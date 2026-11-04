@@ -56,7 +56,17 @@ pub const LISTEN_ADDR_ENV: &str = "MICOLD_LISTEN_ADDR";
 
 /// The address to listen on, when this daemon is containerised.
 fn tcp_listen_addr() -> Option<String> {
-    crate::settings::current().listen_tcp.clone()
+    listen_tcp_of(&crate::settings::current())
+}
+
+/// `settings`' TCP address, but not for a pod's daemon: the client reaches a pod through the
+/// bridge its SSH server starts, which relays to the daemon's socket, so the loopback address
+/// its `daemon.toml` carries (contract §3.4) is not served.
+pub fn listen_tcp_of(settings: &crate::settings::DaemonSettings) -> Option<String> {
+    if settings.kind == Some(micold_core::daemon_config::Kind::Kubernetes) {
+        return None;
+    }
+    settings.listen_tcp.clone()
 }
 
 /// Serve over loopback TCP (feature 027).

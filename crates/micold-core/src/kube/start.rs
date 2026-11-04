@@ -176,6 +176,10 @@ pub struct StartRequest<'a> {
     pub home: &'a Path,
     /// How the `Secrets` phase reads a source file (the only place one is read).
     pub read: ReadFile<'a>,
+    /// The daemon's `daemon.toml`, rendered and checked by the application: the config map's file.
+    pub config: &'a str,
+    /// The daemon's `daemon.time_zone`, the pod's `TZ`.
+    pub time_zone: Option<&'a str>,
 }
 
 /// A start that reached a running container.
@@ -378,8 +382,35 @@ async fn check_claim(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
 
 /// The `Secrets` phase: the access secret, then the allowed credentials' secrets (FR-008).
 async fn secrets(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
+    config_map(r, attempt).await?;
     access_secret(r, attempt).await?;
     credential_secrets(r, attempt).await
+}
+
+/// Create the config map `<name>-config`, or replace its file when the one in the cluster is not
+/// this client's (the hash on it differs). The daemon reloads the file the kubelet then updates, so
+/// a changed configuration needs no new pod.
+async fn config_map(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
+    let manifest = manifest::config_map(r.names, r.config);
+    if let Ensured::Adopted(view) =
+        ensure(r, ObjectKind::ConfigMap, manifest.clone(), attempt).await?
+    {
+        let want = &manifest["metadata"]["annotations"][manifest::CONFIG_HASH_ANNOTATION];
+        if view.annotations.get(manifest::CONFIG_HASH_ANNOTATION)
+            != want.as_str().map(String::from).as_ref()
+        {
+            r.cluster
+                .replace(
+                    namespace(r),
+                    ObjectKind::ConfigMap,
+                    &r.names.config_map(),
+                    &view.resource_version,
+                    manifest,
+                )
+                .await?;
+        }
+    }
+    Ok(())
 }
 
 /// Create or refresh one secret per allowed credential, and delete the secrets of withdrawn ones
@@ -528,7 +559,7 @@ async fn pod(
 ) -> Result<Vec<&'static str>, KubeFailure> {
     let stamp = PodStamp::of(r.settings, r.image);
     loop {
-        let manifest = manifest::pod(r.settings, r.names, r.image, &stamp);
+        let manifest = manifest::pod(r.settings, r.names, r.image, &stamp, r.time_zone);
         let view = match ensure(r, ObjectKind::Pod, manifest, attempt).await? {
             Ensured::Created => return Ok(Vec::new()),
             Ensured::Adopted(view) => view,
@@ -538,7 +569,8 @@ async fn pod(
         let fields = manifest::drift(on_pod, &stamp);
         // A pod made before #1002 mounts the user's SSH key and sets `GIT_SSH_COMMAND` (FR-001):
         // keeping it would keep them, so it is recreated whatever the user chose about drift.
-        let retired = manifest::holds_retired_credential(on_pod);
+        let retired =
+            manifest::holds_retired_credential(on_pod) || manifest::lacks_config_map(on_pod);
         match r.drift {
             _ if retired => delete_and_wait(r, ObjectKind::Pod, &r.names.pod(), &view.uid).await?,
             _ if fields.is_empty() => return Ok(Vec::new()),
@@ -680,7 +712,9 @@ pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarge
             install: StartPhase::Install.bound(),
             ..StepBounds::container()
         },
-        env: super::credentials::daemon_env().into_iter().collect(),
+        env: super::credentials::daemon_env(&settings.allowed)
+            .into_iter()
+            .collect(),
         config: None,
     }
 }

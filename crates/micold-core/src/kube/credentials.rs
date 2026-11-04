@@ -19,6 +19,10 @@ pub const HOME_DIR: &str = "/data/home";
 /// Where the daemon keeps its clones (research K8).
 pub const REPOS_ROOT: &str = "/data/repos";
 
+/// Where the shared git configuration is mounted, as a directory holding the key `gitconfig`: each
+/// Secret has a directory of its own under `/run/micold/secrets`, read-only, never a single file.
+pub const GIT_CONFIG_DIR: &str = "/run/micold/secrets/git";
+
 /// The `type` of a registry pull secret.
 pub const DOCKER_CONFIG_TYPE: &str = "kubernetes.io/dockerconfigjson";
 
@@ -85,7 +89,12 @@ impl KubeCredential {
             sub_path: Some(key.to_string()),
         };
         match self {
-            Self::GitConfig => Some(file(format!("{HOME_DIR}/.gitconfig"), "gitconfig")),
+            // A directory of its own, never a single-file mount; `GIT_CONFIG_GLOBAL` names the
+            // file in it ([`daemon_env`]).
+            Self::GitConfig => Some(Mount {
+                path: GIT_CONFIG_DIR.into(),
+                sub_path: None,
+            }),
             Self::SignIn { cli } => Self::sign_in_file(*cli).map(|(path, key)| file(path, &key)),
             Self::RegistryPull { .. } => None,
         }
@@ -147,22 +156,21 @@ pub fn every_kind() -> Vec<KubeCredential> {
     all
 }
 
-/// The variable that tells a pod's daemon it runs in a pod, so it holds credential files (#1522).
-/// A pod has no image reference to give: `MICOLD_IMAGE_REFERENCE` stays unset for it.
+/// The variable that told a pod's daemon it runs in a pod, so it holds credential files (#1522).
+/// The pod's `daemon.toml` says it now (`daemon.kind = "kubernetes"`); only a daemon without a file
+/// still reads this (issue 15 retires it).
 pub const POD_ENV: &str = "MICOLD_KUBERNETES_POD";
 
 /// The environment the daemon runs with (the pod's own env does not reach it: sshd starts sessions
-/// clean). No allowed credential adds to it.
-pub fn daemon_env() -> BTreeMap<String, String> {
+/// clean). Not one `MICOLD_*` variable (FR-005): the idle stop, the clone root and the pod kind come
+/// from `daemon.toml`. `allowed` is what the user allowed the pod to receive.
+pub fn daemon_env(
+    allowed: &std::collections::BTreeSet<KubeCredential>,
+) -> BTreeMap<String, String> {
     // Nothing allowed reaches the env since #1002 removed the git credential store and the SSH key
     // (FR-001): what remains is mounted as files where the tools look for them. Git is told to
     // ignore every credential helper the shared configuration might still name (FR-004).
-    let mut env = BTreeMap::from([
-        ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
-        ("MICOLD_REPOS_ROOT".to_string(), REPOS_ROOT.to_string()),
-        // The daemon holds credential files only when it knows it is sandboxed (#1522).
-        (POD_ENV.to_string(), "1".to_string()),
-    ]);
+    let mut env = BTreeMap::new();
     // The pod's daemon is not on `PATH`: name it by the build directory the client installs it in
     // (quoted so the shell git runs the helper through expands `$HOME`).
     let daemon = format!(
@@ -173,6 +181,12 @@ pub fn daemon_env() -> BTreeMap<String, String> {
         crate::scoped_credential::GITHUB_BASE,
         &daemon,
     ));
+    if allowed.contains(&KubeCredential::GitConfig) {
+        env.insert(
+            "GIT_CONFIG_GLOBAL".to_string(),
+            format!("{GIT_CONFIG_DIR}/gitconfig"),
+        );
+    }
     env
 }
 
@@ -230,7 +244,7 @@ mod tests {
         };
         assert_eq!(
             KubeCredential::GitConfig.mount(),
-            mount("/data/home/.gitconfig", Some("gitconfig"))
+            mount("/run/micold/secrets/git", None)
         );
         assert_eq!(
             claude.mount(),
@@ -309,13 +323,11 @@ mod tests {
 
     #[test]
     fn the_daemon_env_carries_no_credential_and_resets_the_helpers() {
-        let env = daemon_env();
-        assert_eq!(env["MICOLD_IDLE_STOP"], "off");
-        assert_eq!(env["MICOLD_REPOS_ROOT"], "/data/repos");
-        // #1522: without the pod setting the pod's daemon refuses every GitHub token grant, and
-        // the image reference is not faked for it.
-        assert_eq!(env[POD_ENV], "1");
-        assert!(!env.contains_key("MICOLD_IMAGE_REFERENCE"));
+        let env = daemon_env(&Default::default());
+        // The idle stop, the clone root and the pod kind are in `daemon.toml` (FR-005, T037).
+        let micold: Vec<_> = env.keys().filter(|k| k.starts_with("MICOLD_")).collect();
+        assert!(micold.is_empty(), "{micold:?}");
+        assert!(!env.contains_key("GIT_CONFIG_GLOBAL"), "nothing shared");
         for (key, value) in crate::scoped_credential::git_env("https://github.com") {
             if key == "GIT_CONFIG_VALUE_1" {
                 // The pod's daemon is named by its build directory, not found on PATH.
@@ -330,5 +342,21 @@ mod tests {
             assert_eq!(env[&key], value, "{key}");
         }
         assert!(!env.keys().any(|k| k.contains("SSH") || k.contains("TOKEN")));
+    }
+
+    #[test]
+    fn the_shared_git_configuration_is_named_by_the_directory_it_is_mounted_in() {
+        let allowed = [KubeCredential::GitConfig].into_iter().collect();
+        let env = daemon_env(&allowed);
+        assert_eq!(
+            env["GIT_CONFIG_GLOBAL"],
+            "/run/micold/secrets/git/gitconfig"
+        );
+        assert!(env.keys().all(|k| !k.starts_with("MICOLD_")));
+        let mount = KubeCredential::GitConfig.mount().expect("a mount");
+        assert_eq!(
+            (mount.path.as_str(), mount.sub_path),
+            (GIT_CONFIG_DIR, None)
+        );
     }
 }

@@ -31,7 +31,7 @@ fn read_back(text: &str, kind: Kind) -> DaemonSettings {
         image: config.daemon.image,
         idle_stop: config.daemon.idle_stop,
         log: config.daemon.log,
-        listen: config.listen.and_then(|l| l.listen()).expect("a listener"),
+        listen: Some(config.listen.and_then(|l| l.listen()).expect("a listener")),
         client_token_file: config
             .auth
             .and_then(|a| a.client_token_file)
@@ -97,7 +97,7 @@ fn a_value_that_needs_quoting_survives_the_file() {
 #[test]
 fn a_windows_path_is_a_literal_string_and_a_quote_is_escaped() {
     let mut s = settings(Kind::Host);
-    s.listen = Listen::Socket(SocketSpec::Auto);
+    s.listen = Some(Listen::Socket(SocketSpec::Auto));
     s.data_dir = Some(r"C:\Users\me\data".into());
     s.name = "A \"quoted\" name".into();
     let text = render(&s, Kind::Host);
@@ -116,4 +116,16 @@ fn a_project_added_at_runtime_renders_in_the_next_file() {
     assert_eq!(render(&s, kind), once);
     assert_eq!(once, fixtures::golden_named("host_project_added"));
     parse(&once, "daemon.toml").unwrap_or_else(|e| panic!("{}", e[0]));
+}
+
+/// #1528: a pod's file (contract §3.4) validates, names the mounts the pod has and the zone the
+/// pod's `TZ` has, and keeps the idle stop off that the old `MICOLD_IDLE_STOP` gave it.
+#[test]
+fn a_pods_file_validates_and_names_the_pods_mounts() {
+    let settings =
+        DaemonSettings::for_pod("k8s-dev", "ghcr.io/acme/basic:1", Some("Europe/Berlin"));
+    let text = micold_client::daemon_config_render::prepare(&settings, Kind::Kubernetes)
+        .unwrap_or_else(|e| panic!("{}", e[0]));
+    assert_eq!(text, include_str!("golden/daemon_config/pod.toml"));
+    assert!(!text.contains("MICOLD_"), "{text}");
 }

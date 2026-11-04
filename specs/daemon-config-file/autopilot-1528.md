@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1528
 - **Worktree branch**: feat/1528_deliver-the-configuration-to-kubernetes-daemons
 - **Started**: 2026-11-03
-- **Phase**: tasks
-- **Next step**: design PR #1680 merges; then milestone M1
+- **Phase**: implement
+- **Next step**: M1 PR CI; T039 kind check pending on CI
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1680 | design (milestone cut) | open | — |
+| #1680 | design (milestone cut) | merged | 90a1522a392025444b33f429255ad10ca9314dbd |
 
 ## Milestones
 
@@ -30,6 +30,10 @@ Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 20
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D2 | implement | Pod credential mounts: all to directories now? | git config only (to `/run/micold/secrets/git`, `GIT_CONFIG_GLOBAL`); the AI sign-in keeps its `subPath` mount, T065 (Issue 11) moves it to a directory and links it. Contract §3.4 puts no `sign_in_file` in a pod before that | agent-resolved | tasks.md T065 names `credentials.rs:73-79 drop subPath` |
+| D3 | implement | Pod `listen.tcp` (contract §3.4, required by validation) would make the daemon serve TCP and not the socket the SSH bridge relays to | The daemon ignores `listen.tcp` when `daemon.kind = kubernetes` (`server::listen_tcp_of`) | agent-resolved | `server.rs` `tcp_listen_addr` |
+| D4 | implement | Pods made before the config map exist | Recreated without asking (stamp lacks `config_map`), as for retired credentials | agent-resolved | `manifest::lacks_config_map` |
+| D5 | implement | Pod `[listen]`/token (contract §3.4) cannot be satisfied: the token file is required (V15) and a Secret file in a fsGroup pod is group-readable (V14) | `[listen]` optional for `kubernetes` (validation V3 relaxed); the pod's file has no `[listen]`/`[auth]`; D3 kept for a hand-written file | agent-resolved | review A F1; `validate.rs` `listen` |
 | D1 | spec | New spec for #1528? | No: parent spec, plan, contracts §3.4 and tasks T036–T039, T091 already on main (PR #1509); blockers #1524, #1525 are CLOSED | agent-resolved | specs/daemon-config-file/tasks.md "Issue 7"; autopilot-1526.md D1 |
 
 ## Review rounds
@@ -38,6 +42,9 @@ Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 20
 - Tasks review round 2 (fix diff vs 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722, sonnet): CLEAN; F1 fix holds. One MINOR (T036 fully green only after T091) fixed with a note on T038.
 
 ## Declined review findings
+
+- Review A: git config only via daemon env (sessions are daemon-spawned); TZ not in stamp (daemon sets own TZ; follow-up); hand-edited ConfigMap data not repaired (hash annotation); POD_ENV comment accurate; configmaps delete not in access reviews (same as secrets precedent). Fixed: unused SECRETS_MOUNT, token-file/listen (D5), TIMING placeholder.
+- Review B F1 (no red run): declined, TEST_AFTER recorded honestly in cycle-log. F3 (V3/listen_tcp_of out of scope): declined, required for a working pod (D3, D5). F2 fixed: T039 left unticked until CI's kube-cluster job runs the kind test.
 
 None.
 
@@ -51,4 +58,6 @@ None.
 
 ## Follow-ups not done
 
-None.
+- The pod's `TZ` env is not in the pod stamp: a changed time zone reaches new sessions with the file (the daemon sets its own `TZ`) and the pod's env at its next recreation.
+- The pod's file carries no `[[projects]]`, `[[github.tokens]]`, `[[ai.cli]]` or `[startup]` yet (Issues 8, 11, 12, 13 deliver them); the AI sign-in keeps its `subPath` mount until T065.
+- T039's live kind check did not run locally (podman provider: `kind load` hangs); CI's `kube-cluster` job runs `kube_real_the_pod_reads_its_configuration_from_the_config_map`.

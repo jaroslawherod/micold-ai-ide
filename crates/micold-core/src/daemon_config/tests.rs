@@ -299,6 +299,13 @@ fn v3_a_kubernetes_daemon_with_no_listen_table_is_refused_and_a_container_is_not
 }
 
 #[test]
+fn v3_a_pod_with_no_listen_table_is_accepted() {
+    // #1528: a pod's daemon is reached through the bridge its SSH server starts.
+    let config = ok("schema = 1\n[daemon]\nname = \"t\"\nkind = \"kubernetes\"\n");
+    assert!(config.listen.is_none());
+}
+
+#[test]
 fn v4_a_relative_path_is_refused_with_its_key() {
     let text = host("[[github.tokens]]\nname = \"a\"\ntoken_file = \"secrets/a\"\n");
     let error = expect(

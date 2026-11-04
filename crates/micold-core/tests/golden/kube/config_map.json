@@ -1,0 +1,18 @@
+{
+  "apiVersion": "v1",
+  "data": {
+    "daemon.toml": "schema = 1\n"
+  },
+  "kind": "ConfigMap",
+  "metadata": {
+    "annotations": {
+      "micold.dev/config-sha256": "da93db77ebb07776dbd095f79fe28cbf4d42340c27bc33547ed7eeb2d3c93ea1",
+      "micold.dev/daemon-name": "Build box"
+    },
+    "labels": {
+      "app.kubernetes.io/managed-by": "micold-ai-ide",
+      "micold.dev/daemon": "8384f9ba"
+    },
+    "name": "micold-build-box-8384f9ba-config"
+  }
+}

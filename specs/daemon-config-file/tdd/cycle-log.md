@@ -135,3 +135,18 @@ below is by mutation on the green tree, not an observed failing-first run.
   used a helper from a sibling test module and did not compile; found by `test-sandbox`'s build.
 - Real runtime: `sandbox_real_*` boot and SSH start cases exercise the delivered file under podman
   (`MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman`); results in the PR body.
+
+
+## Issue 7 (#1528) M1: deliver the configuration to Kubernetes daemons
+
+- Baseline: `cargo test -p micold-core --lib kube` 140 tests green on `origin/main`.
+- No red run was recorded: the tests for T036 (pod and config map goldens, mounts, env), T037
+  (`daemon_env` has no `MICOLD_*`) and T091 (`TZ`, `LANG`) landed with the code, so these behaviors
+  are `TEST_AFTER`. The goldens do not compile against `origin/main` (`manifest::config_map`,
+  `pod(.., time_zone)`), and every test of the old shape (`MICOLD_SSH_DIR`, the gitconfig `subPath`,
+  six access reviews, three created objects) was changed with the code.
+- Green: `kube` 150 tests in `micold-core`, `--test main` 3302 in `micold-client`, plus the
+  `config_map`, `lacks_config_map`, V3-for-a-pod and `listen_tcp_of` tests added in review.
+- The live kind check (`kube_real_the_pod_reads_its_configuration_from_the_config_map`) is written; on
+  this machine the harness hangs in `kind load` under the podman provider, so CI's `kube-cluster`
+  job is where it runs.

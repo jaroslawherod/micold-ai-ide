@@ -345,26 +345,31 @@ async fn a_host_process_daemon_refuses_grants_and_sends_no_targets() {
     assert_eq!(refused, ErrorKind::Refused);
 }
 
-/// #1522: the daemon of a pod has only the env `daemon_env` gives it, and must still take grants.
-#[tokio::test]
-async fn a_daemon_run_with_only_the_pods_env_announces_targets() {
-    let _one = ONE_AT_A_TIME.lock().await;
-    let dir = tempfile::tempdir().unwrap();
-    let pod = micold_core::kube::credentials::daemon_env();
-    let pod_setting = micold_core::kube::credentials::POD_ENV;
-    let flag = pod.get(pod_setting).expect("the pod's env names the pod");
-    let _env = Env::set(&[
-        (ROOT_ENV, None),
-        ("MICOLD_IMAGE_REFERENCE", None),
-        (pod_setting, Some(flag.into())),
-        ("MICOLD_TOKEN_PATH", None),
-    ]);
-    assert!(micold_daemon::git_credential::credential_root().is_some());
-    let a = project(dir.path(), "a", Some("https://github.com/o/r"));
-    let state = state_with(&[&a]);
-    let mut client = connect_and_attach(&state, &a).await;
-    let (found, _) = targets(&mut client).await;
-    assert_eq!(found.len(), 1, "{found:?}");
+/// #1522, #1528: the daemon of a pod has no `MICOLD_*` variable, only a `daemon.toml` whose
+/// `daemon.kind` is `kubernetes`, and must still be sandboxed: it takes grants.
+#[test]
+fn a_daemon_run_with_only_the_pods_file_holds_credentials() {
+    let pod = micold_core::kube::credentials::daemon_env(&Default::default());
+    assert!(pod.keys().all(|k| !k.starts_with("MICOLD_")), "{pod:?}");
+    let mut settings = micold_daemon::settings::DaemonSettings::resolve(None, &|_| None);
+    settings.kind = Some(micold_core::daemon_config::Kind::Kubernetes);
+    assert!(micold_daemon::git_credential::credential_root_of(&settings).is_some());
+}
+
+/// #1528: the pod's file names a loopback address (contract §3.4), but the pod's daemon keeps its
+/// socket, which the SSH bridge relays to; a container's daemon serves its address.
+#[test]
+fn a_pods_daemon_does_not_serve_the_address_in_its_file() {
+    use micold_core::daemon_config::Kind;
+    let mut settings = micold_daemon::settings::DaemonSettings::resolve(None, &|_| None);
+    settings.listen_tcp = Some("127.0.0.1:7000".into());
+    settings.kind = Some(Kind::Container);
+    assert_eq!(
+        micold_daemon::server::listen_tcp_of(&settings).as_deref(),
+        Some("127.0.0.1:7000")
+    );
+    settings.kind = Some(Kind::Kubernetes);
+    assert_eq!(micold_daemon::server::listen_tcp_of(&settings), None);
 }
 
 #[tokio::test]

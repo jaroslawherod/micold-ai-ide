@@ -1,0 +1,122 @@
+{
+  "automountServiceAccountToken": false,
+  "containers": [
+    {
+      "env": [
+        {
+          "name": "HOME",
+          "value": "/data/home"
+        },
+        {
+          "name": "TMPDIR",
+          "value": "/tmp"
+        },
+        {
+          "name": "LANG",
+          "value": "C.UTF-8"
+        },
+        {
+          "name": "TZ",
+          "value": "Europe/Berlin"
+        }
+      ],
+      "image": "ghcr.io/acme/micold-daemon:1.2.3",
+      "name": "daemon",
+      "resources": {
+        "limits": {
+          "cpu": "2000m",
+          "memory": "4Gi"
+        }
+      },
+      "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+          "drop": [
+            "ALL"
+          ]
+        },
+        "readOnlyRootFilesystem": true
+      },
+      "volumeMounts": [
+        {
+          "mountPath": "/data",
+          "name": "data"
+        },
+        {
+          "mountPath": "/tmp",
+          "name": "tmp"
+        },
+        {
+          "mountPath": "/run/micold/ssh",
+          "name": "ssh-access",
+          "readOnly": true
+        },
+        {
+          "mountPath": "/run/micold/config",
+          "name": "daemon-config",
+          "readOnly": true
+        },
+        {
+          "mountPath": "/run/micold/secrets/git",
+          "name": "micold-build-box-8384f9ba-gitconfig",
+          "readOnly": true
+        },
+        {
+          "mountPath": "/run/micold/git",
+          "name": "git-credential"
+        }
+      ]
+    }
+  ],
+  "enableServiceLinks": false,
+  "restartPolicy": "Always",
+  "securityContext": {
+    "fsGroup": 10001,
+    "runAsGroup": 10001,
+    "runAsNonRoot": true,
+    "runAsUser": 10001,
+    "seccompProfile": {
+      "type": "RuntimeDefault"
+    }
+  },
+  "volumes": [
+    {
+      "name": "data",
+      "persistentVolumeClaim": {
+        "claimName": "micold-build-box-8384f9ba-data"
+      }
+    },
+    {
+      "emptyDir": {},
+      "name": "tmp"
+    },
+    {
+      "name": "ssh-access",
+      "secret": {
+        "defaultMode": 288,
+        "secretName": "micold-build-box-8384f9ba-ssh-access"
+      }
+    },
+    {
+      "configMap": {
+        "defaultMode": 292,
+        "name": "micold-build-box-8384f9ba-config"
+      },
+      "name": "daemon-config"
+    },
+    {
+      "name": "micold-build-box-8384f9ba-gitconfig",
+      "secret": {
+        "defaultMode": 288,
+        "secretName": "micold-build-box-8384f9ba-gitconfig"
+      }
+    },
+    {
+      "emptyDir": {
+        "medium": "Memory",
+        "sizeLimit": "64Ki"
+      },
+      "name": "git-credential"
+    }
+  ]
+}

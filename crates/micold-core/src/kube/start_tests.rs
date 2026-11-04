@@ -16,6 +16,7 @@ use crate::kube::{EventView, PodStatusView};
 
 const NS: &str = "dev";
 const IMAGE: &str = "ghcr.io/acme/micold-ssh:1";
+const CONFIG: &str = "schema = 1\n";
 
 fn settings() -> KubeSettings {
     KubeSettings::new("kind-dev", NS, &[])
@@ -90,6 +91,8 @@ fn start_request<'a>(
         drift,
         home: Path::new("/home/u"),
         read,
+        config: CONFIG,
+        time_zone: Some("Europe/Berlin"),
     }
 }
 
@@ -197,6 +200,7 @@ async fn a_first_start_creates_claim_secret_and_pod_and_reports_each_phase() {
         created,
         [
             (ObjectKind::PersistentVolumeClaim, names().pvc()),
+            (ObjectKind::ConfigMap, names().config_map()),
             (ObjectKind::Secret, names().access_secret()),
             (ObjectKind::Pod, names().pod()),
         ]
@@ -434,7 +438,14 @@ async fn a_pod_allowing_a_retired_credential_is_recreated_never_kept_or_asked_ab
     for choice in [DriftChoice::Keep, DriftChoice::Ask] {
         let fake = cluster();
         let first = ready(run(&fake, &settings()).await.0);
-        let old = first.attempt.created[2].uid.clone();
+        let old = first
+            .attempt
+            .created
+            .iter()
+            .find(|c| c.kind == ObjectKind::Pod)
+            .expect("a pod")
+            .uid
+            .clone();
         let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
         let mut stamp: serde_json::Value = serde_json::from_str(
             pod["metadata"]["annotations"][POD_STAMP_ANNOTATION]
@@ -466,6 +477,72 @@ async fn a_pod_allowing_a_retired_credential_is_recreated_never_kept_or_asked_ab
 }
 
 #[tokio::test(start_paused = true)]
+async fn the_config_map_holds_the_file_the_pod_mounts_and_a_changed_file_replaces_it() {
+    let fake = cluster();
+    ready(run(&fake, &settings()).await.0);
+    let name = names().config_map();
+    let map = fake.manifest(NS, ObjectKind::ConfigMap, &name).unwrap();
+    assert_eq!(map["data"]["daemon.toml"], CONFIG);
+    let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+    assert_eq!(
+        pod["spec"]["containers"][0]["env"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == "TZ")
+            .map(|e| e["value"].clone()),
+        Some(serde_json::json!("Europe/Berlin"))
+    );
+    assert!(!fake
+        .calls()
+        .iter()
+        .any(|c| c == &format!("replace ConfigMap {name}")));
+
+    let (keys, client) = (FakeKeyGen::default(), client("c1"));
+    let read = |p: &Path| std::fs::read_to_string(p);
+    let s = settings();
+    let n = names();
+    let mut request = start_request(&fake, &s, &n, &keys, &client, DriftChoice::Ask, &read);
+    request.config = "schema = 1\n# changed\n";
+    ready(start(&request, &mut |_| {}).await);
+    let map = fake.manifest(NS, ObjectKind::ConfigMap, &name).unwrap();
+    assert_eq!(map["data"]["daemon.toml"], "schema = 1\n# changed\n");
+    assert!(fake
+        .calls()
+        .iter()
+        .any(|c| c == &format!("replace ConfigMap {name}")));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pod_made_before_the_config_map_is_recreated_never_kept_or_asked_about() {
+    for choice in [DriftChoice::Keep, DriftChoice::Ask] {
+        let fake = cluster();
+        ready(run(&fake, &settings()).await.0);
+        let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+        let mut stamp: serde_json::Value = serde_json::from_str(
+            pod["metadata"]["annotations"][POD_STAMP_ANNOTATION]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        stamp.as_object_mut().unwrap().remove("config_map");
+        fake.set_annotation(
+            NS,
+            ObjectKind::Pod,
+            &names().pod(),
+            POD_STAMP_ANNOTATION,
+            &stamp.to_string(),
+        );
+        ready(run_with(&fake, &settings(), &client("c1"), choice).await.0);
+        assert_eq!(
+            deletes(&fake),
+            [format!("delete Pod {}", names().pod())],
+            "{choice:?}"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_pod_never_scheduled_times_out_in_schedule_and_rolls_back_in_reverse() {
     let fake = cluster();
     fake.progress(&names().pod(), vec![pending_pod()]);
@@ -484,6 +561,7 @@ async fn a_pod_never_scheduled_times_out_in_schedule_and_rolls_back_in_reverse()
         [
             format!("delete Pod {}", names().pod()),
             format!("delete Secret {}", names().access_secret()),
+            format!("delete ConfigMap {}", names().config_map()),
             format!("delete PersistentVolumeClaim {}", names().pvc()),
         ],
         "newest first"
@@ -739,7 +817,7 @@ async fn a_denied_access_review_fails_forbidden_before_anything_is_created() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_start_asks_the_six_reviews_of_the_contract() {
+async fn a_start_asks_the_eight_reviews_of_the_contract() {
     let fake = cluster();
     run(&fake, &settings()).await;
     let reviews: Vec<String> = fake
@@ -754,6 +832,8 @@ async fn a_start_asks_the_six_reviews_of_the_contract() {
             "review create persistentvolumeclaims",
             "review create secrets",
             "review update secrets",
+            "review create configmaps",
+            "review update configmaps",
             "review create pods/portforward",
             "review delete pods",
         ]
@@ -1237,13 +1317,12 @@ mod connect {
         let _ = connect(&host).await;
         let commands = host.commands.lock().unwrap().clone();
         let bridge = commands.last().unwrap().last().unwrap();
+        // FR-005: the idle stop, the clone root and the pod kind are in `daemon.toml`.
         assert!(
-            bridge.contains(
-                "MICOLD_IDLE_STOP='off' MICOLD_KUBERNETES_POD='1' MICOLD_REPOS_ROOT='/data/repos' "
-            ) && !bridge.contains("MICOLD_IMAGE_REFERENCE")
+            !bridge.contains("MICOLD_")
                 && bridge.contains("GIT_CONFIG_KEY_0='credential.helper'")
                 && bridge.contains("GIT_CONFIG_VALUE_0=''"),
-            "the daemon keeps its clones on the volume: {bridge}"
+            "the daemon is given no MICOLD_* variable: {bridge}"
         );
         assert_eq!(
             commands.len(),
@@ -1437,7 +1516,7 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
             }
         }
     }
-    for (name, value) in crate::kube::credentials::daemon_env() {
+    for (name, value) in crate::kube::credentials::daemon_env(&settings.allowed) {
         start_up.push_str(&format!("\n{name}={value}"));
     }
     assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");

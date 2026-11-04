@@ -1,0 +1,15 @@
+# Written by Micold AI IDE from Settings. Edit the daemon in Settings: a change made here is overwritten.
+schema = 1
+
+[daemon]
+name = "k8s-dev"
+kind = "kubernetes"
+time_zone = "Europe/Berlin"
+image = "ghcr.io/acme/basic:1"
+idle_stop = "off"
+
+[ssh]
+dir = "/run/micold/ssh"
+
+[storage]
+clone_root = "/data/repos"
