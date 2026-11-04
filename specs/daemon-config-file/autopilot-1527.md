@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1527_deliver-the-configuration-to-container-daemons
 - **Started**: 2026-11-03
 - **Phase**: implement (M1 in progress)
-- **Next step**: full gate, PR
+- **Next step**: PR open; orchestrator waits on CI and merges
 
 ## Pull requests
 
