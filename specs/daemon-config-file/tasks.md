@@ -130,7 +130,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 - [ ] T040 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat_store.rs`: store keyed `github-pat/<name>`; migration of each `github-pat/<owner>/<repo>` to a token named `<owner>-<repo>` with `repos = ["owner/repo"]`
 - [ ] T041 [P] [US2] Failing tests in `crates/micold-core/src/scoped_credential/pat.rs`: the one-repository reach refusal (`parse_reach`, `:191-219`) is gone; a token reaching N repositories is accepted and its reach list returned
-- [ ] T042 [P] [US2] Failing test: Settings lists tokens in file order and shows, per repository in a token's reach, which token it uses and which are shadowed (two tokens with `repos = ["acme/*"]`: the first wins; reordering changes the winner)
+- [ ] T042 [P] [US2] Failing test in `crates/micold-client/tests/github_tokens_reach.rs` (wired into `tests/main.rs`, module name contains `github`): the rendered `[[github.tokens]]` block carries name, token file and repos; Settings lists tokens in file order and shows, per repository in a token's reach, which token it uses and which are shadowed (two tokens with `repos = ["acme/*"]`: the first wins; reordering changes the winner)
 - [ ] T043 [US2] Implement the store and migration in `crates/micold-core/src/scoped_credential/pat_store.rs`; remove the reach refusal in `pat.rs`
 - [ ] T044 [US2] Settings → GitHub (`crates/micold-client/src/ui/settings/github.rs`): name, token, optional repos filter, the reach list per token; render into `[[github.tokens]]`
 - [ ] T045 [US2] Update `docs/user-guide/settings.md` (GitHub tokens section)
@@ -302,7 +302,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 8 (#1529)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -429,6 +429,21 @@ so the tier is `full`. T035's user-guide update travels here (rule 4).
 - **Satisfies**: US1; FR-005, FR-029, FR-039
 - **Verify**: `cargo test -p micold-core --test sandbox_argv`; `cargo test -p micold-client daemon::`; `scripts/tests/entrypoint-config.test.sh`; `mise run image && mise run test-sandbox`
 - **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525) M1, merged
+- **Tier**: full
+
+### Issue 8 (#1529) — M1 — One GitHub token for many repositories
+
+One milestone: the store keyed by token name with its migration (T040, T043), the lifted one-repository refusal (T041) and
+the Settings list with reach and shadowing (T042, T044) serve one acceptance scenario (one token pasted once reaches N
+repositories, and Settings says which token each repository uses); lifting the refusal without the name-keyed store, or the
+store without the Settings view, would leave a token whose reach the user cannot see. Six tasks, so it is not split. It changes
+a persistence format and a security check, so the tier is `full`. T045's user-guide update travels here (rule 4).
+
+- **Tasks**: T040–T045
+- **Deliverable**: GitHub tokens are stored by name (`github-pat/<name>`) and a token may reach any number of repositories (the one-repository refusal is gone); Settings → GitHub lists tokens in file order with their reach and, per repository, the token used and those shadowed; each existing per-repository token migrates to a token named `<owner>-<repo>` with no change in behaviour; Settings renders `[[github.tokens]]`.
+- **Satisfies**: US2; FR-007, FR-009, SC-002
+- **Verify**: `cargo test -p micold-core scoped_credential`; `cargo test -p micold-client --test main github`
+- **Depends on**: Issue 4 (#1525) M1, merged
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
