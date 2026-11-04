@@ -330,12 +330,15 @@ mod tests {
         assert!(!text.contains("Restart to apply"));
     }
 
-    /// FR-029: the start script's output tail may echo what it read, so no rendered text has it.
+    /// FR-029: the start script's output tail may echo what it read, so a run that went well renders none of it.
     #[test]
     fn the_start_script_output_tail_is_never_rendered() {
         const TAIL: &str = "TAIL_ECHOED_SECRET_9f3a";
         let mut s = status();
-        s.startup.as_mut().expect("the fixture ran").tail = vec![TAIL.into()];
+        let run = s.startup.as_mut().expect("the fixture ran");
+        run.tail = vec![TAIL.into()];
+        // Only a refused or warned start shows its output (US4); any other outcome shows none.
+        run.outcome = StartupOutcome::Ok;
         let lines = configuration_lines(&s).join("\n");
         let rows = texts(&configuration_rows(Some("schema = 1\n".into()), Some(&s)));
         assert!(!lines.contains(TAIL), "tail in the lines:\n{lines}");
