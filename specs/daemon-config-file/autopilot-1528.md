@@ -35,6 +35,7 @@ Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 20
 ## Review rounds
 
 - Tasks review round 1 (snapshot 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722): CHANGES; F1 (MAJOR, T091 test not before code, T036 env list contradicted T091) fixed, prose only (T036 golden now expects `TZ`/`LANG`, T091 implements); F2 (MINOR) declined, column order is cosmetic; F3 (MINOR) left, T091 ID stable.
+- Tasks review round 2 (fix diff vs 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722, sonnet): CLEAN; F1 fix holds. One MINOR (T036 fully green only after T091) fixed with a note on T038.
 
 ## Declined review findings
 
