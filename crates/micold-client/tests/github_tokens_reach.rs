@@ -47,7 +47,6 @@ fn the_rendered_block_carries_name_token_file_and_repos_and_parses_back() {
         ),
         "{text}"
     );
-    assert!(!text.contains(FAKE));
     let config = parse(&text, "daemon.toml").expect("parses");
     let names: Vec<_> = config
         .github

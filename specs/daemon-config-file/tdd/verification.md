@@ -533,3 +533,136 @@ Tests tracing to nothing: none. Claimed tests that do not exist: none. T080a is 
   host actor (I5-3 note). No real SSH host or container runtime was used.
 - Windows (`set_owner_only` is a no-op there; no test); the `#[cfg(unix)]` tests run only on this Linux host.
 - Issues 2, 3, 4, 13, 14 sections above were not touched.
+
+---
+
+# Issue 8 (#1529) M1: one GitHub token for many repositories
+
+```yaml
+scope: Issue 8 (#1529), tasks T040-T045; commits ec5591ca9 (feat) and 0d1922acd, 49d5730e1 (review fixes). Files read cold: crates/micold-core/src/scoped_credential/{pat_store,pat}.rs, crates/micold-client/src/daemon_config_render.rs, src/ui/settings/github.rs, tests/github_tokens_reach.rs, plus the changed tests in tests/features_settings.rs and src/shell/scoped_credential/tests.rs
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 7eab7d9a5
+independent: true # auditor did not write these tests; no subagent smell pass
+verdict: FAIL
+behaviors: 0 listed in tdd/test-list.md for #1529; 6 task-derived (T040-T045) audited
+proven: 0
+likely: 0
+test_after: 5 # T040-T044; T045 is docs, NOT_APPLICABLE
+no_test: 0
+high_smells: 0
+high_findings: 2
+mutants_tried: 16
+mutants_caught: 8
+mutants_survived: 8
+mutation_score: unmeasured # no tool; 16 targeted hand mutants
+criteria_covered: 3 of 4 through a real entry point (see Traceability)
+suite: scoped - core lib `scoped_credential::` 81 passed; client `--test main github` 110 passed; `--test main` 3301 passed; `--test features_settings` 155 passed; `--test layout_snapshot` 177 passed; 0 failed (full workspace suite and mise run gate not run)
+```
+
+**Verdict: FAIL.** The pasted-token field losing its mask, and the Remove button sending Replace, both pass the whole
+client suite (3301 + 155 + 177 tests): the per-token row of `ui/settings/github.rs` has no test at all, because the layout
+snapshot is rendered with no tokens. The store, migration, reach parsing and rendering are well covered (8 of 16 mutants
+caught, including every one in the migration, render and reach-parse logic). No red is recorded for any #1529 behavior.
+
+Audit independence: the auditor did not write these tests. Mutants were applied in the working tree one at a time and
+restored with `git checkout -- <file>`; `git status` was clean afterwards.
+
+## Test-first evidence (Issue 8)
+
+| Behavior | Class | Evidence |
+|---|---|---|
+| T040 store by name, migration | TEST_AFTER | `ec5591ca9` rewrites `pat_store.rs` source and its `#[cfg(test)]` module together; no #1529 entry in `tdd/test-list.md` or `tdd/cycle-log.md`; no red command recorded |
+| T041 reach refusal gone | TEST_AFTER | same commit; `parse_reach` signature changed and its test rewritten in place, so the old refusal test was not kept red-then-removed |
+| T042 rendered block, tokens list, shadowing | TEST_AFTER | `tests/github_tokens_reach.rs` is added in the same commit as `daemon_config_render.rs`, `token_choice.rs` and `github_tokens.rs` |
+| T043 store and migration implemented | TEST_AFTER | as T040 |
+| T044 Settings -> GitHub | TEST_AFTER | `ui/settings/github.rs` changed in `ec5591ca9` and `49d5730e1`; only the layout snapshot (no tokens) touches the view |
+| T045 user guide | NOT_APPLICABLE | docs only |
+| Baseline | absent | none recorded for #1529 |
+
+Per Hard Rule 3 an absent red is `TEST_AFTER`. `tasks.md` T040-T045 are `[x]` with no behavior rows to match (I8-6).
+
+## Changes to tests that already existed (Issue 8)
+
+Read from `git diff ec5591ca9~1 HEAD`. No assertion loosened, no skip, filter, ignore or threshold change.
+- `features_settings.rs`: repo-keyed calls become name-keyed (`stored(..)`, `typed(.., name, repos, ..)`); `take_refresh()` returns `bool` instead of `Vec`, so `assert_eq!(tokens.take_refresh(), vec![repo])` becomes `assert!(tokens.take_refresh())` (the repo list is no longer meaningful: the whole store is reloaded); the `help(false)` "cannot verify which other repositories" assertion is dropped with the `REACH_CHECK` constant it covered. Justified by the design change; noted.
+- `shell/scoped_credential/tests.rs`: `ec5591ca9` deleted `ureq_transport_sends_the_contract_headers...`, `a_transport_failure_is_short_and_carries_no_token`, `statuses_are_reported_once_per_change...` and `a_held_token_is_reported_again...` (about 70 lines of unrelated assertions). `0d1922acd` restores all four; at `HEAD` the net diff to those tests is mechanical (`repo("a")` to `"a"`, `refresh` to `refresh_all`). No net loss. The intermediate deletion was a weakened-test state that only the review caught.
+- `pat.rs`: `the_reach_listing_refuses_another_private_repository_naming_it` is replaced by `a_token_reaching_many_repositories_is_accepted_and_its_reach_listed`, which is the intended inversion (T041).
+
+## Findings (Issue 8)
+
+| # | Sev | Category | File | Finding |
+|---|---|---|---|---|
+| I8-1 | HIGH | test-strength (mutant U5) | `crates/micold-client/src/ui/settings/github.rs:249-251` | Removing `.secure(true)` from the Token field leaves all tests green: nothing pins that a pasted token is masked. FR-005's "no row ever shows a token" and the field's masking are untested. Fix: a view/state test that the token field is built secure (or a layout-snapshot record with a state that has a pending token), run to red against the mutant |
+| I8-2 | HIGH | test-strength (mutant U2) | `ui/settings/github.rs:200-205` | Swapping `GithubPatRemoveRequested` for `GithubPatReplaceRequested` on the Remove button passes everything. The view's token rows are never rendered by any test (layout snapshot has no tokens), so no button-to-message wiring is pinned; Remove deletes a stored secret. Fix: render the page with 2 rows and assert each button's message (or extend the layout fixture with two tokens so enablement and messages show) |
+| I8-3 | MED | test-strength (mutants U3, U4) | `ui/settings/github.rs:195-197,213-218` | Making "Move down" always enabled (last row), and hiding the expiry warning, both survive. Same cause as I8-2; the state-level `GithubPatMoved` tests do not reach the enablement guards. (The same mutant on the older issue-label rows, `IssueMappingMoved`, is caught by the layout snapshot, which shows the snapshot would catch these if it held tokens) |
+| I8-4 | MED | test-strength (mutant M13) | `crates/micold-core/src/scoped_credential/pat_store.rs:165-169` | `remove` filtering the name out of `.order` can be deleted unnoticed. Then remove-then-add the same name keeps its old position instead of going last (`put` doc: "a new name goes last"), which changes which of two equally specific tokens wins. `tokens_list_in_the_order...` removes `c` but never re-adds it. Fix: after `remove("c")`, `put("c", ..)` and assert `names == [.., "c"]` |
+| I8-5 | MED | test-strength (mutant M7) | `crates/micold-core/src/scoped_credential/pat.rs:258-260` | In `check_added` with no probe repository, deleting the `listing.status != 200` guard passes. A 403/404 listing then reports "the token has no expiry" instead of `status_reason`'s "does not reach any repository" / SSO / rate-limit text. Only the 200 path of `probe: None` is tested. Fix: `check_added(.., None, ..)` with `reply(403, [("x-github-sso", ..)], "")` expecting the SSO reason |
+| I8-6 | MED | process | `tdd/test-list.md`, `tdd/cycle-log.md`, `tasks.md` | No test-list rows, baseline or cycle-log red for #1529; T040-T044 are `[x]` with no behavior ids behind them (a completion claim with no evidence, but the code and tests exist, so MED, not HIGH). Test and source share `ec5591ca9` |
+| I8-7 | MED | traceability | `daemon_config_render.rs` `GithubTokenSetting::from_store` | `[[github.tokens]]` rendering is tested only by building a `DaemonSettings` by hand and from a `PatStore` via `from_store`; `from_store` is not called from `DaemonSettings::from_entry` (declined follow-up in the ledger). No test starts at the app entry point and finds the block in a delivered file, so the "rendered into `[[github.tokens]]`" half of T044 and SC-002 is unit-level only. State this in the spec until the follow-up lands, and add the entry-point test then |
+| I8-8 | LOW | test-strength (mutant M15) | `pat_store.rs:34` | `name.len() <= MAX_NAME_LEN` changed to `<` survives: the 64-character boundary is unpinned (the long-name migration test only asserts the result is valid). Fix: `valid_name(&"a".repeat(64))` true, 65 false |
+| I8-9 | LOW | test-strength (mutant M14) | `pat_store.rs:183-187` | The duplicate-removal in `set_order` survives; the effect is invisible through `list()` (the first position wins) but the `.order` file would hold duplicates. Judged near-equivalent; pin with a read of the file if the file's shape matters |
+| I8-10 | LOW | smell (vacuous assertion) | `tests/github_tokens_reach.rs:50` | `assert!(!text.contains(FAKE))` can never fail: the render input holds no token value (`GithubTokenSetting` has only a file path). The no-secret-in-file guarantee holds by the type, not by this line. Drop it, or feed `FAKE` through `from_store` and assert on that text |
+| I8-11 | LOW | test-strength | `daemon_config_render.rs` `from_store` | A stored token with an invalid name is silently dropped by the `filter_map`; no test. The `list()` already filters invalid names, so this is defensive; leave it unless the filter is relied on |
+
+Smell pass: no assertion-free, tautological, skipped or `#[ignore]` tests; fixtures are fake tokens (`github_pat_FAKE_...`,
+`github_pat_one`), no real credential; `tempfile` is used for the store as the existing store tests do; `Script`, `Rig` and
+`state_scan` helpers reused, no new fake. Tests are fast (core 0.05 s, `github` filter 0.14 s) and deterministic (no clock, no
+network). `ureq` transport tests bind loopback listeners, as before. The assertions in `github_tokens_reach.rs` use `{text}`
+messages, not rule messages as the profile asks (style only).
+
+## Mutation results (Issue 8)
+
+No mutation tool (`mutation: null`). Sixteen deliberate mutants, one at a time (a first scripted batch failed to apply from shell quoting and was rerun; M4 ran in both); each
+restored with `git checkout -- <file>` and verified by `git status` clean. Suites: core `--lib scoped_credential::`; client
+`--test main github` and `--test features_settings`; view mutants additionally full `--test main` and `--test layout_snapshot`.
+
+| Mutant | File | Result | Judgment |
+|---|---|---|---|
+| M1 `put` never appends to `.order` | `pat_store.rs` | CAUGHT (`tokens_list_in_the_order...`) | fine |
+| M2 migration drops the `repos` filter | `pat_store.rs` | CAUGHT (`each_per_repository_token_migrates...`) | fine |
+| M3 migration keeps the old file | `pat_store.rs` | CAUGHT (same) | fine |
+| M4 `token_file` keeps the name's case | `pat_store.rs` | CAUGHT (`a_token_is_stored_by_name...`) | fine |
+| M5 `parse_reach` returns only the first repo | `pat.rs` | CAUGHT (2 tests) | fine |
+| M7 drop non-200 guard in `check_added` | `pat.rs` | SURVIVED | I8-5 |
+| M13 `remove` leaves the name in `.order` | `pat_store.rs` | SURVIVED | I8-4 |
+| M14 `set_order` keeps duplicates | `pat_store.rs` | SURVIVED | I8-9, near-equivalent |
+| M15 `<=` to `<` on the name length | `pat_store.rs` | SURVIVED | I8-8 |
+| R1 render `repos` key for an empty filter | `daemon_config_render.rs` | CAUGHT (`the_rendered_block...`) | fine |
+| R2 render a constant name | `daemon_config_render.rs` | CAUGHT (2 tests) | fine |
+| U1 issue-label "Move up" always enabled (pre-existing rows) | `ui/settings/github.rs` | CAUGHT (`layout_snapshot`) | shows the snapshot would catch token-row mutants if it held tokens |
+| U2 Remove button sends Replace | `ui/settings/github.rs` | SURVIVED | I8-2 |
+| U3 token "Move down" always enabled | `ui/settings/github.rs` | SURVIVED | I8-3 |
+| U4 expiry warning hidden | `ui/settings/github.rs` | SURVIVED | I8-3 |
+| U5 token field not masked | `ui/settings/github.rs` | SURVIVED | I8-1 |
+
+Sampling: 16 mutants, 8 caught, 8 survived (4 in the view, 4 in the store and pat; M14 near-equivalent).
+Not exhaustive; `from_text` / `to_text` parse branches, `GithubTokens` state transitions (`github_tokens.rs`) and
+`token_choice.rs` were not mutated.
+
+## Traceability (Issue 8)
+
+| Criterion | Tests | Real entry point | Status |
+|---|---|---|---|
+| FR-007/SC-002 a token is stored by name and reaches N repositories (T040, T041) | `a_token_is_stored_by_name...`, `the_repository_filter_is_kept...`, `a_token_reaching_many_repositories_is_accepted...`, `one_pasted_token_reaching_many_repositories_is_one_row_with_its_reach` | `PatStore`, `pat::parse_reach`, `features::settings::update` | Covered |
+| Existing per-repo tokens migrate unchanged (T040) | `each_per_repository_token_migrates...`, `a_migrated_name_never_replaces...`, `a_legacy_token_with_a_very_long...` | `PatStore::migrate` (the `on_device` once-per-run wrapper is untested) | Covered at unit level |
+| `[[github.tokens]]` carries name, token file, repos (T042, T044) | `the_rendered_block_carries_name_token_file_and_repos_and_parses_back`, `the_tokens_of_a_store_render...` | `prepare` only; `from_entry` does not feed it (I8-7) | Partial |
+| Settings lists in file order, shows used and shadowed, reordering changes the winner (T042, T044) | `two_tokens_for_the_same_organisation...`, `an_exact_filter_beats_the_organisation...` | `update` + state; the view is not rendered with tokens (I8-1..3) | Partial |
+| T045 user guide | `docs/user-guide/settings.md` | n/a | Present, not read for this audit |
+
+Tests tracing to nothing: none. Claimed tests that do not exist: none (`tests/main.rs:128` wires `github_tokens_reach`).
+
+## What was not audited (Issue 8)
+
+- Full workspace suite and `mise run gate`; coverage (none in profile); the PR review history (#1684).
+- `crates/micold-client/src/features/settings/github_tokens.rs` and `crates/micold-core/src/scoped_credential/token_choice.rs` were read only through their tests; not mutated. `shell/settings.rs`, `shell/scoped_credential.rs` and the migration call in `on_device` were not mutated.
+- `docs/user-guide/settings.md` (T045) content.
+- Real GitHub API behaviour for `REACH_URL` (the 100-repository page limit; quickstart Part C); a real device store path; Windows.
+- Earlier sections of this file were not touched. Tasks were not appended to `tasks.md` (the request scoped writes to this file).
+
+## Remediation (Issue 8, close unit)
+
+- I8-1 to I8-5, I8-8, I8-10: tests added in the close PR (see its diff); the surviving mutants now fail.
+- I8-6: T040-T044 were written test-after; no red run is recorded. Accepted, as for U21-U24 of Issue 5.
+- I8-7, I8-11: `GithubTokenSetting::from_store` is not wired into `DaemonSettings::from_entry` until the delivery issues mount token files into containers; the entry-point test follows with that wiring. Tracked in the ledger's follow-ups.
+- I8-9: near-equivalent (`list()` hides the duplicate); left.
+- `<data_dir>/github-reach.json` (contract) is not implemented: Settings shows reach for the filter or the listing of a token pasted this session. Tracked in the ledger's follow-ups.
