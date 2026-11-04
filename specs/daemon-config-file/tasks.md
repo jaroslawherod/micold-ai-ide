@@ -122,7 +122,7 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [x] T037 [P] [US1] Failing test in `crates/micold-core/src/kube/credentials.rs`: `daemon_env` is empty of `MICOLD_*`
 - [x] T038 [US1] Implement ConfigMap and directory Secret manifests in `crates/micold-core/src/kube/manifest.rs` and `crates/micold-core/src/kube/credentials.rs`; apply/update them from `crates/micold-client/src/kube/` (T036 passes fully only after T091)
 - [x] T091 [US1] Pods get `TZ` from `daemon.time_zone` and `LANG=C.UTF-8` (D15 rows 12, 13), in `crates/micold-core/src/kube/manifest.rs` to make the T036 golden pass (the failing test is T036), matching `sandbox/argv.rs:176`
-- [ ] T039 [US1] Kind-cluster check (quickstart §2 pod row) and update `docs/user-guide/kubernetes-daemons.md`, including how a refreshed credential reaches a pod (the application updates the Secret; the kubelet's own propagation delay, measured on kind, comes before the daemon's 5 s)
+- [x] T039 [US1] Kind-cluster check (quickstart §2 pod row) and update `docs/user-guide/kubernetes-daemons.md`, including how a refreshed credential reaches a pod (the application updates the Secret; the kubelet's own propagation delay, measured on kind, comes before the daemon's 5 s)
 
 ---
 

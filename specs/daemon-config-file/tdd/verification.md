@@ -755,3 +755,90 @@ Sampling: 7 mutants on the highest-risk behaviors (FR-029 read-only, adoption, L
 - Full workspace suite, `mise run gate`, `mise run test-sandbox` real-runtime cases (T035); Windows; `docs/user-guide/sandboxed-daemon.md`.
 - Mutants on `DeliveryMount::beside`, `mount_paths`, `write_if_changed` rename, `kube/manifest.rs`. No coverage tool.
 - Earlier sections untouched. Tasks not appended to `tasks.md` (request scoped writes to this file).
+
+# Issue 7 (#1528) M1: pod daemons read the delivered configuration
+
+```yaml
+scope: Issue 7 (#1528), tasks T036-T039 and T091; merged in PR #1690 (merge SHA 95163863755822fdf0369e6a68904fc08e9d8347); range 2a88331e6..95163863 (code, tests, goldens, docs)
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 951638637
+independent: true # auditor did not write these tests; no subagent smell pass (read by the auditor)
+verdict: FAIL
+behaviors: 0 listed in tdd/test-list.md; 6 task-derived behaviors audited (T036 pod/config map golden and mounts, T037 empty daemon_env, T038 config map apply/replace/remove, T091 TZ/LANG, V3 for a pod, pod daemon does not serve the file's tcp address)
+proven: 0
+likely: 0
+test_after: 6
+no_test: 0
+high_findings: 1 # at 951638637, before remediation; I7-1 to I7-3 are closed in the close PR
+mutants_tried: 8
+mutants_caught: 6
+mutants_survived: 2
+mutation_score: unmeasured # no tool; hand mutants only
+```
+
+**Verdict: FAIL.** `kube_attempt` (`crates/micold-client/src/daemon.rs:1906,1924`) is the only place the pod's file and `TZ` are fed from
+the host time zone, and both can be dropped with every test green (6 of 8 mutants caught; the two survivors are this wiring).
+
+## Test-first evidence (Issue 7)
+
+All six behaviors are `TEST_AFTER`. `cycle-log.md:140-152` says "No red run was recorded ... the tests landed with the code" and that the
+goldens do not compile on `origin/main`; commit `105556324` carries code, tests and goldens together, so ordering cannot be shown (the
+log's own admission, consistent with the history). `test-list.md` has no #1528 rows. `tasks.md` T036-T039, T091 are `[x]` (T039's box is in the
+working-tree diff, uncommitted, at audit time) with no list row to cross-check.
+
+Existing tests changed (read in the diff): no skip, ignore, filter, or threshold change. Assertions removed or reshaped:
+- `core/src/kube/credentials.rs` `the_daemon_env_carries_no_credential...`: `MICOLD_IDLE_STOP`, `MICOLD_REPOS_ROOT`, `POD_ENV` expectations became "no `MICOLD_*` key" (spec-mandated, FR-005; tightened).
+- `core/src/kube/manifest.rs`: `.gitconfig` `subPath` expectations became the directory mount; volume/mount counts 4->5; env expectation swapped `MICOLD_SSH_DIR` for `LANG`; init-container command lost `/data/home`. Spec-driven, each replaced.
+- `core/src/daemon_config/tests.rs:295`: V3 "a pod without `[listen]` is refused" flipped to "accepted" (spec change in this issue, `.listen.is_none()` asserted).
+- `daemon/tests/git_credential_grant.rs:348-357`: **weakened**, see I7-2.
+- `start_tests.rs`: `created[2]` index replaced by a lookup of the Pod (more robust); six reviews became eight; bridge-command check inverted to "no `MICOLD_`".
+
+## Findings (Issue 7)
+
+- **I7-1 HIGH.** `crates/micold-client/src/daemon.rs:1906` (`for_pod(name, &image, time_zone)`) and `:1924` (`time_zone,` in `StartRequest`): mutants F (file rendered with `None` zone) and G (pod gets `time_zone: None`) both SURVIVED `--test main kube` (86 tests, incl. `kube_daemon_start`, `features_daemons`). `kube_attempt` tests (`kube_daemon_start.rs:151,156,248`) never read the config map or the pod env, and `HOST_TIME_ZONE` is a process `OnceLock` (`:100`) that no test sets, so the zone is `None` on both sides of the mutation. The units (`for_pod` golden, `pod(.., Some(zone))`) are tested, the entry point that joins them is not. Add a `kube_attempt` test that sets the host zone and asserts the fake cluster's config map `data["daemon.toml"]` and pod `TZ`; also that an invalid `prepare` result returns the "pod's configuration is invalid" error.
+  **Remediation (done, tests only):** `tests/kube_daemon_start.rs::the_host_time_zone_reaches_the_config_map_and_the_pod_env` installs `Europe/Berlin` and asserts both; mutant F now fails it. The invalid-`prepare` error is not reachable through `kube_attempt` without a production change; left.
+- **I7-2 MEDIUM.** `crates/micold-daemon/tests/git_credential_grant.rs:348-357`: the async test `a_daemon_run_with_only_the_pods_env_announces_targets` (real `connect_and_attach`, asserts a target is announced, `found.len() == 1`) became a synchronous `credential_root_of(&settings).is_some()` check named `a_daemon_run_with_only_the_pods_file_holds_credentials`. Behavior `kind = kubernetes` -> grants taken is no longer exercised through the protocol; partly mitigated by `config_load.rs:429` asserting the same `is_some()`, so the new test is a duplicate of it and the end-to-end check is gone. Restore a `targets` call with `settings.kind = Kubernetes`.
+  **Remediation (done, tests only):** `tests/git_credential_pod.rs::a_daemon_run_with_only_the_pods_file_announces_targets` (own binary: `install` is a process-global `OnceLock`) runs `connect_and_attach` with `kind = Kubernetes` and asserts one announced target.
+- **I7-3 MEDIUM.** T039 is ticked `[x]` and the kind check `kube_real_the_pod_reads_its_configuration_from_the_config_map` was never run on the author's machine (`cycle-log.md:150-152`: harness hangs in `kind load`). PR #1690's "kubernetes daemon on a real cluster (linux)" job is SUCCESS, which is the evidence, but whether the test ran or took the `suite_or_skip` path was not checked here; also the printed propagation delay T039 asks to document is not recorded in the log or the user guide diff. Confirm in the CI log that the test ran and capture the delay.
+  **Remediation (done):** the CI log of PR #1690's kind job shows `test kube_real_the_pod_reads_its_configuration_from_the_config_map ... ok` (it ran, not skipped). The kubelet propagation delay is printed by the test on the CI runner only and was not captured; left as is.
+- **I7-4 MEDIUM.** All behaviors `TEST_AFTER`, no red recorded, no baseline run of the changed tests (cycle-log admits it).
+- **I7-5 LOW.** No #1528 rows in `test-list.md` (T036-T039, T091 have no behavior ids).
+- **I7-6 LOW.** `manifest.rs` `config_and_secret_mounts_are_read_only_and_the_git_one_has_no_sub_path` has conditional logic in the test body (`if path.starts_with(...)`, `if m["name"] != ...`) with an exemption for `/run/micold/git`, so a read-only regression on an exempt path would not fail; the golden covers the git case. `a_stamp_from_before_the_config_map...` builds the old stamp by a string replace of `,"config_map":true`, which breaks silently if the JSON key order changes (the `assert_ne!` guards against a silent no-op, so it fails loudly: acceptable).
+- Not a finding: T038's "directory Secrets" holds for the shared git configuration only; the sign-in mounts keep `subPath` (the test comment points at T065).
+- Smells: no HIGH beyond I7-1. Messages are value-style (`{micold:?}`, `{path}`) rather than rule-style in places (style only).
+
+## Mutation results (Issue 7)
+
+No tool; 8 deliberate mutants, one at a time, restored with `git checkout -- <file>`, `git status` showed only the pre-existing `tasks.md` change after each, and a final re-run of `micold-core --lib kube` (150 passed) and `git_credential_grant` (12 passed) was green. The restored client tree was not re-run in full after F and G (the tree is byte-identical to HEAD).
+
+| Mutant | File | Result |
+|---|---|---|
+| A config mount `readOnly: false` | `kube/manifest.rs:225` | CAUGHT (read-only test and pod golden) |
+| B `GIT_CONFIG_GLOBAL` always set | `kube/credentials.rs:184` | CAUGHT (`the_daemon_env_carries_no_credential...`) |
+| C drop `lacks_config_map` from the recreate rule | `kube/start.rs:573` | CAUGHT (`a_pod_made_before_the_config_map...`) |
+| D never replace a changed config map (`!=` to `==`) | `kube/start.rs:400` | CAUGHT (3 tests) |
+| E `Leftovers.config_map` empty | `kube/lifecycle.rs:138` | CAUGHT (`forget_locally_lists...`) |
+| F file rendered without the host zone | `client/src/daemon.rs:1908` | SURVIVED (I7-1) |
+| G pod `TZ` source `None` | `client/src/daemon.rs:1924` | SURVIVED (I7-1) |
+| H pod daemon serves the file's tcp address | `daemon/src/server.rs:66` | CAUGHT (`a_pods_daemon_does_not_serve...`) |
+
+Sampling: 8 mutants on the highest-risk behaviors (FR-029 read-only, FR-005 no `MICOLD_*`, recreate of old pods, config replace, removal list, zone wiring, V3-driven listener); not exhaustive. Not mutated: `for_pod` fields (the `pod.toml` golden compares the whole text), `access_reviews`, the `remove` delete itself.
+
+## Traceability (Issue 7)
+
+| Criterion | Tests | Status |
+|---|---|---|
+| FR-005 pod env has no `MICOLD_*` (T036, T037) | `manifest::the_container_env_is_home_tmp_and_lang_only...`, `credentials::the_daemon_env_...`, `start_tests::connect` bridge check, golden pod | Covered |
+| FR-005 the pod reads the file (T038) | golden `config_map.json`, `start_tests::the_config_map_holds_the_file...`, `pod.toml` golden, `kube_real_...config_map` (CI only) | Covered at unit and fake-cluster level; the client entry point `kube_attempt` feeding it is not (I7-1); real cluster by CI only |
+| FR-029 read-only, no `subPath` for config and git secret | `manifest` golden and mounts test, `kube_real` mount check | Covered |
+| FR-039 `TZ`/`LANG` (T091) | `manifest::the_pod_has_tz_only_when_...`, `lang` env test, golden | Covered at unit level; host zone to pod untested (I7-1) |
+| Remove/forget lists the config map (T038) | `lifecycle` tests, `features_daemons` prompts | Covered |
+| V3 pod without `[listen]` | `daemon_config/tests.rs:295`, `daemon_config_render` pod test | Covered |
+| T039 kind check and user guide | `kube_real_the_pod_reads_...` | Not run locally; CI job green (I7-3) |
+
+## What was not audited (Issue 7)
+
+- Full workspace suite and `mise run gate`; ran `micold-core --lib kube` (150), `micold-client --test main kube` (86), `git_credential_grant` (12) only. The `kube_real_*` kind test, `mise run test-sandbox`, Windows and macOS.
+- `docs/user-guide/kubernetes-daemons.md` content beyond the diff stat; the CI log of the kubernetes job.
+- Mutants on `for_pod` fields, `access_reviews`, `remove`'s delete, `live.rs` `ConfigMap` mapping (reached only by the kind test). No coverage tool.
+- Earlier sections untouched. Tasks not appended to `tasks.md` (request scoped writes to this file).
