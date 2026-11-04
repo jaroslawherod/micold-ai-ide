@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1671 | Design (milestone for Issue 6) | merged | 2d674a9a494599c2a45de2afca5ab714fa2c43ed |
+| #1687 | M1 | open | — |
 
 ## Milestones
 
 | M | Deliverable | Tasks | Tier | PR |
 |---|---|---|---|---|
-| M1 | container daemons read the same read-only `/run/micold/config/daemon.toml` at boot and over SSH; no `MICOLD_*` env; `LANG=C.UTF-8` | T030–T035, T090 | full | — |
+| M1 | container daemons read the same read-only `/run/micold/config/daemon.toml` at boot and over SSH; no `MICOLD_*` env; `LANG=C.UTF-8` | T030–T035, T090 | full | #1687 |
 
 Checked 2026-11-03: `container_env` is at `daemon.rs:1328` (not 1283); `docs/user-guide/sandboxed-daemon.md` exists; the entrypoint reads no `MICOLD_SSH_DIR` today. Fixed in tasks.md.
 
