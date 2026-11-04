@@ -9,15 +9,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1527
 - **Worktree branch**: feat/1527_deliver-the-configuration-to-container-daemons
 - **Started**: 2026-11-03
-- **Phase**: implement (M1 in progress)
-- **Next step**: PR open; orchestrator waits on CI and merges
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1671 | Design (milestone for Issue 6) | merged | 2d674a9a494599c2a45de2afca5ab714fa2c43ed |
-| #1687 | M1 | open | — |
+| #1687 | M1 | merged | 335ea366160866c9a3e36ddf00cafe8501fb85f1 |
+| #1689 | Close | open | — |
 
 ## Milestones
 
@@ -54,3 +55,8 @@ Real-runtime results (`MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman mise run
 ## Handover
 
 None.
+
+## Close
+
+M1 CI on #1687 was green, including `sandbox against a real runtime (linux)` (docker, 15m17s), `container daemon end to end` (docker and podman), the real-sshd job and the kubernetes job: that is the proof for the boot and SSH start cases; the local podman failures noted above were host issues. `speckit-tdd-verify` (Issue 6 section of `tdd/verification.md`): FAIL before remediation, I6-1 to I6-3 fixed with tests only (verified by mutation); I6-4 to I6-6 (test-after, no tdd rows) left, documented.
+Close review (sonnet, snapshot c343ec9a:335ea366): CLEAN; 3 MINOR doc/test-clarity findings, F1/F2 fixed in verification.md (prose only), F3 optional, not done. Full `mise run gate` green.

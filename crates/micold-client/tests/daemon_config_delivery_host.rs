@@ -198,13 +198,21 @@ mod container {
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
         assert!(errors.is_empty(), "{errors:?}\n{text}");
-        let daemon = config.unwrap().daemon;
+        let config = config.unwrap();
+        let ssh_dir = config.ssh.clone().and_then(|s| s.dir);
+        let daemon = config.daemon;
         assert_eq!(daemon.kind, micold_core::daemon_config::Kind::Container);
         assert_eq!(
             daemon.data_dir.as_deref(),
             Some(Path::new("/var/lib/micold-ai-ide"))
         );
         assert_eq!(daemon.home.as_deref(), Some(home));
+        // The entrypoint reads `[ssh] dir`; the value is the one the container mounts the keys at,
+        // not an unset table (which resolves to None).
+        assert_eq!(
+            ssh_dir.as_deref(),
+            Some(Path::new(micold_core::sandbox::argv::CONTAINER_SSH_DIR))
+        );
         assert_eq!(daemon.image.as_deref(), Some("acme/ssh:1"));
         assert_eq!(
             daemon.idle_stop,

@@ -2050,6 +2050,73 @@ mod tests {
         }
     }
 
+    /// #1527, FR-005: a real start writes the daemon's configuration where the container mounts it
+    /// read-only. Without it the container has no `daemon.toml` to read.
+    #[test]
+    fn a_bring_up_writes_the_daemons_configuration_into_the_delivery_folder() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_dir = dir.path().join("state");
+        let facts = facts_with_history(&state_dir, state_dir.join("terminal-history"), None);
+        let delivery = micold_core::sandbox::DeliveryMount::beside(&state_dir);
+        let calls = a_runtime_that_creates_the_sandbox();
+
+        let _ = start(
+            &SandboxProfile::default(),
+            &[],
+            &facts,
+            CONTAINER_NAME,
+            DEFAULT_SANDBOX_PORT,
+            &calls,
+            &mut |_| {},
+        );
+
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml"))
+            .expect("the start wrote daemon.toml");
+        assert!(text.contains("container"), "{text}");
+        assert!(delivery.secrets.is_dir(), "the secrets folder is made too");
+    }
+
+    /// #1527: a configuration that cannot be written stops the start as a preparation failure,
+    /// before the runtime is called, instead of a container without one.
+    #[test]
+    fn a_delivery_that_cannot_be_written_stops_the_start_as_preparation_failed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_dir = dir.path().join("state");
+        // A file where the delivery folder belongs, so it cannot be made.
+        std::fs::write(dir.path().join("state.delivery"), "in the way").unwrap();
+        let facts = facts_with_history(&state_dir, state_dir.join("terminal-history"), None);
+        let calls = a_runtime_that_creates_the_sandbox();
+
+        let outcome = start(
+            &SandboxProfile::default(),
+            &[],
+            &facts,
+            CONTAINER_NAME,
+            DEFAULT_SANDBOX_PORT,
+            &calls,
+            &mut |_| {},
+        );
+
+        let failure = match outcome {
+            Ok(_) => panic!("the start went on without a configuration"),
+            Err(f) => f,
+        };
+        assert!(
+            failure
+                .report()
+                .contains("could not write the daemon's configuration"),
+            "{}",
+            failure.report()
+        );
+        assert!(
+            calls
+                .calls()
+                .iter()
+                .all(|c| c.args_lossy().first().map(String::as_str) != Some("create")),
+            "a container was created without its configuration"
+        );
+    }
+
     /// Feature 041, R11: the zone `gather` records is the machine's IANA zone.
     #[test]
     fn gather_records_the_hosts_iana_time_zone() {
