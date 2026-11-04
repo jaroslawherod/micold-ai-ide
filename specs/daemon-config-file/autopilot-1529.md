@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1681 | Design (milestone for Issue 8) | MERGED | e42ca1e77c49dc2cf7273a45f610601b3fc261bc |
+| #1684 | Milestone M1 | OPEN | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T040–T045 | full | tokens stored by name, one-repository refusal gone, Settings lists tokens in file order with reach, used and shadowed token per repository; existing per-repository tokens migrate unchanged | — | in progress |
+| M1 | T040–T045 | full | tokens stored by name, one-repository refusal gone, Settings lists tokens in file order with reach, used and shadowed token per repository; existing per-repository tokens migrate unchanged | #1684 | in review |
 
 ## Decisions
 
