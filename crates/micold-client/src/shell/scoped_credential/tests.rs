@@ -460,3 +460,114 @@ fn one_token_for_a_whole_organisation_is_granted_to_each_of_its_repositories() {
         ]
     );
 }
+
+#[test]
+fn ureq_transport_sends_the_contract_headers_and_reads_the_reply_headers() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/repos/o/a", listener.local_addr().unwrap());
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut raw = Vec::new();
+        let mut buf = [0u8; 1024];
+        while !String::from_utf8_lossy(&raw).contains("\r\n\r\n") {
+            let n = stream.read(&mut buf).unwrap();
+            assert!(n > 0, "closed before the headers");
+            raw.extend_from_slice(&buf[..n]);
+        }
+        let body = "{\"message\":\"Not Found\"}";
+        write!(
+            stream,
+            "HTTP/1.1 404 Not Found\r\nX-Test: yes\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+        String::from_utf8(raw).unwrap()
+    });
+    let reply = UreqTransport::default()
+        .get(&url, &SecretToken::new(PAT_A))
+        .unwrap();
+    assert_eq!((reply.status, reply.header("x-test")), (404, Some("yes")));
+    assert_eq!(reply.body, "{\"message\":\"Not Found\"}");
+    let seen = server.join().unwrap().to_ascii_lowercase();
+    assert!(seen.starts_with("get /repos/o/a http/1.1"));
+    for header in [
+        &format!("authorization: bearer {}", PAT_A.to_ascii_lowercase()),
+        "accept: application/vnd.github+json",
+        "x-github-api-version: 2022-11-28",
+        "user-agent: micold-ai-ide",
+    ] {
+        assert!(seen.contains(header), "missing {header} in {seen}");
+    }
+}
+
+#[test]
+fn a_transport_failure_is_short_and_carries_no_token() {
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/x", closed.local_addr().unwrap());
+    drop(closed);
+    let error = UreqTransport::default()
+        .get(&url, &SecretToken::new(PAT_A))
+        .unwrap_err();
+    assert!(
+        !error.contains(PAT_A) && error.chars().count() <= 80,
+        "{error}"
+    );
+}
+
+#[test]
+fn statuses_are_reported_once_per_change_and_cleared_when_the_daemon_stops() {
+    let mut rig = Rig::new();
+    let (send, _log) = sink();
+    rig.manager
+        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
+    rig.run();
+    let now = rig.now();
+    let not_set_up = BTreeMap::from([(
+        PathBuf::from("/pa"),
+        CredentialStatus::None(NoCredentialReason::SourceNotSetUp),
+    )]);
+    assert_eq!(
+        rig.manager.changed_statuses(now),
+        vec![(DaemonId(1), not_set_up)]
+    );
+    assert!(
+        rig.manager.changed_statuses(now).is_empty(),
+        "nothing changed"
+    );
+    rig.store_pat("a", PAT_A);
+    rig.manager.refresh_all(now);
+    rig.run();
+    let changed = rig.manager.changed_statuses(now);
+    assert!(matches!(
+        changed.as_slice(),
+        [(DaemonId(1), s)] if matches!(s.get(Path::new("/pa")), Some(CredentialStatus::Held { .. }))
+    ));
+    rig.manager.stopped(DaemonId(1));
+    assert_eq!(
+        rig.manager.changed_statuses(now),
+        vec![(DaemonId(1), BTreeMap::new())]
+    );
+    assert!(rig.manager.changed_statuses(now).is_empty());
+}
+
+#[test]
+fn a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry() {
+    let mut rig = Rig::new();
+    rig.store_pat("a", PAT_A);
+    let (send, _log) = sink();
+    rig.manager
+        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
+    rig.run();
+    assert_eq!(rig.manager.changed_statuses(rig.now()).len(), 1);
+    let warn_at = T0 + 30 * DAY - EXPIRY_WARNING_SECS;
+    assert_eq!(rig.manager.next_wake(rig.now()), Some(warn_at));
+    rig.advance(warn_at - rig.now());
+    rig.run();
+    assert_eq!(
+        rig.manager.changed_statuses(rig.now()).len(),
+        1,
+        "the warning is news"
+    );
+    assert_eq!(rig.manager.next_wake(rig.now()), Some(T0 + 30 * DAY));
+}

@@ -105,9 +105,12 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             let names = app.core.settings.github_tokens.names();
             match PatStore::on_device().map_or(Ok(()), |store| store.set_order(&names)) {
                 Ok(()) => refresh_github_tokens(app),
-                Err(e) => app
-                    .core
-                    .notify_error(format!("Couldn't keep the order of the GitHub tokens: {e}")),
+                Err(e) => {
+                    app.core
+                        .notify_error(format!("Couldn't keep the order of the GitHub tokens: {e}"));
+                    // Show what the store holds, not the order that was not kept.
+                    load_github_tokens(app);
+                }
             }
             Task::none()
         }

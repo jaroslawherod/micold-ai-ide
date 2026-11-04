@@ -36,8 +36,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Tasks | 1 | 07cb9a5b6f2547974183bbc6c1458e3919838de0:70539f472a111826ae2b4480391002acaf5b7df2 | CLEAN; 2 MINOR fixed (T042 path, render assertion), prose only |
+| M1 A (code-review high) | 1 | 59d20c7229e75aba83fb136c566b6384dfab399e:4fe0bd618e8f6c0760e91e865be39f44d3a8d564 | 10 findings: 5 fixed (migrate loop on long names, once-per-run migration, dropped tests restored, set_order failure reloads, dedup), 5 declined |
 
 ## Declined review findings
+
+- M1 A: `GithubTokenSetting::from_store` is not wired into `DaemonSettings::from_entry`. Delivering a token file path to a daemon needs the mounts the delivery issues (5-7) create; wiring host paths now would write unreachable paths into container configs. Recorded as a follow-up.
+- M1 A: an unfiltered token always wins over a later unfiltered one. The contract (`[[github.tokens]]`, D6) says the first in file order wins among equally specific tokens; the reach cache (`github-reach.json`) is not part of M1.
+- M1 A: an expired specific token blocks a valid less specific one. The contract chooses by specificity and file order only; Settings warns on the expiring row.
+- M1 A: push permission is probed on the first exact repo only. `pat::check` probes the actual repository at every issue, so a token that cannot push there is refused with its reason.
+- M1 A: `store.list()` per issue. Tokens are few; no measured cost.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -52,4 +59,5 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- Wire `GithubTokenSetting::from_store` into `DaemonSettings::from_entry` when the delivery issues mount token files into containers (render and `[[github.tokens]]` are done and tested).
+- Persist the reach in `<data_dir>/github-reach.json` by token fingerprint (contract); Settings now shows reach only for the filter, or the listing of the token pasted this session.
