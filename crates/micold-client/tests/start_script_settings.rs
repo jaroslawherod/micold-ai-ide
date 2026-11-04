@@ -33,7 +33,10 @@ fn with_startup(settings: StartupSettings) -> DaemonSettings {
 #[test]
 fn the_group_is_offered_only_for_a_kind_that_delivers() {
     for runtime in RUNTIMES {
-        let delivered = matches!(runtime, DraftRuntime::Ssh | DraftRuntime::Host);
+        let delivered = matches!(
+            runtime,
+            DraftRuntime::Ssh | DraftRuntime::Host | DraftRuntime::Container
+        );
         assert_eq!(
             Section::of(runtime).contains(&Section::StartScript),
             delivered,

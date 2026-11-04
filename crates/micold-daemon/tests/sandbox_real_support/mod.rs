@@ -467,6 +467,23 @@ pub fn start_no_outbound_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     start_sandbox_on(spec, &image(), &[], &opts)
 }
 
+/// The start script the next sandbox is delivered, as the application delivers it (#1533). Set by
+/// the one test file that probes it, before it starts its sandboxes.
+static STARTUP: std::sync::Mutex<Option<micold_client::daemon_config_render::StartupTable>> =
+    std::sync::Mutex::new(None);
+
+/// Delivers `script` (a file in `dir`) as the start script of the sandboxes started from now on.
+pub fn deliver_start_script(dir: &Path, script: &str) {
+    use micold_core::daemons::{StartupScript, StartupSettings};
+    let path = dir.join("start.sh");
+    std::fs::write(&path, script).unwrap();
+    *STARTUP.lock().unwrap_or_else(|e| e.into_inner()) =
+        Some(micold_client::daemon_config_render::StartupTable {
+            settings: StartupSettings::new(StartupScript::File(path.clone())),
+            script_file: path,
+        });
+}
+
 /// Runs the runtime CLI with the original XDG variables, so a probe sees the runtime the rest of
 /// the harness drives ([`runtime_cmd`]).
 struct OriginalXdgRunner;
@@ -619,6 +636,7 @@ fn start_sandbox_on(
         &profile,
         Path::new(spec.home),
         &delivery,
+        STARTUP.lock().unwrap_or_else(|e| e.into_inner()).as_ref(),
     )
     .expect("deliver the daemon's configuration");
     let config_mount = bind_mount(
@@ -964,13 +982,18 @@ pub async fn provision_and_connect(port: u16) -> (DaemonConnection, Welcome) {
     }
 }
 
-fn reason_context(port: u16) -> ReasonContext {
+pub fn reason_context(port: u16) -> ReasonContext {
     ReasonContext {
         host: "127.0.0.1".to_string(),
         port,
         timeout_secs: 30,
         platform: ClientPlatform::current(),
     }
+}
+
+/// The step bounds of a container bring-up, as the client uses them.
+pub fn container_bounds() -> StepBounds {
+    StepBounds::container()
 }
 
 /// How long the harness asks a started container for its login name.

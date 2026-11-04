@@ -659,7 +659,7 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
             .map(|x| s.section_open(*x))
             .collect()
     };
-    assert_eq!(open(&state), vec![true, false, false, false, false, false]);
+    assert_eq!(open(&state), vec![true, false, false, false, false, false, false]);
 
     let draft = state.draft.clone();
     let saved = w.registry.clone();

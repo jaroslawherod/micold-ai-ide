@@ -357,6 +357,10 @@ fn boot() -> (App, Task<Message>) {
             projects: projects_for_sandbox,
             container_name,
             port,
+            startup: crate::shell::sandbox::BootPlan::startup_of(
+                &core.settings.daemons,
+                core.settings.legacy_default_daemon,
+            ),
         }
     });
 

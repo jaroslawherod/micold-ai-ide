@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::app::Message;
+use micold_client::daemon_config_render::{DaemonSettings, StartupTable};
 use micold_client::features::sandbox::{Msg as SandboxMsg, SandboxLocations};
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
 use micold_core::provision::{rollback, AttemptLedger, CancelToken};
@@ -296,6 +297,7 @@ pub fn start<R: CommandRunner>(
         facts,
         container_name,
         port,
+        None,
         runner,
         &CancelToken::new(),
         &mut AttemptLedger::new(),
@@ -313,6 +315,7 @@ pub fn start_attempt<R: CommandRunner>(
     facts: &HostFacts,
     container_name: &str,
     port: u16,
+    startup: Option<&StartupTable>,
     runner: R,
     cancel: &CancelToken,
     ledger: &mut AttemptLedger,
@@ -362,6 +365,7 @@ pub fn start_attempt<R: CommandRunner>(
             profile,
             &mounts.home.container,
             delivery,
+            startup,
         ) {
             return Err(preparation_failed(format!(
                 "could not write the daemon's configuration to {}: {e}",
@@ -714,6 +718,8 @@ pub struct BootPlan {
     /// The loopback port its control channel is published on; from the bound daemon entry
     /// (feature 491).
     pub port: u16,
+    /// The daemon's start script and `[startup]` keys, delivered with its configuration (#1533).
+    pub startup: Option<StartupTable>,
 }
 
 impl BootPlan {
@@ -740,6 +746,16 @@ impl BootPlan {
             Some(DaemonRuntime::Container(c)) => (c.container_name.clone(), c.port),
             _ => (CONTAINER_NAME.to_string(), DEFAULT_SANDBOX_PORT),
         }
+    }
+
+    /// The start script of the daemon [`Self::identity_of`] names, as its entry holds it.
+    pub fn startup_of(
+        registry: &micold_core::daemons::DaemonRegistry,
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    ) -> Option<StartupTable> {
+        let entry =
+            Self::sandbox_daemon(registry, legacy_default).and_then(|id| registry.get(id))?;
+        DaemonSettings::from_entry(entry).and_then(|(settings, _)| settings.startup)
     }
 }
 
@@ -822,6 +838,7 @@ impl micold_client::daemon::ContainerStarter for DaemonContainers {
             &facts,
             container_name,
             port,
+            setup.startup.as_ref(),
             &runner,
             cancel,
             &mut ledger,
@@ -990,6 +1007,7 @@ impl BringUp {
                 &facts,
                 &plan.container_name,
                 plan.port,
+                plan.startup.as_ref(),
                 &runner,
                 &cancelled,
                 &mut ledger,
@@ -1497,6 +1515,7 @@ mod tests {
             projects: Vec::new(),
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
+            startup: None,
         };
 
         let messages: Vec<Message> = BringUp::now(plan)
@@ -1604,6 +1623,7 @@ mod tests {
             projects: Vec::new(),
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
+            startup: None,
         };
         let runtime = CancelledDuring::scripted(
             a_runtime_that_creates_the_sandbox_then(Ok(
@@ -1657,6 +1677,7 @@ mod tests {
             projects: Vec::new(),
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
+            startup: None,
         };
         let mut running = None;
         let _task = BringUp::now(plan).run(&mut running);
@@ -1676,6 +1697,7 @@ mod tests {
             projects: Vec::new(),
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
+            startup: None,
         };
         let runtime = CancelledDuring::new(cancel_on);
         let (runtime_log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
@@ -2489,6 +2511,7 @@ mod tests {
             projects: vec![PathBuf::from("/proj/P")],
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
+            startup: None,
         }
     }
 

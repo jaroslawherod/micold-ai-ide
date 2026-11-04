@@ -304,6 +304,29 @@ in a container run with `LANG=C.UTF-8` unless the daemon already has a `LANG` of
 The SSH server's keys are read from the file's `[ssh] dir`, which is `/run/micold/ssh` unless the
 file says otherwise.
 
+### A start script for a container daemon
+
+A container daemon can run a start script before it serves, set in **Settings → Daemons → Start
+script** ([all the keys](daemon-configuration.md#setting-it-up-in-settings-and-how-it-reaches-the-daemon)).
+The application writes the script as `startup.sh` into the config folder and the `env_file` as
+`startup.env` into the secrets folder (both mode `0600`), and `daemon.toml` names them at
+`/run/micold/config/startup.sh` and `/run/micold/secrets/startup.env`. Neither the script text nor a
+secret is in `daemon.toml`. A script you remove from the daemon is removed from those folders at the
+next start.
+
+- **It runs as the daemon's own user, never root,** with `HOME` set to the container home the
+  sessions use. It runs the same way when the container is started as the application opens and
+  when the daemon is started over SSH.
+- **Install under `~/.local`.** The home survives the container, so a tool the script puts in
+  `~/.local/bin` is there for every session, and a script with `run = "once_per_container"` installs
+  it once. Anything outside the home is lost when the container is replaced.
+- **A refused start is visible.** The daemon's error state shows the exit status and the last 200
+  lines of the script's output; the whole output is in the daemon log under the `startup` target.
+  When the daemon the container starts at boot refuses, the container's own log says so, and the
+  application shows the failure at its next connection.
+- **A change applies after a restart:** the files are rewritten when the application starts the
+  container, and the daemon runs the new script at its next start.
+
 ### Dropping files into a sandboxed session
 
 Dropping a file on a sandboxed terminal (or pasting a screenshot) inserts the path **the container
