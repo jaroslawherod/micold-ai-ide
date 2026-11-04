@@ -48,6 +48,9 @@ pub struct DaemonSettings {
     pub clone_root: Option<PathBuf>,
     /// `[[projects]]`; none without a file.
     pub projects: Vec<ConfiguredProject>,
+    /// The configuration file this daemon was started with; sessions get it as
+    /// `MICOLD_DAEMON_CONFIG` so the credential helper reads the live tokens (#1530).
+    pub config_path: Option<PathBuf>,
 }
 
 /// Reads the process environment, as the daemon does.
@@ -80,6 +83,7 @@ impl DaemonSettings {
             token_file: path(env, micold_core::protocol::auth::TOKEN_PATH_ENV),
             clone_root: path(env, crate::repo_clone::ROOT_ENV),
             projects: Vec::new(),
+            config_path: None,
         };
         let Some(config) = config else {
             return from_env;
@@ -128,6 +132,7 @@ impl DaemonSettings {
                     remote: p.remote.clone(),
                 })
                 .collect(),
+            config_path: None,
         }
     }
 

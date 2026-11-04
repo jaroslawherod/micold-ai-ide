@@ -289,13 +289,96 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
         .is_file();
     let lang_inherited = std::env::var_os("LANG").is_some_and(|v| !v.is_empty());
-    env_hygiene_with(
+    let mut edits = env_hygiene_with(
         target,
         data_dir.as_deref(),
         exe.as_deref(),
         identity_exists,
         lang_inherited,
-    )
+    );
+    // After the legacy edits: the configuration's helper, reset and rewrite replace theirs.
+    edits.extend(config_git_edits(
+        &crate::settings::current(),
+        exe.as_deref(),
+    ));
+    edits
+}
+
+/// The git environment the configuration asks for (#1530, FR-010, research D7): the daemon's
+/// file is read now, so a token added since start is honoured by the next session. Empty for a
+/// daemon with no file, and on host and SSH while no token is configured.
+pub(crate) fn config_git_edits(
+    settings: &crate::settings::DaemonSettings,
+    exe: Option<&std::path::Path>,
+) -> Vec<EnvEdit> {
+    use micold_core::daemon_config::Kind;
+    use micold_core::scoped_credential::git_env::{session_git_env, SessionGit};
+    use micold_core::scoped_credential::reach::forge_base;
+    let (Some(path), Some(exe)) = (
+        settings.config_path.as_deref(),
+        exe.and_then(std::path::Path::to_str),
+    ) else {
+        return Vec::new();
+    };
+    let Ok(loaded) = crate::config_load::load_file(path) else {
+        return Vec::new();
+    };
+    let config = &loaded.config;
+    let mut bases: Vec<String> = Vec::new();
+    for token in &config.github.tokens {
+        let base = forge_base(
+            token
+                .host
+                .as_deref()
+                .unwrap_or(micold_core::daemon_config::DEFAULT_FORGE_HOST),
+        );
+        if !bases.contains(&base) {
+            bases.push(base);
+        }
+    }
+    let isolate = config.git.isolate_host_helpers.unwrap_or(matches!(
+        config.daemon.kind,
+        Kind::Container | Kind::Kubernetes
+    ));
+    let fallback = if isolate || bases.is_empty() {
+        Vec::new()
+    } else {
+        captured_helpers(&bases)
+    };
+    let daemon = shell_word(exe);
+    let config_path = path.to_string_lossy();
+    let git = SessionGit {
+        bases: &bases,
+        daemon: &daemon,
+        config: &config_path,
+        isolate,
+        ssh_to_https: config.git.ssh_to_https.unwrap_or(true),
+        fallback: &fallback,
+    };
+    session_git_env(&git)
+        .into_iter()
+        .map(|(k, v)| EnvEdit::Set(k.into(), v.into()))
+        .collect()
+}
+
+/// The credential helpers git names before our reset: those for each forge, then the general ones.
+fn captured_helpers(bases: &[String]) -> Vec<String> {
+    let ask = |key: String| {
+        let mut cmd = std::process::Command::new("git");
+        let out = micold_core::process::no_window(&mut cmd)
+            .args(["config", "--get-all", &key])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+        micold_core::scoped_credential::git_env::parse_helper_list(&out.unwrap_or_default())
+    };
+    let mut helpers = Vec::new();
+    for base in bases {
+        helpers.extend(ask(format!("credential.{base}.helper")));
+    }
+    helpers.extend(ask("credential.helper".to_string()));
+    helpers
 }
 
 /// [`env_hygiene`] with the process facts it reads passed in, so a test can drive the wiring.
@@ -1363,5 +1446,114 @@ mod windows_tests {
             done_rx.recv_timeout(DROP_BUDGET).is_ok(),
             "dropping the session did not return within {DROP_BUDGET:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod config_git_tests {
+    use super::*;
+    use std::path::Path;
+
+    const EXE: &str = "/usr/bin/micold-daemon";
+
+    fn set(edits: &[EnvEdit]) -> std::collections::BTreeMap<String, String> {
+        edits
+            .iter()
+            .filter_map(|e| match e {
+                EnvEdit::Set(k, v) => Some((
+                    k.to_string_lossy().into_owned(),
+                    v.to_string_lossy().into_owned(),
+                )),
+                EnvEdit::Remove(_) => None,
+            })
+            .collect()
+    }
+
+    /// The edits of a daemon whose file has kind `kind` and `tokens` tokens, plus `git` lines.
+    fn edits(kind: &str, tokens: usize, git: &str) -> (tempfile::TempDir, Vec<EnvEdit>) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut text = format!("schema = 1\n[daemon]\nname = \"t\"\nkind = \"{kind}\"\n");
+        if kind == "container" || kind == "kubernetes" {
+            text.push_str("image = \"img\"\n[listen]\ntcp = \"127.0.0.1:7000\"\n");
+            let client = dir.path().join("client");
+            std::fs::write(&client, "x").unwrap();
+            #[cfg(unix)]
+            std::fs::set_permissions(&client, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+                .unwrap();
+            text.push_str(&format!(
+                "[auth]\nclient_token_file = \"{}/client\"\n",
+                dir.path().display()
+            ));
+        }
+        text.push_str(&format!("[git]\n{git}\n"));
+        for i in 0..tokens {
+            text.push_str(&format!(
+                "[[github.tokens]]\nname = \"t{i}\"\ntoken_file = \"{}/t{i}\"\n",
+                dir.path().display()
+            ));
+        }
+        let file = dir.path().join("daemon.toml");
+        std::fs::write(&file, text).unwrap();
+        let settings = crate::settings::DaemonSettings {
+            config_path: Some(file),
+            ..Default::default()
+        };
+        let edits = config_git_edits(&settings, Some(Path::new(EXE)));
+        (dir, edits)
+    }
+
+    #[test]
+    fn a_host_daemon_with_no_token_leaves_the_sessions_git_untouched() {
+        assert!(edits("host", 0, "").1.is_empty());
+    }
+
+    #[test]
+    fn a_host_daemon_with_a_token_resets_adds_its_helper_and_names_the_file() {
+        let (dir, edits) = edits("host", 1, "");
+        let env = set(&edits);
+        // Only the token forge's list is reset: the session's helpers for other hosts keep working.
+        assert_eq!(
+            env["GIT_CONFIG_KEY_0"],
+            "credential.https://github.com.helper"
+        );
+        assert_eq!(env["GIT_CONFIG_VALUE_0"], "");
+        assert_eq!(env["GIT_CONFIG_VALUE_1"], format!("!{EXE} git-credential"));
+        assert_eq!(
+            env["MICOLD_DAEMON_CONFIG"],
+            dir.path().join("daemon.toml").to_string_lossy()
+        );
+        // The host's own helpers stay available to ours as the fallback.
+        assert!(!env.contains_key("GIT_TERMINAL_PROMPT"));
+    }
+
+    #[test]
+    fn a_sandbox_clears_inherited_helpers_with_or_without_a_token() {
+        for tokens in [0, 1] {
+            let env = set(&edits("container", tokens, "").1);
+            assert_eq!(env["GIT_CONFIG_KEY_0"], "credential.helper", "{tokens}");
+            assert_eq!(env["GIT_CONFIG_VALUE_0"], "");
+            assert_eq!(env["GIT_TERMINAL_PROMPT"], "0");
+            assert!(!env.contains_key("MICOLD_GIT_FALLBACK_HELPERS"));
+        }
+    }
+
+    #[test]
+    fn the_git_table_overrides_isolation_and_the_rewrite() {
+        let env = set(&edits(
+            "host",
+            1,
+            "isolate_host_helpers = true\nssh_to_https = false",
+        )
+        .1);
+        assert_eq!(env["GIT_TERMINAL_PROMPT"], "0");
+        assert!(!env.values().any(|v| v == "git@github.com:"));
+        let env = set(&edits("host", 1, "").1);
+        assert!(env.values().any(|v| v == "git@github.com:"));
+    }
+
+    #[test]
+    fn a_daemon_without_a_file_adds_nothing() {
+        let settings = crate::settings::DaemonSettings::default();
+        assert!(config_git_edits(&settings, Some(Path::new(EXE))).is_empty());
     }
 }

@@ -115,6 +115,7 @@ Append only. Newest last.
   (`189ccd5ff`, `8a5e7f12c`), so these behaviors are `TEST_AFTER`. `tdd/verification.md`
   (Issue 5) lists the gaps found afterwards; T131-T136 and T138 closed them, each checked against
   the mutant it names.
+
 ## Issue 6 (#1527) M1: container daemons read the delivered configuration (T030-T035, T090)
 
 Honest account: the `tdd.run` hook did not run in this part, so there is no per-behaviour red run
@@ -150,3 +151,13 @@ below is by mutation on the green tree, not an observed failing-first run.
 - The live kind check (`kube_real_the_pod_reads_its_configuration_from_the_config_map`) is written; on
   this machine the harness hangs in `kind load` under the podman provider, so CI's `kube-cluster`
   job is where it runs.
+
+## Issue 9 (#1530) M1: the helper chooses the token from the configuration (T046-T052, T093)
+
+- Baseline: `scoped_credential::git_env` 4 tests and `--test git_credential_grant` 11 passed on `origin/main`.
+- No red run was recorded: tests and code landed together (`TEST_AFTER`), as for Issue 5 M1a. Each new
+  test was written against the rule it names (tasks.md T046-T049).
+- Green: `daemon_config::matching` 6, `scoped_credential::reach` 8, `scoped_credential::git_env` 9 (5 new),
+  `--test git_credential_config` 5 (fake forge: choice, ties, replaced file, reach cache by fingerprint and the
+  once-a-minute miss, expiry, fallback), `supervisor::config_git_tests` 5 (host untouched with no token, sandbox
+  cleared with or without one), `--test git_credential_grant` 11 unchanged (legacy path while `MICOLD_DAEMON_CONFIG` is unset).

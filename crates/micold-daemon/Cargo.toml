@@ -35,6 +35,9 @@ interprocess = { workspace = true }
 bytes = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Reach discovery for the credential helper (#1530, research D6): the daemon asks GitHub which
+# repositories each token can see. Same workspace version the client uses.
+ureq = { workspace = true }
 futures-util = { workspace = true }
 # Per-session hook tokens + session-uuid path parsing for the loopback activity receiver (US2, T045).
 uuid = { workspace = true }
@@ -149,6 +152,10 @@ path = "tests/exclusivity.rs"
 [[test]]
 name = "fatal_startup_is_logged"
 path = "tests/fatal_startup_is_logged.rs"
+
+[[test]]
+name = "git_credential_config"
+path = "tests/git_credential_config.rs"
 
 [[test]]
 name = "git_credential_grant"

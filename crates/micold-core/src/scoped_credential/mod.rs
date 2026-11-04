@@ -18,6 +18,7 @@ pub mod gitconfig;
 pub mod helper;
 pub mod pat;
 pub mod pat_store;
+pub mod reach;
 pub mod schedule;
 pub mod token_choice;
 

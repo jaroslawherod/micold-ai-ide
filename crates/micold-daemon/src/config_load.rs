@@ -290,6 +290,9 @@ pub fn load_startup(
             });
         }
     }
-    let settings = DaemonSettings::resolve(file.as_ref().map(|f| &f.config), env);
+    let mut settings = DaemonSettings::resolve(file.as_ref().map(|f| &f.config), env);
+    settings.config_path = file
+        .as_ref()
+        .map(|f| std::path::absolute(&f.path).unwrap_or_else(|_| f.path.clone()));
     Ok(Startup { file, settings })
 }

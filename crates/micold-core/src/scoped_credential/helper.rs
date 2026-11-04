@@ -63,7 +63,7 @@ pub fn parse_credential_file(text: &str) -> Option<(UnixTime, String)> {
 }
 
 /// `(scheme, host[:port])` of a base such as `https://github.com`.
-fn split_base(base: &str) -> Option<(&str, &str)> {
+pub fn split_base(base: &str) -> Option<(&str, &str)> {
     let (scheme, rest) = base.split_once("://")?;
     let host = rest.trim_end_matches('/');
     (!host.is_empty() && !host.contains('/')).then_some((scheme, host))
@@ -71,7 +71,7 @@ fn split_base(base: &str) -> Option<(&str, &str)> {
 
 /// `owner/repo`, lower-cased, from a request path (`o/r`, `o/r.git`, `o/r/`); `None` for any other
 /// shape, so nothing but two plain names ever reaches the file system.
-fn repo_key(path: &str) -> Option<(String, String)> {
+pub fn repo_key(path: &str) -> Option<(String, String)> {
     let path = path.trim_end_matches('/');
     let path = path.strip_suffix(".git").unwrap_or(path);
     let (owner, repo) = path.split_once('/')?;
