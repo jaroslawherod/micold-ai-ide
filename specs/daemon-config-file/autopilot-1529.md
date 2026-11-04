@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1529_one-github-token-for-many-repositories
 - **Started**: 2026-11-04
 - **Phase**: milestone M1 (implemented, in review)
-- **Next step**: review A, gate, PR for M1
+- **Next step**: PR for M1 open; orchestrator waits on CI and merges
 
 ## Pull requests
 
@@ -36,6 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Tasks | 1 | 07cb9a5b6f2547974183bbc6c1458e3919838de0:70539f472a111826ae2b4480391002acaf5b7df2 | CLEAN; 2 MINOR fixed (T042 path, render assertion), prose only |
+| M1 B (conformance, sonnet) | 1 | f2a97af7fa29f7bbb18688c8fd67de0f1bf39984:8d7581194dfde2f54b29be84452c66a98ee308fd | CLEAN; 1 MINOR (from_store not wired) is the recorded follow-up |
+| M1 visual pass | 1 | - | narrowest width clipped Move up/down; fixed (second button row), layout snapshot updated |
 | M1 A (code-review high) | 1 | 59d20c7229e75aba83fb136c566b6384dfab399e:4fe0bd618e8f6c0760e91e865be39f44d3a8d564 | 10 findings: 5 fixed (migrate loop on long names, once-per-run migration, dropped tests restored, set_order failure reloads, dedup), 5 declined |
 
 ## Declined review findings
