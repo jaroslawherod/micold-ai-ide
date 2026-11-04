@@ -61,6 +61,8 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 | Code M4 B | 2 | fix diff | CLEAN (1 MINOR: second test module in classify.rs, not fixed) |
 | Code M1 A (code-review high) | 1 | 3e019daf9ea5:761a3fb9e52b | CLEAN (3 MINOR; F1 invalid env name fixed with test; F2, F3 declined, see Declined) |
 | Code M1 B (conformance) | 1 | 3e019daf9ea5:761a3fb9e52b | CHANGES: 1 MAJOR (no red evidence) answered by tdd/cycle-log.md recording the deviation (evidence only, not re-run); T004 text reworded; B could not run Verify (build lock); unit ran core + daemon startup_script tests green |
+| Code M5 A (code-review high) | 1 | 33749c64:2a88331e | CHANGES: F1 MAJOR (boot plan refresh) fixed, F2 MINOR doc added |
+| Code M5 B (conformance) | 1 | abcc80e9:93e89981 | CHANGES: F1 MAJOR (cycle-log M5 section) added; F2 MINOR remote.rs no change recorded in cycle log; F3 sandbox result below |
 
 ## Declined review findings
 
@@ -74,10 +76,7 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-M5 implemented, uncommitted until this handover commit; no PR yet. Done: T030-T033 ticked; deliver_container(.., startup) writes startup.sh to config dir, startup.env to secrets dir (paths /run/micold/config|secrets), removes stale copies; startup threaded through ContainerBringUp, BootPlan (+startup_of, refresh in routing.rs refresh_sandbox_boot, test in service_control.rs), start_attempt; start_script_delivered now true for Container; entrypoint.sh names a non-zero daemon exit (+ test in scripts/tests/basic-entrypoint.test.sh); docs in sandboxed-daemon.md and daemon-configuration.md; sandbox_real_startup.rs (wired in micold-daemon Cargo.toml, not yet compiled/run).
-Review A round 1 (snapshot 33749c64:2a88331e): F1 MAJOR fixed (boot plan refresh), F2 MINOR doc added.
-Next: (1) scoped gate: 4 client tests were updated for container showing the group (daemons_feature, daemons_section_geometry x2 incl. test name `the_container_form_paints_six_titles...`, features_daemon_sections) - rerun `scripts/autopilot/scoped-gate.sh` (detached, hold.sh) and fix; also compile `cargo test -p micold-daemon --features sandbox-real-runtime --no-run --test sandbox_real_startup`; (2) `mise run image` + `mise run test-sandbox` (podman present) for Verify; (3) Review B (conformance, sonnet) once; (4) visual pass for the container form's Start script group; (5) full gate, PR "feat(1533): deliver the start script to container daemons (#1533)", body Refs #1533, then record PR in ledger. Prior PR #1682 merge SHA 3af058506bbe0e95b0b8e3e31801c8388b23604c.
-Follow-up: a content change to the script alone does not change the actor identity; delivered at next start.
+None.
 
 ## Open escalation
 
@@ -101,3 +100,7 @@ PR #1673 carries `docs-not-needed`: the Start script group is hidden for every k
 ## M4 notes
 
 #1526 delivery (host `deliver_host`, SSH `ConfigDelivery`) is on main. M4 follows its layout: host `<data_dir>/startup.sh|env`, SSH `~/.micold/remote/secrets/startup.sh|env`; SSH config carries `/__MICOLD_REMOTE_HOME__` which `deliver_config` swaps for the probe's home. Spawners read `startup-result.json` via `micold_core::startup_result` (host: `connect_or_spawn_reading`; SSH: bridge `refused`). Deviations are in the cycle log.
+
+## M5 notes
+
+Verify (`mise run image`, `mise run test-sandbox`): image built; every sandbox_real_* test, including the two sandbox_real_startup ones, fails on this host with the runtime refusing the app's docker-style options (`unknown mount option "uid=1000"`, `unsupported bridge network option enable_ip_masquerade`; docker here is podman emulation, podman fails the same), so the suite is not observable locally; CI's sandbox job runs it. Visual pass not run: the `visual-pass` skill's fork receives no arguments from a unit and the host has no Xvfb/xdotool; the layout is covered by `daemons_section_geometry`. #1528 (pod) merged during M5 (PR #1690); this diff touches no pod path. `refused_mutations_are_logged` fails under plain `cargo test` (two tests set the global subscriber in one binary) on main too; CI uses nextest.
