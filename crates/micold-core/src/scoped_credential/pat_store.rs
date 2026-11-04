@@ -99,8 +99,12 @@ impl PatStore {
     /// The store under the device's [`crate::paths::secrets_dir`], when it has one. Tokens an
     /// earlier version stored per repository are migrated first ([`PatStore::migrate`]).
     pub fn on_device() -> Option<Self> {
+        static MIGRATED: std::sync::Once = std::sync::Once::new();
         let store = crate::paths::secrets_dir().map(Self::new)?;
-        let _ = store.migrate();
+        // Once per run: the callers are on several threads, and two migrations would race.
+        MIGRATED.call_once(|| {
+            let _ = store.migrate();
+        });
         Some(store)
     }
 
@@ -175,7 +179,12 @@ impl PatStore {
             .map(|n| n.to_ascii_lowercase())
             .filter(|n| stored.contains(n))
             .collect();
-        order.dedup();
+        let mut seen = vec![];
+        order.retain(|n| {
+            let new = !seen.contains(n);
+            seen.push(n.clone());
+            new
+        });
         for name in stored {
             if !order.contains(&name) {
                 order.push(name);
@@ -226,12 +235,17 @@ impl PatStore {
                     repo.owner().to_string(),
                     repo.name().to_string(),
                 )];
-                let base = format!("{}-{}", repo.owner(), repo.name());
+                // Short enough that a `-2` suffix still makes a valid name.
+                let mut base = format!("{}-{}", repo.owner(), repo.name());
+                base.truncate(MAX_NAME_LEN - 8);
                 let mut name = base.clone();
                 let mut suffix = 2;
-                while self.token_file(&name).is_none_or(|p| p.exists()) {
+                while self.token_file(&name).is_some_and(|p| p.exists()) {
                     name = format!("{base}-{suffix}");
                     suffix += 1;
+                }
+                if self.token_file(&name).is_none() {
+                    continue;
                 }
                 self.put(&name, &pat)?;
                 std::fs::remove_file(&file)?;
@@ -412,6 +426,19 @@ mod tests {
         assert_eq!(store.migrate().unwrap(), 1);
         assert_eq!(store.get("acme-app"), Some(pat("github_pat_mine", 1)));
         assert_eq!(store.get("acme-app-2").unwrap().expires_at, 2);
+    }
+
+    #[test]
+    fn a_legacy_token_with_a_very_long_repository_name_still_migrates() {
+        let dir = tempfile::tempdir().unwrap();
+        let (owner, name) = ("o".repeat(39), "r".repeat(90));
+        legacy(dir.path(), &owner, &name, "github_pat_long", 3);
+        let store = PatStore::new(dir.path());
+        assert_eq!(store.migrate().unwrap(), 1);
+        let listed = store.list();
+        assert_eq!(listed.len(), 1);
+        assert!(valid_name(&listed[0].0), "{}", listed[0].0);
+        assert_eq!(listed[0].1.expires_at, 3);
     }
 
     #[test]
