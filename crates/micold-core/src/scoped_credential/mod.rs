@@ -19,6 +19,7 @@ pub mod helper;
 pub mod pat;
 pub mod pat_store;
 pub mod schedule;
+pub mod token_choice;
 
 pub use git_env::{git_env, git_env_with_helper};
 pub use gitconfig::{parse_config_list, sanitize_gitconfig, sanitize_gitconfig_text};

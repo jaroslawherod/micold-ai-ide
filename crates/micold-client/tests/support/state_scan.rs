@@ -74,7 +74,9 @@ pub const MUTATORS: &[&str] = &[
     "load",
     "removed",
     "replace_requested",
-    "repo_edited",
+    "name_edited",
+    "repos_edited",
+    "moved",
     "token_edited",
     "append",
     // `jira_status.apply` takes the answer of a Jira status read (feature 1101).

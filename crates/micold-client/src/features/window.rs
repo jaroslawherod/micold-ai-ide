@@ -170,9 +170,11 @@ pub enum FieldId {
     SettingsSaveTerminalHistory,
     /// The Settings → GitHub pull request status switch (feature 040).
     SettingsPrStatus,
-    /// Settings -> GitHub access tokens: **Repository** (#1002).
-    SettingsGithubPatRepo,
-    /// Settings -> GitHub access tokens: **Token** (#1002).
+    /// Settings -> GitHub tokens: **Name** (#1529).
+    SettingsGithubPatName,
+    /// Settings -> GitHub tokens: **Repositories** (#1529).
+    SettingsGithubPatRepos,
+    /// Settings -> GitHub tokens: **Token** (#1002).
     SettingsGithubPatToken,
     /// The Settings → GitHub **Offer GitHub issues** switch (feature 1102).
     SettingsGithubIssues,

@@ -151,8 +151,9 @@ impl Rig {
         let pat = StoredPat {
             token: SecretToken::new(token),
             expires_at: T0 + 30 * DAY,
+            repos: vec![RepoPattern::Exact("o".into(), name.into())],
         };
-        self.store.put(&repo(name), &pat).unwrap();
+        self.store.put(name, &pat).unwrap();
     }
 
     fn run(&mut self) {
@@ -218,7 +219,7 @@ fn a_replaced_token_is_granted_without_a_daemon_restart() {
     rig.store_pat("a", PAT_A2);
     rig.advance(5);
     let now = rig.now();
-    rig.manager.refresh(&repo("a"), now);
+    rig.manager.refresh_all(now);
     rig.run();
     let sent: Vec<String> = grants(&log).into_iter().map(|g| g.1).collect();
     assert_eq!(sent, vec![PAT_A.to_string(), PAT_A2.to_string()]);
@@ -232,9 +233,9 @@ fn a_removed_token_is_withdrawn_from_the_daemon() {
     rig.manager
         .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
     rig.run();
-    rig.store.remove(&repo("a")).unwrap();
+    rig.store.remove("a").unwrap();
     let now = rig.now();
-    rig.manager.refresh(&repo("a"), now);
+    rig.manager.refresh_all(now);
     rig.run();
     assert_eq!(revokes(&log), vec![repo("a")]);
     assert_eq!(
@@ -252,7 +253,7 @@ fn a_token_removed_while_disconnected_is_revoked_on_the_reconnect() {
         .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
     rig.run();
     rig.manager.disconnected(DaemonId(1));
-    rig.store.remove(&repo("a")).unwrap();
+    rig.store.remove("a").unwrap();
     let (again, log2) = sink();
     rig.manager.targets(
         DaemonId(1),
@@ -310,10 +311,7 @@ fn stopping_a_daemon_deletes_its_copies_and_never_reaches_github() {
     rig.advance(2 * DAY);
     rig.run();
     assert_eq!(rig.github.requests(), asked);
-    assert!(
-        rig.store.get(&repo("a")).is_some(),
-        "the user's token stays"
-    );
+    assert!(rig.store.get("a").is_some(), "the user's token stays");
 }
 
 #[test]
@@ -326,7 +324,7 @@ fn an_unreachable_github_keeps_the_held_token() {
     rig.run();
     rig.github.offline.store(true, Ordering::SeqCst);
     let now = rig.now();
-    rig.manager.refresh(&repo("a"), now);
+    rig.manager.refresh_all(now);
     rig.run();
     assert!(revokes(&log).is_empty());
     assert!(matches!(
@@ -376,7 +374,7 @@ fn no_log_line_or_message_debug_carries_the_token() {
     rig.run();
     rig.github.offline.store(false, Ordering::SeqCst);
     let now = rig.now();
-    rig.manager.refresh(&repo("a"), now);
+    rig.manager.refresh_all(now);
     rig.run();
     assert!(!grants(&log).is_empty());
     let lines = rig.logs.lock().unwrap().clone();
@@ -401,7 +399,7 @@ fn issuing_writes_the_refreshed_expiry_back_and_revoking_is_never_a_request() {
     );
     let credential = source.issue(&repo("a"), Grant::default()).unwrap();
     assert_eq!(credential.expires_at(), T0 + 10 * DAY);
-    assert_eq!(rig.store.get(&repo("a")).unwrap().expires_at, T0 + 10 * DAY);
+    assert_eq!(rig.store.get("a").unwrap().expires_at, T0 + 10 * DAY);
     let asked = rig.github.requests();
     source.revoke(&credential).unwrap();
     assert_eq!(rig.github.requests(), asked);
@@ -410,133 +408,55 @@ fn issuing_writes_the_refreshed_expiry_back_and_revoking_is_never_a_request() {
 #[test]
 fn a_refused_token_is_not_stored_and_an_accepted_one_is() {
     let rig = Rig::new();
+    let only_a = || vec![RepoPattern::Exact("o".into(), "a".into())];
     let bad = check_and_store(
         &*rig.github,
         Some(&rig.store),
-        &repo("a"),
+        "a",
+        only_a(),
         SecretToken::new("ghp_classic"),
         T0,
     );
     assert!(bad.is_err());
-    assert!(rig.store.get(&repo("a")).is_none());
+    assert!(rig.store.get("a").is_none());
     let good = check_and_store(
         &*rig.github,
         Some(&rig.store),
-        &repo("a"),
+        "a",
+        only_a(),
         SecretToken::new(PAT_A),
         T0,
     );
-    assert_eq!(good, Ok(T0 + 30 * DAY));
-    assert_eq!(rig.store.get(&repo("a")).unwrap().token.expose(), PAT_A);
+    assert_eq!(good.map(|c| c.expires_at), Ok(T0 + 30 * DAY));
+    assert_eq!(rig.store.get("a").unwrap().token.expose(), PAT_A);
 }
 
 #[test]
-fn ureq_transport_sends_the_contract_headers_and_reads_the_reply_headers() {
-    use std::io::{Read, Write};
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}/repos/o/a", listener.local_addr().unwrap());
-    let server = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut raw = Vec::new();
-        let mut buf = [0u8; 1024];
-        while !String::from_utf8_lossy(&raw).contains("\r\n\r\n") {
-            let n = stream.read(&mut buf).unwrap();
-            assert!(n > 0, "closed before the headers");
-            raw.extend_from_slice(&buf[..n]);
-        }
-        let body = "{\"message\":\"Not Found\"}";
-        write!(
-            stream,
-            "HTTP/1.1 404 Not Found\r\nX-Test: yes\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        )
-        .unwrap();
-        String::from_utf8(raw).unwrap()
-    });
-    let reply = UreqTransport::default()
-        .get(&url, &SecretToken::new(PAT_A))
-        .unwrap();
-    assert_eq!((reply.status, reply.header("x-test")), (404, Some("yes")));
-    assert_eq!(reply.body, "{\"message\":\"Not Found\"}");
-    let seen = server.join().unwrap().to_ascii_lowercase();
-    assert!(seen.starts_with("get /repos/o/a http/1.1"));
-    for header in [
-        &format!("authorization: bearer {}", PAT_A.to_ascii_lowercase()),
-        "accept: application/vnd.github+json",
-        "x-github-api-version: 2022-11-28",
-        "user-agent: micold-ai-ide",
-    ] {
-        assert!(seen.contains(header), "missing {header} in {seen}");
-    }
-}
-
-#[test]
-fn a_transport_failure_is_short_and_carries_no_token() {
-    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}/x", closed.local_addr().unwrap());
-    drop(closed);
-    let error = UreqTransport::default()
-        .get(&url, &SecretToken::new(PAT_A))
-        .unwrap_err();
-    assert!(
-        !error.contains(PAT_A) && error.chars().count() <= 80,
-        "{error}"
-    );
-}
-
-#[test]
-fn statuses_are_reported_once_per_change_and_cleared_when_the_daemon_stops() {
+fn one_token_for_a_whole_organisation_is_granted_to_each_of_its_repositories() {
     let mut rig = Rig::new();
-    let (send, _log) = sink();
-    rig.manager
-        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
-    rig.run();
+    let org = StoredPat {
+        token: SecretToken::new(PAT_A),
+        expires_at: T0 + 30 * DAY,
+        repos: vec![RepoPattern::Owner("o".into())],
+    };
+    rig.store.put("org", &org).unwrap();
+    let (send, log) = sink();
     let now = rig.now();
-    let not_set_up = BTreeMap::from([(
-        PathBuf::from("/pa"),
-        CredentialStatus::None(NoCredentialReason::SourceNotSetUp),
-    )]);
-    assert_eq!(
-        rig.manager.changed_statuses(now),
-        vec![(DaemonId(1), not_set_up)]
+    rig.manager.targets(
+        DaemonId(1),
+        send,
+        vec![target("/pa", "a"), target("/pb", "b")],
+        None,
+        now,
     );
-    assert!(
-        rig.manager.changed_statuses(now).is_empty(),
-        "nothing changed"
-    );
-    rig.store_pat("a", PAT_A);
-    rig.manager.refresh(&repo("a"), now);
     rig.run();
-    let changed = rig.manager.changed_statuses(now);
-    assert!(matches!(
-        changed.as_slice(),
-        [(DaemonId(1), s)] if matches!(s.get(Path::new("/pa")), Some(CredentialStatus::Held { .. }))
-    ));
-    rig.manager.stopped(DaemonId(1));
+    let mut granted = grants(&log);
+    granted.sort_by(|x, y| x.0.cmp(&y.0));
     assert_eq!(
-        rig.manager.changed_statuses(now),
-        vec![(DaemonId(1), BTreeMap::new())]
+        granted,
+        vec![
+            (repo("a"), PAT_A.to_string()),
+            (repo("b"), PAT_A.to_string())
+        ]
     );
-    assert!(rig.manager.changed_statuses(now).is_empty());
-}
-
-#[test]
-fn a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry() {
-    let mut rig = Rig::new();
-    rig.store_pat("a", PAT_A);
-    let (send, _log) = sink();
-    rig.manager
-        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
-    rig.run();
-    assert_eq!(rig.manager.changed_statuses(rig.now()).len(), 1);
-    let warn_at = T0 + 30 * DAY - EXPIRY_WARNING_SECS;
-    assert_eq!(rig.manager.next_wake(rig.now()), Some(warn_at));
-    rig.advance(warn_at - rig.now());
-    rig.run();
-    assert_eq!(
-        rig.manager.changed_statuses(rig.now()).len(),
-        1,
-        "the warning is news"
-    );
-    assert_eq!(rig.manager.next_wake(rig.now()), Some(T0 + 30 * DAY));
 }

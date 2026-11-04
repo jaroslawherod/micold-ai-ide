@@ -37,7 +37,7 @@ marked too. Port, User and Key file are optional and carry no mark.
 | [Terminal](#terminal) | The embedded terminal's scrollback limit, and whether its history is saved to disk |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
 | [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them, and each container daemon's runtime, image, credentials and resources |
-| [GitHub](#github) | Whether worktrees show their pull request, which worktree type an issue's labels choose, and the GitHub access tokens that let sandboxes push |
+| [GitHub](#github) | Whether worktrees show their pull request, which worktree type an issue's labels choose, and the GitHub tokens that let sandboxes push |
 | [Jira](#jira) | Whether Jira issues can start worktrees, whether the open project is connected, and its Jira base URL for issue links |
 | [Project](#project) | The open project's setup command, run in each new worktree |
 
@@ -650,7 +650,7 @@ Each share is separate, and only what you tick is passed in:
 The **SSH agent** and **Git credentials** shares were removed: they handed the sandbox your whole
 git identity. A daemon that had either on keeps working without it, and its entry in the daemon list
 shows a one-time notice with a **Dismiss** button. Until you paste a GitHub token for its
-repository (see [GitHub access tokens](#github-access-tokens)), a sandbox cannot push.
+repository (see [GitHub tokens](#github-tokens)), a sandbox cannot push.
 
 While either of these is on, the form lists exactly which ones by name, and the rail marks
 **Daemons** with a *Sharing* badge — so you can tell at a glance, from any section, that
@@ -738,31 +738,46 @@ fix or delete it.
 A saved change applies to the next issue you pick, in every open project, without a restart. It is
 kept in `settings.json` with your other settings.
 
-### GitHub access tokens
+### GitHub tokens
 
 A sandboxed daemon never holds your own GitHub token or SSH key. To let a sandbox push and pull its
-project's repository, you give the application a **fine-grained personal access token** for that one
-repository, once per repository.
+project's repository, you give the application a **fine-grained personal access token**. One token
+can reach as many repositories as you choose on GitHub, so you paste one token for an organisation
+instead of one per repository.
 
 1. **Create the token** on GitHub under *Settings → Developer settings → Personal access tokens →
-   Fine-grained tokens*. Under *Repository access* choose *Only select repositories* and pick just
-   that repository. Under *Repository permissions* give **Contents: Read and write** and **Metadata:
-   Read-only**, and nothing else. Set an expiry: choose the shortest you can live with (GitHub's
-   minimum is one day). A token with no expiry is refused.
-2. **Paste it** in **Settings → GitHub → GitHub access tokens**: enter the repository as `owner/name`
-   or a github.com URL, paste the token and choose **Add**. The application checks with GitHub
-   that it is a fine-grained token, that it has an expiry, that it can push to that repository and
-   that it reaches no other private repository. A token that fails is not stored; the reason is
-   shown at the form. The token is kept only on this computer, in a folder readable only by you
-   beside the application's data folder, outside anything a container can see, and it is never
-   shown again or logged.
-3. **Replace** pastes a new token for the same repository; running sandboxes receive it without a
+   Fine-grained tokens*. Under *Repository access* choose *Only select repositories* and pick the
+   repositories it is for. Under *Repository permissions* give **Contents: Read and write** and
+   **Metadata: Read-only**, and nothing else. Set an expiry: choose the shortest you can live with
+   (GitHub's minimum is one day). A token with no expiry is refused.
+2. **Paste it** in **Settings → GitHub → GitHub tokens**: give the token a **Name** (letters,
+   digits, `-`, `_` or `.`), optionally limit it in **Repositories** to `owner/repo` or `owner/*`
+   entries separated by commas, paste the token and choose **Add**. Leave **Repositories** empty to
+   use the token for every repository it reaches. The application checks with GitHub that it is a
+   fine-grained token, that it has an expiry and, for a repository you named exactly, that it can
+   push there. It lists the private repositories the token reaches; nothing is refused for
+   reaching more than one. A token that fails is not stored; the reason is shown at the form. The
+   token is kept only on this computer, in a folder readable only by you beside the application's
+   data folder, outside anything a container can see, and it is never shown again or logged.
+3. **Replace** pastes a new token under the same name; running sandboxes receive it without a
    restart and without ending a session.
 
-Each row shows the token's expiry date. **From 24 hours before it expires** the row, and the status
-of every project that uses it, warn you; the application never renews a token (GitHub has no way
-to), so paste a new one before then. At the expiry the token is taken out of running sandboxes and
-pushes fail until you paste a new one.
+Each row shows the token's name, its expiry date and the repositories it reaches: the ones you
+listed, or every repository the token can access. Under the rows, each repository the filters name
+shows which token it **uses** and which tokens are **shadowed** by it.
+
+A repository uses the **most specific** token that reaches it: a token limited to `owner/repo`,
+then one limited to `owner/*`, then one with no filter. Of two equally specific tokens the **first
+in the list wins**; use **Move up** and **Move down** to choose. Nothing is refused for an overlap.
+
+Tokens you pasted before this version, one per repository, are converted when you first start the
+application: each becomes a token named `owner-repo`, limited to `owner/repo`, so the repository
+keeps using the same token.
+
+**From 24 hours before it expires** a row, and the status of every project that uses the token,
+warn you; the application never renews a token (GitHub has no way to), so paste a new one before
+then. At the expiry the token is taken out of running sandboxes and pushes fail until you paste a
+new one.
 
 **Remove** deletes the stored token and takes it out of running sandboxes. **It does not delete the
 token on GitHub**: it stays valid there until it expires or you delete it under *Developer
@@ -770,8 +785,8 @@ settings*.
 
 What a token can do, a sandbox can do. The application cannot narrow it, so every permission you
 give it beyond the two above is held by the sandbox as well, and a token that leaks from a sandbox
-stays valid until it expires or you delete it on GitHub. Where GitHub does not let the application
-list the repositories a token reaches, the settings say so and you must check that yourself.
+stays valid until it expires or you delete it on GitHub. The **Repositories** filter chooses which
+token a repository uses; it does not change what the token can reach on GitHub.
 
 ## Jira
 

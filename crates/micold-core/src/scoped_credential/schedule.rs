@@ -149,6 +149,14 @@ impl Schedule {
         }
     }
 
+    /// A pasted token was added, replaced, removed or reordered: which token each repository uses
+    /// may have changed, so check every repository again at `now`.
+    pub fn refresh_all(&mut self, now: UnixTime) {
+        for state in self.repos.values_mut() {
+            state.due_at = now;
+        }
+    }
+
     /// The repositories whose issue is due at `now`.
     pub fn due(&self, now: UnixTime) -> Vec<GithubRepo> {
         self.repos

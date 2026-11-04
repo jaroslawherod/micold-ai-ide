@@ -171,14 +171,15 @@ pub fn view<'a>(
 }
 
 /// The heading of the pasted-token part of the page.
-pub const TOKENS_HEADING: &str = "GitHub access tokens";
+pub const TOKENS_HEADING: &str = "GitHub tokens";
 
-/// What the tokens are for (#1002).
-pub const TOKENS_INTRO: &str = "A fine-grained token lets sandboxed sessions push to one repository. Paste one per repository. It is kept on this device only.";
+/// What the tokens are for (#1002, #1529).
+pub const TOKENS_INTRO: &str = "A fine-grained token lets sandboxed sessions push to the repositories it reaches. Paste one token for as many repositories as you like, or one per repository. It is kept on this device only.";
 
-/// The *GitHub access tokens* part (#1002, contracts/pat-source.md §3): a row per stored token with
-/// its expiry, and the form that adds or replaces one. The token field is masked and cleared after a
-/// save; no row ever shows a token.
+/// The *GitHub tokens* part (#1002, #1529, contracts/pat-source.md §3): a row per stored token in
+/// the order that decides ties, with its expiry and the repositories it reaches; per repository, the
+/// token used and those shadowed; and the form that adds or replaces one. The token field is masked
+/// and cleared after a save; no row ever shows a token.
 fn access_tokens<'a>(
     tokens: &'a GithubTokens,
     focused: Option<FieldId>,
@@ -187,33 +188,53 @@ fn access_tokens<'a>(
     let now = micold_core::unix_time::unix_secs();
     let mut controls: Vec<Element<'a, Message>> =
         vec![note(TOKENS_HEADING, roles), note(TOKENS_INTRO, roles)];
-    for stored in &tokens.rows {
+    let last = tokens.rows.len().saturating_sub(1);
+    for (index, stored) in tokens.rows.iter().enumerate() {
         controls.push(note(stored.label(), roles));
+        controls.push(note(stored.reach_text(), roles));
         if let Some(warning) = stored.warning(now) {
             controls.push(caution(warning, roles));
         }
         controls.push(
             row![
                 Button::text("Replace", roles).on_press(Message::Settings(
-                    SettingsMsg::GithubPatReplaceRequested(stored.repo.clone())
+                    SettingsMsg::GithubPatReplaceRequested(stored.name.clone())
                 )),
                 Button::text("Remove", roles).on_press(Message::Settings(
-                    SettingsMsg::GithubPatRemoveRequested(stored.repo.clone())
+                    SettingsMsg::GithubPatRemoveRequested(stored.name.clone())
+                )),
+                Button::text("Move up", roles).on_press_maybe((index > 0).then_some(
+                    Message::Settings(SettingsMsg::GithubPatMoved(index, Direction::Prev))
+                )),
+                Button::text("Move down", roles).on_press_maybe((index < last).then_some(
+                    Message::Settings(SettingsMsg::GithubPatMoved(index, Direction::Next))
                 )),
             ]
             .spacing(spacing::XS)
             .into(),
         );
     }
-    for line in github_tokens::help(micold_core::scoped_credential::pat::REACH_CHECK) {
+    for line in tokens.uses() {
+        controls.push(note(github_tokens::use_text(&line), roles));
+    }
+    for line in github_tokens::help() {
         controls.push(note(line, roles));
     }
     controls.push(
-        TextField::new("", &tokens.repo, roles)
-            .label("Repository")
-            .supporting("owner/name or a github.com URL")
-            .track_focus(FieldId::SettingsGithubPatRepo, focused)
-            .on_input(|v| Message::Settings(SettingsMsg::GithubPatRepoChanged(v)))
+        TextField::new("", &tokens.name, roles)
+            .label("Name")
+            .supporting("Letters, digits, - _ or .")
+            .track_focus(FieldId::SettingsGithubPatName, focused)
+            .on_input(|v| Message::Settings(SettingsMsg::GithubPatNameChanged(v)))
+            .on_submit(Message::Settings(SettingsMsg::GithubPatAddRequested))
+            .into(),
+    );
+    controls.push(
+        TextField::new("", &tokens.repos, roles)
+            .label("Repositories")
+            .supporting("Optional: owner/repo or owner/*, separated by commas. Empty: every repository the token reaches")
+            .track_focus(FieldId::SettingsGithubPatRepos, focused)
+            .on_input(|v| Message::Settings(SettingsMsg::GithubPatReposChanged(v)))
             .on_submit(Message::Settings(SettingsMsg::GithubPatAddRequested))
             .into(),
     );

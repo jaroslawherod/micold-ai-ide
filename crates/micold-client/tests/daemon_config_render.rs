@@ -47,6 +47,7 @@ fn read_back(text: &str, kind: Kind) -> DaemonSettings {
             })
             .collect(),
         startup: None,
+        github_tokens: vec![],
     }
 }
 

@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1529
 - **Worktree branch**: feat/1529_one-github-token-for-many-repositories
 - **Started**: 2026-11-04
-- **Phase**: tasks (design PR)
-- **Next step**: design PR open; after merge, milestone M1
+- **Phase**: milestone M1 (implemented, in review)
+- **Next step**: review A, gate, PR for M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1681 | Design (milestone for Issue 8) | OPEN | — |
+| #1681 | Design (milestone for Issue 8) | MERGED | e42ca1e77c49dc2cf7273a45f610601b3fc261bc |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T040–T045 | full | tokens stored by name, one-repository refusal gone, Settings lists tokens in file order with reach, used and shadowed token per repository; existing per-repository tokens migrate unchanged | — | planned |
+| M1 | T040–T045 | full | tokens stored by name, one-repository refusal gone, Settings lists tokens in file order with reach, used and shadowed token per repository; existing per-repository tokens migrate unchanged | — | in progress |
 
 ## Decisions
 

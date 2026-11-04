@@ -427,10 +427,10 @@ one-time notice saying so, with a **Dismiss** button; the next save drops the ol
 A sandbox container made before this change is replaced on its next start, even a running one,
 which ends any session still running in it: it may still mount your agent or credential store.
 
-**Until you paste a GitHub token for its repository, a sandbox cannot push.** Paste one per
-repository in [Settings → GitHub → GitHub access
-tokens](settings.md#github-access-tokens). A sandbox then pushes and pulls its project's repository
-with that **fine-grained token, limited to that one repository**, over HTTPS; a remote that uses
+**Until you paste a GitHub token that reaches its repository, a sandbox cannot push.** Paste one
+token for as many repositories as it reaches in [Settings → GitHub → GitHub
+tokens](settings.md#github-tokens). A sandbox then pushes and pulls its project's repository
+with that **fine-grained token, limited to the repositories you chose**, over HTTPS; a remote that uses
 SSH goes over HTTPS inside the sandbox, with no SSH key. The application never renews the token: it
 warns you 24 hours before it expires and takes it out of the sandbox at the expiry, and you paste a
 new one without restarting anything. A token that leaks from a sandbox stays valid until it
@@ -446,7 +446,7 @@ that says where the project's git credential stands:
 | Line | What to do |
 |---|---|
 | *project: Git credential for owner/repo, expires on 2026-11-20* | Nothing: the sandbox pushes and pulls with it. |
-| *project: Git credential for owner/repo expires on 2026-11-20: paste a new token in Settings* (within 24 hours of the expiry) | Paste a new token for the repository in Settings → GitHub access tokens; the sandbox gets it without a restart. |
+| *project: Git credential for owner/repo expires on 2026-11-20: paste a new token in Settings* (within 24 hours of the expiry) | Paste a new token for the repository in Settings → GitHub tokens; the sandbox gets it without a restart. |
 | *project: No git credential: No GitHub token is stored for this repository. …* | Paste a fine-grained token for the repository. |
 | *project: No git credential: The GitHub token for this repository expired. …* | The token was taken out of the sandbox at its expiry: paste a new one. |
 | *project: No git credential: GitHub refused the token: …* | Paste a corrected token: the reason says what GitHub refused (not fine-grained, no expiry, cannot push to the repository, reaches another private repository). |

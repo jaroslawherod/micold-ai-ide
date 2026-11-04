@@ -11,11 +11,6 @@ use serde::Deserialize;
 use super::{NoCredentialReason, SecretToken, UnixTime};
 use crate::github::GithubRepo;
 
-/// Whether the other-repositories check (contract §2, *reach*) runs. To be confirmed against the live
-/// API (quickstart Part C step 3): if the listing is not limited to the token's repositories, turn
-/// this off and the settings say the client cannot verify which other repositories the token reaches.
-pub const REACH_CHECK: bool = true;
-
 /// The prefix of a fine-grained PAT; a classic token is `ghp_…`, an OAuth one `gho_…`.
 pub const FINE_GRAINED_PREFIX: &str = "github_pat_";
 
@@ -127,7 +122,7 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 }
 
 /// What a non-200 answer to `repo`'s requests means (contract §2).
-fn status_reason(reply: &Reply, repo: &GithubRepo) -> NoCredentialReason {
+fn status_reason(reply: &Reply, what: &dyn std::fmt::Display) -> NoCredentialReason {
     match reply.status {
         401 => refused("GitHub rejected the token (expired or revoked)"),
         403 if reply.header("x-ratelimit-remaining") == Some("0") => {
@@ -136,7 +131,7 @@ fn status_reason(reply: &Reply, repo: &GithubRepo) -> NoCredentialReason {
         403 if reply.header("x-github-sso").is_some() => {
             refused("authorise the token for the organisation's SSO in GitHub")
         }
-        403 | 404 => refused(format!("the token does not reach {repo}")),
+        403 | 404 => refused(format!("the token does not reach {what}")),
         status => NoCredentialReason::SourceUnreachable(format!("GitHub answered {status}")),
     }
 }
@@ -168,16 +163,7 @@ pub fn parse_probe(
     if !json.permissions.is_some_and(|p| p.push) {
         return Err(refused(format!("the token cannot push to {repo}")));
     }
-    let header = reply
-        .header(EXPIRATION_HEADER)
-        .filter(|v| !v.trim().is_empty())
-        .ok_or_else(|| refused("the token has no expiry"))?;
-    let expires_at =
-        parse_expiration(header).ok_or_else(|| refused("the token's expiry could not be read"))?;
-    if expires_at <= now {
-        return Err(NoCredentialReason::PatExpired);
-    }
-    Ok(expires_at)
+    parse_expiry_header(reply, now)
 }
 
 #[derive(Deserialize)]
@@ -185,12 +171,18 @@ struct ListedRepo {
     full_name: String,
 }
 
-/// Judge the answer to `GET /user/repos?visibility=private&per_page=2` (contract §2, *reach*): a
-/// private repository other than `repo` is refused, naming it. An answer that is not a `200`
-/// listing says nothing either way, so it is not held against the token.
-pub fn parse_reach(reply: &Reply, repo: &GithubRepo) -> Result<(), NoCredentialReason> {
+/// The listing that says which repositories a token reaches (contract §2, *reach*): the private
+/// ones, which are all a token can reach that every other token cannot. A hundred is the most one
+/// page lists; the Settings text says when the list may be longer.
+pub const REACH_URL: &str = "https://api.github.com/user/repos?visibility=private&per_page=100";
+
+/// Judge the answer to [`REACH_URL`] (contract §2, *reach*): the full names of the private
+/// repositories the token reaches. A token may reach any number of them (#1529, FR-009): nothing is
+/// refused for the count, the list is for Settings to show. An answer that is not a `200` listing
+/// says nothing either way, so it is an empty list; one GitHub is too busy to give is retried.
+pub fn parse_reach(reply: &Reply) -> Result<Vec<String>, NoCredentialReason> {
     if reply.status == 401 {
-        return Err(status_reason(reply, repo));
+        return Err(status_reason(reply, &"GitHub"));
     }
     // A listing GitHub is too busy or limited to give is retried (paste refused, a held token
     // kept), not passed.
@@ -201,25 +193,15 @@ pub fn parse_reach(reply: &Reply, repo: &GithubRepo) -> Result<(), NoCredentialR
         ));
     }
     if reply.status != 200 {
-        return Ok(());
+        return Ok(vec![]);
     }
-    let Ok(listed) = serde_json::from_str::<Vec<ListedRepo>>(&reply.body) else {
-        return Ok(());
-    };
-    match listed
-        .iter()
-        .find(|r| !r.full_name.eq_ignore_ascii_case(&repo.to_string()))
-    {
-        Some(other) => Err(refused(format!(
-            "the token also reaches {}",
-            other.full_name
-        ))),
-        None => Ok(()),
-    }
+    Ok(serde_json::from_str::<Vec<ListedRepo>>(&reply.body)
+        .map(|listed| listed.into_iter().map(|r| r.full_name).collect())
+        .unwrap_or_default())
 }
 
-/// Every check of a pasted token for `repo` at `now` (contract §2): shape, probe, reach. Returns the
-/// expiry GitHub reports. Nothing is stored or sent by this.
+/// Every check of a token at issue time for `repo` at `now` (contract §2): shape and probe. Returns
+/// the expiry GitHub reports. Nothing is stored or sent by this.
 pub fn check(
     transport: &dyn Transport,
     repo: &GithubRepo,
@@ -227,21 +209,70 @@ pub fn check(
     now: UnixTime,
 ) -> Result<UnixTime, NoCredentialReason> {
     check_shape(token)?;
-    let get = |url: String| {
-        transport
-            .get(&url, token)
-            .map_err(|e| NoCredentialReason::SourceUnreachable(short_error(&e, token)))
-    };
-    let probe = get(format!(
+    let probe = get(transport, token, probe_url(repo))?;
+    parse_probe(&probe, repo, now)
+}
+
+fn probe_url(repo: &GithubRepo) -> String {
+    format!(
         "https://api.github.com/repos/{}/{}",
         repo.owner(),
         repo.name()
-    ))?;
-    let expires_at = parse_probe(&probe, repo, now)?;
-    if REACH_CHECK {
-        let listing =
-            get("https://api.github.com/user/repos?visibility=private&per_page=2".into())?;
-        parse_reach(&listing, repo)?;
+    )
+}
+
+fn get(
+    transport: &dyn Transport,
+    token: &SecretToken,
+    url: String,
+) -> Result<Reply, NoCredentialReason> {
+    transport
+        .get(&url, token)
+        .map_err(|e| NoCredentialReason::SourceUnreachable(short_error(&e, token)))
+}
+
+/// What a pasted token turned out to be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Checked {
+    /// When GitHub says it expires.
+    pub expires_at: UnixTime,
+    /// The private repositories it reaches (`owner/name`), as GitHub lists them.
+    pub reach: Vec<String>,
+}
+
+/// Every check of a token pasted in Settings (contract §2): shape, the reach listing, and, when
+/// `probe` names a repository, the probe of that repository (push access). The expiry is the
+/// probe's, or the listing's header when there is no repository to probe. Nothing is stored.
+pub fn check_added(
+    transport: &dyn Transport,
+    token: &SecretToken,
+    probe: Option<&GithubRepo>,
+    now: UnixTime,
+) -> Result<Checked, NoCredentialReason> {
+    check_shape(token)?;
+    let listing = get(transport, token, REACH_URL.to_string())?;
+    let reach = parse_reach(&listing)?;
+    let expires_at = match probe {
+        Some(repo) => parse_probe(&get(transport, token, probe_url(repo))?, repo, now)?,
+        None => {
+            if listing.status != 200 {
+                return Err(status_reason(&listing, &"any repository"));
+            }
+            parse_expiry_header(&listing, now)?
+        }
+    };
+    Ok(Checked { expires_at, reach })
+}
+
+fn parse_expiry_header(reply: &Reply, now: UnixTime) -> Result<UnixTime, NoCredentialReason> {
+    let header = reply
+        .header(EXPIRATION_HEADER)
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| refused("the token has no expiry"))?;
+    let expires_at =
+        parse_expiration(header).ok_or_else(|| refused("the token's expiry could not be read"))?;
+    if expires_at <= now {
+        return Err(NoCredentialReason::PatExpired);
     }
     Ok(expires_at)
 }
@@ -387,33 +418,32 @@ mod tests {
     }
 
     #[test]
-    fn the_reach_listing_refuses_another_private_repository_naming_it() {
+    fn a_token_reaching_many_repositories_is_accepted_and_its_reach_listed() {
         let listing = |body| reply(200, &[], body);
+        assert_eq!(parse_reach(&listing("[]")), Ok(vec![]));
         assert_eq!(
-            parse_reach(&listing(r#"[{"full_name":"o/r"}]"#), &repo()),
-            Ok(())
-        );
-        assert_eq!(parse_reach(&listing("[]"), &repo()), Ok(()));
-        assert_eq!(
-            parse_reach(
-                &listing(r#"[{"full_name":"o/r"},{"full_name":"o/secret"}]"#),
-                &repo()
-            ),
-            Err(refused("the token also reaches o/secret"))
+            parse_reach(&listing(r#"[{"full_name":"o/r"}]"#)),
+            Ok(vec!["o/r".to_string()])
         );
         assert_eq!(
-            parse_reach(&reply(401, &[], ""), &repo()),
+            parse_reach(&listing(
+                r#"[{"full_name":"o/r"},{"full_name":"o/secret"},{"full_name":"p/x"}]"#
+            )),
+            Ok(vec!["o/r".into(), "o/secret".into(), "p/x".into()])
+        );
+        assert_eq!(
+            parse_reach(&reply(401, &[], "")),
             Err(refused("GitHub rejected the token (expired or revoked)"))
         );
         // A listing GitHub will not give says nothing about the token; a busy one is retried.
-        assert_eq!(parse_reach(&reply(403, &[], ""), &repo()), Ok(()));
+        assert_eq!(parse_reach(&reply(403, &[], "")), Ok(vec![]));
         for busy in [
             reply(429, &[], ""),
             reply(503, &[], ""),
             reply(403, &[("x-ratelimit-remaining", "0")], ""),
         ] {
             assert!(matches!(
-                parse_reach(&busy, &repo()),
+                parse_reach(&busy),
                 Err(NoCredentialReason::SourceUnreachable(_))
             ));
         }
@@ -443,19 +473,48 @@ mod tests {
     }
 
     #[test]
-    fn a_good_token_passes_the_shape_probe_and_reach_checks() {
-        let t = Script::new(vec![
-            Ok(good_probe()),
-            Ok(reply(200, &[], r#"[{"full_name":"o/r"}]"#)),
-        ]);
+    fn a_good_token_passes_the_shape_and_probe_checks() {
+        let t = Script::new(vec![Ok(good_probe())]);
         let expires = check(&t, &repo(), &SecretToken::new(PAT), NOW).unwrap();
         assert_eq!(
             expires,
             parse_expiration("2023-11-20 00:00:00 UTC").unwrap()
         );
-        let asked = t.asked.lock().unwrap();
-        assert_eq!(asked[0], "https://api.github.com/repos/o/r");
-        assert!(asked[1].starts_with("https://api.github.com/user/repos?visibility=private"));
+        assert_eq!(
+            *t.asked.lock().unwrap(),
+            ["https://api.github.com/repos/o/r"]
+        );
+    }
+
+    #[test]
+    fn a_pasted_token_reaching_several_repositories_is_checked_without_a_probe_repository() {
+        let listing = Reply {
+            body: r#"[{"full_name":"o/a"},{"full_name":"o/b"}]"#.into(),
+            ..good_probe()
+        };
+        let t = Script::new(vec![Ok(listing)]);
+        let checked = check_added(&t, &SecretToken::new(PAT), None, NOW).unwrap();
+        assert_eq!(checked.reach, ["o/a", "o/b"]);
+        assert_eq!(
+            checked.expires_at,
+            parse_expiration("2023-11-20 00:00:00 UTC").unwrap()
+        );
+        assert_eq!(*t.asked.lock().unwrap(), [REACH_URL]);
+    }
+
+    #[test]
+    fn a_probe_repository_is_probed_after_the_listing() {
+        let listing = Reply {
+            body: "[]".into(),
+            ..good_probe()
+        };
+        let t = Script::new(vec![Ok(listing), Ok(good_probe())]);
+        let checked = check_added(&t, &SecretToken::new(PAT), Some(&repo()), NOW).unwrap();
+        assert!(checked.reach.is_empty());
+        assert_eq!(
+            t.asked.lock().unwrap()[1],
+            "https://api.github.com/repos/o/r"
+        );
     }
 
     #[test]
@@ -488,10 +547,7 @@ mod tests {
         let token = SecretToken::new(PAT);
         let shown = format!("{token:?}");
         assert!(!shown.contains("FAKE0123"));
-        let t = Script::new(vec![
-            Ok(good_probe()),
-            Ok(reply(200, &[], r#"[{"full_name":"o/x"}]"#)),
-        ]);
+        let t = Script::new(vec![Ok(reply(403, &[], ""))]);
         let err = check(&t, &repo(), &token, NOW).unwrap_err();
         assert!(!format!("{err:?} {}", err.message()).contains("FAKE0123"));
     }
