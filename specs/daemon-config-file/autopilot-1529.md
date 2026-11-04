@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1529
 - **Worktree branch**: feat/1529_one-github-token-for-many-repositories
 - **Started**: 2026-11-04
-- **Phase**: milestone M1 (implemented, in review)
-- **Next step**: PR for M1 open; orchestrator waits on CI and merges
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1681 | Design (milestone for Issue 8) | MERGED | e42ca1e77c49dc2cf7273a45f610601b3fc261bc |
-| #1684 | Milestone M1 | OPEN | — |
+| #1684 | Milestone M1 | MERGED | 7eab7d9a5ca9f734b284cf330d89b39b3ec82907 |
+| CLOSE_PR | Close | OPEN | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T040–T045 | full | tokens stored by name, one-repository refusal gone, Settings lists tokens in file order with reach, used and shadowed token per repository; existing per-repository tokens migrate unchanged | #1684 | in review |
+| M1 | T040–T045 | full | tokens stored by name, one-repository refusal gone, Settings lists tokens in file order with reach, used and shadowed token per repository; existing per-repository tokens migrate unchanged | #1684 | merged |
 
 ## Decisions
 
@@ -51,6 +52,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+
+## Review rounds (close)
+
+Close diff review (sonnet) round 1: CLEAN; 1 MINOR (mask test control) left. tdd-verify: FAIL on test strength, I8-1 to I8-5, I8-8, I8-10 closed by tests; visual pass re-run at 520 px: PASS. Full gate green.
 
 ## Handover
 
