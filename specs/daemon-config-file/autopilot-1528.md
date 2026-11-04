@@ -10,13 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1528_deliver-the-configuration-to-kubernetes-daemons
 - **Started**: 2026-11-03
 - **Phase**: tasks
-- **Next step**: open design PR; then milestone M1
+- **Next step**: design PR #1680 merges; then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| — | none yet | — | — |
+| #1680 | design (milestone cut) | open | — |
 
 ## Milestones
 
