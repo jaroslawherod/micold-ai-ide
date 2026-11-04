@@ -864,16 +864,13 @@ mod tests {
             let mut s = spec();
             s.time_zone = Some("Europe/Berlin".into());
             let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            // Built as the spec's own mount is, so the separators agree on Windows.
+            let delivery = DeliveryMount::beside(Path::new("/home/u/.local/share/micold-ai-ide"));
             for (host, container) in [
-                (
-                    "/home/u/.local/share/micold-ai-ide.delivery/config",
-                    "/run/micold/config",
-                ),
-                (
-                    "/home/u/.local/share/micold-ai-ide.delivery/secrets",
-                    "/run/micold/secrets",
-                ),
+                (delivery.config, "/run/micold/config"),
+                (delivery.secrets, "/run/micold/secrets"),
             ] {
+                let host = host.display();
                 assert!(
                     args.contains(&format!("{host}:{container}:ro")),
                     "{kind}: {args:?}"
