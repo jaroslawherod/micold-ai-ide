@@ -331,3 +331,46 @@ mod on_submit_tests {
         assert!(published.is_empty(), "published {published:?}");
     }
 }
+
+/// With no rows, [`Typeahead::empty_message`] stands in their place rather than nothing (contract
+/// §4.2): a caller that opens the list over a result set that turned out empty — a model picker
+/// whose CLI query failed, say — has a way to say so instead of a bare field (BUG-1679 acceptance
+/// bullet 2).
+#[cfg(test)]
+mod empty_message_tests {
+    use super::super::test_support::{roles, Mounted};
+    use super::Typeahead;
+
+    fn words(m: &mut Mounted<'_>) -> Vec<String> {
+        m.painted_text().into_iter().map(|p| p.content).collect()
+    }
+
+    #[test]
+    fn no_rows_draws_the_message_instead_of_nothing() {
+        let t: Typeahead<'static, String> =
+            Typeahead::new("", Vec::new(), |q| format!("typed {q}"), roles())
+                .in_flow(true)
+                .open(true)
+                .empty_message("No models to choose from. Type a model id and press Enter.");
+        let drawn = words(&mut Mounted::new(t));
+        assert!(
+            drawn
+                .iter()
+                .any(|d| d == "No models to choose from. Type a model id and press Enter."),
+            "{drawn:?}"
+        );
+    }
+
+    /// Without the message, an empty list draws nothing extra — the gap this fix closes for the
+    /// model picker specifically (`ui::composer::model_control`), pinned here so a caller that
+    /// forgets `.empty_message()` again shows up as a behaviour change, not a silent one.
+    #[test]
+    fn no_rows_and_no_message_draws_nothing_extra() {
+        let t: Typeahead<'static, String> =
+            Typeahead::new("", Vec::new(), |q| format!("typed {q}"), roles())
+                .in_flow(true)
+                .open(true);
+        let drawn = words(&mut Mounted::new(t));
+        assert!(!drawn.iter().any(|d| d.contains("model")), "{drawn:?}");
+    }
+}

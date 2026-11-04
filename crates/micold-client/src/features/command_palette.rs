@@ -43,6 +43,15 @@ pub const DEFAULT_MODEL: &str = "Default";
 /// The header's words before the CLI has reported a model (FR-013).
 pub const MODEL_NOT_REPORTED: &str = "Model not reported yet";
 
+/// What the model picker says in place of its list when it has nothing to offer: never reached
+/// today, since [`ModelPickerState::new`] always has at least [`DEFAULT_MODEL`] to show, but the
+/// typeahead's own contract (§4.2 of its docs) is "without an empty message, an empty list shows
+/// nothing" — a bare field with no way to tell a slow CLI from a broken one (BUG-1679 acceptance
+/// bullet 2). Keeping this wired closes that gap for good, same as the slash-command palette's own
+/// `NO_MATCH` does for it.
+pub const MODEL_LIST_UNAVAILABLE: &str =
+    "No models to choose from. Type a model id and press Enter.";
+
 /// An open palette: the list it was opened over, the name typed so far and its matches.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaletteState {

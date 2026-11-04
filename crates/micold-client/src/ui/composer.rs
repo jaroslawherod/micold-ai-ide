@@ -287,6 +287,7 @@ fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Elem
     )
     .id(model_picker_field(session))
     .placeholder(MODEL_PLACEHOLDER)
+    .empty_message(crate::features::command_palette::MODEL_LIST_UNAVAILABLE)
     .open(true)
     .highlighted(picker.enter_row())
     .selected(picker.current_row())
