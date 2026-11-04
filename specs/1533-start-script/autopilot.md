@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | merged |
-| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | | implemented, in review |
+| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | PR pending | gate green, PR open |
 | M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
 | M6 | T034-T036 | full | Pod delivery (after #1528) | | pending |
 
@@ -56,6 +56,8 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 | Code M3 B (conformance) | 1 | HEAD~2 | CHANGES: 1 MAJOR (cycle-log M3 section missing, added), 1 MINOR (RestartKeysReported has no producer until M4, recorded in cycle log) |
 | Tasks 1533 | 1 | 43696b27:c6372cd5 | CHANGES: 1 MAJOR (M3 half-wired UI: group hidden per kind until delivery) and 3 MINOR fixed |
 | Tasks 1533 | 2 | 80d6c8d2:c6372cd5 | CHANGES: 1 MAJOR (guide task T023 moved to M4) and 2 MINOR fixed; prose/ordering only, no round 3 |
+| Code M4 A and B | 1 | 76fd9421:41b0f119 | CHANGES, fixed (A.F1-F3, B.F1); B.F2/F3 declined |
+| Code M4 B | 2 | fix diff | CLEAN (1 MINOR: second test module in classify.rs, not fixed) |
 | Code M1 A (code-review high) | 1 | 3e019daf9ea5:761a3fb9e52b | CLEAN (3 MINOR; F1 invalid env name fixed with test; F2, F3 declined, see Declined) |
 | Code M1 B (conformance) | 1 | 3e019daf9ea5:761a3fb9e52b | CHANGES: 1 MAJOR (no red evidence) answered by tdd/cycle-log.md recording the deviation (evidence only, not re-run); T004 text reworded; B could not run Verify (build lock); unit ran core + daemon startup_script tests green |
 
