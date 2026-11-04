@@ -125,6 +125,7 @@ mod forget_project;
 mod frame_probe_glue;
 mod github_filter_state;
 mod github_selector_shell;
+mod github_token_rows_wiring;
 mod github_tokens_reach;
 mod history;
 mod icon_roles;

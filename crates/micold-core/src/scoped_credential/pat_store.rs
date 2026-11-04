@@ -371,7 +371,15 @@ mod tests {
         store.remove("c").unwrap();
         store.remove("c").unwrap();
         assert_eq!(names(&store), ["b", "a"]);
+        store.put("c", &pat("github_pat_c3", 3)).unwrap();
+        assert_eq!(names(&store), ["b", "a", "c"], "a re-added name goes last");
         assert_eq!(PatStore::new(dir.path().join("none")).list(), vec![]);
+    }
+
+    #[test]
+    fn a_name_may_be_sixty_four_characters_and_no_more() {
+        assert!(valid_name(&"a".repeat(64)));
+        assert!(!valid_name(&"a".repeat(65)));
     }
 
     #[test]

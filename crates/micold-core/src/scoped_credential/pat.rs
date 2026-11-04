@@ -503,6 +503,18 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_listing_without_a_probe_repository_gives_the_status_reason() {
+        let listing = reply(403, &[("x-github-sso", "required; url=https://x")], "");
+        let t = Script::new(vec![Ok(listing)]);
+        assert_eq!(
+            check_added(&t, &SecretToken::new(PAT), None, NOW),
+            Err(refused(
+                "authorise the token for the organisation's SSO in GitHub"
+            ))
+        );
+    }
+
+    #[test]
     fn a_probe_repository_is_probed_after_the_listing() {
         let listing = Reply {
             body: "[]".into(),
