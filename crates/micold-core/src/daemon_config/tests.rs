@@ -292,13 +292,6 @@ fn v3_tcp_without_a_client_token_file_is_refused() {
 }
 
 #[test]
-fn v3_a_kubernetes_daemon_with_no_listen_table_is_refused_and_a_container_is_not() {
-    let text = "schema = 1\n[daemon]\nname = \"t\"\nkind = \"kubernetes\"\n";
-    expect(text, "V3", "listen", "daemon", 2, 2);
-    ok("schema = 1\n[daemon]\nname = \"t\"\nkind = \"container\"\n");
-}
-
-#[test]
 fn v3_a_pod_with_no_listen_table_is_accepted() {
     // #1528: a pod's daemon is reached through the bridge its SSH server starts.
     let config = ok("schema = 1\n[daemon]\nname = \"t\"\nkind = \"kubernetes\"\n");

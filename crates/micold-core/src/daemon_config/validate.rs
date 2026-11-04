@@ -496,20 +496,13 @@ impl Checker<'_, '_> {
 
     /// V3. A container daemon the client reaches over SSH listens on its per-user socket, as the
     /// bridge dials it (#1527): `socket` is valid for it, `tcp` stays valid with a token. A pod
-    /// daemon uses `tcp`.
+    /// daemon uses `tcp`, or none: the bridge reaches it (#1528).
     fn listen(&mut self) {
         let sandbox = self.kind().is_sandbox();
         let pod = self.kind() == Kind::Kubernetes;
         let Some(table) = &self.config.listen else {
             // A pod's daemon is reached through the bridge its SSH server starts, which relays to
             // the daemon's socket: it has no address to serve (daemon-config-file #1528).
-            if pod {
-                self.at_key(
-                    "V3",
-                    "daemon",
-                    "[listen] is required for a kubernetes daemon: set `tcp`".to_string(),
-                );
-            }
             return;
         };
         let ListenTable { socket, tcp } = table;
