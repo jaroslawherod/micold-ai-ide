@@ -118,10 +118,10 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 ## Issue 7 — feat: deliver the configuration to Kubernetes daemons (needs 3, 4)
 
-- [ ] T036 [P] [US1] Failing golden tests in `crates/micold-core/src/kube/manifest.rs` tests: a ConfigMap `<name>-config` mounted at `/run/micold/config`; one Secret per credential mounted as a **directory** (no `subPath`) under `/run/micold/secrets/…`, every config and secret volume `readOnly: true`; pod env only `HOME`, `TMPDIR`
+- [ ] T036 [P] [US1] Failing golden tests in `crates/micold-core/src/kube/manifest.rs` tests: a ConfigMap `<name>-config` mounted at `/run/micold/config`; one Secret per credential mounted as a **directory** (no `subPath`) under `/run/micold/secrets/…`, every config and secret volume `readOnly: true`; pod env only `HOME`, `TMPDIR`, `TZ` (from `daemon.time_zone`), `LANG=C.UTF-8` (the golden expects T091's result)
 - [ ] T037 [P] [US1] Failing test in `crates/micold-core/src/kube/credentials.rs`: `daemon_env` is empty of `MICOLD_*`
 - [ ] T038 [US1] Implement ConfigMap and directory Secret manifests in `crates/micold-core/src/kube/manifest.rs` and `crates/micold-core/src/kube/credentials.rs`; apply/update them from `crates/micold-client/src/kube/`
-- [ ] T091 [US1] Pods get `TZ` from `daemon.time_zone` and `LANG=C.UTF-8` (D15 rows 12, 13), in `crates/micold-core/src/kube/manifest.rs` with a golden test, matching `sandbox/argv.rs:176`
+- [ ] T091 [US1] Pods get `TZ` from `daemon.time_zone` and `LANG=C.UTF-8` (D15 rows 12, 13), in `crates/micold-core/src/kube/manifest.rs` to make the T036 golden pass (the failing test is T036), matching `sandbox/argv.rs:176`
 - [ ] T039 [US1] Kind-cluster check (quickstart §2 pod row) and update `docs/user-guide/kubernetes-daemons.md`, including how a refreshed credential reaches a pod (the application updates the Secret; the kubelet's own propagation delay, measured on kind, comes before the daemon's 5 s)
 
 ---
@@ -302,7 +302,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -538,3 +538,18 @@ Verdict FAIL: Issue 5 is not done until I5-1 to I5-5 are cleared. Verify each wi
 - [x] T136 [US1] I5-6, I5-7: in `daemon_config_delivery_host.rs` deliver into a data dir that does not exist yet, and into a file left `0644` with the same content; decide whether the host path should correct the mode (as the SSH path does) and pin the decision; done when dropping `create_dir_all` fails the first
 - [x] T137 [US1] I5-8: add the #1526 rows (U21-U24, T080a with `traces` FR-005, FR-014, FR-029) and a baseline to `tdd/test-list.md` and a cycle-log entry noting that no red was recorded for the M1a/M1b code
 - [x] T138 [US1] I5-9, I5-10, I5-11: compare the first host-delivery test to a golden file instead of `prepare`, compare env values as well as names in `spawn_detached_daemon_adds_no_env`, and state in `docs/user-guide/remote-daemons.md` that a hand edit is replaced on the next connect (or make it not so)
+
+### Issue 7 (#1528) — M1 — Deliver the configuration to Kubernetes daemons 🎯 MVP
+
+One milestone: the ConfigMap and directory Secret manifests (T036, T038), the empty `daemon_env` (T037) and `TZ`/`LANG`
+(T091) all serve one scenario (a pod reads the same `/run/micold/config/daemon.toml` as the other kinds); a pod with the
+env list gone but no mounts, or the reverse, would have no configuration. Five tasks, so it is not split. It adds a
+cluster API surface (ConfigMap/Secret apply from `micold-client`), so the tier is `full`. T039's kind-cluster check and
+user-guide update travel here (rule 4).
+
+- **Tasks**: T036–T039, T091
+- **Deliverable**: a pod daemon reads the rendered file from the ConfigMap `<name>-config` at `/run/micold/config` and each credential from its own directory-mounted Secret under `/run/micold/secrets/…` (read-only, no `subPath`); the application creates or updates both; the pod env carries no `MICOLD_*` (only `HOME`, `TMPDIR`, `TZ` from `daemon.time_zone`, `LANG=C.UTF-8`); `docs/user-guide/kubernetes-daemons.md` says how a refreshed credential reaches a pod.
+- **Satisfies**: US1; FR-005, FR-029, FR-039
+- **Verify**: `cargo test -p micold-core kube::manifest kube::credentials`; `cargo test -p micold-client kube`; kind-cluster check of quickstart §2 pod row (`kubectl get pod -o yaml` shows no `MICOLD_*` env, Secrets mounted as directories)
+- **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525) M1, merged
+- **Tier**: full

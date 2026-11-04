@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1528
 - **Worktree branch**: feat/1528_deliver-the-configuration-to-kubernetes-daemons
 - **Started**: 2026-11-03
-- **Phase**: spec (skipped, design on main)
-- **Next step**: tasks unit (cut milestones for Issue 7)
+- **Phase**: tasks
+- **Next step**: open design PR; then milestone M1
 
 ## Pull requests
 
@@ -20,7 +20,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Milestones
 
-None yet (tasks unit).
+| M | Deliverable | Tasks | Tier | PR |
+|---|---|---|---|---|
+| M1 | pod daemons read ConfigMap `<name>-config` at `/run/micold/config` and directory-mounted Secrets under `/run/micold/secrets/…`; no `MICOLD_*` env; `TZ`, `LANG=C.UTF-8` | T036–T039, T091 | full | — |
+
+Five tasks, one acceptance scenario, so not split. Paths in the tasks checked 2026-11-03.
 
 ## Decisions
 
@@ -30,7 +34,7 @@ None yet (tasks unit).
 
 ## Review rounds
 
-None.
+- Tasks review round 1 (snapshot 47d0d8181a03c75d1692d4824ddc42544481c27d:d0ddfd28dc82009eccfd212cbf64220e528f9722): CHANGES; F1 (MAJOR, T091 test not before code, T036 env list contradicted T091) fixed, prose only (T036 golden now expects `TZ`/`LANG`, T091 implements); F2 (MINOR) declined, column order is cosmetic; F3 (MINOR) left, T091 ID stable.
 
 ## Declined review findings
 
