@@ -146,10 +146,10 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 - [ ] T050 [US2] Add `ureq` (workspace version) to `crates/micold-daemon/Cargo.toml`; implement reach discovery (`GET /user/repos?per_page=100`, paginated) reusing the request shape of `crates/micold-core/src/scoped_credential/pat.rs:236-243`
 - [ ] T051 [US2] Make `git-credential` stateless in `crates/micold-daemon/src/git_credential.rs`: config path from `MICOLD_DAEMON_CONFIG` in the session env; `ssh_to_https` rewrite only with ≥1 token
 - [ ] T052 [US3] Session git env per kind in `crates/micold-core/src/scoped_credential/git_env.rs` (reset + ours + fallback capture)
-- [ ] T053 [US2] Retire `GitCredentialGrant`/`Revoke`/`Targets` in `crates/micold-core/src/protocol/messages.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-client/src/shell/scoped_credential.rs`, `crates/micold-core/src/scoped_credential/schedule.rs`, `crates/micold-client/src/shell/daemon_sync.rs`; protocol version bump; update `crates/micold-core/tests/protocol_roundtrip.rs` and `schema_hash.rs`
+- [ ] T053 [US2] Retire `GitCredentialGrant`/`Revoke`/`Targets` in `crates/micold-core/src/protocol/messages.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-client/src/shell/scoped_credential.rs`, `crates/micold-core/src/scoped_credential/schedule.rs`, `crates/micold-client/src/shell/daemon_sync.rs`; protocol version bump; update `crates/micold-core/tests/protocol_roundtrip.rs` and `schema_hash.rs`; delete or rewrite `crates/micold-daemon/tests/git_credential_grant.rs`
 - [ ] T092 [US3] Gate `container_git_edits` (`crates/micold-daemon/src/supervisor.rs:325`) on `daemon.kind` ∈ {container, kubernetes} instead of `MICOLD_DATA_DIR == /var/lib/micold-ai-ide` (D15 row 2), test for both start paths
 - [ ] T093 [US2] Per-host `ssh_to_https` rewrites and token `host` (D15 row 7) in `crates/micold-core/src/scoped_credential/git_env.rs` (today hard-coded `github.com`, `:27-32`); the fake-forge tests use a loopback `host` base URL instead of `[git] base`
-- [ ] T094 [US3] `[git] config_file` (D15 rows 1, 9): the app delivers the `sanitize_gitconfig` output as a read-only secret file; the daemon sets `GIT_CONFIG_GLOBAL` to it in container and pod sessions; without `signing_key_file`, `commit.gpgsign` and `tag.gpgsign` are stripped (`crates/micold-core/src/scoped_credential/gitconfig.rs`); replaces `CredentialShare::GitConfig` and the kube `gitconfig` Secret `subPath` mount
+- [ ] T094 [US3] `[git] config_file` (D15 rows 1, 9): the app delivers the `sanitize_gitconfig` output as a read-only secret file; the daemon sets `GIT_CONFIG_GLOBAL` to it in container and pod sessions; without `signing_key_file`, `commit.gpgsign` and `tag.gpgsign` are stripped (`crates/micold-core/src/scoped_credential/gitconfig.rs`); replaces `CredentialShare::GitConfig` and the kube `gitconfig` Secret `subPath` mount; also update `docs/user-guide/sandboxed-daemon.md` and `settings.md` for `[git] config_file` and the signing key
 - [ ] T054 [US2] Update `docs/user-guide/sandboxed-daemon.md` and `settings.md` (tokens work on every kind)
 
 ---
@@ -302,7 +302,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 8 (#1529)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -444,6 +444,39 @@ a persistence format and a security check, so the tier is `full`. T045's user-gu
 - **Satisfies**: US2; FR-007, FR-009, SC-002
 - **Verify**: `cargo test -p micold-core scoped_credential`; `cargo test -p micold-client --test main github`
 - **Depends on**: Issue 4 (#1525) M1, merged
+- **Tier**: full
+
+### Issue 9 (#1530) — M1 — The credential helper chooses the token from the configuration
+
+Split in two (milestones.md rule 3: 11 tasks, two stories). M1 is the acceptance scenario "git in a session
+authenticates with the token the file selects": the pure `TokenChoice` (T046), the reach discovery and cache (T047, T050),
+the stateless helper (T051), the per-kind session git env with its fallback and sandbox-clearing tests (T048, T049, T052)
+and the per-host rewrite (T093) all serve it; the env without the helper, or the helper without the env, leaves git with
+no token. Eight tasks plus the user-guide task (T054, rule 4), so nine. It changes a security check and the sandbox
+boundary, so the tier is `full`. `GitCredentialGrant`/`Revoke`/`Targets` stay in place and unused by the helper until M2
+retires them, so `main` stays green.
+
+- **Tasks**: T046–T052, T093, T054
+- **Deliverable**: `micold-daemon git-credential get` answers from `[[github.tokens]]` read from `MICOLD_DAEMON_CONFIG` on every call: the most specific filter wins, ties go to the first in file order, expired tokens are skipped, and a token with no filter is used for any host it reaches; reach comes from `GET /user/repos` cached in `<data_dir>/github-reach.json` by token fingerprint and refreshed on load, on token change, every 15 minutes and at most once a minute on a miss; sandbox sessions clear inherited helpers, host and SSH sessions fall back to the captured helpers when no token matches and are left untouched with no token configured; `ssh_to_https` rewrites are per host and only with at least one token.
+- **Satisfies**: US2 and US3 (helper and fallback scenarios); FR-008, FR-010, FR-016, FR-031, SC-004
+- **Verify**: `cargo test -p micold-core daemon_config::matching`; `cargo test -p micold-daemon --test git_credential_config`; `cargo test -p micold-core scoped_credential::git_env`
+- **Depends on**: Issue 3 (#1524), merged; Issue 8 (#1529) M1, merged
+- **Tier**: full
+
+### Issue 9 (#1530) — M2 — Containers and pods get the git setup from `daemon.kind`; the old grant messages are retired
+
+Three tasks that share one scenario: a container or pod session gets the helper, the rewrite and `GIT_CONFIG_GLOBAL` from
+the file's `daemon.kind` on every start path (T092, T094), and the grant messages that carried the same data are then
+removed (T053), so the protocol bump lands together with the last user of the old path. T053 is cut apart from M1 so the
+protocol change (wire format) is reviewed on its own. It changes a wire protocol and the sandbox boundary, so the tier is
+`full`. The user-guide edit for `[git] config_file` and the signing key (`sandboxed-daemon.md`, `settings.md`) is part of T094
+(the guide edit is written into T094's text).
+
+- **Tasks**: T092, T094, T053
+- **Deliverable**: `container_git_edits` runs for `daemon.kind` container or kubernetes on both start paths, not by the `MICOLD_DATA_DIR` value; container and pod sessions get `GIT_CONFIG_GLOBAL` pointing at the delivered read-only `[git] config_file` (replacing `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount); `commit.gpgsign` and `tag.gpgsign` are stripped when `signing_key_file` is unset; `GitCredentialGrant`, `GitCredentialRevoke` and `GitCredentialTargets` are gone with a protocol version bump.
+- **Satisfies**: US3; FR-016, FR-030, FR-035
+- **Verify**: `cargo test -p micold-daemon supervisor`; `cargo test -p micold-core --test protocol_roundtrip --test schema_hash`; `cargo test -p micold-core scoped_credential::gitconfig`; `git_credential_grant.rs` is deleted or rewritten by T053
+- **Depends on**: Issue 9 (#1530) M1
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
