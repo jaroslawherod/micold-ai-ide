@@ -203,6 +203,13 @@ fn access_tokens<'a>(
                 Button::text("Remove", roles).on_press(Message::Settings(
                     SettingsMsg::GithubPatRemoveRequested(stored.name.clone())
                 )),
+            ]
+            .spacing(spacing::XS)
+            .into(),
+        );
+        // A second row: all four buttons do not fit the narrowest page width.
+        controls.push(
+            row![
                 Button::text("Move up", roles).on_press_maybe((index > 0).then_some(
                     Message::Settings(SettingsMsg::GithubPatMoved(index, Direction::Prev))
                 )),
