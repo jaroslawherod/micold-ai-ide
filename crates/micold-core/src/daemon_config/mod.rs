@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 mod files;
+pub mod matching;
 mod resolved;
 mod secret;
 mod validate;

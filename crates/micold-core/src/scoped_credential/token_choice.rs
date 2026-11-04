@@ -19,7 +19,7 @@ const OWNER: u8 = 2;
 const UNFILTERED: u8 = 1;
 
 /// How specifically `filter` names `repo`: `None` when it does not reach it.
-fn specificity(filter: &Filter<'_>, repo: &GithubRepo) -> Option<u8> {
+pub(crate) fn specificity(filter: &Filter<'_>, repo: &GithubRepo) -> Option<u8> {
     if filter.repos.is_empty() {
         return Some(UNFILTERED);
     }

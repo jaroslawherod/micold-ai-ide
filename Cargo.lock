@@ -2701,6 +2701,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "ureq",
  "uuid",
  "windows-sys 0.61.2",
 ]

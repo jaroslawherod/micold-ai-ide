@@ -442,6 +442,11 @@ one-time notice saying so, with a **Dismiss** button; the next save drops the ol
 A sandbox container made before this change is replaced on its next start, even a running one,
 which ends any session still running in it: it may still mount your agent or credential store.
 
+Tokens are not special to sandboxes: a host or SSH daemon chooses the token for a repository the same
+way, from its configuration file (see [GitHub tokens](settings.md#github-tokens)). What differs is
+the fallback: a sandbox clears every helper it inherited, while a host or SSH daemon hands a
+repository no token applies to over to the helpers you already had.
+
 **Until you paste a GitHub token that reaches its repository, a sandbox cannot push.** Paste one
 token for as many repositories as it reaches in [Settings → GitHub → GitHub
 tokens](settings.md#github-tokens). A sandbox then pushes and pulls its project's repository

@@ -770,6 +770,16 @@ A repository uses the **most specific** token that reaches it: a token limited t
 then one limited to `owner/*`, then one with no filter. Of two equally specific tokens the **first
 in the list wins**; use **Move up** and **Move down** to choose. Nothing is refused for an overlap.
 
+Tokens work on **every kind of daemon**, not only sandboxes. The daemon's git credential helper
+reads the daemon's configuration file and the token files on every git command, so a replaced token
+is used by the next command. The helper learns which repositories an unfiltered token reaches from
+GitHub (`GET /user/repos`) and keeps the answer in `github-reach.json` in the daemon's data folder,
+keyed by a fingerprint of the token and holding no secret; it asks again every 15 minutes and, when a
+repository is missing, at most once a minute. Offline, the last answer stays in use. On **this
+computer and over SSH**, when no token applies to a repository, git falls back to the helpers you
+already had (the keychain, `gh`); with no token at all, your git setup is left as it is. A sandbox
+never falls back: it clears every inherited helper.
+
 Tokens you pasted before this version, one per repository, are converted when you first start the
 application: each becomes a token named `owner-repo`, limited to `owner/repo`, so the repository
 keeps using the same token.

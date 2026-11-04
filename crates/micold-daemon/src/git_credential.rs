@@ -1,8 +1,10 @@
 //! `micold-daemon git-credential <get|store|erase>`: the credential helper git inside a sandbox
 //! runs (#1002, FR-006, FR-007, contracts/git-in-container.md §2).
 //!
-//! It answers `get` from the in-memory file of the one repository the container holds a credential
-//! for, and nothing for any other repository or host. `store` and `erase` read and discard their
+//! With `MICOLD_DAEMON_CONFIG` set (a session of a daemon that has a configuration file, #1530) it
+//! answers `get` from the configuration: [`crate::credential_config`]. Without it, it answers from the
+//! in-memory file of the one repository the container holds a credential for (the grant path, retired
+//! with the grant messages), and nothing for any other repository or host. `store` and `erase` read and discard their
 //! input: a token is never kept anywhere git could write it. Every path exits 0, so git falls
 //! through to "no credential" rather than to an error.
 
@@ -15,6 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use micold_core::github::GithubRepo;
 use micold_core::process::no_window;
 use micold_core::protocol::messages::CredentialTarget;
+use micold_core::scoped_credential::git_env::{CONFIG_ENV, FALLBACK_ENV};
 use micold_core::scoped_credential::helper::{
     answer, parse_request, render_credential_file, GIT_CREDENTIAL_ROOT,
 };
@@ -210,14 +213,52 @@ pub fn run(args: &[OsString], input: &mut impl Read, output: &mut impl Write) ->
     // Git sends text; whatever cannot be read is an empty request, which gets no answer.
     let _ = input.read_to_string(&mut text);
     if args.first().map(OsString::as_os_str) == Some(std::ffi::OsStr::new("get")) {
-        let root = PathBuf::from(env_or(ROOT_ENV, GIT_CREDENTIAL_ROOT));
-        let base = env_or(BASE_ENV, GITHUB_BASE);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
-        let _ = output.write_all(answer(&root, &base, &parse_request(&text), now).as_bytes());
+        let config = std::env::var_os(CONFIG_ENV).filter(|v| !v.is_empty());
+        let reply = match config {
+            Some(file) => answer_from_config(Path::new(&file), &text, now),
+            None => {
+                let root = PathBuf::from(env_or(ROOT_ENV, GIT_CREDENTIAL_ROOT));
+                let base = env_or(BASE_ENV, GITHUB_BASE);
+                answer(&root, &base, &parse_request(&text), now)
+            }
+        };
+        let _ = output.write_all(reply.as_bytes());
     }
     0
+}
+
+/// The answer from the configuration file `file`: the token it chooses for the repository, else the
+/// helpers the session's git named before our reset (host and SSH daemons, research D7), else
+/// nothing. A file that cannot be read answers nothing.
+fn answer_from_config(file: &Path, request_text: &str, now: UnixTime) -> String {
+    let fallback = || {
+        let helpers = std::env::var(FALLBACK_ENV).ok();
+        crate::credential_config::run_fallback(
+            &crate::credential_config::fallback_helpers(helpers.as_deref()),
+            request_text,
+        )
+    };
+    let Ok(loaded) = crate::config_load::load_file(file) else {
+        return fallback();
+    };
+    let cache = loaded
+        .config
+        .daemon
+        .data_dir
+        .clone()
+        .or_else(micold_core::paths::data_dir)
+        .map(|dir| dir.join(crate::credential_config::REACH_FILE));
+    let chosen = crate::credential_config::answer(
+        &loaded.config,
+        cache.as_deref(),
+        &parse_request(request_text),
+        now,
+        &crate::credential_config::UreqTransport::default(),
+    );
+    chosen.unwrap_or_else(fallback)
 }
 
 /// The process entry: stdin to stdout.
