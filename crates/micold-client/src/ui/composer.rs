@@ -94,9 +94,11 @@ pub struct Seams<'a> {
     pub waiting: bool,
     /// #943's element over the text area.
     pub completion: Option<Element<'a, Message>>,
-    /// #942's control beside the text area, before **Stop** and **Send**: in the input row, whose
-    /// height the text area sets, so it adds no row to the composer.
+    /// #942's permission control, the last of the session options row (feature 1703 FR-008).
     pub control: Option<Element<'a, Message>>,
+    /// Whether the permission mode is Bypass: the settings icon carries a warning marker
+    /// (feature 1703 FR-014).
+    pub bypass: bool,
 }
 
 fn send(msg: Msg) -> Message {
@@ -179,14 +181,14 @@ pub fn view<'a>(
         parts.push(Text::new(notice, TypeRole::Caption, roles).into());
     }
 
-    parts.push(status_row(
-        state,
-        session,
-        phase,
-        roles,
-        seams.status,
-        seams.waiting,
-    ));
+    if let Some(status) = status_row(state, session, roles, seams.status) {
+        parts.push(status);
+    }
+
+    // The session options row, behind the settings icon (feature 1703 FR-008, FR-009).
+    if state.composers.options_open {
+        parts.push(options_row(state, session, roles, seams.control));
+    }
 
     // The draft's pictures (US5).
     if let Some(composer) = composer.filter(|c| !c.draft.images.is_empty()) {
@@ -211,7 +213,7 @@ pub fn view<'a>(
     // The parts above the input row come and go; held in a column of their own, they leave the
     // input row at the same place in the tree, so the text area keeps its state (focus, caret)
     // when a queue row, a notice or a chip appears (T061 run 2, step 6).
-    let input = input_row(state, session, phase, roles, seams.control);
+    let input = input_row(state, session, phase, roles, seams.waiting, seams.bypass);
     let composer =
         container(column![column(parts).spacing(spacing::SM), input].spacing(spacing::SM))
             .padding([spacing::SM, spacing::MD])
@@ -228,33 +230,20 @@ pub fn view<'a>(
     .into()
 }
 
-/// Busy or ready in words and the indicator (FR-010), **Stop session** while an interrupt is
-/// overdue (FR-015), and #942's slot.
+/// **Stop session** while an interrupt is overdue (FR-015) and #942's refusal note; `None` when
+/// neither is there, so the collapsed composer is one control row (feature 1703 FR-006, SC-002).
 fn status_row<'a>(
     state: &'a State,
     session: SessionId,
-    phase: TurnPhase,
     roles: Roles,
     slot: Option<Element<'a, Message>>,
-    waiting: bool,
-) -> Element<'a, Message> {
-    let composers = &state.composers;
-    let (label, busy) = match phase {
-        _ if waiting => (WAITING, false),
-        TurnPhase::Busy { .. } => (BUSY, true),
-        TurnPhase::Idle => (READY, false),
-        TurnPhase::NotRunning => (NOT_RUNNING, false),
-    };
-    let mut status = row![
-        BusyIndicator::new(label, roles).busy(busy),
-        model_control(state, session, roles)
-    ]
-    .spacing(spacing::SM)
-    .align_y(Alignment::Center);
-    if state.offers_effort(session) {
-        status = status.push(effort_control(state, session, roles));
+) -> Option<Element<'a, Message>> {
+    let overdue = state.composers.overdue_notice(session);
+    if overdue.is_none() && slot.is_none() {
+        return None;
     }
-    if let Some(overdue) = composers.overdue_notice(session) {
+    let mut status = row![].spacing(spacing::SM).align_y(Alignment::Center);
+    if let Some(overdue) = overdue {
         status = status
             .push(Text::new(overdue, TypeRole::Caption, roles).width(Length::Fill))
             .push(
@@ -265,7 +254,91 @@ fn status_row<'a>(
     if let Some(slot) = slot {
         status = status.push(slot);
     }
-    status.into()
+    Some(status.into())
+}
+
+/// The session options row: Model, Effort where the model takes it, and Permission, in that order
+/// (feature 1703 FR-008, FR-009).
+fn options_row<'a>(
+    state: &'a State,
+    session: SessionId,
+    roles: Roles,
+    permission: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let mut options = row![model_control(state, session, roles)]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center);
+    if state.offers_effort(session) {
+        options = options.push(effort_control(state, session, roles));
+    }
+    if let Some(permission) = permission {
+        options = options.push(permission);
+    }
+    options.into()
+}
+
+/// The activity indicator's words and whether it turns (FR-010): its tooltip, and what a screen
+/// reader reads.
+pub fn activity(phase: TurnPhase, waiting: bool) -> (&'static str, bool) {
+    match phase {
+        _ if waiting => (WAITING, false),
+        TurnPhase::Busy { .. } => (BUSY, true),
+        TurnPhase::Idle => (READY, false),
+        TurnPhase::NotRunning => (NOT_RUNNING, false),
+    }
+}
+
+/// The icon-only activity indicator with its words as the tooltip (feature 1703 FR-006, FR-007).
+fn activity_indicator<'a>(phase: TurnPhase, waiting: bool, roles: Roles) -> Element<'a, Message> {
+    let (label, busy) = activity(phase, waiting);
+    let rest = if waiting {
+        Icon::NeedsPermission
+    } else {
+        Icon::ActivityEnded
+    };
+    Tooltip::new(
+        BusyIndicator::new(label, roles).busy(busy).icon_only(rest),
+        label,
+        roles,
+    )
+    .position(TooltipPosition::Top)
+    .into()
+}
+
+/// The session options tooltip and label, with the Bypass warning when it applies.
+pub fn options_tooltip(bypass: bool) -> &'static str {
+    if bypass {
+        "Session options (Bypass permissions is on)"
+    } else {
+        OPTIONS_LABEL
+    }
+}
+
+/// The settings icon at the input row's start: toggles the options row, tonal while it is open,
+/// with a warning marker while the mode is Bypass (feature 1703 FR-009, FR-010, FR-014).
+fn options_button<'a>(
+    open: bool,
+    bypass: bool,
+    session: SessionId,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let button = IconButton::new(Icon::Settings, roles)
+        .padding(spacing::SM)
+        .keyboard(true)
+        .selected(open)
+        .on_press(send(Msg::OptionsToggled(session)));
+    // The same two-child stack with or without the marker, so the tree keeps its shape.
+    let marker: Element<'a, Message> = if bypass {
+        container(crate::ui::icon(Icon::UsageWarning, 14.0, roles.error))
+            .width(Length::Fill)
+            .align_x(Alignment::End)
+            .into()
+    } else {
+        Space::new().into()
+    };
+    Tooltip::new(stack![button, marker], options_tooltip(bypass), roles)
+        .position(TooltipPosition::Top)
+        .into()
 }
 
 /// The session's model as the CLI last reported it and whose choice it is, pressed to open the
@@ -492,6 +565,9 @@ pub fn attach_button<'a, M: Clone + 'a>(roles: Roles, press: Option<M>) -> Eleme
     .into()
 }
 
+/// The settings icon's label (feature 1703 FR-010).
+pub const OPTIONS_LABEL: &str = "Session options";
+
 /// The **Open large editor** button's tooltip (feature 1703 FR-004).
 pub const OPEN_EDITOR_TOOLTIP: &str = if cfg!(target_os = "macos") {
     "Open large editor (Cmd+Shift+M)"
@@ -552,7 +628,8 @@ fn input_row<'a>(
     session: SessionId,
     phase: TurnPhase,
     roles: Roles,
-    control: Option<Element<'a, Message>>,
+    waiting: bool,
+    bypass: bool,
 ) -> Element<'a, Message> {
     let composers = &state.composers;
     let editor = composers.editor(session);
@@ -573,18 +650,13 @@ fn input_row<'a>(
             key_binding(session, press, caret, lines, selecting, phase, palette)
         })
         .track_focus(FieldId::Composer(session), None);
-    let mut controls = row![text_area_with_button(
-        state,
-        session,
-        area.into(),
-        lines,
-        roles
-    )]
+    let mut controls = row![
+        options_button(composers.options_open, bypass, session, roles),
+        text_area_with_button(state, session, area.into(), lines, roles),
+        activity_indicator(phase, waiting, roles),
+    ]
     .spacing(spacing::SM)
     .align_y(Alignment::End);
-    if let Some(control) = control {
-        controls = controls.push(control);
-    }
     // #1464 FR-006: **Add attachment**, before Stop and Send; disabled, not hidden, while the
     // session cannot accept input or its picker is open, so the row does not shift.
     controls = controls.push(attach_button(

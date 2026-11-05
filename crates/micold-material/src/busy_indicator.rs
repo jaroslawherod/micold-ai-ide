@@ -16,12 +16,14 @@
 
 use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Shell};
-use iced::widget::{row, Space};
+use iced::widget::{container, row, Space};
 use iced::{Alignment, Border, Element, Event, Length, Rectangle, Size};
 use micold_core::tokens::{motion::duration, spacing, Roles};
 use std::time::Duration;
 
 use crate::cdk::motion::Progress;
+use crate::glyph::icon;
+use crate::icons::Icon;
 use crate::style;
 use crate::{Text, TypeRole};
 
@@ -44,6 +46,8 @@ const FAINTEST: f32 = 0.2;
 pub struct BusyIndicator {
     label: String,
     busy: bool,
+    /// Icon-only: no words; the glyph is drawn while idle (feature 1703 FR-006).
+    glyph: Option<Icon>,
     roles: Roles,
 }
 
@@ -53,8 +57,16 @@ impl BusyIndicator {
         Self {
             label: label.into(),
             busy: true,
+            glyph: None,
             roles,
         }
+    }
+
+    /// Draw no words: the ring turns while busy and `rest` is drawn otherwise, so the state is
+    /// still seen. The label is for the caller's tooltip (feature 1703 FR-006, FR-007).
+    pub fn icon_only(mut self, rest: Icon) -> Self {
+        self.glyph = Some(rest);
+        self
     }
 
     /// Whether the ring turns; idle, only the words are drawn (FR-010).
@@ -69,9 +81,18 @@ impl<'a, M: 'a> From<BusyIndicator> for Element<'a, M> {
         let r = b.roles;
         let ring: Element<'a, M> = if b.busy {
             Ring { roles: r }.into()
+        } else if let Some(rest) = b.glyph {
+            container(icon(rest, SIZE, r.on_surface_variant))
+                .width(SIZE)
+                .height(SIZE)
+                .center(SIZE)
+                .into()
         } else {
             Space::new().width(SIZE).height(SIZE).into()
         };
+        if b.glyph.is_some() {
+            return ring;
+        }
         let label = Text::new(b.label, TypeRole::Label, r)
             .tint(if b.busy {
                 r.on_surface

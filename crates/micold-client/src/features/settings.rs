@@ -941,6 +941,7 @@ impl ValidSettings {
             // Not in the form (feature 551): the sidebar writes it on a toggle, a save keeps it.
             folded_origins: Default::default(),
             filter_open: false,
+            composer_options_open: false,
             dismissed_offers: Default::default(),
         }
     }

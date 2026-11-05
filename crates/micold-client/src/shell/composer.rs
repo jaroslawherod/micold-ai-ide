@@ -24,8 +24,23 @@ use micold_core::structured::model::ModelChoice;
 use crate::shell::daemon_sync::{send_op_bound, send_op_bound_req, PendingOp};
 use crate::App;
 
-/// Run one composer message.
+/// Run one composer message, then write the options row's state when the message changed it
+/// (a toggle, or a refusal that opened it; feature 1703 FR-011, FR-012).
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
+    let was_open = app.core.composers.options_open;
+    let task = update_message(app, msg);
+    persist_options_if_changed(app, was_open);
+    task
+}
+
+/// Write the session options row's open state when it differs from `was_open`.
+pub(crate) fn persist_options_if_changed(app: &mut App, was_open: bool) {
+    if app.core.composers.options_open != was_open {
+        crate::shell::persist::persist_composer_options_open(app.caps.settings(), &mut app.core);
+    }
+}
+
+fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
     let session = session_of(&msg);
     let picker_was_open = app.core.composers.palette.picker(session).is_some();
     let effort_was_open = app.core.effort_picker.picker(session).is_some();
@@ -157,6 +172,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::LargeEditorRequested(session) => {
             return crate::shell::large_editor::update(app, LargeEditorMsg::Requested(session));
         }
+        Msg::OptionsToggled(_) => app.core.composers.options_toggled(),
         Msg::AttachPickerClosed(session) => app.core.composers.attach_picker_closed(session),
         Msg::AttachPicked { session, paths } => {
             if app.core.composers.attach_picked(session, paths.len()) {
@@ -284,6 +300,7 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::Dropped { session, .. }
         | Msg::AttachRequested(session)
         | Msg::LargeEditorRequested(session)
+        | Msg::OptionsToggled(session)
         | Msg::AttachPicked { session, .. }
         | Msg::AttachPickerClosed(session)
         | Msg::PaletteClicked { session, .. }
@@ -527,6 +544,39 @@ mod tests {
             .insert(path.clone(), vec![session]);
         app.core.workspace.active = Some(path);
         (app, rx, id)
+    }
+
+    /// Feature 1703 FR-011, FR-012: a toggle and a refusal that opens the row both write it.
+    #[test]
+    fn the_options_row_is_written_on_a_toggle_and_on_an_automatic_expand() {
+        use micold_core::settings::FakeSettingsStore;
+        let (mut app, _rx, s) = app_with_session();
+        let store = std::sync::Arc::new(FakeSettingsStore::new());
+        app.caps = app.caps.clone().with_settings(store.clone());
+        let _ = update(&mut app, Msg::OptionsToggled(s));
+        assert!(app.core.composers.options_open);
+        assert!(store
+            .saves()
+            .last()
+            .is_some_and(|x| x.composer_options_open));
+        let _ = update(&mut app, Msg::OptionsToggled(s));
+        assert!(store
+            .saves()
+            .last()
+            .is_some_and(|x| !x.composer_options_open));
+        let writes = store.saves().len();
+        app.core
+            .composers
+            .edited(s, "/effort extreme".to_string(), (0, 15));
+        send(&mut app, s);
+        // `send` is the reducer's path; the wrapper writes what a message changed.
+        persist_options_if_changed(&mut app, false);
+        assert!(app.core.composers.options_open, "a refusal expands the row");
+        assert!(store.saves().len() > writes);
+        assert!(store
+            .saves()
+            .last()
+            .is_some_and(|x| x.composer_options_open));
     }
 
     fn effort_requests(rx: &mut UnboundedReceiver<ClientMsg>) -> Vec<(u64, EffortChoice)> {

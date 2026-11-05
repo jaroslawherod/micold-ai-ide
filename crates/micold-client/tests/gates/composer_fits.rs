@@ -151,10 +151,30 @@ fn the_composer_sits_under_a_structured_transcript_in_both_schemes() {
         report(&mut state, id, TurnPhase::Idle, false, 0);
         let (painted, transcript) = paint(themed(state, scheme), id);
         // The empty area's placeholder is drawn by the editor, not as a paragraph the painter sees.
-        for part in [READY, "Send"] {
-            under_the_transcript(&painted, transcript, part);
-        }
+        under_the_transcript(&painted, transcript, "Send");
+        assert!(
+            glyph_under(&painted, transcript, &rest_glyph()),
+            "the activity icon is drawn under the transcript"
+        );
+        assert!(
+            !painted.iter().any(|p| p.content == READY),
+            "the state is an icon, not the word `{READY}` (feature 1703 FR-006)"
+        );
     }
+}
+
+/// Whether `glyph` is drawn under the transcript (the same glyph may also be drawn above it).
+fn glyph_under(painted: &[Overflow], transcript: Rectangle, glyph: &str) -> bool {
+    painted
+        .iter()
+        .any(|p| p.content == glyph && p.origin.y >= transcript.y + transcript.height - TOLERANCE)
+}
+
+/// The glyph the activity indicator rests on while no turn runs (feature 1703 FR-006).
+fn rest_glyph() -> String {
+    micold_client::icons::Icon::ActivityEnded
+        .glyph()
+        .to_string()
 }
 
 #[test]
@@ -239,17 +259,21 @@ fn busy_and_idle_say_so_and_only_busy_offers_stop() {
         let (mut state, id) = pane();
         report(&mut state, id, busy(InterruptAsk::None), false, 0);
         let (painted, transcript) = paint(themed(state, scheme), id);
-        under_the_transcript(&painted, transcript, BUSY);
         under_the_transcript(&painted, transcript, "Stop");
+        assert!(
+            !painted.iter().any(|p| p.content == BUSY)
+                && !glyph_under(&painted, transcript, &rest_glyph()),
+            "a busy session turns the ring and says no `{BUSY}`"
+        );
 
         let (mut state, id) = pane();
         report(&mut state, id, TurnPhase::Idle, false, 0);
         let (painted, transcript) = paint(themed(state, scheme), id);
-        under_the_transcript(&painted, transcript, READY);
+        assert!(glyph_under(&painted, transcript, &rest_glyph()));
         assert!(
             !painted
                 .iter()
-                .any(|p| p.content == "Stop" || p.content == BUSY),
+                .any(|p| p.content == "Stop" || p.content == BUSY || p.content == READY),
             "an idle session offers no Stop and says no `{BUSY}`"
         );
     }
@@ -271,7 +295,6 @@ fn the_queue_hold_overdue_notice_and_chips_fit_under_the_transcript() {
             ON_HOLD,
             "Send queued",
             NOTICE,
-            BUSY,
             OVERDUE,
             "Stop session",
             PICTURE,
@@ -302,24 +325,22 @@ fn the_status_and_completion_slots_take_space_only_when_filled() {
     };
     let empty = height(Seams::default());
     let filled = height(Seams {
-        status: None,
-        waiting: false,
         completion: Some(iced::widget::text("completion").into()),
-        control: None,
+        ..Seams::default()
     });
     assert!(
         filled > empty + TOLERANCE,
         "a filled completion slot takes room the empty one does not: {empty} vs {filled}"
     );
+    // Feature 1703 SC-002: the status row exists only for what it holds (the refusal note, Stop
+    // session), so the collapsed composer is one control row.
     let with_status = height(Seams {
         status: Some(iced::widget::text("mode").into()),
-        waiting: false,
-        completion: None,
-        control: None,
+        ..Seams::default()
     });
     assert!(
-        (with_status - empty).abs() <= TOLERANCE,
-        "the status slot sits in the status row, adding no row: {empty} vs {with_status}"
+        with_status > empty + TOLERANCE,
+        "a filled status slot takes a row the empty one does not: {empty} vs {with_status}"
     );
     let with_control = height(Seams {
         control: Some(iced::widget::text("mode").into()),
@@ -327,7 +348,7 @@ fn the_status_and_completion_slots_take_space_only_when_filled() {
     });
     assert!(
         (with_control - empty).abs() <= TOLERANCE,
-        "the control sits in the input row, adding no row: {empty} vs {with_control}"
+        "the control sits in the options row, shown only when it is open: {empty} vs {with_control}"
     );
 }
 
@@ -680,16 +701,19 @@ fn the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode() {
             let (mut state, id) = pane();
             report(&mut state, id, TurnPhase::Idle, false, 0);
             in_mode(&mut state, id, mode);
+            // Collapsed, the options row is not drawn (feature 1703 FR-008).
+            let (collapsed, _) = paint(themed(state.clone(), scheme), id);
+            assert!(!collapsed.iter().any(|p| p.content == MODE_LABEL));
+            state.composers.options_open = true;
             let (painted, transcript) = paint(themed(state, scheme), id);
             under_the_transcript(&painted, transcript, MODE_LABEL);
             under_the_transcript(&painted, transcript, mode.label());
-            let (ready, send) = (find(&painted, READY), find(&painted, "Send"));
+            let send = find(&painted, "Send");
             let shown = find(&painted, mode.label());
             assert!(
-                shown.origin.y > ready.origin.y && shown.origin.x < send.origin.x,
-                "the mode sits in the input row, before Send: {:?} vs {:?}, {:?}",
+                shown.origin.y < send.origin.y,
+                "the mode sits in the options row, above the input row: {:?} vs {:?}",
                 shown.origin,
-                ready.origin,
                 send.origin
             );
         }
@@ -730,6 +754,7 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
     let (mut state, id) = pane();
     report(&mut state, id, TurnPhase::Idle, false, 0);
     in_mode(&mut state, id, PermissionMode::Default);
+    state.composers.options_open = true;
     let under = StateUnderTest::new(state);
 
     let mut renderer = lay::renderer();
@@ -821,18 +846,23 @@ fn a_session_with_a_pending_request_says_waiting_for_you() {
         report(&mut state, id, busy(InterruptAsk::None), false, 0);
         pending_request(&mut state, id);
         let (painted, transcript) = paint(themed(state, scheme), id);
-        under_the_transcript(&painted, transcript, WAITING);
+        let waiting_glyph = micold_client::icons::Icon::NeedsPermission
+            .glyph()
+            .to_string();
+        assert!(glyph_under(&painted, transcript, &waiting_glyph));
         assert!(
-            !painted.iter().any(|p| p.content == BUSY),
-            "*{WAITING}* replaces `{BUSY}`"
+            !painted
+                .iter()
+                .any(|p| p.content == BUSY || p.content == WAITING),
+            "the waiting icon replaces the ring, with no words"
         );
 
         let (mut state, id) = pane();
         report(&mut state, id, busy(InterruptAsk::None), false, 0);
-        let (painted, _) = paint(themed(state, scheme), id);
+        let (painted, transcript) = paint(themed(state, scheme), id);
         assert!(
-            !painted.iter().any(|p| p.content == WAITING),
-            "no request pending: no *{WAITING}*"
+            !glyph_under(&painted, transcript, &waiting_glyph),
+            "no request pending: no waiting icon"
         );
     }
 }

@@ -465,6 +465,8 @@ pub enum Msg {
     AttachRequested(SessionId),
     /// The chord or the **Open large editor** button (feature 1703 FR-001, FR-004).
     LargeEditorRequested(SessionId),
+    /// The settings icon: show or hide the session options row (feature 1703 FR-009).
+    OptionsToggled(SessionId),
     /// The files the user chose in `session`'s picker, in the order chosen (#1464 FR-008).
     AttachPicked {
         session: SessionId,
@@ -527,6 +529,9 @@ pub struct State {
     /// The open offer to switch a Claude session's kind, with its confirmation step once the
     /// service asked for one (#943 FR-010, FR-021, FR-022a). Its presence *is* the offer shown.
     pub switch_offer: Option<crate::features::session::SwitchOffer>,
+    /// Whether the session options row (model, effort, permission) is shown: one value for the
+    /// window, persisted as `Settings.composer_options_open` (feature 1703 FR-009, FR-011).
+    pub options_open: bool,
     /// The editor of a session that has no composer yet: empty.
     blank: crate::app::Editor,
 }
@@ -790,6 +795,23 @@ impl State {
     /// Drop `session`'s notice: what it said no longer holds (a refused `/effort` since corrected).
     pub fn clear_notice(&mut self, session: SessionId) {
         self.entry(session).notice = None;
+    }
+
+    /// Show or hide the session options row.
+    pub fn options_toggled(&mut self) {
+        self.options_open = !self.options_open;
+    }
+
+    /// Show the options row (a refused permission change names its control there).
+    pub fn expand_options(&mut self) {
+        self.options_open = true;
+    }
+
+    /// Put a refusal about the model, the effort or the permission mode on `session`'s composer
+    /// and show the options row, where the control it concerns is (feature 1703 FR-012).
+    pub fn refusal(&mut self, session: SessionId, notice: String) {
+        self.notice(session, notice);
+        self.expand_options();
     }
 
     /// Put `notice` on `session`'s composer (a queue request's refusal).
@@ -1076,7 +1098,7 @@ impl crate::app::State {
         match self.composers.palette.picker_chose(session, item)? {
             Ok(choice) => Some(choice),
             Err(refusal) => {
-                self.composers.notice(session, refusal.to_string());
+                self.composers.refusal(session, refusal.to_string());
                 None
             }
         }
@@ -1103,7 +1125,7 @@ impl crate::app::State {
             }
             Classified::Model(Ok(choice)) => SendIntent::SetModel(choice),
             Classified::Model(Err(refusal)) => {
-                self.composers.notice(session, refusal.to_string());
+                self.composers.refusal(session, refusal.to_string());
                 SendIntent::Nothing
             }
             Classified::EffortPicker => {
@@ -1114,7 +1136,7 @@ impl crate::app::State {
             }
             Classified::Effort(Ok(choice)) => SendIntent::SetEffort(choice),
             Classified::Effort(Err(refusal)) => {
-                self.composers.notice(session, refusal.to_string());
+                self.composers.refusal(session, refusal.to_string());
                 SendIntent::Nothing
             }
             Classified::Shortcuts => {

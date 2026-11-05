@@ -210,6 +210,8 @@ fn restore_from_disk(
 fn restore_folds(core: &mut State, settings: &Settings) {
     core.sidebar.folded = settings.folded_origins.clone();
     core.sidebar.filter_open = settings.filter_open;
+    // Feature 1703, SC-005: the composer's options row, as it was left.
+    core.composers.options_open = settings.composer_options_open;
     // #1664, SC-004: the transcript's "Show raw events" choice, as it was left.
     core.settings.show_raw_events = settings.show_raw_events;
     core.attach.offer.dismissed = settings.dismissed_offers.clone();
@@ -803,6 +805,20 @@ mod tests {
         };
         restore_folds(&mut core, &settings);
         assert!(core.sidebar.filter_open);
+    }
+
+    /// Feature 1703, SC-005: the options row opens at launch as it was left.
+    #[test]
+    fn an_open_options_row_stays_open_at_launch() {
+        let mut core = State::default();
+        restore_folds(&mut core, &Settings::default());
+        assert!(!core.composers.options_open);
+        let settings = Settings {
+            composer_options_open: true,
+            ..Settings::default()
+        };
+        restore_folds(&mut core, &settings);
+        assert!(core.composers.options_open);
     }
 
     /// #1664, SC-004: the "Show raw events" choice is restored at launch.
