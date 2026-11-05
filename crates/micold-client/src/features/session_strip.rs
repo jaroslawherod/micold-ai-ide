@@ -313,10 +313,10 @@ impl Member {
         }
     }
 
-    /// What its close control sends: shell tabs (S5) and the Review tab, whose × closes it
-    /// (feature 1269, U4, U14).
+    /// What its close control sends: session tabs (#1598: as the sidebar row's does), shell tabs (S5) and the Review tab, whose × closes it (feature 1269, U4, U14).
     pub fn close(&self) -> Option<Message> {
         match self {
+            Self::Session { id, .. } => Some(Message::Session(SessionMsg::CloseRequested(*id))),
             Self::Shell {
                 session, instance, ..
             } => Some(Message::Session(SessionMsg::ShellInstanceCloseRequested(
@@ -1019,7 +1019,11 @@ pub(crate) mod tests {
             shown.press(),
             Message::Session(SessionMsg::TerminalAiCliSelected(m))
         );
-        assert_eq!(shown.close(), None);
+        assert_eq!(
+            shown.close(),
+            Some(Message::Session(SessionMsg::CloseRequested(m))),
+            "#1598: a session tab's × closes it as its sidebar row's does"
+        );
         assert_eq!(shown.menu_tab(), Some(StripTab::Ai));
 
         let other = member(MemberKey::Session(h1));

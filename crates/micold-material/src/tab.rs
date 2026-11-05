@@ -125,7 +125,7 @@ pub const SESSION_WIDTH: f32 = SLOT_WIDTH // the leading slot
     + spacing::XS
     + SESSION_LABEL_WIDTH
     + spacing::XS
-    + SLOT_WIDTH; // the trailing slot, reserved and empty
+    + SLOT_WIDTH; // the trailing slot: the ×
 
 /// The Review tab's width in the session strip (feature 1269, R10, U15): [`WIDTH`]'s anatomy with
 /// the label's ceiling as its label share, which holds the word "Review" and a draft count of up to
@@ -215,7 +215,7 @@ impl<'a, M: Clone + 'a> Tab<'a, M> {
     }
 
     /// Fill the trailing slot — a terminal tab's close control. Left empty on a tab that offers no
-    /// close (FR-004), which is why the slot is reserved rather than reclaimed: a strip whose tabs
+    /// close, which is why the slot is reserved rather than reclaimed: a strip whose tabs
     /// are not all one size reads as a control among controls rather than as a strip.
     pub fn trailing(mut self, content: impl Into<Element<'a, M>>) -> Self {
         self.trailing = Some(content.into());

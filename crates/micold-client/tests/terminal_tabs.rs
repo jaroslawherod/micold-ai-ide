@@ -177,9 +177,10 @@ fn the_strip_lays_out_the_models_members_and_their_presses() {
     );
 }
 
-/// FR-004, R8: a session tab has no close control; its trailing slot stays reserved and empty.
+/// #1598 (supersedes 026 FR-004), R8: a session tab has a close control in its reserved trailing
+/// slot, sent by the member (`m.close()`).
 #[test]
-fn a_session_tab_is_unclosable() {
+fn a_session_tab_has_a_close_control() {
     let body = member_body(&area_source());
     let session_arm = body
         .split_once("Member::Session {")
@@ -187,9 +188,8 @@ fn a_session_tab_is_unclosable() {
         .expect("`member` matches a session tab before a shell tab")
         .0;
     assert!(
-        !session_arm.contains(".trailing(") && !session_arm.contains("CloseRequested"),
-        "a session tab must not offer a close control (feature 026 FR-004): its trailing slot \
-         stays reserved and empty, so it is no narrower than its neighbours"
+        session_arm.contains(".trailing(") && session_arm.contains("m.close()"),
+        "a session tab offers a close control in its trailing slot (#1598), sent by the member"
     );
 }
 

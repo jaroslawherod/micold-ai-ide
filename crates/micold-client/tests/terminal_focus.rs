@@ -967,7 +967,7 @@ fn showing_a_strip() -> State {
 #[test]
 fn a_strip_press_leaves_focus_where_the_bar_control_left_it() {
     use micold_client::features::session::PaneMsg;
-    use micold_client::features::session_strip::StripModel;
+    use micold_client::features::session_strip::{MemberKey, StripModel};
     use micold_core::pane_layout::{Axis, PaneLayout};
 
     let base = showing_a_strip();
@@ -986,6 +986,9 @@ fn a_strip_press_leaves_focus_where_the_bar_control_left_it() {
         model
             .members
             .iter()
+            // A session tab's × closes the displayed session, which clears the focus by design
+            // (`closing_the_displayed_session_clears_focus`, #1598).
+            .filter(|m| !matches!(m.key(), MemberKey::Session(_)))
             .filter_map(|m| m.close().map(|c| (format!("close {:?}", m.key()), c))),
     );
     presses.push((
