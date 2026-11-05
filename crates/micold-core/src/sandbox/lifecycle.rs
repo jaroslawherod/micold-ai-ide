@@ -978,7 +978,7 @@ mod tests {
 
     #[test]
     fn a_report_names_the_runtimes_error_and_carries_all_it_printed() {
-        // #1280: podman's refusal of the credential tmpfs, as `classify` receives it. The row's
+        // #1280/#1662: podman's refusal of the credential tmpfs option, as `classify` receives it. The row's
         // sentence names its error line, not the warning before it; the runtime's own words follow.
         let stderr = "time=\"2026-10-23T10:00:00Z\" level=warning msg=\"cgroupv2 manager is set to systemd\"\n\
                       Error: unknown mount option \"uid=1000\": invalid mount option\n";
@@ -996,8 +996,8 @@ mod tests {
         };
         assert_eq!(
             failure.reason(),
-            "The sandbox failed while creating the sandbox. A path the sandbox needs cannot be \
-             shared with it: Error: unknown mount option \"uid=1000\": invalid mount option"
+            "The sandbox failed while creating the sandbox. The runtime reported: \
+             Error: unknown mount option \"uid=1000\": invalid mount option"
         );
         assert_eq!(
             failure.report(),

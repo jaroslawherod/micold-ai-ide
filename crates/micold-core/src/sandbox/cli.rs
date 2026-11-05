@@ -305,7 +305,13 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
             memory: LimitSupport::Supported,
             pids: LimitSupport::Supported,
             storage: storage_support(&info.storage_driver),
-            identity_mapping: self.dialect().identity,
+            // Read from what answered, not the configured name: `docker` may be podman's shim, and
+            // podman refuses the Docker dialect's `uid=` tmpfs option (#1662).
+            identity_mapping: if info.is_podman {
+                IdentityMapping::KeepId
+            } else {
+                self.dialect().identity
+            },
             no_outbound: no_outbound_support(self.kind, &info),
             selinux_enforcing: selinux_enforcing(),
         })
@@ -579,6 +585,7 @@ mod tests {
             rootless,
             network_backend: backend.map(str::to_string),
             network_backend_version: version.map(str::to_string),
+            is_podman: true,
         }
     }
 
@@ -590,6 +597,7 @@ mod tests {
             rootless: false,
             network_backend: None,
             network_backend_version: None,
+            is_podman: false,
         };
         assert_eq!(
             no_outbound_support(RuntimeKind::Docker, &docker),
