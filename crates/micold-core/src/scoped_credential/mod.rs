@@ -7,19 +7,16 @@
 //!
 //! The other part (FR-008–FR-010, FR-012) is what hands the sandbox a credential scoped to one
 //! repository: [`ScopedCredential`] (only [`ScopedCredential::accept`] makes one), the
-//! [`CredentialSource`] seam, [`NoCredentialReason`] and the pure [`schedule::Schedule`]. The one
+//! [`CredentialSource`] seam, [`NoCredentialReason`]. The one
 //! real source is a fine-grained PAT the user pastes ([`pat`], [`pat_store`]): it is checked, never
 //! renewed, and withdrawn at its expiry.
 
-#[cfg(any(test, feature = "kube-fake"))]
-pub mod fake;
 pub mod git_env;
 pub mod gitconfig;
 pub mod helper;
 pub mod pat;
 pub mod pat_store;
 pub mod reach;
-pub mod schedule;
 pub mod token_choice;
 
 pub use git_env::{git_env, git_env_with_helper};
@@ -50,7 +47,7 @@ pub const CLOCK_SKEW_SECS: u64 = 300;
 /// The forge the scoped credential is for, as git names it in `credential.<base>.*`.
 pub const GITHUB_BASE: &str = "https://github.com";
 
-/// How long before it expires a minted credential is renewed ([`schedule::RenewPolicy::Renew`]).
+/// How long before it expires a minted credential is renewed.
 pub const RENEW_MARGIN_SECS: u64 = 600;
 
 /// How long before its expiry a held credential is warned about (FR-008): 24 hours.
@@ -331,41 +328,6 @@ impl CredentialStatus {
     }
 }
 
-pub use crate::protocol::messages::CredentialTarget;
-
-impl CredentialTarget {
-    /// The GitHub repository the project pushes to: `NoRemote` without an `origin`, `NotGithub`
-    /// for any other host.
-    pub fn repo(&self) -> Result<GithubRepo, NoCredentialReason> {
-        let url = self
-            .push_url
-            .as_deref()
-            .ok_or(NoCredentialReason::NoRemote)?;
-        GithubRepo::from_remote_url(url).ok_or_else(|| NoCredentialReason::NotGithub {
-            host: remote_host(url),
-        })
-    }
-}
-
-/// The host a remote URL names, for the message; `unknown` when it names none.
-fn remote_host(url: &str) -> String {
-    let url = url.trim();
-    let authority = match url.split_once("://") {
-        Some((_, rest)) => rest.split('/').next().unwrap_or_default(),
-        None => match url.split_once(':') {
-            Some((user_host, _)) if !user_host.contains('/') => user_host,
-            _ => "",
-        },
-    };
-    let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-    let host = host_port.split(':').next().unwrap_or_default();
-    if host.is_empty() {
-        "unknown".to_string()
-    } else {
-        host.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -582,33 +544,5 @@ mod tests {
         ] {
             assert!(!other.expires_within(NOW, day));
         }
-    }
-
-    #[test]
-    fn a_target_resolves_to_its_repository_or_says_why_not() {
-        let target = |url: Option<&str>| CredentialTarget {
-            project: "/p".into(),
-            push_url: url.map(str::to_string),
-        };
-        assert_eq!(target(Some("git@github.com:o/r.git")).repo(), Ok(repo()));
-        assert_eq!(target(None).repo(), Err(NoCredentialReason::NoRemote));
-        assert_eq!(
-            target(Some("https://user:pw@gitlab.com:8443/o/r")).repo(),
-            Err(NoCredentialReason::NotGithub {
-                host: "gitlab.com".into()
-            })
-        );
-        assert_eq!(
-            target(Some("git@bitbucket.org:o/r.git")).repo(),
-            Err(NoCredentialReason::NotGithub {
-                host: "bitbucket.org".into()
-            })
-        );
-        assert_eq!(
-            target(Some("/srv/git/r.git")).repo(),
-            Err(NoCredentialReason::NotGithub {
-                host: "unknown".into()
-            })
-        );
     }
 }

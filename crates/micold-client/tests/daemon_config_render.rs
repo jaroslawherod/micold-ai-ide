@@ -123,10 +123,26 @@ fn a_project_added_at_runtime_renders_in_the_next_file() {
 /// pod's `TZ` has, and keeps the idle stop off that the old `MICOLD_IDLE_STOP` gave it.
 #[test]
 fn a_pods_file_validates_and_names_the_pods_mounts() {
-    let settings =
-        DaemonSettings::for_pod("k8s-dev", "ghcr.io/acme/basic:1", Some("Europe/Berlin"));
+    let settings = DaemonSettings::for_pod(
+        "k8s-dev",
+        "ghcr.io/acme/basic:1",
+        Some("Europe/Berlin"),
+        false,
+    );
     let text = micold_client::daemon_config_render::prepare(&settings, Kind::Kubernetes)
         .unwrap_or_else(|e| panic!("{}", e[0]));
     assert_eq!(text, include_str!("golden/daemon_config/pod.toml"));
     assert!(!text.contains("MICOLD_"), "{text}");
+}
+
+/// #1530: with the shared git configuration mounted, the pod's file names the mounted copy.
+#[test]
+fn a_pods_file_names_the_mounted_git_config() {
+    let settings = DaemonSettings::for_pod("k8s-dev", "ghcr.io/acme/basic:1", None, true);
+    let text = micold_client::daemon_config_render::prepare(&settings, Kind::Kubernetes)
+        .unwrap_or_else(|e| panic!("{}", e[0]));
+    assert!(
+        text.contains("config_file = \"/run/micold/secrets/git/gitconfig\""),
+        "{text}"
+    );
 }

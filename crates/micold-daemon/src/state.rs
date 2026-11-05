@@ -85,12 +85,6 @@ type IssueLookupFactory =
 /// One input batch held while its session starts: serial, bytes and the targeted process.
 type HeldInput = (u64, Vec<u8>, Option<SessionProcess>);
 
-/// The credential targets and `git_too_old` last sent to the clients.
-type GitTargetsSent = (
-    Vec<micold_core::protocol::messages::CredentialTarget>,
-    Option<String>,
-);
-
 /// At most this many SSH aliases of github.com are held (#1475).
 const MAX_SSH_GITHUB_ALIASES: usize = 256;
 
@@ -121,9 +115,6 @@ pub struct DaemonState {
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
-    /// The credential targets last sent to the clients (#1002), so a refresh that changed nothing
-    /// sends nothing. Its own mutex: it is touched around git calls, never under `inner`.
-    git_targets: Mutex<Option<GitTargetsSent>>,
     /// The SSH host aliases of github.com the clients' machines resolved (#1475,
     /// `ClientMsg::SshHostAliases`), lower-cased; empty until a client reports one.
     ssh_github_aliases: Mutex<std::collections::BTreeSet<String>>,
@@ -1315,7 +1306,6 @@ impl DaemonState {
             setup_store,
             setup_turn: Arc::default(),
             diagnostics: std::sync::OnceLock::new(),
-            git_targets: Mutex::new(None),
             ssh_github_aliases: Mutex::new(std::collections::BTreeSet::new()),
             hooks: std::sync::OnceLock::new(),
             config: std::sync::OnceLock::new(),
@@ -5218,21 +5208,6 @@ impl DaemonState {
             .then_some(host_ssh);
         let resolve = micold_core::github::known_github_aliases(&known, fallback);
         micold_core::github::resolve_ssh_aliases_with(remotes, &resolve)
-    }
-
-    /// Remember `targets` as the last list sent; `true` when it differs from the one before.
-    pub fn git_targets_changed(
-        &self,
-        targets: &[micold_core::protocol::messages::CredentialTarget],
-        git_too_old: Option<&str>,
-    ) -> bool {
-        let mut last = self.git_targets.lock().unwrap_or_else(|e| e.into_inner());
-        let now = (targets.to_vec(), git_too_old.map(str::to_string));
-        let changed = last.as_ref() != Some(&now);
-        if changed {
-            *last = Some(now);
-        }
-        changed
     }
 
     /// A known project's repo path + whether it is a git repository. `None` if unknown.

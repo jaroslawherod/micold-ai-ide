@@ -120,12 +120,10 @@ impl KubeCredential {
                 // The shared copy carries no credential helper, embedded token, extra header or
                 // include (FR-004). A host without `git` cannot be sanitized, so shares nothing.
                 let text = source(&path)?;
-                let sanitized =
-                    crate::scoped_credential::sanitize_gitconfig_text(&text, false).map_err(|_| {
-                        KubeFailure::CredentialSource {
-                            credential: self.label(),
-                            path: path.clone(),
-                        }
+                let sanitized = crate::scoped_credential::sanitize_gitconfig_text(&text, false)
+                    .map_err(|_| KubeFailure::CredentialSource {
+                        credential: self.label(),
+                        path: path.clone(),
                     })?;
                 Ok(one("gitconfig", sanitized))
             }

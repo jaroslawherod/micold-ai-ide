@@ -346,7 +346,7 @@ fn a_pods_script_and_env_file_become_texts_and_the_file_names_their_mounts() {
     std::fs::write(&env, "TOKEN=SECRET_VALUE\n").unwrap();
     let mut table = StartupSettings::new(StartupScript::File(script.clone()));
     table.env_file = Some(env);
-    let mut settings = DaemonSettings::for_pod("Pod", "img:1", None);
+    let mut settings = DaemonSettings::for_pod("Pod", "img:1", None, false);
     settings.startup = Some(StartupTable {
         script_file: script,
         settings: table,
@@ -360,7 +360,7 @@ fn a_pods_script_and_env_file_become_texts_and_the_file_names_their_mounts() {
     assert!(config.contains("env_file = \"/run/micold/secrets/startup/startup.env\""));
     assert!(!config.contains("SCRIPT_BODY") && !config.contains("SECRET_VALUE"));
 
-    let none = pod_startup(&DaemonSettings::for_pod("Pod", "img:1", None)).unwrap();
+    let none = pod_startup(&DaemonSettings::for_pod("Pod", "img:1", None, false)).unwrap();
     assert_eq!((none.script, none.env), (None, None));
 
     let mut missing = settings.clone();

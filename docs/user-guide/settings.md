@@ -644,7 +644,9 @@ Caps on what the sandbox may consume (CPU, memory, process count and writable st
 The container starts with **none** of your credentials, and upgrading the app never opts you in.
 Each share is separate, and only what you tick is passed in:
 
-- **Git configuration** — `~/.gitconfig`, read-only: your commit identity.
+- **Git configuration** — `~/.gitconfig`, read-only: your commit identity. The sandbox gets a
+  sanitized copy, named by `[git] config_file` in the daemon's configuration, and commit and tag
+  signing switches are removed from it unless the daemon has a `signing_key_file`.
 - **AI CLI sign-in** — the AI CLI's own authentication material.
 
 The **SSH agent** and **Git credentials** shares were removed: they handed the sandbox your whole
@@ -784,12 +786,10 @@ Tokens you pasted before this version, one per repository, are converted when yo
 application: each becomes a token named `owner-repo`, limited to `owner/repo`, so the repository
 keeps using the same token.
 
-**From 24 hours before it expires** a row, and the status of every project that uses the token,
-warn you; the application never renews a token (GitHub has no way to), so paste a new one before
-then. At the expiry the token is taken out of running sandboxes and pushes fail until you paste a
-new one.
+The application never renews a token (GitHub has no way to), so paste a new one before it expires.
+An expired token is no longer used, and pushes fail until you paste a new one.
 
-**Remove** deletes the stored token and takes it out of running sandboxes. **It does not delete the
+**Remove** deletes the stored token; running sandboxes stop using it. **It does not delete the
 token on GitHub**: it stays valid there until it expires or you delete it under *Developer
 settings*.
 

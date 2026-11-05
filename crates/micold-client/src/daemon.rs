@@ -1945,8 +1945,11 @@ pub async fn kube_attempt(
     let time_zone = HOST_TIME_ZONE.get().and_then(|z| z.as_deref());
     // The start script goes in the config map and its `env_file` in a secret (#1533, FR-011); an
     // unreadable one stops the start naming it instead of starting the pod without it.
+    let git_config = settings
+        .allowed
+        .contains(&micold_core::kube::credentials::KubeCredential::GitConfig);
     let mut pod_settings =
-        crate::daemon_config_render::DaemonSettings::for_pod(name, &image, time_zone);
+        crate::daemon_config_render::DaemonSettings::for_pod(name, &image, time_zone, git_config);
     pod_settings.startup = startup.cloned();
     let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
