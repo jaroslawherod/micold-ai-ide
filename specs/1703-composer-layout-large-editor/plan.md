@@ -72,16 +72,18 @@ specs/1703-composer-layout-large-editor/
 crates/micold-core/src/settings.rs             # + composer_options_open (Settings, serde mirror, default false)
 crates/micold-client/src/shell/persist.rs      # + persist_composer_options_open; form-save exclusion list
 crates/micold-client/src/shell/startup.rs      # read it into core state at boot
-crates/micold-client/src/main.rs               # call persist after the toggle message (as filter_open, ~l.1232)
+crates/micold-client/src/shell/composer.rs     # NEW arm: Message::Composer is routed here (main.rs:1157); call persist_composer_options_open whenever options_open changes (toggle or auto-expand on a refusal)
+crates/micold-client/src/main.rs               # no change expected beyond the existing routing
 crates/micold-client/src/features/composer.rs  # options_open flag, toggle, auto-expand on model/effort/permission refusal; chord intent LargeEditorRequested
 crates/micold-client/src/features/large_editor.rs  # NEW render-free: LargeEditor{session,content}, open/confirm/cancel reducer
 crates/micold-client/src/overlay/registry.rs   # register the large-editor dialog
 crates/micold-client/src/ui/large_editor.rs    # NEW dialog body (Modal, TextArea, Done, Cancel)
 crates/micold-client/src/ui/composer.rs        # new layout: settings IconButton, indicator in input row, options row, open-editor IconButton
-crates/micold-client/src/ui/mode_control.rs    # permission selector becomes a MenuSelect; leaves the input row
-crates/micold-client/src/ui/material/menu_select.rs  # shared trigger 32dp/8dp/states/disabled+tooltip; MenuSelectRow::filter
+crates/micold-client/src/ui/mode_control.rs    # permission selector becomes a MenuSelect (the `Select` use here is dropped; `Select` stays for other callers); leaves the input row
+crates/micold-client/src/ui/material/menu_select.rs  # NEW API: disabled state + tooltip, MenuSelectRow::filter; shared trigger 32dp/8dp/states/disabled+tooltip; MenuSelectRow::filter
 crates/micold-client/src/features/changes/keys.rs    # shortcut-sheet entry (next to Add attachment, l.480)
-crates/micold-material/src/icons.rs            # Icon::Settings exists; add Icon::OpenInFull (or reuse an existing expand glyph) if absent
+crates/micold-material/src/icons.rs            # Icon::Settings exists; Icon::OpenInFull is NEW (codepoint, Icon list entry, mapping)
+crates/micold-client/src/showcase/sections/controls.rs  # showcase MenuSelect disabled and filter variants (catalogue.rs if an entry is needed)
 docs/user-guide/structured-input.md, docs/user-guide/terminal-panes.md
 ```
 
@@ -104,12 +106,13 @@ docs/user-guide/structured-input.md, docs/user-guide/terminal-panes.md
 | Requirement | Layer |
 |---|---|
 | Settings field default/round trip/old file/unreadable -> collapsed (011) | core unit, `settings.rs` tests |
+| Auto-expand on a model/effort/permission refusal sets and persists `composer_options_open` (012) | client `shell/composer.rs` test with a mock `SettingsStore` |
 | Persist on toggle, form save keeps it, boot reads it (011) | client `shell/persist.rs`, `shell/startup.rs` tests |
 | Toggle, auto-expand on refusal, Stop/refusal visible (009, 012, 013) | client reducer tests `tests/features_composer.rs` |
 | Chord Ctrl/Cmd+Shift+M only when focused; open/confirm/cancel; empty draft; second open ignored; session binding; ended session (001-003, 019, edge cases) | client reducer tests (render-free `large_editor.rs`) |
 | Button visibility rule (004) | client unit test of the pure predicate |
 | Indicator placement, no permission selector, labels (006-008) | client view-structure tests like `tests/composer_tab.rs` |
-| Selector geometry/states (015-017) | geometry gate test beside `ui/material/*_anatomy.rs` |
+| Selector geometry/states (015-017) | geometry gate test `ui/material/menu_select_anatomy.rs` (NEW, modelled on `select_anatomy.rs`) |
 | Shortcut listed (005) | client test on sheet entries + docs check in CI |
 | Look, state treatments, ripple, tonal icon, Bypass marker | quickstart §B visual pass |
 
