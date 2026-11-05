@@ -163,7 +163,7 @@ pub fn configured_window() -> Option<IdleWindow> {
             Ok(window) => window,
             Err(reason) => {
                 tracing::warn!(
-                    env = IDLE_STOP_ENV,
+                    key = "daemon.idle_stop",
                     value = %raw,
                     %reason,
                     "unrecognised idle-stop setting; using the standard window"
