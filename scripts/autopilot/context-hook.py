@@ -100,7 +100,7 @@ def names_branch(cwd):
     if not top or not branch:
         return False
     line = f"- **Worktree branch**: {branch}"
-    for pattern in ("specs/*/autopilot.md", "specs/*/bugs/*.autopilot.md", "specs/quick/*.autopilot.md"):
+    for pattern in ("specs/*/autopilot.md", "specs/*/autopilot-*.md", "specs/*/bugs/*.autopilot.md", "specs/quick/*.autopilot.md"):
         for ledger in glob.glob(os.path.join(top, pattern)):
             try:
                 if line in Path(ledger).read_text(errors="replace").splitlines():
