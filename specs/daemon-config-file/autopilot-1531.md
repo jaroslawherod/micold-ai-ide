@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: tasks (milestones cut, in review)
-- **Next step**: design PR open (see PR table); orchestrator waits on CI and merges
+- **Phase**: tasks (milestones cut, design PR open)
+- **Next step**: design PR open (see PR table); orchestrator waits on CI and merges; then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| — | Design (milestones for Issue 10) | pending | — |
+| #1696 | Design (milestones for Issue 10) | OPEN | — |
 
 ## Milestones
 
