@@ -588,36 +588,14 @@ classified as authentication, a full disk, an unreachable remote or other. Git n
 Kubernetes pod; a daemon without it refuses every clone, and the refusal names the key; the old
 `MICOLD_REPOS_ROOT` variable is ignored). Two requests for one `dest` run one after the other.
 
-## Scoped git credentials (feature 1002, protocol 55)
+## Scoped git credentials (feature 1002, #1530)
 
-A sandboxed daemon (in a container or a pod) holds no git identity of the user. The application
-hands it one credential per repository its projects push to, over three messages; a host-process
-or SSH daemon never sends the first and answers the others with an `OperationError`
-(`req: u64::MAX`, `Refused`).
-
-- `DaemonMsg::GitCredentialTargets { targets, git_too_old }`: sent by the daemon after a successful
-  `Attach`, and to every client when a project is added or removed or a worktree refresh finds a
-  changed list. One `CredentialTarget { project, push_url }` per project, `push_url` being
-  `git remote get-url --push origin` verbatim (`None` without an `origin`). The whole list every
-  time; the client diffs. `git_too_old` is the container's `git --version` when it is older than
-  2.31 (no `GIT_CONFIG_COUNT`): the client issues nothing and the daemon refuses every grant.
-- `ClientMsg::GitCredentialGrant { repo, token, expires_at }`: the daemon writes
-  `<root>/<owner>/<repo>` (lower case; root `/run/micold/git`, in memory) atomically with mode
-  `0600`, replacing the previous file (a replacement). No reply on success. Refused when no project of
-  the daemon pushes to `repo`, so a client bug cannot widen its reach; a write failure is reported
-  naming the repository.
-- `ClientMsg::GitCredentialRevoke { repo }`: removes the file; idempotent.
-
-Invariants: the token is never logged (`SecretToken`'s `Debug` is redacted, and so is the wire
-message's), never forwarded to another daemon or a session's environment, and never written outside
-the credential root. The one real source is a fine-grained PAT the user pasted per repository
-(contract `specs/1002-sandbox-scoped-token/contracts/pat-source.md`): the client never renews it and
-never revokes it on GitHub. It re-checks it once at its expiry and then sends a `GitCredentialRevoke`
-(also when a PAT was removed or refused while the daemon was disconnected, and on removal in the
-settings), and it sends one when the daemon stops or is deleted
-(`micold_core::scoped_credential::schedule::Schedule` with `RenewPolicy::AtExpiry`). A grant may
-live up to 366 days (`MAX_LIFETIME_SECS`; the daemon refuses an expiry that is past or further
-away), and the token's expiry is always known.
+A sandboxed daemon (in a container or a pod) holds no git identity of the user. Its credential
+helper (`micold-daemon git-credential`) chooses the token for a repository from the daemon's
+configuration at git time; the pasted tokens are checked and stored by the application's Settings.
+The grant messages (`GitCredentialGrant`, `GitCredentialRevoke`, `GitCredentialTargets`) were retired
+in protocol 79. The token is never logged (`SecretToken`'s `Debug` is redacted) and never written
+where git could keep it.
 
 ## Finding the logs and recent errors
 

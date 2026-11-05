@@ -1097,7 +1097,6 @@ where
                         // just filled, and both must land before the snapshot is built or a
                         // discovered session appears only on the *next* open.
                         refresh_worktrees_and_send(state, id, project).await;
-                        announce_git_targets(state, Some(id)).await;
                     }
                     Err(reason) => {
                         tracing::info!(client = id, project = %project.display(), "attach refused: project busy");
@@ -2278,86 +2277,9 @@ where
                     task_state.send(id, reply);
                 });
             }
-            // #1002: a scoped credential for one repository, written to the in-memory file the
-            // helper reads. Never logged; refused unless a project here pushes to the repository.
-            ClientMsg::GitCredentialGrant {
-                repo,
-                token,
-                expires_at,
-            } => {
-                let st = Arc::clone(state);
-                let asked = repo.clone();
-                let done = tokio::task::spawn_blocking(move || {
-                    crate::git_credential::apply_grant(
-                        &st.project_paths(),
-                        &st.ssh_github_aliases(),
-                        &repo,
-                        &token,
-                        expires_at,
-                    )
-                })
-                .await;
-                use crate::git_credential::GrantRefused;
-                match done {
-                    Ok(Ok(())) => {}
-                    Ok(Err(GrantRefused::NotSandboxed)) => refuse_git_credential(
-                        state,
-                        id,
-                        ErrorKind::Refused,
-                        format!("this daemon holds no git credentials; refused one for {asked}"),
-                    ),
-                    Ok(Err(GrantRefused::GitTooOld(version))) => {
-                        tracing::warn!(version = %version, repo = %asked, "git credential refused: git is too old");
-                        refuse_git_credential(
-                            state,
-                            id,
-                            ErrorKind::Refused,
-                            format!("git {version} is older than 2.31; refused a credential for {asked}"),
-                        );
-                    }
-                    Ok(Err(GrantRefused::Invalid)) => refuse_git_credential(
-                        state,
-                        id,
-                        ErrorKind::InvalidInput,
-                        format!("the credential for {asked} is empty, malformed or expired"),
-                    ),
-                    Ok(Err(GrantRefused::NotAProjectRepo)) => refuse_git_credential(
-                        state,
-                        id,
-                        ErrorKind::Refused,
-                        format!("no project here pushes to {asked}; refused its credential"),
-                    ),
-                    Ok(Err(GrantRefused::Write(e))) => {
-                        tracing::warn!(repo = %asked, error = %e, "git credential not written");
-                        refuse_git_credential(
-                            state,
-                            id,
-                            ErrorKind::IoFailed,
-                            format!("could not write the git credential for {asked}: {e}"),
-                        );
-                    }
-                    Err(e) => tracing::warn!(error = %e, "the git credential task failed"),
-                }
-            }
-            ClientMsg::GitCredentialRevoke { repo } => {
-                if let Some(root) = crate::git_credential::credential_root() {
-                    if let Err(e) = crate::git_credential::remove_grant(&root, &repo.lowercased()) {
-                        tracing::warn!(repo = %repo, error = %e, "git credential not removed");
-                        refuse_git_credential(
-                            state,
-                            id,
-                            ErrorKind::IoFailed,
-                            format!("could not remove the git credential for {repo}: {e}"),
-                        );
-                    }
-                }
-            }
-            // #1475: the SSH aliases of github.com the user's machine resolved. A grown set can
-            // turn a project's push URL into GitHub's, so the credential targets are re-announced.
+            // #1475: the SSH aliases of github.com the user's machine resolved.
             ClientMsg::SshHostAliases { github_hosts } => {
-                if state.remember_ssh_github_aliases(github_hosts) {
-                    announce_git_targets(state, None).await;
-                }
+                state.remember_ssh_github_aliases(github_hosts);
             }
             ClientMsg::RemoteList { req, project } => {
                 // Read-only and local: `git config`, never a network call (034 FR-002). The URLs
@@ -2767,7 +2689,6 @@ where
                         let _ = pty.kill();
                     }
                     state.broadcast_catalog();
-                    announce_git_targets(state, None).await;
                     send_ack(state, id, req);
                 }
                 Err(e) => send_io_error(state, id, req, "failed to remove the project", &e),
@@ -2905,63 +2826,6 @@ pub(crate) async fn refresh_worktrees_and_broadcast(
 ) {
     refresh_worktrees_off_runtime(state, &project).await;
     state.broadcast_catalog();
-    announce_git_targets(state, None).await;
-}
-
-/// Tell the clients where this sandboxed daemon's projects push (#1002, contracts/protocol.md):
-/// to `only` always (after its `Attach`), otherwise to everyone when the list changed. A
-/// host-process daemon sends nothing.
-async fn announce_git_targets(state: &Arc<DaemonState>, only: Option<crate::state::ClientId>) {
-    if crate::git_credential::credential_root().is_none() {
-        return;
-    }
-    let st = Arc::clone(state);
-    let computed = tokio::task::spawn_blocking(move || {
-        (
-            crate::git_credential::collect_targets(&st.project_paths(), &st.ssh_github_aliases()),
-            crate::git_credential::git_too_old(),
-        )
-    })
-    .await;
-    let Ok((targets, git_too_old)) = computed else {
-        return;
-    };
-    if let Some(version) = &git_too_old {
-        tracing::warn!(version = %version, "git is older than 2.31: scoped git credentials are refused");
-    }
-    let changed = state.git_targets_changed(&targets, git_too_old.as_deref());
-    let msg = DaemonMsg::GitCredentialTargets {
-        targets,
-        git_too_old,
-    };
-    match only {
-        Some(id) => state.send(id, msg),
-        None if changed => state.broadcast(msg),
-        None => {}
-    }
-}
-
-/// The `req` of an `OperationError` answering no request: a refused or failed credential message.
-/// Clients number requests up from 0, so the top of the range cannot be one of theirs.
-pub const GIT_CREDENTIAL_NOTICE_REQ: u64 = u64::MAX;
-
-/// A refused or failed credential request, to the requester only. It names the repository, never
-/// the token.
-fn refuse_git_credential(
-    state: &DaemonState,
-    id: crate::state::ClientId,
-    kind: ErrorKind,
-    message: String,
-) {
-    state.send(
-        id,
-        DaemonMsg::OperationError {
-            req: GIT_CREDENTIAL_NOTICE_REQ,
-            kind,
-            message,
-            detail: None,
-        },
-    );
 }
 
 /// Re-discover a project's worktrees and send the refreshed catalog to a single client — the

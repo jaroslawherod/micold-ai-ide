@@ -81,7 +81,6 @@ fn a_session_the_daemon_is_not_hosting_seeds_at_zero() {
 #[test]
 fn update_inner_applies_window_focus_changed() {
     let mut app = App {
-        git_credentials: crate::shell::scoped_credential::GitCredentials::idle(),
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
@@ -269,7 +268,6 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     // its live size changes) must now be remembered on `App` so `spawn_pty` call sites can
     // seed new sessions at the pane's actual current size instead.
     let mut app = App {
-        git_credentials: crate::shell::scoped_credential::GitCredentials::idle(),
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
@@ -965,7 +963,6 @@ pub(crate) fn base_app() -> App {
 
 fn base_app_fields() -> App {
     App {
-        git_credentials: crate::shell::scoped_credential::GitCredentials::idle(),
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
@@ -4040,7 +4037,6 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
     use micold_client::features::connection::ConnectionStatus;
 
     let mut app = App {
-        git_credentials: crate::shell::scoped_credential::GitCredentials::idle(),
         caps: Capabilities::real()
             .without_settings()
             .without_projects()

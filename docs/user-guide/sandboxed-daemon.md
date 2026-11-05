@@ -450,7 +450,12 @@ Nothing of yours is shared unless you say so. Each item is a separate opt-in:
 
 - **Git configuration** — your commit name and email, read-only. The sandbox gets a copy without
   credential helpers, tokens embedded in URLs, extra HTTP headers, includes, or a custom SSH or
-  askpass command, and git inside it ignores any helper that is left.
+  askpass command, and git inside it ignores any helper that is left. The daemon's file names the
+  copy as `[git] config_file`, and git in every session of a container or pod reads it through
+  `GIT_CONFIG_GLOBAL`. Signing is not shared: `commit.gpgsign` and `tag.gpgsign` are removed from the
+  copy unless the daemon's file also names a `signing_key_file` (see [the daemon's
+  configuration](daemon-configuration.md#git)), so a commit made in the sandbox is not left failing
+  for want of a key it does not hold.
 - **AI CLI sign-in** — each CLI's sign-in file, and nothing else from its directory:
   Claude Code's `~/.claude/.credentials.json`, Codex's `~/.codex/auth.json` and OpenCode's
   `~/.local/share/opencode/auth.json`. A file you do not have is simply not shared. It is the one
@@ -474,31 +479,9 @@ repository no token applies to over to the helpers you already had.
 token for as many repositories as it reaches in [Settings → GitHub → GitHub
 tokens](settings.md#github-tokens). A sandbox then pushes and pulls its project's repository
 with that **fine-grained token, limited to the repositories you chose**, over HTTPS; a remote that uses
-SSH goes over HTTPS inside the sandbox, with no SSH key. The application never renews the token: it
-warns you 24 hours before it expires and takes it out of the sandbox at the expiry, and you paste a
-new one without restarting anything. A token that leaks from a sandbox stays valid until it
-expires or you delete it on GitHub. A session that tries to push without one fails for want of
-credentials, and the application says so rather than leaving you with an unexplained
-authentication error.
-
-### The git credential lines
-
-While a sandbox is connected, its row in **Settings → Daemons** has one line per project it serves
-that says where the project's git credential stands:
-
-| Line | What to do |
-|---|---|
-| *project: Git credential for owner/repo, expires on 2026-11-20* | Nothing: the sandbox pushes and pulls with it. |
-| *project: Git credential for owner/repo expires on 2026-11-20: paste a new token in Settings* (within 24 hours of the expiry) | Paste a new token for the repository in Settings → GitHub tokens; the sandbox gets it without a restart. |
-| *project: No git credential: No GitHub token is stored for this repository. …* | Paste a fine-grained token for the repository. |
-| *project: No git credential: The GitHub token for this repository expired. …* | The token was taken out of the sandbox at its expiry: paste a new one. |
-| *project: No git credential: GitHub refused the token: …* | Paste a corrected token: the reason says what GitHub refused (not fine-grained, no expiry, cannot push to the repository, reaches another private repository). |
-| *project: No git credential: GitHub could not be reached: … Retrying.* | Nothing: the application tries again. A token the sandbox already holds stays until its expiry. |
-| *project: No git credential: The project has no GitHub remote (origin).* or *… is not supported for scoped credentials.* | Set `origin` to the project's GitHub repository; other hosts get no credential. |
-| *project: No git credential: Git … in the container is older than 2.31 …* | Use an image with a newer git. |
-
-A line goes from *No git credential* to *Git credential for …* as soon as a token is delivered, and
-the lines go away when the sandbox stops or disconnects.
+SSH goes over HTTPS inside the sandbox, with no SSH key. The application never renews the token: paste a new one before it expires. A token that leaks from a
+sandbox stays valid until it expires or you delete it on GitHub. A session that tries to push
+without a token that applies fails for want of credentials.
 
 ### Where sandboxed conversations live
 

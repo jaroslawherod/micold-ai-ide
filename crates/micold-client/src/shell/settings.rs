@@ -35,11 +35,10 @@ fn load_github_tokens(app: &mut App) {
         .update(Message::Settings(Msg::GithubPatsLoaded(stored)));
 }
 
-/// Tell the credential wiring about the tokens the section replaced or removed.
+/// Clear the section's refresh flag: the daemon's credential helper reads the store at git time,
+/// so a replaced or removed token needs no push.
 fn refresh_github_tokens(app: &mut App) {
-    if app.core.settings.github_tokens.take_refresh() {
-        app.git_credentials.refresh_all();
-    }
+    let _ = app.core.settings.github_tokens.take_refresh();
 }
 
 /// Check the token the form raised and, if GitHub accepts it, store it: on a blocking thread, the

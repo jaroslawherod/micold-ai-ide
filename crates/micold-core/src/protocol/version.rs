@@ -270,7 +270,10 @@
 ///
 /// And 77 → 78 for #1723's daemon-qualified rows: `SessionSummary.daemon` and
 /// `WorktreeSnapshot.daemon`, with `protocol/routing.rs` joining the schema hash.
-pub const PROTOCOL_VERSION: u32 = 78;
+/// And 78 → 79 for #1530, which retired the git credential grant messages the daemon's credential
+/// helper replaced: `ClientMsg::{GitCredentialGrant, GitCredentialRevoke}`,
+/// `DaemonMsg::GitCredentialTargets` and `CredentialTarget`.
+pub const PROTOCOL_VERSION: u32 = 79;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

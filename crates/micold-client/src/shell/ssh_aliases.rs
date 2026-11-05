@@ -148,20 +148,6 @@ pub fn prepare(hosts: &SshHosts, outbox: Option<&Outbox>, event: DaemonMsg) -> P
                 result: OperationResult::RemoteList { remotes },
             })
         }
-        DaemonMsg::GitCredentialTargets { ref targets, .. } => {
-            let urls: Vec<String> = targets.iter().filter_map(|t| t.push_url.clone()).collect();
-            let unasked = hosts.unasked(urls.iter().map(String::as_str));
-            if unasked.is_empty() {
-                hosts.tell(outbox, urls.iter().map(String::as_str));
-            } else {
-                let (hosts, outbox) = (hosts.clone(), outbox.cloned());
-                std::thread::spawn(move || {
-                    hosts.ask(&unasked);
-                    hosts.tell(outbox.as_ref(), urls.iter().map(String::as_str));
-                });
-            }
-            Prepared::Ready(event)
-        }
         event => Prepared::Ready(event),
     }
 }

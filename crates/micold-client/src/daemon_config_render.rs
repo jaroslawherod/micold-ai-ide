@@ -144,8 +144,17 @@ impl DaemonSettings {
     /// off (the pod outlives its client), and the image and time zone it runs. No `[listen]` and no
     /// client token: the pod is reached through the bridge its SSH server starts, which relays to
     /// the daemon's socket, so there is no address to serve and no token to check.
-    pub fn for_pod(name: &str, image: &str, time_zone: Option<&str>) -> Self {
+    ///
+    /// `git_config` is whether the shared git configuration is mounted in the pod: the file then
+    /// names the mounted copy as `[git] config_file` (#1530, FR-016).
+    pub fn for_pod(name: &str, image: &str, time_zone: Option<&str>, git_config: bool) -> Self {
         Self {
+            git_config_file: git_config.then(|| {
+                PathBuf::from(format!(
+                    "{}/gitconfig",
+                    micold_core::kube::credentials::GIT_CONFIG_DIR
+                ))
+            }),
             listen: None,
             image: Some(image.to_string()),
             time_zone: time_zone.map(str::to_string),
