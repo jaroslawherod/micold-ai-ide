@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1682 | M4 | merged | 3af058506bbe0e95b0b8e3e31801c8388b23604c |
 | #1698 | M5 | merged | 1897aa45b3c239b33a5ebd470f16bada280ab4ab |
 | #1712 | M6 | merged | 061050efbefc06bccfac49b4117005d8314f1572 |
-| close | Close (TDD verification, quickstart results, spec Status) | open | |
+| #1715 | Close (TDD verification, quickstart results, spec Status) | open | |
 
 ## Milestones
 
