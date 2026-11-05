@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft
+**Status**: Closed 2026-11-05 — shipped in PRs #1695, #1701
 
 **Input**: Issue #1663 — "Structured view: messages sent by the user are not visually distinct from the agent's output". In a long transcript the text the user sent blends into assistant text, thinking and tool cards; a user turn should stand apart through a tinted surface and a left accent, using existing theme tokens, in light and dark.
 

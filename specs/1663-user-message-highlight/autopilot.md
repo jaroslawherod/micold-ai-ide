@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1663
 - **Worktree branch**: feat/1663_structured-view-messages-sent-by-the-user-are-not
 - **Started**: 2026-11-05
-- **Phase**: milestone M1 (gate, PR)
-- **Next step**: full gate, PR
+- **Phase**: close (review, gate, PR)
+- **Next step**: diff review, full gate, close PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1695 | design | merged | 8a4e2dd39e9ed9d7acb2f2f4743dc89ffbd0567b |
-| #1701 | M1 | open | |
+| #1701 | M1 | merged | 80d691d1580e1af4d771edabe9135b5a08c0a8f9 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Every user turn shows tinted surface + 4dp primary left edge, light and dark; selection unchanged; guide updated | #1701 | in PR |
+| M1 | T001–T010 | full | Every user turn shows tinted surface + 4dp primary left edge, light and dark; selection unchanged; guide updated | #1701 | merged |
 
 ## Decisions
 

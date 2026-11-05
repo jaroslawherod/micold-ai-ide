@@ -40,3 +40,11 @@ Crops are in `visual-pass/`.
 
 ## Result
 Checks 1 to 9 pass in both themes. Checks 10 and 11 are unverified and need a human or a working click.
+
+## Close note (2026-11-05)
+Checks 10 and 11 stay unverified by eye. What covers them instead: check 11 by the renderer-pixel test
+`an_unfolded_command_turn_is_highlighted` (both schemes) and `an_unfolded_command_card_stays_open_when_an_entry_is_appended`
+in `transcript_entry_view.rs`; check 10 by the token contrast test in `micold-core/tests/tokens.rs` (the selection
+colour `primary_container` against the turn fill, floor 1.05) and the unchanged `features_transcript_selection`
+suite (42 passed). Neither shows the selection as a person sees it; a human glance at a selected turn in the
+real app remains the one open visual item and blocks nothing.
