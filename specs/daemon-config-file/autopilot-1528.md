@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1680 | design (milestone cut) | merged | 90a1522a392025444b33f429255ad10ca9314dbd |
 | #1690 | M1 | merged | 95163863755822fdf0369e6a68904fc08e9d8347 |
-| close PR (number below) | close | open | — |
+| #1692 | close | open | — |
 
 ## Milestones
 
