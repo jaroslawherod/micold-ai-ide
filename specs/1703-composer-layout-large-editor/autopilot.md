@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: tasks
-- **Next step**: design PR merge, then milestone M1
+- **Phase**: milestone M1 PR open
+- **Next step**: M1 PR merge, then milestone M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1705 | Design (spec, plan, tasks) | open | |
+| #1705 | Design (spec, plan, tasks) | merged | eb1b62d9967f4d7ad7092c0dc75e6d3a1e7af621 |
+| PR_M1 | M1 large editor | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Large editor: chord/icon opens modal editor, Done/Cancel, shortcut listed | | pending |
+| M1 | T001–T013 | full | Large editor: chord/icon opens modal editor, Done/Cancel, shortcut listed | PR_M1 | PR open |
 | M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | | pending |
 | M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | | pending |
 
@@ -60,15 +61,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 ## Handover
 
-Unit M1 (T001-T013) hit the 150k cap while waiting on the build lock. Previous PR #1705 merged (eb1b62d99); branch-start.sh was run (reset to origin/main).
-Done (uncommitted work committed as WIP): all code, tests and docs for T001-T013 are WRITTEN but NOT yet compiled or run, and tasks.md checkboxes T001-T013 are NOT yet ticked:
-- icons: `Icon::OpenInFull` (U+F1CE, verified in the font cmap) + tests/icons.rs (count 87, new pin test) + PROVENANCE.md row
-- `features/large_editor.rs` (State{open,hovered}, Msg, `update(&mut app::State, Msg)`, `editor_key`, `LargeEditorDialog` surface), `Message::LargeEditor`, `State.large_editor`, registry entry, `ui/large_editor.rs` (dialog, `body`, `field()`), `shell/large_editor.rs` (focus), main.rs arm, `shell/composer.rs` (`KeyIntent::LargeEditor`, `Msg::LargeEditorRequested`)
-- `features/composer.rs`: chord, `open_editor_visible` + its unit test, `Msg::LargeEditorRequested`; `ui/composer.rs`: `open_editor_button`, `text_area_with_button` (stack + mouse_area hover)
-- keys.rs sheet entry + test; showcase entry (surfaces.rs); docs structured-input.md + terminal-panes.md
-- tests: tests/features_large_editor.rs, features_composer.rs chord test, overlay_registration.rs dialog test
-Next: run `mise run check` (a first run only reached a showcase type error, fixed with `.map(|_| Message::NoOp)`; one detached `mise run check` may still be queued behind another worktree's build lock, log in the old scratchpad), fix compile errors, then run `scripts/build-lock.sh cargo test -p micold-client --test features_large_editor --test features_composer --test overlay_registration --test icons` and the lib tests for `open_editor_visible` / keys.rs; check `tests/surface_registration_cost.rs` and `features_are_render_free.rs` still pass (large_editor.rs names `crate::floating_surface` only). Then tick T001-T013 in tasks.md, then verify.md flow (scoped gate + review A high, review B, visual pass for the new button/dialog, full gate), PR.
-Open risks: hover button overlays the text area top-right; `Done` on a forgotten composer recreates it (minor).
+None.
 
 ## Open escalation
 
