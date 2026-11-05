@@ -347,8 +347,9 @@ appears anywhere in it.
   environment variables, a sign-in file or long-lived token file, an API key file, and the CLI's
   own settings files to place. The offered list replaces today's per-kind selections.
 - **FR-013a**: The configuration MUST NOT hold an API key, sign-in or other secret value for an AI
-  CLI; each is named by file (FR-004). A CLI MUST NOT be given both a sign-in file and an API key
-  file unless the CLI documents which of the two wins. A replaced API key file MUST reach a running
+  CLI; each is named by file (FR-004). A CLI MUST have at most one of `sign_in_file`, `token_file`,
+  `api_key_file` and `use_machine_sign_in` configured; the configuration is refused otherwise, with
+  no CLI-documented precedence to fall back on. A replaced API key file MUST reach a running
   session through the CLI's key helper where it has one (Claude Code `apiKeyHelper`), else the next
   session.
 - **FR-013e**: On every kind a configured sign-in MUST win over a sign-in already on that machine,

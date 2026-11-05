@@ -174,12 +174,12 @@ Includes AI sign-in delivery (replaces the `[[ai.sign_in]]` draft): research D9.
 - [ ] T062 [P] [US4] Failing tests for placement (container, pod): `settings_file` and `place` land under the CLI's config dir in the sandbox home; `place.as` cannot escape it; no sign-in is ever mounted writable; the CLI's sign-in location is a link to the read-only delivered file, re-created at every session start; a session that replaced the link does not change what the next session uses
 - [ ] T063 [US4] Implement the launch mapping in `crates/micold-daemon/src/state.rs` and `crates/micold-core/src/provider.rs`; for Claude Code add `apiKeyHelper` (`<daemon> ai-key claude_code`, prints the key file on each use) to the per-session `SettingsDoc` in `crates/micold-daemon/src/hooks.rs`, with a test that a replaced key file is printed on the next call
 - [ ] T064 [US4] Implement version and selection in `crates/micold-core/src/provision/ai_cli.rs` and `crates/micold-core/src/provision/mod.rs`
-- [ ] T065 [US4] Sign-in delivery, read-only on every kind (research D13): remove `CredentialShare::writable` and the single-file writable mount (`crates/micold-core/src/sandbox/mod.rs:317-322`, `:700-735`); container: the sign-in is a file in the read-only secrets directory, linked from the CLI's config dir; pod directory Secret (`crates/micold-core/src/kube/credentials.rs:73-79`, drop `subPath`); host/SSH: a configured sign-in wins — the session gets `<data_dir>/ai/<id>/` as its config dir (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode `XDG_DATA_HOME`) with the sign-in linked in and the user's own settings files linked read-through (research D9 table); test that the machine's own sign-in file is byte-identical and its mtime unchanged after a session; verify macOS Keychain behaviour per CLI (research §4)
+- [ ] T065 [US4] Sign-in delivery, read-only on every kind (research D13): remove `CredentialShare::writable` and the single-file writable mount (`crates/micold-core/src/sandbox/mod.rs:321-323`, `:704-709`); container: the sign-in is a file in the read-only secrets directory, linked from the CLI's config dir; pod directory Secret (`crates/micold-core/src/kube/credentials.rs:86-99`, drop `subPath`); host/SSH: a configured sign-in wins — the session gets `<data_dir>/ai/<id>/` as its config dir (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode `XDG_DATA_HOME`) with the sign-in linked in and the user's own settings files linked read-through (research D9 table); test that the machine's own sign-in file is byte-identical and its mtime unchanged after a session; verify macOS Keychain behaviour per CLI (research §4)
 - [ ] T065a [US4] `token_file` (research D14 mode 1): Claude Code → `CLAUDE_CODE_OAUTH_TOKEN`, Copilot → `COPILOT_GITHUB_TOKEN`, read at session start, never in argv; V9 rules; Settings runs `claude setup-token` or takes a pasted token and warns 14 days before expiry
 - [ ] T065b [US4] Sign-in relay in the client (research D14 mode 3), `crates/micold-client/src/`: watch the host's own sign-in file (Claude, Codex, OpenCode), derive the copy without its refresh token (Codex: `last_refresh` = delivery time), re-deliver it (D5 write order) when it differs; schedule a host-side refresh by the user's own CLI at 75 % of the access token's life, else warn at < 1 h left; tests with fake sign-in files that the derived copy has no refresh token and that the host file is never written
 - [ ] T065c [US4] Per-CLI measurement (research §4), recorded in `docs/user-guide/sandboxed-daemon.md`: each CLI with a read-only sign-in (starts? fails only at refresh?), which host command refreshes without a model request, and whether a running CLI re-reads its file on expiry; Pi with a read-only `auth.json` directory
-- [ ] T096 [US4] Seed `<data_dir>/ai/claude_code/.claude.json` on H/S from the user's `~/.claude.json` on first use when a sign-in is delivered (copy once, `primaryApiKey` dropped, never copied back; Settings "Seed again from this computer"), so `cli_would_ask_trust` (`crates/micold-daemon/src/state.rs:1914-1935`) and user MCP servers keep working (D15 row 4)
-- [ ] T097 [US4] Mark `hasCompletedOnboarding` on container and pod whenever `claude_code` has `sign_in_file`, `token_file` or `api_key_file` (D15 row 5; today only with a writable share, `crates/micold-core/src/sandbox/mod.rs:507-530,930-939`)
+- [ ] T096 [US4] Seed `<data_dir>/ai/claude_code/.claude.json` on H/S from the user's `~/.claude.json` on first use when a sign-in is delivered (copy once, `primaryApiKey` dropped, never copied back; Settings "Seed again from this computer"), so `cli_would_ask_trust` (`crates/micold-daemon/src/state.rs:2078-2095`) and user MCP servers keep working (D15 row 4)
+- [ ] T097 [US4] Mark `hasCompletedOnboarding` on container and pod whenever `claude_code` has `sign_in_file`, `token_file` or `api_key_file` (D15 row 5; today only with a writable share, `crates/micold-core/src/sandbox/mod.rs:508-543,963-975`)
 - [ ] T098 [US4] Seed `settings_file` and `place` (copy when the source changed since the last copy, never a read-only mount) so Codex can record folder trust in `config.toml` (D15 row 6), test in `crates/micold-core/src/provision/ai_cli.rs`
 - [ ] T099 [US4] `use_machine_sign_in` (H/S, off by default): the CLI uses the machine's own sign-in and config dir; the read-only rule does not apply; existing host daemons migrate with it off and Settings asks once (D15, user decision)
 - [ ] T100 [US4] The diagnostic shows each delivered AI sign-in's `expiresAt`; the client re-delivers the pod Secret when the host sign-in changes (D15 row 14)
@@ -302,7 +302,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 11 (#1532)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -580,4 +580,66 @@ user-guide update travel here (rule 4).
 - **Satisfies**: US1; FR-005, FR-029, FR-039
 - **Verify**: `cargo test -p micold-core kube::manifest kube::credentials`; `cargo test -p micold-client kube`; kind-cluster check of quickstart §2 pod row (`kubectl get pod -o yaml` shows no `MICOLD_*` env, Secrets mounted as directories)
 - **Depends on**: Issue 3 (#1524), merged; Issue 4 (#1525) M1, merged
+- **Tier**: full
+
+### Issue 11 (#1532) — M1 — Each `[[ai.cli]]` field maps to the CLI's launch 🎯 MVP
+
+Split from the 17-task group along rule 3 (acceptance scenario, not just task count): the failing
+tests that pin down field-to-launch mapping (T059, T060, T061, T062) and the implementation that
+makes them pass (T063, T064) serve one scenario — a configured `[[ai.cli]]` changes a session's
+launch without replacing the app's own args/env — and splitting tests from implementation would
+leave a half-built mapping with nothing green. Six tasks. It changes a provider launch path and the
+sandbox placement rules, so the tier is `full`.
+
+- **Tasks**: T059–T064
+- **Deliverable**: `enabled`, `version`, `args`, `model`, `api_base_url`, `api_key_file`, `settings_file` and `place` each map to the CLI's launch in `crates/micold-daemon/src/state.rs` and `crates/micold-core/src/provider.rs`; configured `args`/`env` add to the app's own and never replace them; `enabled = false` hides the CLI from availability; Claude Code's API key reaches the session through `apiKeyHelper` (`<daemon> ai-key claude_code`) in the per-session `SettingsDoc`, never `ANTHROPIC_API_KEY`, so a replaced key file is picked up on the CLI's next call; `version` overrides the pinned table for that CLI only, as semver, with package and registry fixed; `settings_file`/`place` land under the CLI's sandbox config dir and `place.as` cannot escape it.
+- **Satisfies**: US4; FR-013, FR-013a, FR-013b, FR-013c, FR-013e, FR-025, FR-033, FR-034
+- **Verify**: `cargo test -p micold-core daemon_config::ai_cli`; `cargo test -p micold-daemon --test ai_cli_config --test ai_cli_availability`; `cargo test -p micold-core provision::ai_cli`
+- **Depends on**: Issue 5 (#1526) M1a and M1b, merged; Issue 6 (#1527) M1, merged; Issue 7 (#1528) M1, merged
+- **Tier**: full
+
+### Issue 11 (#1532) — M2 — AI sign-in delivery, read-only on every kind, stays valid without a CLI refresh
+
+One milestone: removing the writable share (T065) without a working replacement for keeping a
+sign-in valid (T065a, token_file; T065b, the client-side relay) would leave the user logged out
+mid-session, and T065c (the per-CLI measurement) is what proves T065's read-only delivery actually
+works per CLI rather than in theory. Four tasks, and it touches the sandbox boundary, the pod Secret
+shape and the client, so the tier is `full`.
+
+- **Tasks**: T065, T065a, T065b, T065c
+- **Deliverable**: `CredentialShare::writable` and the single-file writable sign-in mount are gone; container and pod deliver the sign-in read-only (pod: a directory Secret, no `subPath`); host/SSH give a configured sign-in its own `<data_dir>/ai/<id>/` config dir (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`/OpenCode `XDG_DATA_HOME`) and never touch the machine's own sign-in file; after a session, every delivered sign-in file is byte-identical to before it (SC-008); `token_file` (`CLAUDE_CODE_OAUTH_TOKEN`, `COPILOT_GITHUB_TOKEN`) and the client's sign-in relay (a derived copy with no refresh token, re-delivered on change, host-side refresh scheduled at 75% of token life) keep a relayed sign-in valid with no CLI-side refresh; per-CLI read-only/refresh behaviour is recorded in `docs/user-guide/sandboxed-daemon.md`.
+- **Satisfies**: US4; FR-013d, FR-013g, FR-040, SC-006, SC-008
+- **Verify**: `cargo test -p micold-core sandbox::mod -- credential`; `cargo test -p micold-core kube::credentials`; `cargo test -p micold-client --lib` (sign-in relay watcher)
+- **Depends on**: Issue 11 (#1532) M1
+- **Tier**: full
+
+### Issue 11 (#1532) — M3 — The gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry
+
+Five tasks from the gap review (research D15), all amendments to the delivery M2 lands, serving one
+scenario each only together with M2's read-only delivery: seeding `.claude.json` (T096) and marking
+onboarding done (T097) both depend on a sign-in actually being delivered read-only; seeding
+`settings_file`/`place` as copies rather than mounts (T098) is the same seed-not-mount rule that
+`.claude.json` needs; `use_machine_sign_in` (T099) is the explicit opt-out of all of the above; the
+diagnostic's expiry (T100) reports on the sign-ins M2 delivers. Five tasks, no UI yet (that is M4),
+so the tier is `full` (a security-relevant default, `use_machine_sign_in`, and the sandbox-home
+seeding rule).
+
+- **Tasks**: T096–T100
+- **Deliverable**: on host/SSH, `<data_dir>/ai/claude_code/.claude.json` is seeded once from the user's own file (trust and MCP servers kept, `primaryApiKey` dropped, never copied back) when a sign-in is delivered; container and pod mark `hasCompletedOnboarding` whenever Claude Code has a `sign_in_file`, `token_file` or `api_key_file`; `settings_file`/`place` are seeded copies (re-copied only when the source changed), never read-only mounts, so Codex can record folder trust in `config.toml`; `use_machine_sign_in` (host/SSH, off by default) lets a daemon use the machine's own CLI-managed sign-in and config dir instead, with existing daemons migrating with it off; the diagnostic shows each delivered sign-in's `expiresAt`, and the client re-delivers the pod Secret when the host sign-in changes.
+- **Satisfies**: US4; FR-013d, FR-040, FR-043, SC-006
+- **Verify**: `cargo test -p micold-core provision::ai_cli`; `cargo test -p micold-daemon --test ai_cli_config`; `cargo test -p micold-core sandbox::mod -- onboarding`
+- **Depends on**: Issue 11 (#1532) M2
+- **Tier**: full
+
+### Issue 11 (#1532) — M4 — Settings → Daemons renders `[[ai.cli]]`, and the user guide
+
+The UI (T066) is held back to its own milestone (rule 6: no half-wired UI on `main`) until the
+behaviour it configures (M1–M3) is in place; the user-guide task (T067) documents the whole story
+including the file-vs-`settings.json` rule and ships with the UI that completes it (rule 4).
+
+- **Tasks**: T066, T067
+- **Deliverable**: Settings → Daemons has a per-CLI section (enabled, version, args, model, base URL, sign-in, API key, settings file) that renders into `[[ai.cli]]`; `default_ai_cli` and other live settings stay in `settings.json`; `docs/user-guide/settings.md` and `daemon-configuration.md` document every `[[ai.cli]]` field and the file-vs-`settings.json` rule.
+- **Satisfies**: US4; FR-013d, FR-013f
+- **Verify**: `cargo test -p micold-client --test main daemon_config_render`; `cargo test -p micold-client settings::daemons`
+- **Depends on**: Issue 11 (#1532) M3
 - **Tier**: full
