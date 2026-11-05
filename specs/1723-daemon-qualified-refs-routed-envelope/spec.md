@@ -29,6 +29,7 @@ documentation; it adds no orchestrator, no routing and no link. Covers orchestra
 ### Session 2026-11-05
 
 - Q: `specs/orchestrator/` exists only on `docs/orchestrator-and-web-client-plan`, not `main`; how does `specs/orchestrator/contracts/` land? → A: This feature's PR creates only the new files under `specs/orchestrator/contracts/` (no edit to `spec.md` or `issues.md`, which the plan branch owns), so the two branches add disjoint paths and merge in either order without conflict. _(agent-resolved: specs/orchestrator/issues.md on docs/orchestrator-and-web-client-plan, issue 1 "contract under specs/orchestrator/contracts/")_
+- Q: Which identity declares "same project" (FR-008)? → A: Normalised remote URL with a per-project override; no remote means its own project per daemon. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -141,11 +142,11 @@ frame decodes in a test.
 - **FR-007**: `PROTOCOL_VERSION` MUST be bumped and the schema hash MUST change accordingly; the
   handshake refusal MUST name both versions.
 - **FR-008**: The contract MUST state one rule for when daemons serve "the same project", usable by
-  the orchestrator (#1727) without reading a daemon's filesystem. **[NEEDS CLARIFICATION: which
-  identity — the app's project id, the repository's normalised remote URL, or a declared name? The
-  recommendation is the normalised remote URL, with an explicit per-project override, because it
-  needs no coordination and survives different paths; a repository with no remote is its own project
-  per daemon.]**
+  the orchestrator (#1727) without reading a daemon's filesystem: the project identity is the
+  repository's normalised remote URL (lowercase host; scheme, `user@`, a trailing `.git` and trailing
+  `/` removed; `host:o/r` written as `host/o/r`), unless a per-project override value is set, which
+  then is the identity. A repository with no remote is its own project per daemon (identity includes
+  the daemon id). The override's name and location are fixed by the plan.
 - **FR-009**: `docs/daemon.md` MUST describe the daemon id, qualified refs, the envelope, its
   rejection rule and the new protocol number; `specs/orchestrator/contracts/` MUST hold a contract
   with the byte-level fields and the project-identity rule.
