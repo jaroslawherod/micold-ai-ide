@@ -239,10 +239,13 @@ commit, reaches an HTTPS host behind a custom CA, and finds the configured `.npm
 
 ## Issue 15 — chore: retire the old `MICOLD_*` start-up variables (needs all)
 
-- [ ] T084 Failing test: setting any retired variable in a release build has no effect and logs one warning naming the config key that replaces it
-- [ ] T085 Remove the env reads (keep test overrides behind `#[cfg(any(test, feature = "test-env"))]`, research D11) in `crates/micold-core/src/paths.rs`, `crates/micold-core/src/spawn.rs`, `crates/micold-core/src/protocol/auth.rs`, `crates/micold-daemon/src/server.rs`, `crates/micold-daemon/src/state.rs`; `MICOLD_STATUS_RELAY` and `MICOLD_PI_ACTIVITY_LOG` stay
-- [ ] T086a Regression test (D15 row 2): with no `MICOLD_DATA_DIR`, a container session started over SSH still gets the credential helper, the HTTPS rewrite and `GIT_CONFIG_GLOBAL`, in `crates/micold-daemon/tests/`
-- [ ] T086 Remove `[[ai.sign_in]]`-era and env-era docs from `docs/user-guide/sandboxed-daemon.md`, `kubernetes-daemons.md`, `remote-daemons.md`; run quickstart.md end to end
+- [ ] T084 Failing test (M1): the release path is a pure `micold_core::retired_env::resolve(name, raw, test_env_enabled: bool)` function; the test calls it with `test_env_enabled = false` (the daemon's own test build has `test-env` on, so only a direct call sees the release behaviour): setting `MICOLD_HOME`, `MICOLD_IMAGE_REFERENCE`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_LOG` or `MICOLD_REPOS_ROOT` has no effect on `DaemonSettings` and logs one warning per variable naming the config key that replaces it, and with `true` returns the raw value (`daemon.home`, `daemon.image`, `listen.tcp`, `daemon.idle_stop`, `daemon.log`, `storage.clone_root`), in `crates/micold-daemon/tests/config_load.rs`
+- [ ] T084b Failing test (M2): the same, calling the same pure function (in `micold-core`, so the daemon reuses it), for `MICOLD_DATA_DIR` (`daemon.data_dir`, read by `micold_core::paths`) and `MICOLD_TOKEN_PATH` (`auth.client_token_file`, read by `protocol::auth`), in `crates/micold-core/tests/retired_env.rs`; `MICOLD_STATUS_RELAY`, `MICOLD_PI_ACTIVITY_LOG` and `MICOLD_DAEMON_CONFIG` still work
+- [ ] T085 Remove the daemon-side env reads (M1): create `crates/micold-core/src/retired_env.rs` (exported as `micold_core::retired_env`: `resolve` and the table of all nine names to their config keys, which M2 reuses) and add the `test-env` feature to `crates/micold-daemon/Cargo.toml` (enabled for the daemon's own tests through a dev-dependency on itself, so the spawned binary has it), make `settings::process_env` the one read function, return nothing for the retired names unless `#[cfg(any(test, feature = "test-env"))]` (research D11) and log the retirement warning once per set variable; drop the per-site reads in `crates/micold-daemon/src/settings.rs`, `server.rs` (`LISTEN_ADDR_ENV`), `state.rs` (`MICOLD_HOME`, `MICOLD_IMAGE_REFERENCE`), `logging.rs`, `idle.rs`, `repo_clone.rs` (its "`MICOLD_REPOS_ROOT` is not set" error names `storage.clone_root` instead); also stop the producers of these six: the `ENV MICOLD_LISTEN_ADDR` line of `packaging/sandbox/Containerfile`, the SSH remote command's `env MICOLD_IDLE_STOP=…` (`crates/micold-core/src/ssh/argv.rs`; the delivered file already carries `idle_stop`, prove it with a test), the shell-level `MICOLD_HOME` override in `packaging/basic/entrypoint.sh` (it only reads it; remove it, or state in the file that it is not a daemon start-up variable, and update `scripts/tests/basic-entrypoint.test.sh`, `scripts/tests/entrypoint-config.test.sh`, `packaging/basic/README.md`); `MICOLD_LOG` in `site/capture/scenes/lib.sh` and its assertion in `scripts/tests/capture-harness.test.sh` (deliver the filter as `daemon.log` or drop it); update the `repo_clone.rs` test that matches the error text; so no launch path warns about a variable it set itself; `MICOLD_STATUS_RELAY` and `MICOLD_PI_ACTIVITY_LOG` stay
+- [ ] T085b Remove the core-side env reads and the launch paths that still set them (M2): `crates/micold-core/src/paths.rs` (`DATA_DIR_ENV`), `crates/micold-core/src/protocol/auth.rs` (`TOKEN_PATH_ENV`), `crates/micold-core/src/spawn.rs` (`IDLE_STOP_ENV`) behind a `test-env` feature of `micold-core` (the daemon's `test-env` forwards it; `micold-core` integration tests enable it through a dev-dependency on itself), keeping the `*_ENV` constants available unconditionally for names and warnings; update `crates/micold-daemon/src/supervisor.rs` (`EnvEdit::Remove(DATA_DIR_ENV)` and its tests), `settings.rs`, and the comments in `sandbox/mod.rs`, `state.rs`, `messages.rs`; stop passing them: the `ENV MICOLD_DATA_DIR/TOKEN_PATH` lines of `packaging/sandbox/Containerfile` and `packaging/basic/Containerfile` (the delivered file carries `daemon.data_dir` and `auth.client_token_file`); adjust `scripts/tests/*.test.sh`, and `packaging/basic/README.md` that set or mention them; a script test greps `packaging/` and `site/` for any retired name (SC-001). `MICOLD_SSH_DIR` has no read site (verified); nothing to remove
+- [ ] T086a Regression test (D15 row 2, M2): with no `MICOLD_DATA_DIR`, a container session started over SSH still gets the credential helper, the HTTPS rewrite and `GIT_CONFIG_GLOBAL`, in `crates/micold-daemon/tests/container_over_ssh_without_data_dir.rs`
+- [ ] T086b User guide (M1): remove env-era text for the daemon-side variables from `docs/user-guide/sandboxed-daemon.md`, `kubernetes-daemons.md`, `remote-daemons.md` and `docs/daemon.md`; say each is replaced by its config key
+- [ ] T086 User guide and quickstart (M2): remove the remaining env-era and `[[ai.sign_in]]`-era text from the same files; run quickstart.md end to end (the close unit records the result)
 
 ---
 
@@ -302,7 +305,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 11 (#1532)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 11 (#1532)**, **Issue 13 (#1534)**, **Issue 14 (#1535)** and **Issue 15 (#1537)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -505,6 +508,38 @@ surface, not a reuse of an existing pattern), so the tier is `full`.
 - **Depends on**: Issue 9 (#1530) M1, merged (the `TokenChoice` chooser, the stateless
   `git-credential get` and the per-host rewrite this milestone reuses; M2's container/pod gating
   and protocol retirement are not touched by the `gh` shim)
+- **Tier**: full
+
+### Issue 15 (#1537) — M1 — The daemon ignores the retired start-up variables
+
+Split in two (milestones.md rule 3: the work touches the daemon, core, two images, the SSH launch and about 57 files).
+M1 is the daemon-side scenario: the `DaemonSettings` variables (`MICOLD_HOME`, `_IMAGE_REFERENCE`, `_LISTEN_ADDR`,
+`_IDLE_STOP`, `_LOG`, `_REPOS_ROOT`) stop working in a release build and say so, and their producers (the sandbox image's
+`MICOLD_LISTEN_ADDR`, the SSH command's `MICOLD_IDLE_STOP`, the entrypoint's `MICOLD_HOME`) stop setting them, so no launch path
+warns about its own variable. The `test-env` seam lands here, so tests keep driving the binary. `MICOLD_DATA_DIR` and `MICOLD_TOKEN_PATH` stay live until M2, because the images still set them and
+M2 changes those together. The user-guide task (T086b) is here since M1 changes behaviour a
+user can see (rule 4). It touches a security check (token) only in M2, but changes process env handling, so `full`.
+
+- **Tasks**: T084, T085, T086b
+- **Deliverable**: a daemon release build ignores `MICOLD_HOME`, `MICOLD_IMAGE_REFERENCE`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_LOG` and `MICOLD_REPOS_ROOT` and logs one warning per set variable naming its config key; `--features test-env` and the daemon's own tests still honour them; the plumbing variables are unchanged; the user guide names the config keys.
+- **Satisfies**: FR-001, FR-012 (daemon-side half)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test config_load`; `scripts/build-lock.sh cargo test -p micold-daemon --test config_wiring`; `mise run test-scripts`
+- **Depends on**: Issues 3 (#1524), 6 (#1527), 9 (#1530) M1, 13 (#1534), 14 (#1535), merged
+- **Tier**: full
+
+### Issue 15 (#1537) — M2 — The images and launch paths no longer rely on the variables; the data directory and token come from the file
+
+Completes the retirement: `MICOLD_DATA_DIR` and `MICOLD_TOKEN_PATH` are read behind `test-env` in `micold-core`; the sandbox
+and basic images, the SSH remote command and the entrypoint stop setting them, so every kind starts from its file alone
+(SC-001). T086a is the regression test the handover asks for: a container session over SSH keeps its helper, rewrite and
+`GIT_CONFIG_GLOBAL` with no `MICOLD_DATA_DIR`. It changes a sandbox boundary and the token check, so `full`; run
+`mise run image` and `mise run test-sandbox` (gate.md).
+
+- **Tasks**: T084b, T085b, T086a, T086
+- **Deliverable**: with no `MICOLD_*` start-up variable in the environment or the image, a container daemon, an SSH daemon and a host daemon start from their file and a container session over SSH keeps the credential helper, rewrite and `GIT_CONFIG_GLOBAL`; a release build ignores `MICOLD_DATA_DIR` and `MICOLD_TOKEN_PATH` with one warning each; `MICOLD_STATUS_RELAY`, `MICOLD_PI_ACTIVITY_LOG` and `MICOLD_DAEMON_CONFIG` stay; the user guide has no env-era text.
+- **Satisfies**: FR-001, FR-012, SC-001
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core retired_env`; `scripts/build-lock.sh cargo test -p micold-daemon --test container_over_ssh_without_data_dir`; `mise run test-scripts`; `mise run image` then `mise run test-sandbox`; quickstart.md sections 2 and 8
+- **Depends on**: Issue 15 (#1537) M1; Issue 9 (#1530) M2 (T092 moves `container_git_edits` off `MICOLD_DATA_DIR` onto `daemon.kind`, which T086a tests; start M2 after it merges)
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
