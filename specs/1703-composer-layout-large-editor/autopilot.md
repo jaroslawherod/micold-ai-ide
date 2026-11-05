@@ -47,11 +47,16 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Spec review | 2 | be3fa230674fce49e8852e215b014e2f60123596:3ffb138fbe2f1fbacfb8cbad179ad4a99202e95f | CLEAN (3 MINOR fixed, prose only) |
 | Plan review | 1 | 7e8c799ceb6fabcdecaf0727e82c9a1b7745c6dd:ef7d1da558d16846cd079b27fcc37d93795bc7aa | CHANGES: 1 MAJOR (fixed, prose only: plan scope text), 3 MINOR fixed |
 | Tasks review | 1 | 859d3283237831feac5a93d7649f6ab2a1c2483d:f2bd343afdbfe83de2192d7ef0755815054a1519 | CHANGES: 1 MAJOR (Verify commands, fixed), 2 MINOR fixed; plan round-1 fix confirmed |
+| Review A (M1) | 1 | a32852da698391233b83a80997d596d7b86e9910:72befd849ecd49e1f2db2f8483ea786350fbe122 | CLEAN (3 MINOR) |
+| Review B (M1) | 1 | a32852da698391233b83a80997d596d7b86e9910:72befd849ecd49e1f2db2f8483ea786350fbe122 | CHANGES: 1 MAJOR (no tdd log; declined, see above); Verify 75 passed |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F1 forgotten session recreates composer on Done | Draft is absent for a never-typed composer too, so skipping would break FR-002 Done; minor, left |
+| M1 | A | F2 close_topmost bypasses focus return | Minor; Esc/scrim/Done paths restore focus |
+| M1 | B | F1 no tdd/cycle-log.md | The design PR set no tdd plan (no tdd/ dir); tests exist and pass, red-first evidence not retrofittable; left for the close unit's TDD verify |
 
 ## Handover
 

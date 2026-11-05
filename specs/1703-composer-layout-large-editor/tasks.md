@@ -113,7 +113,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T013
 - **Deliverable**: Ctrl/Cmd+Shift+M or the open-editor icon opens a modal large editor on the draft; Done writes back, Cancel discards, and the chord is in the shortcut sheet and user guide.
 - **Satisfies**: US1 acceptance scenarios 1–6; FR-001, FR-002, FR-003, FR-004, FR-005, FR-019; SC-001, SC-006
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_large_editor --test features_composer --test overlay_registration`; quickstart §B step 6 (covers SC-001)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test main -- features_large_editor features_composer overlay_registration`; quickstart §B step 6 (covers SC-001)
 - **Depends on**: —
 - **Tier**: full
 
