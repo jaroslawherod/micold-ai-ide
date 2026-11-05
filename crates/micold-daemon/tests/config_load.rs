@@ -469,7 +469,7 @@ fn a_release_build_ignores_a_retired_variable_and_names_the_key_that_replaces_it
         let warning = got.warning.unwrap_or_else(|| panic!("{name} must warn"));
         assert!(warning.contains(name), "{warning}");
         assert!(warning.contains(&format!("`{key}`")), "{warning}");
-        assert!(micold_core::retired_env::DAEMON_SIDE.contains(name));
+        assert_eq!(micold_core::retired_env::config_key(name), Some(*key));
     }
 }
 

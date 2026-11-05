@@ -66,7 +66,7 @@ static PENDING_WARNINGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// (release builds) and is recorded for one warning naming the configuration key that replaces it.
 pub fn process_env(name: &str) -> Option<OsString> {
     let raw = std::env::var_os(name);
-    if !retired_env::DAEMON_SIDE.contains(&name) {
+    if retired_env::config_key(name).is_none() {
         return raw;
     }
     let resolved = retired_env::resolve(name, raw, TEST_ENV);
