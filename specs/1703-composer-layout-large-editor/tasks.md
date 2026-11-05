@@ -8,7 +8,7 @@ Format: `- [ ] T### [P?] [US?] description with file path`. `[P]` = disjoint fil
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `Icon::OpenInFull` (codepoint, `Icon` list entry, mapping; `Icon::Settings` already exists) in `crates/micold-material/src/icons.rs`, with the icon-list test that file's tests keep (R6)
+- [x] T001 Add `Icon::OpenInFull` (codepoint, `Icon` list entry, mapping; `Icon::Settings` already exists) in `crates/micold-material/src/icons.rs`, with the icon-list test that file's tests keep (R6)
 
 ## Phase 2: Foundational
 
@@ -21,21 +21,21 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 
 ### Tests first (must fail before T008+)
 
-- [ ] T002 [P] [US1] Reducer and key-mapping (Ctrl/Cmd+Enter -> Done, Esc -> Cancel) tests for `LargeEditor` in `crates/micold-client/tests/features_large_editor.rs`: `Requested(session)` opens with the session's draft text and cursor at end (FR-002); empty draft opens empty; second `Requested` while open is ignored; `Done` writes text to the bound `session` only, also when it ended (FR-019); `Cancelled` leaves the draft unchanged; attachments never read or written (FR-003)
-- [ ] T003 [P] [US1] Chord tests in `crates/micold-client/tests/features_composer.rs`: `composer_key` yields `LargeEditorRequested` for Ctrl+Shift+M on Linux/Windows and Cmd+Shift+M on macOS only while the text area is focused, and not for plain, Ctrl-only or other-modifier forms (FR-001, VI)
-- [ ] T004 [P] [US1] Unit test of the pure open-editor-button visibility predicate (lines > 1 or focused or hovered) in `crates/micold-client/src/features/composer.rs` tests module (FR-004)
-- [ ] T005 [P] [US1] Test that the shortcut sheet lists the chord next to Add attachment in `crates/micold-client/src/features/changes/keys.rs` tests (FR-005, SC-006)
-- [ ] T006 [P] [US1] Registration test for the large-editor dialog in `crates/micold-client/tests/overlay_registration.rs`
+- [x] T002 [P] [US1] Reducer and key-mapping (Ctrl/Cmd+Enter -> Done, Esc -> Cancel) tests for `LargeEditor` in `crates/micold-client/tests/features_large_editor.rs`: `Requested(session)` opens with the session's draft text and cursor at end (FR-002); empty draft opens empty; second `Requested` while open is ignored; `Done` writes text to the bound `session` only, also when it ended (FR-019); `Cancelled` leaves the draft unchanged; attachments never read or written (FR-003)
+- [x] T003 [P] [US1] Chord tests in `crates/micold-client/tests/features_composer.rs`: `composer_key` yields `LargeEditorRequested` for Ctrl+Shift+M on Linux/Windows and Cmd+Shift+M on macOS only while the text area is focused, and not for plain, Ctrl-only or other-modifier forms (FR-001, VI)
+- [x] T004 [P] [US1] Unit test of the pure open-editor-button visibility predicate (lines > 1 or focused or hovered) in `crates/micold-client/src/features/composer.rs` tests module (FR-004)
+- [x] T005 [P] [US1] Test that the shortcut sheet lists the chord next to Add attachment in `crates/micold-client/src/features/changes/keys.rs` tests (FR-005, SC-006)
+- [x] T006 [P] [US1] Registration test for the large-editor dialog in `crates/micold-client/tests/overlay_registration.rs`
 
 ### Implementation
 
-- [ ] T007 [US1] Create render-free `crates/micold-client/src/features/large_editor.rs`: `Option<LargeEditor { session: SessionId, content }>` with `Requested`/`Edited`/`Done`/`Cancelled` reducer per data-model.md; add the module and `Message::LargeEditor` routing in `crates/micold-client/src/main.rs`
-- [ ] T008 [US1] In `crates/micold-client/src/features/composer.rs`: `LargeEditorRequested` intent from `composer_key` (before the non-plain guard, like the attachment chord), the visibility predicate, and the `Composer(LargeEditorRequested(session))` message
-- [ ] T009 [P] [US1] Dialog body `crates/micold-client/src/ui/large_editor.rs` (`Modal`, `TextArea` large `max_height`, Done and Cancel `Button`s; Ctrl/Cmd+Enter = Done, Esc = Cancel; the key-to-message mapping is a pure fn tested in T002's file) and register it in `crates/micold-client/src/overlay/registry.rs`
-- [ ] T010 [US1] Open-editor `IconButton` (`Icon::OpenInFull`, label "Open large editor", platform tooltip like Add attachment) at the text area's top-right in `crates/micold-client/src/ui/composer.rs`, shown by the predicate
-- [ ] T011 [P] [US1] Shortcut-sheet entry in `crates/micold-client/src/features/changes/keys.rs` (next to Add attachment, ~l.480)
-- [ ] T012 [P] [US1] Showcase entry for the large-editor dialog body in `crates/micold-client/src/showcase/sections/surfaces.rs` (edit; VIII)
-- [ ] T013 [P] [US1] User guide: document the chord and editor in `docs/user-guide/structured-input.md` and the shortcut table in `docs/user-guide/terminal-panes.md` (FR-005, VII)
+- [x] T007 [US1] Create render-free `crates/micold-client/src/features/large_editor.rs`: `Option<LargeEditor { session: SessionId, content }>` with `Requested`/`Edited`/`Done`/`Cancelled` reducer per data-model.md; add the module and `Message::LargeEditor` routing in `crates/micold-client/src/main.rs`
+- [x] T008 [US1] In `crates/micold-client/src/features/composer.rs`: `LargeEditorRequested` intent from `composer_key` (before the non-plain guard, like the attachment chord), the visibility predicate, and the `Composer(LargeEditorRequested(session))` message
+- [x] T009 [P] [US1] Dialog body `crates/micold-client/src/ui/large_editor.rs` (`Modal`, `TextArea` large `max_height`, Done and Cancel `Button`s; Ctrl/Cmd+Enter = Done, Esc = Cancel; the key-to-message mapping is a pure fn tested in T002's file) and register it in `crates/micold-client/src/overlay/registry.rs`
+- [x] T010 [US1] Open-editor `IconButton` (`Icon::OpenInFull`, label "Open large editor", platform tooltip like Add attachment) at the text area's top-right in `crates/micold-client/src/ui/composer.rs`, shown by the predicate
+- [x] T011 [P] [US1] Shortcut-sheet entry in `crates/micold-client/src/features/changes/keys.rs` (next to Add attachment, ~l.480)
+- [x] T012 [P] [US1] Showcase entry for the large-editor dialog body in `crates/micold-client/src/showcase/sections/surfaces.rs` (edit; VIII)
+- [x] T013 [P] [US1] User guide: document the chord and editor in `docs/user-guide/structured-input.md` and the shortcut table in `docs/user-guide/terminal-panes.md` (FR-005, VII)
 
 **Checkpoint**: US1 works alone.
 

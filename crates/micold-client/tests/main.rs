@@ -98,6 +98,7 @@ mod features_help;
 mod features_history;
 mod features_jira_status;
 mod features_kube_clone;
+mod features_large_editor;
 mod features_navigation;
 mod features_notifications;
 mod features_overview;
