@@ -2,7 +2,7 @@
 
 ## R1: Fill token
 - **Decision**: `surface_container_high` for the fill.
-- **Rationale**: Transcript background is the window `background`; tool and command cards use `surface_container_low` plus a shadow. `surface_container_high` is two levels above the cards and four tones above the background in both schemes, so the user turn is the strongest tonal block, and `on_surface` text is high-contrast on it. No new colour (FR-006). A unit test pins the difference and AA ratio in both schemes.
+- **Rationale**: Transcript background is the window `background`; tool and command cards use `surface_container_low` plus a shadow. `surface_container_high` is two container levels above the cards (tone 92 vs 96 light, 17 vs 10 dark) and 6 (light) and 11 (dark) tones from the background, so the user turn is the strongest tonal block, and `on_surface` text is high-contrast on it. No new colour (FR-006). A unit test pins the difference and AA ratio in both schemes.
 - **Alternatives**: `primary_container` / `secondary_container`: stronger, but ties text colour to `on_*_container` and every `Text` in the turn would need recolouring, which risks selection and caption colours (FR-008). `surface_container_low`: same as cards, so a user turn would look like a tool card (fails FR-001). A fixed tinted colour: forbidden by FR-006.
 
 ## R2: Accent edge
