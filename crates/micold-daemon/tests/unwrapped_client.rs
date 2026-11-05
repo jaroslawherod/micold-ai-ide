@@ -36,7 +36,9 @@ fn state(dir: &std::path::Path, config: Option<&str>) -> DaemonState {
         ..Default::default()
     };
     let projects = dir.join("projects.json");
-    JsonFileStore::at(projects.clone()).save(&workspace).unwrap();
+    JsonFileStore::at(projects.clone())
+        .save(&workspace)
+        .unwrap();
     let state = DaemonState::new(Catalog::load(
         Box::new(JsonFileStore::at(projects)),
         Box::new(JsonFileSettingsStore::at(dir.join("settings.json"))),
@@ -53,8 +55,16 @@ fn ids(state: &DaemonState) -> (Vec<String>, Vec<String>) {
     let snapshot = state.catalog_snapshot();
     let project = &snapshot.projects[0];
     (
-        project.sessions.iter().map(|s| s.daemon.to_string()).collect(),
-        project.worktrees.iter().map(|w| w.daemon.to_string()).collect(),
+        project
+            .sessions
+            .iter()
+            .map(|s| s.daemon.to_string())
+            .collect(),
+        project
+            .worktrees
+            .iter()
+            .map(|w| w.daemon.to_string())
+            .collect(),
     )
 }
 

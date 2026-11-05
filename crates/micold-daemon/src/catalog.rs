@@ -29,11 +29,11 @@ use micold_core::origin::{
     validate_origin, OriginNode, OriginRejected, OriginStatus, SessionOrigin,
 };
 use micold_core::project::Availability;
-use micold_core::protocol::routing::WireDaemonId;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonMsg, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::protocol::routing::WireDaemonId;
 use micold_core::session::{
     AiCli, KindRefusal, ModeRefusal, PermissionMode, Session, SessionId, SessionKind, SessionLabel,
     SessionLifecycle, SessionLocation, TerminalMode,
