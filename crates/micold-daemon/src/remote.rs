@@ -143,7 +143,7 @@ fn run_bridge() -> io::Result<()> {
     // A start the script refused leaves its result in the data directory: the bridge relays the
     // failure block on stderr (the SSH client shows it) instead of waiting out the timeout.
     let since_secs = micold_core::startup_result::now_secs();
-    let data_dir = micold_core::paths::data_dir();
+    let data_dir = daemon_data_dir();
     let result = runtime.block_on(bridge(
         &endpoint,
         tokio::io::stdin(),
@@ -160,6 +160,22 @@ fn run_bridge() -> io::Result<()> {
     // daemon-initiated close would not end this process until the client closed its side.
     runtime.shutdown_background();
     result
+}
+
+/// The data directory the daemon this bridge starts will use: the one its configuration file names
+/// (a container's `daemon.toml` points at the image's state directory, which an SSH session's
+/// environment does not carry), else the process's own.
+fn daemon_data_dir() -> Option<std::path::PathBuf> {
+    let own = micold_core::paths::data_dir();
+    let defaults = crate::config_load::DefaultLocations::system(own.clone());
+    crate::config_load::load_startup(
+        &crate::config_load::StartupArgs::default(),
+        &crate::settings::process_env,
+        &defaults,
+    )
+    .ok()
+    .and_then(|startup| startup.settings.data_dir)
+    .or(own)
 }
 
 /// Relay `input` to the daemon at `endpoint` and its answers to `output`, byte for byte, until
