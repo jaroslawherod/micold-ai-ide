@@ -10,7 +10,7 @@ ledger_of() {
   top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || return 0
   b=$(git -C "$top" branch --show-current 2>/dev/null)
   [ -n "$b" ] || return 0
-  (cd "$top" && grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.autopilot.md \
+  (cd "$top" && grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/autopilot-*.md specs/*/bugs/*.autopilot.md \
     specs/quick/*.autopilot.md 2>/dev/null | head -1 | sed "s|^|$top/|")
 }
 run_ledger() {

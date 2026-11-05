@@ -24,7 +24,7 @@ esac
 n=$(wc -l <"$f")
 max="${AUTOPILOT_READ_LINES:-400}"
 is_ledger=0
-case "$f" in *specs/*autopilot.md) is_ledger=1; max=80 ;; esac
+case "$f" in *specs/*autopilot.md|*specs/*/autopilot-*.md) is_ledger=1; max=80 ;; esac
 [ "$n" -gt "$max" ] || exit 0
 
 . "$(dirname "$0")/ledger-of.sh"

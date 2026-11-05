@@ -146,6 +146,10 @@ python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.rep
 check "resume prints an open handover" 0 '^HANDOVER M2: T010 done, next T011\.$' "$S/resume.sh"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
+ledger specs/042-x/autopilot-77.md wt 3-design
+check "resume finds a per-issue autopilot-<issue>.md ledger" 0 '^LEDGER specs/042-x/autopilot-77.md' "$S/resume.sh"
+
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/042-x/autopilot.md other-branch 3-design
 check "resume finds nothing for another branch" 2 '^NONE' "$S/resume.sh"
 

@@ -11,7 +11,7 @@ set -uo pipefail
 
 b="$(git branch --show-current)"
 line="- **Worktree branch**: $b"
-ledgers() { grep -lxF -- "$line" specs/*/autopilot.md specs/*/bugs/*.autopilot.md specs/quick/*.autopilot.md 2>/dev/null; }
+ledgers() { grep -lxF -- "$line" specs/*/autopilot.md specs/*/autopilot-*.md specs/*/bugs/*.autopilot.md specs/quick/*.autopilot.md 2>/dev/null; }
 # PR numbers from the ledger's "Pull requests" and "Milestones" tables only.
 ledger_prs() {
   sed -n '/^## Pull requests/,/^## Decisions/p' "$1" | grep -oE '#[0-9]+' | tr -d '#' | sort -un

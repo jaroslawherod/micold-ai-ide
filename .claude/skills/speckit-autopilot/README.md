@@ -183,7 +183,7 @@ micold IDE to clean up.
 
 ## Resuming
 
-The ledger is `specs/<issue>-<slug>/autopilot.md` for a feature, `bugs/BUG-<issue>.autopilot.md` beside
+The ledger is `specs/<issue>-<slug>/autopilot.md` (or `autopilot-<issue>.md` when a spec has one per issue) for a feature, `bugs/BUG-<issue>.autopilot.md` beside
 the BUG record for a bugfix, and `specs/quick/<date>-<issue>-<slug>.autopilot.md` (not committed)
 for a bug or chore. It holds the flow, the unit at work, PRs, milestones, every decision (and who
 made it), declined review findings, and follow-ups. After a crash or `/clear`, run
