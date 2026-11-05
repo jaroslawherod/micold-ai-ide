@@ -92,7 +92,7 @@ pub fn launch_overlay(cli: &AiCli, api_key: Option<&str>) -> LaunchOverlay {
 /// reaches here is already known good — this is the belt to that suspenders, for a caller with no
 /// validated [`super::DaemonConfig`] of its own to lean on).
 pub fn place_target(config_dir: &Path, as_path: &Path) -> Option<PathBuf> {
-    if as_path.is_absolute()
+    if is_absolute_on_any_platform(as_path)
         || as_path
             .components()
             .any(|c| matches!(c, std::path::Component::ParentDir))
@@ -100,6 +100,25 @@ pub fn place_target(config_dir: &Path, as_path: &Path) -> Option<PathBuf> {
         return None;
     }
     Some(config_dir.join(as_path))
+}
+
+/// Whether `path` is absolute on *this* host (`Path::is_absolute`) or would be on another one:
+/// a leading `/` or `\`, or a drive letter (`C:...`). The config is authored once and placed by
+/// whichever platform's daemon reads it, so a path that only one platform's `is_absolute` would
+/// catch is still an escape to guard against (T062's "`place.as` cannot escape the CLI's config
+/// dir" does not say "on this platform only" — the Windows CI run that first found this treated a
+/// leading-slash `/absolute` as relative, since `Path::is_absolute` is Windows's own rule, not
+/// POSIX's).
+fn is_absolute_on_any_platform(path: &Path) -> bool {
+    if path.is_absolute() {
+        return true;
+    }
+    let s = path.to_string_lossy();
+    if s.starts_with('/') || s.starts_with('\\') {
+        return true;
+    }
+    let bytes = s.as_bytes();
+    bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
 }
 
 /// `settings_file`'s file name under the CLI's config dir in the sandbox home (contract row
@@ -216,6 +235,18 @@ mod tests {
         );
         assert_eq!(place_target(dir, Path::new("../escape")), None);
         assert_eq!(place_target(dir, Path::new("/absolute")), None);
+    }
+
+    #[test]
+    fn place_as_rejects_an_absolute_path_foreign_to_the_host_platform() {
+        // A leading `/` or `\`, and a drive letter, are all absolute on some platform the
+        // daemon runs on even when `Path::is_absolute` (host-specific) says otherwise — e.g.
+        // `/absolute` is relative by Windows's own rule, `C:\escape` is relative by POSIX's.
+        let dir = Path::new("/home/user/.claude");
+        assert_eq!(place_target(dir, Path::new("/absolute")), None);
+        assert_eq!(place_target(dir, Path::new(r"\absolute")), None);
+        assert_eq!(place_target(dir, Path::new(r"C:\escape")), None);
+        assert_eq!(place_target(dir, Path::new("C:/escape")), None);
     }
 
     #[test]

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M1
-- **Next step**: wait on CI, merge PR #1711; next unit: milestone M2
+- **Next step**: wait on CI, merge PR #1711 (red-CI fix pushed); next unit: milestone M2
 
 ## Pull requests
 
@@ -86,6 +86,40 @@ Milestone M1 review A round 2 (sonnet, full diff — round 1 took no snapshot): 
 ## Gate
 
 Rebased onto `origin/main` (8005e00e9 on top), clean (no conflicts). `mise run check` and `cargo clippy --workspace --all-targets -- -D warnings` both clean at `8005e00e9`. The full `mise run gate` was run twice; both runs failed only on tests outside this diff's files (`exclusivity::a_displaced_client_is_not_terminated`, `history_damaged::*`, `history_stop_request::*`, `mcp::worktree_refresh::*`, `micold-material::ellipsized::*`, and once `micold-core::streaming_child::*`) — none of them touch `daemon_config`, `provider`, `terminal`, `provision`, `state.rs`'s AI-CLI code, `hooks.rs`, or `ai_key.rs`, and the set and content changed between the two runs (classic load-timing flakiness; the machine was building several other worktrees concurrently throughout, per the repeated `build-lock.sh: another build holds the lock` lines). `a_displaced_client_is_not_terminated` was separately reproduced on a clean `git stash`'d checkout of this branch's pre-M1 tip (`98aa6edcc`), confirming it predates this diff. The scoped gate (`scripts/autopilot/scoped-gate.sh`, fmt + clippy + the changed crates' tests) is green except that same pre-existing flake. Per `gate.md`'s fallback, recorded the scoped-gate-passing tree and pushed with "Local gate: scoped only, full gate left to CI" — CI's full-workspace run, on a quieter machine, is the tie-breaker; a red CI finding for one of these six tests is this gate failing (`red-ci.md`), any other red is not.
+
+## Red CI
+
+PR #1711, run `42014070087`: `build + test (windows-latest)`, step "Test (render-free core, no
+GUI)" failed — `daemon_config::ai_cli::tests::place_as_stays_inside_the_config_dir` asserted
+`place_target(dir, Path::new("/absolute")) == None` but got `Some("/absolute")` on Windows. Cause:
+`place_target`'s escape guard used `Path::is_absolute()`, which is host-specific — a leading `/`
+is not absolute by Windows's own rule, so the guard let it through there while correctly rejecting
+it on Linux/macOS. Every other CI job (including the real-runtime jobs) passed.
+
+Fixed the guard, not the test: T062's "`place.as` cannot escape the CLI's config dir" is a security
+property, and a guard that is weaker on one platform than another (the config is authored once,
+read by whichever platform's daemon runs it) is exactly the kind of gap this milestone exists to
+close. Added `is_absolute_on_any_platform` in `crates/micold-core/src/daemon_config/ai_cli.rs`
+(`place_target` now calls it instead of the host-specific `is_absolute()`): true for the host's own
+`is_absolute()`, plus a leading `/` or `\`, plus a drive letter (`C:...`) — so a POSIX-only or a
+Windows-only absolute path is rejected on every platform, not just its own. Added
+`place_as_rejects_an_absolute_path_foreign_to_the_host_platform`, asserting `/absolute`, `\absolute`,
+`C:\escape` and `C:/escape` are all rejected — this test fails on Linux for the pre-fix `/absolute`
+case would not have (Linux's `is_absolute()` already caught that one); the new cases
+(`\absolute`, `C:\escape`, `C:/escape`) are the ones no platform's host-native `is_absolute()`
+alone would catch everywhere, so they would have caught this bug on Linux too, not just on
+Windows's own CI run.
+
+Local gate: `mise run check`, `cargo clippy -p micold-core --all-targets -- -D warnings` clean.
+Full `mise run gate`: 19 failures, none in `ai_cli`/`daemon_config`/`provision` — all in daemon
+spawn/socket-accept timing (`autospawn`, `exclusivity`, connection/history tests) and one
+`micold-material::ellipsized` shaping test, matching the same load-related flakiness class M1's
+first gate round already recorded (this machine was building other worktrees concurrently). Scoped
+gate: fmt/clippy clean, `ai_cli_config.rs`'s 3 tests pass; one unrelated failure
+(`autospawn::a_client_cold_starts_a_daemon_and_it_outlives_the_client`, a 20s socket-accept
+timeout) reproduced twice in isolation under the same concurrent-build load — pre-existing, not
+this diff's. Per `gate.md`'s fallback, recorded the scoped-gate tree and pushed with "Local gate:
+scoped only, full gate left to CI"; CI's quieter machine is the tie-breaker.
 
 ## Declined review findings
 
