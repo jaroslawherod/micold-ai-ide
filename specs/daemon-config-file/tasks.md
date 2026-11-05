@@ -157,9 +157,9 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 ## Issue 10 — feat: `GH_TOKEN` for `gh` in sessions of every kind (needs 9)
 
 - [ ] T055 [P] [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs`: `micold-daemon gh-token --cwd <dir>` prints the token chosen for the cwd's `origin`; exits 1 silently with none
-- [ ] T056 [P] [US2] Failing test: the shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set, and leaves an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH`
-- [ ] T057 [US2] Implement `crates/micold-daemon/src/gh_shim.rs` and the PATH entry at session spawn in `crates/micold-daemon/src/state.rs`
-- [ ] T095 [US2] The `gh` shim sets `GH_HOST` from the chosen token's `host` (D15 row 7), test in `crates/micold-daemon/tests/gh_shim.rs`
+- [ ] T056 [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs` (same file as T055, different test functions, so not `[P]`): the shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set, and leaves an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH`
+- [ ] T057 [US2] Implement `crates/micold-daemon/src/gh_shim.rs` and the PATH entry at session spawn in `crates/micold-daemon/src/state.rs`; the Windows `gh.cmd` shim forwards the real `gh`'s exit code, since a batch file cannot replace the process image the way the unix `sh` shim's `exec` does
+- [ ] T095 [US2] The `gh` shim sets `GH_HOST` from the chosen token's `host` (D15 row 7), left alone with no token chosen, same as `GH_TOKEN` (T056); test in `crates/micold-daemon/tests/gh_shim.rs`
 - [ ] T058 [US2] Document `gh` support in `docs/user-guide/settings.md`
 
 ---
@@ -302,7 +302,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 13 (#1534)** and **Issue 14 (#1535)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -477,6 +477,34 @@ protocol change (wire format) is reviewed on its own. It changes a wire protocol
 - **Satisfies**: US3; FR-016, FR-030, FR-035
 - **Verify**: `cargo test -p micold-daemon supervisor`; `cargo test -p micold-core --test protocol_roundtrip --test schema_hash`; `cargo test -p micold-core scoped_credential::gitconfig`; `git_credential_grant.rs` is deleted or rewritten by T053
 - **Depends on**: Issue 9 (#1530) M1
+- **Tier**: full
+
+### Issue 10 (#1531) — M1 — `GH_TOKEN` for `gh` in sessions of every kind
+
+One milestone: five tasks, one shim. The failing tests for the `gh-token` subcommand and the shim's
+exec/env behaviour (T055, T056), its implementation and the `PATH` entry at session spawn (T057),
+the `GH_HOST` addition (T095) and the user-guide entry (T058, rule 4) all serve one acceptance
+scenario (`gh` in any session authenticates with the token chosen for the cwd's repository); the
+shim without the resolver, or the reverse, would leave `gh` unauthenticated. It builds on Issue 9
+(#1530)'s `TokenChoice` chooser (`crates/micold-core/src/daemon_config/matching.rs`, T046) and the
+stateless `git-credential get` resolution path (`crates/micold-daemon/src/git_credential.rs`, T051)
+plus its per-host `host`/`ssh_to_https` rewrite (T093): `gh-token --cwd` resolves through the same
+chooser, reading the token file at call time rather than at session spawn. It is a new
+PATH-injected shim that reads a chosen credential into a session's environment (a security-sensitive
+surface, not a reuse of an existing pattern), so the tier is `full`.
+
+- **Tasks**: T055–T057, T095, T058
+- **Deliverable**: `micold-daemon gh-token --cwd <dir>` prints, via the Issue 9 `TokenChoice`
+  chooser, the token chosen for the cwd's `origin` (exit 1 silently with none); a `gh` shim at
+  `<data_dir>/bin/gh` (unix `sh`, `exec`s the real `gh`; Windows `gh.cmd`, forwards its exit code),
+  first on every session's `PATH`, calls it and runs the real `gh` with `GH_TOKEN` and `GH_HOST`
+  set only when a token was printed, leaving existing `GH_TOKEN`/`GH_HOST` alone otherwise;
+  `docs/user-guide/settings.md` documents `gh` support.
+- **Satisfies**: US2; FR-011, FR-035, SC-003
+- **Verify**: `cargo test -p micold-daemon --test gh_shim`
+- **Depends on**: Issue 9 (#1530) M1, merged (the `TokenChoice` chooser, the stateless
+  `git-credential get` and the per-host rewrite this milestone reuses; M2's container/pod gating
+  and protocol retirement are not touched by the `gh` shim)
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
