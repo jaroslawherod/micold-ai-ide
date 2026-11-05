@@ -32,9 +32,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001-T009 | full | Script runs before serving; exports applied; StartupReport + protocol bump | #1665 | merged |
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | merged |
-| M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | #1682 | merged |
-| M5 | T030-T033 | full | Container delivery (after #1527) | #1698 | merged |
-| M6 | T034-T036 | full | Pod delivery (after #1528) | #1712 | merged |
+| M4 | T023-T029 | full | Host+SSH delivery and failure display (after issue 1526) | #1682 | merged |
+| M5 | T030-T033 | full | Container delivery (after issue 1527) | #1698 | merged |
+| M6 | T034-T036 | full | Pod delivery (after issue 1528) | #1712 | merged |
 
 T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-needed` label.
 
