@@ -145,7 +145,15 @@ mod tests {
     #[test]
     fn invalid_ids_are_refused() {
         for id in [
-            "", "Local", ".a", "-a", "_a", "a b", "é", "a/b", &"a".repeat(64),
+            "",
+            "Local",
+            ".a",
+            "-a",
+            "_a",
+            "a b",
+            "é",
+            "a/b",
+            &"a".repeat(64),
         ] {
             assert!(WireDaemonId::new(id).is_err(), "{id:?}");
         }
