@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1663
 - **Worktree branch**: feat/1663_structured-view-messages-sent-by-the-user-are-not
 - **Started**: 2026-11-05
-- **Phase**: close (review, gate, PR)
-- **Next step**: diff review, full gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1695 | design | merged | 8a4e2dd39e9ed9d7acb2f2f4743dc89ffbd0567b |
 | #1701 | M1 | merged | 80d691d1580e1af4d771edabe9135b5a08c0a8f9 |
+| close | close | open | |
 
 ## Milestones
 
