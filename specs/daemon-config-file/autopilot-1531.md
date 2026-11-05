@@ -65,3 +65,12 @@ None open. The M1 blocker was asked and answered: see D5. Paused, waiting on #15
   this unit. M1's tasks (T055–T057, T095) name the #1530 API they build on: `gh-token` resolves a
   token the same way `git-credential get` does (T047), through the `TokenChoice` chooser
   (T046) and the per-host `host`/`ssh_to_https` rewrite (T093).
+
+- **Defect in shared autopilot tooling, not fixed here** (outside this flow, `rules/ownership.md`):
+  `scripts/autopilot/resume.sh`'s `ledgers()` globs only `specs/*/autopilot.md`,
+  `specs/*/bugs/*.autopilot.md` and `specs/quick/*.autopilot.md`, so it never finds the per-issue
+  ledgers this feature uses (`specs/daemon-config-file/autopilot-<issue>.md`). It falls through to
+  the `origin/main` search and prints `LEDGER-ON-MAIN` on every call, even straight after
+  `branch-start.sh` — an endless loop, so `/speckit-autopilot resume` cannot resume any of the
+  #1521 sibling runs (#1523–#1527, #1530, #1531, #1534, #1535). A glob of
+  `specs/*/autopilot*.md` would fix it.
