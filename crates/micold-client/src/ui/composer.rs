@@ -525,18 +525,20 @@ fn text_area_with_button<'a>(
 ) -> Element<'a, Message> {
     let focused = state.window.focused_field == Some(FieldId::Composer(session));
     let hovered = state.large_editor.hovered == Some(session);
-    let mut field: Element<'a, Message> = container(area).width(Length::Fill).into();
-    if open_editor_visible(lines, focused, hovered) {
+    // The same two-child stack whether or not the button shows: a changing tree shape would
+    // reset the text area's widget state (its focus) the frame the button appears.
+    let overlay: Element<'a, Message> = if open_editor_visible(lines, focused, hovered) {
         let button = open_editor_button(roles, Some(send(Msg::LargeEditorRequested(session))));
-        field = stack![
-            field,
-            container(button)
-                .width(Length::Fill)
-                .align_x(Alignment::End)
-                .padding(spacing::XS)
-        ]
-        .into();
-    }
+        container(button)
+            .width(Length::Fill)
+            .align_x(Alignment::End)
+            .padding(spacing::XS)
+            .into()
+    } else {
+        Space::new().into()
+    };
+    let field: Element<'a, Message> =
+        stack![container(area).width(Length::Fill), overlay].into();
     mouse_area(field)
         .on_enter(Message::LargeEditor(LargeEditorMsg::Hovered(session, true)))
         .on_exit(Message::LargeEditor(LargeEditorMsg::Hovered(
