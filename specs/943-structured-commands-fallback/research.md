@@ -113,7 +113,8 @@ their committed form, re-recorded in M1 with the capture script.
   boundary plus the synthetic user text that follows it into one `Compacted { trigger, summary }`
   entry (the summary collapsed), and a reset into `Cleared`. Entries carry `era: u32`, bumped at
   each `Cleared`; the window draws entries of an earlier era as "before the clear". Turns before
-  either marker stay (FR-004, FR-005). The session is busy through a `/compact` because it is a
+  either marker stay (FR-004, FR-005). **Bugfix 2026-11-05 (BUG-1694)**: a `Cleared` now drops the
+  entries before it (the held events stay) and `era` is removed; only a compaction keeps its turns. The session is busy through a `/compact` because it is a
   turn (#941's turn state) — no extra state.
 - **Rejected — dropping entries before a compaction**: the spec keeps them visible.
 

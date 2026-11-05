@@ -159,12 +159,12 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [x] T021 Implement T019–T020 in `core/src/structured/transcript/entry.rs` (`CommandOutput`,
   `Compacted`, `Cleared`, `ModelChanged`, `TerminalPeriod`, `AssistantText.auth_failed`,
   `Entry.era`) and `core/src/structured/transcript/build.rs`
-- [x] T022 [US1] Tests in `core/tests/structured_transcript.rs`: a `UserSent` note (#941 M1) with
+- [ ] T022 [US1] (reopened — BUG-1694: the `era` assertions are superseded) Tests in `core/tests/structured_transcript.rs`: a `UserSent` note (#941 M1) with
   `/greet Ada` → `UserMessage { command: Some(CommandInvocation { name: "greet", args: "Ada" }) }`;
   plain text → `command: None`; the command's description and argument hint are those of the
   `CommandList` held at that point of the history (a later `CommandsReported` does not change an
   earlier chip) (FR-003)
-- [x] T023 Implement T022 in `core/src/structured/transcript/build.rs` and `entry.rs`
+- [ ] T023 (reopened — BUG-1694: `era` is removed) Implement T022 in `core/src/structured/transcript/build.rs` and `entry.rs`
 - [x] T024 [US1] Draw the new `EntryKind` arms in `client/src/ui/transcript/entries.rs` with the
   existing pieces only (caption for `Cleared`, `ModelChanged`, `TerminalPeriod`; #940's markdown
   for `CommandOutput`; caption plus the summary as markdown for `Compacted`; `/name args` as the
@@ -357,7 +357,7 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 - [x] T057 [US2] [US3] Draw the palette in #941's composer completion slot and the model (with
   "your choice"/Default, the text from T051's tested function) and the `Typeahead` model picker in
   the composer's status row (`client/src/ui/composer.rs`) (GUI exception for the draw glue only)
-- [x] T058 [US1] [US3] Replace M2's plain markers in `client/src/ui/transcript/entries.rs` with
+- [ ] T058 [US1] [US3] (reopened — BUG-1694: no earlier eras are drawn) Replace M2's plain markers in `client/src/ui/transcript/entries.rs` with
   #939's `DisclosureCard`: the command chip with its description behind it, `CommandOutput`,
   `Compacted` with the summary collapsed, `Cleared` and earlier eras drawn as "before the clear",
   `ModelChanged`/refused; every caption and label comes from a render-free function with a unit
@@ -399,6 +399,29 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 
 - [x] T066 Run quickstart Part A and record the results in
   `specs/943-structured-commands-fallback/quickstart.md`
+
+## Phase 13: Bugfix BUG-1694 — `/clear` resets the view (GitHub #1694)
+
+**Goal**: After `/clear` the transcript holds the *Cleared* marker and what follows it, nothing
+from before (FR-005, US1 scenario 5, as patched). `/compact` keeps its turns (FR-004).
+
+- [ ] T067 [BUG-1694] [US1] *(test, first, red on `origin/main`)* `crates/micold-core/tests/structured_transcript.rs`:
+  replace the `era` tests (~1738, ~1849) — `command-clear.jsonl` and a second `/clear` → `entries()`
+  is `Cleared` then only what follows; a tool card opened before the clear is gone and a late
+  result for it opens no entry; entry ids stay unique; a rebuild from the held events gives the
+  same entries; `user_messages()` still lists the pre-clear messages (FR-025); a `/compact`
+  keeps its earlier entries. Closes the `era` part of T022.
+- [ ] T068 [BUG-1694] [US1] Implement T067 in `crates/micold-core/src/structured/transcript/build.rs`
+  (`ConversationReset` drops the entries and the tool/turn/stream state held for them, then opens
+  `Cleared`) and remove `era` from `mod.rs` and `entry.rs`. Closes T023's `era` part.
+- [ ] T069 [BUG-1694] [US1] *(test)* then remove `BEFORE_THE_CLEAR`, `era_tag` and the
+  `latest_era`/`user_label` era tag from `crates/micold-client/src/features/transcript_selection/shown.rs`
+  and `crates/micold-client/src/ui/transcript/{entries,mod}.rs`; fix the tests that named them
+  (`cargo check` finds them). Closes T058's earlier-eras part.
+- [ ] T070 [BUG-1694] Docs: `docs/user-guide/worktrees-and-sessions.md:1787` (a clear empties the
+  view below its marker), quickstart Part B 4 re-run note; `scripts/check-user-guide-updated.sh`.
+
+**Bugfix**: 2026-11-05 — BUG-1694 Updated from bugfix patch
 
 ---
 
@@ -558,4 +581,15 @@ build on `main` as it is. **M2 needs #941 M1; M6 #941 M2; M7 #941 M4; M8 #941 M6
   `visual-pass/`; `scripts/check-user-guide-updated.sh`
 - **Depends on**: M8; **#942 M7 on `main`** for `PromptCard` (else `Dialog`), #942 M8 for SC-007's
   manual check (I-6)
+- **Tier**: full
+
+### M10 — Bugfix BUG-1694: `/clear` resets the view
+
+- **Tasks**: T067–T070 (reopens the `era` parts of T022, T023, T058)
+- **Deliverable**: after `/clear` the transcript holds the *Cleared* marker and what follows it, no
+  earlier turn; `era` and the "Before the clear" tag are gone; the user guide says so
+- **Satisfies**: FR-005, US1 scenario 5 (as patched by BUG-1694)
+- **Verify**: `cargo test -p micold-core --test structured_transcript`; `mise run check`;
+  `scripts/check-user-guide-updated.sh`
+- **Depends on**: M9 (merged)
 - **Tier**: full
