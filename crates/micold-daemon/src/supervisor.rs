@@ -289,7 +289,7 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
         .is_file();
     let lang_inherited = std::env::var_os("LANG").is_some_and(|v| !v.is_empty());
-    let mut edits = env_hygiene_with(
+    let edits = env_hygiene_with(
         target,
         data_dir.as_deref(),
         exe.as_deref(),
