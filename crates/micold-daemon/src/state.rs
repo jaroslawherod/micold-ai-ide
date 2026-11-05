@@ -1656,8 +1656,10 @@ impl DaemonState {
     /// Record the configuration runtime at startup (#1524). A no-op if already set.
     pub fn set_config(&self, runtime: Arc<crate::config_watch::ConfigRuntime>) {
         let id = runtime.current().wire_id();
-        let _ = self.config.set(runtime);
-        self.lock().catalog.set_daemon_id(id);
+        // The id is read once: a changed `[daemon] id` takes a restart, like the other start keys.
+        if self.config.set(runtime).is_ok() {
+            self.lock().catalog.set_daemon_id(id);
+        }
     }
 
     /// The `config` section of the diagnostic (contract §5); `None` without a configuration file.

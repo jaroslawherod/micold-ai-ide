@@ -65,6 +65,7 @@ fn a_session_create_without_a_kind_decodes_as_a_terminal_session() {
 
 fn summary(kind: SessionKind) -> SessionSummary {
     let snapshot: serde_json::Value = serde_json::json!({
+        "daemon": "local",
         "id": sid(),
         "worktree_dir": "wt",
         "title": "Pending",
