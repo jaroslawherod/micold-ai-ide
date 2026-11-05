@@ -37,6 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+M1: review A (code-review high) snapshot cd610b30:2c612ac0 round 1: F1 MAJOR fixed (capture scene waits on an info-level line; the app overwrites the host daemon.toml), F2 declined (DATA_DIR/TOKEN_PATH stay live until M2 by design), F3-F5 MINOR left. Review B (sonnet): CLEAN, 3 MINOR (F2 fixed). The gate caught the basic image content hash; pin updated.
+
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Tasks 1537 | 1 | 72c2d2e1:3ffb138f | CHANGES: F1 capture lib.sh producer, F2 retired_env module uncreated, F3 entrypoint wording; all fixed (task text), F4-F6 MINOR fixed |
