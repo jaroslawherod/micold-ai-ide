@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M6: review A and B, full gate, PR (pod delivery, tasks T034-T036); then the close unit (T037)
+- **Next step**: wait for CI on PR #1712 (M6) and merge; then the close unit (T037)
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1673 | M3 | merged | b146a398d5597cc67bbd2e2db4994b1bc2649fcf |
 | #1682 | M4 | merged | 3af058506bbe0e95b0b8e3e31801c8388b23604c |
 | #1698 | M5 | merged | 1897aa45b3c239b33a5ebd470f16bada280ab4ab |
+| #1712 | M6 | open | |
 
 ## Milestones
 
