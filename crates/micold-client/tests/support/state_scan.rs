@@ -112,13 +112,15 @@ pub const MUTATORS: &[&str] = &[
     // Feature 1550: `transcript_rich.copy_selection` issues a selection copy's ticket;
     // `transcript_selection.before_apply` fingerprints the selected text before events apply,
     // `applied`, `prompts_changed` and `toggled` clear a selection they changed, and
-    // `retain_shown` drops the selections no pane shows.
+    // `retain_shown` drops the selections no pane shows, and `thread_folded` clears one reaching
+    // into a subagent thread that was folded (#1609).
     "copy_selection",
     "before_apply",
     "applied",
     "prompts_changed",
     "toggled",
     "retain_shown",
+    "thread_folded",
     "push",
     "push_str",
     "remove",
