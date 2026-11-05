@@ -1068,11 +1068,9 @@ fn the_start_script_group_follows_delivery_and_fits_when_forced_on() {
         DraftRuntime::Host,
     ] {
         let (mut state, shown) = add_form(runtime);
-        // Host and SSH deliver a script since M4, container since M5; the pod does not yet.
-        let delivered = !matches!(runtime, DraftRuntime::Kubernetes);
-        assert_eq!(
+        // Host and SSH deliver a script since M4, container since M5, the pod since M6.
+        assert!(
             has(&shown, "Start script"),
-            delivered,
             "{runtime:?} by default: {shown:?}"
         );
 
