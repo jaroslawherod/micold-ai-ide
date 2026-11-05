@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: tasks (milestones cut, design PR open)
-- **Next step**: design PR open (see PR table); orchestrator waits on CI and merges; then M1
+- **Phase**: blocked (design merged; M1 waits on #1530)
+- **Next step**: M1, once #1530's implementation is on `main` (see *Open escalation*)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1696 | Design (milestones for Issue 10) | OPEN | — |
+| #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
 
 ## Milestones
 
@@ -49,7 +49,17 @@ None.
 
 ## Open escalation
 
-None.
+**M1 is blocked by work outside this flow** (category 5/6, *blocked by work outside my flow*).
+
+- Question: wait for #1530 to merge, or stack #1531's M1 on #1530's unmerged branch?
+- Evidence: `crates/micold-core/src/daemon_config/matching.rs` (`TokenChoice`, #1530 T046) does
+  not exist on `origin/main`; `gh pr list` shows no open implementation PR for #1530; #1530's M1
+  commit `324482a39` is not on `origin/feat/1530_the-daemon-s-credential-helper-chooses-the-token`
+  either (that branch's tip is the ledger commit `02cf510bc`), so it is unpushed local work in
+  another session's worktree, still under change.
+- Recommendation: **wait**. #1531's design PR #1696 is merged, so nothing is lost by pausing;
+  stacking on an unpushed branch whose API is still in review would have to be rewritten.
+- Resume with `/speckit-autopilot resume` once #1530's M1 and M2 are on `main`.
 
 ## Follow-ups not done
 
