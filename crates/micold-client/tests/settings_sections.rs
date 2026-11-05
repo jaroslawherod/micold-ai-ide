@@ -91,6 +91,12 @@ const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
         "src/ui/sidebar.rs",
         "SidebarMsg::FilterOpenToggled",
     ),
+    // Feature 1703's session options row is opened by the composer's settings icon.
+    (
+        "composer_options_open",
+        "src/ui/composer.rs",
+        "Msg::OptionsToggled",
+    ),
     // BUG-1555's dismissed restore-sessions offers are written by the sidebar banner's Dismiss.
     (
         "dismissed_offers",

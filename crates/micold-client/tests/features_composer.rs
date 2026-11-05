@@ -1460,3 +1460,46 @@ fn the_large_editor_chord_opens_it_and_near_misses_are_the_editors() {
         "an IME composition keeps the chord"
     );
 }
+
+// --- feature 1703 M2: the session options row (FR-009, FR-012) -----------------------------------
+
+#[test]
+fn the_options_row_is_hidden_until_toggled_and_toggles_back() {
+    let (mut state, _) = composer_in(TurnPhase::Idle);
+    assert!(!state.options_open);
+    state.options_toggled();
+    assert!(state.options_open);
+    state.options_toggled();
+    assert!(!state.options_open);
+}
+
+#[test]
+fn a_model_effort_or_permission_refusal_opens_the_row_and_a_drop_notice_does_not() {
+    use micold_client::features::command_palette::SendIntent;
+    let session = session_of(SessionKind::Structured);
+    let s = session.id;
+    let mut w = window_with(vec![session]);
+    w.composers
+        .apply_drop(s, drop_of(&["/d/a.png"], &[]), false);
+    assert!(!w.composers.options_open, "an attachment notice leaves it");
+    w.composers.edited(s, "/effort extreme".into(), (0, 15));
+    assert_eq!(w.send_intent(s), SendIntent::Nothing);
+    assert!(w.composers.options_open, "an effort refusal opens it");
+    w.composers.options_toggled();
+    w.composers.refusal(s, "refused".into());
+    assert!(w.composers.options_open, "so does any refusal");
+}
+
+#[test]
+fn stop_session_and_the_refusal_note_stay_outside_the_collapsed_row() {
+    let (mut state, s) = composer_in(TurnPhase::Idle);
+    state.refusal(s, "not allowed".into());
+    assert!(state.options_open);
+    state.options_toggled();
+    assert!(!state.options_open);
+    assert_eq!(
+        state.composer(s).unwrap().notice.as_deref(),
+        Some("not allowed"),
+        "the note is the composer's own, shown whatever the row"
+    );
+}

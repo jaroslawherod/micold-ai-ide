@@ -225,6 +225,18 @@ pub fn persist_filter_open(store: Option<&(dyn SettingsStore + Send + Sync)>, co
     write_setting(store, core, &mut |settings| settings.filter_open = open);
 }
 
+/// Write the composer's session options row state after a toggle or an automatic expand
+/// (feature 1703, FR-011, FR-012).
+pub fn persist_composer_options_open(
+    store: Option<&(dyn SettingsStore + Send + Sync)>,
+    core: &mut State,
+) {
+    let open = core.composers.options_open;
+    write_setting(store, core, &mut |settings| {
+        settings.composer_options_open = open;
+    });
+}
+
 /// Write the sessions the banner's dismissed offer showed for the active project (BUG-1555).
 pub fn persist_offer_dismissal(
     store: Option<&(dyn SettingsStore + Send + Sync)>,
@@ -506,6 +518,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         folded_origins: _,
         // Written by the filter toggle in the sidebar, never by a save of the form (BUG-1470).
         filter_open: _,
+        // Written by the composer's settings toggle, never by a save of the form (feature 1703).
+        composer_options_open: _,
         // Written by the offer banner's Dismiss, never by a save of the form (BUG-1555).
         dismissed_offers: _,
         // The registry is not in the form; the daemon block is mirrored into it below.
@@ -1285,6 +1299,7 @@ mod tests {
             legacy_default_daemon: None,
             folded_origins: [micold_core::session::SessionId::new()].into(),
             filter_open: true,
+            composer_options_open: true,
             dismissed_offers: Default::default(),
             review_single_keys: false,
         };
@@ -1376,6 +1391,18 @@ mod tests {
     }
 
     /// BUG-1470, FR-016: the toggle writes the open state and leaves the rest as stored.
+    #[test]
+    fn the_options_row_state_is_written_and_a_form_save_keeps_it() {
+        let store = FakeSettingsStore::loaded(Settings::default());
+        let mut core = State::default();
+        core.composers.options_open = true;
+        persist_composer_options_open(Some(&store), &mut core);
+        assert!(store.saves()[0].composer_options_open);
+        core.composers.options_open = false;
+        persist_composer_options_open(Some(&store), &mut core);
+        assert!(!store.saves()[1].composer_options_open);
+    }
+
     #[test]
     fn a_filter_toggle_writes_the_open_state() {
         let store = FakeSettingsStore::loaded(Settings::default());

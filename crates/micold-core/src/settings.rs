@@ -407,6 +407,11 @@ pub struct Settings {
     /// written before it reads as closed. Client-owned: the daemon never reads it.
     #[serde(default)]
     pub filter_open: bool,
+    /// Whether the structured composer's session options row (model, effort, permission) is open
+    /// (feature 1703 FR-011). Off by default; a file written before it reads as closed. One value
+    /// for the window. Client-owned: the daemon never reads it.
+    #[serde(default)]
+    pub composer_options_open: bool,
     /// The stored sessions each project's dismissed restore-sessions offer showed (BUG-1555), so a
     /// dismissal holds across restarts for those sessions. Replaced per project on a dismissal.
     /// Client-owned: the daemon never reads it.
@@ -503,6 +508,7 @@ impl Default for Settings {
             plan_usage_warn_percent: crate::plan_usage::WarnPercent::DEFAULT,
             folded_origins: BTreeSet::new(),
             filter_open: false,
+            composer_options_open: false,
             dismissed_offers: BTreeMap::new(),
             review_single_keys: default_review_single_keys(),
         }
@@ -964,6 +970,8 @@ struct StoredSettings {
     #[serde(default)]
     filter_open: bool,
     #[serde(default)]
+    composer_options_open: bool,
+    #[serde(default)]
     dismissed_offers: BTreeMap<PathBuf, BTreeSet<uuid::Uuid>>,
     /// Missing in files written before feature 1274's switch → on (FR-022). Additive and
     /// defaulted, so `settings_version` does not move.
@@ -1025,6 +1033,7 @@ impl StoredSettings {
             plan_usage_warn_percent: u64::from(settings.plan_usage_warn_percent),
             folded_origins: settings.folded_origins.clone(),
             filter_open: settings.filter_open,
+            composer_options_open: settings.composer_options_open,
             dismissed_offers: settings.dismissed_offers.clone(),
             review_single_keys: settings.review_single_keys,
         }
@@ -1089,6 +1098,7 @@ impl StoredSettings {
             plan_usage_warn_percent: clamp_plan_usage_warn_percent(self.plan_usage_warn_percent),
             folded_origins: self.folded_origins,
             filter_open: self.filter_open,
+            composer_options_open: self.composer_options_open,
             dismissed_offers: self.dismissed_offers,
             review_single_keys: self.review_single_keys,
         }
@@ -1864,5 +1874,43 @@ mod setup_commands_tests {
             Some(&command("make")),
             "another project's entry stays"
         );
+    }
+}
+
+#[cfg(test)]
+mod composer_options_open_tests {
+    //! Feature 1703, FR-011: the composer's session options row as it is stored.
+
+    use super::*;
+
+    fn store_in(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+    }
+
+    #[test]
+    fn closed_by_default_and_for_an_old_or_unreadable_file() {
+        assert!(!Settings::default().composer_options_open);
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("settings.json"),
+            r#"{ "settings_version": 4, "theme": "dark" }"#,
+        )
+        .unwrap();
+        assert!(!store_in(&dir).load().settings.composer_options_open);
+        std::fs::write(dir.path().join("settings.json"), "{ not json").unwrap();
+        assert!(!store_in(&dir).load().settings.composer_options_open);
+    }
+
+    #[test]
+    fn open_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store_in(&dir);
+        store
+            .save(&Settings {
+                composer_options_open: true,
+                ..Settings::default()
+            })
+            .unwrap();
+        assert!(store.load().settings.composer_options_open);
     }
 }

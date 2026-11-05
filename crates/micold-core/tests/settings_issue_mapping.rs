@@ -178,6 +178,7 @@ fn other_writers_preserve_the_mapping() {
     assert_eq!(
         keys,
         [
+            "composer_options_open",
             "cross_session_access",
             "daemon",
             "daemons",

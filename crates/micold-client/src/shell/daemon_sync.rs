@@ -1876,10 +1876,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 Some(
                     PendingOp::QueueOp { session }
                     | PendingOp::QueueEdit { session }
-                    | PendingOp::QueueTake { session }
-                    | PendingOp::SessionModel { session }
-                    | PendingOp::SessionEffort { session },
+                    | PendingOp::QueueTake { session },
                 ) => app.core.composers.notice(session, message),
+                // Feature 1703 FR-012: a refused model or effort opens the options row.
+                Some(
+                    PendingOp::SessionModel { session } | PendingOp::SessionEffort { session },
+                ) => {
+                    let was_open = app.core.composers.options_open;
+                    app.core.composers.refusal(session, message);
+                    crate::shell::composer::persist_options_if_changed(app, was_open);
+                }
                 // #942: a refused answer or input request shows on the request (FR-012); a
                 // refused mode change is the session's notice (FR-017).
                 Some(PendingOp::PermissionDecision { session, id }) => app
@@ -1892,6 +1898,11 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     .input_failed(session, id, message),
                 Some(PendingOp::SetPermissionMode { session }) => {
                     app.core.permission_prompts.mode_failed(session, message);
+                    // Feature 1703 FR-012: the refusal note shows beside the options row's
+                    // control, which opens.
+                    let was_open = app.core.composers.options_open;
+                    app.core.composers.expand_options();
+                    crate::shell::composer::persist_options_if_changed(app, was_open);
                 }
                 // #943 FR-021: work in progress asks the user first; any other refusal is said.
                 Some(PendingOp::SwitchKind { request }) => {

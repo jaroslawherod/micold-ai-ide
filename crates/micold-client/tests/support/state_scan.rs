@@ -63,6 +63,9 @@ pub const MUTATORS: &[&str] = &[
     "step",
     "replace_text",
     "notice",
+    "refusal",
+    "options_toggled",
+    "expand_options",
     "clear_notice",
     "kind_changed",
     // `overview_expansion::Expansion::apply` takes an event in (feature 1121).

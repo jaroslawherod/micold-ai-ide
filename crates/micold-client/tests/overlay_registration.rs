@@ -154,6 +154,10 @@ const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] = &[
 const INLINE_FLAGS: &[(&str, fn(&mut State))] = &[
     ("sidebar.filter_open", |s| s.sidebar.filter_open = true),
     ("sidebar.compact_open", |s| s.sidebar.compact_open = true),
+    // Feature 1703: the composer's session options row is a row in the composer, not a surface.
+    ("composers.options_open", |s| {
+        s.composers.options_open = true
+    }),
 ];
 
 /// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.

@@ -3,9 +3,8 @@
 //! Bypass only after its confirmation); why a change was refused, at the end of the status row; and
 //! *Waiting for you* in place of the busy label while a request of the session waits (FR-009).
 //!
-//! The `Select` sits in the input row rather than the status row: a filled field is taller than the
-//! status row's words and would add its height to every composer, while the input row is as tall
-//! as the text area already (M9, ledger decision 21).
+//! The `Select` sits in the composer's session options row, behind the settings icon (feature 1703
+//! FR-008); it was in the input row before.
 
 use std::fmt;
 
@@ -73,6 +72,7 @@ pub fn seams<'a>(
             .map(|why| Text::new(why, TypeRole::Caption, roles).into()),
         waiting: prompts.waiting(session),
         control: Some(container(select).width(Length::Fixed(MODE_WIDTH)).into()),
+        bypass: mode == PermissionMode::Bypass,
         ..Seams::default()
     }
 }

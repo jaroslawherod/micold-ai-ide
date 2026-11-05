@@ -244,12 +244,16 @@ fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
         let mut mounted = Mounted::new(view(&state));
         mounted.focus_at(area);
         mounted.event(&tab_released());
+        // The area is focused, so its **Open large editor** button shows and Tab reaches it first
+        // (feature 1703 FR-004).
+        mounted.operate(Box::new(focusable::focus_next::<()>()));
+        mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
         let attach = painted_at(&StateUnderTest::new(state.clone()), "\u{e226}");
         let at = mounted.focused().expect("Tab lands somewhere");
         assert!(
             at.contains(attach),
-            "Tab lands on Add attachment first: {at:?}"
+            "Tab lands on Add attachment first at {attach:?}: {at:?}"
         );
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
@@ -289,4 +293,127 @@ fn shift_tab_from_the_text_area_reaches_send_queued_and_the_queue_actions() {
         above >= 4,
         "Shift+Tab reaches both queued messages' Edit and Remove: {landed:?}"
     );
+}
+
+// --- feature 1703 M2: the activity icon and the session options row ------------------------------
+
+use micold_client::features::composer::Msg as ComposerMsg;
+use micold_client::icons::Icon;
+
+/// Every string the view paints, in the order laid out.
+fn painted_words(state: &State) -> Vec<(String, Point)> {
+    let under = StateUnderTest::new(state.clone());
+    let mut renderer = lay::renderer();
+    let (painted, _) = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
+    painted
+        .into_iter()
+        .map(|p| (p.content.clone(), p.origin))
+        .collect()
+}
+
+fn words(state: &State) -> Vec<String> {
+    painted_words(state).into_iter().map(|(w, _)| w).collect()
+}
+
+/// FR-006, FR-007, SC-003: no state word is drawn, in any state; the icon is in the input row.
+#[test]
+fn the_activity_state_is_an_icon_with_its_words_in_the_tooltip() {
+    use micold_client::ui::composer::{activity, BUSY, NOT_RUNNING, READY, WAITING};
+    for (phase, waiting, label, busy) in [
+        (TurnPhase::Idle, false, READY, false),
+        (TurnPhase::NotRunning, false, NOT_RUNNING, false),
+        (TurnPhase::Idle, true, WAITING, false),
+    ] {
+        assert_eq!(activity(phase, waiting), (label, busy));
+    }
+    let (mut state, id) = crowded();
+    for phase in [TurnPhase::Idle, TurnPhase::NotRunning] {
+        state.composers.input_reported(
+            id,
+            InputState {
+                phase,
+                hold: false,
+                queue: Vec::new(),
+            },
+        );
+        let painted = words(&state);
+        for word in [READY, BUSY, NOT_RUNNING, WAITING] {
+            assert!(
+                !painted.iter().any(|w| w == word),
+                "no status word `{word}` is drawn: {painted:?}"
+            );
+        }
+    }
+}
+
+/// FR-008, FR-009: collapsed, the composer holds only the settings icon; opened, Model comes
+/// first, Permission is last, and the selectors are not in the input row.
+#[test]
+fn the_options_row_holds_the_selectors_only_while_open() {
+    let (mut state, _) = crowded();
+    let settings = Icon::Settings.glyph().to_string();
+    let collapsed = painted_words(&state);
+    assert!(
+        collapsed.iter().any(|(w, _)| *w == settings),
+        "the settings icon is drawn: {collapsed:?}"
+    );
+    assert!(
+        !collapsed.iter().any(|(w, _)| w.contains("Permissions")),
+        "no permission selector in the input row: {collapsed:?}"
+    );
+    state.composers.options_open = true;
+    let open = painted_words(&state);
+    let model = state.model_header(crowded_id(&state));
+    let at = |needle: &str| {
+        open.iter()
+            .find(|(w, _)| w.contains(needle))
+            .map(|(_, p)| *p)
+            .unwrap_or_else(|| panic!("`{needle}` is drawn: {open:?}"))
+    };
+    let (model, effort) = (at(&model), at("ffort"));
+    assert!(model.x < effort.x, "Model before Effort");
+    assert!((model.y - effort.y).abs() < 4.0, "one row");
+}
+
+fn crowded_id(state: &State) -> SessionId {
+    state.session.active.expect("a session")
+}
+
+/// FR-009: the settings icon is a focusable button; Space or Enter on it toggles the row.
+#[test]
+fn the_settings_icon_toggles_from_the_keyboard() {
+    let (state, id) = crowded();
+    let under = StateUnderTest::new(state.clone());
+    // The window's own Settings button draws the same glyph, higher up: the composer's is the last.
+    let glyph = Icon::Settings.glyph().to_string();
+    let mut renderer = lay::renderer();
+    let (painted, _) = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
+    let at = painted
+        .iter()
+        .rfind(|p| p.content == glyph)
+        .expect("the icon");
+    let icon = Point::new(at.origin.x + 4.0, at.origin.y + 4.0);
+    for named in [keyboard::key::Named::Space, keyboard::key::Named::Enter] {
+        let mut mounted = Mounted::new(view(&state));
+        mounted.focus_at(icon);
+        let press = Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(named),
+            modified_key: keyboard::Key::Named(named),
+            physical_key: keyboard::key::Physical::Unidentified(
+                keyboard::key::NativeCode::Unidentified,
+            ),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::default(),
+            text: None,
+            repeat: false,
+        });
+        let messages = mounted.event(&press);
+        assert!(
+            messages.iter().any(|m| matches!(
+                m,
+                Message::Composer(ComposerMsg::OptionsToggled(s)) if *s == id
+            )),
+            "{named:?} presses the icon: {messages:?}"
+        );
+    }
 }
