@@ -60,6 +60,27 @@ its end.
 - The text goes back to the session whose message box opened the editor, even if you have switched
   sessions or that session has ended in the meantime.
 
+## The activity indicator
+
+An icon beside the message box shows what the session is doing: a spinning icon while Claude Code
+works, a different icon while it waits for you (a question or a permission request), and a resting
+icon otherwise. Hover the icon to read the state ("Working", "Waiting for you", "Ready", "Not
+running"); no status text is shown in the row. **Stop session** and any refusal note stay visible
+in the row.
+
+## Session options
+
+The **Session options** button (a settings icon) at the end of the message box row shows or hides
+a row holding the session's **Model**, **Effort** and **Permission** selectors. The permission
+selector is no longer in the message box row itself.
+
+- The row is hidden by default. Whether it is shown is remembered per window and restored when the
+  app restarts.
+- When Claude Code refuses a model, effort or permission change, the row opens by itself so the
+  refused selector is visible.
+- While **Bypass permissions** is on, the settings icon carries a warning marker and its tooltip says so.
+- The button is reachable with Tab; **Space** or **Enter** toggles the row.
+
 ## Finding the shortcut
 
 Type **/shortcuts** in the message box and send it to open the shortcut sheet, the same dialog the

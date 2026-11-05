@@ -44,9 +44,9 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 **Goal**: the activity state is an icon-only 24 dp indicator in the input row, state words as tooltip and accessible label; the status text row loses the indicator.
 **Independent test**: hover the indicator in Ready/Busy/Waiting: tooltip names the state, no visible status text.
 
-- [ ] T014 [P] [US2] View-structure test in `crates/micold-client/tests/composer_tab.rs` (style of the existing tests): input row contains the indicator between text area and attach; no visible state word in the status row; tooltip/accessible label per state (FR-006, FR-007, SC-003)
-- [ ] T015 [US2] In `crates/micold-client/src/ui/composer.rs` move the activity indicator into the input row as an icon-only 24 dp `BusyIndicator` with its label as tooltip and accessible label; `status_row` keeps Stop session and the refusal note (FR-006, FR-007)
-- [ ] T016 [P] [US2] User guide: describe the icon indicator in `docs/user-guide/structured-input.md`
+- [x] T014 [P] [US2] View-structure test in `crates/micold-client/tests/composer_tab.rs` (style of the existing tests): input row contains the indicator between text area and attach; no visible state word in the status row; tooltip/accessible label per state (FR-006, FR-007, SC-003)
+- [x] T015 [US2] In `crates/micold-client/src/ui/composer.rs` move the activity indicator into the input row as an icon-only 24 dp `BusyIndicator` with its label as tooltip and accessible label; `status_row` keeps Stop session and the refusal note (FR-006, FR-007)
+- [x] T016 [P] [US2] User guide: describe the icon indicator in `docs/user-guide/structured-input.md`
 
 **Note**: US2 scenario 1 (no permission selector in the input row) needs the options row of US3 to re-home it, so US2 and US3 ship in one milestone (M2).
 
@@ -57,18 +57,18 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 
 ### Tests first
 
-- [ ] T017 [P] [US3] Core test in `crates/micold-core/src/settings.rs` tests: `composer_options_open` defaults false, round-trips, an old file without the key and an unreadable file read false (FR-011)
-- [ ] T018 [P] [US3] Reducer tests in `crates/micold-client/tests/features_composer.rs`: `OptionsToggled` flips `options_open`; a model, effort or permission refusal sets it true while an attachment-drop notice does not; Stop session and the permission refusal note stay in `status_row` when collapsed (FR-009, FR-012, FR-013)
-- [ ] T019 [P] [US3] Persistence tests: `persist_composer_options_open` and the form-save exclusion in `crates/micold-client/src/shell/persist.rs`; boot reads the flag in `crates/micold-client/src/shell/startup.rs`; `crates/micold-client/src/shell/composer.rs` test with a mock `SettingsStore` that toggle AND auto-expand both persist (FR-011, FR-012)
-- [ ] T020 [P] [US3] View-structure tests in `crates/micold-client/tests/composer_tab.rs`: no permission selector in the input row, options row holds Model, Effort, Permission in that order when open, settings `IconButton` 40 dp labelled "Session options" and `.selected()` when open, Bypass marker on it (FR-008, FR-009, FR-010, FR-014); the icon is a focusable `IconButton` whose Space/Enter fires `OptionsToggled` (keyboard path, FR-009)
+- [x] T017 [P] [US3] Core test in `crates/micold-core/src/settings.rs` tests: `composer_options_open` defaults false, round-trips, an old file without the key and an unreadable file read false (FR-011)
+- [x] T018 [P] [US3] Reducer tests in `crates/micold-client/tests/features_composer.rs`: `OptionsToggled` flips `options_open`; a model, effort or permission refusal sets it true while an attachment-drop notice does not; Stop session and the permission refusal note stay in `status_row` when collapsed (FR-009, FR-012, FR-013)
+- [x] T019 [P] [US3] Persistence tests: `persist_composer_options_open` and the form-save exclusion in `crates/micold-client/src/shell/persist.rs`; boot reads the flag in `crates/micold-client/src/shell/startup.rs`; `crates/micold-client/src/shell/composer.rs` test with a mock `SettingsStore` that toggle AND auto-expand both persist (FR-011, FR-012)
+- [x] T020 [P] [US3] View-structure tests in `crates/micold-client/tests/composer_tab.rs`: no permission selector in the input row, options row holds Model, Effort, Permission in that order when open, settings `IconButton` 40 dp labelled "Session options" and `.selected()` when open, Bypass marker on it (FR-008, FR-009, FR-010, FR-014); the icon is a focusable `IconButton` whose Space/Enter fires `OptionsToggled` (keyboard path, FR-009)
 
 ### Implementation
 
-- [ ] T021 [US3] Add `composer_options_open: bool` (`#[serde(default)]`, default false, serde mirror; `settings_version` unchanged) in `crates/micold-core/src/settings.rs`
-- [ ] T022 [US3] `persist_composer_options_open` and the form-save exclusion in `crates/micold-client/src/shell/persist.rs`; read it into core state at boot in `crates/micold-client/src/shell/startup.rs`
-- [ ] T023 [US3] `options_open` flag, `OptionsToggled`, auto-expand at the model/effort/permission refusal notice sites in `crates/micold-client/src/features/composer.rs`; call `persist_composer_options_open` on every change in `crates/micold-client/src/shell/composer.rs`
-- [ ] T024 [US3] Layout in `crates/micold-client/src/ui/composer.rs`: settings `IconButton` at the input row start, options row (Model, Effort, Permission) when open, Bypass warning marker; `crates/micold-client/src/ui/mode_control.rs` `seams` drops the permission control from the input row (FR-008)
-- [ ] T025 [P] [US3] User guide: options row, settings icon, persistence, auto-expand, Bypass marker in `docs/user-guide/structured-input.md`
+- [x] T021 [US3] Add `composer_options_open: bool` (`#[serde(default)]`, default false, serde mirror; `settings_version` unchanged) in `crates/micold-core/src/settings.rs`
+- [x] T022 [US3] `persist_composer_options_open` and the form-save exclusion in `crates/micold-client/src/shell/persist.rs`; read it into core state at boot in `crates/micold-client/src/shell/startup.rs`
+- [x] T023 [US3] `options_open` flag, `OptionsToggled`, auto-expand at the model/effort/permission refusal notice sites in `crates/micold-client/src/features/composer.rs`; call `persist_composer_options_open` on every change in `crates/micold-client/src/shell/composer.rs`
+- [x] T024 [US3] Layout in `crates/micold-client/src/ui/composer.rs`: settings `IconButton` at the input row start, options row (Model, Effort, Permission) when open, Bypass warning marker; `crates/micold-client/src/ui/mode_control.rs` `seams` drops the permission control from the input row (FR-008)
+- [x] T025 [P] [US3] User guide: options row, settings icon, persistence, auto-expand, Bypass marker in `docs/user-guide/structured-input.md`
 
 ## Phase 6: User Story 4 - One consistent selector style (P2)
 
