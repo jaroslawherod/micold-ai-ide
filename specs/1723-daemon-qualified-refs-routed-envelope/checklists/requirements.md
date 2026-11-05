@@ -5,4 +5,4 @@
 - [x] Success criteria are measurable.
 - [x] Edge cases cover invalid input, concurrency/ordering and cross-platform.
 - [x] Out-of-scope items listed.
-- [ ] Open clarification: FR-008 project identity (1 marker; resolved in the clarify unit).
+- [x] Open clarification: FR-008 project identity (resolved by the user in clarify: normalised remote URL with a per-project override; recorded in spec.md Clarifications and FR-008).
