@@ -13,6 +13,12 @@
 - **User turn**: one transcript entry of the user speaking: a prompt typed in the composer, a queued message once it is delivered to the agent, or a slash command invocation (shown as its command card).
 - **Turn label**: the small caption above a user turn that names who spoke.
 
+## Clarifications
+
+### Session 2026-11-05
+
+- Q: Is any requirement ambiguous enough to change the design or tests? → A: No critical ambiguity found: scope, forms of user turn, selection/copy, theming, edge cases and exclusions are all stated; token choice is deferred to the plan by the first Assumption. _(agent-resolved: specs/1663-user-message-highlight/spec.md#Assumptions)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Find where each turn began (Priority: P1)
