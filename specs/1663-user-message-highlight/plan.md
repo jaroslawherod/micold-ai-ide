@@ -45,7 +45,11 @@ order and scroll are untouched. Token choice and the contrast proof are in [rese
 | VII. Documentation | PASS: `docs/user-guide/structured-transcript.md` gains a short "Your messages" note in the same change |
 | VIII. Reusable UI Foundation | PASS: `UserTurn` is a shared `micold-material` primitive with a builder (`UserTurn::new(content, roles)`, `.into()`), not a transcript-local one-off |
 
-Post-design re-check: unchanged, all PASS. Complexity Tracking: none.
+Post-design re-check: unchanged, all PASS.
+
+## Complexity Tracking
+
+None: no principle is violated.
 
 ## Project Structure
 
@@ -62,6 +66,7 @@ specs/1663-user-message-highlight/
 ```text
 crates/micold-material/src/user_turn.rs        # NEW: UserTurn builder -> Element
 crates/micold-material/src/style.rs            # + user_turn_surface(r), user_turn_edge(r)
+crates/micold-material/tests/user_turn.rs      # NEW: style fns + builder unit tests
 crates/micold-material/src/lib.rs              # + pub mod user_turn; pub use UserTurn
 crates/micold-client/src/ui/transcript/entries.rs  # wrap both UserMessage branches
 crates/micold-core/tests/tokens.rs             # + contrast/difference test for the pair
@@ -73,8 +78,8 @@ docs/user-guide/structured-transcript.md       # + note
 
 | Req | Where |
 |---|---|
-| FR-001, FR-001a | `style::user_turn_surface` = `surface_container_high`; token test asserts it differs from `background` and from `surface_container_low` (tool cards), both schemes |
-| FR-002 | `UserTurn` left edge, `primary`, 4dp |
+| FR-001, FR-001a | `style::user_turn_surface` = `surface_container_high`; token test asserts a minimum tone gap (contrast ratio of the fill to `background` and to `surface_container_low` at least 1.1, both schemes), not bare inequality; the left edge carries the rest of the distinction |
+| FR-002 | `UserTurn` left edge, `primary`, 4dp; token test asserts `contrast(primary, surface_container_high) >= AA_NON_TEXT` in both schemes |
 | FR-003 | wrap at the single `EntryKind::UserMessage` arm (both the command and plain branch); main and sub-agent scopes share that arm |
 | FR-004 | wrap includes caption, body or card, attachments line (the whole `column`) |
 | FR-005 | no other arm touched; view test asserts assistant/thinking/tool/command-output entries are not wrapped |
@@ -92,7 +97,7 @@ docs/user-guide/structured-transcript.md       # + note
 
 - Core unit (`micold-core/tests/tokens.rs`): difference and AA contrast of the chosen pairs, light and dark. FR-001a, FR-007.
 - Material unit (`micold-material`): `UserTurn` builds with both schemes; style fns return the expected tokens and no shadow. FR-001, FR-002, FR-006.
-- Client view (`transcript_entry_view.rs`): a typed, a queued-delivered (same `UserMessage` kind) and a command entry render inside the highlight; assistant text, thinking, tool and command output do not (FR-003/4/5, SC-004); empty text renders.
+- Client view (`transcript_entry_view.rs`): its `painted_of` sees text only, so the highlight is observed by a new helper that renders the entry and walks for the fill quad of `style::user_turn_surface` (`iced_test`-style renderer quad probe, or, if the renderer exposes none, a pure `fn is_user_turn(&EntryKind) -> bool` used by the wrap site plus the material style tests). A typed, a queued-delivered (same `UserMessage` kind) and a command entry show the fill; assistant text, thinking, tool and command output do not (FR-003/4/5, SC-004); empty text renders. The tasks unit picks the probe and records it.
 - Selection (`features_transcript_selection.rs`): run unchanged (FR-008, SC-003).
-- Geometry gates: run unchanged (SC-005).
+- Geometry gates: `transcript_follow_layout.rs`, `transcript_pane.rs`, `transcript_open_budget.rs` run unchanged (SC-005).
 - Visual (quickstart §B): FR-011, SC-001.
