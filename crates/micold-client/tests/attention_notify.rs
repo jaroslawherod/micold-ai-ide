@@ -93,6 +93,7 @@ fn repo_state() -> State {
 
 fn summary(id: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary {
     SessionSummary {
+        daemon: Default::default(),
         id,
         worktree_dir: None,
         title: SessionLabel::Pending,

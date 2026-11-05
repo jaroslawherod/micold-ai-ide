@@ -49,6 +49,7 @@ on it.
 |---|---|---|
 | `schema` | required | Schema version; `1`. |
 | `daemon.name` | required | Display name; matches the daemon in Settings. |
+| `daemon.id` | `"local"` | The id this daemon puts on every session, worktree and project row it sends, so an orchestrator driving several daemons can tell their rows apart. 1 to 63 characters of `a-z`, `0-9`, `.`, `_` and `-`, starting with a letter or digit. Read at start; a change needs a restart. |
 | `daemon.kind` | required | `"host"`, `"ssh"`, `"container"` or `"kubernetes"`. |
 | `daemon.data_dir` | host: the platform data directory; ssh: `~/.local/share/micold-ai-ide`; container and pod: `/var/lib/micold-ai-ide` | State directory. |
 | `daemon.home` | the user's home | `HOME` for the daemon and its sessions. |

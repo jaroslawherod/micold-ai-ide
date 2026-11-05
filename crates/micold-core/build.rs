@@ -1,7 +1,7 @@
 //! Generates `SCHEMA_HASH` for the wire protocol (contracts/protocol.md §4, Decision 4) and
 //! `BUILD_FINGERPRINT` for feature 027's stale-image check.
 //!
-//! Hashes the canonical text of `src/protocol/{messages,grid,envelope}.rs` and emits the digest as
+//! Hashes the canonical text of `src/protocol/{messages,grid,envelope,routing}.rs` and emits the digest as
 //! `pub const SCHEMA_HASH: [u8; 32]` into `$OUT_DIR/schema_hash.rs`, which `protocol/version.rs`
 //! `include!`s. The hashing code itself is `include!`d from `src/protocol/hashing.rs` so the
 //! generator and the crate/tests use one identical implementation — no chance of drift.
@@ -20,9 +20,10 @@ fn main() {
     let messages_path = protocol.join("messages.rs");
     let grid_path = protocol.join("grid.rs");
     let envelope_path = protocol.join("envelope.rs");
+    let routing_path = protocol.join("routing.rs");
 
     // Rebuild the hash whenever any protocol source (or the hashing code) changes.
-    for path in [&messages_path, &grid_path, &envelope_path] {
+    for path in [&messages_path, &grid_path, &envelope_path, &routing_path] {
         println!("cargo:rerun-if-changed={}", path.display());
     }
     println!(
@@ -34,7 +35,9 @@ fn main() {
     let grid = fs::read_to_string(&grid_path).expect("read grid.rs");
     let envelope = fs::read_to_string(&envelope_path).expect("read envelope.rs");
 
-    let hash = schema_hash(&messages, &grid, &envelope);
+    let routing = fs::read_to_string(&routing_path).expect("read routing.rs");
+
+    let hash = schema_hash(&messages, &grid, &envelope, &routing);
 
     let mut literal = String::from("pub const SCHEMA_HASH: [u8; 32] = [");
     for (i, byte) in hash.iter().enumerate() {

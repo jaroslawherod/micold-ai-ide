@@ -221,6 +221,7 @@ mod derived_labels {
                 available: true,
                 worktrees: Vec::new(),
                 sessions: vec![SessionSummary {
+                    daemon: Default::default(),
                     id: id(),
                     worktree_dir: None,
                     title,

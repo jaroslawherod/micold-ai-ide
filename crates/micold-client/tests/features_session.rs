@@ -1596,6 +1596,7 @@ mod switching {
 
     fn summary(id: SessionId, kind: SessionKind) -> SessionSummary {
         SessionSummary {
+            daemon: Default::default(),
             id,
             worktree_dir: Some("feat-00".into()),
             title: micold_core::session::SessionLabel::Pending,

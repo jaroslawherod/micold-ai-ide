@@ -207,3 +207,18 @@ fn two_windows_of_one_build_share_a_build_string_and_differ_by_instance() {
         "and the banner names the window, not only the build a reader shares with it (BUG-023)"
     );
 }
+
+#[test]
+fn the_previous_protocol_version_is_refused_naming_both_numbers() {
+    let err = evaluate(
+        PROTOCOL_VERSION - 1,
+        SCHEMA_HASH,
+        PACKAGE_VERSION,
+        "client-build",
+        "daemon-build",
+    )
+    .expect_err("the previous version must be refused");
+    let text = format!("{err:?}");
+    assert!(text.contains(&(PROTOCOL_VERSION - 1).to_string()), "{text}");
+    assert!(text.contains(&PROTOCOL_VERSION.to_string()), "{text}");
+}

@@ -5589,6 +5589,7 @@ fn catalog_with_worktree_in(
     let mut catalog = snapshot_with(DEMO, Vec::new());
     let project: &mut ProjectSnapshot = &mut catalog.projects[0];
     project.worktrees.push(WorktreeSnapshot {
+        daemon: Default::default(),
         dir_name: dir.to_string(),
         branch: Some(format!("feat/{dir}")),
         display_name: dir.to_string(),
@@ -10746,6 +10747,7 @@ mod pr_status {
         let mut catalog = snapshot_with(DEMO, Vec::new());
         for (dir, branch) in worktrees {
             catalog.projects[0].worktrees.push(WorktreeSnapshot {
+                daemon: Default::default(),
                 dir_name: dir.to_string(),
                 branch: branch.map(str::to_string),
                 display_name: dir.to_string(),

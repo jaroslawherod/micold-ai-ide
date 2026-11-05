@@ -289,6 +289,7 @@ mod tests {
                 is_git_repo: true,
                 available: true,
                 worktrees: vec![WorktreeSnapshot {
+                    daemon: Default::default(),
                     dir_name: "feat".into(),
                     branch: Some("feat".into()),
                     display_name: "feat".into(),

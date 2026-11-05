@@ -410,6 +410,7 @@ fn catalog(sessions: &[(SessionId, Option<&str>, bool)]) -> CatalogSnapshot {
             sessions: sessions
                 .iter()
                 .map(|&(id, worktree, unread)| SessionSummary {
+                    daemon: Default::default(),
                     id,
                     worktree_dir: worktree.map(str::to_string),
                     title: SessionLabel::Pending,

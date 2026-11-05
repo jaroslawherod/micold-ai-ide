@@ -494,6 +494,7 @@ mod tests {
 
     fn summary(session: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary {
         SessionSummary {
+            daemon: Default::default(),
             id: session,
             worktree_dir: None,
             title: SessionLabel::Pending,

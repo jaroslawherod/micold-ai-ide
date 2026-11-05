@@ -22,6 +22,7 @@ const B: DaemonId = DaemonId(2);
 
 fn session(id: SessionId, dir: &str) -> SessionSummary {
     SessionSummary {
+        daemon: Default::default(),
         id,
         worktree_dir: Some(dir.to_string()),
         title: SessionLabel::Pending,
@@ -46,6 +47,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
 
 fn worktree(dir: &str, status: Wire, name: &str) -> WorktreeSnapshot {
     WorktreeSnapshot {
+        daemon: Default::default(),
         dir_name: dir.to_string(),
         branch: Some(format!("feat/{dir}")),
         display_name: name.to_string(),
@@ -267,6 +269,7 @@ fn unbound_locations_survive_another_daemons_snapshots_and_reconnects() {
         snapshot(
             vec![
                 SessionSummary {
+                    daemon: Default::default(),
                     worktree_dir: None,
                     ..session(s_default, "")
                 },

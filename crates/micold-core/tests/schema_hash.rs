@@ -20,14 +20,15 @@ use std::path::Path;
 use micold_core::protocol::hashing::{canonicalize, schema_hash};
 use micold_core::protocol::version::{PROTOCOL_VERSION, SCHEMA_HASH};
 
-fn read_protocol_source() -> (String, String, String) {
+fn read_protocol_source() -> (String, String, String, String) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("protocol");
     let messages = fs::read_to_string(dir.join("messages.rs")).expect("messages.rs");
     let grid = fs::read_to_string(dir.join("grid.rs")).expect("grid.rs");
     let envelope = fs::read_to_string(dir.join("envelope.rs")).expect("envelope.rs");
-    (messages, grid, envelope)
+    let routing = fs::read_to_string(dir.join("routing.rs")).expect("routing.rs");
+    (messages, grid, envelope, routing)
 }
 
 #[test]
@@ -37,8 +38,8 @@ fn schema_hash_is_non_trivial() {
 
 #[test]
 fn baked_hash_matches_a_recompute_over_the_real_source() {
-    let (messages, grid, envelope) = read_protocol_source();
-    let recomputed = schema_hash(&messages, &grid, &envelope);
+    let (messages, grid, envelope, routing) = read_protocol_source();
+    let recomputed = schema_hash(&messages, &grid, &envelope, &routing);
     assert_eq!(
         recomputed, SCHEMA_HASH,
         "build.rs must hash the same protocol source these tests read; \
@@ -48,8 +49,8 @@ fn baked_hash_matches_a_recompute_over_the_real_source() {
 
 #[test]
 fn editing_a_message_struct_changes_the_hash() {
-    let (messages, grid, envelope) = read_protocol_source();
-    let baseline = schema_hash(&messages, &grid, &envelope);
+    let (messages, grid, envelope, routing) = read_protocol_source();
+    let baseline = schema_hash(&messages, &grid, &envelope, &routing);
 
     // Simulate a wire-visible edit: a new field on an existing message.
     let mutated = messages.replace(
@@ -61,7 +62,7 @@ fn editing_a_message_struct_changes_the_hash() {
         "the anchor text must exist to be mutated"
     );
 
-    let after = schema_hash(&mutated, &grid, &envelope);
+    let after = schema_hash(&mutated, &grid, &envelope, &routing);
     assert_ne!(
         after, baseline,
         "a struct/enum edit MUST change SCHEMA_HASH — that is the whole guard"
@@ -70,12 +71,12 @@ fn editing_a_message_struct_changes_the_hash() {
 
 #[test]
 fn a_comment_only_edit_does_not_churn_the_hash() {
-    let (messages, grid, envelope) = read_protocol_source();
-    let baseline = schema_hash(&messages, &grid, &envelope);
+    let (messages, grid, envelope, routing) = read_protocol_source();
+    let baseline = schema_hash(&messages, &grid, &envelope, &routing);
 
     // Prepend a fresh full-line comment: canonicalisation drops it, so the hash is stable.
     let commented = format!("// a brand new doc note that changes nothing on the wire\n{messages}");
-    let after = schema_hash(&commented, &grid, &envelope);
+    let after = schema_hash(&commented, &grid, &envelope, &routing);
     assert_eq!(
         after, baseline,
         "a comment-only edit must not change the hash (canonicalisation drops comment lines)"
@@ -345,8 +346,8 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 73 → 74 for #1602's self-delete; 74 → 75 for #1524's `config` diagnostic section
 /// (`ConfigRequest`, `Config`, `ConfigChanged`); 75 → 76 for #1533's `ConfigStatus.startup`;
-/// 76 → 77 for #1535's `ConfigStatus.tokens`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 77;
+/// 76 → 77 for #1535's `ConfigStatus.tokens`; 77 → 78 for #1723's daemon-qualified rows.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 78;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
@@ -368,7 +369,7 @@ fn every_field_this_feature_added_is_present_in_one_protocol_source() {
     // Read from the source text rather than from the types, deliberately — this file's whole
     // subject is the text `build.rs` hashes, and a field added to a *different* file would not
     // change the hash however correct the type looked.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     for anchor in [
         // Inbound: the client's resolved choice.
         "SessionCreate {",
@@ -396,7 +397,7 @@ fn every_field_this_feature_added_is_present_in_one_protocol_source() {
 fn the_availability_answer_carries_the_environment_state_in_the_hashed_source() {
     // Feature 037, contract A1. Read from the text `build.rs` hashes, as above: the field has to
     // sit in `messages.rs` for the schema hash to be the one of the message set that has it.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("env: Option<SpawnEnv>,"),
         "`DaemonMsg::AiCliAvailability` does not carry `env: Option<SpawnEnv>` in messages.rs, \
@@ -407,7 +408,7 @@ fn the_availability_answer_carries_the_environment_state_in_the_hashed_source() 
 #[test]
 fn the_view_report_and_the_attention_sequence_are_in_the_hashed_source() {
     // Feature 039, contract W1 (version 21). Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in [
         // Inbound: what the window has in view.
@@ -436,7 +437,7 @@ fn the_view_report_and_the_attention_sequence_are_in_the_hashed_source() {
 fn the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_22() {
     // The number itself is pinned once, by `FEATURE_026_PROTOCOL_VERSION` above: later features
     // take later numbers (039 took 23), so this test checks only what version 22 added.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let hashed = canonicalize(&messages);
     for anchor in [
         "pub struct MergedBranchQuery {",
@@ -457,7 +458,7 @@ fn the_merged_branch_question_and_the_pull_request_switch_cost_one_bump_to_22() 
 #[test]
 fn the_claim_and_the_grant_are_in_the_hashed_source() {
     // Feature 039, contract W1 (version 23). U13. Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in ["AttentionClaim {", "AttentionGranted {"] {
         assert!(
@@ -471,7 +472,7 @@ fn the_claim_and_the_grant_are_in_the_hashed_source() {
 #[test]
 fn the_grants_kind_is_in_the_hashed_source() {
     // Feature 613, wire W5.1 (version 32). Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("kind: NotificationKind,"),
         "`kind: NotificationKind,` is not in messages.rs, so version 32's hash is not the hash of \
@@ -482,7 +483,7 @@ fn the_grants_kind_is_in_the_hashed_source() {
 #[test]
 fn the_session_error_notice_is_in_the_hashed_source() {
     // Feature 613, wire W5.2 (version 33). Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("SessionErrorNotice {"),
         "`SessionErrorNotice {{` is not in messages.rs, so version 33's hash is not the hash of \
@@ -493,7 +494,7 @@ fn the_session_error_notice_is_in_the_hashed_source() {
 #[test]
 fn unread_is_in_the_hashed_source() {
     // Feature 039, contract W2 (version 24). U14. Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     assert!(
         canonicalize(&messages).contains("pub unread: bool,"),
         "`pub unread: bool,` is not in messages.rs, so the hash is not the hash of the message \
@@ -504,7 +505,7 @@ fn unread_is_in_the_hashed_source() {
 #[test]
 fn the_reveal_and_its_forward_are_in_the_hashed_source() {
     // Feature 039, contract W3 (version 25). U15. Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in ["SessionReveal {", "RevealSession {"] {
         assert!(
@@ -518,7 +519,7 @@ fn the_reveal_and_its_forward_are_in_the_hashed_source() {
 #[test]
 fn the_activation_token_is_in_the_hashed_source_of_both_reveal_messages() {
     // Feature 039, contract W3.4 (version 26). U16. Read from the text `build.rs` hashes.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for message in ["SessionReveal {", "RevealSession {"] {
         let body = &messages[messages
@@ -536,7 +537,7 @@ fn the_activation_token_is_in_the_hashed_source_of_both_reveal_messages() {
 #[test]
 fn the_desktop_notifications_setting_is_in_the_hashed_source() {
     // Feature 039, contract W4. U17. Read from the text `build.rs` hashes, as above.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in [
         // Outbound: the value every window follows.
@@ -555,7 +556,7 @@ fn the_desktop_notifications_setting_is_in_the_hashed_source() {
 #[test]
 fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
     // Feature 613, wire W5.3, W5.4, W5.6 (version 34). Read from the text `build.rs` hashes.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in [
         // Outbound: the values every window follows.
@@ -578,7 +579,7 @@ fn the_notification_kinds_and_the_threshold_are_in_the_hashed_source() {
 #[test]
 fn the_run_group_messages_are_in_the_hashed_source() {
     // Feature 483 (version 36, contracts/run-group-wire.md). Read from the text `build.rs` hashes.
-    let (messages, _grid, _envelope) = read_protocol_source();
+    let (messages, _grid, _envelope, _routing) = read_protocol_source();
     let messages = canonicalize(&messages);
     for anchor in [
         "RunGroupCreate {",
@@ -601,7 +602,7 @@ fn the_run_group_messages_are_in_the_hashed_source() {
 #[test]
 fn the_pane_messages_are_in_the_hashed_source() {
     // Feature 484 (version 37, contracts/wire.md). Read from the text `build.rs` hashes.
-    let (messages, grid, _envelope) = read_protocol_source();
+    let (messages, grid, _envelope, _routing) = read_protocol_source();
     let (messages, grid) = (canonicalize(&messages), canonicalize(&grid));
     for anchor in [
         "pub struct TerminalRef {",
@@ -618,4 +619,20 @@ fn the_pane_messages_are_in_the_hashed_source() {
         );
     }
     assert!(grid.contains("pub process: SessionProcess,"));
+}
+
+#[test]
+fn editing_routing_rs_changes_the_hash() {
+    let (messages, grid, envelope, routing) = read_protocol_source();
+    let baseline = schema_hash(&messages, &grid, &envelope, &routing);
+    let mutated = routing.replace(
+        "pub struct SessionRef {",
+        "pub struct SessionRef {\n    pub extra: u64,",
+    );
+    assert_ne!(mutated, routing, "the mutation must hit routing.rs");
+    assert_ne!(
+        schema_hash(&messages, &grid, &envelope, &mutated),
+        baseline,
+        "routing.rs must be an input of SCHEMA_HASH"
+    );
 }

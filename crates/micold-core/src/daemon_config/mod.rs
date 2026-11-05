@@ -74,6 +74,13 @@ pub enum Kind {
     Kubernetes,
 }
 
+impl DaemonConfig {
+    /// The id this daemon announces on the wire: `[daemon] id`, or `local` (#1723).
+    pub fn wire_id(&self) -> crate::protocol::routing::WireDaemonId {
+        self.daemon.id.clone().unwrap_or_default()
+    }
+}
+
 impl Kind {
     /// The name the file uses.
     pub fn as_str(self) -> &'static str {
@@ -113,6 +120,9 @@ impl std::str::FromStr for Kind {
 #[serde(deny_unknown_fields)]
 pub struct Daemon {
     pub name: String,
+    /// The id this daemon announces on the wire (#1723); absent means `local`. A bad value is
+    /// refused while the file is read, so no later code sees an invalid id.
+    pub id: Option<crate::protocol::routing::WireDaemonId>,
     pub kind: Kind,
     pub data_dir: Option<PathBuf>,
     pub home: Option<PathBuf>,

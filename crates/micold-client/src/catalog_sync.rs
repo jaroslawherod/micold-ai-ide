@@ -601,6 +601,7 @@ mod tests {
                     worktrees: Vec::new(),
                     sessions: (0..n)
                         .map(|_| SessionSummary {
+                            daemon: Default::default(),
                             id: SessionId::new(),
                             worktree_dir: None,
                             title: SessionLabel::Pending,

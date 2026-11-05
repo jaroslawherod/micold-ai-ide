@@ -304,6 +304,7 @@ fn catalog(sessions: &[(SessionId, &str, WireLifecycle, ActivitySignal)]) -> Cat
             sessions: sessions
                 .iter()
                 .map(|(id, worktree, lifecycle, activity)| SessionSummary {
+                    daemon: Default::default(),
                     id: *id,
                     worktree_dir: Some(worktree.to_string()),
                     title: SessionLabel::Pending,
