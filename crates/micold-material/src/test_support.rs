@@ -501,6 +501,21 @@ impl<'a> Mounted<'a> {
         self.floated(at).into_iter().map(|p| p.content).collect()
     }
 
+    /// Whether the element floats anything at all, with no frames ticked: the question a parent that
+    /// forgot to hand its children's overlays on answers `false` to (BUG-1679).
+    pub fn floats(&mut self) -> bool {
+        self.element
+            .as_widget_mut()
+            .overlay(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                &Rectangle::with_size(self.room),
+                iced::Vector::ZERO,
+            )
+            .is_some()
+    }
+
     /// [`Self::floated_text`] with where each paragraph floats.
     pub fn floated(&mut self, at: Point) -> Vec<Painted> {
         self.floated_in(at, Rectangle::with_size(self.room))
