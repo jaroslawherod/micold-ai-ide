@@ -124,6 +124,7 @@ impl<'a> Mounted<'a> {
             &mut shell,
             &Rectangle::with_size(WINDOW),
         );
+        eprintln!("DBG captured {}", shell.is_event_captured());
         messages
     }
 
@@ -385,6 +386,8 @@ fn the_settings_icon_toggles_from_the_keyboard() {
     let (mut state, id) = crowded();
     // Focus on the icon is the app's focus too: the draft field gives up its keys.
     state.window.focused_field = None;
+    // And the terminal pane, which would otherwise write the key to its process, is let go of.
+    state.session.terminal_released = true;
     let under = StateUnderTest::new(state.clone());
     // The window's own Settings button draws the same glyph, higher up: the composer's is the lowest.
     let glyph = Icon::Settings.glyph().to_string();
