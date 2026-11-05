@@ -537,8 +537,7 @@ fn text_area_with_button<'a>(
     } else {
         Space::new().into()
     };
-    let field: Element<'a, Message> =
-        stack![container(area).width(Length::Fill), overlay].into();
+    let field: Element<'a, Message> = stack![container(area).width(Length::Fill), overlay].into();
     mouse_area(field)
         .on_enter(Message::LargeEditor(LargeEditorMsg::Hovered(session, true)))
         .on_exit(Message::LargeEditor(LargeEditorMsg::Hovered(
