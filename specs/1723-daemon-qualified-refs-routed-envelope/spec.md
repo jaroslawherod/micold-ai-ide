@@ -24,6 +24,12 @@ documentation; it adds no orchestrator, no routing and no link. Covers orchestra
 - The AI tools identify a project by its path (`project: PathBuf`), and one repository can sit at a
   different path on each daemon.
 
+## Clarifications
+
+### Session 2026-11-05
+
+- Q: `specs/orchestrator/` exists only on `docs/orchestrator-and-web-client-plan`, not `main`; how does `specs/orchestrator/contracts/` land? → A: This feature's PR creates only the new files under `specs/orchestrator/contracts/` (no edit to `spec.md` or `issues.md`, which the plan branch owns), so the two branches add disjoint paths and merge in either order without conflict. _(agent-resolved: specs/orchestrator/issues.md on docs/orchestrator-and-web-client-plan, issue 1 "contract under specs/orchestrator/contracts/")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A ref names its daemon and survives a round trip (Priority: P1)

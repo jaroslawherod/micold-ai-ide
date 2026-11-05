@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: spec
+- **Phase**: clarify
 - **Next step**: clarify unit: resolve the FR-008 marker (project identity)
 
 ## Pull requests
@@ -43,7 +43,7 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1: FR-008 project identity (category 1; orchestrator spec line 208 defers it to this feature's plan, so the repo does not settle it). Options: normalised remote URL with per-project override (Recommended) / app project id / declared name.
 
 ## Follow-ups not done
 
