@@ -1407,3 +1407,56 @@ fn sending_slash_shortcuts_shows_the_sheet_and_sends_nothing() {
         "the command is used up"
     );
 }
+
+/// The platform's large-editor chord letter press: Cmd+Shift+M on macOS, Ctrl+Shift+M elsewhere
+/// (feature 1703 FR-001).
+fn large_editor_chord(c: char) -> KeyInput {
+    KeyInput {
+        key: Key::Char(c),
+        ..attach_chord('a')
+    }
+}
+
+#[test]
+fn the_large_editor_chord_opens_it_and_near_misses_are_the_editors() {
+    for c in ['m', 'M'] {
+        assert_eq!(
+            composer_key(&large_editor_chord(c), (0, 0), 1, false, false, busy()),
+            KeyIntent::LargeEditor
+        );
+    }
+    let chord = large_editor_chord('m');
+    let near_misses = [
+        KeyInput {
+            mods: Mods::NONE,
+            ..chord.clone()
+        },
+        KeyInput {
+            mods: Mods {
+                ctrl: true,
+                ..Mods::NONE
+            },
+            ..chord.clone()
+        },
+        KeyInput {
+            mods: Mods {
+                alt: true,
+                ..chord.mods
+            },
+            ..chord.clone()
+        },
+        large_editor_chord('n'),
+    ];
+    for press in near_misses {
+        assert_eq!(
+            composer_key(&press, (0, 0), 1, false, false, busy()),
+            KeyIntent::Edit,
+            "{press:?}"
+        );
+    }
+    assert_eq!(
+        composer_key(&chord, (0, 0), 1, true, false, busy()),
+        KeyIntent::Edit,
+        "an IME composition keeps the chord"
+    );
+}

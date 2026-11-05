@@ -46,10 +46,25 @@ several files at once; the interface stays usable while it is open.
   you chose are not attached and a notice says so.
 - Each session has its own picker: what you choose goes to the session whose button you pressed.
 
+## The large editor
+
+To write a long or multi-line message, open the large editor: with the cursor in the message box press
+**Ctrl+Shift+M** (**Cmd+Shift+M** on macOS), or click the **Open large editor** button at the
+top-right of the message box (it appears while the message has several lines or the box is focused
+or hovered). A window opens over the app with a large text area holding your draft, the cursor at
+its end.
+
+- **Done**, or **Ctrl+Enter** (**Cmd+Enter** on macOS), closes it and puts the edited text in the message box.
+- **Cancel**, or **Escape**, closes it and leaves the message box as it was.
+- Only text is edited: attached pictures stay on the message box and are not shown in the editor.
+- The text goes back to the session whose message box opened the editor, even if you have switched
+  sessions or that session has ended in the meantime.
+
 ## Finding the shortcut
 
 Type **/shortcuts** in the message box and send it to open the shortcut sheet, the same dialog the
 Review tab's **Keyboard shortcuts** item opens. Its **Composer** group lists **Add attachment**
-with its shortcut (**Ctrl+Shift+A**, **Cmd+Shift+A** on macOS); when a Review tab is shown it also
+with its shortcut (**Ctrl+Shift+A**, **Cmd+Shift+A** on macOS) and **Open large editor** (**Ctrl+Shift+M**,
+**Cmd+Shift+M** on macOS); when a Review tab is shown it also
 lists the **Review** group. Nothing is sent to Claude Code, and the command is cleared from the
 message box. Press **Escape** or **Close** to dismiss the sheet.

@@ -36,6 +36,7 @@ pub mod jira_filters;
 pub mod jira_http;
 pub mod jira_query;
 pub mod jira_refresh;
+pub mod large_editor;
 pub mod legacy_units;
 pub mod link_opener;
 pub mod links;

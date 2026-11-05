@@ -224,6 +224,9 @@ pub enum Icon {
     /// The composer's **Add attachment** button (feature 1464, research R1): Material's
     /// `attach_file`, the paperclip.
     Attach,
+    /// The composer's **Open large editor** button (feature 1703, research R6): Material's
+    /// `open_in_full`, two arrows out of a corner.
+    OpenInFull,
 }
 
 impl Icon {
@@ -315,6 +318,7 @@ impl Icon {
         Icon::ReviewDrafts,
         Icon::ReviewDone,
         Icon::Attach,
+        Icon::OpenInFull,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -432,6 +436,8 @@ impl Icon {
             Icon::ReviewDone => '\u{e876}',
             // Feature 1464 (research R1): `attach_file`.
             Icon::Attach => '\u{e226}',
+            // Feature 1703 (research R6): `open_in_full`.
+            Icon::OpenInFull => '\u{f1ce}',
         }
     }
 }

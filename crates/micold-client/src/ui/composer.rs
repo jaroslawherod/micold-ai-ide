@@ -14,7 +14,7 @@
 //! model (`MenuSelect`, its openness and highlight held in `features::effort_picker`).
 
 use iced::widget::text_editor::{Binding, KeyPress, Status};
-use iced::widget::{column, container, row, Row, Space};
+use iced::widget::{column, container, mouse_area, row, stack, Row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::protocol::messages::TurnPhase;
 use micold_core::session::SessionId;
@@ -22,7 +22,10 @@ use micold_core::tokens::{spacing, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::command_palette::{palette_key, PaletteLine, PaletteState};
-use crate::features::composer::{composer_key, KeyIntent, Msg, QueueEditDraft};
+use crate::features::composer::{
+    composer_key, open_editor_visible, KeyIntent, Msg, QueueEditDraft,
+};
+use crate::features::large_editor::Msg as LargeEditorMsg;
 use crate::features::window::{FieldId, Msg as WindowMsg};
 use crate::icons::Icon;
 use crate::keymap::KeyInput;
@@ -489,6 +492,59 @@ pub fn attach_button<'a, M: Clone + 'a>(roles: Roles, press: Option<M>) -> Eleme
     .into()
 }
 
+/// The **Open large editor** button's tooltip (feature 1703 FR-004).
+pub const OPEN_EDITOR_TOOLTIP: &str = if cfg!(target_os = "macos") {
+    "Open large editor (Cmd+Shift+M)"
+} else {
+    "Open large editor (Ctrl+Shift+M)"
+};
+
+/// The **Open large editor** icon button with its tooltip, pressing `press`. Also posed by the
+/// showcase (feature 1703).
+pub fn open_editor_button<'a, M: Clone + 'a>(roles: Roles, press: Option<M>) -> Element<'a, M> {
+    Tooltip::new(
+        IconButton::new(Icon::OpenInFull, roles)
+            .padding(spacing::SM)
+            .keyboard(true)
+            .on_press_maybe(press),
+        OPEN_EDITOR_TOOLTIP,
+        roles,
+    )
+    .position(TooltipPosition::Top)
+    .into()
+}
+
+/// The text area, with the **Open large editor** button at its top-right while the draft has
+/// several lines or the area is focused or hovered (feature 1703 FR-004).
+fn text_area_with_button<'a>(
+    state: &State,
+    session: SessionId,
+    area: Element<'a, Message>,
+    lines: usize,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let focused = state.window.focused_field == Some(FieldId::Composer(session));
+    let hovered = state.large_editor.hovered == Some(session);
+    let mut field: Element<'a, Message> = container(area).width(Length::Fill).into();
+    if open_editor_visible(lines, focused, hovered) {
+        let button = open_editor_button(roles, Some(send(Msg::LargeEditorRequested(session))));
+        field = stack![
+            field,
+            container(button)
+                .width(Length::Fill)
+                .align_x(Alignment::End)
+                .padding(spacing::XS)
+        ]
+        .into();
+    }
+    mouse_area(field)
+        .on_enter(Message::LargeEditor(LargeEditorMsg::Hovered(session, true)))
+        .on_exit(Message::LargeEditor(LargeEditorMsg::Hovered(
+            session, false,
+        )))
+        .into()
+}
+
 /// The text area beside #942's control, **Send** and, while busy, **Stop** (FR-004, FR-012).
 fn input_row<'a>(
     state: &'a State,
@@ -516,9 +572,15 @@ fn input_row<'a>(
             key_binding(session, press, caret, lines, selecting, phase, palette)
         })
         .track_focus(FieldId::Composer(session), None);
-    let mut controls = row![container(area).width(Length::Fill)]
-        .spacing(spacing::SM)
-        .align_y(Alignment::End);
+    let mut controls = row![text_area_with_button(
+        state,
+        session,
+        area.into(),
+        lines,
+        roles
+    )]
+    .spacing(spacing::SM)
+    .align_y(Alignment::End);
     if let Some(control) = control {
         controls = controls.push(control);
     }

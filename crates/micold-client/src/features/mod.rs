@@ -368,6 +368,7 @@ pub mod help;
 pub mod history;
 pub mod jira_status;
 pub mod kube_clone;
+pub mod large_editor;
 pub mod navigation;
 pub mod notifications;
 pub mod overview;

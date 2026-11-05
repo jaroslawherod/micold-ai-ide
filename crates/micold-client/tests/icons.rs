@@ -94,6 +94,7 @@ fn expected(icon: Icon) -> char {
         Icon::ReviewDrafts => '\u{e39e}',
         Icon::ReviewDone => '\u{e876}',
         Icon::Attach => '\u{e226}',
+        Icon::OpenInFull => '\u{f1ce}',
     }
 }
 
@@ -142,8 +143,9 @@ fn all_covers_every_variant_without_duplicates() {
     // feature 940's markdown task-list marks (`check_box`, `check_box_outline_blank`), +1 for
     // feature 1125's sidebar more menu (`more_horiz`; `more_vert` is `Menu`'s), +3 for feature
     // 1271's review row states (`circle`, `adjust`, `done`), +1 for feature 1464's composer
-    // **Add attachment** button (`attach_file`).
-    assert_eq!(Icon::ALL.len(), 86, "curated set size");
+    // **Add attachment** button (`attach_file`), +1 for feature 1703's **Open large editor**
+    // button (`open_in_full`).
+    assert_eq!(Icon::ALL.len(), 87, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -333,6 +335,22 @@ fn the_attach_icon_is_pinned_and_unique() {
     for &other in Icon::ALL.iter().filter(|&&other| other != Icon::Attach) {
         assert_ne!(
             Icon::Attach.glyph(),
+            other.glyph(),
+            "shares a codepoint with {other:?}"
+        );
+    }
+}
+
+#[test]
+fn the_open_in_full_icon_is_pinned_and_unique() {
+    assert!(
+        Icon::ALL.contains(&Icon::OpenInFull),
+        "OpenInFull must be in Icon::ALL"
+    );
+    assert_eq!(Icon::OpenInFull.glyph(), '\u{f1ce}', "open_in_full");
+    for &other in Icon::ALL.iter().filter(|&&other| other != Icon::OpenInFull) {
+        assert_ne!(
+            Icon::OpenInFull.glyph(),
             other.glyph(),
             "shares a codepoint with {other:?}"
         );

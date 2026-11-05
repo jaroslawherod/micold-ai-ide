@@ -10,6 +10,7 @@ use micold_client::app::{Editor, EditorAction, Message};
 use micold_client::features::command_palette::{palette_key, PaletteKey, SendIntent};
 use micold_client::features::composer::Msg;
 use micold_client::features::composer::{composer_key, transcript_key, KeyIntent, NOT_CONNECTED};
+use micold_client::features::large_editor::Msg as LargeEditorMsg;
 use micold_client::features::session::SwitchRequest;
 use micold_client::features::structured_transcript::TranscriptMsg;
 use micold_client::features::transcript_selection::SelectMsg;
@@ -54,6 +55,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             // The chord is the button's: one path to the picker (#1464 FR-010).
             if intent == KeyIntent::Attach {
                 return update(app, Msg::AttachRequested(session));
+            }
+            // So is the large editor's: one path, the button's (feature 1703 FR-001).
+            if intent == KeyIntent::LargeEditor {
+                return update(app, Msg::LargeEditorRequested(session));
             }
             run(app, session, intent);
         }
@@ -148,6 +153,9 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             if app.core.composers.attach_requested(session) {
                 return crate::shell::attach_picker::open(session);
             }
+        }
+        Msg::LargeEditorRequested(session) => {
+            return crate::shell::large_editor::update(app, LargeEditorMsg::Requested(session));
         }
         Msg::AttachPickerClosed(session) => app.core.composers.attach_picker_closed(session),
         Msg::AttachPicked { session, paths } => {
@@ -275,6 +283,7 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::QueueEditAttachmentRemoved { session, .. }
         | Msg::Dropped { session, .. }
         | Msg::AttachRequested(session)
+        | Msg::LargeEditorRequested(session)
         | Msg::AttachPicked { session, .. }
         | Msg::AttachPickerClosed(session)
         | Msg::PaletteClicked { session, .. }
@@ -322,7 +331,11 @@ fn run(app: &mut App, session: SessionId, intent: KeyIntent) {
         KeyIntent::Interrupt => interrupt(app, session),
         // Attach is routed to `AttachRequested` before `run`; the editor's own binding has the
         // rest, and the composer never yields the transcript's keys.
-        KeyIntent::Attach | KeyIntent::Edit | KeyIntent::CopySelection | KeyIntent::SelectAll => {}
+        KeyIntent::Attach
+        | KeyIntent::LargeEditor
+        | KeyIntent::Edit
+        | KeyIntent::CopySelection
+        | KeyIntent::SelectAll => {}
     }
 }
 

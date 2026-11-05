@@ -170,6 +170,21 @@ fn parallel_dialog_pose(error: bool) -> &'static crate::features::runs::Parallel
     }
 }
 
+thread_local! {
+    /// The large editor's sample draft. Leaked once per thread, as the page holds it for its whole
+    /// run and `TextArea` borrows it for the frame.
+    static LARGE_EDITOR: &'static iced::widget::text_editor::Content =
+        Box::leak(Box::new(iced::widget::text_editor::Content::with_text(
+            "A long draft, written in the large editor.\n\nIt holds several paragraphs, and Done \
+             returns the text to the composer.",
+        )));
+}
+
+/// The text the large editor dialog is posed over.
+fn large_editor_sample() -> &'static iced::widget::text_editor::Content {
+    LARGE_EDITOR.with(|content| *content)
+}
+
 /// `Surface` — one instance per kind, each holding the same label so the difference is the surface.
 pub fn surface<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
@@ -1698,6 +1713,11 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
             posed(
                 "Quick-switcher dialog, nothing matches",
                 quick_switcher_pose(roles, true),
+                roles,
+            ),
+            posed(
+                "Large editor dialog (feature 1703)",
+                crate::ui::large_editor::body(large_editor_sample(), roles).map(|_| Message::NoOp),
                 roles,
             ),
             posed(

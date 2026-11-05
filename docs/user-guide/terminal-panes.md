@@ -112,6 +112,7 @@ the terminal to type in it.
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
+| Open the [large editor](structured-input.md#the-large-editor) for the structured message box (only with its cursor in the box) | Ctrl+Shift+M | Cmd+Shift+M |
 | Back | Alt+← or the mouse back button | Cmd+[ or the mouse back button |
 | Forward | Alt+→ or the mouse forward button | Cmd+] or the mouse forward button |
 | Send the review (only in the **Review** tab, and from its comment box; not taken from a focused terminal) — see [Reviewing from the keyboard](reviewing-changes.md#reviewing-from-the-keyboard) | Ctrl+Shift+Enter | Cmd+Shift+Enter |
