@@ -161,3 +161,10 @@ below is by mutation on the green tree, not an observed failing-first run.
   `--test git_credential_config` 5 (fake forge: choice, ties, replaced file, reach cache by fingerprint and the
   once-a-minute miss, expiry, fallback), `supervisor::config_git_tests` 5 (host untouched with no token, sandbox
   cleared with or without one), `--test git_credential_grant` 11 unchanged (legacy path while `MICOLD_DAEMON_CONFIG` is unset).
+
+## Issue 15 (#1537) M1: retire the old start-up variables (T084, T085, T086b)
+
+- Red: `--test config_load` retired-variable tests failed while the daemon still honoured `MICOLD_HOME`,
+  `MICOLD_IMAGE_REFERENCE`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_LOG`, `MICOLD_REPOS_ROOT` in a release build.
+- Green: `retired_env::resolve` ignores a retired variable and warns with the replacing key unless `test-env`;
+  `settings::process_env` routes every read through it (retired set = `RETIRED`, no second list).

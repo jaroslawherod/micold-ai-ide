@@ -51,17 +51,6 @@ pub const RETIRED: &[Retired] = &[
     },
 ];
 
-/// The six variables whose reads live in the daemon's `DaemonSettings`; the data directory and token
-/// path are read by `micold-core` itself and follow with their own reads.
-pub const DAEMON_SIDE: [&str; 6] = [
-    "MICOLD_HOME",
-    "MICOLD_IMAGE_REFERENCE",
-    "MICOLD_LISTEN_ADDR",
-    "MICOLD_IDLE_STOP",
-    "MICOLD_LOG",
-    "MICOLD_REPOS_ROOT",
-];
-
 /// The configuration key that replaces `name`, when `name` is retired.
 pub fn config_key(name: &str) -> Option<&'static str> {
     RETIRED.iter().find(|r| r.name == name).map(|r| r.key)
