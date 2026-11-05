@@ -27,3 +27,18 @@ the `tdd.run` hook, so the log is kept by hand and says what was and was not see
   sub-agent: "lit ... 0" surface pixels; the sub-agent folded count was incidental 23). The
   assistant-only test passed, as a guard.
 - green: after wrapping both `UserMessage` branches: 26 passed.
+
+## Cycle 4 — TDD remediation (T011–T014, `tdd/verification.md`)
+
+- tests: `transcript_entry_view.rs` gains `a_tool_card_is_not_highlighted` and
+  `command_output_is_not_highlighted` (FR-005); `bare` now checks the edge too; the pixel
+  thresholds are named (`EDGE_MIN`, `is_two_turns`); the command test is split into one test per
+  behaviour. `micold-material/tests/user_turn.rs` asserts the edge's left-only corner radius and
+  draws the element (`--features test-support`) to check the 4dp edge and the content offset.
+- The new FR-005 tests pass against the existing code, as negatives of already-correct behaviour
+  (no red by design); their strength was checked against the wrap: a tool card or output wrapped in
+  `UserTurn` adds thousands of surface pixels, far over the thresholds.
+- FR-008 / SC-003: `features_transcript_selection` (`scripts/build-lock.sh cargo test -p
+  micold-client --test main features_transcript_selection`) 42 passed; core is untouched by this
+  remediation and its tests run in
+  the PR's full gate.
