@@ -25,9 +25,9 @@
 
 ## R5. Auto-expand
 
-- **Decision**: the reducer sets `options_open` where it sets a composer notice from a model, effort or permission refusal (`features/composer.rs` notice sites, `permission_prompts` refusal), and persists. Stop session and the permission refusal note render in `status_row`, outside the options row.
+- **Decision**: the reducer sets `options_open` where it sets a composer notice from a model, effort or permission refusal (`features/composer.rs` notice sites, `permission_prompts` refusal), and `shell/composer.rs` persists on every change. Stop session and the permission refusal note render in `status_row`, outside the options row.
 - **Rejected**: expanding on any notice (over-expands on attachment drops).
 
 ## R6. Icons
 
-- **Decision**: `Icon::Settings` exists (`micold-material/src/icons.rs`). The open-editor glyph reuses an existing expand glyph if one exists, else adds one in the same file; a task confirms.
+- **Decision**: `Icon::Settings` exists (`micold-material/src/icons.rs`). The open-editor glyph adds `Icon::OpenInFull` in `icons.rs` (none exists).
