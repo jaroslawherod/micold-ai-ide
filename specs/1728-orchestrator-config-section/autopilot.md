@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | 71e2ac6249f9a3555746e2f8d1ccc0246b4c2dc3:11174021f72bbe06aa2470e521894b2accad8a6e | CHANGES: 4 MAJOR, all fixed (spec prose; fixed, prose only) |
+| Spec | 2 (full; snapshot stale after rebase) | 76ef2a27113bda2c7a5166c38d5f2f7cc42ea2ee:656b78ae3b753338ce5149e495d91ced3919b6f7 | CHANGES: 1 MAJOR (anchor wording, aligned to the table; fixed, prose only), 2 MINOR fixed. Numbering FR-010/FR-011 reordered, plan ref relabelled |
 
 ## Declined review findings
 

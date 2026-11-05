@@ -10,7 +10,7 @@
 `[orchestrator]` table (`url`, `ca_file`, `cert_file`, `key_file`, `enrollment_token_file`; secrets by
 file path only). Add `micold-daemon config check` rules (URL scheme, cert and key given together,
 token file or cert, never both silently) and document them in
-`docs/user-guide/daemon-configuration.md`. Covers FR-011 of the orchestrator plan (#1722).
+`docs/user-guide/daemon-configuration.md`. Covers requirement 11 of the orchestrator plan (#1722).
 
 ## User Scenarios & Testing
 
@@ -47,7 +47,7 @@ message names `file:line:column`.
 1. **Given** `url` whose scheme is not `https`, **When** checked, **Then** exit 2 with an error at
    the `url` value's `file:line:column`.
 2. **Given** `cert_file` without `key_file` (or the reverse), **When** checked, **Then** exit 2 with
-   an error naming the missing key at the table's `file:line:column`.
+   an error naming the missing key at the present key's `file:line:column`.
 3. **Given** both `enrollment_token_file` and `cert_file`/`key_file`, **When** checked, **Then**
    exit 2 with an error saying to give one: the token enrolls, the certificate is the result.
 4. **Given** neither a certificate pair nor an enrollment token file, **When** checked, **Then**
@@ -118,9 +118,9 @@ absent.
 - **FR-007**: `Debug`, `Display` and the resolved view MUST NOT contain secret content; each of the
   four file keys appears as its path and state (`readable, <mode>` or `missing`) only.
 - **FR-008**: `docs/user-guide/daemon-configuration.md` MUST document the table and each rule.
-- **FR-009**: With `--files`, a missing named file MUST be an error, with the severity rules of US3 scenario 4.
-- **FR-011**: A live reload with an invalid `[orchestrator]` table MUST keep the last valid configuration.
+- **FR-009**: With `--files`, a missing named file, or one that is not a regular file, MUST be an error, with the severity rules of US3 scenario 4.
 - **FR-010**: A file without `[orchestrator]` MUST behave exactly as before.
+- **FR-011**: A live reload with an invalid `[orchestrator]` table MUST keep the last valid configuration.
 
 ### Key Entities
 
