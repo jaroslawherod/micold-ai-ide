@@ -464,3 +464,116 @@ fn a_low_signal_entry_has_its_summary_as_unit_zero_and_detail_only_while_open() 
         assert!(case.mismatches(&BlockRenderers::PLAIN, None).is_empty());
     }
 }
+
+/// #1609: a window with a tool card `p`, its open subagent thread (one message) and a message
+/// after it.
+struct Threaded {
+    session: SessionId,
+    state: State,
+    insights: micold_client::features::structured_insights::State,
+    rich: RichCache,
+}
+
+impl Threaded {
+    fn new() -> Self {
+        use crate::stream_json::{tool_use, user_text, with_parent};
+        let session = SessionId::new();
+        let events: Vec<SequencedEvent> = (0..)
+            .zip([
+                user_text("before"),
+                tool_use("p", "Agent", "{}"),
+                with_parent(user_text("thread says one"), "p"),
+                user_text("after"),
+            ])
+            .map(|(seq, event)| SequencedEvent { seq, event })
+            .collect();
+        let mut state = State::default();
+        state.apply(session, 0, &events, false);
+        let mut insights = micold_client::features::structured_insights::State::default();
+        let main = state.transcript(session).expect("held");
+        insights.apply(session, 0, &events, false, main);
+        insights.toggle_thread(session, "p", main);
+        Self {
+            session,
+            state,
+            insights,
+            rich: RichCache::default(),
+        }
+    }
+
+    fn view(&self) -> TranscriptView<'_> {
+        TranscriptView {
+            session: self.session,
+            transcript: self.state.transcript(self.session).expect("held"),
+            open: self.state.open_cards(self.session).expect("held"),
+            rich: &self.rich,
+            prompts: None,
+            insights: Some(&self.insights),
+            show_raw: true,
+        }
+    }
+
+    fn drawn(&self, selected: Option<&Selection>) -> BTreeMap<Slot, String> {
+        let ctx = RenderCtx {
+            selected,
+            ..ctx(&self.rich)
+        };
+        shown(micold_client::ui::transcript::view_full(
+            &self.state,
+            micold_client::ui::transcript::InsightsCtx {
+                state: &self.insights,
+                cli_running: true,
+                mode: micold_core::session::PermissionMode::Default,
+            },
+            self.session,
+            &BlockRenderers::PLAIN,
+            ctx,
+            |_: TranscriptMsg| (),
+            None,
+            None,
+        ))
+    }
+}
+
+/// #1609: an open thread's entries are rows of the view, and what they draw is their units.
+#[test]
+fn an_open_threads_entries_are_rows_drawn_as_their_units() {
+    let case = Threaded::new();
+    let view = case.view();
+    let thread_rows: Vec<RowPos> = rows(&view)
+        .into_iter()
+        .filter(|r| matches!(r, RowPos::Entry(_, Under::Thread(..))))
+        .collect();
+    assert_eq!(thread_rows.len(), 1, "one thread row");
+    let drawn = case.drawn(None);
+    let texts: Vec<&String> = drawn
+        .iter()
+        .filter(|((row, _), _)| *row == thread_rows[0])
+        .map(|(_, text)| text)
+        .collect();
+    assert_eq!(texts, ["thread says one"]);
+}
+
+/// #1609: a copy of a selection across the thread, and Select all, include its text, in order.
+#[test]
+fn a_copy_across_a_thread_includes_its_text() {
+    use micold_client::features::transcript_selection::copy_text;
+    let case = Threaded::new();
+    let view = case.view();
+    let all = rows(&view);
+    let (first, last) = (all[0], *all.last().expect("rows"));
+    let at = |row, offset| TextPos {
+        row,
+        path: units(&row, &view)[0].path.clone(),
+        offset,
+    };
+    let mut selection = Selection::start(at(first, 0), Granularity::Char, 0..0);
+    selection.extend(at(last, 5), 0..0);
+    let text = copy_text(&view, &selection);
+    assert!(text.starts_with("before"), "{text:?}");
+    assert!(text.contains("thread says one"), "{text:?}");
+    assert!(
+        text.find("thread says one") < text.find("after"),
+        "{text:?}"
+    );
+}

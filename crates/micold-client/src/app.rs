@@ -1205,6 +1205,13 @@ impl State {
         grammar: &crate::features::transcript_rich::Grammar,
     ) -> Vec<crate::features::transcript_rich::HighlightJob> {
         let session = msg.session();
+        // #1609: folding a thread or a card in it changes the thread rows a selection may hold.
+        if !matches!(
+            msg,
+            crate::features::structured_insights::InsightsMsg::ToggleBackgroundTasks { .. }
+        ) {
+            self.transcript_selection.thread_folded(session);
+        }
         let empty = micold_core::structured::transcript::Transcript::new();
         let main = self
             .structured_transcript
@@ -1240,8 +1247,10 @@ impl State {
                     .transcript(session)
                     .and_then(|t| t.entry(key))
                     .map(|e| e.id());
-                if let Some(id) = id {
-                    self.transcript_selection.toggled(session, id);
+                match id {
+                    Some(id) => self.transcript_selection.toggled(session, id),
+                    // A card in a subagent thread (#1609).
+                    None => self.transcript_selection.thread_folded(session),
                 }
             }
             // A copy control on a card in a subagent's thread (feature 944): its entry is the

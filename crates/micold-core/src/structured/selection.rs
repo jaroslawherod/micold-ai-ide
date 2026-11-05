@@ -25,11 +25,15 @@ impl TextPath {
     }
 }
 
-/// What part of an entry's rows a unit is in: the entry's own units, then the `k`-th request
-/// block or resolution row drawn under its card.
+/// What part of an entry's rows a unit is in: the entry's own units, then the entries of the
+/// subagent threads drawn inside it (#1609), then the `k`-th request block or resolution row
+/// drawn under its card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Under {
     Body,
+    /// The entry `.1` of the entry's `.0`-th thread (a tool card's only thread is `0`; a
+    /// sub-agent notice's placeholders count from `0`). Entry ids are the thread's own.
+    Thread(u32, EntryId),
     Prompt(u32),
 }
 

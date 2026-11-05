@@ -22,8 +22,9 @@ use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
 use micold_core::session::SessionId;
+use micold_core::structured::selection::{RowPos, Under};
 use micold_core::structured::transcript::{
-    work_value, Entry, EntryKind, ToolCard, ToolStatus, Transcript,
+    work_value, Entry, EntryId, EntryKind, ToolCard, ToolStatus, Transcript,
 };
 use micold_core::tokens::{spacing, Roles};
 use std::hash::{Hash, Hasher};
@@ -448,7 +449,10 @@ pub(super) fn entry(
                 .map(|i| i.unknown_threads(scope.main))
                 .unwrap_or_default()
                 .into_iter()
-                .filter_map(|t| thread_card(&t.parent, None, true, renderers, ctx, scope))
+                .enumerate()
+                .filter_map(|(k, t)| {
+                    thread_card(&t.parent, None, true, slot(k), renderers, ctx, scope)
+                })
                 .collect();
             if placeholders.is_empty() {
                 unit_caption(subagent_notice_text(*count), ctx, vec![0])
@@ -604,7 +608,7 @@ fn tool_card(
         .open(open)
         .failed(header.failed);
     let shell = ctx.header(shell, title, summary);
-    let thread = thread_card(&card.id, Some(card.status), false, renderers, ctx, scope);
+    let thread = thread_card(&card.id, Some(card.status), false, 0, renderers, ctx, scope);
     let with_thread = |card: Block| match thread {
         Some(thread) => column![card, thread].spacing(spacing::SM).into(),
         None => card,
@@ -704,6 +708,7 @@ fn thread_card(
     parent: &str,
     card: Option<ToolStatus>,
     placeholder: bool,
+    slot: u32,
     renderers: &BlockRenderers,
     ctx: &RenderCtx<'_>,
     scope: Scope<'_>,
@@ -734,7 +739,7 @@ fn thread_card(
         shell = shell.trailing(status_label(failed, roles));
     }
     if let Some(thread) = thread {
-        shell = shell.body(thread_body(thread, renderers, ctx, scope, insights));
+        shell = shell.body(thread_body(thread, slot, renderers, ctx, scope, insights));
     }
     let indented = container(shell).padding(Padding {
         left: spacing::LG,
@@ -747,14 +752,19 @@ fn thread_card(
 /// window's insights (FR-015, E-2, E-3).
 fn thread_body(
     thread: &Transcript,
+    slot: u32,
     renderers: &BlockRenderers,
     ctx: &RenderCtx<'_>,
     scope: Scope<'_>,
     insights: InsightsCtx<'_>,
 ) -> Block {
     let session = scope.session;
-    // A thread's entries are not units of the transcript's rows yet (feature 1550).
-    let ctx = &RenderCtx { row: None, ..*ctx };
+    // #1609: a thread drawn in an entry's body has its entries as that entry's `Under::Thread`
+    // rows; one inside a thread (a nested one) is not a unit of the transcript's rows.
+    let parent = ctx.row.and_then(|r| match r.pos {
+        RowPos::Entry(id, Under::Body) => Some(id),
+        _ => None,
+    });
     let entries: Vec<Block> = thread
         .entries()
         .map(|e| {
@@ -763,7 +773,26 @@ fn thread_body(
                 session,
                 key: e.key().clone(),
             });
-            entry(e, open, toggle, renderers, ctx, scope)
+            let Some(parent) = parent else {
+                return entry(
+                    e,
+                    open,
+                    toggle,
+                    renderers,
+                    &RenderCtx { row: None, ..*ctx },
+                    scope,
+                );
+            };
+            let pos = thread_row(parent, slot, e);
+            let part = ctx.selected.and_then(|s| s.in_row(&pos));
+            entry(
+                e,
+                open,
+                toggle,
+                renderers,
+                &ctx.at(session, pos, part.as_ref()),
+                scope,
+            )
         })
         .collect();
     if entries.is_empty() {
@@ -775,6 +804,15 @@ fn thread_body(
         .into()
 }
 
+/// The row of thread entry `e`, in the `slot`-th thread drawn in the entry `parent` (#1609).
+fn thread_row(parent: EntryId, slot: u32, e: &Entry) -> RowPos {
+    RowPos::Entry(parent, Under::Thread(slot, e.id()))
+}
+
+fn slot(k: usize) -> u32 {
+    u32::try_from(k).unwrap_or(u32::MAX)
+}
+
 /// What `entry`'s drawing reads from the insights, hashed: the part of its lazy key that changes
 /// when a thread, a task or the turn's figures change while the entry does not (research R12 of
 /// #939). Zero without insights.
@@ -783,12 +821,14 @@ pub(super) fn insights_stamp(entry: &Entry, ctx: &RenderCtx<'_>, scope: Scope<'_
         return 0;
     };
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    stamp_into(entry, ctx, scope, insights, &mut hasher);
+    stamp_into(entry, Some(entry.id()), ctx, scope, insights, &mut hasher);
     hasher.finish()
 }
 
+/// `row` is the id of the main transcript's entry `entry` is, `None` for an entry of a thread.
 fn stamp_into(
     entry: &Entry,
+    row: Option<EntryId>,
     ctx: &RenderCtx<'_>,
     scope: Scope<'_>,
     insights: InsightsCtx<'_>,
@@ -803,7 +843,15 @@ fn stamp_into(
             if let Some(task) = background_task(insights, session, &card.id) {
                 task_status(task, insights.cli_running).label.hash(h);
             }
-            thread_stamp(&card.id, Some(card.status), ctx, scope, insights, h);
+            thread_stamp(
+                &card.id,
+                Some(card.status),
+                row.map(|id| (id, 0)),
+                ctx,
+                scope,
+                insights,
+                h,
+            );
         }
         EntryKind::Footer(footer) => {
             let turn = insights.state.turn(session, entry.key());
@@ -811,8 +859,9 @@ fn stamp_into(
             (view.figures, view.details).hash(h);
         }
         EntryKind::SubagentNotice { .. } => {
-            for thread in held.unknown_threads(scope.main) {
-                thread_stamp(&thread.parent, None, ctx, scope, insights, h);
+            for (k, thread) in held.unknown_threads(scope.main).into_iter().enumerate() {
+                let at = row.map(|id| (id, slot(k)));
+                thread_stamp(&thread.parent, None, at, ctx, scope, insights, h);
             }
         }
         _ => {}
@@ -824,6 +873,7 @@ fn stamp_into(
 fn thread_stamp(
     parent: &str,
     card: Option<ToolStatus>,
+    at: Option<(EntryId, u32)>,
     ctx: &RenderCtx<'_>,
     scope: Scope<'_>,
     insights: InsightsCtx<'_>,
@@ -851,7 +901,14 @@ fn thread_stamp(
             .get(session, e.key())
             .map_or(0, |d| d.stamp)
             .hash(h);
-        stamp_into(e, ctx, scope, insights, h);
+        // #1609: the part of the selection in the entry's row, so a selection moving through a
+        // thread redraws the entry that holds it.
+        if let Some((parent, slot)) = at {
+            ctx.selected
+                .and_then(|s| s.in_row(&thread_row(parent, slot, e)))
+                .hash(h);
+        }
+        stamp_into(e, None, ctx, scope, insights, h);
     }
 }
 
