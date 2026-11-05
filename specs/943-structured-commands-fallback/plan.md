@@ -130,7 +130,7 @@ crates/micold-core/src/
 │   ├── model.rs                  # NEW: ModelChoice, ModelName, ModelRefusal, launch_args,
 │   │                             #   MODEL_SHORTCUTS, session_model
 │   ├── control.rs                # + encode_initialize, encode_set_model, parse_set_model
-│   ├── transcript/{build,entry}.rs  # command chip, CommandOutput, Compacted, Cleared + era,
+│   ├── transcript/{build,entry}.rs  # command chip, CommandOutput, Compacted, Cleared (drops earlier entries, BUG-1694),
 │   │                             #   ModelChanged, TerminalPeriod, auth_failed
 │   └── mod.rs                    # exports
 ├── session.rs                    # Session.model; resume_handle() (M4: returns id);
@@ -206,7 +206,7 @@ tests against the stand-in; **client** = `micold-client` reducer tests; **gate**
 | FR-002 | R3; first prompt unchanged (`ops::start_with_prompt`) | daemon (create with `/skill args` first prompt → one stdin line, unchanged); §B 3 |
 | FR-003 | R4; `UserMessage.command` | core (chip from `UserSent`; description from the list held then); §B 3 |
 | FR-004 | R5 `Compacted` | core (`command-compact.jsonl`: one entry, summary held, earlier entries kept); §B 4 |
-| FR-005 | R5 `Cleared`, `era` | core (`command-clear.jsonl`: marker, earlier era); §B 4 |
+| FR-005 | R5 `Cleared` drops earlier entries (BUG-1694; `era` removed) | core (`command-clear.jsonl`: marker, earlier entries dropped); §B 4 |
 | FR-005a | R6, M5 | core (store round trip, `resume_handle`); daemon (stand-in `/clear` → new init id → restart, daemon restore and switch use `--resume <new>`; discovery adopts no second session) |
 | FR-006 | R4 `CommandOutput` | core (`command-builtin-output.jsonl`: markdown text, no markup) |
 | FR-007 | R1, R10 | core (merge, kinds, groups); client (palette opens on `/`); §B 1 |
@@ -255,7 +255,7 @@ before M8.
 | M | Delivers | Depends on |
 |---|---|---|
 | M1 | Core: event/parse additions, `commands` (list, kinds, terminal-only, classify, invocation), `palette`, `model`, control encoders; recorded fixtures and capture option; wire bump for the events | — |
-| M2 | Core transcript: command chip, `CommandOutput`, `Compacted`, `Cleared` + eras, `ModelChanged`, `TerminalPeriod`, `auth_failed` | M1; #941 M1 for the chip (I-1), held whole |
+| M2 | Core transcript: command chip, `CommandOutput`, `Compacted`, `Cleared`, `ModelChanged`, `TerminalPeriod`, `auth_failed` | M1; #941 M1 for the chip (I-1), held whole |
 | M3 | Daemon: `send_control` (I-4); `initialize` at spawn → `CommandsReported`; `/model` and terminal-only refused in `SessionUserMessage`; stand-in `initialize` and command fixtures | M1 |
 | M4 | Daemon: model choice persisted, `--model` at launch, `Session::resume_handle()` (returns the id) and `LaunchSpec.resume_handle` with every `--resume` site switched to them, `SetSessionModel`, idle and deferred `set_model`, notes, summary field (wire +1); stand-in `set_model` | M3 |
 | M5 | Daemon: `Session.conversation`, `Catalog::set_conversation`, tracking the latest `init`'s id, `resume_handle()` returning it, `known_session_ids` including it (ledger decision 2, option A confirmed) | M4 |
@@ -267,3 +267,5 @@ before M8.
 ## Complexity Tracking
 
 None.
+
+**Bugfix**: 2026-11-05 — BUG-1694 Updated from bugfix patch: `Cleared` drops the entries before it in `transcript/build.rs`; `era` and the client's "before the clear" tag are removed.

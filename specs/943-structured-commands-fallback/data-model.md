@@ -77,7 +77,7 @@ write-and-wait taken out of `set_permission_mode` (M3). `ControlFailed` **new**:
 | `EntryKind::ModelChanged` **new** | `{ model }` from the note; `ModelRefused` → `{ refused: Some(message) }` | FR-015, FR-016 |
 | `EntryKind::TerminalPeriod` **new** | from a `KindSwitched { to: Terminal }`; closed by the next `KindSwitched { to: Structured }`; one entry per period | FR-023 |
 | `EntryKind::AssistantText` | `+ auth_failed: bool` (`error == "authentication_failed"`) | FR-022a |
-| `Entry` | `+ era: u32`, bumped after each `Cleared` | FR-005 |
+| `Entry` | ~~`+ era: u32`, bumped after each `Cleared`~~ (BUG-1694: removed; `Cleared` drops the entries before it instead) | FR-005 |
 
 ## Core: session and store
 

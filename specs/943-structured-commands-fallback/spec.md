@@ -154,8 +154,9 @@ structured session runs `/speckit-specify` to its first question.
    marker that the conversation was compacted at that point, with the summary available behind it;
    earlier turns stay visible above it.
 5. **Given** the user sends `/clear`, **When** the CLI starts over, **Then** the transcript shows a
-   marker that the conversation was cleared, earlier turns stay visible above it marked as before
-   the clear, and later turns continue the cleared conversation; every later restart, restore
+   marker that the conversation was cleared, ~~earlier turns stay visible above it marked as before
+   the clear~~ (superseded, BUG-1694: no turn from before the clear is shown; the view starts
+   empty below the marker), and later turns continue the cleared conversation; every later restart, restore
    after a daemon restart or switch of kind resumes the cleared conversation (the one the CLI
    reported at the clear), not the one before it (FR-005a).
 6. **Given** a built-in command that answers with text and no model turn (such as `/context`),
@@ -404,8 +405,13 @@ model choice and the permission mode are as before.
 - **FR-004**: A compaction (asked for with `/compact`, or done by the CLI on its own) MUST be shown
   in the transcript as a marker at the point it happened, with the summary available behind it;
   turns before it MUST stay visible.
-- **FR-005**: A `/clear` MUST be shown in the transcript as a marker at the point it happened, with
-  the turns before it still visible and marked as belonging to the conversation before the clear.
+- **FR-005**: A `/clear` MUST be shown in the transcript as a marker at the point it happened, ~~with
+  the turns before it still visible and marked as belonging to the conversation before the clear~~
+  (superseded, BUG-1694). The turns before it MUST NOT be shown: the transcript holds the marker
+  and what follows it, and a rebuild from the held events gives the same view. The composer's
+  message history (FR-025) is unchanged. A compaction (FR-004) is not a clear; its turns stay.
+
+**Bugfix**: 2026-11-05 — BUG-1694 a `/clear` resets the view instead of keeping earlier turns
 - **FR-005a**: A structured session MUST keep, with the session, the conversation handle its CLI
   last reported (the session identity of its latest init, which changes on `/clear`) and MUST
   resume that conversation on every later launch in either kind (restart, restore after a daemon
