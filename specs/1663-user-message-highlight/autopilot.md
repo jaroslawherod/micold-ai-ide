@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1663
 - **Worktree branch**: feat/1663_structured-view-messages-sent-by-the-user-are-not
 - **Started**: 2026-11-05
-- **Phase**: spec
-- **Next step**: clarify unit (no open markers; confirm Assumptions), then plan
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
