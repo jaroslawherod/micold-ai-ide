@@ -124,7 +124,6 @@ impl<'a> Mounted<'a> {
             &mut shell,
             &Rectangle::with_size(WINDOW),
         );
-        eprintln!("DBG captured {}", shell.is_event_captured());
         messages
     }
 
