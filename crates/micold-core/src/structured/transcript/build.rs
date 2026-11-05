@@ -190,9 +190,7 @@ fn push_own(transcript: &mut Transcript, seq: u64, event: &StructuredEvent) {
             transcript.compaction = Some(transcript.open(at(0), seq, kind));
         }
         StructuredEvent::ConversationReset { .. } => {
-            transcript.compaction = None;
-            transcript.subagent_notice = None;
-            transcript.era += 1;
+            transcript.drop_entries();
             transcript.open(at(0), seq, EntryKind::Cleared);
         }
         StructuredEvent::ModelChanged { model } => {
@@ -493,6 +491,8 @@ fn push_tool_result(
                 card.result = Some(ToolResultView { parts, is_error });
             }
         }),
+        // The card went with a `/clear`: its result has nothing to fill and is not an orphan.
+        None if transcript.cleared_tools.contains(tool_use_id) => {}
         None => {
             transcript.open(
                 key,

@@ -30,7 +30,7 @@ use std::hash::{Hash, Hasher};
 
 pub use crate::features::transcript_selection::shown::{
     attachments_line, command_chip_description, command_chip_title, compacted_text,
-    effort_changed_text, era_tag, footer_view, model_changed_text, omitted_text, oversized_text,
+    effort_changed_text, footer_view, model_changed_text, omitted_text, oversized_text,
     subagent_count, subagent_notice_text, tool_status, FooterView, Status, Tone, ATTACHED, CLEARED,
     COMMAND_OUTPUT_TITLE, ENDED_WITHOUT_RESULT, INTERRUPTED, NO_OUTPUT, THINKING_TITLE, USER_LABEL,
 };
@@ -132,15 +132,6 @@ fn status_label(status: Status, roles: Roles) -> IconLabel<'static, TranscriptMs
     }
 }
 
-/// What heads a user turn: [`USER_LABEL`], and `BEFORE_THE_CLEAR` for a turn from before a
-/// `/clear` (#943 FR-005).
-fn user_label(entry: &Entry, scope: Scope<'_>) -> String {
-    match era_tag(entry.era(), scope.latest_era) {
-        Some(tag) => format!("{USER_LABEL} · {tag}"),
-        None => USER_LABEL.to_owned(),
-    }
-}
-
 /// A muted caption line.
 fn caption(text: impl Into<String>, roles: Roles) -> Element<'static, TranscriptMsg> {
     Text::new(text.into(), TypeRole::Caption, roles)
@@ -216,9 +207,6 @@ pub(super) struct Scope<'a> {
     pub session: SessionId,
     /// The session's main transcript, which says which threads have no card (FR-017).
     pub main: &'a Transcript,
-    /// The conversation the transcript's latest entry belongs to: an entry of an earlier one is
-    /// from before a `/clear` (#943 FR-005).
-    pub latest_era: u32,
     pub insights: Option<InsightsCtx<'a>>,
 }
 
@@ -285,8 +273,7 @@ pub(super) fn entry(
                 if open {
                     card = card.body(unit_caption(description, ctx, vec![2]));
                 }
-                let mut turn =
-                    column![caption(user_label(entry, scope), roles), card].spacing(spacing::XS);
+                let mut turn = column![caption(USER_LABEL, roles), card].spacing(spacing::XS);
                 if let Some(line) = attachments_line(attachments) {
                     turn = turn.push(unit_caption(line, ctx, vec![3]));
                 }
@@ -295,7 +282,7 @@ pub(super) fn entry(
             let shown = plain_text(text);
             let len = shown.len();
             let mut message = column![
-                caption(user_label(entry, scope), roles),
+                caption(USER_LABEL, roles),
                 ctx.text(
                     Text::new(shown, TypeRole::Body, roles)
                         .wrapping(Wrapping::WordOrGlyph)
@@ -893,7 +880,7 @@ pub fn with_trailing<'a, M: 'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::features::transcript_selection::shown::{BEFORE_THE_CLEAR, NO_COMMAND_DESCRIPTION};
+    use crate::features::transcript_selection::shown::NO_COMMAND_DESCRIPTION;
     use micold_core::structured::transcript::CommandChip;
 
     #[test]
@@ -979,13 +966,6 @@ mod tests {
             command_chip_description(&chip(None, Some("  "), "")),
             NO_COMMAND_DESCRIPTION
         );
-    }
-
-    #[test]
-    fn a_turn_from_an_earlier_conversation_is_marked_before_the_clear() {
-        assert_eq!(era_tag(0, 1), Some(BEFORE_THE_CLEAR));
-        assert_eq!(era_tag(1, 1), None);
-        assert_eq!(era_tag(2, 1), None, "no entry is newer than the latest");
     }
 
     #[test]

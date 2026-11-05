@@ -24,7 +24,7 @@ pub use visibility::{shown, LowSignal};
 use crate::structured::commands::CommandList;
 use crate::structured::sync::Continuity;
 use crate::structured::{SequencedEvent, StructuredEvent, MAX_EVENTS};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Which events are the transcript's own (research R7).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,8 +65,9 @@ pub struct Transcript {
     /// The open turn was interrupted (an `InterruptAsked` note or the CLI's interrupted text, R4):
     /// its end is an `Interrupted` notice, not a footer (FR-014).
     interrupted: bool,
-    /// The era new entries open in: one more after each `/clear` (#943 FR-005).
-    era: u32,
+    /// Tool use ids whose cards a `/clear` dropped: a late result for one opens no entry
+    /// (#943 FR-005, BUG-1694).
+    cleared_tools: HashSet<String>,
     /// The latest `init` and `CommandsReported` held: the command list a chip reads (#943 FR-003).
     command_sources: Vec<SequencedEvent>,
     /// The list `command_sources` make, once a chip needed it since they last changed.
@@ -114,7 +115,7 @@ impl Transcript {
             rebuilds: 0,
             in_turn: false,
             interrupted: false,
-            era: 0,
+            cleared_tools: HashSet::new(),
             command_sources: Vec::new(),
             commands: None,
             command_turn: false,
@@ -160,6 +161,20 @@ impl Transcript {
         }
         // Ids below `first_id` name nothing now; `turn_cards` and the open stream may still hold
         // them, and `get`/`change` skip them.
+    }
+
+    /// A `/clear`: drops every entry and the tool, turn and stream state held for them. Ids keep
+    /// rising, as in [`Self::rebuild`]. The events stay (FR-025); `in_turn`, `interrupted` and
+    /// `command_turn` are left alone, they belong to the `/clear` turn's own end.
+    fn drop_entries(&mut self) {
+        self.first_id += self.entries.len() as u64;
+        self.entries.clear();
+        self.cleared_tools
+            .extend(self.tools.drain().map(|(id, _)| id));
+        self.turn_cards.clear();
+        self.stream = None;
+        self.subagent_notice = None;
+        self.compaction = None;
     }
 
     fn holds_anything(&self) -> bool {
@@ -284,7 +299,7 @@ impl Transcript {
         let id = EntryId(self.first_id + self.entries.len() as u64);
         self.revision += 1;
         self.entries
-            .push_back(Entry::new(id, key, seq, self.revision, self.era, kind));
+            .push_back(Entry::new(id, key, seq, self.revision, kind));
         id
     }
 

@@ -157,20 +157,11 @@ pub fn effort_changed_text(
     }
 }
 
-/// What a turn from before a `/clear` is marked with (#943 FR-005, US1 scenario 5).
-pub const BEFORE_THE_CLEAR: &str = "Before the clear";
-
 /// What heads a built-in command's answer (#943 FR-006).
 pub const COMMAND_OUTPUT_TITLE: &str = "Command output";
 
 /// What a command chip says with no description behind it (#943 FR-003).
 pub const NO_COMMAND_DESCRIPTION: &str = "The session's command list gave no description";
-
-/// [`BEFORE_THE_CLEAR`] for an entry of an earlier conversation than the transcript's latest
-/// (#943 FR-005): the turns above a `/clear` stay, marked.
-pub fn era_tag(entry_era: u32, latest_era: u32) -> Option<&'static str> {
-    (entry_era < latest_era).then_some(BEFORE_THE_CLEAR)
-}
 
 /// A command chip's header: the command as the user typed it (#943 FR-003), never the
 /// instructions the CLI expanded it into.

@@ -1783,8 +1783,8 @@ instructions Claude Code expanded it into.
   launches with, the choice made here.
 - **What a command leaves in the transcript.** A command you sent is a card headed as you typed
   it, with its description behind it; `/compact` is marked where the conversation was compacted,
-  its summary folded behind the marker, and the turns above stay; `/clear` is marked too, the turns
-  above it kept and headed **Before the clear**, and everything after continues the cleared
+  its summary folded behind the marker, and the turns above stay; `/clear` empties the view, which
+  starts again from a **Cleared** marker, and everything after continues the cleared
   conversation — which is also the one a later restart resumes. A command that answers with text
   and no reply from Claude (`/context` and the like) puts its answer behind a **Command output**
   card.

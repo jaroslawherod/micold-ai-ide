@@ -1734,8 +1734,11 @@ fn recorded_assistant_text(name: &str) -> String {
         .expect("the fixture has an assistant text")
 }
 
-fn eras(transcript: &Transcript) -> Vec<u32> {
-    transcript.entries().map(|e| e.era()).collect()
+fn clear_event() -> StructuredEvent {
+    StructuredEvent::ConversationReset {
+        trigger: Some("clear".to_string()),
+        raw: r#"{"type":"conversation_reset","trigger":"clear"}"#.to_string(),
+    }
 }
 
 #[test]
@@ -1821,35 +1824,109 @@ fn a_compaction_is_one_marker_holding_the_summary_and_every_earlier_entry_stays(
 }
 
 #[test]
-fn a_clear_is_one_marker_and_splits_the_entries_into_eras() {
-    let transcript = built(&with_sent(
+fn a_clear_empties_the_entries_below_its_marker() {
+    let events = with_sent(
         "command-clear",
         &[
             "Reply with the single word before.",
             "/clear",
             "Reply with the single word after.",
         ],
-    ));
+    );
+    let transcript = built(&events);
     let all = kinds(&transcript);
-    let cleared: Vec<usize> = all
-        .iter()
-        .enumerate()
-        .filter(|(_, k)| matches!(k, EntryKind::Cleared))
-        .map(|(i, _)| i)
-        .collect();
-    assert_eq!(cleared.len(), 1, "{all:#?}");
-    let at = cleared[0];
-    let eras = eras(&transcript);
-    assert!(eras[..at].iter().all(|&era| era == 0), "{eras:?}");
-    assert!(eras[at + 1..].iter().all(|&era| era == 1), "{eras:?}");
-    let era_of = |word: &str| {
-        transcript
-            .entries()
-            .find(|e| matches!(e.kind(), EntryKind::AssistantText { text, .. } if text == word))
-            .map(|e| e.era())
+    assert_eq!(all.first(), Some(&EntryKind::Cleared), "{all:#?}");
+    assert_eq!(
+        all.iter()
+            .filter(|k| matches!(k, EntryKind::Cleared))
+            .count(),
+        1,
+        "{all:#?}"
+    );
+    let has_word = |word: &str| {
+        all.iter()
+            .any(|k| matches!(k, EntryKind::AssistantText { text, .. } if text == word))
     };
-    assert_eq!(era_of("before"), Some(0));
-    assert_eq!(era_of("after"), Some(1));
+    assert!(!has_word("before"), "{all:#?}");
+    assert!(has_word("after"), "{all:#?}");
+    assert!(
+        !all.iter().any(|k| matches!(
+            k,
+            EntryKind::UserMessage { text, .. } if text.contains("before")
+        )),
+        "{all:#?}"
+    );
+    // FR-025: the composer's history recall still has the pre-clear messages.
+    assert!(
+        transcript.user_messages().any(|m| m.contains("before")),
+        "the held events stay"
+    );
+}
+
+#[test]
+fn a_second_clear_leaves_one_marker_first_and_only_what_follows() {
+    let transcript = built(&sequenced([
+        user_text("one"),
+        clear_event(),
+        user_text("two"),
+        clear_event(),
+        user_text("three"),
+    ]));
+    let all = kinds(&transcript);
+    assert_eq!(all.len(), 2, "{all:#?}");
+    assert_eq!(all[0], EntryKind::Cleared);
+    assert!(matches!(&all[1], EntryKind::UserMessage { text, .. } if text == "three"));
+}
+
+#[test]
+fn a_tool_card_opened_before_a_clear_is_gone_and_its_late_result_opens_nothing() {
+    let transcript = built(&sequenced([
+        user_text("go"),
+        tool_use("toolu_1", "Bash", r#"{"command":"ls"}"#),
+        clear_event(),
+        tool_result("toolu_1", "late", false),
+    ]));
+    assert_eq!(kinds(&transcript), vec![EntryKind::Cleared]);
+    assert!(transcript
+        .entry(&EntryKey::Tool("toolu_1".to_string()))
+        .is_none());
+}
+
+#[test]
+fn entry_ids_stay_unique_across_a_clear() {
+    let mut transcript = built(&sequenced([user_text("one"), user_text("two")]));
+    let before: Vec<_> = transcript.entries().map(|e| e.id()).collect();
+    let more = [
+        SequencedEvent {
+            seq: 2,
+            event: clear_event(),
+        },
+        SequencedEvent {
+            seq: 3,
+            event: user_text("three"),
+        },
+    ];
+    transcript.apply(0, &more, true);
+    let after: Vec<_> = transcript.entries().map(|e| e.id()).collect();
+    assert_eq!(after.len(), 2);
+    assert!(after.iter().all(|id| !before.contains(id)), "{after:?}");
+    assert_ne!(after[0], after[1]);
+}
+
+#[test]
+fn a_rebuild_from_the_held_events_gives_the_same_cleared_view() {
+    let events = sequenced([
+        user_text("one"),
+        tool_use("toolu_1", "Bash", r#"{"command":"ls"}"#),
+        clear_event(),
+        tool_result("toolu_1", "late", false),
+        user_text("two"),
+    ]);
+    let live = built(&events);
+    let mut rebuilt = built(&events);
+    rebuilt.apply(0, &events, false);
+    assert_eq!(kinds(&rebuilt), kinds(&live));
+    assert_eq!(kinds(&live).len(), 2);
 }
 
 #[test]
@@ -1897,7 +1974,6 @@ fn a_saved_command_history_restores_to_the_same_transcript() {
         let restored = built(&sequenced(restored));
         let whole = built(&events);
         assert_eq!(kinds(&restored), kinds(&whole), "{name}");
-        assert_eq!(eras(&restored), eras(&whole), "{name}");
     }
 }
 
@@ -2220,7 +2296,7 @@ fn a_compaction_keeps_its_first_summary() {
 }
 
 #[test]
-fn orphan_sub_agent_messages_after_a_clear_open_a_notice_in_the_new_era() {
+fn orphan_sub_agent_messages_after_a_clear_open_one_notice_and_the_earlier_one_is_gone() {
     let reset = StructuredEvent::ConversationReset {
         trigger: Some("clear".to_string()),
         raw: r#"{"type":"conversation_reset","trigger":"clear"}"#.to_string(),
@@ -2235,9 +2311,8 @@ fn orphan_sub_agent_messages_after_a_clear_open_a_notice_in_the_new_era() {
         .entries()
         .filter(|e| matches!(e.kind(), EntryKind::SubagentNotice { .. }))
         .collect();
-    assert_eq!(notices.len(), 2, "one notice per era");
+    assert_eq!(notices.len(), 1, "the pre-clear notice is dropped");
     assert!(notices
         .iter()
         .all(|e| e.kind() == &EntryKind::SubagentNotice { count: 1 }));
-    assert!(notices[0].era() < notices[1].era());
 }
