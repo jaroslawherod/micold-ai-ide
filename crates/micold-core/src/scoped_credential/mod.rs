@@ -7,8 +7,7 @@
 //!
 //! The other part (FR-008–FR-010, FR-012) is what hands the sandbox a credential scoped to one
 //! repository: [`ScopedCredential`] (only [`ScopedCredential::accept`] makes one), the
-//! [`CredentialSource`] seam, [`NoCredentialReason`]. The one
-//! real source is a fine-grained PAT the user pastes ([`pat`], [`pat_store`]): it is checked, never
+//! [`CredentialSource`] seam, [`NoCredentialReason`]. The one real source is a fine-grained PAT the user pastes ([`pat`], [`pat_store`]): it is checked, never
 //! renewed, and withdrawn at its expiry.
 
 pub mod git_env;
@@ -46,9 +45,6 @@ pub const CLOCK_SKEW_SECS: u64 = 300;
 
 /// The forge the scoped credential is for, as git names it in `credential.<base>.*`.
 pub const GITHUB_BASE: &str = "https://github.com";
-
-/// How long before it expires a minted credential is renewed.
-pub const RENEW_MARGIN_SECS: u64 = 600;
 
 /// How long before its expiry a held credential is warned about (FR-008): 24 hours.
 pub const EXPIRY_WARNING_SECS: u64 = 86_400;

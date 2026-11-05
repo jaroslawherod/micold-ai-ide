@@ -168,3 +168,17 @@ below is by mutation on the green tree, not an observed failing-first run.
   `MICOLD_IMAGE_REFERENCE`, `MICOLD_LISTEN_ADDR`, `MICOLD_IDLE_STOP`, `MICOLD_LOG`, `MICOLD_REPOS_ROOT` in a release build.
 - Green: `retired_env::resolve` ignores a retired variable and warns with the replacing key unless `test-env`;
   `settings::process_env` routes every read through it (retired set = `RETIRED`, no second list).
+
+## Issue 9 (#1530) M2: git setup from `daemon.kind`, `[git] config_file`, grant messages retired (T092, T094, T053)
+
+- Baseline: `scoped_credential::gitconfig` and the old `container_git_tests` (keyed on `MICOLD_DATA_DIR`) passed on `origin/main`.
+- No red run was recorded (`TEST_AFTER`): the `container_git_tests` were rewritten with the code to cover
+  both start paths (data_dir None and Some) for kinds container, kubernetes, host and ssh and the
+  no-file case; `strip_signing_switches` tests landed with the function.
+- Green: `micold-daemon --lib container_git_tests` and `micold-core --lib scoped_credential::gitconfig`
+  (10 passed), `micold-core --test main -- protocol_roundtrip schema_hash` (PROTOCOL_VERSION 78), the pod
+  file test `a_pods_file_names_the_mounted_git_config`.
+- Removed with the retired messages: `git_credential_grant.rs` (the grants), `git_credential_pod.rs`
+  (only exercised `GitCredentialTargets`), and the schedule/fake modules.
+- Deferred: replacing `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount. The sanitized
+  copy stays the delivery mechanism; both container and pod name it as `[git] config_file`.
