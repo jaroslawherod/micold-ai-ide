@@ -1185,10 +1185,14 @@ mod container_git_tests {
     /// `session.env` is applied after it and beats the default `LANG`; `TZ` is left alone.
     #[test]
     fn env_hygiene_reads_the_installed_data_dir_and_leaves_tz_and_session_env_to_win() {
+        // The file must exist: a missing one is left out rather than named.
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("gitconfig");
+        std::fs::write(&shared, "[user]\n").unwrap();
         crate::settings::install(crate::settings::DaemonSettings {
             kind: Some(Kind::Container),
             data_dir: Some(DATA.into()),
-            git_config_file: Some(SHARED.into()),
+            git_config_file: Some(shared.clone()),
             ..Default::default()
         });
         assert_eq!(
@@ -1210,7 +1214,7 @@ mod container_git_tests {
         // Whatever LANG the test process inherited, the git file is the container signal.
         assert_eq!(
             set(&edits).get("GIT_CONFIG_GLOBAL").map(String::as_str),
-            Some(SHARED),
+            shared.to_str(),
             "the installed kind was not read"
         );
         if !inherited {
