@@ -18,7 +18,10 @@ fn press(named: NamedKey, mods: Mods) -> KeyInput {
 fn with_draft(text: &str) -> (State, SessionId) {
     let mut state = State::default();
     let session = SessionId::new();
-    let end = (text.matches('\n').count(), text.rsplit('\n').next().unwrap().len());
+    let end = (
+        text.matches('\n').count(),
+        text.rsplit('\n').next().unwrap().len(),
+    );
     state.composers.edited(session, text.to_owned(), end);
     (state, session)
 }
@@ -126,12 +129,24 @@ fn hover_follows_the_pointer_per_session() {
 
 #[test]
 fn ctrl_or_cmd_enter_is_done_and_escape_is_cancel() {
-    let ctrl = Mods { ctrl: true, ..Mods::NONE };
-    let cmd = Mods { logo: true, ..Mods::NONE };
+    let ctrl = Mods {
+        ctrl: true,
+        ..Mods::NONE
+    };
+    let cmd = Mods {
+        logo: true,
+        ..Mods::NONE
+    };
     assert_eq!(editor_key(&press(NamedKey::Enter, ctrl)), Some(Msg::Done));
     assert_eq!(editor_key(&press(NamedKey::Enter, cmd)), Some(Msg::Done));
-    assert_eq!(editor_key(&press(NamedKey::Escape, Mods::NONE)), Some(Msg::Cancelled));
+    assert_eq!(
+        editor_key(&press(NamedKey::Escape, Mods::NONE)),
+        Some(Msg::Cancelled)
+    );
     assert_eq!(editor_key(&press(NamedKey::Enter, Mods::NONE)), None);
-    let shift = Mods { shift: true, ..Mods::NONE };
+    let shift = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
     assert_eq!(editor_key(&press(NamedKey::Enter, shift)), None);
 }

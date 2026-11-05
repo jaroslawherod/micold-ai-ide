@@ -26,6 +26,7 @@ mod focus;
 /// The install-me screen (feature 028, FR-019): shown instead of everything else when this copy
 /// is running from a mounted image or a translocated path.
 mod install_location;
+/// The large editor dialog body (feature 1703).
 pub mod large_editor;
 /// The component library. `pub(crate)` rather than private to `ui`, so the component showcase
 /// (feature 020, `crate::showcase`) can compose the very same components the application renders —

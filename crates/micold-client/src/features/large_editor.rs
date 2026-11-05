@@ -60,6 +60,7 @@ fn end_of(text: &str) -> (usize, usize) {
 pub fn update(app: &mut App, msg: Msg) {
     match msg {
         Msg::Requested(session) => {
+            app.large_editor.hovered = None;
             if app.large_editor.open.is_none() {
                 let text = app
                     .composers
