@@ -121,7 +121,7 @@ impl KubeCredential {
                 // include (FR-004). A host without `git` cannot be sanitized, so shares nothing.
                 let text = source(&path)?;
                 let sanitized =
-                    crate::scoped_credential::sanitize_gitconfig_text(&text).map_err(|_| {
+                    crate::scoped_credential::sanitize_gitconfig_text(&text, false).map_err(|_| {
                         KubeFailure::CredentialSource {
                             credential: self.label(),
                             path: path.clone(),

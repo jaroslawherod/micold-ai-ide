@@ -23,7 +23,9 @@ pub mod schedule;
 pub mod token_choice;
 
 pub use git_env::{git_env, git_env_with_helper};
-pub use gitconfig::{parse_config_list, sanitize_gitconfig, sanitize_gitconfig_text};
+pub use gitconfig::{
+    parse_config_list, sanitize_gitconfig, sanitize_gitconfig_text, strip_signing_switches,
+};
 
 use std::fmt;
 

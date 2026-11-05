@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1530
 - **Worktree branch**: feat/1530_the-daemon-s-credential-helper-chooses-the-token
 - **Started**: 2026-11-04
-- **Phase**: M1 PR open
-- **Next step**: orchestrator waits on CI and merges; then M2
+- **Phase**: M2 implementing (T092, T094 done locally; T053 open)
+- **Next step**: continue M2 from Handover: retire the grant messages (T053), then verify, review, gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1686 | Design (milestones for Issue 9) | MERGED | 826681cfb63664b82f65026abfd61abb190956c5 |
+| #1700 | M1 | MERGED | 3ffb138fbe2f1fbacfb8cbad179ad4a99202e95f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T046–T052, T093, T054 | full | helper chooses token from config (most specific, ties first), reach cached by fingerprint, per-kind session git env with fallback/clear, per-host rewrite | — | PR open |
-| M2 | T092, T094, T053 | full | git setup from daemon.kind on every start path, GIT_CONFIG_GLOBAL, gpgsign stripped, grant messages retired + protocol bump | — | pending |
+| M1 | T046–T052, T093, T054 | full | helper chooses token from config (most specific, ties first), reach cached by fingerprint, per-kind session git env with fallback/clear, per-host rewrite | #1700 | merged |
+| M2 | T092, T094, T053 | full | git setup from daemon.kind on every start path, GIT_CONFIG_GLOBAL, gpgsign stripped, grant messages retired + protocol bump | — | in progress |
 
 ## Decisions
 
@@ -49,7 +50,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Unit stopped at context ~130k before T053. Done, uncommitted-then-committed on the local branch (not pushed, no PR yet):
+- T092: `container_git_edits` in `crates/micold-daemon/src/supervisor.rs` now takes `GitFacts {kind, config_file, legacy_identity_exists}`, is gated on `daemon.kind` in {container, kubernetes}, and only sets `GIT_CONFIG_GLOBAL` (`[git] config_file`, else the older mounted `<data_dir>/gitconfig` copy when present). The legacy helper/reset/rewrite edits were dropped because `config_git_edits` (M1) already produces them for a sandbox even with no token. `DaemonSettings.git_config_file` added in `settings.rs`. Tests rewritten in `container_git_tests` (both start paths: data_dir None and Some).
+- T094 (partial): `strip_signing_switches` and `sanitize_gitconfig_text(text, signing_key: bool)` in `scoped_credential/gitconfig.rs` (callers pass `false`: kube/credentials.rs, client shell/sandbox.rs, the mcp test); client renders `[git] config_file` (`DaemonSettings.git_config_file`, `deliver_container` points it at `<data_dir>/gitconfig` when `CredentialShare::GitConfig` is shared).
+- Cargo check of daemon/client/core with tests was running when the unit stopped: re-run `scripts/build-lock.sh cargo check -p micold-daemon -p micold-client -p micold-core --tests` first and fix any compile error.
+
+Not done (the next unit does these, then verify, review A/B, gate, PR per the task files):
+1. T053: remove `ClientMsg::GitCredentialGrant/Revoke`, `DaemonMsg::GitCredentialTargets` (messages.rs ~484, ~1153), the server.rs handlers (~2280-2350, `announce_git_targets` ~2930) and `git_credential::apply_grant/remove_grant/targets`, the client `shell/scoped_credential.rs` (+tests.rs, `GitCredentials`, `statuses()` subscription in subscriptions.rs, daemon_sync.rs:1260, ssh_aliases.rs:151), core `scoped_credential/schedule.rs`; bump `PROTOCOL_VERSION` 77 -> 78 with a doc line in version.rs; update `tests/protocol_roundtrip.rs`, `schema_hash.rs`; delete or rewrite `crates/micold-daemon/tests/git_credential_grant.rs` (and git_credential_pod.rs if it uses grants). Keep what M1 and the PAT store (`check_and_store`, `UreqTransport`, settings.rs) still use.
+2. T094 rest: pods (`DaemonSettings::for_pod` at client daemon.rs:1908 renders no `[git] config_file`; the pod still gets `GIT_CONFIG_GLOBAL` from the container env in `kube/credentials.rs:186`); `CredentialShare::GitConfig` and the kube `gitconfig` Secret `subPath` mount are NOT yet replaced (decide: replace, or record as a follow-up); user-guide edits to `docs/user-guide/sandboxed-daemon.md` and `settings.md` for `[git] config_file` and the signing key (not started).
+3. Run `speckit-implement`-style tick of T092/T094/T053 in tasks.md once each is truly done (none ticked yet).
 
 ## Open escalation
 

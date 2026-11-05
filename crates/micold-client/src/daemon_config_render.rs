@@ -114,6 +114,8 @@ pub struct DaemonSettings {
     pub startup: Option<StartupTable>,
     /// The `[[github.tokens]]` entries, in file order (#1529).
     pub github_tokens: Vec<GithubTokenSetting>,
+    /// `[git] config_file`: the git configuration a container or pod session reads (#1530).
+    pub git_config_file: Option<PathBuf>,
 }
 
 impl DaemonSettings {
@@ -134,6 +136,7 @@ impl DaemonSettings {
             projects: Vec::new(),
             startup: None,
             github_tokens: Vec::new(),
+            git_config_file: None,
         }
     }
 
@@ -277,6 +280,9 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
     });
     table(&mut out, "storage", |out| {
         key_path(out, "clone_root", &settings.clone_root)
+    });
+    table(&mut out, "git", |out| {
+        key_path(out, "config_file", &settings.git_config_file)
     });
     for token in &settings.github_tokens {
         out.push_str("\n[[github.tokens]]\n");
