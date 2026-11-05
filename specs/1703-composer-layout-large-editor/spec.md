@@ -237,6 +237,16 @@ Open questions of the design brief, resolved by the owner's suggested defaults.
 | D5 | Bypass-mode warning | Marker on the settings icon while collapsed or expanded. |
 | D6 | Large editor attachments | Text only. |
 
+## Clarifications
+
+### Session 2026-11-05
+
+- Q: Does Ctrl+Shift+M clash with an existing binding? → A: No; none in the user guide or crates. _(agent-resolved: docs/user-guide#shortcut tables)_
+- Q: Is a settings glyph available? → A: Yes, `Icon::Settings` exists. _(agent-resolved: crates/micold-material/src/icons.rs#Settings)_
+- Q: Which persistence mechanism holds the per-window row state? → A: Deferred to the plan (an existing window-state store is assumed). _(agent-resolved: spec.md#Assumptions)_
+
+No critical ambiguities remain; D1-D6 cover the open design questions.
+
 ## Assumptions
 
 - The component library already offers an outlined menu-select trigger, an icon button, a busy
