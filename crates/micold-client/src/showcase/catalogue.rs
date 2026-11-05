@@ -228,6 +228,19 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::atoms::divider,
     },
     Entry {
+        // #1663: the tinted surface and accent edge a user's message sits on in the transcript.
+        module: "material/user_turn.rs",
+        component: "UserTurn",
+        variants: &[],
+        density: &[],
+        posed: &["one line", "a long wrapped message"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::atoms::user_turn,
+    },
+    Entry {
         // Feature 937 (C3, FR-011): the line that explains the required marker, once per form.
         module: "material/required_legend.rs",
         component: "RequiredLegend",

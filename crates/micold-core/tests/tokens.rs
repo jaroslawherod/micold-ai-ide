@@ -11,7 +11,8 @@ use micold_core::theme::ColorScheme;
 // `contrast` comes from the crate that owns the colours, not from a copy here — see
 // the note in `tokens_contrast.rs`.
 use micold_core::tokens::{
-    contrast, roles, terminal_defaults, typography, Rgb, Roles, TerminalDefaults, AA_TEXT,
+    contrast, roles, terminal_defaults, typography, Rgb, Roles, TerminalDefaults, AA_NON_TEXT,
+    AA_TEXT,
 };
 
 /// The foreground/surface pairs that carry text and must meet AA. Includes the worktree tag
@@ -329,4 +330,51 @@ fn a_light_terminal_defaults_to_on_surface_over_surface() {
         },
         "a light pane's default text and fill are the light scheme's on_surface and surface"
     );
+}
+
+/// The user-turn fill (#1663 FR-001a, FR-002, FR-007, SC-002): `surface_container_high` stands
+/// apart from the transcript background and from the card fill, keeps its text readable, and its
+/// `primary` edge and the selection fill over it stay visible, in both schemes.
+#[test]
+fn the_user_turn_fill_stands_apart_and_keeps_text_readable() {
+    // The fill must read as a different block, not the same one (a 1.05:1 floor, as in the
+    // WCAG ratio of two near surfaces).
+    const APART: f64 = 1.05;
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = roles(scheme);
+        let fill = r.surface_container_high;
+        // Tool and command cards sit on `surface_container_low`.
+        for (what, other) in [
+            ("background", r.background),
+            ("card fill", r.surface_container_low),
+        ] {
+            let ratio = contrast(fill, other);
+            assert!(
+                ratio >= APART,
+                "{scheme:?} user turn vs {what}: {ratio:.3} < {APART}"
+            );
+        }
+        for (what, fg) in [
+            ("on_surface", r.on_surface),
+            ("on_surface_variant", r.on_surface_variant),
+        ] {
+            let ratio = contrast(fg, fill);
+            assert!(
+                ratio >= AA_TEXT,
+                "{scheme:?} {what} on the fill: {ratio:.2} < {AA_TEXT}"
+            );
+        }
+        let edge = contrast(r.primary, fill);
+        assert!(
+            edge >= AA_NON_TEXT,
+            "{scheme:?} primary edge on the fill: {edge:.2} < {AA_NON_TEXT}"
+        );
+        // A selection (`primary_container` under `on_primary_container`, `selectable_text::highlight`)
+        // must still show against the fill, or selecting in a user turn would draw nothing.
+        let ratio = contrast(r.primary_container, fill);
+        assert!(
+            ratio >= APART,
+            "{scheme:?} selection fill vs the user-turn fill: {ratio:.3} < {APART}"
+        );
+    }
 }

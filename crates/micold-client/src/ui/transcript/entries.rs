@@ -16,7 +16,7 @@ use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::transcript_rich::{CopyState, CopyTarget};
 use crate::features::transcript_selection::shown;
 use crate::icons::Icon;
-use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, TypeRole};
+use crate::ui::material::{copy_control, DisclosureCard, IconLabel, Text, TypeRole, UserTurn};
 use crate::ui::material::{Button, Scrollable};
 use iced::widget::text::Wrapping;
 use iced::widget::{column, container, row};
@@ -261,7 +261,7 @@ pub(super) fn entry(
             attachments,
             command,
         } => {
-            if let Some(chip) = command {
+            let inner: Element<'_, TranscriptMsg> = if let Some(chip) = command {
                 // Folded, the description is one line, cut when the pane is narrow; open, it is
                 // the whole of what the command list said of the command (#943 FR-003).
                 let description = command_chip_description(chip);
@@ -277,25 +277,27 @@ pub(super) fn entry(
                 if let Some(line) = attachments_line(attachments) {
                     turn = turn.push(unit_caption(line, ctx, vec![3]));
                 }
-                return turn.into();
-            }
-            let shown = plain_text(text);
-            let len = shown.len();
-            let mut message = column![
-                caption(USER_LABEL, roles),
-                ctx.text(
-                    Text::new(shown, TypeRole::Body, roles)
-                        .wrapping(Wrapping::WordOrGlyph)
-                        .width(Length::Fill),
-                    vec![0],
-                    len,
-                ),
-            ]
-            .spacing(spacing::XS);
-            if let Some(line) = attachments_line(attachments) {
-                message = message.push(unit_caption(line, ctx, vec![3]));
-            }
-            message.into()
+                turn.into()
+            } else {
+                let shown = plain_text(text);
+                let len = shown.len();
+                let mut message = column![
+                    caption(USER_LABEL, roles),
+                    ctx.text(
+                        Text::new(shown, TypeRole::Body, roles)
+                            .wrapping(Wrapping::WordOrGlyph)
+                            .width(Length::Fill),
+                        vec![0],
+                        len,
+                    ),
+                ]
+                .spacing(spacing::XS);
+                if let Some(line) = attachments_line(attachments) {
+                    message = message.push(unit_caption(line, ctx, vec![3]));
+                }
+                message.into()
+            };
+            UserTurn::new(inner, roles).into()
         }
         EntryKind::AssistantText {
             text, streaming, ..

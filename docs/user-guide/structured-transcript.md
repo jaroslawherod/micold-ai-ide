@@ -4,6 +4,15 @@ A structured session shows the conversation: your messages, Claude's answers, it
 tool calls. Entries that are not part of the conversation proper are folded into one summary line
 each, and by default they are hidden altogether (see *Showing raw events*).
 
+## Your messages
+
+Each message you sent stands out from Claude's output: it sits on a tinted block with a bar in the
+accent colour down its left edge, so you can find where each of your turns began while scrolling.
+This holds for a message you typed, a queued message once it is delivered, and a slash command (its
+card keeps folding and unfolding as before), in the main conversation and inside a sub-agent's
+thread. The block and the bar follow the light or dark theme and your accent colour. Selecting and
+copying your messages works as it does for the rest of the transcript.
+
 ## Summary lines
 
 Four kinds of entry are shown as a single folded line:
