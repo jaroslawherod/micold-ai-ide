@@ -492,6 +492,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
 
 fn sample_summary() -> SessionSummary {
     SessionSummary {
+        daemon: Default::default(),
         id: sid(),
         worktree_dir: Some("feat-x".into()),
         provider: AiCli::Copilot,
@@ -550,6 +551,7 @@ fn sample_catalog() -> CatalogSnapshot {
             is_git_repo: true,
             available: true,
             worktrees: vec![WorktreeSnapshot {
+                daemon: Default::default(),
                 dir_name: "feat-x".into(),
                 branch: Some("feat/x".into()),
                 display_name: "X".into(),
@@ -1022,7 +1024,7 @@ fn a_credential_grant_round_trips_and_prints_without_its_token() {
 
 #[test]
 fn the_protocol_version_is_77() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 77);
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 78);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -1132,6 +1134,7 @@ fn the_command_model_and_kind_events_round_trip_in_a_structured_events_frame() {
 fn the_permission_mode_rides_the_summary_and_the_create_and_defaults_when_absent() {
     for mode in PermissionMode::ALL {
         let summary = SessionSummary {
+            daemon: Default::default(),
             permission_mode: mode,
             model: Default::default(),
             effort: Default::default(),
@@ -1786,6 +1789,7 @@ fn a_session_summary_carrying_a_derived_label_round_trips_on_both_wires() {
     // Feature 032: a label derived from the first turn rides `SessionSummary.title` as itself, never
     // as a title, so a client can tell the two apart after a restart (C8.4).
     let summary = SessionSummary {
+        daemon: Default::default(),
         title: SessionLabel::Derived("/speckit-autopilot".into()),
         ..sample_summary()
     };
@@ -2452,6 +2456,7 @@ fn the_main_marker_and_set_main_round_trip() {
     use micold_core::session::{AiCli, SessionLabel};
 
     let summary = SessionSummary {
+        daemon: Default::default(),
         id: SessionId::new(),
         worktree_dir: Some("a".into()),
         title: SessionLabel::Pending,
@@ -2490,6 +2495,7 @@ fn the_main_marker_and_set_main_round_trip() {
 #[test]
 fn paused_on_user_round_trips_and_defaults_to_false() {
     let summary = SessionSummary {
+        daemon: Default::default(),
         paused_on_user: true,
         hook_activity: None,
         ..sample_summary()
@@ -2559,6 +2565,7 @@ fn the_jira_switch_and_a_connection_change_round_trip() {
 fn hook_activity_round_trips_and_defaults_to_none() {
     use micold_core::hook_activity::{HookActivity, Todo, TodoStatus};
     let summary = SessionSummary {
+        daemon: Default::default(),
         hook_activity: Some(HookActivity {
             todos: vec![Todo {
                 text: "write".into(),
@@ -2872,6 +2879,7 @@ fn the_model_choice_rides_the_summary_and_set_session_model() {
         ModelChoice::Named(ModelName::parse("haiku").unwrap()),
     ] {
         let summary = SessionSummary {
+            daemon: Default::default(),
             model: model.clone(),
             ..sample_summary()
         };
@@ -2913,6 +2921,7 @@ fn the_effort_choice_rides_the_summary_and_set_session_effort() {
         EffortChoice::Level(EffortLevel::parse("xhigh").unwrap()),
     ] {
         let summary = SessionSummary {
+            daemon: Default::default(),
             effort: effort.clone(),
             ..sample_summary()
         };
@@ -3104,4 +3113,70 @@ fn startup_report_round_trips_in_every_outcome_and_none_stays_none() {
     status.startup = None;
     json_roundtrip(&status);
     postcard_roundtrip(&status);
+}
+
+// ---- #1723: daemon-qualified refs ---------------------------------------------------------------
+
+fn daemon(id: &str) -> micold_core::protocol::routing::WireDaemonId {
+    id.parse().expect("a valid daemon id")
+}
+
+fn sample_worktree() -> WorktreeSnapshot {
+    WorktreeSnapshot {
+        daemon: Default::default(),
+        dir_name: "feat-x".into(),
+        branch: Some("feat/x".into()),
+        display_name: "X".into(),
+        status: WorktreeStatus::Clean,
+        path: PathBuf::from("/a/.claude/worktrees/feat-x"),
+        included: false,
+    }
+}
+
+#[test]
+fn rows_and_qualified_refs_round_trip_and_the_ref_equals_the_decoded_ref() {
+    use micold_core::protocol::routing::{ProjectRef, SessionRef, WorktreeRef};
+    let mut summary = sample_summary();
+    summary.daemon = daemon("dev-box");
+    let mut worktree = sample_worktree();
+    worktree.daemon = daemon("dev-box");
+    json_roundtrip(&summary);
+    postcard_roundtrip(&summary);
+    json_roundtrip(&worktree);
+    postcard_roundtrip(&worktree);
+
+    let project = std::path::Path::new("/a");
+    let session_ref: SessionRef = summary.qualified();
+    let worktree_ref: WorktreeRef = worktree.qualified(project);
+    let project_ref = ProjectRef {
+        daemon: daemon("dev-box"),
+        path: project.to_path_buf(),
+    };
+    json_roundtrip(&session_ref);
+    postcard_roundtrip(&session_ref);
+    json_roundtrip(&worktree_ref);
+    postcard_roundtrip(&worktree_ref);
+    json_roundtrip(&project_ref);
+    postcard_roundtrip(&project_ref);
+
+    let decoded: SessionSummary =
+        serde_json::from_str(&serde_json::to_string(&summary).unwrap()).unwrap();
+    assert_eq!(decoded.qualified(), session_ref);
+    assert_eq!(session_ref.daemon.as_str(), "dev-box");
+}
+
+#[test]
+fn the_same_local_ref_under_two_daemons_is_unequal_and_hashes_apart() {
+    let mut a = sample_summary();
+    let mut b = sample_summary();
+    a.daemon = daemon("a");
+    b.daemon = daemon("b");
+    assert_ne!(a.qualified(), b.qualified());
+    let refs: std::collections::HashSet<_> = [a.qualified(), b.qualified()].into_iter().collect();
+    assert_eq!(refs.len(), 2);
+    let project = std::path::Path::new("/a");
+    let (mut wa, mut wb) = (sample_worktree(), sample_worktree());
+    wa.daemon = daemon("a");
+    wb.daemon = daemon("b");
+    assert_ne!(wa.qualified(project), wb.qualified(project));
 }

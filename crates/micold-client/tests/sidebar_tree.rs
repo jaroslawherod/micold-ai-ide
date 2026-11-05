@@ -1058,6 +1058,7 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
             available: true,
             worktrees: Vec::new(),
             sessions: vec![SessionSummary {
+                daemon: Default::default(),
                 id: origin,
                 worktree_dir: Some("feat-a".to_string()),
                 title: SessionLabel::Pending,

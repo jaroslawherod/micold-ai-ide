@@ -1244,3 +1244,15 @@ fn a_wrong_value_type_in_the_orchestrator_table_is_reported_at_the_value() {
     let error = expect(&text, "type", "", "", 8, 7);
     assert!(error.to_string().starts_with("daemon.toml:8:7:"), "{error}");
 }
+
+#[test]
+fn daemon_id_defaults_to_local_reads_a_valid_id_and_names_a_bad_one() {
+    assert_eq!(ok(HOST_HEAD).wire_id().as_str(), "local");
+    let with_id = |value: &str| {
+        HOST_HEAD.replace("name = \"t\"", &format!("name = \"t\"\nid = \"{value}\""))
+    };
+    assert_eq!(ok(&with_id("dev-box")).wire_id().as_str(), "dev-box");
+    let error = errors(&with_id("Bad Id")).remove(0);
+    assert!(error.message.contains("daemon id"), "{error}");
+    assert!(error.to_string().contains("id"), "{error}");
+}

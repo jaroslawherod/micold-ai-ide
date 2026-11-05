@@ -12,6 +12,7 @@
 //! - [`auth`] — the shared-secret token the sandbox transport needs (feature 027).
 //! - [`handshake`] — strict exact-match handshake evaluation.
 //! - [`hashing`] — the dependency-free hash shared by `build.rs` and the guard test.
+//! - [`routing`] — daemon ids and daemon-qualified refs (#1723).
 //! - [`keepalive`] — the client-side half-open-connection liveness deadline (FR-026).
 
 pub mod auth;
@@ -22,4 +23,5 @@ pub mod handshake;
 pub mod hashing;
 pub mod keepalive;
 pub mod messages;
+pub mod routing;
 pub mod version;

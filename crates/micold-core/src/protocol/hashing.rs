@@ -126,7 +126,7 @@ pub fn canonicalize(src: &str) -> String {
 
 /// The 32-byte schema hash over the three protocol source files, in fixed order. Both `build.rs`
 /// (which bakes the result into `SCHEMA_HASH`) and the guard test call this same function.
-pub fn schema_hash(messages: &str, grid: &str, envelope: &str) -> [u8; 32] {
+pub fn schema_hash(messages: &str, grid: &str, envelope: &str, routing: &str) -> [u8; 32] {
     let mut buf = String::new();
     buf.push_str("§messages\n");
     buf.push_str(&canonicalize(messages));
@@ -134,6 +134,8 @@ pub fn schema_hash(messages: &str, grid: &str, envelope: &str) -> [u8; 32] {
     buf.push_str(&canonicalize(grid));
     buf.push_str("§envelope\n");
     buf.push_str(&canonicalize(envelope));
+    buf.push_str("§routing\n");
+    buf.push_str(&canonicalize(routing));
     sha256(buf.as_bytes())
 }
 

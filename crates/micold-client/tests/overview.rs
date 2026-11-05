@@ -1727,6 +1727,7 @@ fn adopt(
             available: true,
             worktrees: Vec::new(),
             sessions: vec![SessionSummary {
+                daemon: Default::default(),
                 id: session.id,
                 worktree_dir: Some("feat-a".to_string()),
                 title: session.label.clone(),

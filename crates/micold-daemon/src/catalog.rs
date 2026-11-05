@@ -29,6 +29,7 @@ use micold_core::origin::{
     validate_origin, OriginNode, OriginRejected, OriginStatus, SessionOrigin,
 };
 use micold_core::project::Availability;
+use micold_core::protocol::routing::WireDaemonId;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonMsg, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
@@ -175,6 +176,9 @@ pub struct Catalog {
     /// (feature 551, FR-012). The state drains them with [`Catalog::take_origin_events`] and sends
     /// them in the step that archived, so no window infers a removal from an id leaving a list.
     origin_events: Vec<DaemonMsg>,
+    /// The id this daemon announces on every row it projects (#1723), `local` until the
+    /// configuration says otherwise.
+    daemon: WireDaemonId,
 }
 
 /// One project's Jira change a service-settings write merges into the maps on disk: its
@@ -201,6 +205,16 @@ impl ProjectJiraChange<'_> {
 }
 
 impl Catalog {
+    /// Set the id every projected row carries (#1723).
+    pub fn set_daemon_id(&mut self, daemon: WireDaemonId) {
+        self.daemon = daemon;
+    }
+
+    /// The id every projected row carries (#1723).
+    pub fn daemon_id(&self) -> &WireDaemonId {
+        &self.daemon
+    }
+
     /// Adopt the catalog from explicit stores (used by tests with a temp directory).
     pub fn load(
         project_store: Box<dyn ProjectStore + Send + Sync>,
@@ -216,6 +230,7 @@ impl Catalog {
             load_status: loaded.status,
             recovered_backup: loaded.preserved,
             origin_events: Vec::new(),
+            daemon: WireDaemonId::local(),
         }
     }
 
@@ -241,6 +256,7 @@ impl Catalog {
             load_status: LoadStatus::Missing,
             recovered_backup: None,
             origin_events: Vec::new(),
+            daemon: WireDaemonId::local(),
         }
     }
 
@@ -330,7 +346,7 @@ impl Catalog {
                 let removed = archived_ids(list);
                 list.iter()
                     .filter(|s| !s.archived)
-                    .map(|s| session_summary(s, &removed))
+                    .map(|s| session_summary(s, &removed, &self.daemon))
                     .collect()
             })
             .unwrap_or_default()
@@ -363,6 +379,7 @@ impl Catalog {
                             .cloned()
                             .unwrap_or_else(|| dir_name.clone());
                         WorktreeSnapshot {
+                            daemon: self.daemon.clone(),
                             // The durable half knows a worktree only by the key its sessions were
                             // stored against, so the location is the one the app manages. The live
                             // discovery overlay in `state.rs` replaces this whole list with the
@@ -1090,7 +1107,7 @@ impl Catalog {
                 if child.origin.is_some_and(|o| archived.contains(&o.id)) {
                     self.origin_events.push(DaemonMsg::SessionChanged {
                         session: child.id,
-                        summary: session_summary(child, &removed),
+                        summary: session_summary(child, &removed, &self.daemon),
                     });
                 }
             }
@@ -2216,8 +2233,13 @@ fn claim_main_if_free(list: &[Session], session: &mut Session) {
 /// `removed` holds the archived sessions of the same project: an origin among them is reported
 /// `removed` (feature 551, FR-018); every other origin is `known`, including one not in the
 /// catalog yet, which the client reads as pending.
-fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSummary {
+fn session_summary(
+    session: &Session,
+    removed: &HashSet<SessionId>,
+    daemon: &WireDaemonId,
+) -> SessionSummary {
     SessionSummary {
+        daemon: daemon.clone(),
         id: session.id,
         worktree_dir: match &session.location {
             SessionLocation::Worktree(dir) => Some(dir.clone()),
@@ -2361,7 +2383,7 @@ mod summary_tests {
     #[test]
     fn a_catalog_session_summary_carries_no_hook_activity() {
         let session = Session::start_new(SessionLocation::Default, AiCli::default());
-        let summary = session_summary(&session, &HashSet::new());
+        let summary = session_summary(&session, &HashSet::new(), &WireDaemonId::local());
         assert_eq!(summary.hook_activity, None);
     }
 }

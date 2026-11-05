@@ -6,27 +6,27 @@ Format: `- [ ] T### [P?] [US?] description with file path`. `[P]` = disjoint fil
 
 ## Phase 1: Setup
 
-- [ ] T001 Register an empty `routing` module in `micold-core/src/protocol/mod.rs` and create `micold-core/src/protocol/routing.rs` (module doc only), so later tasks compile.
+- [x] T001 Register an empty `routing` module in `micold-core/src/protocol/mod.rs` and create `micold-core/src/protocol/routing.rs` (module doc only), so later tasks compile.
 
 ## Phase 2: Foundational (blocks all stories)
 
-- [ ] T002 [P] Test `WireDaemonId` in `micold-core/src/protocol/routing.rs` (unit): valid ids; invalid ids (empty, 64 chars, uppercase, leading `.`/`-`/`_`, space, non-ASCII); JSON and postcard round trip; `Deserialize` rejects an invalid id; `Display`, `Eq`, `Hash`, `Ord`.
-- [ ] T003 Implement `WireDaemonId` in `micold-core/src/protocol/routing.rs`: newtype over `String`, "1 to 63 chars, `[a-z0-9][a-z0-9._-]*`"; `new`/`FromStr`/`Deserialize` validate; serialises as a string. Not `daemons::DaemonId`.
-- [ ] T004 [P] Test the `[daemon] id` setting in `micold-core/src/daemon_config/` (unit): absent gives `local`; a valid id is read; an invalid id is a config error naming the key.
-- [ ] T005 Add optional `id` to `[daemon]` in `micold-core/src/daemon_config/mod.rs`, validated through `WireDaemonId` in `micold-core/src/daemon_config/validate.rs`; absent means `local`.
+- [x] T002 [P] Test `WireDaemonId` in `micold-core/src/protocol/routing.rs` (unit): valid ids; invalid ids (empty, 64 chars, uppercase, leading `.`/`-`/`_`, space, non-ASCII); JSON and postcard round trip; `Deserialize` rejects an invalid id; `Display`, `Eq`, `Hash`, `Ord`.
+- [x] T003 Implement `WireDaemonId` in `micold-core/src/protocol/routing.rs`: newtype over `String`, "1 to 63 chars, `[a-z0-9][a-z0-9._-]*`"; `new`/`FromStr`/`Deserialize` validate; serialises as a string. Not `daemons::DaemonId`.
+- [x] T004 [P] Test the `[daemon] id` setting in `micold-core/src/daemon_config/` (unit): absent gives `local`; a valid id is read; an invalid id is a config error naming the key.
+- [x] T005 Add optional `id` to `[daemon]` in `micold-core/src/daemon_config/mod.rs`, validated through `WireDaemonId` in `micold-core/src/daemon_config/validate.rs`; absent means `local`.
 
 ## Phase 3: User Story 1 - A ref names its daemon and survives a round trip (P1) 🎯 MVP
 
 **Goal**: session and worktree rows carry their daemon id; a ref built from a row equals the decoded ref.
 **Independent test**: `cargo test -p micold-core --test protocol_roundtrip` and `-p micold-daemon --test unwrapped_client`.
 
-- [ ] T006 [US1] Tests in `micold-core/tests/protocol_roundtrip.rs`: `SessionRef`, `WorktreeRef`, `ProjectRef`, `SessionSummary` and `WorktreeSnapshot` round trip on JSON and postcard; a ref from `qualified()` equals the decoded ref; the same local ref under two daemon ids is unequal (and hashes apart). Add fixture constructors that default `daemon` to `local`, extending the existing `sample_summary` builders.
-- [ ] T007 [US1] Add `SessionRef { daemon, id: SessionId }`, `WorktreeRef { daemon, project: PathBuf, dir_name }`, `ProjectRef { daemon, path: PathBuf }` to `micold-core/src/protocol/routing.rs` (derived `Eq`/`Hash`/serde).
-- [ ] T008 [US1] Add `daemon: WireDaemonId` (no `serde(default)`) to `SessionSummary` and `WorktreeSnapshot` in `micold-core/src/protocol/messages.rs`, with `SessionSummary::qualified() -> SessionRef` and `WorktreeSnapshot::qualified(project: &Path) -> WorktreeRef`.
-- [ ] T009 [US1] Fix every constructor of `SessionSummary` and `WorktreeSnapshot` the compiler reports across `micold-core`, `micold-daemon` and `micold-client` (tests and fixtures use the T006 constructors).
-- [ ] T010 [US1] Daemon test `unwrapped_client` in `micold-daemon/tests/`: a plain client against one daemon still works (FR-010) and its session and worktree rows carry the configured `daemon.id` (default `local`).
-- [ ] T011 [US1] Fill `daemon` from `daemon.id` in `micold-daemon/src/catalog.rs` (`session_summary`, the `WorktreeSnapshot` builders) and `micold-daemon/src/state.rs`.
-- [ ] T012 [US1] Document the `daemon.id` setting in `docs/user-guide/daemon-configuration.md`.
+- [x] T006 [US1] Tests in `micold-core/tests/protocol_roundtrip.rs`: `SessionRef`, `WorktreeRef`, `ProjectRef`, `SessionSummary` and `WorktreeSnapshot` round trip on JSON and postcard; a ref from `qualified()` equals the decoded ref; the same local ref under two daemon ids is unequal (and hashes apart). Add fixture constructors that default `daemon` to `local`, extending the existing `sample_summary` builders.
+- [x] T007 [US1] Add `SessionRef { daemon, id: SessionId }`, `WorktreeRef { daemon, project: PathBuf, dir_name }`, `ProjectRef { daemon, path: PathBuf }` to `micold-core/src/protocol/routing.rs` (derived `Eq`/`Hash`/serde).
+- [x] T008 [US1] Add `daemon: WireDaemonId` (no `serde(default)`) to `SessionSummary` and `WorktreeSnapshot` in `micold-core/src/protocol/messages.rs`, with `SessionSummary::qualified() -> SessionRef` and `WorktreeSnapshot::qualified(project: &Path) -> WorktreeRef`.
+- [x] T009 [US1] Fix every constructor of `SessionSummary` and `WorktreeSnapshot` the compiler reports across `micold-core`, `micold-daemon` and `micold-client` (tests and fixtures use the T006 constructors).
+- [x] T010 [US1] Daemon test `unwrapped_client` in `micold-daemon/tests/`: a plain client against one daemon still works (FR-010) and its session and worktree rows carry the configured `daemon.id` (default `local`).
+- [x] T011 [US1] Fill `daemon` from `daemon.id` in `micold-daemon/src/catalog.rs` (`session_summary`, the `WorktreeSnapshot` builders) and `micold-daemon/src/state.rs`.
+- [x] T012 [US1] Document the `daemon.id` setting in `docs/user-guide/daemon-configuration.md`.
 
 ## Phase 4: User Story 2 - A routed envelope carries any client message to a named daemon (P1)
 
@@ -46,9 +46,9 @@ Format: `- [ ] T### [P?] [US?] description with file path`. `[P]` = disjoint fil
 **Goal**: `PROTOCOL_VERSION` is 78, the schema hash covers `routing.rs`, the refusal names both versions.
 **Independent test**: `cargo test -p micold-core --test handshake` and `--test schema_hash`.
 
-- [ ] T020 [US3] Tests: in `micold-core/tests/handshake.rs` a handshake with `PROTOCOL_VERSION - 1` is refused and the text contains both numbers; in `micold-core/tests/schema_hash.rs` changing the `routing.rs` input changes the hash.
-- [ ] T021 [US3] Hash `routing.rs` in `micold-core/build.rs` and `micold-core/src/protocol/hashing.rs`.
-- [ ] T022 [US3] Bump `PROTOCOL_VERSION` 77 to 78 in `micold-core/src/protocol/version.rs` and update every test or doc that asserts 77.
+- [x] T020 [US3] Tests: in `micold-core/tests/handshake.rs` a handshake with `PROTOCOL_VERSION - 1` is refused and the text contains both numbers; in `micold-core/tests/schema_hash.rs` changing the `routing.rs` input changes the hash.
+- [x] T021 [US3] Hash `routing.rs` in `micold-core/build.rs` and `micold-core/src/protocol/hashing.rs`.
+- [x] T022 [US3] Bump `PROTOCOL_VERSION` 77 to 78 in `micold-core/src/protocol/version.rs` and update every test or doc that asserts 77.
 
 ## Phase 6: User Story 4 - The contract is written down (P2)
 

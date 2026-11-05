@@ -4311,6 +4311,7 @@ pub(crate) mod tests {
         input_serial: u64,
     ) -> SessionSummary {
         SessionSummary {
+            daemon: Default::default(),
             id,
             worktree_dir: None,
             title: SessionLabel::Named(title.into()),
@@ -4341,6 +4342,7 @@ pub(crate) mod tests {
         live_shells: Vec<micold_core::session::ShellInstanceId>,
     ) -> SessionSummary {
         SessionSummary {
+            daemon: Default::default(),
             live_shells,
             ..summary(id, title, lifecycle)
         }
@@ -5121,6 +5123,7 @@ pub(crate) mod tests {
         provider: AiCli,
     ) -> SessionSummary {
         SessionSummary {
+            daemon: Default::default(),
             provider,
             kind: Default::default(),
             ..summary_at(id, title, lifecycle, 0)

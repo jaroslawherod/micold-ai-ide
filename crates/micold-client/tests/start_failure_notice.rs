@@ -53,6 +53,7 @@ fn snapshot(lifecycle: WireLifecycle) -> CatalogSnapshot {
             available: true,
             worktrees: Vec::new(),
             sessions: vec![SessionSummary {
+                daemon: Default::default(),
                 id: id(),
                 worktree_dir: None,
                 title: SessionLabel::Named("Refactor the parser".into()),

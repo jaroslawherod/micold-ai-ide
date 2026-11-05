@@ -1655,7 +1655,9 @@ impl DaemonState {
 
     /// Record the configuration runtime at startup (#1524). A no-op if already set.
     pub fn set_config(&self, runtime: Arc<crate::config_watch::ConfigRuntime>) {
+        let id = runtime.current().wire_id();
         let _ = self.config.set(runtime);
+        self.lock().catalog.set_daemon_id(id);
     }
 
     /// The `config` section of the diagnostic (contract §5); `None` without a configuration file.
@@ -2417,6 +2419,7 @@ impl DaemonState {
                 project.worktrees = discovered
                     .iter()
                     .map(|wt| WorktreeSnapshot {
+                        daemon: inner.catalog.daemon_id().clone(),
                         dir_name: wt.dir_name.clone(),
                         branch: wt.branch.clone(),
                         display_name: names

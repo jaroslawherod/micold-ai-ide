@@ -16,7 +16,7 @@
 
 use std::fmt;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -1874,6 +1874,9 @@ pub enum WithdrawReason {
 /// the activity indicator in the session list (FR-016d).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionSummary {
+    /// The daemon that owns this session (#1723). No serde default: a peer that predates the field
+    /// is refused at the handshake.
+    pub daemon: crate::protocol::routing::WireDaemonId,
     /// Stable identity.
     pub id: SessionId,
     /// Hosting worktree directory name, or `None` for a session hosted directly by the project
@@ -2062,6 +2065,27 @@ pub struct EnvIncludeFailure {
     pub outcome: crate::env_include::EnvIncludeOutcome,
 }
 
+impl SessionSummary {
+    /// The daemon-qualified ref of this session (#1723).
+    pub fn qualified(&self) -> crate::protocol::routing::SessionRef {
+        crate::protocol::routing::SessionRef {
+            daemon: self.daemon.clone(),
+            id: self.id,
+        }
+    }
+}
+
+impl WorktreeSnapshot {
+    /// The daemon-qualified ref of this worktree, within `project` (#1723).
+    pub fn qualified(&self, project: &Path) -> crate::protocol::routing::WorktreeRef {
+        crate::protocol::routing::WorktreeRef {
+            daemon: self.daemon.clone(),
+            project: project.to_path_buf(),
+            dir_name: self.dir_name.clone(),
+        }
+    }
+}
+
 /// A project within a [`CatalogSnapshot`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectSnapshot {
@@ -2085,6 +2109,8 @@ pub struct ProjectSnapshot {
 /// A worktree within a [`ProjectSnapshot`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorktreeSnapshot {
+    /// The daemon that owns this worktree (#1723). No serde default, as on [`SessionSummary`].
+    pub daemon: crate::protocol::routing::WireDaemonId,
     /// The identity a session binds to.
     pub dir_name: String,
     /// Its branch, if known.
@@ -2660,6 +2686,7 @@ mod attention_wire_tests {
         // A count no default produces, so a field that never encoded cannot read back as it.
         const COUNTED: u64 = 7;
         let summary = SessionSummary {
+            daemon: Default::default(),
             id: session(),
             worktree_dir: None,
             title: SessionLabel::Pending,
@@ -2691,6 +2718,7 @@ mod attention_wire_tests {
     #[test]
     fn a_session_summary_carries_unread() {
         let summary = SessionSummary {
+            daemon: Default::default(),
             id: session(),
             worktree_dir: None,
             title: SessionLabel::Pending,

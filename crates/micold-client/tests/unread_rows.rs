@@ -50,6 +50,7 @@ fn catalog(id: SessionId, unread: bool) -> CatalogSnapshot {
             available: true,
             worktrees: Vec::new(),
             sessions: vec![SessionSummary {
+                daemon: Default::default(),
                 id,
                 worktree_dir: None,
                 title: SessionLabel::Pending,

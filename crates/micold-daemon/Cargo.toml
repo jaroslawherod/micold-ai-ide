@@ -148,6 +148,10 @@ name = "config_wiring"
 path = "tests/config_wiring.rs"
 
 [[test]]
+name = "unwrapped_client"
+path = "tests/unwrapped_client.rs"
+
+[[test]]
 name = "daemon_stop"
 path = "tests/daemon_stop.rs"
 
