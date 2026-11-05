@@ -382,18 +382,21 @@ fn crowded_id(state: &State) -> SessionId {
 /// FR-009: the settings icon is a focusable button; Space or Enter on it toggles the row.
 #[test]
 fn the_settings_icon_toggles_from_the_keyboard() {
-    let (state, id) = crowded();
+    let (mut state, id) = crowded();
+    // Focus on the icon is the app's focus too: the draft field gives up its keys.
+    state.window.focused_field = None;
     let under = StateUnderTest::new(state.clone());
-    // The window's own Settings button draws the same glyph, higher up: the composer's is the last.
+    // The window's own Settings button draws the same glyph, higher up: the composer's is the lowest.
     let glyph = Icon::Settings.glyph().to_string();
     let mut renderer = lay::renderer();
     let (painted, _) = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
     let at = painted
         .iter()
-        .rfind(|p| p.content == glyph)
+        .filter(|p| p.content == glyph)
+        .max_by(|a, b| a.origin.y.total_cmp(&b.origin.y))
         .expect("the icon");
     let icon = Point::new(at.origin.x + 4.0, at.origin.y + 4.0);
-    for named in [keyboard::key::Named::Space, keyboard::key::Named::Enter] {
+    for named in [keyboard::key::Named::Enter, keyboard::key::Named::Space] {
         let mut mounted = Mounted::new(view(&state));
         mounted.focus_at(icon);
         let press = Event::Keyboard(keyboard::Event::KeyPressed {

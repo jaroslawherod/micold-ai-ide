@@ -48,13 +48,13 @@ pub const MAX_HEIGHT: f32 = 220.0;
 /// of a third, which says there are more.
 pub const QUEUE_MAX_HEIGHT: f32 = 120.0;
 
-/// The status row's words while a turn is open (FR-010).
+/// The activity icon's tooltip while a turn is open (FR-010).
 pub const BUSY: &str = "Working";
-/// The status row's words while the session waits for a message (FR-010).
+/// The activity icon's tooltip while the session waits for a message (FR-010).
 pub const READY: &str = "Ready";
-/// The status row's words while the session's CLI is not running.
+/// The activity icon's tooltip while the session's CLI is not running.
 pub const NOT_RUNNING: &str = "Not running";
-/// The status row's words while #942 waits on the user (I-1).
+/// The activity icon's tooltip while #942 waits on the user (I-1).
 pub const WAITING: &str = "Waiting for you";
 /// The hold notice (FR-022).
 pub const ON_HOLD: &str = "Queue on hold";
