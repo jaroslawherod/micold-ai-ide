@@ -75,10 +75,10 @@ None open. The M1 blocker was asked and answered: see D5. Paused, waiting on #15
   #1521 sibling runs (#1523–#1527, #1530, #1531, #1534, #1535). A glob of
   `specs/*/autopilot*.md` would fix it.
 
-- **Session git env is broken, reported not fixed** (outside this flow, `rules/ownership.md`):
-  the session exports five `GIT_CONFIG_KEY_n`/`VALUE_n` pairs but `GIT_CONFIG_COUNT=1`, so git
-  applies only the empty `credential.helper` — every helper is cleared and the daemon's own helper
-  and its SSH→HTTPS rewrites are ignored, so `git push` over HTTPS cannot authenticate. Reported
-  as **#1744**. A unit of this run must push with
-  `git -c "credential.https://github.com.helper=!gh auth git-credential" push`.
-
+- **Container session git env is broken, reported not fixed** (outside this flow,
+  `rules/ownership.md`): a session inside the sandbox container exports five
+  `GIT_CONFIG_KEY_n`/`VALUE_n` pairs but `GIT_CONFIG_COUNT=1`, so git applies only the empty
+  `credential.helper` — helpers cleared, and the daemon's own helper and its SSH→HTTPS rewrites
+  ignored — so `git push` cannot authenticate. Host sessions are unaffected. Reported as **#1744**.
+  Until it is fixed, a unit of this run must push with
+  `git -c "credential.https://github.com.helper=!gh auth git-credential" -c "url.https://github.com/.insteadOf=git@github.com:" push`.
