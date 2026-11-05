@@ -1,8 +1,8 @@
 //! The start script's settings on a daemon entry (#1533, FR-010, US5): serde defaults match the
-//! schema, an inline script is a marker and never text, and no kind delivers a script yet.
+//! schema, an inline script is a marker and never text.
 
-use micold_core::daemon_config::{Kind, OnFailure, RunPolicy};
-use micold_core::daemons::{start_script_delivered, FileSettings, StartupScript, StartupSettings};
+use micold_core::daemon_config::{OnFailure, RunPolicy};
+use micold_core::daemons::{FileSettings, StartupScript, StartupSettings};
 
 #[test]
 fn the_serde_defaults_match_the_schema() {
@@ -38,22 +38,13 @@ fn the_entry_holds_the_inline_marker_and_no_text() {
     assert!(json.contains(r#""script":"inline""#), "{json}");
     let back: FileSettings = serde_json::from_str(&json).unwrap();
     assert_eq!(back, file);
-    assert!(!FileSettings::default().is_empty() || json.contains("startup"));
+    assert!(
+        !file.is_empty(),
+        "an entry with a start script is not empty"
+    );
     assert_eq!(
         serde_json::to_string(&FileSettings::default()).unwrap(),
         "{}",
         "an entry without a script keeps its file unchanged"
     );
-}
-
-#[test]
-fn every_kind_delivers_a_script() {
-    for (kind, delivered) in [
-        (Kind::Host, true),
-        (Kind::Ssh, true),
-        (Kind::Container, true),
-        (Kind::Kubernetes, true),
-    ] {
-        assert_eq!(start_script_delivered(kind), delivered, "{kind:?}");
-    }
 }

@@ -27,3 +27,20 @@ needs eyes at a display (`visual-pass`).
    Look at spacing, labels, the validation message for timeout 0 and the "Restart to apply" notice.
 2. With a refused daemon, open its error state: the exit status and the tail are readable and
    "Show output" opens the full tail. With `warn`, the warning row shows the same text.
+
+## Results (T037, close unit, 2026-11-05)
+
+Part A ran as tests, not by hand, on this Linux host; CI ran what the host could not.
+
+| Step | Result | Covered by |
+|---|---|---|
+| A1 | Pass | `micold-daemon` config check tests; core `startup` validation tests |
+| A2, A3 | Pass | `crates/micold-daemon/tests/startup_script.rs` (`sessions_see_the_exports...`, `an_env_file_secret_is_visible...`) |
+| A4 | Pass | `once_per_container_runs_once...` and the unit tests in `startup_script.rs` |
+| A5 | Pass | `refuse_never_listens...`, `warn_serves...`, `a_timeout_under_refuse...` |
+| A6 | Pass | `a_reload_never_reruns_and_reports_restart_needed` |
+| A7 | Host, SSH, container, pod: delivery pass in fakes; real runtime and cluster run by CI only (no container runtime, no kind cluster here) | `daemon_config_delivery_host.rs`, `kube/start_tests.rs`, CI `sandbox_real_startup`, kube-cluster job |
+
+Part B (visual pass) was not run: no Xvfb on this host. The start-script group is covered by the
+geometry gates (`daemons_section_geometry.rs`, `start_script_settings.rs`); the container and pod
+forms have had no eyes on them.

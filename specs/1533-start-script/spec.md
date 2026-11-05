@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/1533_an-optional-start-script-prepares-each-daemon`
 **Created**: 2026-11-01
-**Status**: Draft
+**Status**: Closed 2026-11-05 — shipped in PRs #1630, #1665, #1669, #1673, #1682, #1698, #1712
 **Issue**: #1533 (part of #1521)
 **Parent design**: `specs/daemon-config-file/` (spec.md Story 5, FR-019 to FR-024, FR-032, SC-007;
 `contracts/daemon-config.md` sections `[startup]` and `[session]` precedence; research D12).
@@ -161,8 +161,9 @@ and Settings shows "Restart to apply". Restart: it runs.
 - **FR-004** (FR-032): The order in which a variable's value is chosen MUST be: daemon environment
   (with start-script exports), environment-include, `ai.cli[].env`, `session.env`/`secret_env`,
   the variables the daemon sets per session (always last, never overridden, including by the script); the later wins. `export_env = false` removes the start-script tier. A script MAY extend or replace `PATH`.
+  *Note (close, 2026-11-05):* the daemon applies today only the tiers that exist in its code (daemon environment with start-script exports, environment-include, the session's own variables); the `ai.cli[].env` and `session.env`/`secret_env` tiers are not applied by the daemon yet, so the order is proven only for those.
 - **FR-005** (FR-019): `run = "once_per_container"` MUST skip the script while the recorded hash of
-  script, shell and `env_file` matches; the record MUST be written only after success.
+  script, shell and `env_file` matches; the record MUST be written only after success. A skipped run applies no exports.
 - **FR-006** (FR-022): `timeout_secs` MUST stop the script and its children and count as a failure.
 - **FR-007** (FR-022): With `refuse`, a failed run MUST keep the daemon from serving; with `warn`
   it MUST serve and report a warning.
