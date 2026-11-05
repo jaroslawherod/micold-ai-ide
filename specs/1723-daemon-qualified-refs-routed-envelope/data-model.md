@@ -31,5 +31,5 @@ repository's local config (optional).
 
 Normalisation (FR-008), applied to the chosen remote URL: trim; split with `github::split_remote`
 (drops scheme, `user@`, port; `host:o/r` and `ssh://host/o/r` give the same pair); lowercase host;
-strip leading `/`, trailing `/`, one trailing `.git`; join `host/path`. `git@host:o/r.git` and
+a single-letter host (drive letter) means a local path: no remote; strip leading `/`, trailing `/`, one trailing `.git`; join `host/path`. `git@host:o/r.git` and
 `https://host/o/r` both give `remote:host/o/r`.
