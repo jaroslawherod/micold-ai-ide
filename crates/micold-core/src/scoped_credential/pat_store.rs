@@ -64,21 +64,35 @@ impl StoredPat {
         )
     }
 
+    /// Reads the keys by name, so a stray line, a blank line, `\r\n` or a different key order does
+    /// not hide a token that is there. A `repos` pattern that does not parse is dropped; a filter
+    /// whose patterns all fail is refused (dropping it would widen the token's reach).
     fn from_text(text: &str) -> Option<Self> {
-        let mut lines = text.lines();
-        let expires_at = lines.next()?.strip_prefix("expires_at=")?.parse().ok()?;
-        let mut line = lines.next()?;
-        let mut repos = vec![];
-        if let Some(list) = line.strip_prefix("repos=") {
-            for pattern in list.split(',') {
-                repos.push(RepoPattern::parse(pattern)?);
+        let (mut expires_at, mut repos, mut token) = (None, None, None);
+        for line in text.lines().map(str::trim_end) {
+            if let Some(v) = line.strip_prefix("expires_at=") {
+                expires_at = v.parse().ok().or(expires_at);
+            } else if let Some(v) = line.strip_prefix("repos=") {
+                repos = Some(v.to_string());
+            } else if let Some(v) = line.strip_prefix("token=") {
+                token = Some(v.to_string());
             }
-            line = lines.next()?;
         }
-        let token = line.strip_prefix("token=")?;
-        (!token.is_empty() && lines.next().is_none()).then(|| Self {
+        let repos = match repos {
+            None => vec![],
+            Some(list) => {
+                let parsed: Vec<RepoPattern> =
+                    list.split(',').filter_map(RepoPattern::parse).collect();
+                if parsed.is_empty() {
+                    return None;
+                }
+                parsed
+            }
+        };
+        let token = token.filter(|t| !t.is_empty())?;
+        Some(Self {
             token: SecretToken::new(token),
-            expires_at,
+            expires_at: expires_at?,
             repos,
         })
     }
@@ -200,8 +214,17 @@ impl PatStore {
             .into_iter()
             .filter_map(|file| {
                 let name = file_name(&file).filter(|n| valid_name(n))?;
-                let pat = StoredPat::from_text(&std::fs::read_to_string(&file).ok()?)?;
-                Some((name, pat))
+                let pat = std::fs::read_to_string(&file)
+                    .ok()
+                    .and_then(|text| StoredPat::from_text(&text));
+                if pat.is_none() {
+                    // Never the content, and the file stays where it is.
+                    eprintln!(
+                        "warning: the GitHub token file {} could not be read",
+                        file.display()
+                    );
+                }
+                Some((name, pat?))
             })
             .collect();
         found.sort_by(|a, b| a.0.cmp(&b.0));
@@ -374,6 +397,33 @@ mod tests {
         store.put("c", &pat("github_pat_c3", 3)).unwrap();
         assert_eq!(names(&store), ["b", "a", "c"], "a re-added name goes last");
         assert_eq!(PatStore::new(dir.path().join("none")).list(), vec![]);
+    }
+
+    #[test]
+    fn a_token_file_with_stray_lines_or_a_bad_pattern_still_yields_the_token() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = PatStore::new(dir.path());
+        std::fs::create_dir_all(dir.path().join("github-pat")).unwrap();
+        let w = |name: &str, text: &str| {
+            std::fs::write(dir.path().join("github-pat").join(name), text).unwrap()
+        };
+        w("extra", "expires_at=7\r\ntoken=github_pat_a\r\n\nnote\n");
+        w(
+            "badpat",
+            "expires_at=7\nrepos=acme/app,nonsense\ntoken=github_pat_b\n",
+        );
+        w(
+            "allbad",
+            "expires_at=7\nrepos=nonsense\ntoken=github_pat_c\n",
+        );
+        assert_eq!(store.get("extra"), Some(pat("github_pat_a", 7)));
+        let bad = store.get("badpat").unwrap();
+        assert_eq!(bad.repos, vec![RepoPattern::parse("acme/app").unwrap()]);
+        assert_eq!(store.get("allbad"), None, "a filter is never widened");
+        assert!(
+            dir.path().join("github-pat/allbad").exists(),
+            "never deleted"
+        );
     }
 
     #[test]
