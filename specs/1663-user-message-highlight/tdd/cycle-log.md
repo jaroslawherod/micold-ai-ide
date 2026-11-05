@@ -36,9 +36,8 @@ the `tdd.run` hook, so the log is kept by hand and says what was and was not see
   behaviour. `micold-material/tests/user_turn.rs` asserts the edge's left-only corner radius and
   draws the element (`--features test-support`) to check the 4dp edge and the content offset.
 - The new FR-005 tests pass against the existing code, as negatives of already-correct behaviour
-  (no red by design); their strength was checked against the wrap: a tool card or output wrapped in
+  (no red by design); their strength is by reasoning, no mutant was run: a tool card or output wrapped in
   `UserTurn` adds thousands of surface pixels, far over the thresholds.
 - FR-008 / SC-003: `features_transcript_selection` (`scripts/build-lock.sh cargo test -p
   micold-client --test main features_transcript_selection`) 42 passed; core is untouched by this
-  remediation and its tests run in
-  the PR's full gate.
+  remediation, so `mise run test-core` is covered by the PR's full gate (`mise run gate`).

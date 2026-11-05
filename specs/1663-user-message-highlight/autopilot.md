@@ -42,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 376151e778b78200cd75a9b4d2f7044881ea765f:82db0e58b277c30ba4d849a4598ba04e62761bc1 | CHANGES (1 MAJOR test-observable named in plan; 3 MINOR fixed); fixes are plan-text clarifications, checked by me, no round 2 |
 | Plan | 2 | b4a8e147fa5bd3f82da8bfbc4a8fd3944d37484c:1c3512f6cb4caa790413b657e577fb34ccfee0be | CLEAN (2 MINOR; floor lowered to 1.05, prose only) |
 | Review A M1 (code-review high) | 1 | 7eb08d8cf5e37cbf8ceb10ce42b301e99161a722:8a4e2dd39e9ed9d7acb2f2f4743dc89ffbd0567b | 8 findings, 7 fixed (showcase entry, edge corner radius, PhantomData, two-turn test, wrap once, selection colour is `primary_container` not alpha, T010 pending), 1 declined (double render in `highlighted`, MINOR test cost); fixes are small and no BLOCKER, no round 2 |
+| Close diff review | 1 | 88bf25eb400363ff57e38eef16d7a38c220b3728:b6f3173952ee2bc214f7ca830444cfdd79e54616 | CLEAN (2 MINOR prose, fixed prose only) |
 | Review B M1 (conformance) | 1 | | CLEAN (3 MINOR, cycle-log red evidence, optional) |
 
 ## Declined review findings
