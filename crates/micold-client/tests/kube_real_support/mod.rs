@@ -491,6 +491,7 @@ pub async fn start(
         &client.env,
         name,
         settings,
+        None,
         DriftChoice::Keep,
         &events.sink(),
     )

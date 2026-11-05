@@ -57,6 +57,11 @@
           "readOnly": true
         },
         {
+          "mountPath": "/run/micold/secrets/startup",
+          "name": "startup-env",
+          "readOnly": true
+        },
+        {
           "mountPath": "/run/micold/secrets/git",
           "name": "micold-build-box-8384f9ba-gitconfig",
           "readOnly": true
@@ -103,6 +108,14 @@
         "name": "micold-build-box-8384f9ba-config"
       },
       "name": "daemon-config"
+    },
+    {
+      "name": "startup-env",
+      "secret": {
+        "defaultMode": 288,
+        "optional": true,
+        "secretName": "micold-build-box-8384f9ba-startup"
+      }
     },
     {
       "name": "micold-build-box-8384f9ba-gitconfig",

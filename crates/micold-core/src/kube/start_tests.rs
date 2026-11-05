@@ -92,6 +92,8 @@ fn start_request<'a>(
         home: Path::new("/home/u"),
         read,
         config: CONFIG,
+        startup_script: None,
+        startup_env: None,
         time_zone: Some("Europe/Berlin"),
     }
 }
@@ -511,6 +513,51 @@ async fn the_config_map_holds_the_file_the_pod_mounts_and_a_changed_file_replace
         .calls()
         .iter()
         .any(|c| c == &format!("replace ConfigMap {name}")));
+}
+
+/// #1533 M6 (FR-011): the script rides in the config map beside `daemon.toml`, the `env_file` in
+/// the startup secret; dropping the `env_file` removes the secret, and the script changes the
+/// config map's hash.
+#[tokio::test(start_paused = true)]
+async fn the_start_script_and_env_file_reach_the_pod_through_the_config_map_and_a_secret() {
+    let fake = cluster();
+    let (keys, client) = (FakeKeyGen::default(), client("c1"));
+    let read = |p: &Path| std::fs::read_to_string(p);
+    let (s, n) = (settings(), names());
+    let mut request = start_request(&fake, &s, &n, &keys, &client, DriftChoice::Ask, &read);
+    request.startup_script = Some("echo hi\n");
+    request.startup_env = Some("TOKEN=abc\n");
+    ready(start(&request, &mut |_| {}).await);
+
+    let map = fake
+        .manifest(NS, ObjectKind::ConfigMap, &n.config_map())
+        .unwrap();
+    assert_eq!(map["data"]["startup.sh"], "echo hi\n");
+    assert_eq!(map["data"]["daemon.toml"], CONFIG);
+    let secret = fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .unwrap();
+    assert_eq!(secret["stringData"]["startup.env"], "TOKEN=abc\n");
+
+    // A changed script replaces the config map; a changed env_file, the secret.
+    request.startup_script = Some("echo changed\n");
+    request.startup_env = Some("TOKEN=def\n");
+    ready(start(&request, &mut |_| {}).await);
+    let calls = fake.calls();
+    assert!(calls.contains(&format!("replace ConfigMap {}", n.config_map())));
+    assert!(calls.contains(&format!("replace Secret {}", n.startup_secret())));
+
+    // Without an env_file the secret goes; without a script the config map holds only the file.
+    request.startup_script = None;
+    request.startup_env = None;
+    ready(start(&request, &mut |_| {}).await);
+    assert!(fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .is_none());
+    let map = fake
+        .manifest(NS, ObjectKind::ConfigMap, &n.config_map())
+        .unwrap();
+    assert!(map["data"].get("startup.sh").is_none());
 }
 
 #[tokio::test(start_paused = true)]

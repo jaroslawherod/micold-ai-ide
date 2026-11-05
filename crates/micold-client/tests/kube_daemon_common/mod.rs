@@ -93,7 +93,7 @@ pub async fn attempt_with(
 ) {
     let (sink, seen) = sink();
     (
-        kube_attempt(&client.env, NAME, settings, DriftChoice::Ask, &sink)
+        kube_attempt(&client.env, NAME, settings, None, DriftChoice::Ask, &sink)
             .await
             .map_err(|e| e.to_string()),
         seen,

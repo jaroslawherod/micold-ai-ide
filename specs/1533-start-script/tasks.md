@@ -90,9 +90,9 @@
 
 ## Phase 9: Pod delivery (needs #1528)
 
-- [ ] T034 [P] [US4] Failing tests in `crates/micold-client/src/shell/daemon_sync.rs` (script and `env_file` through the pod's config and secret volumes) and a failure-display test for a pod daemon
-- [ ] T035 [US4] Deliver script and `env_file` for the pod kind in `crates/micold-client/src/shell/daemon_sync.rs`, enable the group for it; error display for a refused pod daemon
-- [ ] T036 [US4] User guide: pod delivery in `docs/user-guide/sandboxed-daemon.md`
+- [x] T034 [P] [US4] Failing tests in `crates/micold-client/src/shell/daemon_sync.rs` (script and `env_file` through the pod's config and secret volumes) and a failure-display test for a pod daemon
+- [x] T035 [US4] Deliver script and `env_file` for the pod kind in `crates/micold-client/src/shell/daemon_sync.rs`, enable the group for it; error display for a refused pod daemon
+- [x] T036 [US4] User guide: pod delivery in `docs/user-guide/kubernetes-daemons.md` (the pod page) and the table in `daemon-configuration.md`
 
 **Checkpoint (M6)**: T034 to T036, after #1528 merges.
 

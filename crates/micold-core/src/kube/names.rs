@@ -149,6 +149,12 @@ impl ResourceNames {
         format!("{}-config", self.base)
     }
 
+    /// The secret holding the start script's `env_file` (#1533). Not in [`Self::all_secrets`]: it
+    /// exists only while the daemon has an `env_file`, and start deletes it when it has none.
+    pub fn startup_secret(&self) -> String {
+        format!("{}-startup", self.base)
+    }
+
     /// The image pull secret.
     pub fn pull_secret(&self) -> String {
         format!("{}-pull", self.base)

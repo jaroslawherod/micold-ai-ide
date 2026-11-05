@@ -34,6 +34,18 @@ pub const CONFIG_MOUNT: &str = "/run/micold/config";
 /// The config map's key, which is the file's name under [`CONFIG_MOUNT`].
 pub const CONFIG_FILE: &str = "daemon.toml";
 
+/// The config map's key for the start script (#1533): the file's name under [`CONFIG_MOUNT`].
+pub const STARTUP_SCRIPT_FILE: &str = "startup.sh";
+
+/// Where the start script's `env_file` secret is mounted, read-only (#1533).
+pub const STARTUP_ENV_MOUNT: &str = "/run/micold/secrets/startup";
+
+/// The startup secret's key, which is the `env_file`'s name under [`STARTUP_ENV_MOUNT`].
+pub const STARTUP_ENV_FILE: &str = "startup.env";
+
+/// The volume of the startup secret.
+const STARTUP_ENV_VOLUME: &str = "startup-env";
+
 /// The config map's annotation that holds the SHA-256 of its file, so a start rewrites it only
 /// when the file changed (the API returns a config map's data as text, a secret's as base64).
 pub const CONFIG_HASH_ANNOTATION: &str = "micold.dev/config-sha256";
@@ -67,6 +79,8 @@ impl PodStamp {
             // Not a setting: it marks a pod made with the config map mounted, so an older one
             // (the daemon's start-up variables, no `daemon.toml`) is recreated.
             "config_map": true,
+            // Likewise for the optional startup secret volume (#1533).
+            "startup_secret": true,
         });
         Self(value.to_string())
     }
@@ -108,13 +122,17 @@ pub fn holds_retired_credential(on_pod: &str) -> bool {
     })
 }
 
-/// The pod's stamp is a readable one from before the config map was mounted: such a pod has no
-/// `daemon.toml` and runs on start-up variables the daemon no longer is given, so it is recreated
-/// whatever the user chose about drift. An unreadable stamp is not this (it asks, as always).
+/// The pod's stamp is a readable one from before the config map (or the startup secret) was
+/// mounted: such a pod has no `daemon.toml` and runs on start-up variables the daemon no longer is
+/// given, or cannot see an `env_file`, so it is recreated whatever the user chose about drift. An unreadable stamp is not this (it asks, as always).
 pub fn lacks_config_map(on_pod: &str) -> bool {
     serde_json::from_str::<Value>(on_pod)
         .ok()
-        .and_then(|stamp| stamp.as_object().map(|o| !o.contains_key("config_map")))
+        .and_then(|stamp| {
+            stamp
+                .as_object()
+                .map(|o| !o.contains_key("config_map") || !o.contains_key("startup_secret"))
+        })
         .unwrap_or(false)
 }
 
@@ -223,6 +241,7 @@ fn container(
             { "name": "tmp", "mountPath": "/tmp" },
             { "name": "ssh-access", "mountPath": ACCESS_MOUNT, "readOnly": true },
             { "name": CONFIG_VOLUME, "mountPath": CONFIG_MOUNT, "readOnly": true },
+            { "name": STARTUP_ENV_VOLUME, "mountPath": STARTUP_ENV_MOUNT, "readOnly": true },
         ],
     });
     if let Some(zone) = time_zone {
@@ -326,6 +345,10 @@ pub fn pod(
               "secret": { "secretName": names.access_secret(), "defaultMode": 0o440 } },
             { "name": CONFIG_VOLUME,
               "configMap": { "name": names.config_map(), "defaultMode": 0o444 } },
+            // Optional: a daemon without an `env_file` has no such secret (#1533).
+            { "name": STARTUP_ENV_VOLUME,
+              "secret": { "secretName": names.startup_secret(), "defaultMode": 0o440,
+                          "optional": true } },
         ],
     });
     for credential in &settings.allowed {
@@ -368,15 +391,23 @@ pub fn pod(
     })
 }
 
-/// The config map `<name>-config`: the daemon's `daemon.toml` under [`CONFIG_FILE`], stamped with
-/// its hash ([`CONFIG_HASH_ANNOTATION`]).
-pub fn config_map(names: &ResourceNames, text: &str) -> Value {
-    let hash = crate::protocol::hashing::sha256_hex(text.as_bytes());
+/// The config map `<name>-config`: the daemon's `daemon.toml` under [`CONFIG_FILE`] and, when it
+/// has one, its start script under [`STARTUP_SCRIPT_FILE`] (#1533), stamped with their hash
+/// ([`CONFIG_HASH_ANNOTATION`]).
+pub fn config_map(names: &ResourceNames, text: &str, script: Option<&str>) -> Value {
+    let mut hashed = text.as_bytes().to_vec();
+    let mut data = json!({ CONFIG_FILE: text });
+    if let Some(script) = script {
+        hashed.extend_from_slice(b"\0startup.sh\0");
+        hashed.extend_from_slice(script.as_bytes());
+        data[STARTUP_SCRIPT_FILE] = json!(script);
+    }
+    let hash = crate::protocol::hashing::sha256_hex(&hashed);
     json!({
         "apiVersion": "v1",
         "kind": "ConfigMap",
         "metadata": metadata(names, names.config_map(), &[(CONFIG_HASH_ANNOTATION, &hash)]),
-        "data": { CONFIG_FILE: text },
+        "data": data,
     })
 }
 
@@ -880,10 +911,10 @@ mod tests {
 
     #[test]
     fn golden_config_map_holds_the_file_under_its_hash() {
-        let cm = config_map(&names(), "schema = 1\n");
+        let cm = config_map(&names(), "schema = 1\n", None);
         assert_eq!(cm, golden("config_map.json"));
         assert_eq!(cm["metadata"]["name"], format!("{}-config", names().pod()));
-        let again = config_map(&names(), "schema = 1\n# changed\n");
+        let again = config_map(&names(), "schema = 1\n# changed\n", None);
         assert_ne!(
             again["metadata"]["annotations"][CONFIG_HASH_ANNOTATION],
             cm["metadata"]["annotations"][CONFIG_HASH_ANNOTATION]
@@ -925,6 +956,45 @@ mod tests {
         let with = pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), Some("UTC"));
         assert_eq!(env(&with)["TZ"], "UTC");
         assert!(!env(&all()[0]).contains_key("TZ"));
+    }
+
+    /// #1533: a pod made before the startup secret volume cannot see an `env_file`, so it is
+    /// recreated too.
+    #[test]
+    fn a_stamp_from_before_the_startup_secret_is_recreated() {
+        let now = PodStamp::of(&settings(), IMAGE);
+        let old = now.as_str().replace(",\"startup_secret\":true", "");
+        assert_ne!(old, now.as_str());
+        assert!(lacks_config_map(&old));
+    }
+
+    /// #1533: the script is a second key of the config map and changes its hash; the pod mounts
+    /// the startup secret as an optional directory.
+    #[test]
+    fn the_config_map_carries_the_start_script_under_its_hash() {
+        let plain = config_map(&names(), "schema = 1\n", None);
+        let with = config_map(&names(), "schema = 1\n", Some("echo hi\n"));
+        assert_eq!(with["data"]["startup.sh"], "echo hi\n");
+        assert_eq!(with["data"]["daemon.toml"], "schema = 1\n");
+        assert_ne!(
+            with["metadata"]["annotations"][CONFIG_HASH_ANNOTATION],
+            plain["metadata"]["annotations"][CONFIG_HASH_ANNOTATION]
+        );
+        let p = pod(
+            &settings(),
+            &names(),
+            IMAGE,
+            &PodStamp::of(&settings(), IMAGE),
+            None,
+        );
+        let volume = p["spec"]["volumes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["name"] == "startup-env")
+            .expect("the startup volume");
+        assert_eq!(volume["secret"]["optional"], true);
+        assert_eq!(volume["secret"]["secretName"], names().startup_secret());
     }
 
     #[test]

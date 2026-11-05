@@ -64,6 +64,7 @@ Everything is labelled `app.kubernetes.io/managed-by=micold-ai-ide` and `micold.
 | Volume claim (your worktrees, the daemon, the AI CLIs) | `micold-<name>-<key>-data` | Remove |
 | Secret, SSH access (the pod's host key and your computer's public key) | `micold-<name>-<key>-ssh-access` | Remove |
 | Config map, the daemon's `daemon.toml` | `micold-<name>-<key>-config` | Remove |
+| Secret, the start script's `env_file` (only while the daemon has one) | `micold-<name>-<key>-startup` | the next start after you remove the `env_file`, or Remove |
 | One secret per allowed credential | `...-gitconfig`, `...-git-credentials`, `...-git-ssh`, `...-signin-<cli>`, `...-pull` | the next start after you withdraw it, or Remove |
 
 **No Service, Ingress, network policy, service account, role or namespace is created.** Micold
@@ -99,6 +100,26 @@ kubelet copies a changed config map or secret into a running pod on its own sche
 (its sync period, up to about a minute by default). A change you make in Settings reaches the config map at the next start; a pod that
 was made before the config map existed is recreated at that start without asking (its volume is
 kept).
+
+## A start script for a pod
+
+A Kubernetes daemon can run a start script before it serves, set in **Settings → Daemons → Start
+script** ([all the keys](daemon-configuration.md#setting-it-up-in-settings-and-how-it-reaches-the-daemon)).
+At every start the application puts the script in the pod's config map beside `daemon.toml`
+(`startup.sh`) and the `env_file` in a secret named `micold-<name>-<key>-startup`, mounted
+read-only at `/run/micold/secrets/startup`; `daemon.toml` names them at
+`/run/micold/config/startup.sh` and `/run/micold/secrets/startup/startup.env`. Neither the script
+text nor a secret is in `daemon.toml`. Remove deletes the secret with the rest.
+
+- **It runs as the pod's user, never root,** with the pod's home on the volume, so a tool the script
+  installs under `~/.local` is still there after the pod is recreated.
+- **A refused start is visible.** The daemon's error state shows the exit status and the last 200
+  lines of the script's output; the whole output is in the daemon log under the `startup` target.
+  A script or `env_file` the application cannot read, or that is not text, stops the start and the
+  row names the file.
+- **A change applies after a restart.** The kubelet copies a changed script into a running pod, but
+  the daemon runs it at its next start, and Settings says "Restart to apply". A pod made before
+  this existed is recreated at the next start without asking.
 
 ## Allowed credentials
 

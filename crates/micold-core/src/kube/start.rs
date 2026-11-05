@@ -1,6 +1,7 @@
 //! The start sequence of a Kubernetes daemon (feature 686, research K6, contract §2–§3). This
 //! milestone runs it through `Tunnel`; `Copy`, `Install` and `Connect` come later.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::future::Future;
 use std::path::Path;
@@ -178,6 +179,10 @@ pub struct StartRequest<'a> {
     pub read: ReadFile<'a>,
     /// The daemon's `daemon.toml`, rendered and checked by the application: the config map's file.
     pub config: &'a str,
+    /// The daemon's start script, the config map's second file (#1533); `None` without one.
+    pub startup_script: Option<&'a str>,
+    /// The start script's `env_file`, the startup secret's content (#1533); `None` without one.
+    pub startup_env: Option<&'a str>,
     /// The daemon's `daemon.time_zone`, the pod's `TZ`.
     pub time_zone: Option<&'a str>,
 }
@@ -383,15 +388,51 @@ async fn check_claim(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
 /// The `Secrets` phase: the access secret, then the allowed credentials' secrets (FR-008).
 async fn secrets(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
     config_map(r, attempt).await?;
+    startup_secret(r, attempt).await?;
     access_secret(r, attempt).await?;
     credential_secrets(r, attempt).await
+}
+
+/// The secret `<name>-startup` holding the start script's `env_file`: created or refreshed when the
+/// daemon has one, deleted when it has none and the one in the cluster is ours (#1533).
+async fn startup_secret(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
+    let name = r.names.startup_secret();
+    let Some(env) = r.startup_env else {
+        if let Some(view) = r
+            .cluster
+            .get(namespace(r), ObjectKind::Secret, &name)
+            .await?
+        {
+            if is_ours(&view.labels, r.names.key()) {
+                delete_and_wait(r, ObjectKind::Secret, &name, &view.uid).await?;
+            }
+        }
+        return Ok(());
+    };
+    let data = BTreeMap::from([(manifest::STARTUP_ENV_FILE.to_string(), env.to_string())]);
+    let manifest = manifest::secret(r.names, &name, &data);
+    if let Ensured::Adopted(view) = ensure(r, ObjectKind::Secret, manifest.clone(), attempt).await?
+    {
+        if view.data != data {
+            r.cluster
+                .replace(
+                    namespace(r),
+                    ObjectKind::Secret,
+                    &name,
+                    &view.resource_version,
+                    manifest,
+                )
+                .await?;
+        }
+    }
+    Ok(())
 }
 
 /// Create the config map `<name>-config`, or replace its file when the one in the cluster is not
 /// this client's (the hash on it differs). The daemon reloads the file the kubelet then updates, so
 /// a changed configuration needs no new pod.
 async fn config_map(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
-    let manifest = manifest::config_map(r.names, r.config);
+    let manifest = manifest::config_map(r.names, r.config, r.startup_script);
     if let Ensured::Adopted(view) =
         ensure(r, ObjectKind::ConfigMap, manifest.clone(), attempt).await?
     {

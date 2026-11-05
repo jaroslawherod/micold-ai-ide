@@ -70,3 +70,15 @@ own user and shows a refusal over SSH (compiled and run at Verify, `mise run tes
 Deviations, recorded: `crates/micold-daemon/src/remote.rs` needed no change at first (see the CI fix in the ledger), since the refusal path
 is the M1/M4 one (`startup-result.json`, read at the next connection); a refusal at container boot is
 covered by the entrypoint script test, not a real-runtime test.
+
+## M6 (T034-T036): pod delivery
+
+Tests and code were written in one pass and run together (not red-before-green in git). Behaviours
+covered: the config map carries `startup.sh` and its hash changes with it, the pod mounts the
+optional `startup-env` secret (manifest tests, golden pod spec); a start creates, refreshes and
+deletes the startup secret and the script key (`start_tests.rs`); `pod_startup` reads the files,
+renders mount paths and names an unreadable file; `kube_attempt` delivers both and refuses an
+unreadable script (`kube_daemon_start.rs`); the Kubernetes form shows the Start script group
+(section tests). Deviation: the failure-display test for a pod is the refusal of an unreadable
+script; the daemon's refusal over the SSH bridge is the M4 path, which the fake pod host cannot
+script.

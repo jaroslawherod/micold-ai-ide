@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
 - **Phase**: implement
-- **Next step**: M5: review A and B, full gate, PR (container delivery, tasks T030-T033); M6 waits for #1528
+- **Next step**: M6: review A and B, full gate, PR (pod delivery, tasks T034-T036); then the close unit (T037)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1669 | M2 | merged | 96a41b38670b43471a568573dd143459189e139a |
 | #1673 | M3 | merged | b146a398d5597cc67bbd2e2db4994b1bc2649fcf |
 | #1682 | M4 | merged | 3af058506bbe0e95b0b8e3e31801c8388b23604c |
+| #1698 | M5 | merged | 1897aa45b3c239b33a5ebd470f16bada280ab4ab |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T010-T017 | full | env_file secrets, precedence, run/failure policies, reload, host guide | #1669 | merged |
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | merged |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | #1682 | merged |
-| M5 | T030-T033 | full | Container delivery (after #1527) | | pending |
+| M5 | T030-T033 | full | Container delivery (after #1527) | #1698 | merged |
 | M6 | T034-T036 | full | Pod delivery (after #1528) | | pending |
 
 T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-needed` label.
@@ -76,7 +77,14 @@ T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-n
 
 ## Handover
 
-None.
+M6 (T034-T036) is implemented in the working tree and committed as one wip commit; NOT pushed, no PR yet. `cargo check --workspace --tests` is green. Design: see "M6 notes". Review A (code-review high) round 1 ran; its verdicts to apply:
+- Fix F3: revert `lacks_config_map` to its old body (only `config_map` key) and add `lacks_startup_secret(on_pod)`; in `start.rs` (the `retired` condition near `lacks_config_map`) recreate the pod for a missing `startup_secret` stamp key only when `r.startup_env.is_some()`. Keep `"startup_secret": true` in `PodStamp::of`. Adjust the manifest test `a_stamp_from_before_the_startup_secret_is_recreated` accordingly.
+- Fix F2: `lifecycle::leftovers` must list `names.startup_secret()` after `all_secrets`; update `crates/micold-client/tests/features_daemons.rs` (~lines 755, 820: the "secrets {secrets}" expected strings) and the `remove` prompt text if it builds from `leftovers`/`all_secrets` (check `crates/micold-client/src/features/daemons.rs` ~1892).
+- Fix F5: in `daemon_config_delivery::pod_startup` refuse a script or env_file over 512 KiB naming the file (ConfigMap/Secret 1 MiB limit); add a test.
+- F1 (script in ConfigMap, world-readable): declined, T034 specifies "script and env_file through the pod's config and secret volumes"; add one sentence to `docs/user-guide/kubernetes-daemons.md` "A start script for a pod": the script text is in the config map (readable by anyone who can read config maps), put secret values in the `env_file`.
+- F4 (reconnect reads local files): declined, record in Declined findings: an unreadable file names itself, and a reconnect that skipped delivery would replace the config map without the script. F6 (extra GET): declined, secrets GET is already permitted. F7 (StartupDial ignores contents): declined, same as container, changes apply at the next start. F9: declined (ConfigMap data is text by API; hash separator cannot collide in practice).
+- 4 tests in `micold-core --lib kube::` fail only because they count the pod's volumes/mounts: `manifest::tests::each_allowed_credential_adds_one_read_only_secret_volume_and_mount` (line ~870), `nothing_allowed_mounts_only_the_access_secret_and_pulls_no_secret` (~846), `the_claim_is_mounted_at_data_with_an_empty_dir_at_tmp` (~608), and `start::tests::allowed_credentials_become_secrets_mounted_beside_the_access_secret` (start_tests.rs ~1090): update the expected counts/lists for the new `startup-env` volume and mount (one more of each). The client test results of the same run (daemon_config_delivery_host, features_daemon_sections, start_script_settings, kube_daemon_start, kube_daemon_reconnect, core startup_settings) were not read yet: re-run them (log in the scratchpad `t1.log`, detached via setsid nohup, wait with `until grep -q T_EXIT log; do sleep 15; done` in a run_in_background Bash).
+Then: scoped gate, review B (conformance, sonnet, once), full gate (`mise run gate`, detached; builds queue behind other worktrees' locks), PR per pr.md titled `feat(1533): deliver the start script to pod daemons (#1533)`, record the PR number. Review A round 1 snapshot not recorded in *Review rounds* (record `review-snapshot.sh` before round 2; A needs no round 2 if only the fixes above change).
 
 ## Open escalation
 
@@ -108,3 +116,7 @@ Verify (`mise run image`, `mise run test-sandbox`): image built; every sandbox_r
 ## M5 CI fix 1 (M5 PR: #1698)
 
 CI sandbox run: `sandbox_real_startup_refusal_*` timed out instead of showing the refusal. Cause: a container's `daemon.toml` sets `data_dir` to the image's state dir, which an SSH session's environment lacks, so the bridge looked for `startup-result.json` in a different directory than the daemon wrote it. Fix: the bridge resolves the daemon's data dir from the configuration file (`remote.rs` `daemon_data_dir`). The ubuntu failure `structured_permission::two_sessions_waiting` is outside this diff (flake check in the gate).
+
+## M6 notes
+
+#1528 (PR #1690) is on main: pod `daemon.toml` comes from ConfigMap `<name>-config` mounted at `/run/micold/config`. M6 adds the script as that map's second key `startup.sh` (hash covers it) and the `env_file` as Secret `<name>-startup` (optional volume `startup-env` at `/run/micold/secrets/startup`, key `startup.env`); `daemon.toml` names `/run/micold/config/startup.sh` and `/run/micold/secrets/startup/startup.env`. The pod stamp gains `startup_secret`, so a pod made without the volume is recreated (as for `config_map`). Remove deletes the startup secret. Failure display: a pod's refusal travels the same SSH bridge path as M4 (`startup-result.json` in the pod's data dir; the bridge reads the daemon's configured dir since PR #1698); the new tests cover the pod-specific part (an unreadable script or `env_file` stops the start naming the file). The cluster check (quickstart A7) was not run locally (no kind cluster; `kind load` hangs under podman per #1528): CI's kube-cluster job runs the existing kube_real tests, which now mount the new optional volume. T036: the pod page is `kubernetes-daemons.md`, not `sandboxed-daemon.md` as the task says. Not done: `Leftovers` (Forget locally) does not list the startup secret.

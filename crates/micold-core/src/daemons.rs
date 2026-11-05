@@ -285,10 +285,13 @@ impl StartupSettings {
 /// Whether the application delivers a start script to a daemon of `kind` (#1533). Settings offers
 /// the Start script group only for a kind that does, so no savable group sits on main without
 /// delivery. Each delivery milestone turns its kind on: host and SSH (#1526), container (#1527,
-/// delivered by #1533 M5), pod (#1528).
+/// delivered by #1533 M5), pod (#1528, delivered by #1533 M6): every kind delivers now.
 pub fn start_script_delivered(kind: crate::daemon_config::Kind) -> bool {
     use crate::daemon_config::Kind;
-    matches!(kind, Kind::Host | Kind::Ssh | Kind::Container)
+    matches!(
+        kind,
+        Kind::Host | Kind::Ssh | Kind::Container | Kind::Kubernetes
+    )
 }
 
 impl FileSettings {

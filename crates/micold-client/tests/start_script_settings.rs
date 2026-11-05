@@ -31,15 +31,11 @@ fn with_startup(settings: StartupSettings) -> DaemonSettings {
 }
 
 #[test]
-fn the_group_is_offered_only_for_a_kind_that_delivers() {
+fn the_group_is_offered_for_every_kind_and_only_when_delivery_is_on() {
     for runtime in RUNTIMES {
-        let delivered = matches!(
-            runtime,
-            DraftRuntime::Ssh | DraftRuntime::Host | DraftRuntime::Container
-        );
-        assert_eq!(
+        // Every kind delivers a script now (#1533 M6).
+        assert!(
             Section::of(runtime).contains(&Section::StartScript),
-            delivered,
             "{runtime:?}"
         );
         let hidden = Section::of_with(runtime, false);
