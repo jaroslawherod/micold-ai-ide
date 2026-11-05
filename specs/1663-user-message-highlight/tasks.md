@@ -23,7 +23,7 @@ Format: `[ID] [P?] [Story] Description` — `[P]` = different files, no dependen
 - [x] T007 [US2] In `crates/micold-client/src/ui/transcript/entries.rs` wrap both `EntryKind::UserMessage` branches in `UserTurn::new(column, roles).into()`; leave the `vec![..]` selection paths, entry iteration and scroll code untouched (FR-003, FR-008, FR-010). T006 green.
 - [x] T008 [US3] Run unchanged and confirm green: `scripts/build-lock.sh cargo test -p micold-client --test features_transcript_selection` (FR-008, SC-003) and the geometry gates `transcript_follow_layout`, `transcript_pane`, `transcript_open_budget`; update a gate's expected value only if it pins a user-turn height, by the wrap's padding (SC-005).
 - [x] T009 [US1] User guide: add a short "Your messages" note to `docs/user-guide/structured-transcript.md` (Constitution VII; CI's user-guide gate fires on `feat`).
-- [ ] T010 [US1] Visual pass per `quickstart.md` §B with the `visual-pass` skill, light then dark, all listed transcript cases; add `spacing::XS` bottom padding in `UserTurn` only if back-to-back turns touch; save screenshots and the verdict as `specs/1663-user-message-highlight/visual-pass.md` (FR-011, SC-001).
+- [x] T010 [US1] Visual pass per `quickstart.md` §B with the `visual-pass` skill, light then dark, all listed transcript cases; add `spacing::XS` bottom padding in `UserTurn` only if back-to-back turns touch; save screenshots and the verdict as `specs/1663-user-message-highlight/visual-pass.md` (FR-011, SC-001).
 
 ## Dependencies & Order
 
@@ -42,6 +42,6 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T010
 - **Deliverable**: Every user turn (typed, delivered queued message, slash command card, main and sub-agent scope) in the structured view shows a tinted `surface_container_high` surface with a 4dp `primary` left edge, in light and dark, with selection and copy unchanged and the user guide updated.
 - **Satisfies**: US1 acceptance scenarios 1–3; US2 acceptance scenarios 1–4; US3 acceptance scenarios 1–3; FR-001–FR-011; SC-001–SC-005
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-material user_turn`; `scripts/build-lock.sh cargo test -p micold-client --test transcript_entry_view --test features_transcript_selection`; quickstart §B recorded in `visual-pass.md`
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-material --test user_turn`; `scripts/build-lock.sh cargo test -p micold-client --test main transcript_entry_view`; quickstart §B recorded in `visual-pass.md`
 - **Depends on**: —
 - **Tier**: full
