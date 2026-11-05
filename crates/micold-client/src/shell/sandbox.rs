@@ -473,7 +473,7 @@ fn share_sanitized_git_config(mounts: &mut MountSet, facts: &HostFacts) -> Resul
             .ok_or("the host has no git configuration")?;
         let text = std::fs::read_to_string(source)
             .map_err(|e| format!("could not read {}: {e}", source.display()))?;
-        let sanitized = micold_core::scoped_credential::sanitize_gitconfig_text(&text)
+        let sanitized = micold_core::scoped_credential::sanitize_gitconfig_text(&text, false)
             .map_err(|e| format!("could not sanitize {}: {e}", source.display()))?;
         let (dir, name) = (
             copy.parent().ok_or("no state directory")?,

@@ -81,7 +81,7 @@ fn a_planted_host_helper_never_runs_and_no_password_is_returned() {
         store.display()
     );
     // The host's configuration, as the sandbox shares it: sanitized.
-    let shared = sanitize_gitconfig_text(&host_config).expect("sanitized");
+    let shared = sanitize_gitconfig_text(&host_config, false).expect("sanitized");
     fs::write(home.join(".gitconfig"), &shared).unwrap();
     assert!(
         !shared.contains("tok") && !shared.contains("store"),

@@ -133,6 +133,17 @@ pub fn deliver_container(
         idle_stop: profile.survive_logout.then_some(IdleStopSetting::Off),
         ssh_dir: Some(CONTAINER_SSH_DIR.into()),
         startup: startup.cloned(),
+        // The sanitized copy of the user's `.gitconfig` the bring-up mounts in the data
+        // directory (read-only), when *Git configuration* is shared (#1530, D15 row 1).
+        git_config_file: profile
+            .credentials
+            .contains(&micold_core::sandbox::CredentialShare::GitConfig)
+            .then(|| {
+                PathBuf::from(format!(
+                    "{CONTAINER_DATA_DIR}/{}",
+                    micold_core::sandbox::SANDBOX_GITCONFIG_FILE
+                ))
+            }),
         ..DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto))
     };
     let files = read_startup_files(&settings)?;

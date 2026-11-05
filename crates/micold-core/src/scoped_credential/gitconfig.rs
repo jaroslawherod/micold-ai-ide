@@ -123,18 +123,39 @@ pub fn sanitize_gitconfig(entries: &[(String, String)]) -> String {
     out
 }
 
+/// `commit.gpgsign` and `tag.gpgsign` taken out of `entries`: with no signing key delivered a
+/// sandbox cannot sign, so a kept `true` would fail every commit (#1530, research D15 row 9).
+pub fn strip_signing_switches(entries: Vec<(String, String)>) -> Vec<(String, String)> {
+    entries
+        .into_iter()
+        .filter(|(key, _)| {
+            let key = key.to_ascii_lowercase();
+            key != "commit.gpgsign" && key != "tag.gpgsign"
+        })
+        .collect()
+}
+
 /// [`sanitize_gitconfig`] over the configuration text `text`, read by the host's own `git`.
+/// Without `signing_key` (`[git] signing_key_file` is unset) the signing switches are stripped
+/// ([`strip_signing_switches`]).
 ///
 /// The text goes to a private file for the one `git config --file` call, so what is parsed is what
 /// git itself would parse. Without `git` on the host, or when the text is not a valid
 /// configuration, this is an error and the caller shares nothing.
-pub fn sanitize_gitconfig_text(text: &str) -> io::Result<String> {
+pub fn sanitize_gitconfig_text(text: &str, signing_key: bool) -> io::Result<String> {
     let dir = std::env::temp_dir().join(format!("micold-gitconfig-{}", uuid::Uuid::new_v4()));
     crate::owner_only::ensure_dir(&dir)?;
     let result = crate::owner_only::write(&dir, "config", text.as_bytes())
         .and_then(|file| list_entries(&file));
     let _ = std::fs::remove_dir_all(&dir);
-    result.map(|entries| sanitize_gitconfig(&entries))
+    result.map(|entries| {
+        let entries = if signing_key {
+            entries
+        } else {
+            strip_signing_switches(entries)
+        };
+        sanitize_gitconfig(&entries)
+    })
 }
 
 fn list_entries(file: &Path) -> io::Result<Vec<(String, String)>> {
@@ -274,6 +295,34 @@ mod tests {
         assert_eq!(again, out);
         assert!(out.contains(r#"name = "A \"B\" \\ C""#), "{out}");
         assert!(out.contains(r#"bare = "true""#), "{out}");
+    }
+
+    #[test]
+    fn without_a_signing_key_both_signing_switches_go_and_the_rest_stays() {
+        let kept = strip_signing_switches(vec![
+            e("user.name", "Ada"),
+            e("commit.gpgsign", "true"),
+            e("Tag.GpgSign", "true"),
+            e("gpg.format", "ssh"),
+            e("user.signingkey", "k"),
+        ]);
+        assert_eq!(
+            kept,
+            vec![
+                e("user.name", "Ada"),
+                e("gpg.format", "ssh"),
+                e("user.signingkey", "k")
+            ]
+        );
+    }
+
+    #[test]
+    fn the_text_form_strips_signing_only_when_no_key_is_delivered() {
+        let text = "[user]\n\tname = Ada\n[commit]\n\tgpgsign = true\n[tag]\n\tgpgsign = true\n";
+        let without = sanitize_gitconfig_text(text, false).expect("git reads it");
+        assert!(without.contains("name = ") && !without.to_lowercase().contains("gpgsign"));
+        let with = sanitize_gitconfig_text(text, true).expect("git reads it");
+        assert_eq!(with.matches("gpgsign").count(), 2, "{with}");
     }
 
     #[test]

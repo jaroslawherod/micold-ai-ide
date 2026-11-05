@@ -285,6 +285,7 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         .as_ref()
         .and_then(|dir| dir.to_str().map(str::to_owned));
     let exe = std::env::current_exe().ok();
+    let settings = crate::settings::current();
     let identity_exists = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
         .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
         .is_file();
@@ -292,11 +293,16 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
     let edits = env_hygiene_with(
         target,
         data_dir.as_deref(),
-        exe.as_deref(),
-        identity_exists,
+        GitFacts {
+            kind: settings.kind,
+            // A file that is not there (the copy could not be written) would make every git call
+            // fail; leave the user's git configuration out instead.
+            config_file: settings.git_config_file.as_deref().filter(|f| f.is_file()),
+            legacy_identity_exists: identity_exists,
+        },
         lang_inherited,
     );
-    let config = config_git_edits(&crate::settings::current(), exe.as_deref());
+    let config = config_git_edits(&settings, exe.as_deref());
     combine_git_edits(edits, config)
 }
 
@@ -420,8 +426,7 @@ fn captured_helpers(bases: &[String]) -> Vec<String> {
 fn env_hygiene_with(
     target: &impl EnvTarget,
     data_dir: Option<&str>,
-    exe: Option<&std::path::Path>,
-    identity_exists: bool,
+    git: GitFacts<'_>,
     lang_inherited: bool,
 ) -> Vec<EnvEdit> {
     let mut edits = vec![EnvEdit::Remove(micold_core::paths::DATA_DIR_ENV.into())];
@@ -437,7 +442,7 @@ fn env_hygiene_with(
         edits.push(EnvEdit::Set("LANG".into(), CONTAINER_LANG.into()));
     }
     // Overwriting an inherited GIT_CONFIG_* is intended.
-    let git = container_git_edits(data_dir, exe, identity_exists);
+    let git = container_git_edits(&git);
     if !git.is_empty() {
         let names: Vec<String> = git
             .iter()
@@ -452,43 +457,41 @@ fn env_hygiene_with(
     edits
 }
 
-/// The git environment a session in a container needs (#1438, specs/1002 FR-004, FR-007).
+/// What [`container_git_edits`] reads: facts about the daemon, passed in so a test can drive them.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct GitFacts<'a> {
+    /// `daemon.kind`; `None` for a daemon with no file.
+    pub kind: Option<micold_core::daemon_config::Kind>,
+    /// `[git] config_file`.
+    pub config_file: Option<&'a std::path::Path>,
+    /// The sanitized copy of the user's `~/.gitconfig` an older app mounted exists.
+    pub legacy_identity_exists: bool,
+}
+
+/// The global git configuration a session in a container or pod reads (#1438, specs/1002 FR-004,
+/// #1530 FR-016, research D15 rows 1 and 2).
 ///
-/// sshd builds each login's environment afresh, so the `-e` values set at `create` reach only the
-/// entrypoint's daemon, never the daemon the client starts over SSH or its sessions. Without them
-/// git has no credential helper, no HTTPS rewrite and no identity. The helper is this daemon's own
-/// absolute path (it is not on `PATH`, and a build path would go stale); the identity is the
-/// sanitized copy, present only when *Git configuration* is shared. Empty outside a container.
-pub(crate) fn container_git_edits(
-    data_dir: Option<&str>,
-    exe: Option<&std::path::Path>,
-    identity_exists: bool,
-) -> Vec<EnvEdit> {
-    if data_dir != Some(micold_core::ssh::argv::CONTAINER_DATA_DIR) {
+/// Chosen by `daemon.kind`, not by the data directory's value, so a daemon started over SSH and
+/// the one the entrypoint starts both get it. The credential helper, the reset and the HTTPS
+/// rewrite come from the file's tokens ([`config_git_edits`]); this adds the identity: `[git]
+/// config_file`, else the copy an older app mounts at the state directory. Empty on host and SSH.
+pub(crate) fn container_git_edits(git: &GitFacts<'_>) -> Vec<EnvEdit> {
+    use micold_core::daemon_config::Kind;
+    if !matches!(git.kind, Some(Kind::Container | Kind::Kubernetes)) {
         return Vec::new();
     }
-    let mut edits = Vec::new();
-    if let Some(exe) = exe.and_then(std::path::Path::to_str) {
-        let helper = shell_word(exe);
-        edits.extend(
-            micold_core::scoped_credential::git_env_with_helper(
-                micold_core::scoped_credential::GITHUB_BASE,
-                &helper,
-            )
-            .into_iter()
-            .map(|(k, v)| EnvEdit::Set(k.into(), v.into())),
-        );
-    }
-    if identity_exists {
+    let identity = match (git.config_file, git.legacy_identity_exists) {
+        (Some(file), _) => file.as_os_str().to_owned(),
         // A container path is always Linux: spelled with `/`, not the host's separator.
-        let copy = format!(
+        (None, true) => format!(
             "{}/{}",
             micold_core::ssh::argv::CONTAINER_DATA_DIR,
             micold_core::sandbox::SANDBOX_GITCONFIG_FILE
-        );
-        edits.push(EnvEdit::Set("GIT_CONFIG_GLOBAL".into(), copy.into()));
-    }
-    edits
+        )
+        .into(),
+        (None, false) => return Vec::new(),
+    };
+    vec![EnvEdit::Set("GIT_CONFIG_GLOBAL".into(), identity)]
 }
 
 /// `word` as one shell word: unchanged when it holds only safe characters, else single-quoted.
@@ -1029,6 +1032,7 @@ mod container_git_tests {
 
     const DATA: &str = micold_core::ssh::argv::CONTAINER_DATA_DIR;
     const EXE: &str = "/home/node/.micold/remote/0.18.0-x/micold-daemon";
+    use micold_core::daemon_config::Kind;
 
     fn set(edits: &[EnvEdit]) -> std::collections::BTreeMap<String, String> {
         edits
@@ -1043,14 +1047,18 @@ mod container_git_tests {
             .collect()
     }
 
-    #[test]
-    fn a_container_session_gets_the_git_env_with_an_absolute_helper_and_the_identity() {
-        let env = set(&container_git_edits(Some(DATA), Some(Path::new(EXE)), true));
-        assert_eq!(env["GIT_CONFIG_COUNT"], "5");
-        assert_eq!(env["GIT_CONFIG_VALUE_0"], "");
-        assert_eq!(env["GIT_CONFIG_VALUE_1"], format!("!{EXE} git-credential"));
-        assert_eq!(env["GIT_TERMINAL_PROMPT"], "0");
-        assert_eq!(env["GIT_CONFIG_GLOBAL"], format!("{DATA}/gitconfig"));
+    const SHARED: &str = "/run/micold/secrets/gitconfig";
+
+    fn facts(kind: Option<Kind>, file: Option<&'static str>, legacy: bool) -> GitFacts<'static> {
+        GitFacts {
+            kind,
+            config_file: file.map(Path::new),
+            legacy_identity_exists: legacy,
+        }
+    }
+
+    fn global(git: &GitFacts<'_>) -> Option<String> {
+        set(&container_git_edits(git)).remove("GIT_CONFIG_GLOBAL")
     }
 
     /// #1744: the container block (5 entries) and a tokenless sandbox configuration block (the one
@@ -1115,46 +1123,43 @@ mod container_git_tests {
     }
 
     #[test]
-    fn no_shared_git_config_means_no_identity_source() {
-        let env = set(&container_git_edits(
-            Some(DATA),
-            Some(Path::new(EXE)),
-            false,
-        ));
-        assert!(env.contains_key("GIT_CONFIG_COUNT"));
-        assert!(!env.contains_key("GIT_CONFIG_GLOBAL"));
+    fn a_container_or_pod_session_reads_the_configured_git_file() {
+        for kind in [Kind::Container, Kind::Kubernetes] {
+            let git = facts(Some(kind), Some(SHARED), true);
+            assert_eq!(global(&git).as_deref(), Some(SHARED), "{kind:?}");
+        }
     }
 
     #[test]
-    fn outside_a_container_nothing_is_added() {
-        assert!(container_git_edits(None, Some(Path::new(EXE)), true).is_empty());
-        assert!(container_git_edits(Some("/x"), Some(Path::new(EXE)), true).is_empty());
+    fn without_a_git_file_the_older_mounted_copy_is_the_identity_when_present() {
+        let git = facts(Some(Kind::Container), None, true);
+        assert_eq!(global(&git), Some(format!("{DATA}/gitconfig")));
+        assert_eq!(global(&facts(Some(Kind::Container), None, false)), None);
     }
 
     #[test]
-    fn env_hygiene_wires_the_container_git_env_into_every_spawn() {
-        let edits = env_hygiene_with(
-            &std::process::Command::new("true"),
-            Some(DATA),
-            Some(Path::new(EXE)),
-            true,
-            false,
-        );
-        let env = set(&edits);
-        assert_eq!(env["GIT_CONFIG_COUNT"], "5");
-        assert!(
-            env["GIT_CONFIG_VALUE_1"].starts_with("!/"),
-            "absolute helper"
-        );
-        assert_eq!(env["GIT_CONFIG_GLOBAL"], format!("{DATA}/gitconfig"));
-        let outside = env_hygiene_with(
-            &std::process::Command::new("true"),
-            None,
-            Some(Path::new(EXE)),
-            true,
-            false,
-        );
-        assert!(!set(&outside).contains_key("GIT_CONFIG_COUNT"));
+    fn host_ssh_and_a_daemon_with_no_file_get_nothing_whatever_the_data_dir() {
+        for kind in [None, Some(Kind::Host), Some(Kind::Ssh)] {
+            assert!(container_git_edits(&facts(kind, Some(SHARED), true)).is_empty());
+        }
+    }
+
+    #[test]
+    fn env_hygiene_wires_the_git_file_into_every_spawn_whatever_the_data_dir() {
+        let wire = |kind, data_dir| {
+            set(&env_hygiene_with(
+                &std::process::Command::new("true"),
+                data_dir,
+                facts(kind, Some(SHARED), false),
+                false,
+            ))
+        };
+        // The start path that passes no `MICOLD_DATA_DIR` (SSH-started) and the one that does.
+        for data_dir in [None, Some(DATA)] {
+            let env = wire(Some(Kind::Container), data_dir);
+            assert_eq!(env["GIT_CONFIG_GLOBAL"], SHARED, "{data_dir:?}");
+        }
+        assert!(!wire(Some(Kind::Host), Some(DATA)).contains_key("GIT_CONFIG_GLOBAL"));
     }
 
     #[test]
@@ -1163,8 +1168,7 @@ mod container_git_tests {
             set(&env_hygiene_with(
                 &std::process::Command::new("true"),
                 data_dir,
-                None,
-                false,
+                GitFacts::default(),
                 inherited,
             ))
             .get("LANG")
@@ -1181,9 +1185,12 @@ mod container_git_tests {
     /// `session.env` is applied after it and beats the default `LANG`; `TZ` is left alone.
     #[test]
     fn env_hygiene_reads_the_installed_data_dir_and_leaves_tz_and_session_env_to_win() {
-        crate::settings::install(crate::settings::DaemonSettings::resolve(None, &|name| {
-            (name == micold_core::paths::DATA_DIR_ENV).then(|| DATA.into())
-        }));
+        crate::settings::install(crate::settings::DaemonSettings {
+            kind: Some(Kind::Container),
+            data_dir: Some(DATA.into()),
+            git_config_file: Some(SHARED.into()),
+            ..Default::default()
+        });
         assert_eq!(
             crate::settings::current().data_dir.as_deref(),
             Some(Path::new(DATA)),
@@ -1200,10 +1207,11 @@ mod container_git_tests {
                 .any(|e| matches!(e, EnvEdit::Remove(k) if k == "TZ")),
             "TZ is removed from a session"
         );
-        // Whatever LANG the test process inherited, the git environment is the container signal.
-        assert!(
-            set(&edits).contains_key("GIT_CONFIG_COUNT"),
-            "the installed data_dir was not read"
+        // Whatever LANG the test process inherited, the git file is the container signal.
+        assert_eq!(
+            set(&edits).get("GIT_CONFIG_GLOBAL").map(String::as_str),
+            Some(SHARED),
+            "the installed kind was not read"
         );
         if !inherited {
             assert_eq!(set(&edits).get("LANG").map(String::as_str), Some("C.UTF-8"));

@@ -53,6 +53,9 @@ pub struct DaemonSettings {
     /// The configuration file this daemon was started with; sessions get it as
     /// `MICOLD_DAEMON_CONFIG` so the credential helper reads the live tokens (#1530).
     pub config_path: Option<PathBuf>,
+    /// `[git] config_file`: the git configuration a container or pod session reads as its global
+    /// one (`GIT_CONFIG_GLOBAL`, #1530).
+    pub git_config_file: Option<PathBuf>,
 }
 
 /// Whether the retired start-up variables still count: the daemon's own tests only.
@@ -113,6 +116,7 @@ impl DaemonSettings {
             clone_root: path(env, crate::repo_clone::ROOT_ENV),
             projects: Vec::new(),
             config_path: None,
+            git_config_file: None,
         };
         let Some(config) = config else {
             return from_env;
@@ -162,6 +166,7 @@ impl DaemonSettings {
                 })
                 .collect(),
             config_path: None,
+            git_config_file: config.git.config_file.clone(),
         }
     }
 
