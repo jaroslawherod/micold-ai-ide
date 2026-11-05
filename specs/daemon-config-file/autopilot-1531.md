@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: blocked (design merged; M1 waits on #1530)
-- **Next step**: M1, once #1530's implementation is on `main` (see *Open escalation*)
+- **Phase**: paused (design merged; M1 waits on #1530, D5)
+- **Next step**: M1 (T055–T057, T095, T058), once #1530's M1 and M2 are on `main`. Resume with `/speckit-autopilot resume` in this worktree.
 
 ## Pull requests
 
@@ -33,6 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | tasks | Tier | full: new PATH-injected shim that reads a chosen credential and sets it in a session's env (security-sensitive surface); not a reuse of an existing pattern | agent-resolved | milestone-format.md |
 | D4 | tasks | speckit-analyze findings | 1 MEDIUM + 3 LOW, no CRITICAL/HIGH: fixed U1 (`GH_HOST` left alone with no token, same as `GH_TOKEN`) and U3 (Windows `gh.cmd` forwards exit code, cannot `exec`) by wording edits to T057/T095/Deliverable; U2 and N1 needed no fix (U2 is already covered by the milestone narrative; N1 is expected sequencing) | agent-resolved | speckit-analyze run |
 
+| D5 | M1 | M1 needs #1530's `TokenChoice` chooser, which is not on `main` (unpushed local work in another worktree): wait, stack on #1530's branch, or implement behind a local seam? | Wait: pause the run with the design merged and resume once #1530's M1 and M2 are on `main`. Rejected stacking (that branch's M1 is unpushed and still in review, so the API may change) and the seam (it would split the acceptance criteria across two runs). | decided by user | `AskUserQuestion` 2026-11-05; `git ls-tree origin/main crates/micold-core/src/daemon_config/matching.rs` empty; #1530 M1 commit `324482a39` not on `origin/feat/1530_...` (tip `02cf510bc`) |
+
 ## Review rounds
 
 | Review | Round | Snapshot | Verdict |
@@ -49,17 +51,7 @@ None.
 
 ## Open escalation
 
-**M1 is blocked by work outside this flow** (category 5/6, *blocked by work outside my flow*).
-
-- Question: wait for #1530 to merge, or stack #1531's M1 on #1530's unmerged branch?
-- Evidence: `crates/micold-core/src/daemon_config/matching.rs` (`TokenChoice`, #1530 T046) does
-  not exist on `origin/main`; `gh pr list` shows no open implementation PR for #1530; #1530's M1
-  commit `324482a39` is not on `origin/feat/1530_the-daemon-s-credential-helper-chooses-the-token`
-  either (that branch's tip is the ledger commit `02cf510bc`), so it is unpushed local work in
-  another session's worktree, still under change.
-- Recommendation: **wait**. #1531's design PR #1696 is merged, so nothing is lost by pausing;
-  stacking on an unpushed branch whose API is still in review would have to be rewritten.
-- Resume with `/speckit-autopilot resume` once #1530's M1 and M2 are on `main`.
+None open. The M1 blocker was asked and answered: see D5. Paused, waiting on #1530.
 
 ## Follow-ups not done
 
