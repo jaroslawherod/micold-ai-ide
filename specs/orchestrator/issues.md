@@ -139,6 +139,7 @@ Common footer for every body:
 - **Covers**: FR-012, FR-013, FR-014
 - **Body**:
   The orchestrator runs a CA behind an interface (an external CA can replace it), issues one-time expiring enrollment tokens (default 1 hour, revocable unused), signs CSRs and records each daemon. The key is generated on the daemon. Certificates default to 24 h and renew over the link without a restart; a revocation list by daemon id and serial refuses connect and renew. The daemon id is taken from the certificate only. The docs say how to back up the CA key.
+  Plan step (buy vs build): evaluate an existing CA such as step-ca behind the CA interface before writing one; also check Teleport, headscale, NetBird and Nebula for enrollment and revocation. See spec.md, "Prior art".
   Acceptance:
   - A valid token yields a certificate and is spent; reuse and expiry are refused.
   - A certificate renews before expiry without a restart.
@@ -154,6 +155,7 @@ Common footer for every body:
 - **Covers**: FR-014, FR-015
 - **Body**:
   Carry the daemon link over a TLS WebSocket with mTLS, alongside the reverse-forward carrier of M1. Reconnect with backoff and resume streams by sequence number so a client that stayed connected to the orchestrator sees nothing lost or duplicated.
+  Plan step (prior art): compare Piko, Towonel and selftunnel for the dial-out and reconnect pattern; none carries our routed envelope or resumable streams. See spec.md, "Prior art".
   Acceptance:
   - A daemon on another network enrolls and links over mTLS.
   - After a 60 s network drop no structured event or terminal output is lost or duplicated for a connected client (SC-005).

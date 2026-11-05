@@ -335,6 +335,23 @@ internet; the desktop app and a browser both sign in and see the daemon's sessio
   framework. It shares only the generated protocol schema with the desktop app.
 - Cloud means a deployment the user owns; a hosted service run by the project is out of scope.
 
+## Prior art (checked 2026-11-05, from search results only; not yet code-reviewed)
+
+No open-source project covers the whole feature. Parts to evaluate in the plans before building:
+
+- **Web UIs for agent sessions**: [CloudCLI / Claude Code UI](https://github.com/siteboon/claudecodeui)
+  (AGPL-3.0; structured view for Claude Code, Codex, Cursor), [AgentOS](https://news.ycombinator.com/item?id=46533405)
+  and [claude-code-web](https://github.com/vultuk/claude-code-web). All are single-host; none routes
+  across daemons or enforces per-daemon policy. Issues 14 and 15 may read CloudCLI's transcript UI as
+  a reference (mind the AGPL: reference only, copy no code).
+- **Dial-out tunnels**: [Piko](https://sourceforge.net/projects/piko.mirror/) (MIT),
+  [Towonel](https://towonel.dev/docs) (AGPL-3.0, alpha; hub, invites, short-lived agent credentials,
+  audit log) and [selftunnel](https://pkg.go.dev/github.com/mgwn/selftunnel) (MIT). They carry generic
+  traffic, not our routed envelope or resumable streams. Issue 8 compares the pattern.
+- **CA and enrollment**: issue 7 evaluates an existing CA (for example step-ca) behind the CA
+  interface of FR-012 before writing one; Teleport, headscale, NetBird and Nebula were not checked
+  and are worth a look for enrollment and revocation.
+
 ## Out of scope (future work)
 
 - End-to-end encryption between client and daemon (the orchestrator relaying ciphertext only).
