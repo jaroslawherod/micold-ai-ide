@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: clarify
-- **Next step**: plan unit
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -30,6 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Review rounds
+
+- plan round 1 (2 MAJOR, fixed in plan.md/research.md R8/contract; re-review needed): snapshot ce0b24a494d4883155b2267618bc0ebdc5e4fdb5:0dbeec202ce5bd41eef5b88e8730935b12bf1e78
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|

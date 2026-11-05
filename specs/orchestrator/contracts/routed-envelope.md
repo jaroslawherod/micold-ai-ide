@@ -41,6 +41,9 @@ differs from the target; checked by the orchestrator with `RoutedEnvelope::owns`
 `WrongRouting`: a `Routed` frame on a plain connection (kind byte `0`), or a `Control` frame on a
 routed one. A rejected frame delivers nothing.
 
+Handshake: `Hello`, `Welcome` and `Refused` are plain `Control` frames; a routed link handshakes plain
+and switches to routed after `Welcome`. A `Hello` is never wrapped.
+
 Worked example (kind `2`, encoding `0`, the body below; the test `contract_example` decodes it):
 
 ```json routed-example
@@ -57,7 +60,7 @@ it; the orchestrator never reads a daemon's filesystem.
 2. Else take remote `origin`, or the first remote in config order. Normalise its URL: drop the
    scheme, `user@` and the port; write `host:o/r` as `host/o/r`; lowercase the host (path case is
    kept); remove a trailing `/` and one trailing `.git`. Identity is `remote:<host>/<path>`.
-3. No remote, or a remote that is a local path: identity is `local:<daemon id>:<project path>`, so
+3. No remote, or a remote that is a local path (a drive-letter path such as `C:/x` included): identity is `local:<daemon id>:<project path>`, so
    such a repository is never grouped with another.
 
 Examples: `git@host:o/r.git` and `https://host/o/r` both give `remote:host/o/r`; two repositories

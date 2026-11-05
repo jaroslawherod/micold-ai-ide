@@ -50,9 +50,16 @@ Decision: a pure `RoutedEnvelope::owns(&self, row_daemon)` helper returning `Rou
 rows flow daemon to client, so enforcement is the orchestrator's (#1724); this feature supplies and
 tests the check. Rejected: enforcing in the codec (it never sees rows).
 
+## R8. Handshake on a routed link
+
+Decision: plain handshake, then switch the codec. Rejected: wrapping `Hello` (the target daemon is
+not yet confirmed, and the refusal would need a routed reply); letting `Routed` accept `Control`
+(re-opens the mix-up FR-006 closes).
+
 ## R7. Normalisation port and case
 
 Decision: drop the port and scheme, lowercase the host only, keep path case. Reuses `split_remote`,
-which already rejects local paths and unknown schemes. Rejected: keeping the port (ssh port 22 vs
+which rejects unknown schemes and slash-first local paths; a drive-letter path is rejected by a
+single-letter-host check added before it. Rejected: keeping the port (ssh port 22 vs
 https 443 would split one repository). Cost: two hosts on one name with different ports merge; the
 override covers it.

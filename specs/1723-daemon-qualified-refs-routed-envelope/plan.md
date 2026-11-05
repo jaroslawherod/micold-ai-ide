@@ -34,8 +34,9 @@ quickstart §B visual pass.
 
 **Constraints**: exact-match handshake, no compatibility shim (`version.rs` rule); one framed stream, not split.
 
-**Scale/Scope**: 1 new core module, 1 new `Kind`, 3 row types gain fields (about 76 construction
-sites, mostly test fixtures), 1 daemon config key, 2 docs.
+**Scale/Scope**: 1 new core module, 1 new `Kind`, 3 row types gain fields (about 76 grep hits for
+the struct names, mostly test fixtures; the tasks unit adds one fixture constructor per row type that
+defaults `daemon` to `local`, extending existing test builders where they exist), 1 daemon config key, 2 docs.
 
 ## Constitution Check
 
@@ -85,6 +86,14 @@ registry slot, `crates/micold-core/src/daemons.rs`); the name differs on purpose
 - `WireCodec` gains `Routing { Plain, Routed }`, default `Plain`, set by `with_routing`. `Plain`
   rejects `Kind::Routed`; `Routed` rejects `Kind::Control`; grid frames pass in both. The mismatch
   is `CodecError::WrongRouting { expected, got }`. Routing errors: `CodecError::Routing(RoutingError)`.
+- Handshake: `Hello`, `Welcome` and `Refused` are `Frame::Control` (`connect.rs`), so a routed link
+  handshakes on a `Plain` codec and calls `WireCodec::set_routing(Routing::Routed)` after `Welcome`;
+  the refusal path (FR-007) is therefore unchanged. A `Hello` is never wrapped. Test: a routed link
+  completes the handshake plain, then rejects a `Control` frame and accepts a `Routed` one.
+- `Routed` is encodable and decodable only where `Out`/`In` is `ClientMsg` (a `DaemonCodec` decodes
+  it; a `ClientCodec` encodes it); a `ClientCodec` that receives one gets `WrongRouting`. Other
+  `Frame` matches (`connect.rs`, `provision/mod.rs`, `kube/fake_host.rs`, daemon test supports) are
+  found by the compiler in the tasks unit; each gets a rejecting arm or already uses `if let`.
 - Routed frames travel the `ClientMsg` direction only here; the daemon-to-client wrap belongs to #1725.
 
 ### Rows and the daemon id source
@@ -100,10 +109,10 @@ registry slot, `crates/micold-core/src/daemons.rs`); the name differs on purpose
 `ProjectIdentity::derive(remotes, override, daemon, project_path)`: override value wins; else the
 `origin` remote (first remote in config order when there is no `origin`), normalised by the FR-008
 steps using the existing `github::split_remote` (made `pub(crate)`); a local-path remote counts as no
-remote; no remote gives `local:<daemon>:<path>`. Tagged strings (`remote:`, `override:`, `local:`)
+remote (including a drive-letter path such as `C:/x` or `C:\x`, which `split_remote` would read as
+scp host `C`: a single-letter host is rejected before it is called); no remote gives `local:<daemon>:<path>`. Tagged strings (`remote:`, `override:`, `local:`)
 keep the three forms from colliding. The override is read through a new `Git::config_local_get(repo,
-key)` (local config only, like `remote_list`); implementations: the real git, the fake in
-`git.rs` (~1223) and the one at ~1516.
+key)` (local config only, like `remote_list`); implementors: `GitCli` (git.rs:413, pattern `remote_list` at 574) and `FakeGit` (git.rs:1284).
 
 ### Handshake (FR-007)
 
@@ -117,10 +126,10 @@ key)` (local config only, like `remote_list`); implementations: the real git, th
 | FR-001, edge cases for ids | core unit (`routing.rs`) | valid/invalid ids, JSON and postcard round trip |
 | FR-002, SC-001 | core integration `tests/protocol_roundtrip.rs` | every ref and row type round trips; same local ref on two daemons is unequal |
 | FR-003 | core + daemon | row builders carry the id; a ref built from a row equals the decoded ref |
-| FR-004, FR-006 | core integration | envelope around each `ClientMsg` variant through `WireCodec`; plain/routed mix-ups rejected both ways |
+| FR-004, FR-006 | core integration | envelope around each `ClientMsg` variant through `WireCodec`; plain/routed mix-ups rejected both ways; plain handshake then switch |
 | FR-005, SC-002 | core unit | missing, empty, malformed, double-wrapped target cases; payload not interpreted on bad target |
 | FR-007, SC-003 | `tests/handshake.rs`, `tests/schema_hash.rs` | previous-version refusal names both; hash covers `routing.rs` |
-| FR-008 | core unit (`project_identity.rs`) | URL equivalences of User Story 4, override, no remote, two no-remote repos differ |
+| FR-008 | core unit (`project_identity.rs`) | URL equivalences of User Story 4, override, no remote, two no-remote repos differ, `C:/x` and `C:\x` give no remote |
 | FR-009, SC-004 | core test reads the contract file | worked-example frame in the contract decodes; docs headings checked by the docs gate |
 | FR-010, SC-005 | daemon integration | unwrapped client against one daemon still works; existing suites pass with the field added |
 | Geometry gates, quickstart §B | n/a | no UI |
