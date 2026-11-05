@@ -54,6 +54,9 @@ pub struct RuntimeInfo {
     /// The backend's own version line, e.g. `netavark 1.4.0` (`host.networkBackendInfo.version`).
     /// Which no-outbound network a rootful Podman can make depends on it (BUG-1285).
     pub network_backend_version: Option<String>,
+    /// Whether the runtime answered with Podman's `info` shape (a `host` section). `docker` may be
+    /// Podman's Docker-emulation shim, which the configured name cannot tell (#1662).
+    pub is_podman: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,6 +105,7 @@ pub fn info(stdout: &str) -> Result<RuntimeInfo, RuntimeError> {
         .or_else(|| doc.store.and_then(|s| s.graph_driver_name))
         .unwrap_or_default();
     let host = doc.host;
+    let is_podman = host.is_some();
     let rootless = host
         .as_ref()
         .and_then(|h| h.security.as_ref())
@@ -120,6 +124,7 @@ pub fn info(stdout: &str) -> Result<RuntimeInfo, RuntimeError> {
         rootless,
         network_backend,
         network_backend_version,
+        is_podman,
     })
 }
 
@@ -340,6 +345,8 @@ mod tests {
         let podman = info(&fixture("podman_info.json")).unwrap();
         assert_eq!(podman.storage_driver, "overlay");
         assert!(podman.rootless, "podman reports itself rootless");
+        assert!(podman.is_podman);
+        assert!(!info(&fixture("docker_info.json")).unwrap().is_podman);
     }
 
     /// U57 (BUG-1285): the facts that decide how a no-outbound network is made, from each shape.

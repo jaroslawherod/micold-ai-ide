@@ -111,7 +111,9 @@ const SSH_MOUNT_FILES: [(&str, &str); 3] = [
 ];
 
 pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
-    let dialect = Dialect::for_kind(caps.kind);
+    let mut dialect = Dialect::for_kind(caps.kind);
+    // What the probe saw wins over the name: `docker` may be podman's shim (#1662).
+    dialect.identity = caps.identity_mapping;
     let mut args: Vec<OsString> = vec!["create".into(), "--name".into(), (&spec.name).into()];
 
     // The stamp that tells `adopt` this container holds none of the user's git identity (#1002):
@@ -1038,6 +1040,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// #1662: `docker` that is podman's shim is probed as keep-id; the argv follows the probe, not
+    /// the name, or podman refuses `uid=` in the tmpfs options.
+    #[test]
+    fn a_docker_named_runtime_probed_as_keep_id_gets_podmans_identity_and_tmpfs_owner() {
+        let mut caps = caps(RuntimeKind::Docker, LimitSupport::Supported);
+        caps.identity_mapping = IdentityMapping::KeepId;
+        let args = strings(&create(&spec(), &caps));
+        assert!(args.iter().any(|a| a == "--userns=keep-id"), "{args:?}");
+        let tmpfs = args.iter().position(|a| a == "--tmpfs").unwrap();
+        assert!(args[tmpfs + 1].ends_with(",U"), "{args:?}");
+        assert!(!args.iter().any(|a| a.contains("uid=")), "{args:?}");
     }
 
     #[test]

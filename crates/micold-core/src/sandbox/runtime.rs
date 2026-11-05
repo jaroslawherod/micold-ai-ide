@@ -619,6 +619,14 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
             port: port_in(&text).unwrap_or(0),
         };
     }
+    // A bad option in our own argument ("unknown mount option \"uid=1000\": invalid mount option")
+    // is not a path the sandbox cannot share; naming a path would send the user to the wrong place
+    // (#1662). It stays `Unknown` so the runtime's own line is shown.
+    if has("unknown mount option") {
+        return RuntimeError::Unknown {
+            stderr: out.stderr.clone(),
+        };
+    }
     if dialect.mount_rejected_phrases.iter().any(|p| has(p)) {
         return RuntimeError::MountRejected {
             path: String::new(),
@@ -732,6 +740,21 @@ mod tests {
                 .join(name),
         )
         .unwrap_or_else(|e| panic!("read fixture {name}: {e}"))
+    }
+
+    #[test]
+    fn an_unknown_mount_option_is_not_a_path_that_cannot_be_shared() {
+        let out = CommandOutput {
+            code: Some(125),
+            stdout: String::new(),
+            stderr: "Error: unknown mount option \"uid=1000\": invalid mount option".into(),
+        };
+        for kind in RuntimeKind::ALL {
+            assert!(
+                matches!(classify(kind, &out), RuntimeError::Unknown { .. }),
+                "{kind}"
+            );
+        }
     }
 
     #[test]
