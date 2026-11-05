@@ -27,7 +27,6 @@ pub struct Entry {
     key: EntryKey,
     opened_at: u64,
     revision: u64,
-    era: u32,
     kind: EntryKind,
 }
 
@@ -37,7 +36,6 @@ impl Entry {
         key: EntryKey,
         opened_at: u64,
         revision: u64,
-        era: u32,
         kind: EntryKind,
     ) -> Self {
         Self {
@@ -45,7 +43,6 @@ impl Entry {
             key,
             opened_at,
             revision,
-            era,
             kind,
         }
     }
@@ -66,12 +63,6 @@ impl Entry {
     /// Rises on every change to this entry, and only to this entry (FR-016, SC-002).
     pub fn revision(&self) -> u64 {
         self.revision
-    }
-
-    /// The conversation the entry belongs to: `0` until the first `/clear`, then one more after
-    /// each [`EntryKind::Cleared`], which opens its era (#943 FR-005).
-    pub fn era(&self) -> u32 {
-        self.era
     }
 
     pub fn kind(&self) -> &EntryKind {
@@ -118,7 +109,8 @@ pub enum EntryKind {
         trigger: Option<String>,
         summary: Option<String>,
     },
-    /// The conversation was cleared here; it opens the next era (#943 FR-005).
+    /// The conversation was cleared here: it is the first entry, the ones before it are gone
+    /// (#943 FR-005, BUG-1694).
     Cleared,
     /// The model answering from here on, or, `refused`, the CLI's reason for keeping the one it
     /// had (#943 FR-015, FR-016).

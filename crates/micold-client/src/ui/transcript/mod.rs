@@ -244,9 +244,6 @@ fn build<'a, M: Clone + 'a>(
     let scope = entries::Scope {
         session,
         main,
-        // The conversation the latest entry belongs to; everything of an earlier one is from
-        // before a `/clear` (#943 FR-005).
-        latest_era: main.entries().next_back().map_or(0, |e| e.era()),
         insights,
     };
     let placed = prompts
@@ -335,9 +332,6 @@ fn build<'a, M: Clone + 'a>(
                 let open = state.is_open(session, entry.key());
                 let stamp = ctx.cache.get(session, entry.key()).map_or(0, |d| d.stamp);
                 let extras = entries::insights_stamp(entry, &ctx, scope);
-                // The era tag is part of what the entry draws, and a `/clear` changes it without
-                // touching the entry, so it belongs in the key (#943 FR-005).
-                let era = entries::era_tag(entry.era(), scope.latest_era).is_some();
                 // The part of the selection in the entry's body (feature 1550, research R6): a
                 // selection moving through other rows rebuilds no entry it does not touch.
                 let pos = RowPos::Entry(entry.id(), Under::Body);
@@ -349,7 +343,6 @@ fn build<'a, M: Clone + 'a>(
                     dark,
                     stamp,
                     extras,
-                    era,
                     part,
                 );
                 let drawn = lazy(key, move |key| {
@@ -361,7 +354,7 @@ fn build<'a, M: Clone + 'a>(
                         row: Some(RowCtx {
                             session,
                             pos,
-                            part: key.7.as_ref(),
+                            part: key.6.as_ref(),
                         }),
                         ..ctx
                     };
