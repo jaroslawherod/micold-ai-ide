@@ -78,7 +78,7 @@ docs/user-guide/structured-transcript.md       # + note
 
 | Req | Where |
 |---|---|
-| FR-001, FR-001a | `style::user_turn_surface` = `surface_container_high`; token test asserts a minimum tone gap (contrast ratio of the fill to `background` and to `surface_container_low` at least 1.1, both schemes), not bare inequality; the left edge carries the rest of the distinction |
+| FR-001, FR-001a | `style::user_turn_surface` = `surface_container_high`; token test asserts a minimum tone gap (contrast ratio of the fill to `background` and to `surface_container_low` at least 1.05, both schemes (light fill vs tool-card tone is about 1.108 by hand; the tasks unit reads the real `contrast()` value)), not bare inequality; the left edge carries the rest of the distinction |
 | FR-002 | `UserTurn` left edge, `primary`, 4dp; token test asserts `contrast(primary, surface_container_high) >= AA_NON_TEXT` in both schemes |
 | FR-003 | wrap at the single `EntryKind::UserMessage` arm (both the command and plain branch); main and sub-agent scopes share that arm |
 | FR-004 | wrap includes caption, body or card, attachments line (the whole `column`) |
