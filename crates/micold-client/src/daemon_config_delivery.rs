@@ -183,6 +183,9 @@ pub struct PodStartup {
     pub env: Option<String>,
 }
 
+/// A config map or secret holds 1 MiB in all; half of it for one file leaves room for the rest.
+const POD_FILE_LIMIT: usize = 512 * 1024;
+
 /// Reads `settings`' start script and `env_file` for a pod (#1533, FR-011): the script goes in the
 /// config map beside `daemon.toml` and the `env_file` in the startup secret, and the rendered file
 /// names them at their mounts. A file that cannot be read, or is not text, stops the start naming
@@ -198,7 +201,18 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
             env: None,
         });
     };
-    let text = |what: &str, bytes: Vec<u8>| {
+    let table = settings.startup.as_ref().expect("files were read");
+    let text = |what: &str, path: &Path, bytes: Vec<u8>| {
+        if bytes.len() > POD_FILE_LIMIT {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "the start script's {what} {} is {} bytes, over the {POD_FILE_LIMIT} a pod can hold",
+                    path.display(),
+                    bytes.len()
+                ),
+            ));
+        }
         String::from_utf8(bytes).map_err(|_| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -214,8 +228,14 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
             format!("{CONFIG_MOUNT}/{STARTUP_SCRIPT_FILE}").into(),
             format!("{STARTUP_ENV_MOUNT}/{STARTUP_ENV_FILE}").into(),
         ),
-        script: Some(text("script", files.script)?),
-        env: files.env.map(|bytes| text("env_file", bytes)).transpose()?,
+        script: Some(text("script", &table.script_file, files.script)?),
+        env: files
+            .env
+            .map(|bytes| {
+                let path = table.settings.env_file.as_deref().unwrap_or(Path::new(""));
+                text("env_file", path, bytes)
+            })
+            .transpose()?,
     })
 }
 

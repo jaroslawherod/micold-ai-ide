@@ -109,7 +109,7 @@ At every start the application puts the script in the pod's config map beside `d
 (`startup.sh`) and the `env_file` in a secret named `micold-<name>-<key>-startup`, mounted
 read-only at `/run/micold/secrets/startup`; `daemon.toml` names them at
 `/run/micold/config/startup.sh` and `/run/micold/secrets/startup/startup.env`. Neither the script
-text nor a secret is in `daemon.toml`. Remove deletes the secret with the rest.
+text nor a secret is in `daemon.toml`. Remove deletes the secret with the rest. The script text is in the config map, which anyone who can read config maps in the namespace can read: put secret values in the `env_file`, not in the script. A script or `env_file` over 512 KiB is refused.
 
 - **It runs as the pod's user, never root,** with the pod's home on the volume, so a tool the script
   installs under `~/.local` is still there after the pod is recreated.

@@ -1087,7 +1087,7 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
         .iter()
         .filter_map(|v| v["secret"]["secretName"].as_str())
         .collect();
-    assert_eq!(mounted.len(), 3);
+    assert_eq!(mounted.len(), 4); // and the optional startup secret (#1533)
     assert!(want.iter().all(|w| mounted.contains(&w.as_str())));
     let data = fake.manifest(
         NS,

@@ -610,8 +610,9 @@ async fn pod(
         let fields = manifest::drift(on_pod, &stamp);
         // A pod made before #1002 mounts the user's SSH key and sets `GIT_SSH_COMMAND` (FR-001):
         // keeping it would keep them, so it is recreated whatever the user chose about drift.
-        let retired =
-            manifest::holds_retired_credential(on_pod) || manifest::lacks_config_map(on_pod);
+        let retired = manifest::holds_retired_credential(on_pod)
+            || manifest::lacks_config_map(on_pod)
+            || (r.startup_env.is_some() && manifest::lacks_startup_secret(on_pod));
         match r.drift {
             _ if retired => delete_and_wait(r, ObjectKind::Pod, &r.names.pod(), &view.uid).await?,
             _ if fields.is_empty() => return Ok(Vec::new()),

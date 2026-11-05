@@ -752,7 +752,9 @@ mod kubernetes {
         let mut state = State::default();
         assert!(send(&mut state, &mut w, Msg::RemovalRequested(id)).is_empty());
         let text = &state.prompt().unwrap().text;
-        let secrets = n.all_secrets(&stored(&w, id).allowed).join(", ");
+        let mut secrets = n.all_secrets(&stored(&w, id).allowed);
+        secrets.push(n.startup_secret());
+        let secrets = secrets.join(", ");
         assert!(
             text.starts_with(&format!(
                 "Remove Cluster? This deletes from prod/dev: pod {}, volume {} with its worktrees, config map {}, secrets {secrets}. This computer's SSH key for Cluster is deleted too.",
@@ -817,7 +819,9 @@ mod kubernetes {
         );
         assert!(out.is_empty());
         assert!(w.registry.get(id).is_some());
-        let secrets = n.all_secrets(&stored(&w, id).allowed).join(", ");
+        let mut secrets = n.all_secrets(&stored(&w, id).allowed);
+        secrets.push(n.startup_secret());
+        let secrets = secrets.join(", ");
         assert_eq!(
             state.prompt().unwrap().text,
             format!(

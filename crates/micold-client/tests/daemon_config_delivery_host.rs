@@ -367,4 +367,11 @@ fn a_pods_script_and_env_file_become_texts_and_the_file_names_their_mounts() {
     missing.startup.as_mut().unwrap().script_file = app.path().join("gone.sh");
     let err = pod_startup(&missing).unwrap_err();
     assert!(err.to_string().contains("gone.sh"), "{err}");
+
+    let big = app.path().join("big.sh");
+    std::fs::write(&big, vec![b'#'; 512 * 1024 + 1]).unwrap();
+    let mut large = settings.clone();
+    large.startup.as_mut().unwrap().script_file = big;
+    let err = pod_startup(&large).unwrap_err();
+    assert!(err.to_string().contains("big.sh"), "{err}");
 }
