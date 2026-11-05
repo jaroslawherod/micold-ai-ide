@@ -129,6 +129,37 @@ impl AiCliTable {
             Vec::new()
         }
     }
+
+    /// Apply a daemon configuration's `[[ai.cli]]` entries (contract rows `version`, `enabled`)
+    /// on top of the pinned table: each entry's `version` overrides that CLI's row — the package
+    /// and its registry or tarball source never change, `version` never names either (research
+    /// D9) — accepted only as a semver string (already enforced at `validate` time, V7; a
+    /// malformed one here is ignored rather than trusted, since this table has no error channel
+    /// of its own). `enabled = false` drops the row entirely, so both the check script and the
+    /// install step's `selected_rows` (which filters by the rows a table has) skip that CLI with
+    /// no caller change — the "selection" half of this function.
+    pub fn configured<'a>(
+        mut self,
+        entries: impl IntoIterator<Item = &'a crate::daemon_config::AiCli>,
+    ) -> Self {
+        for entry in entries {
+            let cli = entry.id.ai_cli();
+            if entry.enabled == Some(false) {
+                self.rows.retain(|r| r.cli != cli);
+                continue;
+            }
+            if let Some(version) = &entry.version {
+                if crate::daemon_config::version_ok(version) {
+                    if let Some(row) = self.rows.iter_mut().find(|r| r.cli == cli) {
+                        if let Source::Registry { version: v } = &mut row.source {
+                            *v = version.clone();
+                        }
+                    }
+                }
+            }
+        }
+        self
+    }
 }
 
 /// `s` as one single-quoted shell word.
@@ -582,5 +613,92 @@ mod tests {
             parse_installed(&String::from_utf8(found).unwrap()),
             BTreeSet::from([AiCli::ClaudeCode])
         );
+    }
+
+    fn config_entry(
+        id: crate::daemon_config::CliId,
+        version: Option<&str>,
+        enabled: Option<bool>,
+    ) -> crate::daemon_config::AiCli {
+        crate::daemon_config::AiCli {
+            id,
+            enabled,
+            version: version.map(str::to_string),
+            args: Vec::new(),
+            model: None,
+            api_base_url: None,
+            env: Default::default(),
+            sign_in_file: None,
+            token_file: None,
+            api_key_file: None,
+            settings_file: None,
+            place: Vec::new(),
+            use_machine_sign_in: None,
+        }
+    }
+
+    #[test]
+    fn a_configured_version_overrides_only_that_clis_row() {
+        let table = AiCliTable::pinned().configured(&[config_entry(
+            crate::daemon_config::CliId::ClaudeCode,
+            Some("2.0.0"),
+            None,
+        )]);
+        assert_eq!(
+            table.row(AiCli::ClaudeCode).unwrap().source,
+            Source::Registry {
+                version: "2.0.0".to_string()
+            }
+        );
+        assert_eq!(
+            table.row(AiCli::ClaudeCode).unwrap().package,
+            "@anthropic-ai/claude-code"
+        );
+        // Every other row is untouched.
+        let pinned = AiCliTable::pinned();
+        assert_eq!(table.row(AiCli::Codex), pinned.row(AiCli::Codex));
+    }
+
+    #[test]
+    fn a_non_semver_configured_version_is_ignored() {
+        let table = AiCliTable::pinned().configured(&[config_entry(
+            crate::daemon_config::CliId::ClaudeCode,
+            Some("not-a-version"),
+            None,
+        )]);
+        assert_eq!(
+            table.row(AiCli::ClaudeCode),
+            AiCliTable::pinned().row(AiCli::ClaudeCode)
+        );
+    }
+
+    #[test]
+    fn a_tarballs_source_is_never_turned_into_a_registry_version() {
+        let table = AiCliTable::from_tarballs([(AiCli::ClaudeCode, PathBuf::from("/local.tgz"))])
+            .configured(&[config_entry(
+                crate::daemon_config::CliId::ClaudeCode,
+                Some("2.0.0"),
+                None,
+            )]);
+        assert_eq!(
+            table.row(AiCli::ClaudeCode).unwrap().source,
+            Source::Tarball
+        );
+    }
+
+    #[test]
+    fn enabled_false_drops_the_row_so_it_is_never_selected_or_installed() {
+        let table = AiCliTable::pinned().configured(&[config_entry(
+            crate::daemon_config::CliId::Pi,
+            None,
+            Some(false),
+        )]);
+        assert_eq!(table.row(AiCli::Pi), None);
+        assert_eq!(table.rows().len(), AiCli::ALL.len() - 1);
+        let selected = super::super::selected_rows(
+            &table,
+            &crate::sandbox::AiCliSelection(BTreeSet::from(AiCli::ALL)),
+        );
+        assert!(!selected.iter().any(|r| r.cli == AiCli::Pi));
     }
 }

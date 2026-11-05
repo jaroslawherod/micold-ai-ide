@@ -1,0 +1,290 @@
+//! #1532 (contract "`[[ai.cli]]`"): a configured `[[ai.cli]]` entry's `args`/`env`/`model` add to
+//! the CLI's own launch — never a replacement — and a configured `api_key_file` reaches the
+//! session through its environment, never on the command line.
+//!
+//! Unix only, like the other tests that run a real spawn through a `PATH` stand-in
+//! (`crates/micold-daemon/tests/one_session_per_worktree.rs`): the stand-in is a `#!/bin/sh`
+//! script made executable with `std::os::unix::fs::PermissionsExt`; a Windows stand-in needs its
+//! own compiled binary (see `session_identity_env.rs`'s `write_stand_in`), not worth it here.
+// unix-only: the stand-in is a `#!/bin/sh` script, made executable with `PermissionsExt`.
+#![cfg(unix)]
+
+use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use micold_core::project::{Availability, Project};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
+use micold_core::settings::JsonFileSettingsStore;
+use micold_core::store::{JsonFileStore, ProjectStore};
+use micold_core::terminal::LaunchMode;
+use micold_core::workspace::Workspace;
+use micold_daemon::catalog::Catalog;
+use micold_daemon::config_load::LoadedFile;
+use micold_daemon::config_watch::ConfigRuntime;
+use micold_daemon::state::DaemonState;
+use uuid::Uuid;
+
+/// `PATH` is process-global; this binary runs one test, so there is nothing else to race with.
+static PATH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if cond() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    cond()
+}
+
+/// A stand-in for `command` that records its argv (joined by `$*`) and its whole environment to
+/// `<bin>/<command>.argv` / `.env`, then reads its stdin until closed (as a real AI CLI's PTY
+/// child would).
+fn stand_in(bin: &Path, command: &str) {
+    let argv_file = bin.join(format!("{command}.argv"));
+    let env_file = bin.join(format!("{command}.env"));
+    let script = format!(
+        "#!/bin/sh\nprintf '%s' \"$*\" > '{a}'\nenv > '{e}'\nexec cat > /dev/null\n",
+        a = argv_file.display(),
+        e = env_file.display(),
+    );
+    let path = bin.join(command);
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A catalog holding one AI-CLI session of `provider` at the project root.
+fn catalog_with_ai_cli_session(
+    project_dir: &Path,
+    store_dir: &Path,
+    provider: AiCli,
+) -> (Catalog, SessionId) {
+    let id = SessionId::from_uuid(Uuid::from_u128(0xA1C11));
+    let session = Session::restored(
+        id,
+        SessionLocation::Default,
+        SessionLabel::Named("AI".into()),
+        TerminalMode::AiCli,
+        provider,
+    );
+    let mut sessions = BTreeMap::new();
+    sessions.insert(project_dir.to_path_buf(), vec![session]);
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project_dir.to_path_buf(),
+            false,
+            Availability::Available,
+        )],
+        active: Some(project_dir.to_path_buf()),
+        sessions,
+        ..Default::default()
+    };
+    let projects_path = store_dir.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    let catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    );
+    (catalog, id)
+}
+
+/// T060: configured `args`/`env` add to Codex's own launch — never a replacement — and a
+/// configured `api_key_file` reaches it as `OPENAI_API_KEY` in the environment, never on the
+/// command line (contract rows `args`, `env`, `api_key_file`; FR-013, SC-008).
+#[test]
+fn configured_args_and_env_add_to_the_clis_own_launch_and_the_api_key_never_reaches_argv() {
+    let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bin = tempfile::tempdir().unwrap();
+    stand_in(bin.path(), "codex");
+    let previous_path = std::env::var_os("PATH");
+    std::env::set_var(
+        "PATH",
+        std::env::join_paths([
+            bin.path().to_path_buf(),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ])
+        .unwrap(),
+    );
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (catalog, id) = catalog_with_ai_cli_session(project.path(), store.path(), AiCli::Codex);
+    let state = DaemonState::new(catalog);
+
+    let key_file = project.path().join("codex.key");
+    std::fs::write(&key_file, "sk-codex-test\n").unwrap();
+    let text = format!(
+        "schema = 1\n[daemon]\nname = \"d\"\nkind = \"host\"\n\n[[ai.cli]]\nid = \"codex\"\nargs = [\"--extra-flag\"]\napi_key_file = \"{}\"\nenv = {{ FOO = \"bar\" }}\n",
+        key_file.display(),
+    );
+    let config = micold_core::daemon_config::parse(&text, "test.toml").expect("a valid config");
+    state.set_config(Arc::new(ConfigRuntime::new(LoadedFile {
+        path: PathBuf::from("test.toml"),
+        config,
+        hash: "x".to_string(),
+        warnings: Vec::new(),
+    })));
+
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("start the ai-cli session");
+    let live = state.live_session(id).expect("registered");
+    assert!(
+        wait_until(Duration::from_secs(5), || bin
+            .path()
+            .join("codex.argv")
+            .exists()),
+        "the stand-in must have run and recorded its launch"
+    );
+    live.kill().expect("kill");
+
+    let argv = std::fs::read_to_string(bin.path().join("codex.argv")).unwrap();
+    assert!(
+        argv.contains("--extra-flag"),
+        "configured args must be appended to the app's own: {argv}"
+    );
+    assert!(
+        !argv.contains("sk-codex-test"),
+        "the api key must never be on the command line: {argv}"
+    );
+
+    let env = std::fs::read_to_string(bin.path().join("codex.env")).unwrap();
+    assert!(
+        env.lines().any(|l| l == "OPENAI_API_KEY=sk-codex-test"),
+        "the configured api_key_file must reach Codex as OPENAI_API_KEY: {env}"
+    );
+    assert!(
+        env.lines().any(|l| l == "FOO=bar"),
+        "configured env must be added to the launch environment: {env}"
+    );
+
+    match previous_path {
+        Some(p) => std::env::set_var("PATH", p),
+        None => std::env::remove_var("PATH"),
+    }
+}
+
+/// #1532, contract row `enabled`: a CLI the configuration disables refuses the start with its own
+/// reason, never "not on `PATH`" — the two causes are different and a user and the log must be
+/// told which one actually happened, even when (as here) the binary is installed and would be
+/// found just fine.
+#[test]
+fn a_disabled_cli_refuses_the_start_with_its_own_reason_not_not_on_path() {
+    let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bin = tempfile::tempdir().unwrap();
+    stand_in(bin.path(), "codex");
+    let previous_path = std::env::var_os("PATH");
+    std::env::set_var(
+        "PATH",
+        std::env::join_paths([
+            bin.path().to_path_buf(),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ])
+        .unwrap(),
+    );
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (catalog, id) = catalog_with_ai_cli_session(project.path(), store.path(), AiCli::Codex);
+    let state = DaemonState::new(catalog);
+
+    let text = "schema = 1\n[daemon]\nname = \"d\"\nkind = \"host\"\n\n[[ai.cli]]\nid = \"codex\"\nenabled = false\n";
+    let config = micold_core::daemon_config::parse(text, "test.toml").expect("a valid config");
+    state.set_config(Arc::new(ConfigRuntime::new(LoadedFile {
+        path: PathBuf::from("test.toml"),
+        config,
+        hash: "x".to_string(),
+        warnings: Vec::new(),
+    })));
+
+    let err = state
+        .start_session(id, LaunchMode::Fresh)
+        .expect_err("a disabled CLI must refuse the start");
+    let message = err.to_string();
+    assert!(
+        message.contains("disabled"),
+        "the refusal must name the real reason: {message}"
+    );
+    assert!(
+        !message.to_lowercase().contains("path"),
+        "a disabled CLI must never be reported as \"not on PATH\": {message}"
+    );
+    assert!(
+        !bin.path().join("codex.argv").exists(),
+        "a disabled CLI must never actually launch"
+    );
+
+    match previous_path {
+        Some(p) => std::env::set_var("PATH", p),
+        None => std::env::remove_var("PATH"),
+    }
+}
+
+/// T059/T063: a configured `model` is Claude Code's default when the session's own choice is
+/// still "default" (contract row `model`; `data-model` V7 refuses `model` for any other CLI, so
+/// only this one CLI needs the end-to-end check).
+#[test]
+fn a_configured_model_is_claude_codes_default_launch_model() {
+    let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bin = tempfile::tempdir().unwrap();
+    stand_in(bin.path(), "claude");
+    let previous_path = std::env::var_os("PATH");
+    std::env::set_var(
+        "PATH",
+        std::env::join_paths([
+            bin.path().to_path_buf(),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ])
+        .unwrap(),
+    );
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (catalog, id) =
+        catalog_with_ai_cli_session(project.path(), store.path(), AiCli::ClaudeCode);
+    let state = DaemonState::new(catalog);
+
+    let text = "schema = 1\n[daemon]\nname = \"d\"\nkind = \"host\"\n\n[[ai.cli]]\nid = \"claude_code\"\nmodel = \"opus\"\n";
+    let config = micold_core::daemon_config::parse(text, "test.toml").expect("a valid config");
+    state.set_config(Arc::new(ConfigRuntime::new(LoadedFile {
+        path: PathBuf::from("test.toml"),
+        config,
+        hash: "x".to_string(),
+        warnings: Vec::new(),
+    })));
+
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("start the ai-cli session");
+    let live = state.live_session(id).expect("registered");
+    assert!(
+        wait_until(Duration::from_secs(5), || bin
+            .path()
+            .join("claude.argv")
+            .exists()),
+        "the stand-in must have run and recorded its launch"
+    );
+    live.kill().expect("kill");
+
+    let argv = std::fs::read_to_string(bin.path().join("claude.argv")).unwrap();
+    assert!(
+        argv.contains("--model opus"),
+        "the configured model must launch as the default model choice: {argv}"
+    );
+
+    match previous_path {
+        Some(p) => std::env::set_var("PATH", p),
+        None => std::env::remove_var("PATH"),
+    }
+}

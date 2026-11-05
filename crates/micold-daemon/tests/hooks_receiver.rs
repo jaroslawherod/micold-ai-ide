@@ -426,6 +426,7 @@ mod status_line_block {
                     ..ConfigLocations::default()
                 },
                 guarded: true,
+                api_key_helper: None,
             }
         }
 

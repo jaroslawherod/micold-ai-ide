@@ -433,7 +433,7 @@ const CLI_CONFIG_DIRS: &[&str] = &[
     ".local/share/opencode",
 ];
 
-fn version_ok(version: &str) -> bool {
+pub(crate) fn version_ok(version: &str) -> bool {
     let mut parts = version.splitn(3, '.');
     let (Some(major), Some(minor), Some(tail)) = (parts.next(), parts.next(), parts.next()) else {
         return false;

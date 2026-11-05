@@ -330,6 +330,7 @@ async fn an_unguarded_launchs_settings_file_has_no_deny_rules() {
         cwd: f.wt("a"),
         locations: Default::default(),
         guarded,
+        api_key_helper: None,
     };
     for (guarded, expected) in [(true, true), (false, false)] {
         let path = f.receiver.prepare_settings(id, context(guarded)).unwrap();

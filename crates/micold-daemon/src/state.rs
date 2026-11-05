@@ -745,6 +745,55 @@ fn with_launch_env(mut env: Vec<(String, String)>, provider: AiCli) -> Vec<(Stri
     env
 }
 
+/// `env` with `cli`'s [`micold_core::daemon_config::ai_cli::LaunchOverlay`] added, after
+/// `launch_env` (contract row `env`: "Added to the CLI's launch environment, after
+/// `launch_env`"). `api_key_file`'s content is read here — the one place this daemon reads a
+/// secret file for an AI CLI's own launch — and only for the CLIs that take it at session start
+/// rather than through `apiKeyHelper` ([`micold_core::daemon_config::ai_cli::uses_api_key_helper`]);
+/// a file that cannot be read contributes no key, logged rather than failing the launch (FR-019).
+/// Unlike [`with_launch_env`], a configured name **replaces** any existing value of the same name:
+/// this is the user's explicit configuration for this one CLI, more specific than an
+/// environment-include script's general output.
+fn with_configured_env(
+    mut env: Vec<(String, String)>,
+    cli: &micold_core::daemon_config::AiCli,
+) -> Vec<(String, String)> {
+    use micold_core::daemon_config::ai_cli::{
+        launch_overlay, uses_api_key_helper, CLAUDE_API_KEY_FILE_VAR,
+    };
+    let api_key = if uses_api_key_helper(cli.id) {
+        None
+    } else {
+        cli.api_key_file
+            .as_ref()
+            .and_then(|file| match file.read() {
+                Ok(value) => Some(value.expose().to_string()),
+                Err(e) => {
+                    tracing::warn!(error = %e, cli = ?cli.id, "api_key_file could not be read");
+                    None
+                }
+            })
+    };
+    let overlay = launch_overlay(cli, api_key.as_deref());
+    for (name, value) in overlay.env {
+        env.retain(|(existing, _)| *existing != name);
+        env.push((name, value));
+    }
+    // Claude Code's `apiKeyHelper` subprocess (`ai-key claude_code`) has no daemon state of its
+    // own; it reads the key file's path from the session environment it inherits, never its
+    // content (that would put the key where `ps`/`/proc` could see it, SC-008).
+    if uses_api_key_helper(cli.id) {
+        if let Some(file) = &cli.api_key_file {
+            env.retain(|(existing, _)| existing != CLAUDE_API_KEY_FILE_VAR);
+            env.push((
+                CLAUDE_API_KEY_FILE_VAR.to_string(),
+                file.path().display().to_string(),
+            ));
+        }
+    }
+    env
+}
+
 /// Write `wanted(<current content>)` to `file` unless it is already that, creating its folder; a
 /// missing file reads as empty. Written in place, so the file keeps its mode, owner and any link to
 /// it. A failure is logged (#1439 FR-019: never fatal); `false` then.
@@ -1431,8 +1480,15 @@ impl DaemonState {
 
     /// `available` limited to the CLIs `offered.json` lists, when there is one, and to those whose
     /// command is in the `bin` folder it names: a copy elsewhere on the spawn `PATH` (the home's
-    /// `.local/bin`, feature 1289) is not the one the application installed.
+    /// `.local/bin`, feature 1289) is not the one the application installed. Then, always, to the
+    /// CLIs the configuration file does not disable (#1532, contract row `enabled`, FR-013): a
+    /// `[[ai.cli]]` entry with `enabled = false` hides that CLI regardless of install or `PATH`
+    /// state, on every daemon kind.
     fn only_offered(&self, available: Vec<AiCli>) -> Vec<AiCli> {
+        let available: Vec<AiCli> = available
+            .into_iter()
+            .filter(|cli| !self.ai_cli_disabled(*cli))
+            .collect();
         match self.offered_clis() {
             Some(offered) => available
                 .into_iter()
@@ -1445,6 +1501,71 @@ impl DaemonState {
                 .collect(),
             None => available,
         }
+    }
+
+    /// `which`'s own `[[ai.cli]]` entry in the live configuration (#1532), or `None` with no
+    /// configuration file at all, or none naming `which`.
+    fn configured_ai_cli(&self, which: AiCli) -> Option<micold_core::daemon_config::AiCli> {
+        self.config
+            .get()
+            .map(|runtime| runtime.current())
+            .and_then(|config| {
+                config
+                    .ai
+                    .cli
+                    .iter()
+                    .find(|entry| entry.id.ai_cli() == which)
+                    .cloned()
+            })
+    }
+
+    /// Whether `which` is explicitly disabled by the configuration (contract row `enabled`):
+    /// `enabled = false`, never the absence of an entry (default `true`).
+    fn ai_cli_disabled(&self, which: AiCli) -> bool {
+        self.configured_ai_cli(which)
+            .and_then(|entry| entry.enabled)
+            == Some(false)
+    }
+
+    /// `which`'s configured `args` (contract row `args`), appended after its own launch args
+    /// ([`micold_core::terminal::LaunchSpec::cli_args`]) — empty with no entry or no `args` set.
+    fn ai_cli_args_for(&self, which: AiCli) -> Vec<String> {
+        self.configured_ai_cli(which)
+            .map(|entry| entry.args)
+            .unwrap_or_default()
+    }
+
+    /// `choice`, or — only when it is [`ModelChoice::Default`] — the configured `model` (contract
+    /// row `model`, Claude Code only; refused for any other CLI at `validate` time, V7), as the
+    /// session's default when nothing more specific was chosen.
+    fn effective_model_for(&self, which: AiCli, choice: ModelChoice) -> ModelChoice {
+        if !choice.is_default() {
+            return choice;
+        }
+        self.configured_ai_cli(which)
+            .and_then(|entry| entry.model)
+            .and_then(|name| micold_core::structured::model::ModelName::parse(&name).ok())
+            .map(ModelChoice::Named)
+            .unwrap_or(choice)
+    }
+
+    /// The `apiKeyHelper` command for `which`'s per-session settings (#1532, contract row
+    /// `api_key_file`): `<this executable> ai-key <cli>`, only for a CLI whose key reaches it that
+    /// way ([`micold_core::daemon_config::ai_cli::uses_api_key_helper`]) and only when one is
+    /// actually configured. `None` with no current executable path either: that makes a missing
+    /// helper, not a wrong one.
+    fn api_key_helper_for(&self, which: AiCli) -> Option<String> {
+        use micold_core::daemon_config::ai_cli::uses_api_key_helper;
+        let cli = self.configured_ai_cli(which)?;
+        if cli.api_key_file.is_none() || !uses_api_key_helper(cli.id) {
+            return None;
+        }
+        let exe = std::env::current_exe().ok()?;
+        Some(format!(
+            "{} ai-key {}",
+            crate::hooks::shell_quoted(&exe),
+            crate::ai_key::cli_arg(which),
+        ))
     }
 
     /// Record the data directory pasted images are kept in (feature 487). A no-op if already set.
@@ -1865,6 +1986,7 @@ impl DaemonState {
             cwd: spec.cwd.clone(),
             locations: claude_locations(spec),
             guarded: guard != crate::hooks::GuardState::Off,
+            api_key_helper: self.api_key_helper_for(spec.provider),
         };
         match receiver.prepare_settings(id, status) {
             Ok(path) => {
@@ -2048,7 +2170,23 @@ impl DaemonState {
     /// nothing in practice: nobody sets `PI_OFFLINE` by accident, and someone who sets it
     /// deliberately means it.
     fn ai_cli_env_for(&self, cwd: &Path, provider: AiCli) -> Vec<(String, String)> {
-        with_launch_env(self.env_include_vars_for(cwd), provider)
+        self.ai_cli_env_overlay(
+            with_launch_env(self.env_include_vars_for(cwd), provider),
+            provider,
+        )
+    }
+
+    /// `env` with `which`'s configured `[[ai.cli]]` overlay added (`with_configured_env`), or
+    /// `env` unchanged with no entry for `which`.
+    fn ai_cli_env_overlay(
+        &self,
+        env: Vec<(String, String)>,
+        which: AiCli,
+    ) -> Vec<(String, String)> {
+        match self.configured_ai_cli(which) {
+            Some(cli) => with_configured_env(env, &cli),
+            None => env,
+        }
     }
 
     /// The `PATH` a session spawned in `cwd` gets (feature 029, BUG-001, FR-003b): the one the
@@ -6434,92 +6572,121 @@ impl DaemonState {
         // One resolution serves the check and the spawn (#441): looked up twice, an invalidation
         // landing in between (a Settings save, a worktree delete) gave the spawn another
         // environment than the one the CLI was found in, and re-ran the script.
-        let ai_cli_env = if plan.mode == TerminalMode::AiCli {
-            let provider = plan.provider.provider();
-            let resolved = self.spawn_env_for(&plan.cwd);
-            if !provider.is_available(&session_path(&resolved.vars))
-                || !self
-                    .only_offered(vec![plan.provider])
-                    .contains(&plan.provider)
-            {
-                // Is there a folder to have looked in (037 M2 review F2)? The script cannot be
-                // sourced in a directory that does not exist, and `env_include::resolve` reports
-                // that attempt as timed out. Without this a session whose folder was deleted was
-                // refused for a script that "timed out" there, and never reached the sentence that
-                // names the folder. Asked only once the CLI was not found: a start that finds it
-                // goes on as before, and learns of the folder from the refused spawn below, as a
-                // Regular session does.
-                if !plan.cwd.is_dir() {
-                    let reason = folder_gone(&plan.cwd);
+        let ai_cli_env =
+            if plan.mode == TerminalMode::AiCli {
+                let provider = plan.provider.provider();
+                // Checked ahead of the `PATH` walk below (#1532, contract row `enabled`, FR-009):
+                // a CLI the configuration disables is refused for that reason, never reported as
+                // "not on PATH" when it may be installed and found just fine — the two causes
+                // need two sentences, or the log and the refusal shown to the user describe an
+                // attempt that did not happen.
+                if self.ai_cli_disabled(plan.provider) {
+                    let reason = format!(
+                        "{} is disabled in the daemon's configuration",
+                        provider.display_name()
+                    );
                     tracing::warn!(
                         session = %id.0,
-                        cwd = %plan.cwd.display(),
-                        "session folder is gone; not starting"
+                        cli = provider.command(),
+                        "AI CLI disabled in the configuration; not starting"
                     );
                     self.refuse_and_forget_env(id, &plan.cwd, &reason);
                     return Err(io::Error::new(io::ErrorKind::NotFound, reason));
                 }
-                let image = image_reference();
-                let reason = micold_core::cli_reason::start_refusal(
-                    plan.provider,
-                    resolved.env,
-                    place(&image),
-                    AttemptDir::Dir(&plan.cwd),
-                    launch,
-                );
-                tracing::warn!(
-                    session = %id.0,
-                    cli = provider.command(),
-                    env = ?resolved.env,
-                    "AI CLI not on PATH; not starting"
-                );
-                self.refuse_and_forget_env(id, &plan.cwd, &reason);
-                return Err(io::Error::new(io::ErrorKind::NotFound, reason));
-            }
-
-            // FR-008 / T046: the CLI is installed, but is the conversation still there? A row the
-            // user is clicking Start on was offered because a conversation existed at startup; it
-            // can be deleted afterwards, by the CLI or by hand, and nothing tells us.
-            //
-            // Gated on `resumable` — the record having been marked at startup — for two reasons.
-            // It is the only state in which absence is *news*: a session created but never used
-            // has no recorded conversation either, and refusing that would break `Fresh`-adjacent
-            // resumes of sessions the daemon never saw a transcript for. And it keeps the check to
-            // one stat() on the path a user actually clicks.
-            //
-            // Reported, not silently started fresh: reusing the id for a new conversation would
-            // put the user in an empty session wearing the old one's title (spec clarification
-            // 2026-08-16).
-            //
-            // Not for a provider that mints its own ids (feature 488, FR-006): a session of one
-            // that never recorded a conversation (or whose binding was never made) is not "gone",
-            // it simply starts fresh, which is what its launch arguments already do.
-            if launch == LaunchMode::Resume
-                && plan.resumable
-                && provider.identity() == ConversationIdentity::AppAssigned
-            {
-                let gone = Self::conversation_gone(provider, &plan.cwd, plan.resume_handle);
-                if gone {
-                    let reason = conversation_gone_text(provider);
+                let resolved = self.spawn_env_for(&plan.cwd);
+                if !provider.is_available(&session_path(&resolved.vars))
+                    || !self
+                        .only_offered(vec![plan.provider])
+                        .contains(&plan.provider)
+                {
+                    // Is there a folder to have looked in (037 M2 review F2)? The script cannot be
+                    // sourced in a directory that does not exist, and `env_include::resolve` reports
+                    // that attempt as timed out. Without this a session whose folder was deleted was
+                    // refused for a script that "timed out" there, and never reached the sentence that
+                    // names the folder. Asked only once the CLI was not found: a start that finds it
+                    // goes on as before, and learns of the folder from the refused spawn below, as a
+                    // Regular session does.
+                    if !plan.cwd.is_dir() {
+                        let reason = folder_gone(&plan.cwd);
+                        tracing::warn!(
+                            session = %id.0,
+                            cwd = %plan.cwd.display(),
+                            "session folder is gone; not starting"
+                        );
+                        self.refuse_and_forget_env(id, &plan.cwd, &reason);
+                        return Err(io::Error::new(io::ErrorKind::NotFound, reason));
+                    }
+                    let image = image_reference();
+                    let reason = micold_core::cli_reason::start_refusal(
+                        plan.provider,
+                        resolved.env,
+                        place(&image),
+                        AttemptDir::Dir(&plan.cwd),
+                        launch,
+                    );
                     tracing::warn!(
                         session = %id.0,
                         cli = provider.command(),
-                        "no recorded conversation to resume; not starting"
+                        env = ?resolved.env,
+                        "AI CLI not on PATH; not starting"
                     );
-                    self.lock().start_failures.insert(id, reason.clone());
+                    self.refuse_and_forget_env(id, &plan.cwd, &reason);
                     return Err(io::Error::new(io::ErrorKind::NotFound, reason));
                 }
-            }
-            Some(with_launch_env(resolved.vars, plan.provider))
-        } else {
-            None
-        };
+
+                // FR-008 / T046: the CLI is installed, but is the conversation still there? A row the
+                // user is clicking Start on was offered because a conversation existed at startup; it
+                // can be deleted afterwards, by the CLI or by hand, and nothing tells us.
+                //
+                // Gated on `resumable` — the record having been marked at startup — for two reasons.
+                // It is the only state in which absence is *news*: a session created but never used
+                // has no recorded conversation either, and refusing that would break `Fresh`-adjacent
+                // resumes of sessions the daemon never saw a transcript for. And it keeps the check to
+                // one stat() on the path a user actually clicks.
+                //
+                // Reported, not silently started fresh: reusing the id for a new conversation would
+                // put the user in an empty session wearing the old one's title (spec clarification
+                // 2026-08-16).
+                //
+                // Not for a provider that mints its own ids (feature 488, FR-006): a session of one
+                // that never recorded a conversation (or whose binding was never made) is not "gone",
+                // it simply starts fresh, which is what its launch arguments already do.
+                if launch == LaunchMode::Resume
+                    && plan.resumable
+                    && provider.identity() == ConversationIdentity::AppAssigned
+                {
+                    let gone = Self::conversation_gone(provider, &plan.cwd, plan.resume_handle);
+                    if gone {
+                        let reason = conversation_gone_text(provider);
+                        tracing::warn!(
+                            session = %id.0,
+                            cli = provider.command(),
+                            "no recorded conversation to resume; not starting"
+                        );
+                        self.lock().start_failures.insert(id, reason.clone());
+                        return Err(io::Error::new(io::ErrorKind::NotFound, reason));
+                    }
+                }
+                Some(self.ai_cli_env_overlay(
+                    with_launch_env(resolved.vars, plan.provider),
+                    plan.provider,
+                ))
+            } else {
+                None
+            };
 
         let size = self.desired_size(id);
         let cwd = plan.cwd.clone();
         let mut seeded = None;
         let spawned = match plan.mode {
             TerminalMode::AiCli => {
+                // The configured default model (#1532, contract row `model`) is resolved once and
+                // fed to both `effort`'s lookup and `model` itself: `launch_effort` looks an
+                // effort level up by the model that is actually launching
+                // (`structured::effort::effort_support`), and doing that lookup against the raw,
+                // pre-override choice named a model nothing launches, letting an effort level the
+                // configured model does not support through unfiltered.
+                let effective_model = self.effective_model_for(plan.provider, plan.model.clone());
                 let mut spec = LaunchSpec {
                     cwd: plan.cwd.clone(),
                     session_id: id.0,
@@ -6528,8 +6695,9 @@ impl DaemonState {
                     mode: launch,
                     env: ai_cli_env
                         .expect("the launch gate resolves every AI-CLI start's environment"),
-                    model: plan.model.clone(),
-                    effort: self.launch_effort(id, &plan.model, &plan.effort),
+                    effort: self.launch_effort(id, &effective_model, &plan.effort),
+                    model: effective_model,
+                    cli_args: self.ai_cli_args_for(plan.provider),
                 };
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
@@ -8131,7 +8299,10 @@ impl DaemonState {
                     ModelChoice::Default,
                     EffortChoice::Default,
                 ));
-                let effort = self.launch_effort(id, &model, &effort);
+                // Resolved once, then fed to both `effort` and `model` — see the start path's
+                // comment above the same two lines for why the order matters (#1532).
+                let effective_model = self.effective_model_for(provider, model);
+                let effort = self.launch_effort(id, &effective_model, &effort);
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
@@ -8139,8 +8310,9 @@ impl DaemonState {
                     resume_handle,
                     provider,
                     mode: LaunchMode::Resume,
-                    model,
+                    model: effective_model,
                     effort,
+                    cli_args: self.ai_cli_args_for(provider),
                 };
                 let kind = match dead {
                     Proc::Pty { .. } => SessionKind::Terminal,

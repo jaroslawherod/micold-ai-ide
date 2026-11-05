@@ -2656,6 +2656,7 @@ mod structured_args_tests {
                 name => ModelChoice::Named(ModelName::parse(name).unwrap()),
             },
             effort: None,
+            cli_args: Vec::new(),
         }
     }
 

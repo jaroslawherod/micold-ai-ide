@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: tasks
-- **Next step**: wait on CI, merge the design PR; next unit: milestone M1
+- **Phase**: milestone M1
+- **Next step**: rebase onto origin/main, full gate, push, open the milestone PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1699 | design (tasks + milestones for Issue 11) | open | — |
+| #1699 | design (tasks + milestones for Issue 11) | merged | 98aa6edcc561301f70c671b74113b9877ce2d9fd |
 
 ## Milestones
 
 | M | Deliverable | Tasks | Tier | PR |
 |---|---|---|---|---|
-| M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | — |
+| M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | TBD |
 | M2 | AI sign-in delivery, read-only on every kind; stays valid without a CLI refresh | T065, T065a, T065b, T065c | full | — |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | — |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
@@ -69,6 +69,8 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D1 | spec | Write a new spec? | No: design merged on main (PR #1509, `specs/daemon-config-file/spec.md` FR-013/FR-013a-g/FR-025/FR-033/FR-034/FR-040/FR-043, SC-006/SC-008; contract "`[[ai.cli]]`" section). Same precedent as #1524, #1525, #1526, #1527, #1528 and #1534 | agent-resolved | specs/daemon-config-file/autopilot-1527.md D1 |
 | D2 | tasks | `speckit-analyze` F1 (HIGH): FR-013a's "unless the CLI documents which of the two wins" exception contradicts the contract's and data-model's unconditional "at most one of `sign_in_file`/`token_file`/`api_key_file`/`use_machine_sign_in`" | Dropped the exception clause from FR-013a: no CLI in `AiCli::ALL` documents a precedence, and the schema (contract + data-model, already merged) is deliberately the stricter, unconditional rule. Prose-only fix, no new round (review-rounds.md exception) | agent-resolved | speckit-analyze F1; contracts/daemon-config.md row `api_key_file`; data-model.md "AiCli" |
 | D3 | tasks | Resumed unit found `origin/main` 11 commits ahead of this branch's HEAD (the ledger's recorded tip `93bc2a7f9` was stale), including one commit (#1531) editing `tasks.md`'s milestones heading line that our own uncommitted work also touched | Committed the uncommitted tasks/milestones work, then `git rebase origin/main`; one textual conflict on the shared heading line (both add an issue name to the same list) — resolved by keeping both additions (`Issue 10 (#1531)` and `Issue 11 (#1532)`), no content lost on either side. Verified no other conflict markers and all four Issue 11 milestone sections intact after the rebase | agent-resolved | `git log 93bc2a7f9..origin/main --oneline`; `git diff` of resolved `tasks.md` |
+| D4 | milestone M1 | T062 names "no sign-in is ever mounted writable" and "the sign-in location is a link, re-created at every session start" — but sign-in delivery is M2's T065 (not yet implemented), and M1's Deliverable line only covers field-to-launch mapping | Scoped T062 to its first two clauses — `settings_file`/`place` land under the CLI's config dir, `place.as` cannot escape it — as pure path-mapping functions (`daemon_config::ai_cli::place_target`, `settings_file_name`), consistent with M1's Verify line (no sandbox/kube integration command listed) and Deliverable text. The sign-in clauses are M2/T065's own stated scope; left for that milestone | agent-resolved | tasks.md M1 Verify line; tasks.md T065 |
+| D5 | milestone M1 | Review A round 2 F1 (BLOCKER): `AiCliTable::configured(...)` (T061's version/enabled override) is never called from the real client/kube provisioning paths — is wiring them in-scope for M1? | No: neither `kube::start::pod_target` nor `micold-client::daemon::container_target` has a per-CLI `version`/`args`/`model` value available today — both build their `AiCliSelection`/`KubeSettings.providers` from a bare `BTreeSet<AiCli>`, with no field for any `[[ai.cli]]` key beyond which CLIs are chosen. That data model, and the Settings UI that would produce it, is M4's own named scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067) — wiring `.configured()` into those call sites now would mean inventing M4's data model inside M1. `AiCliTable::configured` stays the pure, tested builder M1's Deliverable and Verify line (`provision::ai_cli`, core-only) call for; M4 calls it once its own Settings-side `[[ai.cli]]` values exist | agent-resolved | `grep -rn "AiCliTable::pinned()\|table: AiCliTable" crates/` outside tests; tasks.md M4 line; `KubeSettings.providers`/`AiCliSelection` definitions |
 
 ## Review rounds
 
@@ -76,9 +78,14 @@ Tasks review A round 1 (snapshot `08da6558cfb79253faee3b170a8c04b4666d9efa:01448
 
 Tasks review A round 2 (sonnet, fix diff only; snapshot `a0459e0031fc4415dd96b496c1c308ca07e11886:c8d8ea65b9e5a5d8c25228f0383c1c912b0538a7`): CLEAN. All three round 1 fixes confirmed to hold; both new Verify targets (`config_reload.rs`, `kube::credentials`) confirmed to exist. (Earlier snapshot `3ad4fced4370a500be17fe9f2d2a4553dfbaba24:93bc2a7f9a0a8723aa5ec8061cfe36c235c9f6f3` went stale when the branch rebased onto `origin/main` past 11 new commits, one of which touched `tasks.md`'s milestones heading line; resolved with no content loss, see note below.)
 
+Milestone M1 review A round 1 (code-review skill equivalent, general-purpose agent, high effort; no snapshot — pre-commit working tree): CHANGES. F1 [BLOCKER] two `StatusContext` literals (`tests/mcp/worktree_guard_sessions.rs`, `tests/settings/plan_usage_setting.rs`) missed the new `api_key_helper` field — fixed, both literals now carry `api_key_helper: None`. F2 [MAJOR] a config-disabled CLI's start refusal reused the "not on PATH" sentence, misleading when the CLI is actually installed — fixed in `state.rs`'s `start_session_gated`: `ai_cli_disabled` is checked first and gets its own reason ("… is disabled in the daemon's configuration"). No other findings. All fixed, confirmed by a green `mise run check`, `cargo clippy --workspace --all-targets -D warnings`, and the scoped gate (one unrelated pre-existing failure, `exclusivity::a_displaced_client_is_not_terminated`, reproduced identically on `git stash`'s clean `98aa6edcc` baseline — not this diff's).
+
+Milestone M1 review A round 2 (sonnet, full diff — round 1 took no snapshot): CHANGES. F1 [BLOCKER] `AiCliTable::configured(...)` (the `version`/`enabled` override, T061) is never called from the real provisioning call sites (`crates/micold-core/src/kube/start.rs`'s `pod_target`, `crates/micold-client/src/daemon.rs`'s `container_target`) — declined, see D5. F2 [MAJOR] `launch_effort`'s model lookup used the session's raw, pre-override model while the sibling `model` field in the same `LaunchSpec` used `effective_model_for`'s overridden one, so an effort level could pass unfiltered for a model that is not what actually launches — fixed at both `LaunchSpec` construction sites (start and respawn paths) in `state.rs`: the effective model is now resolved once and fed to both `launch_effort` and `model`. F3 [MINOR] `launch_overlay`'s `args`/`model` fields are unit-tested but unread in production (`state.rs` re-derives the same mapping through `ai_cli_args_for`/`effective_model_for`) — declined, see D5. F4 [MINOR] the disabled-CLI refusal path (round 1's F2 fix) had no direct test of the refusal reason itself — fixed, added `a_disabled_cli_refuses_the_start_with_its_own_reason_not_not_on_path` to `tests/ai_cli_config.rs`, asserting the reason names "disabled" and never "path", and that the CLI never actually launches. F2 and F4 fixed, confirmed by a green `mise run check`, `cargo fmt --check`, and `cargo test -p micold-daemon --test ai_cli_config --test ai_cli_availability` (24 passed). F1 and F3 declined (D5): no new round required, since review-rounds.md's round limit counts rounds that fix a BLOCKER/MAJOR of *that* round, and this round's remaining open findings are declined, not deferred-but-agreed.
+
 ## Declined review findings
 
-None yet.
+- M1 review A round 2, F1 [BLOCKER]: `AiCliTable::configured(...)` not called from the real provisioning call sites (`kube::start::pod_target`, `micold-client::daemon::container_target`). Declined — see D5: neither production call site has a per-CLI `version`/`enabled` value to pass in today (`KubeSettings.providers` and `AiCliSelection` are both a bare `AiCli` set, no version/args/model field exists on the client side yet); that data model is M4's own stated scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067). `AiCliTable::configured` is exactly what M1's Deliverable and Verify line (`cargo test -p micold-core provision::ai_cli`, core-only) call for: the pure builder, ready for M4 to call once the Settings-side data exists.
+- M1 review A round 2, F3 [MINOR]: `daemon_config::ai_cli::launch_overlay`'s `args`/`model` fields unread in production (state.rs re-derives via `ai_cli_args_for`/`effective_model_for`). Declined: `effective_model_for` additionally validates the model string with `ModelName::parse` (`launch_overlay` does not — it is a pure capability-mapping function tested in isolation, not the only place the mapping has to be applied correctly), and `ai_cli_args_for` is a one-line accessor; collapsing them would couple the launch-spec wiring to a type (`LaunchOverlay`) built for a different purpose (env mapping, including the two API-key-reaching-env rules). Left as two small, independently correct functions rather than one with a secondary mode.
 
 ## Handover
 

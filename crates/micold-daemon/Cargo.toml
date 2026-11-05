@@ -112,6 +112,10 @@ name = "ai_cli_availability"
 path = "tests/ai_cli_availability.rs"
 
 [[test]]
+name = "ai_cli_config"
+path = "tests/ai_cli_config.rs"
+
+[[test]]
 name = "attach_apply"
 path = "tests/attach_apply.rs"
 

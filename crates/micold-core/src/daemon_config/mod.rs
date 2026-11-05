@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub mod ai_cli;
 mod files;
 pub mod matching;
 mod resolved;
@@ -25,6 +26,7 @@ mod tests;
 pub use files::{check_files, secret_entries};
 pub use resolved::{resolved_view, ResolvedView, SecretState, SecretStatus};
 pub use secret::{SecretPath, SecretValue};
+pub(crate) use validate::version_ok;
 pub use validate::{diagnose, parse, ConfigError, Severity};
 
 /// The schema this build writes and reads.

@@ -157,6 +157,33 @@ async fn an_environment_with_no_cli_reports_an_empty_set_rather_than_failing() {
     );
 }
 
+/// #1532, contract row `enabled`: `enabled = false` hides a CLI regardless of `PATH` — the
+/// configuration overrules installation, on every daemon kind.
+#[tokio::test]
+async fn a_cli_disabled_in_the_configuration_is_hidden_even_though_it_is_on_path() {
+    let claude = AiCli::ClaudeCode.provider().command();
+    let _path = ScratchPath::with(&[claude]);
+
+    let store = tempfile::tempdir().unwrap();
+    let state = service_with(store.path(), None);
+    let text = "schema = 1\n[daemon]\nname = \"d\"\nkind = \"host\"\n\n[[ai.cli]]\nid = \"claude_code\"\nenabled = false\n";
+    let config = micold_core::daemon_config::parse(text, "test.toml").expect("a valid config");
+    state.set_config(Arc::new(micold_daemon::config_watch::ConfigRuntime::new(
+        micold_daemon::config_load::LoadedFile {
+            path: PathBuf::from("test.toml"),
+            config,
+            hash: "x".to_string(),
+            warnings: Vec::new(),
+        },
+    )));
+    let mut client = connect(&state).await;
+
+    assert!(
+        ask(&mut client, 1, None).await.is_empty(),
+        "claude_code is on PATH but `enabled = false` must hide it from availability"
+    );
+}
+
 // ---------------------------------------------------------------------------------------
 // BUG-001 (feature 029, FR-003b): the answer follows the environment a session is spawned with
 // ---------------------------------------------------------------------------------------
