@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
 - **Phase**: clarify
-- **Next step**: clarify unit: resolve the FR-008 marker (project identity)
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- FR-008 project identity: normalised remote URL with per-project override; no remote = own project per daemon _(decided by user)_. Override name/location deferred to the plan.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -43,7 +45,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1: FR-008 project identity (category 1; orchestrator spec line 208 defers it to this feature's plan, so the repo does not settle it). Options: normalised remote URL with per-project override (Recommended) / app project id / declared name.
+None.
 
 ## Follow-ups not done
 
