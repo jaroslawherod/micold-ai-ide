@@ -9,8 +9,8 @@
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
-use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
-use iced::{Element, Event, Length, Point, Rectangle, Size};
+use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
+use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
 use micold_core::pane_layout::{Axis, Divider, PaneId, PaneLayout, Placement, Rect, SplitEvent};
 use micold_core::tokens::Roles;
 
@@ -394,6 +394,26 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
                 child.as_widget_mut().operate(state, l, renderer, operation);
             }
         });
+    }
+
+    /// What the panes' content floats: a composer's model and effort lists, a tooltip. Without it
+    /// the panes drew their pickers as bare fields (BUG-1679).
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &iced::Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
+        overlay::from_children(
+            &mut self.children,
+            tree,
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 
     fn update(
@@ -820,5 +840,30 @@ mod tests {
             g.header(&release(), Some(Point::new(800.0, 300.0)), &geo, false),
             None
         );
+    }
+
+    /// A pane's content floats lists of its own (the structured session's model and effort
+    /// pickers sit in its composer); a split view that dropped them left the picker as a bare
+    /// field with nothing under it (BUG-1679).
+    #[test]
+    fn a_list_floated_by_a_pane_is_floated_by_the_split_view() {
+        use super::super::picker::Row;
+        use super::super::test_support::{roles, Mounted};
+        use super::super::typeahead::Typeahead;
+
+        let typeahead: Typeahead<'static, String> = Typeahead::new(
+            "",
+            vec![Row::new("Sonnet 5.5", Vec::new())],
+            |q| format!("typed {q}"),
+            roles(),
+        )
+        .open(true);
+        let split = SplitView::new(
+            &PaneLayout::single(),
+            MIN,
+            roles(),
+            vec![Element::from(typeahead)],
+        );
+        assert!(Mounted::new(split).floats(), "the pane's open list is not floated");
     }
 }
