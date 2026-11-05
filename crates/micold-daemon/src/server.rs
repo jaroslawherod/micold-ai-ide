@@ -208,6 +208,7 @@ pub async fn run() -> io::Result<()> {
         log_path = ?logging.path,
         "micold-daemon starting"
     );
+    crate::settings::log_retired_warnings();
 
     let catalog = Catalog::load_default();
     // A recovered (corrupt) catalog is surfaced, not swallowed (data-model C4). At `warn`, because

@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1537
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
-- **Phase**: tasks
-- **Next step**: commit, push, design PR
+- **Phase**: milestone M1
+- **Next step**: gate + review A/B, then open the M1 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1704 | Design (milestones for Issue 15) | open | |
+| #1704 | Design (milestones for Issue 15) | merged | 5e72b83360ee747bc80ad577a468d2119f47bb48 |
 
 ## Milestones
 

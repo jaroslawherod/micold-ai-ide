@@ -2692,6 +2692,7 @@ dependencies = [
  "libc",
  "micold-client",
  "micold-core",
+ "micold-daemon",
  "notify",
  "portable-pty",
  "serde",

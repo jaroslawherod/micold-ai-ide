@@ -11,8 +11,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use micold_core::protocol::messages::CloneFailureWire;
 
-/// The environment variable naming the directory every clone must lie under.
+/// The retired environment variable that named the directory every clone must lie under (read only
+/// with `test-env`, #1537).
 pub const ROOT_ENV: &str = "MICOLD_REPOS_ROOT";
+
+/// The configuration key that names that directory.
+pub const ROOT_KEY: &str = "storage.clone_root";
 
 /// The configured clone root: `storage.clone_root` of the configuration file, else the variable.
 pub fn configured_root() -> Option<PathBuf> {
@@ -36,7 +40,7 @@ fn refuse(text: impl Into<String>) -> CloneFailureWire {
 fn checked_dest(root: Option<&Path>, dest: &str) -> Result<PathBuf, CloneFailureWire> {
     let Some(root) = root else {
         return Err(refuse(format!(
-            "this daemon keeps no clones: {ROOT_ENV} is not set"
+            "this daemon keeps no clones: `{ROOT_KEY}` is not set"
         )));
     };
     let dest = PathBuf::from(dest);
@@ -81,7 +85,7 @@ fn git(dir: Option<&Path>, args: &[&str]) -> Result<(), CloneFailureWire> {
 }
 
 /// Clone `url` to `dest`, or fetch when `dest` already holds a clone. `root` is the daemon's
-/// [`ROOT_ENV`]; a `dest` outside it is refused before git runs.
+/// [`ROOT_KEY`]; a `dest` outside it is refused before git runs.
 pub fn ensure_clone(root: Option<&Path>, url: &str, dest: &str) -> Result<(), CloneFailureWire> {
     let dest = checked_dest(root, dest)?;
     let lock = lock_for(&dest);
@@ -308,7 +312,7 @@ mod tests {
         }
         assert!(matches!(
             ensure_clone(None, "u", "/data/repos/x"),
-            Err(CloneFailureWire::Other(t)) if t.contains(ROOT_ENV)
+            Err(CloneFailureWire::Other(t)) if t.contains(ROOT_KEY)
         ));
         assert!(!root.exists());
     }

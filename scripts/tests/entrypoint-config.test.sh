@@ -28,7 +28,7 @@ run_entry() {
     printf '%s\n' "$1" >"$work/daemon.toml"
   fi
   env -u MISE_DATA_DIR -u XDG_DATA_HOME MICOLD_PASSWD_FILE="$work/passwd" \
-    MICOLD_GROUP_FILE="$work/group" MICOLD_HOME="$work/home" MICOLD_SSHD="$work/sshd" \
+    MICOLD_GROUP_FILE="$work/group" HOME="$work/home" MICOLD_SSHD="$work/sshd" \
     MICOLD_CONFIG_FILE="$work/daemon.toml" sh "$ENTRY" >/dev/null 2>&1 </dev/null
   grep -E '^(HostKey|AuthorizedKeysFile)=' "$work/sshd-args" 2>/dev/null
 }

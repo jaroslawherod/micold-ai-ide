@@ -211,18 +211,16 @@ fi
 # 5. **The environment a scene runs under is the scene's.** Everything above is one rule applied to
 # `PATH`, to `$SHELL` and to the provider set: a published frame may not depend on the machine that
 # produced it (FR-011b, FR-013). The log filter is the same rule and was the last place it leaked.
-# This application ships as a systemd user service that exports `MICOLD_LOG=info` into every process
-# it starts, so a scene run from a terminal *inside the application* inherited `info`, never saw the
-# service's answer to "which AI CLIs can I run", and waited out `scene_wait_providers` -- while the
-# same scene on a runner, where nothing sets the variable, passed. A `:-` default is what makes that
-# possible, so the assertion is that there is not one.
-filter_line="$(sed -n 's/^  MICOLD_LOG=\(.*\)$/\1/p' site/capture/scenes/lib.sh)"
-if [ -z "$filter_line" ]; then
-  fail "the scene sets its own log filter" "lib.sh assigns MICOLD_LOG nowhere"
-elif printf '%s' "$filter_line" | grep -q ':-'; then
-  fail "the scene sets its own log filter" \
-    "MICOLD_LOG defers to the environment: $filter_line"
-elif printf '%s' "$filter_line" | grep -q 'micold_daemon::server=debug'; then
+# The `MICOLD_LOG` variable is retired (#1537), so the scene writes the filter as `daemon.log` in
+# the host daemon's own file, `<data dir>/daemon.toml`, which no machine setting can override. The
+# assertion is that it does so, with the line that matters turned on, and sets no environment one.
+filter_line="$(grep -n 'log = "' site/capture/scenes/lib.sh | head -1)"
+filter_value="$(sed -n 's/.*"info,micold_daemon::server=debug".*/&/p' site/capture/scenes/lib.sh)"
+if grep -q '^  MICOLD_LOG=' site/capture/scenes/lib.sh; then
+  fail "the scene sets its own log filter" "lib.sh still assigns the retired MICOLD_LOG"
+elif [ -z "$filter_line" ]; then
+  fail "the scene sets its own log filter" "lib.sh writes no daemon.log"
+elif [ -n "$filter_value" ]; then
   pass "the scene sets its own log filter"
 else
   fail "the scene sets its own log filter" \

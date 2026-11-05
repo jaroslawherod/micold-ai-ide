@@ -105,12 +105,11 @@ COPY micold-daemon /usr/local/bin/micold-daemon
 
 # No USER directive: the uid is supplied at run time so the image works for every user. A uid baked
 # in here would be correct only for whoever happened to match it.
-# Where the daemon listens *inside* the container. `0.0.0.0` here, not `127.0.0.1`: the runtime
-# forwards the published host port to the container's bridge address, so a container-loopback bind
-# would leave the published port unreachable. What guards the listener is the mounted secret, which
-# on this transport is the only thing that does.
-ENV MICOLD_LISTEN_ADDR=0.0.0.0:7727
-
+# Where the daemon listens *inside* the container comes from its configuration file
+# (`listen.tcp`, `0.0.0.0:7727`), not from the image: `MICOLD_LISTEN_ADDR` is retired (#1537). Not
+# `127.0.0.1`: the runtime forwards the published host port to the container's bridge address, so a
+# container-loopback bind would leave the published port unreachable. What guards the listener is
+# the mounted secret, which on this transport is the only thing that does.
 EXPOSE 7727
 
 # `image.source` is not decoration: GHCR uses it to attach the published package to this

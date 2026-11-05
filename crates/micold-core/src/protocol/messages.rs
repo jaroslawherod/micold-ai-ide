@@ -470,7 +470,7 @@ pub enum ClientMsg {
         display_name: String,
     },
     /// Make sure `dest` holds a clone of `url` (feature 686, FR-007): clone it when absent, fetch
-    /// when present. `dest` must lie under the daemon's `MICOLD_REPOS_ROOT`. Answered by
+    /// when present. `dest` must lie under the daemon's `storage.clone_root`. Answered by
     /// [`DaemonMsg::RepoCloned`] or [`DaemonMsg::RepoCloneFailed`].
     RepoClone {
         /// The remote's URL.
