@@ -286,12 +286,12 @@ mod tests {
     #[test]
     fn a_value_with_quotes_and_newlines_survives_a_round_trip_through_git() {
         let text = "[user]\n\tname = \"A \\\"B\\\" \\\\ C\"\n[credential]\n\thelper = store\n[core]\n\tbare\n";
-        let Ok(out) = sanitize_gitconfig_text(text) else {
+        let Ok(out) = sanitize_gitconfig_text(text, true) else {
             eprintln!("skipped: no git on this host");
             return;
         };
         assert!(!out.contains("helper"), "{out}");
-        let again = sanitize_gitconfig_text(&out).expect("the output re-parses");
+        let again = sanitize_gitconfig_text(&out, true).expect("the output re-parses");
         assert_eq!(again, out);
         assert!(out.contains(r#"name = "A \"B\" \\ C""#), "{out}");
         assert!(out.contains(r#"bare = "true""#), "{out}");
