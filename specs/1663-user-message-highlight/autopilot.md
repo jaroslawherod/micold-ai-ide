@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1663
 - **Worktree branch**: feat/1663_structured-view-messages-sent-by-the-user-are-not
 - **Started**: 2026-11-05
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks (design PR open)
+- **Next step**: tasks review, then design PR
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T010 | full | Every user turn shows tinted surface + 4dp primary left edge, light and dark; selection unchanged; guide updated | | pending |
 
 ## Decisions
 
@@ -29,6 +30,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Tint+accent or right alignment | Tint + left accent, full width | agent-resolved | spec.md#Assumptions |
 
 ## Review rounds
+
+- tasks round 1 snapshot: 310509aaeb23c63fae305dd51dbe390d7b0cbdf9:287bae52c9187a35edb3df4479dbf4c789d222d9 (after speckit-analyze fixes: probe, command-output pair, selection colour, fold-state test)
+- tasks round 1: CLEAN (2 MINOR: T006 [P] dropped; T001 label left, prose only)
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
@@ -52,3 +56,4 @@ None.
 ## Follow-ups not done
 
 None.
+
