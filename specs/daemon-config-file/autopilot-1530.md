@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1530_the-daemon-s-credential-helper-chooses-the-token
 - **Started**: 2026-11-04
 - **Phase**: M2 gate and PR
-- **Next step**: continue M2 from Handover: retire the grant messages (T053), then verify, review, gate, PR
+- **Next step**: merge M2 PR, then the Close unit (last milestone)
 
 ## Pull requests
 
@@ -36,6 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Review rounds
 
 - M1: review A (code-review high) 10 findings, 4 fixed (host reset now per forge, fallback on unreadable config, absolute config path, token file leading blank line); review B (sonnet) CLEAN, 3 MINOR (F1 fixed). Snapshot 503b13b8:826681cfb.
+
+- M2: review A (code-review high) CLEAN, 3 MINOR (F2 fixed, F1 noted in Follow-ups); review B (sonnet) F1 MAJOR (no cycle-log entry) fixed, F2/F3 MINOR noted. Rebased onto origin/main afterwards; full gate re-run on the rebased tree. A Close unit follows this last milestone.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
