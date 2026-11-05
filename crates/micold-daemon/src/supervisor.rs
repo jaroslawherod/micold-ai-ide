@@ -296,11 +296,46 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         identity_exists,
         lang_inherited,
     );
-    // After the legacy edits: the configuration's helper, reset and rewrite replace theirs.
-    edits.extend(config_git_edits(
-        &crate::settings::current(),
-        exe.as_deref(),
-    ));
+    let config = config_git_edits(&crate::settings::current(), exe.as_deref());
+    combine_git_edits(edits, config)
+}
+
+/// Whether `key` belongs to the `GIT_CONFIG_COUNT` / `_KEY_n` / `_VALUE_n` block.
+fn is_git_config_block(key: &std::ffi::OsStr) -> bool {
+    let key = key.to_string_lossy();
+    key == "GIT_CONFIG_COUNT"
+        || key.starts_with("GIT_CONFIG_KEY_")
+        || key.starts_with("GIT_CONFIG_VALUE_")
+}
+
+/// Whether `edits` set a `GIT_CONFIG_*` block, and how many entries its `GIT_CONFIG_COUNT` names.
+fn git_block_count(edits: &[EnvEdit]) -> Option<usize> {
+    edits.iter().find_map(|edit| match edit {
+        EnvEdit::Set(key, value) if key == "GIT_CONFIG_COUNT" => value.to_str()?.parse().ok(),
+        _ => None,
+    })
+}
+
+/// Join the container's git edits with the configuration's (#1744). Each layer sets a whole
+/// `GIT_CONFIG_COUNT` / `_KEY_n` / `_VALUE_n` block, and git reads `COUNT` entries from whichever
+/// keys are set, so two blocks merged key by key leave the later `COUNT` over the earlier keys: a
+/// configuration block of one reset entry beside the container's five cleared every helper and
+/// dropped the daemon's own. The block with more entries replaces the other wholesale (the
+/// configuration's on a tie, as it is the later and newer); the rest of the later layer
+/// (`MICOLD_DAEMON_CONFIG`, `GIT_TERMINAL_PROMPT`) always applies.
+fn combine_git_edits(legacy: Vec<EnvEdit>, config: Vec<EnvEdit>) -> Vec<EnvEdit> {
+    let (Some(old), Some(new)) = (git_block_count(&legacy), git_block_count(&config)) else {
+        return legacy.into_iter().chain(config).collect();
+    };
+    let keep_block = old > new;
+    let in_block =
+        |edit: &EnvEdit| matches!(edit, EnvEdit::Set(key, _) if is_git_config_block(key));
+    let mut edits: Vec<EnvEdit> = if keep_block {
+        legacy
+    } else {
+        legacy.into_iter().filter(|e| !in_block(e)).collect()
+    };
+    edits.extend(config.into_iter().filter(|e| !keep_block || !in_block(e)));
     edits
 }
 
@@ -1016,6 +1051,67 @@ mod container_git_tests {
         assert_eq!(env["GIT_CONFIG_VALUE_1"], format!("!{EXE} git-credential"));
         assert_eq!(env["GIT_TERMINAL_PROMPT"], "0");
         assert_eq!(env["GIT_CONFIG_GLOBAL"], format!("{DATA}/gitconfig"));
+    }
+
+    /// #1744: the container block (5 entries) and a tokenless sandbox configuration block (the one
+    /// reset entry) reached the session as `COUNT=1` over five keys.
+    #[test]
+    fn the_container_and_configuration_git_blocks_reach_the_session_as_one_consistent_block() {
+        use micold_core::scoped_credential::git_env::{session_git_env, SessionGit};
+        let legacy = container_git_edits(Some(DATA), Some(Path::new(EXE)), true);
+        let config: Vec<EnvEdit> = session_git_env(&SessionGit {
+            bases: &[],
+            daemon: EXE,
+            config: "/c.toml",
+            isolate: true,
+            ssh_to_https: true,
+            fallback: &[],
+        })
+        .into_iter()
+        .map(|(k, v)| EnvEdit::Set(k.into(), v.into()))
+        .collect();
+        let env = set(&combine_git_edits(legacy, config));
+        let count: usize = env["GIT_CONFIG_COUNT"].parse().unwrap();
+        let keys = env
+            .keys()
+            .filter(|k| k.starts_with("GIT_CONFIG_KEY_"))
+            .count();
+        let values = env
+            .keys()
+            .filter(|k| k.starts_with("GIT_CONFIG_VALUE_"))
+            .count();
+        assert_eq!((count, keys, values), (keys, keys, keys), "{env:?}");
+        assert_eq!(env["GIT_CONFIG_VALUE_1"], format!("!{EXE} git-credential"));
+        assert_eq!(env["MICOLD_DAEMON_CONFIG"], "/c.toml");
+    }
+
+    #[test]
+    fn a_configuration_block_with_tokens_replaces_the_container_block() {
+        let block = |n: usize| -> Vec<EnvEdit> {
+            let mut v = vec![EnvEdit::Set(
+                "GIT_CONFIG_COUNT".into(),
+                n.to_string().into(),
+            )];
+            for i in 0..n {
+                v.push(EnvEdit::Set(
+                    format!("GIT_CONFIG_KEY_{i}").into(),
+                    "k".into(),
+                ));
+                v.push(EnvEdit::Set(
+                    format!("GIT_CONFIG_VALUE_{i}").into(),
+                    "v".into(),
+                ));
+            }
+            v
+        };
+        let env = set(&combine_git_edits(block(5), block(7)));
+        assert_eq!(env["GIT_CONFIG_COUNT"], "7");
+        assert_eq!(
+            env.keys()
+                .filter(|k| k.starts_with("GIT_CONFIG_KEY_"))
+                .count(),
+            7
+        );
     }
 
     #[test]
