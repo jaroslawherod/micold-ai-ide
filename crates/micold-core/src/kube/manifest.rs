@@ -122,17 +122,23 @@ pub fn holds_retired_credential(on_pod: &str) -> bool {
     })
 }
 
-/// The pod's stamp is a readable one from before the config map (or the startup secret) was
-/// mounted: such a pod has no `daemon.toml` and runs on start-up variables the daemon no longer is
-/// given, or cannot see an `env_file`, so it is recreated whatever the user chose about drift. An unreadable stamp is not this (it asks, as always).
+/// The pod's stamp is a readable one from before the config map was mounted: such a pod has no
+/// `daemon.toml` and runs on start-up variables the daemon no longer is given, so it is recreated
+/// whatever the user chose about drift. An unreadable stamp is not this (it asks, as always).
 pub fn lacks_config_map(on_pod: &str) -> bool {
+    lacks_stamp_key(on_pod, "config_map")
+}
+
+/// The stamp is readable and from before the startup secret volume (#1533): such a pod cannot see
+/// an `env_file`. The caller recreates it only when the daemon has an `env_file`.
+pub fn lacks_startup_secret(on_pod: &str) -> bool {
+    lacks_stamp_key(on_pod, "startup_secret")
+}
+
+fn lacks_stamp_key(on_pod: &str, key: &str) -> bool {
     serde_json::from_str::<Value>(on_pod)
         .ok()
-        .and_then(|stamp| {
-            stamp
-                .as_object()
-                .map(|o| !o.contains_key("config_map") || !o.contains_key("startup_secret"))
-        })
+        .and_then(|stamp| stamp.as_object().map(|o| !o.contains_key(key)))
         .unwrap_or(false)
 }
 
@@ -605,7 +611,7 @@ mod tests {
     fn the_claim_is_mounted_at_data_with_an_empty_dir_at_tmp() {
         let p = &all()[0];
         let volumes = p["spec"]["volumes"].as_array().unwrap();
-        assert_eq!(volumes.len(), 5);
+        assert_eq!(volumes.len(), 6);
         assert_eq!(volumes[0]["name"], "data");
         assert_eq!(
             volumes[0]["persistentVolumeClaim"]["claimName"],
@@ -843,13 +849,15 @@ mod tests {
             .iter()
             .filter(|v| v.get("secret").is_some())
             .collect();
-        assert_eq!(secrets.len(), 1);
+        // The access secret and the optional startup one (#1533).
+        assert_eq!(secrets.len(), 2);
         assert_eq!(secrets[0]["secret"]["secretName"], names().access_secret());
+        assert_eq!(secrets[1]["secret"]["secretName"], names().startup_secret());
         assert!(p["spec"].get("imagePullSecrets").is_none());
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
             .unwrap();
-        assert_eq!(mounts.len(), 5);
+        assert_eq!(mounts.len(), 6);
     }
 
     #[test]
@@ -867,7 +875,7 @@ mod tests {
             .filter_map(|v| v["secret"]["secretName"].as_str())
             .collect();
         // The pull secret is read by the kubelet, not mounted.
-        assert_eq!(volumes.len(), 3, "{volumes:?}");
+        assert_eq!(volumes.len(), 4, "{volumes:?}");
         assert!(!volumes.contains(&n.pull_secret().as_str()));
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
@@ -884,7 +892,7 @@ mod tests {
             p["spec"]["imagePullSecrets"],
             json!([{ "name": n.pull_secret() }])
         );
-        assert_eq!(mounts.len(), 5 + 2);
+        assert_eq!(mounts.len(), 6 + 2);
     }
 
     fn golden(name: &str) -> Value {
@@ -965,7 +973,10 @@ mod tests {
         let now = PodStamp::of(&settings(), IMAGE);
         let old = now.as_str().replace(",\"startup_secret\":true", "");
         assert_ne!(old, now.as_str());
-        assert!(lacks_config_map(&old));
+        assert!(lacks_startup_secret(&old));
+        assert!(!lacks_config_map(&old));
+        assert!(!lacks_startup_secret(now.as_str()));
+        assert!(!lacks_startup_secret("not json"));
     }
 
     /// #1533: the script is a second key of the config map and changes its hash; the pod mounts

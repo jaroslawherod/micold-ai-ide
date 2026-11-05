@@ -135,7 +135,11 @@ pub fn leftovers(allowed: &BTreeSet<KubeCredential>, names: &ResourceNames) -> L
     Leftovers {
         pod: names.pod(),
         pvc: names.pvc(),
-        secrets: names.all_secrets(allowed),
+        secrets: names
+            .all_secrets(allowed)
+            .into_iter()
+            .chain([names.startup_secret()])
+            .collect(),
         config_map: names.config_map(),
     }
 }
@@ -292,6 +296,7 @@ mod tests {
                     n.access_secret(),
                     n.secret(&KubeCredential::GitConfig),
                     n.secret(&KubeCredential::SignIn { cli: AiCli::Codex }),
+                    n.startup_secret(),
                 ],
                 config_map: n.config_map(),
             },

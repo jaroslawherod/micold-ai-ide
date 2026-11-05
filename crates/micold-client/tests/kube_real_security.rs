@@ -47,8 +47,8 @@ async fn kube_real_the_pod_is_locked_down_and_accepts_only_the_access_keys() {
         .collect();
     assert_eq!(
         secrets,
-        vec![names.access_secret()],
-        "only the access secret is mounted"
+        vec![names.access_secret(), names.startup_secret()],
+        "only the access secret and the optional startup secret (#1533) are mounted"
     );
     // A key the access secret does not list is refused, and a password is never offered.
     let stray = tempfile::tempdir().unwrap();
