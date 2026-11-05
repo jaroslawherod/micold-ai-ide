@@ -264,6 +264,29 @@ impl<'a> TranscriptView<'a> {
             .filter(move |e| micold_core::structured::transcript::shown(e, show_raw))
     }
 
+    /// The open subagent threads drawn inside `entry` (#1609), by the thread's place in it: a
+    /// tool card's own thread, or one per placeholder of a sub-agent notice; `None` for a thread
+    /// that is folded.
+    fn threads(&self, entry: &Entry) -> Vec<Option<&'a Transcript>> {
+        let Some(insights) = self.insights else {
+            return Vec::new();
+        };
+        let session = self.session;
+        match entry.kind() {
+            EntryKind::ToolCall(card) => vec![insights.thread(session, &card.id)],
+            EntryKind::SubagentNotice { .. } => insights
+                .insights(session)
+                .map(|i| {
+                    i.unknown_threads(self.transcript)
+                        .iter()
+                        .map(|t| insights.thread(session, &t.parent))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
     /// Where the view draws each request block and resolution row (`ui/transcript/mod.rs`):
     /// under a held card its pending requests, else how its last request ended; requests whose
     /// card is not held after the last entry.
@@ -323,6 +346,10 @@ pub fn rows(view: &TranscriptView<'_>) -> Vec<RowPos> {
     for entry in view.entries() {
         let id = entry.id();
         rows.push(RowPos::Entry(id, Under::Body));
+        for (k, thread) in view.threads(entry).into_iter().enumerate() {
+            let thread = thread.into_iter().flat_map(Transcript::entries);
+            rows.extend(thread.map(|e| RowPos::Entry(id, Under::Thread(index(k), e.id()))));
+        }
         let under = placed.under.get(&id).map_or(0, Vec::len);
         rows.extend((0..under).map(|k| RowPos::Entry(id, Under::Prompt(index(k)))));
     }
@@ -377,6 +404,19 @@ pub fn units<'a>(row: &RowPos, view: &TranscriptView<'a>) -> Vec<Unit<'a>> {
             let open = view.open.contains(entry.key());
             let derived = view.rich.get(view.session, entry.key());
             body_units(entry, open, derived, extras(entry, view))
+        }
+        RowPos::Entry(id, Under::Thread(k, tid)) => {
+            let (Some(entry), Some(insights)) = (view.transcript.entry_by_id(id), view.insights)
+            else {
+                return Vec::new();
+            };
+            let thread = view.threads(entry).get(k as usize).copied().flatten();
+            let Some(e) = thread.and_then(|t| t.entry_by_id(tid)) else {
+                return Vec::new();
+            };
+            let open = insights.entry_open(view.session, e.key());
+            let derived = view.rich.get(view.session, e.key());
+            body_units(e, open, derived, extras(e, view))
         }
         RowPos::Entry(id, Under::Prompt(k)) => {
             let placed = view.placed();
@@ -876,6 +916,22 @@ fn print_of(view: &TranscriptView<'_>, row: &RowPos, start: &TextPos, end: &Text
     hasher.finish()
 }
 
+/// A fingerprint of the thread rows at or between `sel`'s bounds, with their selected text: a
+/// thread entry changing, going or coming is a change (#1609; thread entries are not in `prints`
+/// because their ids are their thread's own).
+fn thread_print(view: &TranscriptView<'_>, sel: &Selection) -> u64 {
+    let (start, end) = sel.bounds();
+    let mut hasher = DefaultHasher::new();
+    for row in rows(view) {
+        if row < start.row || row > end.row || !matches!(row, RowPos::Entry(_, Under::Thread(..))) {
+            continue;
+        }
+        row.hash(&mut hasher);
+        print_of(view, &row, &start, &end).hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
 /// An entry in range's selected text as last seen: at which revision, which part of it, and its
 /// fingerprint.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -899,6 +955,8 @@ struct SessionSelection {
     omitted: Option<u64>,
     /// The prompt rows and their text when last seen (R7).
     prompts: Vec<(RowPos, String)>,
+    /// A fingerprint of the thread rows between the bounds and their selected text (#1609).
+    threads: u64,
     /// The selected text of the entries in range, as last seen.
     prints: HashMap<EntryId, Print>,
 }
@@ -915,6 +973,7 @@ impl SessionSelection {
         self.rebuilds = view.transcript.rebuilds();
         self.omitted = view.transcript.omitted_notice();
         self.prompts = prompt_rows(view);
+        self.threads = self.selection.as_ref().map_or(0, |s| thread_print(view, s));
     }
 
     fn selecting(&self) -> bool {
@@ -1201,6 +1260,10 @@ impl State {
                 },
             );
         }
+        if thread_print(view, &selection) != s.threads {
+            s.clear();
+            return;
+        }
         s.omitted = transcript.omitted_notice();
         self.prompts_changed(view);
     }
@@ -1239,6 +1302,23 @@ impl State {
             let (start, end) = selection.bounds();
             let row = RowPos::Entry(id, Under::Body);
             start.row <= row && row <= end.row
+        });
+        if held {
+            s.clear();
+        }
+    }
+
+    /// A subagent thread, or a card in one, was folded or unfolded (#1609): the thread rows a
+    /// selection holds changed, so it is cleared when it reaches into any thread.
+    pub fn thread_folded(&mut self, session: SessionId) {
+        let Some(s) = self.sessions.get_mut(&session) else {
+            return;
+        };
+        let held = s.selection.as_ref().is_some_and(|selection| {
+            let (start, end) = selection.bounds();
+            [start.row, end.row]
+                .iter()
+                .any(|r| matches!(r, RowPos::Entry(_, Under::Thread(..))))
         });
         if held {
             s.clear();
