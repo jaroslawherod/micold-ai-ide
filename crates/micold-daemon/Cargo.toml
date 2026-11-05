@@ -168,6 +168,10 @@ name = "fatal_startup_is_logged"
 path = "tests/fatal_startup_is_logged.rs"
 
 [[test]]
+name = "gh_shim"
+path = "tests/gh_shim.rs"
+
+[[test]]
 name = "git_credential_config"
 path = "tests/git_credential_config.rs"
 

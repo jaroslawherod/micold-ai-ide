@@ -18,6 +18,7 @@ pub mod credential_config;
 /// Tailing a provider's own append-only event log for busy/idle evidence (feature 026, T064).
 pub mod event_log;
 pub mod framer;
+pub mod gh_shim;
 pub mod git_credential;
 /// Capturing, seeding and saving a session terminal's history (feature 041).
 pub mod history;

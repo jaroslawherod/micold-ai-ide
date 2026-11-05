@@ -2088,7 +2088,42 @@ impl DaemonState {
     /// Environment page lists the directory with what the script printed. The log line names the
     /// directory and the outcome's kind only, never the script's output.
     fn spawn_env_for(&self, cwd: &Path) -> ResolvedEnv {
-        self.with_sandbox_path(self.resolved_env_for(cwd))
+        self.with_gh_shim_path(self.with_sandbox_path(self.resolved_env_for(cwd)))
+    }
+
+    /// `resolved` with `<data_dir>/bin` first on its `PATH` (#1531, T057): the `gh` shim written
+    /// there resolves `GH_TOKEN`/`GH_HOST` for every `gh` call through the configuration's
+    /// chooser, on every session kind (host, SSH, container, Kubernetes) alike — unlike
+    /// [`Self::with_sandbox_path`], this needs no `offered.json` of its own. A no-op without a data
+    /// directory or this process's own executable path (both the shim bakes in), and when writing
+    /// it fails: a session must not fail to spawn over a shim it does not strictly need.
+    fn with_gh_shim_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
+        let Some(data_dir) = crate::settings::current()
+            .data_dir
+            .clone()
+            .or_else(micold_core::paths::data_dir)
+        else {
+            return resolved;
+        };
+        let Ok(exe) = std::env::current_exe() else {
+            return resolved;
+        };
+        let Ok(bin_dir) = crate::gh_shim::write_shim(&data_dir.join("bin"), &exe) else {
+            return resolved;
+        };
+        let mut joined = bin_dir.into_os_string();
+        joined.push(if cfg!(windows) { ";" } else { ":" });
+        joined.push(session_path(&resolved.vars));
+        let joined = joined.to_string_lossy().into_owned();
+        match resolved
+            .vars
+            .iter_mut()
+            .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
+        {
+            Some((_, value)) => *value = joined,
+            None => resolved.vars.push(("PATH".to_string(), joined)),
+        }
+        resolved
     }
 
     /// [`Self::spawn_env_for`] before [`Self::with_sandbox_path`] orders its `PATH`.
