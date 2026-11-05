@@ -1,0 +1,29 @@
+# Cycle Log: #1663 — highlighted user turns (M1)
+
+Append only. Newest last. Tests were written before the code they cover; this was not run through
+the `tdd.run` hook, so the log is kept by hand and says what was and was not seen red.
+
+## Cycle 1 — fill and contrast (T002)
+
+- test: `crates/micold-core/tests/tokens.rs::the_user_turn_fill_stands_apart_and_keeps_text_readable`.
+- red: none. It characterises existing tokens (no code to write), so it passed on the first run;
+  measured values are in `research.md` (R1 addendum). A mutation (`surface_container_low` as the
+  fill) fails the "stands apart from the card fill" assertion by construction (ratio 1.0 < 1.05).
+
+## Cycle 2 — the primitive (T003–T005)
+
+- tests: `crates/micold-material/tests/user_turn.rs` (3 tests).
+- red: written before `UserTurn`, `user_turn_surface` and `user_turn_edge` existed (compile
+  failure on the missing items, which the task counts as red). The first build was run after both
+  were added, so the compile failure itself was not captured. green: 3 passed.
+
+## Cycle 3 — the transcript wiring (T006–T007)
+
+- tests: `crates/micold-client/tests/transcript_entry_view.rs`, six tests (typed and delivered,
+  attachments and empty text, assistant not highlighted, command folded/unfolded with fold
+  state kept and back-to-back turns, sub-agent thread).
+- red: `scripts/build-lock.sh cargo test -p micold-client --test main transcript_entry_view` before
+  the wrap in `entries.rs`: 22 passed, 4 failed (typed/delivered, attachments/empty, command,
+  sub-agent: "lit ... 0" surface pixels; the sub-agent folded count was incidental 23). The
+  assistant-only test passed, as a guard.
+- green: after wrapping both `UserMessage` branches: 26 passed.

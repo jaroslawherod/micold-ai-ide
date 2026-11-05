@@ -107,6 +107,7 @@ pub mod toolbar;
 #[cfg(test)]
 pub mod type_role_mapping;
 pub mod unread_mark;
+pub mod user_turn;
 pub mod virtual_rows;
 mod wide_content;
 pub use accordion::Accordion;
@@ -174,6 +175,7 @@ pub use text_link::TextLink;
 pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toolbar::Toolbar;
 pub use unread_mark::UnreadMark;
+pub use user_turn::UserTurn;
 pub use virtual_rows::VirtualRows;
 pub use wide_content::{within_pane, PaneWidth};
 

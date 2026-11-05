@@ -603,6 +603,37 @@ pub fn queue_row(r: Roles) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A user's turn in the transcript (#1663, `UserTurn`): a flat `surface_container_high` block with
+/// the small corner and no shadow or outline, so it reads apart from the raised cards and from
+/// the background by tone, and depth never doubles as a border (contract §1.5).
+pub fn user_turn_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.surface_container_high))),
+        text_color: Some(color(r.on_surface)),
+        border: radius(shape::SMALL),
+        ..container::Style::default()
+    }
+}
+
+/// The accent edge down the left of a [`user_turn_surface`]: a plain `primary` fill, so it follows
+/// the user's accent (#1663 FR-006). Its left corners follow the surface's, so the bar does not
+/// stick out past the rounded fill.
+pub fn user_turn_edge(r: Roles) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(r.primary))),
+        border: Border {
+            radius: iced::border::Radius {
+                top_left: shape::SMALL,
+                bottom_left: shape::SMALL,
+                top_right: 0.0,
+                bottom_right: 0.0,
+            },
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
 /// A permission request's card in the transcript (feature 942, `PromptCard`): an **outlined** card
 /// — `surface_container_low`, a 1dp `outline_variant` edge and no shadow — so it reads apart from
 /// the raised tool card above it as something waiting for the user, and depth never doubles as a

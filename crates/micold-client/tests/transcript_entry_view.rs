@@ -3,9 +3,11 @@
 
 use crate::support;
 
-use iced::Size;
-use micold_client::features::structured_transcript::State;
+use crate::stream_json::{assistant_block, thinking_block, user_sent};
+use iced::{Element, Size};
+use micold_client::features::structured_transcript::{State, TranscriptMsg};
 use micold_client::icons::Icon;
+use micold_client::ui::transcript::RenderCtx;
 use micold_client::ui::transcript::{
     footer_view, rows, tool_header, tool_status, BlockCache, BlockRenderers, Row, Status, Tone,
     NO_OUTPUT,
@@ -13,6 +15,9 @@ use micold_client::ui::transcript::{
 use micold_core::session::SessionId;
 use micold_core::structured::transcript::{Outcome, ToolCard, ToolStatus, Transcript, TurnFooter};
 use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
+use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, Rgb};
+use micold_material::test_support::Mounted;
 use support::layout::{painted_text_settled_at, renderer};
 use support::transcript::view_of;
 
@@ -470,7 +475,6 @@ fn live_and_resumed_transcripts_give_equal_rows() {
 
 /// Every distinct `ShowRawEvents` a click anywhere in the transcript view publishes.
 fn raw_events_sent(state: &State, session: SessionId, show_raw: bool) -> Vec<bool> {
-    use micold_client::features::structured_transcript::TranscriptMsg;
     let cache = BlockCache::default();
     let ctx = micold_client::ui::transcript::RenderCtx {
         show_raw,
@@ -518,4 +522,218 @@ fn pressing_the_hidden_notice_show_button_turns_raw_events_on() {
     let (state, session) = state_with(&[unreadable(0, "x"), init(1)]);
     // Off: both the toggle and the Show button send `true`, nothing sends `false`.
     assert_eq!(raw_events_sent(&state, session, false), vec![true]);
+}
+
+// ---- #1663: a user's turn is highlighted ----
+
+fn seq_of(events: impl IntoIterator<Item = StructuredEvent>) -> Vec<SequencedEvent> {
+    (0..)
+        .zip(events)
+        .map(|(seq, event)| SequencedEvent { seq, event })
+        .collect()
+}
+
+/// How many pixels of `element`, drawn in `scheme`, are exactly `fill` (the research R6 probe: the
+/// renderer's own pixels, not a predicate).
+fn count_pixels(element: Element<'_, TranscriptMsg>, scheme: ColorScheme, fill: Rgb) -> usize {
+    let element = element.map(|_| String::new());
+    let (buf, _) = Mounted::new_in(element, Size::new(900.0, 6000.0))
+        .in_scheme(scheme)
+        .drawn(iced::Color::TRANSPARENT);
+    buf.as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| p[..3] == [fill.r, fill.g, fill.b] && p[3] == 255)
+        .count()
+}
+
+fn ctx_in<'a>(scheme: ColorScheme, cache: &'a BlockCache) -> RenderCtx<'a> {
+    RenderCtx {
+        roles: tokens::roles(scheme),
+        scheme,
+        cache,
+        selected: None,
+        row: None,
+        show_raw: true,
+    }
+}
+
+fn pixels_of(state: &State, session: SessionId, scheme: ColorScheme, fill: Rgb) -> usize {
+    let cache = BlockCache::default();
+    let element = micold_client::ui::transcript::view(
+        state,
+        session,
+        &BlockRenderers::PLAIN,
+        ctx_in(scheme, &cache),
+    );
+    count_pixels(element, scheme, fill)
+}
+
+const SCHEMES: [ColorScheme; 2] = [ColorScheme::Light, ColorScheme::Dark];
+
+/// Fewer pixels than this of the fill are incidental (anti-aliasing); a user turn is thousands.
+const SURFACE_MIN: usize = 1000;
+
+/// The user-turn surface and the accent edge both appear (FR-001, FR-002).
+fn highlighted(state: &State, session: SessionId, scheme: ColorScheme) -> bool {
+    let r = tokens::roles(scheme);
+    let n = pixels_of(state, session, scheme, r.surface_container_high);
+    n >= SURFACE_MIN && pixels_of(state, session, scheme, r.primary) >= 40
+}
+
+fn bare(state: &State, session: SessionId, scheme: ColorScheme) -> bool {
+    let r = tokens::roles(scheme);
+    let n = pixels_of(state, session, scheme, r.surface_container_high);
+    n < SURFACE_MIN
+}
+
+/// US1 scenario 1, US2 scenarios 1 and 2, SC-004: a typed message and a delivered queued message
+/// are one entry kind, and both carry the highlight, in light and dark.
+#[test]
+fn a_typed_and_a_delivered_message_are_highlighted() {
+    for text in ["typed", "delivered from the queue"] {
+        let (state, session) = state_with(&seq_of([user_sent(text, &[])]));
+        for scheme in SCHEMES {
+            assert!(highlighted(&state, session, scheme), "{text:?} {scheme:?}");
+        }
+    }
+}
+
+/// FR-004, US2 scenario 4: the attachments line is inside the highlight; an empty message renders.
+#[test]
+fn a_message_with_attachments_or_no_text_is_highlighted() {
+    for (text, attachments) in [("see", vec!["a.png"]), ("", vec![])] {
+        let (state, session) = state_with(&seq_of([user_sent(text, &attachments)]));
+        for scheme in SCHEMES {
+            assert!(highlighted(&state, session, scheme), "{text:?} {scheme:?}");
+        }
+    }
+}
+
+/// FR-005, US1 scenario 1: the agent's entries carry neither the tint nor the edge.
+#[test]
+fn assistant_text_and_thinking_are_not_highlighted() {
+    let (state, session) = state_with(&seq_of([
+        assistant_block(ContentBlock::Text {
+            text: "an answer".into(),
+        }),
+        thinking_block("a thought"),
+    ]));
+    for scheme in SCHEMES {
+        assert!(bare(&state, session, scheme), "{scheme:?}");
+    }
+}
+
+/// FR-009: a slash command card sits in the highlight, folded and unfolded, and keeps its fold
+/// state when another entry arrives; two user turns in a row both show it.
+#[test]
+fn a_command_turn_is_highlighted_folded_and_unfolded() {
+    let (mut state, session) = state_with(&seq_of([user_sent("/review the diff", &[])]));
+    let keys: Vec<_> = state
+        .transcript(session)
+        .expect("held")
+        .entries()
+        .filter(|e| {
+            matches!(
+                e.kind(),
+                micold_core::structured::transcript::EntryKind::UserMessage {
+                    command: Some(_),
+                    ..
+                }
+            )
+        })
+        .map(|e| e.key().clone())
+        .collect();
+    assert!(!keys.is_empty(), "the text reads as a command");
+    for scheme in SCHEMES {
+        assert!(highlighted(&state, session, scheme), "folded {scheme:?}");
+    }
+    state.toggle(session, keys[0].clone());
+    for scheme in SCHEMES {
+        assert!(highlighted(&state, session, scheme), "unfolded {scheme:?}");
+    }
+    let r = tokens::roles(ColorScheme::Light);
+    let one = pixels_of(
+        &state,
+        session,
+        ColorScheme::Light,
+        r.surface_container_high,
+    );
+    let before = painted_of(&state, session);
+    state.apply(
+        session,
+        0,
+        &[SequencedEvent {
+            seq: 1,
+            event: user_sent("another", &[]),
+        }],
+        true,
+    );
+    let after = painted_of(&state, session);
+    assert!(
+        before.iter().all(|t| after.contains(t)),
+        "the card stays open when an entry is appended"
+    );
+    assert!(
+        after.iter().any(|t| t.contains("another")),
+        "the second turn is shown: {after:?}"
+    );
+    let two = pixels_of(
+        &state,
+        session,
+        ColorScheme::Light,
+        r.surface_container_high,
+    );
+    assert!(
+        two > one + one / 2,
+        "two consecutive user turns both carry the surface: {one} then {two}"
+    );
+}
+
+/// A sub-agent's thread is drawn by the same entry code: its user turn is highlighted once the
+/// thread is open, and not while it is folded (FR-003).
+#[test]
+fn a_subagent_user_turn_is_highlighted_in_its_open_thread() {
+    use micold_client::features::structured_insights::State as Insights;
+    use micold_client::ui::transcript::{view_with_insights, InsightsCtx};
+    let session = SessionId::new();
+    let events =
+        support::transcript::sequenced(&support::transcript::fixture_lines("subagent-turn"), 0);
+    let mut state = State::default();
+    state.apply(session, 0, &events, false);
+    let mut insights = Insights::default();
+    let main = state.transcript(session).expect("held");
+    insights.apply(session, 0, &events, false, main);
+    let parent = main
+        .entries()
+        .find_map(|e| match e.kind() {
+            micold_core::structured::transcript::EntryKind::ToolCall(c)
+                if c.subagent_messages > 0 =>
+            {
+                Some(c.id.clone())
+            }
+            _ => None,
+        })
+        .expect("a card with a thread");
+    let scheme = ColorScheme::Light;
+    let fill = tokens::roles(scheme).surface_container_high;
+    let count = |insights: &Insights| {
+        let cache = BlockCache::default();
+        let element = view_with_insights(
+            &state,
+            InsightsCtx {
+                state: insights,
+                cli_running: true,
+                mode: micold_core::session::PermissionMode::Default,
+            },
+            session,
+            &BlockRenderers::PLAIN,
+            ctx_in(scheme, &cache),
+        );
+        count_pixels(element, scheme, fill)
+    };
+    assert!(count(&insights) < SURFACE_MIN, "folded");
+    let main = state.transcript(session).expect("held");
+    insights.toggle_thread(session, &parent, main);
+    assert!(count(&insights) >= SURFACE_MIN, "open");
 }

@@ -180,6 +180,28 @@ pub fn divider<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
     )
 }
 
+/// `UserTurn` — a short and a long wrapped message on the user-turn surface with its accent edge.
+pub fn user_turn<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let line = |text: &'static str| -> Element<'a, Message> {
+        material::UserTurn::new(material::Text::new(text, TypeRole::Body, roles), roles).into()
+    };
+    arrange(
+        vec![
+            posed("one line", line("Run the tests and fix what fails."), roles),
+            posed(
+                "a long wrapped message",
+                line(
+                    "Read the failing test first, then the code it covers. Keep the fix small, \
+                     explain what was wrong in one paragraph, and do not touch the other \
+                     tests while you are there.",
+                ),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `RequiredLegend` — the `* required` line a form shows once above its first field (feature 937,
 /// FR-011); the marker itself is posed on the `FormField` entry.
 pub fn required_legend<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
