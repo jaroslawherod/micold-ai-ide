@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M1
-- **Next step**: push HEAD `2d5d3973c` (gate-stamped: `mise run gate`'s unrelated flakes recorded below) to PR #1711 (blocked, see *Open escalation*), then wait on CI, merge PR #1711; next unit: milestone M2
+- **Next step**: push HEAD `19d261d14` (code tree gate-stamped at `2d5d3973c`, `19d261d14` only adds this docs commit on top) to PR #1711 (blocked, see *Open escalation*), then wait on CI, merge PR #1711; next unit: milestone M2
 
 ## Pull requests
 
