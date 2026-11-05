@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: spec
-- **Next step**: clarify unit (spec reviewed; no NEEDS CLARIFICATION markers)
+- **Phase**: clarify
+- **Next step**: plan unit (clarify round 1 clean)
 
 ## Pull requests
 
