@@ -960,6 +960,7 @@ fn bare_process(dir: &Path, script: &str) -> micold_daemon::structured::Structur
         env: Vec::new(),
         model: Default::default(),
         effort: Default::default(),
+        cli_args: Vec::new(),
     };
     micold_daemon::structured::StructuredSession::spawn(
         SessionId(session_id),

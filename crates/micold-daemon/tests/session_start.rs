@@ -630,6 +630,7 @@ fn a_created_session_records_the_cli_the_client_chose() {
             env: Vec::new(),
             model: Default::default(),
             effort: Default::default(),
+            cli_args: Vec::new(),
         })
     };
     assert_eq!(

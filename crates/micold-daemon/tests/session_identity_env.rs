@@ -236,6 +236,7 @@ fn child_side() -> bool {
         env: env_for(&ai_dump),
         model: Default::default(),
         effort: Default::default(),
+        cli_args: Vec::new(),
     };
     let ai = PtySession::spawn_ai_cli(
         SessionId::new(),

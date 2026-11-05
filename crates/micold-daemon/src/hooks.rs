@@ -82,6 +82,10 @@ pub struct StatusContext {
     /// Whether the session is guarded to its worktree: the file then carries the static deny
     /// rules, and omits `permissions` when not (feature 1210, FR-008).
     pub guarded: bool,
+    /// The `apiKeyHelper` command (#1532, contract row `api_key_file`): `<daemon> ai-key
+    /// claude_code`, read on each use so a replaced key file reaches running sessions. `None` with
+    /// no `api_key_file` configured for Claude Code.
+    pub api_key_helper: Option<String>,
 }
 
 /// A session's worktree guard (feature 1210, data-model): fixed when the session is launched, so a
@@ -318,7 +322,13 @@ impl HookReceiver {
         let path = self.settings_file(session);
         std::fs::write(
             &path,
-            settings_json(&url, &token, block.as_ref(), status.guarded),
+            settings_json(
+                &url,
+                &token,
+                block.as_ref(),
+                status.guarded,
+                status.api_key_helper.as_deref(),
+            ),
         )?;
         Ok(path)
     }
@@ -326,7 +336,7 @@ impl HookReceiver {
 
 /// A path for the status-line command: double-quoted, with `/` separators on every platform, as
 /// Claude Code runs the command through Git Bash on Windows (contract S1.2).
-fn shell_quoted(path: &Path) -> String {
+pub(crate) fn shell_quoted(path: &Path) -> String {
     format!("\"{}\"", path.to_string_lossy().replace('\\', "/"))
 }
 
@@ -653,6 +663,10 @@ struct SettingsDoc<'a> {
     permissions: Option<PermissionsBlock>,
     #[serde(rename = "statusLine", skip_serializing_if = "Option::is_none")]
     status_line: Option<&'a StatusLineBlock>,
+    /// `apiKeyHelper` (#1532, contract row `api_key_file`): read on each use, so a replaced key
+    /// file is picked up on Claude Code's next call rather than only at session start.
+    #[serde(rename = "apiKeyHelper", skip_serializing_if = "Option::is_none")]
+    api_key_helper: Option<&'a str>,
 }
 
 /// The per-session `--settings` JSON that points `claude` at this receiver (contracts/hooks.md
@@ -665,6 +679,7 @@ pub fn settings_json(
     token: &str,
     status_line: Option<&StatusLineBlock>,
     guarded: bool,
+    api_key_helper: Option<&str>,
 ) -> String {
     let group = || MatcherGroup {
         matcher: "",
@@ -691,6 +706,7 @@ pub fn settings_json(
             deny: &micold_core::worktree_guard::DENY_RULES,
         }),
         status_line,
+        api_key_helper,
     };
     serde_json::to_string_pretty(&doc).expect("settings json is always serialisable")
 }
@@ -815,7 +831,7 @@ mod tests {
 
     #[test]
     fn a_guarded_sessions_settings_keep_the_pre_tool_use_hook_and_override_nothing() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true);
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true, None);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["hooks"]["PreToolUse"][0]["hooks"][0]["type"], "http");
         // FR-013: only the hooks the session already had; no `allow`, no override key.
@@ -851,6 +867,7 @@ mod tests {
                     cwd: project.path().to_path_buf(),
                     locations: Default::default(),
                     guarded: true,
+                    api_key_helper: None,
                 },
             )
             .unwrap();
@@ -869,7 +886,7 @@ mod tests {
 
     #[test]
     fn an_unguarded_sessions_settings_carry_no_deny_rules() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, false);
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, false, None);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed.get("permissions").is_none(), "{json}");
         assert_eq!(parsed["hooks"]["PreToolUse"][0]["hooks"][0]["type"], "http");
@@ -877,7 +894,7 @@ mod tests {
 
     #[test]
     fn settings_json_denies_worktree_entry_and_creation_but_not_create_worktree() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true);
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true, None);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
             parsed["permissions"]["deny"],
@@ -906,7 +923,13 @@ mod tests {
 
     #[test]
     fn settings_json_embeds_the_url_and_bearer_token() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok-123", None, true);
+        let json = settings_json(
+            "http://127.0.0.1:5000/hook/abc",
+            "tok-123",
+            None,
+            true,
+            None,
+        );
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         // The event's array entry is a matcher-group wrapper (BUG-001) — the `http` hook itself is
         // nested under `hooks`, not placed directly in the top-level array.
@@ -942,5 +965,30 @@ mod tests {
                 "{hook}'s matcher-group must have a non-empty nested hooks array"
             );
         }
+    }
+
+    /// #1532, contract row `api_key_file`: Claude Code's key reaches it through `apiKeyHelper`,
+    /// never through a key in the settings file or on the command line (SC-008).
+    #[test]
+    fn settings_json_carries_the_api_key_helper_when_given_one() {
+        let json = settings_json(
+            "http://127.0.0.1:5000/hook/abc",
+            "tok",
+            None,
+            true,
+            Some("/usr/bin/micold-daemon ai-key claude_code"),
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["apiKeyHelper"],
+            "/usr/bin/micold-daemon ai-key claude_code"
+        );
+    }
+
+    #[test]
+    fn settings_json_omits_api_key_helper_with_none() {
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok", None, true, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed.get("apiKeyHelper").is_none(), "{json}");
     }
 }

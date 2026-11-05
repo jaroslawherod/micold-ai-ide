@@ -166,6 +166,7 @@ async fn the_switch_rewrites_every_live_sessions_settings_and_relay_file() {
         cwd: dir.path().join("project"),
         locations: ConfigLocations::default(),
         guarded: true,
+        api_key_helper: None,
     };
     receiver.set_plan_usage(true);
     let settings = receiver.prepare_settings(session_id(A), context).unwrap();

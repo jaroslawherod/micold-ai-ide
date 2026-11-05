@@ -50,6 +50,10 @@ pub struct LaunchSpec {
     /// session's choice when the model is not known not to take it, else `None`, launched as the
     /// provider's [`effort_args`](crate::provider::AiCliProvider::effort_args) after the model.
     pub effort: Option<crate::structured::effort::EffortLevel>,
+    /// The configured `[[ai.cli]].args` for this CLI (#1532, contract row `args`), appended after
+    /// the provider's own launch args and `model_args`/`effort_args`, and before the tool-server
+    /// binding the caller adds afterward — additions, never a replacement.
+    pub cli_args: Vec<String>,
 }
 
 /// Build the AI CLI argument vector for a launch spec. Pure, so the fresh/resume flag choice is
@@ -68,6 +72,7 @@ pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
     let mut args = provider.launch_args_in(provider.config_dir().as_deref(), id, spec.mode);
     args.extend(provider.model_args(&spec.model));
     args.extend(provider.effort_args(spec.effort.as_ref()));
+    args.extend(spec.cli_args.iter().cloned());
     args
 }
 
@@ -260,6 +265,7 @@ mod launch_args_tests {
                 env: Vec::new(),
                 model: Default::default(),
                 effort,
+                cli_args: Vec::new(),
             };
             let with = launch_args(&spec(Some(EffortLevel::parse("max").unwrap())));
             let without = launch_args(&spec(None));
@@ -268,5 +274,24 @@ mod launch_args_tests {
                 _ => assert_eq!(with, without, "{which:?}"),
             }
         }
+    }
+
+    /// Configured `[[ai.cli]].args` land last, after `model_args`/`effort_args`, additions on top
+    /// of the provider's own argv (contract row `args`; #1532, T059).
+    #[test]
+    fn configured_cli_args_are_appended_after_the_providers_own_launch_args() {
+        let spec = LaunchSpec {
+            cwd: "/w".into(),
+            session_id: Uuid::from_u128(1),
+            resume_handle: Uuid::from_u128(1),
+            provider: AiCli::ClaudeCode,
+            mode: LaunchMode::Fresh,
+            env: Vec::new(),
+            model: Default::default(),
+            effort: None,
+            cli_args: vec!["--verbose".to_string()],
+        };
+        let args = launch_args(&spec);
+        assert_eq!(args.last(), Some(&"--verbose".to_string()));
     }
 }

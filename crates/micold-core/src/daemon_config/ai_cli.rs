@@ -1,0 +1,242 @@
+//! How one parsed `[[ai.cli]]` entry maps onto its CLI's launch and placement (contract
+//! "`[[ai.cli]]`", FR-013/FR-013a-c/FR-013e, data-model V7–V11): which env variable `api_base_url`
+//! and `api_key_file` set, that Claude Code's key reaches it through `apiKeyHelper` instead of an
+//! env variable, and where `settings_file`/`place` land under the CLI's config dir.
+//!
+//! Pure: nothing here reads a file or spawns anything. `crates/micold-daemon/src/state.rs` reads
+//! `api_key_file`'s content and builds the actual launch; this module only says which variable
+//! that content belongs in, and what `args`/`env`/`model` this entry adds on top of the CLI's own
+//! — never a replacement (`validate.rs`'s V7–V10 already refuse what a CLI cannot take).
+
+use std::path::{Path, PathBuf};
+
+use super::{AiCli, CliId};
+
+/// The endpoint variable `api_base_url` sets, for the CLIs that have one (contract row
+/// `api_base_url`). `None` for a CLI `validate.rs`'s V7 already refuses the key for.
+pub fn api_base_url_variable(cli: CliId) -> Option<&'static str> {
+    match cli {
+        CliId::ClaudeCode => Some("ANTHROPIC_BASE_URL"),
+        CliId::Codex => Some("OPENAI_BASE_URL"),
+        CliId::Copilot | CliId::Pi | CliId::Opencode => None,
+    }
+}
+
+/// The variable `api_key_file`'s content is read into at session start, for the CLIs that take
+/// their key that way. `None` for Claude Code, whose key reaches it through `apiKeyHelper`
+/// instead ([`uses_api_key_helper`]) — never through this or any other variable (contract row
+/// `api_key_file`: "Never on the command line"; FR-013, SC-008) — and for a CLI `validate.rs`'s V7
+/// already refuses `api_key_file` for (Copilot, Pi).
+pub fn api_key_env_variable(cli: CliId) -> Option<&'static str> {
+    match cli {
+        CliId::Codex | CliId::Opencode => Some("OPENAI_API_KEY"),
+        CliId::ClaudeCode | CliId::Copilot | CliId::Pi => None,
+    }
+}
+
+/// Whether `cli`'s `api_key_file` reaches the session through `apiKeyHelper` in the per-session
+/// settings (contract row `api_key_file`), read on each use rather than once at session start, so
+/// a replaced key file is picked up on the CLI's next call (FR-013, SC-008). Only Claude Code has
+/// this mechanism today.
+pub fn uses_api_key_helper(cli: CliId) -> bool {
+    cli == CliId::ClaudeCode
+}
+
+/// The variable the daemon hands Claude Code's launched session the configured `api_key_file`'s
+/// **path** in (never its content — `apiKeyHelper` reads that itself, on each use): the `ai-key
+/// claude_code` subcommand `apiKeyHelper` names (`crates/micold-daemon/src/ai_key.rs`) is a short
+/// subprocess with no daemon state of its own, so it reads this from the environment it inherits
+/// from the session that spawned it, rather than re-finding the daemon's configuration file.
+pub const CLAUDE_API_KEY_FILE_VAR: &str = "MICOLD_CLAUDE_API_KEY_FILE";
+
+/// The extra launch args and env one configured `[[ai.cli]]` entry contributes, on top of the
+/// CLI's own (contract rows `args`, `model`, `api_base_url`, `env`): additions, never a
+/// replacement. `api_key` is `api_key_file`'s already-read content, when the entry sets one and
+/// the CLI does not use `apiKeyHelper` for it ([`uses_api_key_helper`]) — reading the file is
+/// `crates/micold-daemon/src/state.rs`'s job, not this pure module's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LaunchOverlay {
+    /// Appended after the CLI's own launch args, before the tool-server binding (contract row
+    /// `args`).
+    pub args: Vec<String>,
+    /// Added to the CLI's launch environment, after `launch_env` (contract row `env`).
+    pub env: Vec<(String, String)>,
+    /// The default model, for the one CLI with a model argument (contract row `model`).
+    pub model: Option<String>,
+}
+
+/// Build `cli`'s [`LaunchOverlay`]. `api_key` is `cli.api_key_file`'s content, already read, or
+/// `None` when there is no file or the CLI reads it through `apiKeyHelper` instead.
+pub fn launch_overlay(cli: &AiCli, api_key: Option<&str>) -> LaunchOverlay {
+    let mut env = Vec::new();
+    if let Some(url) = &cli.api_base_url {
+        if let Some(var) = api_base_url_variable(cli.id) {
+            env.push((var.to_string(), url.clone()));
+        }
+    }
+    if let (Some(key), Some(var)) = (api_key, api_key_env_variable(cli.id)) {
+        env.push((var.to_string(), key.to_string()));
+    }
+    env.extend(cli.env.iter().map(|(k, v)| (k.clone(), v.clone())));
+    LaunchOverlay {
+        args: cli.args.clone(),
+        env,
+        model: (cli.id == CliId::ClaudeCode)
+            .then(|| cli.model.clone())
+            .flatten(),
+    }
+}
+
+/// `place.as`'s target under `config_dir`, or `None` when it would escape (contract row `place`;
+/// `validate.rs`'s V10 already refuses an escaping `place.as` at parse time, so a config that
+/// reaches here is already known good — this is the belt to that suspenders, for a caller with no
+/// validated [`super::DaemonConfig`] of its own to lean on).
+pub fn place_target(config_dir: &Path, as_path: &Path) -> Option<PathBuf> {
+    if as_path.is_absolute()
+        || as_path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return None;
+    }
+    Some(config_dir.join(as_path))
+}
+
+/// `settings_file`'s file name under the CLI's config dir in the sandbox home (contract row
+/// `settings_file`): Claude `settings.json`, Codex `config.toml` (`$CODEX_HOME` already *is* the
+/// config dir there), OpenCode `opencode.json`. `None` for Copilot and Pi, which the contract
+/// marks C,K-unsupported — `validate.rs`'s V10 refuses `settings_file` for them on no kind at all,
+/// so this only names the file for the CLIs that can have one.
+pub fn settings_file_name(cli: CliId) -> Option<&'static str> {
+    match cli {
+        CliId::ClaudeCode => Some("settings.json"),
+        CliId::Codex => Some("config.toml"),
+        CliId::Opencode => Some("opencode.json"),
+        CliId::Copilot | CliId::Pi => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::daemon_config::Place;
+    use std::collections::BTreeMap;
+
+    fn cli(id: CliId) -> AiCli {
+        AiCli {
+            id,
+            enabled: None,
+            version: None,
+            args: Vec::new(),
+            model: None,
+            api_base_url: None,
+            env: BTreeMap::new(),
+            sign_in_file: None,
+            token_file: None,
+            api_key_file: None,
+            settings_file: None,
+            place: Vec::new(),
+            use_machine_sign_in: None,
+        }
+    }
+
+    #[test]
+    fn model_only_overrides_claude_codes_default() {
+        let mut claude = cli(CliId::ClaudeCode);
+        claude.model = Some("opus".to_string());
+        assert_eq!(
+            launch_overlay(&claude, None).model,
+            Some("opus".to_string())
+        );
+
+        let mut codex = cli(CliId::Codex);
+        codex.model = None; // refused by V7 for any other CLI; nothing to carry here.
+        assert_eq!(launch_overlay(&codex, None).model, None);
+    }
+
+    #[test]
+    fn api_base_url_maps_to_the_clis_own_endpoint_variable() {
+        let mut claude = cli(CliId::ClaudeCode);
+        claude.api_base_url = Some("https://proxy.example/v1".to_string());
+        assert_eq!(
+            launch_overlay(&claude, None).env,
+            vec![(
+                "ANTHROPIC_BASE_URL".to_string(),
+                "https://proxy.example/v1".to_string()
+            )]
+        );
+
+        let mut codex = cli(CliId::Codex);
+        codex.api_base_url = Some("https://proxy.example/v1".to_string());
+        assert_eq!(
+            launch_overlay(&codex, None).env,
+            vec![(
+                "OPENAI_BASE_URL".to_string(),
+                "https://proxy.example/v1".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn claude_codes_api_key_never_reaches_env_it_uses_api_key_helper_instead() {
+        assert!(uses_api_key_helper(CliId::ClaudeCode));
+        let mut claude = cli(CliId::ClaudeCode);
+        claude.api_key_file = Some(super::super::SecretPath::new("/secrets/claude.key"));
+        // Even handed the key's content, Claude Code's overlay carries no env for it: the daemon
+        // never puts the key on the command line or in the environment for this CLI (SC-008).
+        assert_eq!(launch_overlay(&claude, Some("sk-test")).env, Vec::new());
+    }
+
+    #[test]
+    fn codexs_api_key_reaches_openai_api_key_at_session_start() {
+        assert!(!uses_api_key_helper(CliId::Codex));
+        let codex = cli(CliId::Codex);
+        assert_eq!(
+            launch_overlay(&codex, Some("sk-test")).env,
+            vec![("OPENAI_API_KEY".to_string(), "sk-test".to_string())]
+        );
+    }
+
+    #[test]
+    fn configured_args_and_env_are_additions_carried_verbatim() {
+        let mut claude = cli(CliId::ClaudeCode);
+        claude.args = vec!["--verbose".to_string()];
+        claude.env.insert("FOO".to_string(), "bar".to_string());
+        let overlay = launch_overlay(&claude, None);
+        assert_eq!(overlay.args, vec!["--verbose".to_string()]);
+        assert_eq!(overlay.env, vec![("FOO".to_string(), "bar".to_string())]);
+    }
+
+    #[test]
+    fn place_as_stays_inside_the_config_dir() {
+        let dir = Path::new("/home/user/.claude");
+        assert_eq!(
+            place_target(dir, Path::new("agents/review.md")),
+            Some(dir.join("agents/review.md"))
+        );
+        assert_eq!(place_target(dir, Path::new("../escape")), None);
+        assert_eq!(place_target(dir, Path::new("/absolute")), None);
+    }
+
+    #[test]
+    fn place_entries_round_trip_through_the_parsed_type() {
+        let place = Place {
+            file: PathBuf::from("/src/mcp.json"),
+            as_path: PathBuf::from("mcp.json"),
+        };
+        let dir = Path::new("/home/user/.codex");
+        assert_eq!(
+            place_target(dir, &place.as_path),
+            Some(dir.join("mcp.json"))
+        );
+    }
+
+    #[test]
+    fn settings_file_names_match_each_clis_own_user_settings() {
+        assert_eq!(settings_file_name(CliId::ClaudeCode), Some("settings.json"));
+        assert_eq!(settings_file_name(CliId::Codex), Some("config.toml"));
+        assert_eq!(settings_file_name(CliId::Opencode), Some("opencode.json"));
+        assert_eq!(settings_file_name(CliId::Copilot), None);
+        assert_eq!(settings_file_name(CliId::Pi), None);
+    }
+}
