@@ -13,7 +13,9 @@ use micold_client::ui::transcript::{
     NO_OUTPUT,
 };
 use micold_core::session::SessionId;
-use micold_core::structured::transcript::{Outcome, ToolCard, ToolStatus, Transcript, TurnFooter};
+use micold_core::structured::transcript::{
+    EntryKey, EntryKind, Outcome, ToolCard, ToolStatus, Transcript, TurnFooter,
+};
 use micold_core::structured::{ContentBlock, SequencedEvent, StructuredEvent};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, Rgb};
@@ -574,17 +576,27 @@ const SCHEMES: [ColorScheme; 2] = [ColorScheme::Light, ColorScheme::Dark];
 /// Fewer pixels than this of the fill are incidental (anti-aliasing); a user turn is thousands.
 const SURFACE_MIN: usize = 1000;
 
+/// Fewer pixels than this of the accent are incidental; the edge is a 4dp bar down the turn.
+const EDGE_MIN: usize = 40;
+
+/// A second user turn adds at least this share of the first turn's surface pixels (3 / 2 of one
+/// turn in total, so the second is more than half a turn: both are painted, not one stretched).
+fn is_two_turns(one: usize, two: usize) -> bool {
+    two > one + one / 2
+}
+
 /// The user-turn surface and the accent edge both appear (FR-001, FR-002).
 fn highlighted(state: &State, session: SessionId, scheme: ColorScheme) -> bool {
     let r = tokens::roles(scheme);
     let n = pixels_of(state, session, scheme, r.surface_container_high);
-    n >= SURFACE_MIN && pixels_of(state, session, scheme, r.primary) >= 40
+    n >= SURFACE_MIN && pixels_of(state, session, scheme, r.primary) >= EDGE_MIN
 }
 
+/// Neither the surface nor the accent edge appears.
 fn bare(state: &State, session: SessionId, scheme: ColorScheme) -> bool {
     let r = tokens::roles(scheme);
-    let n = pixels_of(state, session, scheme, r.surface_container_high);
-    n < SURFACE_MIN
+    pixels_of(state, session, scheme, r.surface_container_high) < SURFACE_MIN
+        && pixels_of(state, session, scheme, r.primary) < EDGE_MIN
 }
 
 /// US1 scenario 1, US2 scenarios 1 and 2, SC-004: a typed message and a delivered queued message
@@ -624,41 +636,111 @@ fn assistant_text_and_thinking_are_not_highlighted() {
     }
 }
 
-/// FR-009: a slash command card sits in the highlight, folded and unfolded, and keeps its fold
-/// state when another entry arrives; two user turns in a row both show it.
+/// FR-005: a tool card (folded and open) is not highlighted.
 #[test]
-fn a_command_turn_is_highlighted_folded_and_unfolded() {
-    let (mut state, session) = state_with(&seq_of([user_sent("/review the diff", &[])]));
-    let keys: Vec<_> = state
+fn a_tool_card_is_not_highlighted() {
+    let session = SessionId::new();
+    let events =
+        support::transcript::sequenced(&support::transcript::fixture_lines("tool-turn"), 0);
+    let mut state = State::default();
+    state.apply(session, 0, &events, false);
+    assert!(
+        state
+            .transcript(session)
+            .expect("held")
+            .entries()
+            .any(|e| matches!(e.kind(), EntryKind::ToolCall(_))),
+        "the fixture holds a tool card"
+    );
+    for scheme in SCHEMES {
+        assert!(bare(&state, session, scheme), "folded {scheme:?}");
+    }
+    open_all(&mut state, session);
+    for scheme in SCHEMES {
+        assert!(bare(&state, session, scheme), "open {scheme:?}");
+    }
+}
+
+/// FR-005: a command's output entry is not highlighted: answering `/context` adds no surface and
+/// no edge to the command turn alone.
+#[test]
+fn command_output_is_not_highlighted() {
+    let mut events = seq_of([user_sent("/context", &[])]);
+    events.extend(support::transcript::sequenced(
+        &support::transcript::fixture_lines("command-builtin-output"),
+        1,
+    ));
+    let (answered, session) = state_with(&events);
+    assert!(
+        answered
+            .transcript(session)
+            .expect("held")
+            .entries()
+            .any(|e| matches!(e.kind(), EntryKind::CommandOutput { .. })),
+        "the fixture holds command output"
+    );
+    let (asked, asked_session) = state_with(&events[..1]);
+    for scheme in SCHEMES {
+        let r = tokens::roles(scheme);
+        for fill in [r.surface_container_high, r.primary] {
+            let (with, without) = (
+                pixels_of(&answered, session, scheme, fill),
+                pixels_of(&asked, asked_session, scheme, fill),
+            );
+            // Glyph anti-aliasing differs by tens of pixels; a wrapped output adds thousands.
+            assert!(
+                with.abs_diff(without) < SURFACE_MIN / 4,
+                "{scheme:?}: {without} pixels before the output, {with} after"
+            );
+        }
+    }
+}
+
+/// A transcript of one slash-command turn and the key of its entry.
+fn command_turn() -> (State, SessionId, EntryKey) {
+    let (state, session) = state_with(&seq_of([user_sent("/review the diff", &[])]));
+    let key = state
         .transcript(session)
         .expect("held")
         .entries()
-        .filter(|e| {
+        .find(|e| {
             matches!(
                 e.kind(),
-                micold_core::structured::transcript::EntryKind::UserMessage {
+                EntryKind::UserMessage {
                     command: Some(_),
                     ..
                 }
             )
         })
         .map(|e| e.key().clone())
-        .collect();
-    assert!(!keys.is_empty(), "the text reads as a command");
+        .expect("the text reads as a command");
+    (state, session, key)
+}
+
+/// FR-009: a slash command card sits in the highlight while folded.
+#[test]
+fn a_folded_command_turn_is_highlighted() {
+    let (state, session, _) = command_turn();
     for scheme in SCHEMES {
-        assert!(highlighted(&state, session, scheme), "folded {scheme:?}");
+        assert!(highlighted(&state, session, scheme), "{scheme:?}");
     }
-    state.toggle(session, keys[0].clone());
+}
+
+/// FR-009: and while unfolded.
+#[test]
+fn an_unfolded_command_turn_is_highlighted() {
+    let (mut state, session, key) = command_turn();
+    state.toggle(session, key);
     for scheme in SCHEMES {
-        assert!(highlighted(&state, session, scheme), "unfolded {scheme:?}");
+        assert!(highlighted(&state, session, scheme), "{scheme:?}");
     }
-    let r = tokens::roles(ColorScheme::Light);
-    let one = pixels_of(
-        &state,
-        session,
-        ColorScheme::Light,
-        r.surface_container_high,
-    );
+}
+
+/// FR-009: an unfolded command card keeps its fold state when another entry arrives.
+#[test]
+fn an_unfolded_command_card_stays_open_when_an_entry_is_appended() {
+    let (mut state, session, key) = command_turn();
+    state.toggle(session, key);
     let before = painted_of(&state, session);
     state.apply(
         session,
@@ -678,14 +760,26 @@ fn a_command_turn_is_highlighted_folded_and_unfolded() {
         after.iter().any(|t| t.contains("another")),
         "the second turn is shown: {after:?}"
     );
-    let two = pixels_of(
-        &state,
+}
+
+/// Two user turns in a row both show the surface.
+#[test]
+fn two_consecutive_user_turns_both_carry_the_surface() {
+    let (mut state, session, _) = command_turn();
+    let fill = tokens::roles(ColorScheme::Light).surface_container_high;
+    let one = pixels_of(&state, session, ColorScheme::Light, fill);
+    state.apply(
         session,
-        ColorScheme::Light,
-        r.surface_container_high,
+        0,
+        &[SequencedEvent {
+            seq: 1,
+            event: user_sent("another", &[]),
+        }],
+        true,
     );
+    let two = pixels_of(&state, session, ColorScheme::Light, fill);
     assert!(
-        two > one + one / 2,
+        is_two_turns(one, two),
         "two consecutive user turns both carry the surface: {one} then {two}"
     );
 }
