@@ -406,14 +406,17 @@ Paths: `core` = `crates/micold-core`, `daemon` = `crates/micold-daemon`,
 from before (FR-005, US1 scenario 5, as patched). `/compact` keeps its turns (FR-004).
 
 - [ ] T067 [BUG-1694] [US1] *(test, first, red on `origin/main`)* `crates/micold-core/tests/structured_transcript.rs`:
-  replace the `era` tests (~1738, ~1849) — `command-clear.jsonl` and a second `/clear` → `entries()`
+  replace the `era` tests (~1738, ~1849, and the `notices[0].era() < notices[1].era()` assert ~2242) — `command-clear.jsonl` and a second `/clear` → `entries()`
   is `Cleared` then only what follows; a tool card opened before the clear is gone and a late
-  result for it opens no entry; entry ids stay unique; a rebuild from the held events gives the
+  result for it opens no entry (not an `OrphanResult`); entry ids stay unique; a rebuild from the held events gives the
   same entries; `user_messages()` still lists the pre-clear messages (FR-025); a `/compact`
   keeps its earlier entries. Closes the `era` part of T022.
 - [ ] T068 [BUG-1694] [US1] Implement T067 in `crates/micold-core/src/structured/transcript/build.rs`
   (`ConversationReset` drops the entries and the tool/turn/stream state held for them, then opens
-  `Cleared`) and remove `era` from `mod.rs` and `entry.rs`. Closes T023's `era` part.
+  `Cleared`) and remove `era` from `mod.rs` and `entry.rs`. Bump `first_id` by the dropped count, as
+  `rebuild()`/`bound()` do, so ids stay unique; a late result for a dropped tool card is ignored
+  (no `OrphanResult`: `build.rs:485-497`'s `None` arm must not open one for a pre-clear id);
+  `in_turn`, `interrupted` and `command_turn` are left alone (the `/clear` turn's own footer). Closes T023's `era` part.
 - [ ] T069 [BUG-1694] [US1] *(test)* then remove `BEFORE_THE_CLEAR`, `era_tag` and the
   `latest_era`/`user_label` era tag from `crates/micold-client/src/features/transcript_selection/shown.rs`
   and `crates/micold-client/src/ui/transcript/{entries,mod}.rs`; fix the tests that named them
