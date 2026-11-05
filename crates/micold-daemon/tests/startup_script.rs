@@ -248,7 +248,6 @@ async fn a_reload_never_reruns_and_reports_restart_needed() {
     use micold_daemon::config_watch::ConfigRuntime;
     let f = Fixture::new("echo x >> count\n", Some("run = \"every_start\""));
     let runtime = ConfigRuntime::open(&f.path("daemon.toml")).unwrap();
-    assert!(runtime.status().startup.is_none() || !runtime.status().restart_needed);
     assert!(!runtime.status().restart_needed);
     f.rewrite_script("echo y >> count\n");
     runtime.check(Instant::now());

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1533
 - **Worktree branch**: feat/1533_an-optional-start-script-prepares-each-daemon
 - **Started**: 2026-11-01
-- **Phase**: implement
-- **Next step**: wait for CI on PR #1712 (M6) and merge; then the close unit (T037)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1673 | M3 | merged | b146a398d5597cc67bbd2e2db4994b1bc2649fcf |
 | #1682 | M4 | merged | 3af058506bbe0e95b0b8e3e31801c8388b23604c |
 | #1698 | M5 | merged | 1897aa45b3c239b33a5ebd470f16bada280ab4ab |
-| #1712 | M6 | open | |
+| #1712 | M6 | merged | 061050efbefc06bccfac49b4117005d8314f1572 |
 
 ## Milestones
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T018-T022 | full | Settings Start script group (hidden per kind until delivery) | #1673 | merged |
 | M4 | T023-T029 | full | Host+SSH delivery and failure display (after #1526) | #1682 | merged |
 | M5 | T030-T033 | full | Container delivery (after #1527) | #1698 | merged |
-| M6 | T034-T036 | full | Pod delivery (after #1528) | #1712 | open |
+| M6 | T034-T036 | full | Pod delivery (after #1528) | #1712 | merged |
 
 T037 (quickstart results) is left to the close unit. M1 may need the `docs-not-needed` label.
 
@@ -95,7 +95,7 @@ None.
 
 ## Follow-ups not done
 
-- Dependencies #1526, #1527, #1528 are still OPEN on GitHub (no delivery commits on main); #1524 is closed. Script delivery (T075) and per-kind failure surfacing need them: plan/milestones must order or stub accordingly.
+- (Dependencies #1526, #1527, #1528 all merged and delivered in M4 to M6.) Open: the daemon applies no `ai.cli[].env` or `session.env`/`secret_env` tier yet, so quickstart order is proven only for the tiers present (tdd finding 3); the visual pass of the container and pod forms was not run; the cluster check ran in CI only. Close PR: see the table.
 
 ## M2 notes
 

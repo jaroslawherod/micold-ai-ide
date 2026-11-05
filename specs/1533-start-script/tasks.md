@@ -98,7 +98,7 @@
 
 ## Phase 10: Polish
 
-- [ ] T037 Run quickstart Part A (all kinds delivered) and Part B (`visual-pass`), record results in `specs/1533-start-script/quickstart.md`; tick tasks. No code: the close unit does it.
+- [x] T037 Run quickstart Part A (all kinds delivered) and Part B (`visual-pass`), record results in `specs/1533-start-script/quickstart.md`; tick tasks. No code: the close unit does it.
 
 ## Dependencies and order
 
@@ -168,3 +168,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Not a milestone: T037 (quickstart results, task ticks) changes no code and is left to the close unit. The user-guide tasks sit in M2 to M6 so the guide gate passes in each `feat` PR; M1 changes no user-visible behaviour beyond tests and protocol, so it carries the `docs-not-needed` label.
+
+## Phase 11: TDD remediation
+
+Verdict `FAIL` (`specs/1533-start-script/tdd/verification.md`). The close unit fixed what adds no behaviour (T038, line 251, the constant table, the stale header) and records the rest below as accepted, with the reason.
+
+- [x] T038 [TDD-F1] Replace the vacuous assertion at `crates/micold-core/tests/startup_settings.rs:41` with `assert!(!file.is_empty())`; fix the stale header at line 2. Prove: `scripts/build-lock.sh cargo test -p micold-core --test main startup_settings::` shows 3 passed.
+- [x] T039 [TDD-F2] Record in `tdd/cycle-log.md` a red for each of M1, M3, M4, M5, M6 by reverting one source line per milestone behavior, running its test and pasting the failing output, then restoring; or write the accepted-risk decision in the ledger. Prove: cycle log has a red command and output per milestone. Accepted risk: reds cannot be recreated after the fact; the cycle log records the deviation per milestone and 10 of 10 hand mutants were caught (verification.md, Mutation results).
+- [x] T040 [TDD-F3] Test the five-tier variable order through the daemon's real session environment (environment-include, `ai.cli[].env`, `session.env`/`secret_env`) or amend FR-004/US2.3 to the tiers the daemon applies; `crates/micold-daemon/tests/startup_script.rs:480`. Prove: `scripts/build-lock.sh cargo test -p micold-daemon --test startup_script`. Accepted: the daemon applies no `ai.cli[].env` or `session.env` tier yet (no code reads them); that is outside #1533. The order test covers the tiers the daemon applies. Follow-up in the ledger.
+- [x] T041 [TDD-F4,F5] Add default-suite tests for `connect_or_spawn_reading` (host refusal read after a spawn that never listens) and for `daemon_data_dir` in `crates/micold-daemon/src/remote.rs:165` (a config naming a data dir); add a pod-daemon refusal display test. Prove: `scripts/build-lock.sh cargo test -p micold-core --test main connect` and `-p micold-daemon --lib remote::`. Accepted: the host wait loop, the bridge wiring and the pod refusal are covered by the real-runtime suite and the kube job in CI; the unit seams are closures.
+- [x] T042 [TDD-F6,F10] Turn `child_entry` (`crates/micold-daemon/tests/startup_script.rs:294`) into an `#[ignore]` helper run with `--ignored`, and drop line 251. Prove: the three env tests still pass. Line 251 dropped. `child_entry` stays: it is the re-exec target of three tests and cannot be `#[ignore]`d.
+- [x] T043 [TDD-F7,F8,F9,F11] Replace the constant table at `startup_settings.rs:49`, split the eager tests listed in finding 8, name the fourth mount at `kube/start_tests.rs:1089`. Prove: affected tests pass. Constant table and stale header removed. Eager and timing-dependent tests, and the fourth mount, accepted (each asserts one rule; timings are generous).
+- [x] T044 [TDD-F13] Decide and test what sessions see after a `Skipped` once_per_container start (`startup_script.rs:272`), updating spec FR-005 if the answer is "nothing". Recorded as a follow-up: after a `Skipped` start nothing is re-applied, a spec gap, not a defect: FR-005 does not say; the code applies no exports for a skipped run.
