@@ -245,6 +245,8 @@ pub enum Message {
     /// Everything the attach-existing-worktrees dialog says about itself (feature 582); see
     /// [`crate::features::attach::Msg`].
     Attach(crate::features::attach::Msg),
+    /// The composer's large editor (feature 1703); see [`crate::features::large_editor::Msg`].
+    LargeEditor(crate::features::large_editor::Msg),
     /// Everything the worktree Overview says about itself (feature 813); see
     /// [`crate::features::overview::Msg`].
     Overview(crate::features::overview::Msg),
@@ -451,6 +453,8 @@ pub struct State {
     pub worktree_form: crate::features::worktree_form::State,
     /// What the attach feature remembers -- see [`crate::features::attach::State`].
     pub attach: crate::features::attach::State,
+    /// The composer's large editor -- see [`crate::features::large_editor::State`].
+    pub large_editor: crate::features::large_editor::State,
     /// What the pr_status feature remembers -- see [`crate::features::pr_status::State`].
     pub pr_status: crate::features::pr_status::State,
     /// The statuses of the linked Jira tickets -- see [`crate::features::jira_status::State`].
@@ -1561,6 +1565,7 @@ impl State {
                 let outcomes = crate::features::worktree_form::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            Message::LargeEditor(msg) => crate::features::large_editor::update(self, msg),
             Message::Attach(msg) => {
                 let outcomes = crate::features::attach::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

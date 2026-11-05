@@ -476,8 +476,10 @@ pub const COMPOSER_GROUP: &str = "Composer";
 
 /// The structured composer's keys on the sheet (#1464 FR-010): `(Linux/Windows form, macOS form,
 /// what it does)`. The attach chord is `composer::is_attach_key`.
-pub const COMPOSER_KEYS: [(&str, &str, &str); 1] =
-    [("Ctrl+Shift+A", "Cmd+Shift+A", "Add attachment")];
+pub const COMPOSER_KEYS: [(&str, &str, &str); 2] = [
+    ("Ctrl+Shift+A", "Cmd+Shift+A", "Add attachment"),
+    ("Ctrl+Shift+M", "Cmd+Shift+M", "Open large editor"),
+];
 
 /// One titled group of the shortcut sheet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -621,14 +623,18 @@ mod tests {
         let alone = sheet_model(false, false);
         assert_eq!(titles(&alone), [COMPOSER_GROUP]);
         assert_eq!(alone.note, None, "the note is about the Review keys");
-        let attach = if cfg!(target_os = "macos") {
-            "Cmd+Shift+A"
+        let (attach, large) = if cfg!(target_os = "macos") {
+            ("Cmd+Shift+A", "Cmd+Shift+M")
         } else {
-            "Ctrl+Shift+A"
+            ("Ctrl+Shift+A", "Ctrl+Shift+M")
         };
+        // Feature 1703 FR-005, SC-006: the large editor's chord, next to Add attachment.
         assert_eq!(
             alone.rows_of(COMPOSER_GROUP),
-            [(attach.to_owned(), "Add attachment")]
+            [
+                (attach.to_owned(), "Add attachment"),
+                (large.to_owned(), "Open large editor")
+            ]
         );
     }
 }

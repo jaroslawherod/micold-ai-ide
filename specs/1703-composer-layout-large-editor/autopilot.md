@@ -55,7 +55,15 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 ## Handover
 
-None.
+Unit M1 (T001-T013) hit the 150k cap while waiting on the build lock. Previous PR #1705 merged (eb1b62d99); branch-start.sh was run (reset to origin/main).
+Done (uncommitted work committed as WIP): all code, tests and docs for T001-T013 are WRITTEN but NOT yet compiled or run, and tasks.md checkboxes T001-T013 are NOT yet ticked:
+- icons: `Icon::OpenInFull` (U+F1CE, verified in the font cmap) + tests/icons.rs (count 87, new pin test) + PROVENANCE.md row
+- `features/large_editor.rs` (State{open,hovered}, Msg, `update(&mut app::State, Msg)`, `editor_key`, `LargeEditorDialog` surface), `Message::LargeEditor`, `State.large_editor`, registry entry, `ui/large_editor.rs` (dialog, `body`, `field()`), `shell/large_editor.rs` (focus), main.rs arm, `shell/composer.rs` (`KeyIntent::LargeEditor`, `Msg::LargeEditorRequested`)
+- `features/composer.rs`: chord, `open_editor_visible` + its unit test, `Msg::LargeEditorRequested`; `ui/composer.rs`: `open_editor_button`, `text_area_with_button` (stack + mouse_area hover)
+- keys.rs sheet entry + test; showcase entry (surfaces.rs); docs structured-input.md + terminal-panes.md
+- tests: tests/features_large_editor.rs, features_composer.rs chord test, overlay_registration.rs dialog test
+Next: run `mise run check` (a first run only reached a showcase type error, fixed with `.map(|_| Message::NoOp)`; one detached `mise run check` may still be queued behind another worktree's build lock, log in the old scratchpad), fix compile errors, then run `scripts/build-lock.sh cargo test -p micold-client --test features_large_editor --test features_composer --test overlay_registration --test icons` and the lib tests for `open_editor_visible` / keys.rs; check `tests/surface_registration_cost.rs` and `features_are_render_free.rs` still pass (large_editor.rs names `crate::floating_surface` only). Then tick T001-T013 in tasks.md, then verify.md flow (scoped gate + review A high, review B, visual pass for the new button/dialog, full gate), PR.
+Open risks: hover button overlays the text area top-right; `Done` on a forgotten composer recreates it (minor).
 
 ## Open escalation
 

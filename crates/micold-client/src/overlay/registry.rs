@@ -262,6 +262,8 @@ macro_rules! register {
 register! {
     crate::features::agent_confirm::ConfirmAgentRequestDialog => crate::ui::confirm_agent_request::dialog,
     crate::features::attach::AttachDialog => crate::ui::attach_dialog::dialog,
+    // Feature 1703: the composer's large editor (FR-002, FR-019).
+    crate::features::large_editor::LargeEditorDialog => crate::ui::large_editor::dialog,
     crate::features::changes::ConfirmDiscardPendingDialog => crate::ui::changes::discard_dialog,
     crate::features::changes::FullReplyDialog => crate::ui::changes::reply_dialog,
     // Feature 1270: the review bar's overflow menu closes nothing by opening (R8).

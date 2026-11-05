@@ -75,6 +75,8 @@ pub enum KeyIntent {
     SelectAll,
     /// Open the **Add attachment** picker (#1464 FR-010): Ctrl+Shift+A, Cmd+Shift+A on macOS.
     Attach,
+    /// Open the large editor (feature 1703 FR-001): Ctrl+Shift+M, Cmd+Shift+M on macOS.
+    LargeEditor,
 }
 
 fn is_busy(phase: TurnPhase) -> bool {
@@ -104,6 +106,27 @@ fn is_attach_key(press: &KeyInput) -> bool {
     is_char(press, 'a', mods)
 }
 
+/// The **Open large editor** chord (feature 1703 FR-001): Cmd+Shift+M on macOS, Ctrl+Shift+M
+/// elsewhere.
+fn is_large_editor_key(press: &KeyInput) -> bool {
+    let mods = if cfg!(target_os = "macos") {
+        Mods {
+            logo: true,
+            shift: true,
+            ..Mods::NONE
+        }
+    } else {
+        CTRL_SHIFT
+    };
+    is_char(press, 'm', mods)
+}
+
+/// Whether the **Open large editor** button shows (feature 1703 FR-004): the draft has more than
+/// one line, or the text area is focused or hovered.
+pub fn open_editor_visible(lines: usize, focused: bool, hovered: bool) -> bool {
+    lines > 1 || focused || hovered
+}
+
 /// What `press` means in a composer whose caret is at `caret` in a draft of `lines` lines, while
 /// an IME composition is open (`composing`) or not, with text selected in the editor (`selecting`) or not,
 /// for a session in `phase` (FR-002, FR-012,
@@ -129,6 +152,9 @@ pub fn composer_key(
     }
     if is_attach_key(press) {
         return KeyIntent::Attach;
+    }
+    if is_large_editor_key(press) {
+        return KeyIntent::LargeEditor;
     }
     if !plain(press) {
         return KeyIntent::Edit;
@@ -437,6 +463,8 @@ pub enum Msg {
     },
     /// The **Add attachment** button (#1464 FR-007).
     AttachRequested(SessionId),
+    /// The chord or the **Open large editor** button (feature 1703 FR-001, FR-004).
+    LargeEditorRequested(SessionId),
     /// The files the user chose in `session`'s picker, in the order chosen (#1464 FR-008).
     AttachPicked {
         session: SessionId,
@@ -1221,5 +1249,20 @@ impl crate::overlay::registry::Registered for ConfirmSwitchKindDialog {
             .as_ref()
             .filter(|offer| offer.confirm.is_some())
             .map(|offer| ConfirmSwitchKindDialog(offer.session))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::open_editor_visible;
+
+    /// Feature 1703 FR-004: the button shows with several lines, or while focused or hovered.
+    #[test]
+    fn the_open_editor_button_shows_for_several_lines_focus_or_hover() {
+        assert!(!open_editor_visible(1, false, false));
+        assert!(!open_editor_visible(0, false, false));
+        assert!(open_editor_visible(2, false, false));
+        assert!(open_editor_visible(1, true, false));
+        assert!(open_editor_visible(1, false, true));
     }
 }

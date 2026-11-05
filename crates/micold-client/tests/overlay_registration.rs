@@ -396,3 +396,18 @@ fn an_inline_flag_registers_no_overlay() {
         );
     }
 }
+
+#[test]
+fn the_large_editor_registers_as_a_dialog_cancelled_by_its_cancel() {
+    use micold_client::features::large_editor::Msg;
+    let mut state = State::default();
+    assert!(registry::open_dialog(&state).is_none());
+    micold_client::features::large_editor::update(&mut state, Msg::Requested(SessionId::new()));
+    let dialog = registry::open_dialog(&state).expect("the large editor is open");
+    assert_eq!(dialog.id().as_str(), "large_editor");
+    assert_eq!(dialog.layer(), micold_core::overlay::Layer::Dialog);
+    assert_eq!(
+        dialog.cancel(),
+        Some(&micold_client::app::Message::LargeEditor(Msg::Cancelled))
+    );
+}
