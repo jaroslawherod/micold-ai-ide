@@ -105,6 +105,6 @@ PR #1673 carries `docs-not-needed`: the Start script group is hidden for every k
 
 Verify (`mise run image`, `mise run test-sandbox`): image built; every sandbox_real_* test, including the two sandbox_real_startup ones, fails on this host with the runtime refusing the app's docker-style options (`unknown mount option "uid=1000"`, `unsupported bridge network option enable_ip_masquerade`; docker here is podman emulation, podman fails the same), so the suite is not observable locally; CI's sandbox job runs it. Visual pass not run: the `visual-pass` skill's fork receives no arguments from a unit and the host has no Xvfb/xdotool; the layout is covered by `daemons_section_geometry`. #1528 (pod) merged during M5 (PR #1690); this diff touches no pod path. `refused_mutations_are_logged` fails under plain `cargo test` (two tests set the global subscriber in one binary) on main too; CI uses nextest.
 
-## M5 CI fix 1 (PR #1698)
+## M5 CI fix 1 (M5 PR: #1698)
 
 CI sandbox run: `sandbox_real_startup_refusal_*` timed out instead of showing the refusal. Cause: a container's `daemon.toml` sets `data_dir` to the image's state dir, which an SSH session's environment lacks, so the bridge looked for `startup-result.json` in a different directory than the daemon wrote it. Fix: the bridge resolves the daemon's data dir from the configuration file (`remote.rs` `daemon_data_dir`). The ubuntu failure `structured_permission::two_sessions_waiting` is outside this diff (flake check in the gate).
