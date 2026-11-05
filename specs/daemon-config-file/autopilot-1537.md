@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1537
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
-- **Phase**: milestone M1
-- **Next step**: CI red on run 42016227256 was runner "No space left on device" in the full-workspace test step (not this diff); failed jobs re-run. Orchestrator waits on CI, merges #1709; then M2 (blocked on #1530 M2)
+- **Phase**: milestone M2 (blocked)
+- **Next step**: M2 is blocked on #1530 M2 (PR #1713, open, `build + test (windows-latest)` red). Resume once #1713 merges, then dispatch the M2 milestone unit
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1704 | Design (milestones for Issue 15) | merged | 5e72b83360ee747bc80ad577a468d2119f47bb48 |
-| #1709 | M1 | open | |
+| #1709 | M1 | merged | 04743add7b0041fe5e6b8e8652071b05eeebab66 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T084, T085, T086b | full | Daemon release build ignores the six `DaemonSettings` variables, one warning each naming the config key; `test-env` seam; guide updated | #1709 | open |
+| M1 | T084, T085, T086b | full | Daemon release build ignores the six `DaemonSettings` variables, one warning each naming the config key; `test-env` seam; guide updated | #1709 | merged |
 | M2 | T084b, T085b, T086a, T086 | full | `MICOLD_DATA_DIR`/`MICOLD_TOKEN_PATH` retired; images, SSH launch, entrypoint stop setting them; container-over-SSH regression test; guide; quickstart | | pending |
 
 ## Decisions
