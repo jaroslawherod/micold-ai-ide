@@ -211,20 +211,16 @@ fi
 # 5. **The environment a scene runs under is the scene's.** Everything above is one rule applied to
 # `PATH`, to `$SHELL` and to the provider set: a published frame may not depend on the machine that
 # produced it (FR-011b, FR-013). The log filter is the same rule and was the last place it leaked.
-# The `MICOLD_LOG` variable is retired (#1537), so the scene writes the filter as `daemon.log` in
-# the host daemon's own file, `<data dir>/daemon.toml`, which no machine setting can override. The
-# assertion is that it does so, with the line that matters turned on, and sets no environment one.
-filter_line="$(grep -n 'log = "' site/capture/scenes/lib.sh | head -1)"
-filter_value="$(sed -n 's/.*"info,micold_daemon::server=debug".*/&/p' site/capture/scenes/lib.sh)"
+# The `MICOLD_LOG` variable is retired (#1537), so the scene sets no filter at all and waits for a
+# line the daemon logs at its default level. The assertion is that lib.sh neither assigns the
+# variable nor depends on a debug line, and that the daemon logs that line at `info`.
 if grep -q '^  MICOLD_LOG=' site/capture/scenes/lib.sh; then
-  fail "the scene sets its own log filter" "lib.sh still assigns the retired MICOLD_LOG"
-elif [ -z "$filter_line" ]; then
-  fail "the scene sets its own log filter" "lib.sh writes no daemon.log"
-elif [ -n "$filter_value" ]; then
-  pass "the scene sets its own log filter"
+  fail "the scene needs no log filter" "lib.sh still assigns the retired MICOLD_LOG"
+elif grep -B6 'AI CLI availability reported' crates/micold-daemon/src/server.rs | grep -q 'tracing::info!'; then
+  pass "the scene needs no log filter"
 else
-  fail "the scene sets its own log filter" \
-    "the filter does not turn on the availability line: $filter_line"
+  fail "the scene needs no log filter" \
+    "the daemon logs 'AI CLI availability reported' below info"
 fi
 
 # 6. **The scenes click where the layout is.** A click that lands on nothing produces a plausible

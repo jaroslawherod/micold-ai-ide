@@ -1142,7 +1142,9 @@ where
                     })
                     .await
                     .unwrap_or_else(|_| task_state.availability_for(None));
-                    tracing::debug!(
+                    // `info`: the capture scenes wait for this line, and the log filter can no longer be
+                    // set through the environment (#1537).
+                    tracing::info!(
                         client = id,
                         ?available,
                         ?env,
