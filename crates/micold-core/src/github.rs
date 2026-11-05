@@ -109,8 +109,10 @@ impl fmt::Display for GithubRepo {
 }
 
 /// The `(host, path, over_ssh)` of a remote URL in a form git accepts (`http(s)`, `git`, `ssh`
-/// or scp), `None` for anything else — a local path, another scheme, a non-numeric port.
-pub(crate) fn split_remote(url: &str) -> Option<(&str, &str, bool)> {
+/// or scp), `None` for anything else — a local path, another scheme, a non-numeric port. Public so
+/// a caller that is not limited to github.com (the `gh-token` resolver, #1531: a token's forge may
+/// be a GitHub Enterprise host) can reuse the same parsing [`GithubRepo::from_remote_url`] does.
+pub fn split_remote(url: &str) -> Option<(&str, &str, bool)> {
     let url = url.trim();
     let (host, path, over_ssh) = match url.split_once("://") {
         Some((scheme, rest)) => {

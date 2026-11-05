@@ -803,6 +803,18 @@ give it beyond the two above is held by the sandbox as well, and a token that le
 stays valid until it expires or you delete it on GitHub. The **Repositories** filter chooses which
 token a repository uses; it does not change what the token can reach on GitHub.
 
+### `gh` in sessions
+
+Every session — host, SSH, container or Kubernetes alike — gets a small `gh` of the daemon's own on
+the front of its `PATH`. Before running the real `gh`, it asks the daemon which token the
+repository in the session's current directory uses (the same choice **GitHub tokens** above makes
+for git) and, only when one applies, sets `GH_TOKEN` and `GH_HOST` for that one call — never for the
+whole session, since `gh` is called once per repository and a replaced token must be used by the
+very next call. Either variable already set (by you, or by an earlier step of the session) is left
+alone. With no token chosen, `gh` runs exactly as it would outside the application: your own
+`gh auth login`, or unauthenticated in a sandbox, where the token file is the only credential there
+is.
+
 ## Jira
 
 ### Enable Jira integration
