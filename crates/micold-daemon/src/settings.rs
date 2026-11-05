@@ -1,16 +1,18 @@
 //! `DaemonSettings`: every value the daemon reads once, at start, built from its configuration
 //! file (#1524, research D11).
 //!
-//! The file wins; a `MICOLD_*` variable fills in what the file does not set, which is how a daemon
-//! started the old way keeps working until the variables are retired (issue 15). All of these are
+//! The file wins. The `MICOLD_*` start-up variables are retired (#1537): a release build ignores
+//! them and warns once per set variable ([`process_env`]); only a `test-env` build (the daemon's own
+//! tests) still lets one fill in what the file does not set. All of these are
 //! restart-only keys (contract R7): a running daemon never re-reads them, so one value built before
 //! the runtime exists is enough, and the live part of the file is [`crate::config_watch`].
 
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use micold_core::daemon_config::{DaemonConfig, IdleStopSetting, Kind, Listen};
+use micold_core::retired_env;
 
 use crate::idle::IDLE_STOP_ENV;
 
@@ -29,22 +31,22 @@ pub struct DaemonSettings {
     pub kind: Option<Kind>,
     /// `daemon.data_dir` / `MICOLD_DATA_DIR`.
     pub data_dir: Option<PathBuf>,
-    /// `daemon.home` / `MICOLD_HOME`.
+    /// `daemon.home`.
     pub home: Option<PathBuf>,
     /// `daemon.time_zone` / `TZ`.
     pub time_zone: Option<String>,
-    /// `daemon.image` / `MICOLD_IMAGE_REFERENCE`; empty on the host.
+    /// `daemon.image`; empty on the host.
     pub image: String,
-    /// `daemon.idle_stop` / `MICOLD_IDLE_STOP`, in the notation of [`crate::idle`]; `None` = the
+    /// `daemon.idle_stop`, in the notation of [`crate::idle`]; `None` = the
     /// standard window.
     pub idle_stop: Option<String>,
-    /// `daemon.log` / `MICOLD_LOG`: `tracing` directives.
+    /// `daemon.log`: `tracing` directives.
     pub log: Option<String>,
-    /// `listen.tcp` / `MICOLD_LISTEN_ADDR`.
+    /// `listen.tcp`.
     pub listen_tcp: Option<String>,
     /// `auth.client_token_file` / `MICOLD_TOKEN_PATH`.
     pub token_file: Option<PathBuf>,
-    /// `storage.clone_root` / `MICOLD_REPOS_ROOT`.
+    /// `storage.clone_root`.
     pub clone_root: Option<PathBuf>,
     /// `[[projects]]`; none without a file.
     pub projects: Vec<ConfiguredProject>,
@@ -53,9 +55,36 @@ pub struct DaemonSettings {
     pub config_path: Option<PathBuf>,
 }
 
-/// Reads the process environment, as the daemon does.
+/// Whether the retired start-up variables still count: the daemon's own tests only.
+const TEST_ENV: bool = cfg!(any(test, feature = "test-env"));
+
+/// Warnings for retired variables found set, not yet logged: tracing is not up when the settings
+/// are read, so [`log_retired_warnings`] writes them once it is.
+static PENDING_WARNINGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Reads the process environment, as the daemon does. A retired start-up variable reads as unset
+/// (release builds) and is recorded for one warning naming the configuration key that replaces it.
 pub fn process_env(name: &str) -> Option<OsString> {
-    std::env::var_os(name)
+    let raw = std::env::var_os(name);
+    if !retired_env::DAEMON_SIDE.contains(&name) {
+        return raw;
+    }
+    let resolved = retired_env::resolve(name, raw, TEST_ENV);
+    if let Some(warning) = resolved.warning {
+        let mut pending = PENDING_WARNINGS.lock().unwrap_or_else(|e| e.into_inner());
+        if !pending.contains(&warning) {
+            pending.push(warning);
+        }
+    }
+    resolved.value
+}
+
+/// Logs, once, each retired variable [`process_env`] found set and ignored.
+pub fn log_retired_warnings() {
+    let pending = std::mem::take(&mut *PENDING_WARNINGS.lock().unwrap_or_else(|e| e.into_inner()));
+    for warning in pending {
+        tracing::warn!("{warning}");
+    }
 }
 
 fn text(env: &dyn Fn(&str) -> Option<OsString>, name: &str) -> Option<String> {

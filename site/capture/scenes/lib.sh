@@ -222,13 +222,15 @@ scene_start() {
   # `info`, so the one line that matters is turned on here -- for the service only, since the
   # client writes nothing at all and a whole-workspace `debug` would bury it.
   #
-  # Set, not defaulted. `${MICOLD_LOG:-...}` looked harmless and was not: this application ships as
-  # a systemd user service that exports `MICOLD_LOG=info` into every process it starts, so a scene
-  # run from a terminal *inside the application* inherited `info`, never saw the line, and waited
-  # out `scene_wait_providers` -- while the same scene on a runner passed. The filter a scene runs
-  # under is the scene's, for the same reason the provider set and `$SHELL` are (FR-011b).
-  MICOLD_LOG="info,micold_daemon::server=debug"
-  export MICOLD_LOG
+  # Set in the host daemon's own configuration file (`daemon.log`), not defaulted from the
+  # environment: the `MICOLD_LOG` variable is retired (#1537), and a filter the scene does not write
+  # would be whatever the machine's service configuration says. This application ships as a systemd
+  # user service whose `info` filter a scene run from a terminal *inside the application* would
+  # inherit, never see the line, and wait out `scene_wait_providers` -- while the same scene on a
+  # runner passed. The filter a scene runs under is the scene's, for the same reason the provider
+  # set and `$SHELL` are (FR-011b). The host daemon reads `<data dir>/daemon.toml` when it has one.
+  printf 'schema = 1\n[daemon]\nname = "capture"\nkind = "host"\nlog = "%s"\n' \
+    "info,micold_daemon::server=debug" >"$XDG_DATA_HOME/micold-ai-ide/daemon.toml"
 
   # Where that answer lands, and how much of the file predates this scene. The daemon appends, and
   # every scene of a run starts its own against the same path, so an offset is the only way to read

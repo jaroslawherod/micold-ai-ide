@@ -25,6 +25,10 @@ default = []
 sandbox-real-runtime = []
 # Feature 489: the `ssh_real_*` suite against a rootless `sshd` (off by default; `mise run test-ssh`).
 ssh-real-runtime = ["micold-core/ssh-real-runtime"]
+# #1537: the retired `MICOLD_*` start-up variables (`micold_core::retired_env`) are read only with
+# this feature, which the daemon's own tests turn on (a dev-dependency on itself), so a release
+# build ignores them and warns.
+test-env = []
 
 [dependencies]
 micold-core = { workspace = true }
@@ -66,6 +70,8 @@ libc = { workspace = true }
 windows-sys = { workspace = true }
 
 [dev-dependencies]
+# Turns `test-env` on for the daemon's own tests, the spawned binary included.
+micold-daemon = { path = ".", features = ["test-env"] }
 # `sandbox_real_no_user_credentials.rs` builds its host with `sandbox::hostile_host` (#1002).
 micold-core = { workspace = true, features = ["kube-fake"] }
 tempfile = { workspace = true }

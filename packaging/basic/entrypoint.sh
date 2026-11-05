@@ -2,8 +2,8 @@
 # The basic image's entrypoint (feature 806, research R3).
 #
 # 1. The container runs as the host uid, which has no passwd entry; sshd refuses a user it cannot
-#    resolve. Add one, home `$HOME` (the container home the client passes with `-e HOME`; `$MICOLD_HOME`
-#    still wins when set), when absent.
+#    resolve. Add one, home `$HOME` (the container home the client passes with `-e HOME`; `MICOLD_HOME`
+#    is not a start-up variable any more, #1537), when absent.
 # 2. Create the home's `~/.local/bin` and mise's shims folder, which #1289 puts on every session's
 #    `PATH`, so a session that lists them sees what exists (#1439, FR-011).
 # 3. When provisioning has started a daemon build here before, start it again in the background,
@@ -26,7 +26,7 @@ sshd_bin="${MICOLD_SSHD:-/usr/sbin/sshd}"
 uid="$(id -u)"
 gid="$(id -g)"
 # A runtime sets HOME=/ for a uid with no passwd entry; `/` is not writable, so fall back to /tmp.
-home="${MICOLD_HOME:-${HOME:-/}}"
+home="${HOME:-/}"
 [ "$home" = "/" ] && home=/tmp
 
 if ! grep -q "^[^:]*:[^:]*:${uid}:" "$passwd_file"; then

@@ -3,7 +3,7 @@
 #
 # sshd sets a login's HOME from passwd. The base image already has `node` at uid 1000 with home
 # /home/node, and uid 1000 is the usual host uid, so the entrypoint must point that existing entry at
-# the provisioned home ($MICOLD_HOME) instead of leaving /home/node. Runs against fixture files.
+# the provisioned home ($HOME) instead of leaving /home/node. Runs against fixture files.
 #
 # And its home folders (#1439, FR-011, contract B5): before sshd starts, `~/.local/bin` and the mise
 # shims folder that #1289 puts on `PATH` exist in the home, without touching what is in them; a home
@@ -29,7 +29,7 @@ run_entry() {
   d="$(mktemp -d)"
   printf '%s\n' "$1" >"$d/passwd"
   : >"$d/group"
-  MICOLD_PASSWD_FILE="$d/passwd" MICOLD_GROUP_FILE="$d/group" MICOLD_HOME="$jaro" \
+  MICOLD_PASSWD_FILE="$d/passwd" MICOLD_GROUP_FILE="$d/group" HOME="$jaro" \
     sh "$ENTRY" >/dev/null 2>&1 </dev/null
   cat "$d/passwd"
   rm -rf "$d"
@@ -57,7 +57,7 @@ fi
 
 # --- home folders (1439, contract B5) ------------------------------------------------------------
 
-# run_home <home> [VAR=value...]: run the entrypoint with <home> as MICOLD_HOME, MISE_DATA_DIR and
+# run_home <home> [VAR=value...]: run the entrypoint with <home> as HOME, MISE_DATA_DIR and
 # XDG_DATA_HOME unset unless given. Leaves its stderr in "$err".
 err="$(mktemp)"
 run_home() {
@@ -67,7 +67,7 @@ run_home() {
   printf 'daemon:x:99999:99999:d:/nonexistent:/bin/false\n' >"$d/passwd"
   : >"$d/group"
   env -u MISE_DATA_DIR -u XDG_DATA_HOME MICOLD_PASSWD_FILE="$d/passwd" MICOLD_GROUP_FILE="$d/group" \
-    MICOLD_HOME="$home" "$@" sh "$ENTRY" >/dev/null 2>"$err" </dev/null
+    HOME="$home" "$@" sh "$ENTRY" >/dev/null 2>"$err" </dev/null
   rm -rf "$d"
 }
 

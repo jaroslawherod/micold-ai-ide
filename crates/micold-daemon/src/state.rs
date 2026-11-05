@@ -807,12 +807,12 @@ fn attempted(outcome: &micold_core::env_include::EnvIncludeOutcome) -> SpawnEnv 
     }
 }
 
-/// The image this service's sessions run in: `MICOLD_IMAGE_REFERENCE`, empty on the host.
+/// The image this service's sessions run in: `daemon.image`, empty on the host.
 pub(crate) fn image_reference() -> String {
     crate::settings::current().image.clone()
 }
 
-/// The `HOME` a container daemon must run with: `MICOLD_HOME` when the daemon is in a container
+/// The `HOME` a container daemon must run with: `daemon.home` when the daemon is in a container
 /// (`image` non-empty) and `HOME` is something else. sshd resets `HOME` to the image user's passwd
 /// home, so a daemon started through it sent every session's conversations, sign-ins and config
 /// into the image's ephemeral layer, lost with the container (#1459). `None`: nothing to change.
@@ -825,7 +825,7 @@ fn container_home_fix(
     (!image.is_empty() && home != Some(wanted)).then(|| PathBuf::from(wanted))
 }
 
-/// Make this daemon's `HOME` the container's `MICOLD_HOME`, before anything reads it, so the
+/// Make this daemon's `HOME` the container's `daemon.home`, before anything reads it, so the
 /// sessions it spawns keep their data where the container mounts it ([`container_home_fix`]).
 /// Call it once, at startup, before other threads exist.
 pub fn align_container_home() {
@@ -838,7 +838,7 @@ pub fn align_container_home() {
         std::env::var_os("HOME").as_deref(),
     );
     if let Some(home) = fix {
-        tracing::info!(home = %home.display(), "container HOME differs from MICOLD_HOME; using MICOLD_HOME");
+        tracing::info!(home = %home.display(), "container HOME differs from daemon.home; using daemon.home");
         std::env::set_var("HOME", home);
     }
 }

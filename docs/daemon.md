@@ -584,8 +584,9 @@ of `url`: it clones into `.partial-<name>-<rand>` beside `dest` and renames on s
 leaves nothing behind, and it fetches when `dest` already exists. The answer is
 `DaemonMsg::RepoCloned { dest }` or `DaemonMsg::RepoCloneFailed { dest, failure }` with the failure
 classified as authentication, a full disk, an unreachable remote or other. Git never prompts
-(`GIT_TERMINAL_PROMPT=0`). `dest` must lie under `MICOLD_REPOS_ROOT` (`/data/repos` in a Kubernetes
-pod; a daemon without it refuses every clone). Two requests for one `dest` run one after the other.
+(`GIT_TERMINAL_PROMPT=0`). `dest` must lie under `storage.clone_root` of the daemon's configuration file (`/data/repos` in a
+Kubernetes pod; a daemon without it refuses every clone, and the refusal names the key; the old
+`MICOLD_REPOS_ROOT` variable is ignored). Two requests for one `dest` run one after the other.
 
 ## Scoped git credentials (feature 1002, protocol 55)
 

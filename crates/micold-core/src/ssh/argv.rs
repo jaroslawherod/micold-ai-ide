@@ -358,7 +358,7 @@ pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str
 }
 
 /// [`bridge`] with the daemon's environment: sshd clears the login environment, so what the
-/// daemon needs (686 FR-010: `MICOLD_IDLE_STOP=off`) rides the remote command as `env K='v'`.
+/// daemon needs rides the remote command as `env K='v'` (no `MICOLD_*` start-up variable: the delivered file carries those, #1537).
 pub fn bridge_with_env(
     reach: &Reach,
     platform: ClientPlatform,
@@ -532,14 +532,14 @@ mod tests {
     #[test]
     fn the_daemons_environment_rides_the_remote_command_quoted() {
         let env = [
-            ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
+            ("LC_ALL".to_string(), "C".to_string()),
             ("A".to_string(), "it's".to_string()),
         ];
         let cmd = bridge_with_env(&pinned(), ClientPlatform::Linux, 15, "b", &env);
         let remote = cmd.args.last().unwrap();
         assert_eq!(
             remote,
-            "env MICOLD_IDLE_STOP='off' A='it'\\''s' \"$HOME/.micold/remote/b/micold-daemon\" remote bridge"
+            "env LC_ALL='C' A='it'\\''s' \"$HOME/.micold/remote/b/micold-daemon\" remote bridge"
         );
         assert_eq!(
             bridge_with_env(&pinned(), ClientPlatform::Linux, 15, "b", &[]),

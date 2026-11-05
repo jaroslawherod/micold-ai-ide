@@ -79,6 +79,7 @@ pub mod pull_request;
 pub mod query_text;
 pub mod quick_switch;
 pub mod required;
+pub mod retired_env;
 pub mod review;
 pub mod review_tabs;
 pub mod runs;
