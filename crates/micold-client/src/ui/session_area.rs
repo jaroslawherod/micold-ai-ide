@@ -436,6 +436,14 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
             ..
         } => {
             let tint = tab_content_colour(*marked, r);
+            let mut close = IconButton::new(Icon::Close, r)
+                .size(TypeRole::Label)
+                .padding(spacing::XS)
+                .circular()
+                .tint(tint);
+            if let Some(message) = m.close() {
+                close = close.on_press(message);
+            }
             let tab = Tab::new(
                 Ellipsized::<Message>::at_role(label.clone(), TypeRole::Label, tint).shrink(),
                 r,
@@ -444,6 +452,9 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
             .edge(IndicatorEdge::Bottom)
             .active(*marked)
             .leading(mark(*stopped))
+            .trailing(
+                Tooltip::new(close, "Close this session", r).position(TooltipPosition::Bottom),
+            )
             .on_press(m.press());
             Tooltip::new(with_menu(tab), tooltip.clone(), r)
                 .position(TooltipPosition::Bottom)
