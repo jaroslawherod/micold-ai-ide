@@ -246,7 +246,27 @@ pub enum Dial {
         /// What to do with a pod that runs with other settings: the user's answer to the drift
         /// prompt, `Ask` until there is one. Part of the identity, so an answer restarts the actor.
         drift: DriftDial,
+        /// The daemon's start script and `[startup]` keys, delivered through the pod's config map
+        /// and startup secret (#1533). Identity: a changed script restarts the actor, which
+        /// delivers it again.
+        startup: StartupDial,
     },
+}
+
+/// A daemon's start script and its keys as part of an actor's identity (#1533): the path and the
+/// keys, as for [`ContainerBringUp`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartupDial(pub Option<daemon_config_render::StartupTable>);
+
+impl std::hash::Hash for StartupDial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        if let Some(startup) = &self.0 {
+            startup.script_file.hash(state);
+            serde_json::to_string(&startup.settings)
+                .unwrap_or_default()
+                .hash(state);
+        }
+    }
 }
 
 /// A host daemon's config settings and data directory, as part of an actor's identity:
@@ -537,6 +557,10 @@ pub fn actor_specs_answered(
                     name: entry.name.as_str().to_string(),
                     settings: KubeDial(Box::new(k.clone())),
                     drift: DriftDial(drift.get(&entry.id).copied().unwrap_or(DriftChoice::Ask)),
+                    startup: StartupDial(
+                        DaemonSettings::from_entry(entry)
+                            .and_then(|(settings, _)| settings.startup),
+                    ),
                 },
                 _ => return None,
             };
@@ -888,6 +912,7 @@ async fn connect_and_pump(
                 name,
                 settings,
                 drift,
+                startup,
             },
             _,
         ) => {
@@ -906,9 +931,9 @@ async fn connect_and_pump(
             // A daemon that never connected is on its first start, which creates the pod if it
             // is missing: that is the user's Start, not a re-dial.
             let tried = if life.established {
-                kube_reconnect(env, name, &settings.0, &sink).await
+                kube_reconnect(env, name, &settings.0, startup.0.as_ref(), &sink).await
             } else {
-                kube_attempt(env, name, &settings.0, drift.0, &sink)
+                kube_attempt(env, name, &settings.0, startup.0.as_ref(), drift.0, &sink)
                     .await
                     .map_err(KubeReconnectError::Attempt)
             };
@@ -1854,6 +1879,7 @@ pub async fn kube_reconnect(
     env: &KubeEnv,
     name: &str,
     settings: &KubeSettings,
+    startup: Option<&daemon_config_render::StartupTable>,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeReconnectError> {
     use micold_core::kube::classify::PodGone;
@@ -1871,7 +1897,7 @@ pub async fn kube_reconnect(
     if let Some(gone) = PodGone::classify(status.as_ref(), true) {
         return Err(KubeReconnectError::Gone(gone.to_string()));
     }
-    kube_attempt(env, name, settings, DriftChoice::Keep, sink)
+    kube_attempt(env, name, settings, startup, DriftChoice::Keep, sink)
         .await
         .map_err(KubeReconnectError::Attempt)
 }
@@ -1889,6 +1915,7 @@ pub async fn kube_attempt(
     env: &KubeEnv,
     name: &str,
     settings: &KubeSettings,
+    startup: Option<&daemon_config_render::StartupTable>,
     drift: DriftChoice,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeAttemptError> {
@@ -1916,8 +1943,15 @@ pub async fn kube_attempt(
     // The file the pod's config map holds. Checked as every delivered file is: one that does not
     // validate is not delivered (contract §4).
     let time_zone = HOST_TIME_ZONE.get().and_then(|z| z.as_deref());
+    // The start script goes in the config map and its `env_file` in a secret (#1533, FR-011); an
+    // unreadable one stops the start naming it instead of starting the pod without it.
+    let mut pod_settings =
+        crate::daemon_config_render::DaemonSettings::for_pod(name, &image, time_zone);
+    pod_settings.startup = startup.cloned();
+    let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
+        .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
     let config = crate::daemon_config_render::prepare(
-        &crate::daemon_config_render::DaemonSettings::for_pod(name, &image, time_zone),
+        &delivered.settings,
         micold_core::daemon_config::Kind::Kubernetes,
     )
     .map_err(|errors| format!("the pod's configuration is invalid: {}", errors[0]))?;
@@ -1933,6 +1967,8 @@ pub async fn kube_attempt(
         home: &env.home,
         read: &read,
         config: &config,
+        startup_script: delivered.script.as_deref(),
+        startup_env: delivered.env.as_deref(),
         time_zone,
     };
     let started = match start(&request, &mut |_| {}).await {

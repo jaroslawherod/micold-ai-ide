@@ -90,6 +90,66 @@ async fn a_daemon_that_refuses_the_client_is_a_version_mismatch() {
     assert!(reason.contains("refused"), "{reason}");
 }
 
+/// #1533 M6 (US4.4, FR-011): a pod's start delivers the script in its config map and the
+/// `env_file` in the startup secret, and a script the application cannot read refuses the start
+/// with its path, which is what the row then shows.
+#[tokio::test]
+async fn a_pods_start_delivers_the_script_and_env_file_and_refuses_an_unreadable_one() {
+    use micold_client::daemon_config_render::StartupTable;
+    use micold_core::daemons::{StartupScript, StartupSettings};
+    let dir = tempfile::tempdir().unwrap();
+    let (script, env) = (dir.path().join("s.sh"), dir.path().join("s.env"));
+    std::fs::write(&script, "echo hi\n").unwrap();
+    std::fs::write(&env, "TOKEN=abc\n").unwrap();
+    let mut table = StartupSettings::new(StartupScript::File(script.clone()));
+    table.env_file = Some(env);
+    let startup = StartupTable {
+        script_file: script,
+        settings: table,
+    };
+    let cluster = cluster();
+    let client = client(&cluster, welcoming());
+    let (sink, _) = sink();
+    kube_attempt(
+        &client.env,
+        NAME,
+        &settings(),
+        Some(&startup),
+        DriftChoice::Ask,
+        &sink,
+    )
+    .await
+    .expect("the start connects");
+    let map = cluster
+        .manifest(NS, ObjectKind::ConfigMap, &names().config_map())
+        .unwrap();
+    assert_eq!(map["data"]["startup.sh"], "echo hi\n");
+    assert!(map["data"]["daemon.toml"]
+        .as_str()
+        .unwrap()
+        .contains("/run/micold/config/startup.sh"));
+    let secret = cluster
+        .manifest(NS, ObjectKind::Secret, &names().startup_secret())
+        .unwrap();
+    assert_eq!(secret["stringData"]["startup.env"], "TOKEN=abc\n");
+
+    let mut gone = startup.clone();
+    gone.script_file = dir.path().join("gone.sh");
+    let reason = kube_attempt(
+        &client.env,
+        NAME,
+        &settings(),
+        Some(&gone),
+        DriftChoice::Ask,
+        &sink,
+    )
+    .await
+    .err()
+    .expect("an unreadable script refuses the start")
+    .to_string();
+    assert!(reason.contains("gone.sh"), "{reason}");
+}
+
 #[tokio::test]
 async fn nothing_creates_a_service_or_an_ingress() {
     let cluster = cluster();
@@ -148,12 +208,12 @@ async fn a_drifted_pod_is_reported_typed_and_the_choice_continues_the_start() {
         Some(micold_core::sandbox::image::ImageRef::parse("ghcr.io/acme/ssh:2").unwrap());
     let again = client(&cluster, welcoming());
     let (sink, _) = sink();
-    let ask = kube_attempt(&again.env, NAME, &changed, DriftChoice::Ask, &sink).await;
+    let ask = kube_attempt(&again.env, NAME, &changed, None, DriftChoice::Ask, &sink).await;
     match ask.err().expect("the start stops at the drift") {
         KubeAttemptError::Drift { fields } => assert!(!fields.is_empty()),
         other => panic!("{other}"),
     }
-    let keep = kube_attempt(&again.env, NAME, &changed, DriftChoice::Keep, &sink).await;
+    let keep = kube_attempt(&again.env, NAME, &changed, None, DriftChoice::Keep, &sink).await;
     assert!(keep.is_ok(), "Keep continues with the running pod");
 }
 
@@ -245,7 +305,7 @@ mod install {
             assert!(cancel_kube_start(&client.env, NAME), "a start to cancel");
         };
         let (result, ()) = tokio::join!(
-            kube_attempt(&client.env, NAME, &settings, DriftChoice::Ask, &sink),
+            kube_attempt(&client.env, NAME, &settings, None, DriftChoice::Ask, &sink),
             canceller
         );
         assert_eq!(result.err().unwrap().to_string(), "start cancelled");

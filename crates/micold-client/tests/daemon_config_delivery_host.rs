@@ -328,3 +328,43 @@ mod container {
         assert!(err.to_string().contains("gone.sh"), "{err}");
     }
 }
+
+/// #1533 M6 (FR-011, US4.4): a pod's script and `env_file` become the config map's and the startup
+/// secret's text, the rendered file names their mounts, and neither the script nor a secret value
+/// is in it. An unreadable script stops the start naming it.
+#[test]
+fn a_pods_script_and_env_file_become_texts_and_the_file_names_their_mounts() {
+    use micold_client::daemon_config_delivery::pod_startup;
+    use micold_client::daemon_config_render::{prepare, StartupTable};
+    use micold_core::daemon_config::Kind;
+    use micold_core::daemons::{StartupScript, StartupSettings};
+
+    let app = tempfile::tempdir().unwrap();
+    let script = app.path().join("mine.sh");
+    let env = app.path().join("mine.env");
+    std::fs::write(&script, "echo SCRIPT_BODY\n").unwrap();
+    std::fs::write(&env, "TOKEN=SECRET_VALUE\n").unwrap();
+    let mut table = StartupSettings::new(StartupScript::File(script.clone()));
+    table.env_file = Some(env);
+    let mut settings = DaemonSettings::for_pod("Pod", "img:1", None);
+    settings.startup = Some(StartupTable {
+        script_file: script,
+        settings: table,
+    });
+
+    let delivered = pod_startup(&settings).unwrap();
+    assert_eq!(delivered.script.as_deref(), Some("echo SCRIPT_BODY\n"));
+    assert_eq!(delivered.env.as_deref(), Some("TOKEN=SECRET_VALUE\n"));
+    let config = prepare(&delivered.settings, Kind::Kubernetes).unwrap();
+    assert!(config.contains("script_file = \"/run/micold/config/startup.sh\""));
+    assert!(config.contains("env_file = \"/run/micold/secrets/startup/startup.env\""));
+    assert!(!config.contains("SCRIPT_BODY") && !config.contains("SECRET_VALUE"));
+
+    let none = pod_startup(&DaemonSettings::for_pod("Pod", "img:1", None)).unwrap();
+    assert_eq!((none.script, none.env), (None, None));
+
+    let mut missing = settings.clone();
+    missing.startup.as_mut().unwrap().script_file = app.path().join("gone.sh");
+    let err = pod_startup(&missing).unwrap_err();
+    assert!(err.to_string().contains("gone.sh"), "{err}");
+}

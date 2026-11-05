@@ -104,6 +104,7 @@ pub async fn remove(
         .all_secrets(allowed)
         .into_iter()
         .chain(names.retired_secrets())
+        .chain([names.startup_secret()])
     {
         delete_ours(cluster, namespace, names, ObjectKind::Secret, &secret).await?;
     }

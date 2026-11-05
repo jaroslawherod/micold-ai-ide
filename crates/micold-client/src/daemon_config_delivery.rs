@@ -174,6 +174,51 @@ pub fn deliver_container(
     Ok(wrote | config)
 }
 
+/// What a pod's start script delivers: the settings to render, naming the files where the pod
+/// mounts them, and the texts for the config map (script) and the startup secret (`env_file`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PodStartup {
+    pub settings: DaemonSettings,
+    pub script: Option<String>,
+    pub env: Option<String>,
+}
+
+/// Reads `settings`' start script and `env_file` for a pod (#1533, FR-011): the script goes in the
+/// config map beside `daemon.toml` and the `env_file` in the startup secret, and the rendered file
+/// names them at their mounts. A file that cannot be read, or is not text, stops the start naming
+/// it, so the pod does not start without the script the user chose.
+pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
+    use micold_core::kube::manifest::{
+        CONFIG_MOUNT, STARTUP_ENV_FILE, STARTUP_ENV_MOUNT, STARTUP_SCRIPT_FILE,
+    };
+    let Some(files) = read_startup_files(settings)? else {
+        return Ok(PodStartup {
+            settings: settings.clone(),
+            script: None,
+            env: None,
+        });
+    };
+    let text = |what: &str, bytes: Vec<u8>| {
+        String::from_utf8(bytes).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "the start script's {what} is not text, so it cannot be delivered to a pod"
+                ),
+            )
+        })
+    };
+    Ok(PodStartup {
+        settings: relocated_startup(
+            settings,
+            format!("{CONFIG_MOUNT}/{STARTUP_SCRIPT_FILE}").into(),
+            format!("{STARTUP_ENV_MOUNT}/{STARTUP_ENV_FILE}").into(),
+        ),
+        script: Some(text("script", files.script)?),
+        env: files.env.map(|bytes| text("env_file", bytes)).transpose()?,
+    })
+}
+
 /// Removes `path` when it exists; whether it did.
 fn remove_if_present(path: &Path) -> io::Result<bool> {
     match std::fs::remove_file(path) {
