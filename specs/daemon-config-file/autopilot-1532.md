@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M1
-- **Next step**: wait on CI, merge PR #1711 (red-CI fix pushed); next unit: milestone M2
+- **Next step**: push commit `24c862389` to PR #1711 (blocked, see *Open escalation*), then wait on CI, merge PR #1711; next unit: milestone M2
 
 ## Pull requests
 
@@ -132,4 +132,14 @@ None.
 
 ## Open escalation
 
-None.
+The red-CI fix (`24c862389`, local commit, not yet on `origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind`) is ready but `git push` fails in this worktree session: category 4, missing access.
+
+- `git push --force-with-lease -u origin HEAD` → `git@github.com: Permission denied (publickey)` (no SSH key in this session: `ssh-add -l` finds no agent, `~/.ssh` does not exist).
+- The session's own `GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*` env vars define the intended fallback (an `insteadOf` rewrite to HTTPS plus a credential helper, `!/home/node/.micold/remote/0.18.0-3bb12e5e60ee/micold-daemon git-credential`), but `GIT_CONFIG_COUNT=1` in the actual shell env only activates entry 0 (`credential.helper=`), not the HTTPS rewrite or the helper (entries 1-4) — so plain `git push` never reaches HTTPS at all.
+- Forcing all 5 entries by hand (`-c url."https://github.com/".insteadOf=... -c credential.https://github.com.helper=...`) does reach HTTPS (`git ls-remote origin HEAD` this way succeeds, read-only, anonymously) but `git push` still fails: `could not read Username ... terminal prompts disabled` — the credential helper returns nothing. Running that helper binary directly (outside git) is refused by the Claude Code auto-mode classifier ("Permission for this action was denied by the Claude Code auto mode classifier"), which is very likely also what silently empties it out when git spawns it as a child.
+- `scripts/autopilot/preflight.sh` reproduces and names the same failure (`git ls-remote origin HEAD failed: ... Permission denied (publickey)`), confirming this is an environment problem, not a one-off.
+- Not attempted: editing git config (forbidden — "NEVER update the git config") or working around the classifier's denial (forbidden per its own message).
+
+**Recommended**: push this one commit from a session/environment where `git push` already works for this worktree (e.g. the orchestrator's own context, or after `/home/jaro/.ssh` or the HTTPS credential helper is fixed for this session), rather than changing this worktree's git or permission configuration. Evidence: `preflight.sh`'s own check exists for exactly this failure mode, and the fix the script's own comment names (an SSH key, or the HTTPS rewrite/credential helper actually enabled) is infrastructure outside this unit's scope to change.
+
+What you need to do: make `git push` work for this worktree session (add an SSH key, or fix the `GIT_CONFIG_COUNT`/credential-helper env so HTTPS auth succeeds), then run `git push --force-with-lease -u origin HEAD` from `/run/media/jaro/Workspace/micold-ai-ide/.claude/worktrees/feat-1532_ai-cli-configuration-from-the-file-for-every-kind` (branch `feat/1532_ai-cli-configuration-from-the-file-for-every-kind`, 1 commit ahead: `24c862389`), then reply "done".
