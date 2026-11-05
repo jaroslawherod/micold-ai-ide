@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
 - **Phase**: milestone M1
-- **Next step**: orchestrator waits on CI, merges #1709 (rebased onto origin/main, basic image hash repinned to dd029f826ae2f841, DAEMON_SIDE removed, cycle-log entry added); then M2 (blocked on #1530 M2)
+- **Next step**: CI red on run 42016227256 was runner "No space left on device" in the full-workspace test step (not this diff); failed jobs re-run. Orchestrator waits on CI, merges #1709; then M2 (blocked on #1530 M2)
 
 ## Pull requests
 
