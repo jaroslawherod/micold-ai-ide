@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: clarify
-- **Next step**: clarify unit (no open markers expected), then plan
+- **Phase**: plan
+- **Next step**: plan unit (clarify round 1: no critical ambiguities)
 
 ## Pull requests
 
