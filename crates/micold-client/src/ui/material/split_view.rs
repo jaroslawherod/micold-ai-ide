@@ -864,6 +864,9 @@ mod tests {
             roles(),
             vec![Element::from(typeahead)],
         );
-        assert!(Mounted::new(split).floats(), "the pane's open list is not floated");
+        assert!(
+            Mounted::new(split).floats(),
+            "the pane's open list is not floated"
+        );
     }
 }
