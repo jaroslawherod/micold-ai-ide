@@ -214,8 +214,8 @@ state treatments; they match, differing only in label and value.
 
 - **SC-001**: A user can move a long draft into the large editor and back using only the keyboard
   in two key chords (open, confirm).
-- **SC-002**: In the default (collapsed) state the composer shows a single control row (the input row)
-  above the text area, where today it shows two (status row plus input row); the three selectors are
+- **SC-002**: In the default (collapsed) state the composer shows a single control row (the input row,
+  holding the text area, indicator and buttons), where today it shows two (status row plus input row); the three selectors are
   reachable in one action.
 - **SC-003**: The activity state is conveyed in 100% of states (ready, busy, waiting) by icon plus
   tooltip and accessible label, with no visible status text.
