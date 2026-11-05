@@ -67,6 +67,6 @@ group (client section tests updated to seven sections); `entrypoint.sh` names a 
 (`scripts/tests/basic-entrypoint.test.sh`); `sandbox_real_startup` runs the script as the daemon's
 own user and shows a refusal over SSH (compiled and run at Verify, `mise run test-sandbox`).
 
-Deviations, recorded: `crates/micold-daemon/src/remote.rs` needed no change, since the refusal path
+Deviations, recorded: `crates/micold-daemon/src/remote.rs` needed no change at first (see the CI fix in the ledger), since the refusal path
 is the M1/M4 one (`startup-result.json`, read at the next connection); a refusal at container boot is
 covered by the entrypoint script test, not a real-runtime test.
