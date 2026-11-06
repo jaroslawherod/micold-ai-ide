@@ -127,7 +127,8 @@ fn commit_with(dir: &Path, edits: &[EnvEdit]) -> Option<bool> {
     );
     let git = |args: &[&str]| {
         let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(&repo)
+        micold_core::process::no_window(&mut cmd)
+            .current_dir(&repo)
             .args(args)
             .env("GIT_CONFIG_GLOBAL", &global)
             .env("GIT_CONFIG_SYSTEM", "/dev/null");
@@ -146,7 +147,7 @@ fn commit_with(dir: &Path, edits: &[EnvEdit]) -> Option<bool> {
 }
 
 fn ssh_keygen(path: &Path) -> Option<()> {
-    std::process::Command::new("ssh-keygen")
+    micold_core::process::no_window(&mut std::process::Command::new("ssh-keygen"))
         .args(["-q", "-t", "ed25519", "-N", "", "-f"])
         .arg(path)
         .status()
@@ -171,7 +172,7 @@ fn a_signed_commit_succeeds_with_the_key_and_an_unsigned_one_without() {
         return;
     };
     assert!(signed, "a commit signed with the delivered key");
-    let log = std::process::Command::new("git")
+    let log = micold_core::process::no_window(&mut std::process::Command::new("git"))
         .current_dir(dir.path().join("repo"))
         .args(["cat-file", "-p", "HEAD"])
         .output()
