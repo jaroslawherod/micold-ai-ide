@@ -262,6 +262,8 @@ struct Link<S> {
     messages: std::pin::Pin<Box<S>>,
     session: Option<SessionId>,
     screen: BTreeMap<i64, String>,
+    /// The client's own cache of the viewed session, as the pane and the clipboard read it.
+    cache: micold_client::grid::GridCache,
 }
 
 impl<S: Stream<Item = micold_client::app::Message>> Link<S> {
@@ -285,6 +287,7 @@ impl<S: Stream<Item = micold_client::app::Message>> Link<S> {
             };
             if let ConnectionMsg::GridFrame(frame) = &*msg {
                 if Some(frame.session) == self.session {
+                    self.cache.apply(frame);
                     if frame.full {
                         self.screen.clear();
                     }
@@ -395,6 +398,7 @@ async fn sandbox_real_container_daemon_runs_a_session_end_to_end() {
         messages: Box::pin(micold_client::daemon::actor(spec)),
         session: None,
         screen: BTreeMap::new(),
+        cache: micold_client::grid::GridCache::new(),
     };
     let outbox = link
         .until(
@@ -449,6 +453,30 @@ async fn sandbox_real_container_daemon_runs_a_session_end_to_end() {
     outbox.send(stamper.stamp(session, b"hello from the e2e\r".to_vec()));
     link.shows(&format!("{STANDIN_ECHO}hello from the e2e"), step)
         .await;
+
+    // #1720: what the user selects in a container session reaches the clipboard, and a paste
+    // reaches the session as typed bytes. The selection is the whole viewport, as a drag from the
+    // top-left to the bottom-right cell makes it, over the cache the pane reads.
+    {
+        use micold_client::selection::{self, Anchor, SelectGranularity, Selection};
+        let cache = &link.cache;
+        let top = cache.viewport_top();
+        let last = micold_core::protocol::grid::LineId(top.0 + i64::from(cache.rows()) - 1);
+        let text = |id| cache.line(id).map(|l| l.text.clone());
+        let mut sel = Selection::start(Anchor::new(top, 0), SelectGranularity::Char, text);
+        sel.update(Anchor::new(last, cache.cols() - 1), text);
+        let outcome = selection::copy_request(Some(&sel), text);
+        let Some(micold_client::features::Outcome::ClipboardWrite(copied)) = outcome else {
+            panic!("nothing to copy from a container session's screen:\n{}", link.text());
+        };
+        assert!(
+            copied.contains(&format!("{STANDIN_ECHO}hello from the e2e")),
+            "the copy lacks the screen's text: {copied:?}"
+        );
+        let bytes = micold_client::keymap::paste_bytes("pasted", cache.bracketed_paste());
+        outbox.send(stamper.stamp(session, [bytes, b"\r".to_vec()].concat()));
+        link.shows(&format!("{STANDIN_ECHO}pasted"), step).await;
+    }
 
     // The session stops. The daemon tells every window with a `CatalogChanged` in which the
     // session is `Idle` (`stop_session_gated`), not with a `SessionChanged`.
