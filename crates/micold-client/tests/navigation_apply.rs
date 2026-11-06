@@ -172,6 +172,8 @@ mod over_the_flat_list {
                     .expect("the chord's session is open"),
                 other => panic!("a chord stops on a location row, never a header: {other:?}"),
             };
+            // A session step only returns the `Selected` message; stand in for it by moving the stop.
+            state.sidebar.nav_stop = Some(location.clone());
             visited.push(location);
         }
         assert_eq!(visited, order);
