@@ -92,7 +92,7 @@ skipped, not failed.
 3. **Given** the token is removed, **Then** push fails and, after re-pasting, succeeds without a
    daemon restart (step 8); **Given** the token expires, **Then** the file is gone and push fails
    until a new token is pasted (step 10).
-4. **Given** a kind-cluster daemon, **When** steps 4-5 are repeated, **Then** they hold (step 11).
+4. ~~**Given** a kind-cluster daemon, **When** steps 4-5 are repeated, **Then** they hold (step 11).~~ Moved to follow-up #1760 (decided by user, M2: the kind pod harness has no credential wiring); step 11 stays UNCOVERED here.
 5. **Given** no container runtime or kind, **When** the test runs, **Then** it is skipped.
 
 ### Edge Cases
@@ -126,7 +126,7 @@ skipped, not failed.
 - **FR-007**: The normal suite MUST cover Part C steps 2, 3, 8, 10 and 12 through the fake API.
 - **FR-010**: The "not live" table in the #1002 quickstart MUST be updated to name the new tests.
 - **FR-011**: The fake API MUST run on every CI platform (Linux, macOS, Windows) on loopback.
-- **FR-008**: A runtime-gated test MUST cover steps 4-8, 10 and 11 for a container daemon and a kind daemon, run by the existing `sandbox-runtime` CI job, skipped (reported as skipped, not failed) when no runtime is available.
+- **FR-008**: A runtime-gated test MUST cover steps 4-8 and 10 for a container daemon (step 11, a kind daemon, is follow-up #1760), run by the existing `sandbox-runtime` CI job, skipped (reported as skipped, not failed) when no runtime is available.
 - **FR-009**: Steps that need real GitHub (1, the real-API facts of step 3, the `/hooks` 403 of step 7) MUST remain documented as manual. Step 9 (SSH-agent notice) is already covered by an existing test and is out of scope.
 
 ### Key Entities
@@ -139,7 +139,7 @@ skipped, not failed.
 ### Measurable Outcomes
 
 - **SC-001**: 5 of the 12 Part C steps (2, 3, 8, 10, 12) are asserted by tests in the normal suite, with no network access beyond loopback.
-- **SC-002**: Steps 4-8, 10 and 11 are asserted by one runtime-gated test in the `sandbox-runtime` CI job (8 and 10 are also covered by the fake-API tests; 4, 5, 6, 7 and 11 are new coverage).
+- **SC-002**: Steps 4-8 and 10 are asserted by one runtime-gated test in the `sandbox-runtime` CI job (8 and 10 are also covered by the fake-API tests; 4, 5, 6 and 7 are new coverage; step 11 is #1760).
 - **SC-003**: With no override, 0 differences in the URLs and headers the check sends (asserted by test).
 - **SC-004**: In a shipped build, 0 user-reachable ways (setting, file, UI) to change the base.
 
