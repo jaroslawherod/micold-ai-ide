@@ -305,7 +305,7 @@ largest pain), then AI CLIs and the start script, then the view and the cleanup.
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). This section holds
 the milestones of **Issue 2 (#1523)**, **Issue 3 (#1524)**, **Issue 4 (#1525)**, **Issue 5 (#1526)**,
-**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 11 (#1532)**, **Issue 13 (#1534)**, **Issue 14 (#1535)** and **Issue 15 (#1537)**; the sub-issue that owns another group adds its own
+**Issue 6 (#1527)**, **Issue 7 (#1528)**, **Issue 8 (#1529)**, **Issue 9 (#1530)**, **Issue 10 (#1531)**, **Issue 11 (#1532)**, **Issue 13 (#1534)**, **Issue 14 (#1535)**, **Issue 15 (#1537)** and **Issue 16 (#1536)**; the sub-issue that owns another group adds its own
 milestones under its own heading. Milestone IDs are local to a heading.
 
 ### Issue 2 (#1523) — M1 — Daemon configuration schema and `config check` 🎯 MVP
@@ -540,6 +540,17 @@ and basic images, the SSH remote command and the entrypoint stop setting them, s
 - **Satisfies**: FR-001, FR-012, SC-001
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-core retired_env`; `scripts/build-lock.sh cargo test -p micold-daemon --test container_over_ssh_without_data_dir`; `mise run test-scripts`; `mise run image` then `mise run test-sandbox`; quickstart.md sections 2 and 8
 - **Depends on**: Issue 15 (#1537) M1; Issue 9 (#1530) M2 (T092 moves `container_git_edits` off `MICOLD_DATA_DIR` onto `daemon.kind`, which T086a tests; start M2 after it merges)
+- **Tier**: full
+
+### Issue 16 (#1536) — M1 — SSH key, signing key, CA file and session files reach sandbox sessions
+
+One milestone: six tasks, one story (US1). T101–T104 are four independent delivery paths in the daemon (git SSH command and signing key, CA environment and daemon HTTPS trust, session files) that share the container and pod session environment in `state.rs`; T105 renders them from Settings and T106 documents them, so splitting would leave an unobservable half. It adds environment and file delivery into sessions and a trust change in the daemon's HTTPS, so `full`.
+
+- **Tasks**: T101–T106
+- **Deliverable**: a container or pod session pushes to an SSH remote with the configured `ssh_key_file` and `known_hosts_file`, signs commits with `signing_key_file` (signing off without it), reaches HTTPS hosts behind `ca_file` (sessions and the daemon's reach check), the daemon honours proxies from `session.env`/`secret_env`, and `[[session.files]]` land in the session home (V18 refusals for `as` outside the home or in the CLI config dir); Settings → Daemons renders the four extras and the user guide documents them.
+- **Satisfies**: US1; FR-036, FR-037, FR-038 (contract `#git`, `#session`, `#network`)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon` tests added by T101–T104 (SSH command, signing on/off, CA env and reach, session files and V18); `scripts/build-lock.sh cargo test -p micold-client daemon_config_render`; `mise run test-scripts`
+- **Depends on**: Issues 3 (#1524), 6 (#1527), 7 (#1528), merged
 - **Tier**: full
 
 ## Phase 20: TDD remediation (Issue 2 / #1523, from `tdd/verification.md`)
