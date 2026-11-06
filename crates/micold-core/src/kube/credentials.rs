@@ -23,6 +23,15 @@ pub const REPOS_ROOT: &str = "/data/repos";
 /// Secret has a directory of its own under `/run/micold/secrets`, read-only, never a single file.
 pub const GIT_CONFIG_DIR: &str = "/run/micold/secrets/git";
 
+/// Where one CLI's sign-in Secret is mounted (T065, research D13): a directory of its own under
+/// `/run/micold/secrets`, like [`GIT_CONFIG_DIR`] — never a single-file mount with a `subPath`, so
+/// the CLI's own refresh never has to write through a bind mount. The pod's daemon relinks the
+/// CLI's live sign-in path to the delivered file in here at every session start, the same relink
+/// the container kind runs (`sandbox::relink_ai_cli_sign_ins`, parameterised by this base).
+pub fn sign_in_dir(cli: AiCli) -> String {
+    format!("/run/micold/secrets/sign-in/{}", cli.tool_name())
+}
+
 /// The `type` of a registry pull secret.
 pub const DOCKER_CONFIG_TYPE: &str = "kubernetes.io/dockerconfigjson";
 
@@ -84,10 +93,6 @@ impl KubeCredential {
 
     /// Where the secret is mounted; `None` for a pull secret, which is no mount.
     pub fn mount(&self) -> Option<Mount> {
-        let file = |path: String, key: &str| Mount {
-            path,
-            sub_path: Some(key.to_string()),
-        };
         match self {
             // A directory of its own, never a single-file mount; `GIT_CONFIG_GLOBAL` names the
             // file in it ([`daemon_env`]).
@@ -95,7 +100,10 @@ impl KubeCredential {
                 path: GIT_CONFIG_DIR.into(),
                 sub_path: None,
             }),
-            Self::SignIn { cli } => Self::sign_in_file(*cli).map(|(path, key)| file(path, &key)),
+            Self::SignIn { cli } => Self::sign_in_file(*cli).map(|_| Mount {
+                path: sign_in_dir(*cli),
+                sub_path: None,
+            }),
             Self::RegistryPull { .. } => None,
         }
     }
@@ -246,10 +254,7 @@ mod tests {
         );
         assert_eq!(
             claude.mount(),
-            mount(
-                "/data/home/.claude/.credentials.json",
-                Some(".credentials.json")
-            )
+            mount(&sign_in_dir(AiCli::ClaudeCode), None)
         );
         let pull = KubeCredential::RegistryPull { auths: "/a".into() };
         assert_eq!(pull.mount(), None);

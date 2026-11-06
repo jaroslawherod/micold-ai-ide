@@ -314,13 +314,6 @@ impl CredentialShare {
             CredentialShare::AiCliAuth => "AI CLI sign-in",
         }
     }
-
-    /// Whether the share is mounted writable (rule N-4, FR-004e). Only the AI CLI's sign-in token
-    /// is: the CLI replaces it on every refresh, and a read-only token stops working once it
-    /// expires. Everything else is only ever read.
-    pub fn writable(self) -> bool {
-        matches!(self, CredentialShare::AiCliAuth)
-    }
 }
 
 /// The user's sandbox configuration (FR-005 … FR-019).
@@ -705,7 +698,19 @@ pub struct CredentialMount {
     /// Which opt-in produced this mount, so the view can name what is shared (FR-004c).
     pub share: CredentialShare,
     pub host: PathBuf,
+    /// The CLI's own *live* path, where it looks for this file — unchanged meaning, read by
+    /// [`MountSet::home_dirs_to_create`], [`MountSet::home_files_to_create`],
+    /// [`MountSet::onboarding_record`], [`MountSet::shared_locations`],
+    /// [`MountSet::container_projects`] and [`MountSet::unshared_sign_in`].
     pub container: PathBuf,
+    /// Where this credential is actually bind-mounted read-only, under
+    /// [`CONTAINER_SECRETS_DIR`], when that differs from [`Self::container`] (T065, research D13).
+    /// `None` for [`CredentialShare::GitConfig`] (mounted directly at `container`, as before);
+    /// `Some` for [`CredentialShare::AiCliAuth`], whose `container` is relinked to point here at
+    /// every session start ([`relink_ai_cli_sign_ins`]) rather than mounted there directly — the
+    /// read-only share this field exists for (rule N-4's writable exception is gone: every
+    /// credential mount is read-only now).
+    pub delivered: Option<PathBuf>,
 }
 
 /// The invoking user's identity, for the container to run as (research R3).
@@ -783,15 +788,7 @@ impl CredentialLayout {
             .iter()
             .chain(layout.ai_cli_auth.iter())
             .filter(|path| exists(path))
-            // Joined with `/` whatever the host: the names are of files in a container home.
-            .map(|path| {
-                path.strip_prefix(home)
-                    .unwrap_or(path)
-                    .components()
-                    .map(|part| part.as_os_str().to_string_lossy())
-                    .collect::<Vec<_>>()
-                    .join("/")
-            })
+            .map(|path| relative_to(home, path))
             .collect()
     }
 
@@ -801,6 +798,80 @@ impl CredentialLayout {
             CredentialShare::AiCliAuth => self.ai_cli_auth.iter().map(PathBuf::as_path).collect(),
         }
     }
+}
+
+/// `path`'s components under `home`, joined with `/` whatever the host platform (T065): the
+/// result names a file in a container home, which is POSIX on every host.
+fn relative_to(home: &Path, path: &Path) -> String {
+    path.strip_prefix(home)
+        .unwrap_or(path)
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Where an AI CLI's sign-in at `live` (under `home`) is actually bind-mounted read-only (T065,
+/// research D13): a path under [`CONTAINER_SECRETS_DIR`] that keeps `live`'s suffix after `home`,
+/// which is what makes this safe to recompute with no cross-process information — see
+/// [`ai_cli_sign_in_links`].
+fn ai_cli_auth_delivered_path(home: &Path, live: &Path) -> PathBuf {
+    PathBuf::from(format!(
+        "{CONTAINER_SECRETS_DIR}/ai-cli-auth/{}",
+        relative_to(home, live)
+    ))
+}
+
+/// `(live, delivered)` for every CLI whose sign-in would land under `home` (the sandbox's own
+/// `HOME`, as seen from wherever this runs): `live` is where the CLI itself looks, `delivered` is
+/// where the read-only mount actually puts the file. Self-contained — no host-side
+/// [`CredentialLayout`] or profile needed — because `pathmap::map_for` never touches the suffix
+/// after the home prefix, so this produces the same `delivered` whether computed on the host
+/// (building the [`MountSet`]) or inside the sandbox (relinking at session start,
+/// [`relink_ai_cli_sign_ins`]).
+pub fn ai_cli_sign_in_links(home: &Path) -> Vec<(PathBuf, PathBuf)> {
+    crate::session::AiCli::ALL
+        .iter()
+        .filter_map(|cli| {
+            let live = cli.provider().sandbox_auth_file(home)?;
+            Some((live.clone(), ai_cli_auth_delivered_path(home, &live)))
+        })
+        .collect()
+}
+
+/// Re-creates the symlink from each AI CLI's live sign-in path to where T065's read-only mount
+/// actually delivered it, inside the sandbox, at every session start (never run outside a sandbox
+/// kind — SC-008 forbids ever touching a host/ssh session's real sign-in file). A pair whose
+/// `delivered` does not exist on disk is skipped (that CLI's sign-in was never shared, or the
+/// opt-in is off): no dangling link is created. Removes whatever is at `live` first — a stale
+/// link from a previous delivery, or (compatibility with containers made before this change) the
+/// file itself. A failure on one pair is skipped, never fatal (FR-019): one CLI's sign-in failing
+/// to link must not stop a session over another's; this crate is render- and log-free (its own
+/// `FR-040`), so the caller logs what [`Self::relink_ai_cli_sign_ins`] leaves out of its result.
+pub fn relink_ai_cli_sign_ins(home: &Path) -> Vec<PathBuf> {
+    ai_cli_sign_in_links(home)
+        .into_iter()
+        .filter(|(_, delivered)| delivered.exists())
+        .filter_map(|(live, delivered)| relink_one(&live, &delivered))
+        .collect()
+}
+
+/// Links `live` to `delivered`, clearing whatever is at `live` first. `None` on any failure — a
+/// helper for [`relink_ai_cli_sign_ins`] so its tests can assert on the return value.
+fn relink_one(live: &Path, delivered: &Path) -> Option<PathBuf> {
+    if let Some(parent) = live.parent() {
+        std::fs::create_dir_all(parent).ok()?;
+    }
+    match std::fs::symlink_metadata(live) {
+        Ok(_) => std::fs::remove_file(live).ok()?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return None,
+    }
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(delivered, live);
+    #[cfg(not(unix))]
+    let linked = std::os::windows::fs::symlink_file(delivered, live);
+    linked.ok().map(|()| live.to_path_buf())
 }
 
 impl MountSet {
@@ -849,6 +920,13 @@ impl MountSet {
     ) -> Self {
         let state_dir = state_dir.into();
         let delivery = DeliveryMount::beside(&state_dir);
+        // Where each AI CLI's sign-in actually lands when delivered read-only (T065), keyed by its
+        // container-mapped live path — computed from the *container*'s own home so it matches
+        // exactly what the sandbox recomputes for itself at relink time (`relink_ai_cli_sign_ins`).
+        let ai_cli_delivered: std::collections::BTreeMap<PathBuf, PathBuf> =
+            ai_cli_sign_in_links(&pathmap::map_for(home, windows_host))
+                .into_iter()
+                .collect();
         let credentials = profile
             .credentials
             .iter()
@@ -856,17 +934,28 @@ impl MountSet {
                 layout
                     .paths_for(*share)
                     .into_iter()
-                    .map(|host| CredentialMount {
-                        share: *share,
+                    .map(|host| {
                         // Credentials are mounted at their own absolute paths for the same reason
                         // projects are: the tools inside look for them where they always are.
-                        container: pathmap::map_for(host, windows_host),
-                        // The git configuration is mounted from its sanitized copy, never from
-                        // the host's file (FR-004).
-                        host: match share {
-                            CredentialShare::GitConfig => state_dir.join(SANDBOX_GITCONFIG_FILE),
-                            CredentialShare::AiCliAuth => host.to_path_buf(),
-                        },
+                        let container = pathmap::map_for(host, windows_host);
+                        CredentialMount {
+                            share: *share,
+                            delivered: match share {
+                                CredentialShare::GitConfig => None,
+                                CredentialShare::AiCliAuth => {
+                                    ai_cli_delivered.get(&container).cloned()
+                                }
+                            },
+                            container,
+                            // The git configuration is mounted from its sanitized copy, never from
+                            // the host's file (FR-004).
+                            host: match share {
+                                CredentialShare::GitConfig => {
+                                    state_dir.join(SANDBOX_GITCONFIG_FILE)
+                                }
+                                CredentialShare::AiCliAuth => host.to_path_buf(),
+                            },
+                        }
                     })
             })
             .collect();

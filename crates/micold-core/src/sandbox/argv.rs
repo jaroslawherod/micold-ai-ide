@@ -300,15 +300,13 @@ fn mount_args(mounts: &MountSet, selinux_enforcing: bool) -> Vec<OsString> {
             false,
         );
     }
-    // Credentials are read-only, with one exception (rule N-4): the AI CLI's sign-in token, which
-    // the CLI replaces itself whenever it refreshes it. The sandbox may *use* the user's identity
-    // when they opted in, and may keep that one token current, but never rewrite the rest.
+    // Every credential mount is read-only (T065): the AI CLI's sign-in is no longer mounted
+    // writable at its own live path — it lands in the read-only secrets directory instead
+    // (`delivered`), and the sandbox relinks the live path to it at every session start
+    // (`relink_ai_cli_sign_ins`), so the CLI's own refresh never has to write through a mount.
     for c in &mounts.credentials {
-        mount(
-            &c.host.display(),
-            &c.container.display(),
-            c.share.writable(),
-        );
+        let container = c.delivered.as_ref().unwrap_or(&c.container);
+        mount(&c.host.display(), &container.display(), false);
     }
     args
 }
@@ -523,6 +521,7 @@ mod tests {
             share: CredentialShare::GitConfig,
             host: PathBuf::from("/home/u/.gitconfig"),
             container: PathBuf::from("/home/u/.gitconfig"),
+            delivered: None,
         }];
         for kind in RuntimeKind::ALL {
             let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
@@ -588,6 +587,7 @@ mod tests {
             share: CredentialShare::GitConfig,
             host: PathBuf::from("/home/u/.gitconfig"),
             container: PathBuf::from("/home/u/.gitconfig"),
+            delivered: None,
         }];
         for kind in RuntimeKind::ALL {
             let plain = caps(kind, LimitSupport::Supported);
