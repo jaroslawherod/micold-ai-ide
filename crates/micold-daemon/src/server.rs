@@ -882,6 +882,11 @@ where
             frame = incoming.next() => match frame {
                 Some(Ok(Frame::Control(msg))) => msg,
                 Some(Ok(Frame::Grid(_))) => continue, // clients never send grid frames
+                // A routed envelope belongs to the orchestrator link, not to a plain connection:
+                // close it rather than deliver or misread it (#1723 FR-006).
+                Some(Ok(Frame::Routed(_))) => {
+                    return Err(io::Error::other("routed frame on a plain connection"))
+                }
                 Some(Err(e)) => return Err(io::Error::other(e)),
                 None => break, // EOF
             },

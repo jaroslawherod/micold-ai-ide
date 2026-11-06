@@ -38,6 +38,8 @@ pub enum Kind {
     Control = 0,
     /// A [`crate::protocol::grid::GridFrame`].
     Grid = 1,
+    /// A [`crate::protocol::routing::RoutedEnvelope`] around a control message. Body is JSON.
+    Routed = 2,
 }
 
 impl Encoding {
@@ -56,6 +58,7 @@ impl Kind {
         match b {
             0 => Ok(Kind::Control),
             1 => Ok(Kind::Grid),
+            2 => Ok(Kind::Routed),
             other => Err(EnvelopeError::UnknownKind(other)),
         }
     }

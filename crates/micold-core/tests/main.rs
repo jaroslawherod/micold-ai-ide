@@ -136,6 +136,7 @@ mod review_browse;
 mod review_drawer;
 mod review_keys_doc;
 mod review_tree;
+mod routed_codec;
 mod runs_integrate;
 mod runs_summary;
 mod sandbox_argv;
