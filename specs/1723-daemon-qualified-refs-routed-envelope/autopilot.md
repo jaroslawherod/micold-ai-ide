@@ -73,3 +73,7 @@ None.
 ## Review notes (spec, round 1)
 
 Round 1 snapshot 0a3a5600:11174021: CHANGES 3 MAJOR. F1 declined: the FR-008 marker is left for the clarify unit by design (spec.md task). F2, F3 fixed (scenario, SC, row-type check, edge cases); F4-F6 fixed. Re-check by me against findings; no new round needed beyond the marker.
+
+## CI notes
+
+- PR #1753 attempt 1: the only red test was `streaming_child::unix::a_natural_exit_still_ends_what_it_left_running` (grandchild outlived the run; file untouched by this feature, passes on main). Treated as a flake; re-run by a docs-only push. The earlier local `schema_hash` failure did not reproduce in CI.
