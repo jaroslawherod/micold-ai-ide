@@ -105,6 +105,7 @@ fn every_restart_key_changed_alone_sets_restart_needed_and_names_itself() {
     std::fs::write(&script, "#!/bin/sh\n").unwrap();
     let t = tmp.path().display();
     let cases: Vec<(&str, String)> = vec![
+        ("daemon.id", file_with("t", "host", "id = \"edge-1\"", "")),
         ("daemon.name", file_with("other", "host", "", "")),
         ("daemon.kind", file_with("t", "ssh", "", "")),
         (

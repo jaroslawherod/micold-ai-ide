@@ -421,6 +421,7 @@ pub fn restart_keys(started: &DaemonConfig, now: &DaemonConfig) -> Vec<String> {
     let (a, b) = (&started.daemon, &now.daemon);
     let storage = |c: &DaemonConfig| c.storage.as_ref().and_then(|s| s.clone_root.clone());
     let checks = [
+        ("daemon.id", a.id != b.id),
         ("daemon.name", a.name != b.name),
         ("daemon.kind", a.kind != b.kind),
         ("daemon.data_dir", a.data_dir != b.data_dir),
