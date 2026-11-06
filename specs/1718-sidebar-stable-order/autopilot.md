@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: clarify
-- **Next step**: plan unit (clarify round 1: no ambiguities, no questions; plan must check feature 905 icons differ per state)
+- **Phase**: plan
+- **Next step**: tasks unit (plan done; finding: 905 StateIcon has 3 glyphs, so StateIcon is re-keyed on CardState, research R1/R6)
 
 ## Pull requests
 
@@ -28,6 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Review rounds
+
+- plan R1 snapshot 9c7a789..:5d02cca.. CHANGES (2 MAJOR fixed); R2 snapshot cdf4399..:a38b989.. CHANGES (2 MAJOR: contradictory Complexity Tracking, incomplete file list; fixed, prose only)
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|

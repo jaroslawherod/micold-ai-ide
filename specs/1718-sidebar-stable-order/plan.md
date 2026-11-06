@@ -51,14 +51,12 @@ e8f4, `CardDone` e86c, `StateIdle` e034). Decisions: [research.md](research.md).
 | VII Documentation | Pass | FR-009: user guide, layout-snapshot doc, showcase, module docs updated |
 | VIII Reusable UI | Pass | `StateIcon` stays the one shared component; reuses `overview_card::state_icon` |
 
-No violation.
-
 ## Complexity Tracking
 
 None. Re-keying `StateIcon` supersedes feature 905's contract `state-icon.md` S1 (three states) for the
 row; recorded in research R1 and R6.
 
-No violation; Complexity Tracking is empty. Re-checked after design: unchanged.
+Re-checked after design: unchanged.
 
 ## Project Structure
 
@@ -68,7 +66,7 @@ crates/micold-core/src/sidebar_groups.rs      # delete StateGroup, Group, group_
 crates/micold-core/src/lib.rs                 # module line
 crates/micold-client/src/features/sidebar.rs  # drop SidebarGroup, GroupHeaderRow, ListRow::Header, group_choices, GroupToggled, open_group_of_*; sidebar_list = entries
 crates/micold-client/src/features/navigation.rs # location_nodes over sidebar_entries
-crates/micold-client/src/ui/sidebar.rs        # drop group_header, Header row key; pass card state to StateIcon
+crates/micold-client/src/ui/sidebar.rs        # drop group_header, Header row key, SidebarGroup / ListRow uses; pass card state to StateIcon and with_state_line
 crates/micold-client/src/ui/material/state_icon.rs # re-key on CardState
 crates/micold-client/src/showcase/sections/{surfaces,atoms}.rs # drop group header poses; five-state icon pose
 crates/micold-material/src/text.rs, type_role_mapping.rs  # delete TypeRole::SidebarGroup and test a_sidebar_group_header_is_twelve_px_bold
@@ -77,6 +75,9 @@ crates/micold-client/src/ui/material/composition_contrast.rs # drop a_sidebar_gr
 crates/micold-client/src/showcase/catalogue.rs    # drop the SidebarGroup entry
 crates/micold-client/tests/showcase_completeness.rs # poses Running/Blocked/Idle/Unknown become the five card states
 crates/micold-client/tests/icons_font.rs          # only if Icon::StateBlocked is dropped (R6: it is kept)
+crates/micold-client/tests/composite_call_sites.rs  # ListRow becomes SidebarEntry
+crates/micold-client/tests/sidebar_spawn_tree.rs    # row_index takes &[SidebarEntry]
+crates/micold-client/tests/sidebar_state_icon.rs    # with_state_line and StateIcon re-keyed on CardState
 docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, tests/layout_snapshot.rs
 ```
 
