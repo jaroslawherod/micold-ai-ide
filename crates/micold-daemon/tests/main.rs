@@ -23,5 +23,4 @@ mod every_test_file_is_wired;
 mod log_redaction;
 mod pasted_cleanup;
 mod project_registered_before_create;
-mod refused_mutations_are_logged;
 mod run_group_persist;

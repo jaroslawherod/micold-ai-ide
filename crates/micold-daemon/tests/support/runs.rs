@@ -10,6 +10,7 @@ mod env;
 
 pub use conn::{connect, Client};
 pub use env::Env;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -225,6 +226,7 @@ pub fn service(store: &Path) -> Arc<DaemonState> {
 /// The stand-in `claude`: waits `<bin>/slow` seconds when that file exists, asks for bracketed
 /// paste (unless `<bin>/nopaste.<--session-id>` exists), draws a prompt, and appends everything
 /// typed into it to `<bin>/input.<--session-id or --resume id>`.
+#[cfg(unix)]
 pub fn install_claude(bin: &Path) {
     let dir = bin.display();
     let path = bin.join("claude");

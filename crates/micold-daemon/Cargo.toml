@@ -280,6 +280,10 @@ name = "provider_origin_discovery"
 path = "tests/provider_origin_discovery.rs"
 
 [[test]]
+name = "refused_mutations_are_logged"
+path = "tests/refused_mutations_are_logged.rs"
+
+[[test]]
 name = "resume_failure_reported"
 path = "tests/resume_failure_reported.rs"
 
