@@ -11,6 +11,11 @@ make the change and report only what changed and any follow-up the user needs to
 without wrapping explanation unless the user asks how or why. Prefer one line over a paragraph, and
 a paragraph over a bulleted essay, when either communicates the same information.
 
+## Follow-ups go to the project chat
+
+Do not reply in a finished cloud thread to ask a follow-up: after more than an hour idle, one reply
+re-writes the whole cache (about $2 each). Ask in the project chat, or start a fresh thread.
+
 ## "Start work on issue": worktree and autopilot session
 
 When the user says to start work on an issue (`#<issue>`), do not work on it in the current

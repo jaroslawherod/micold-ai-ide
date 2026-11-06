@@ -4,7 +4,11 @@ When: the flow's file names the next unit, and the previous PR (if any) has merg
 
 Run each unit in its own `autopilot-unit` subagent (`general-purpose` when your agent types lack
 it: the type drops tool schemas a unit never uses, about 10k tokens on each of its calls). The
-`model` is the one the flow's file gives. A unit keeps its model when continued with `SendMessage`.
+`model` is the one the flow's file gives. **On that fallback always pass `model`**: `general-purpose`
+inherits the session's (Opus), so a missing `model` silently loses the cheaper tiers. `"sonnet"` for
+the units the flow marks light, re-reviews, conformance checks and workers. Cloud threads often do
+not list the `autopilot-*` types: check the agent list before the first dispatch, and say in the
+ledger when you fell back. A unit keeps its model when continued with `SendMessage`.
 
 - **Description:** name the unit (`Milestone M2 553`, `Plan 553`, `Chore 587`). Token reports
   group by it.

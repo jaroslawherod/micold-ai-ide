@@ -11,6 +11,9 @@ When: the run's last PR has merged (the close PR, the bugfix's fix PR, or the bu
    ```bash
    mise run autopilot-tokens > "$SCRATCHPAD/tokens.md" && gh pr comment <last-pr> --body-file "$SCRATCHPAD/tokens.md"
    ```
+   Without `gh` or `mise` (a cloud thread): build the report from the harness's usage totals for
+   the thread (input, cache read, cache write and output tokens, and cost if shown), one line per
+   unit description, and put it in the final message and the issue comment instead.
 3. Close the issue: [issue.md](issue.md), *Done*.
 4. Send this, with a `PushNotification`:
 
