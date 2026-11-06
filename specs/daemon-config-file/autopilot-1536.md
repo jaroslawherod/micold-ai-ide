@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1536
 - **Worktree branch**: feat/1536_ssh-key-signing-key-ca-file-and-session-files-for
 - **Started**: 2026-11-06
-- **Phase**: implement M1 (review)
+- **Phase**: implement M1 (PR open)
 - **Next step**: after design PR merges: milestone M1 (T101–T106)
 
 ## Pull requests
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | - | pending |
+| M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | see PR table | in review |
 
 ## Decisions
 
