@@ -134,111 +134,220 @@ scoped only, full gate left to CI"; CI's quieter machine is the tie-breaker.
 
 ## Handover
 
-Milestone M2 (T065, T065a, T065b, T065c) not yet started on the tree (no code changes yet; only
-this ledger's housekeeping, committed at `0b3324d41`). Investigated the existing wiring in depth
-(an Explore subagent plus direct reads) so the next unit can implement straight away without
-redoing this research.
+Milestone M2 (T065, T065a, T065b, T065c) still not started on the tree: no code changes (the tree
+is clean, identical to `0b3324d41`). This round went deeper into T065's exact mechanics — far
+enough to find that the previous round's plan needed one correction before coding — and ran out of
+context before writing any code. The design below is ready to implement directly; do not re-derive
+it.
 
-**T065's exact scope** (confirmed against the code, not just the task text):
-- **Container & pod** are governed by the *legacy* opt-in toggle, not the new `[[ai.cli]]` file
-  fields: `CredentialShare::AiCliAuth` (`crates/micold-core/src/sandbox/mod.rs:280-285`,
-  `SandboxProfile.credentials: BTreeSet<CredentialShare>`), `CredentialLayout.ai_cli_auth`
-  (`mod.rs:742-753`, one path per installed CLI via `AiCli::ALL`/`sandbox_auth_file`),
-  `CredentialMount` (`mod.rs:704-709`) built by `MountSet::build_for` (`mod.rs:841-901`), and
-  `KubeCredential::SignIn` (`crates/micold-core/src/kube/credentials.rs:44-144`). These are what
-  T065's line citations (`mod.rs:321-323`, `:704-709`, `credentials.rs:86-99`) point at — the new
-  `[[ai.cli]] sign_in_file`/`token_file`/`api_key_file` fields (M1's `daemon_config::ai_cli`) are
-  **not** wired into container/pod delivery yet (M4 gives container/pod daemons their Settings UI);
-  do not try to wire them in for T065.
-- **Today's container flow** (read-only exception): `CredentialShare::writable()`
-  (`mod.rs:321-323`, true only for `AiCliAuth`) is read by `mount_args`
-  (`crates/micold-core/src/sandbox/argv.rs:303-312`, calling `mount_value`/`argv.rs:237-245`) to
-  bind-mount the **host's real sign-in file directly at the CLI's own live path** (e.g.
-  `~/.claude/.credentials.json`), read-write, at container start (`docker run -v …:rw`) — so the
-  CLI refreshing it rewrites the host's file through the mount. This is rule N-4/FR-004e, the exact
-  thing D13 retires.
-- **Today's pod flow**: `KubeCredential::SignIn{cli}.mount()` (`credentials.rs:85-96`) returns
-  `Mount{path: <cli's live sign-in path under HOME_DIR>, sub_path: Some(<basename>)}` — a
-  single-file `subPath` mount at the CLI's own live location, same read-write exposure in spirit
-  (kubelet mounts Secrets read-only, but at the CLI's live path, which collides with D9's "pods are
-  no longer a special case" framing once containers also deliver read-only+linked).
-- **The fix, by design** (not yet coded — record this reasoning as a Decision when implementing, it
-  is a real design call): since "linked, re-created at every session start" cannot be satisfied by
-  a mount made once at container/pod start, relocate the delivered file into a dedicated read-only
-  location and have the daemon (which **runs inside the container/pod itself** — confirmed by
-  `docs/user-guide/sandboxed-daemon.md:360,376-378` and the `argv.rs` config/secrets mount block
-  around line 278-291) create/recreate a **symlink** from the CLI's live `sandbox_auth_file()` path
-  to that location at every session start (the same "re-created each start" rule T062/D4 already
-  deferred to T065). Needs a per-CLI subdirectory because two CLIs share a basename (`auth.json`
-  for both Codex and OpenCode): use the CLI's id, from `daemon_config::CliId::as_str()`
-  (`crates/micold-core/src/daemon_config/mod.rs:379-384`, delegates to
-  `AiCli::provider().tool_name()`) or an equivalent slug — do **not** invent a second id scheme.
-  - Container: mount `AiCliAuth`'s host files, read-only, under a new subpath of the *existing*
-    `CONTAINER_SECRETS_DIR` (`mod.rs:588`, already mounted read-only as a whole — `argv.rs:286-290`)
-    — e.g. `ai-cli-auth/<cli-id>/<basename>` — instead of at the CLI's live path. Drop
-    `CredentialShare::writable()` entirely (every `CredentialMount` is read-only now;
-    `argv.rs:306-312`'s per-share branch collapses to a plain `false`).
-  - Pod: give `KubeCredential::SignIn` a directory Secret with no `subPath`, mirroring
-    `KubeCredential::GitConfig`'s own pattern exactly (`credentials.rs:91-97`, `GIT_CONFIG_DIR`
-    constant at `:24`, consumed by `daemon_env`'s `GIT_CONFIG_GLOBAL` at `:186-187` — no `subPath`,
-    the *env var* points at the file inside the directory mount). Add an equivalent `SIGN_IN_DIR`
-    constant and mount each CLI's Secret as its own subdirectory; the consumer is
-    `crates/micold-core/src/kube/manifest.rs:216-224` (`credential_mount`, drops `subPath` when
-    `None`) and the volume builder around `manifest.rs:360-369`.
-  - The relink step itself: a new pure function (core, testable without the real-runtime feature),
-    called from the daemon at session start — for container today that is wherever a session
-    actually spawns (look for the existing per-session setup call site in
-    `crates/micold-daemon/src/state.rs`, near where `with_configured_env`/`ai_cli_env_overlay`
-    already run, `state.rs:739-789`, `:2160-2191` — those are T063's M1 insertion points and are
-    **not** this one; this one runs unconditionally for sandbox kinds, independent of the new
-    config fields, simply checking "does `<secrets-root>/<cli-id>/<basename>` exist" and
-    symlinking if so). **Never run this relink for host/ssh kinds** — SC-008 requires the machine's
-    own sign-in file is never written, and this function's whole point is sandbox-only.
-- **Host/SSH side of T065** is a *separate*, additive piece, driven by the *new*
-  `[[ai.cli]]` fields (`sign_in_file`/`token_file`/`api_key_file`/`use_machine_sign_in`,
-  already parsed in M1 — `crates/micold-core/src/daemon_config/mod.rs:401-424`): give the session
-  `<data_dir>/ai/<id>/` as its config dir (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`XDG_DATA_HOME`),
-  symlink the sign-in in, and read-through-link the user's own settings files (Claude:
-  `settings.json`, `CLAUDE.md`, `agents/`, `commands/`; Codex: `config.toml`, `AGENTS.md`) per the
-  contract/D9 table — again **never** touching the real `~/.claude/…` file. The natural insertion
-  point is `crates/micold-daemon/src/state.rs`'s `with_configured_env`/`ai_cli_env_overlay`
-  (`:757-789`, `:2160-2191`), called before a session spawns (look for the call site around
-  `state.rs:6512`, per the Explore agent's report — re-verify the line, it will have moved).
-  Byte-identical/mtime-unchanged test (SC-008): write a fake "machine's own" sign-in file, run a
-  session through this path, assert `std::fs::read`/`metadata().modified()` unchanged.
-- **Existing tests to extend, not duplicate**: `crates/micold-core/tests/sandbox_credentials.rs`
-  already has `each_opt_in_adds_exactly_one_mount` (branches on `writable()` — update once it is
-  gone), `the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory`,
-  `a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create`, and `sign_in_path()`/
-  `sharing_the_sign_in()` helpers (~line 100-375) — this is the fast, non-real-runtime suite to add
-  the new read-only/relocated-path/relink assertions to. The two real-runtime tests that read
-  `.writable()` directly (`crates/micold-daemon/tests/sandbox_real_ai_cli_sessions.rs:163`,
-  `sandbox_real_no_user_credentials.rs:83`) need updating to match once `writable()` is gone, but
-  are not where new coverage belongs (they need the real-runtime feature and a container runtime).
+**Correction to the previous round's plan**: do **not** change `CredentialMount.container`'s
+meaning, and do **not** change `CredentialLayout.ai_cli_auth`'s type. Those two are read by several
+other `MountSet` methods that assume `container` is the CLI's own *live* path, under
+`home.container` (`home_dirs_to_create`, `home_files_to_create` — BUG-006/BUG-007, do not regress
+them; `onboarding_record` — BUG-007; `shared_locations`/`container_projects` — link recognition,
+research R10; `unshared_sign_in` — FR-004g/BUG-008). Relocating `container` itself (what the
+previous round's investigation suggested) would require reworking every one of those, each with its
+own test file, which is far more than this task needs. Instead, **add one field**:
 
-**T065a** (`token_file`): not started. `CLAUDE_CODE_OAUTH_TOKEN`/`COPILOT_GITHUB_TOKEN`, read at
-session start, never in argv — same env-injection pattern `api_key_file` already uses in
-`state.rs:757-789` (T063's `with_configured_env`), so this is the smallest of the four and a good
-one to do right after T065's relink function exists (it reuses the same read-the-secret-file
-plumbing, not the relink).
+```rust
+pub struct CredentialMount {
+    pub share: CredentialShare,
+    pub host: PathBuf,
+    pub container: PathBuf,      // unchanged meaning: the CLI's own live path
+    pub delivered: Option<PathBuf>, // NEW: where it is actually bind-mounted read-only, when that
+                                     // differs from `container` (T065, research D13)
+}
+```
 
-**T065b** (client-side sign-in relay) and **T065c** (docs measurements): not started; no
-investigation done yet beyond what research.md D14 already states (quoted in the brief). T065b
-needs a new module under `crates/micold-client/src/` (none exists yet) watching the host's own
-sign-in file with `notify` (already a dependency — check `crates/micold-client/src/daemon_config_delivery.rs`
-for the watcher pattern M1/#1527 already use) and deriving the no-refresh-token copy per D14's
-per-CLI rules.
+`delivered` is `None` for `GitConfig` (mounted directly at `container`, as today) and
+`Some(<path under CONTAINER_SECRETS_DIR>)` for `AiCliAuth`. Every other `MountSet` method keeps
+working unmodified because `container` still means what they all assume.
 
-**Why handing over now**: the investigation above (an Explore subagent's report plus direct reads
-of `sandbox/mod.rs`, `argv.rs`, `kube/credentials.rs`, `session.rs`, `daemon_config/mod.rs`) pushed
-this unit's own context past the 150k cap before any code was written. The next unit should start
-coding directly from the plan above: first `sandbox/mod.rs` (`CredentialShare::writable` removal +
-`CredentialMount`'s new container destination for `AiCliAuth`) and `argv.rs` (`mount_args`'s
-per-share branch), then the relink function and its test in `sandbox_credentials.rs`, then
-`kube/credentials.rs` + `kube/manifest.rs`, then the host/ssh `state.rs` wiring and its SC-008 test,
-then T065a, then T065b/T065c. Record each real design call (the relink mechanism, the per-CLI
-subdirectory naming) as a ledger Decision once made, since none of this is literally spelled out in
-tasks.md's one-line task text.
+**The delivered path, and why it needs no cross-process information at all**: build it as
+`format!("{CONTAINER_SECRETS_DIR}/ai-cli-auth/{rel}")` where `rel` is `host`'s path *relative to
+`home`*, joined with `/` regardless of platform (the same pattern `CredentialLayout::present_under`
+already uses inline at `mod.rs:787-793` — extract it to a shared private helper, e.g.
+`fn relative_to(home: &Path, path: &Path) -> String`, and reuse it in both places). This
+automatically avoids the Codex/OpenCode `auth.json` basename collision the previous round worried
+about, with no need for a CLI id at all: `~/.codex/auth.json` and
+`~/.local/share/opencode/auth.json` already have distinct relative suffixes under `home`.
+
+Crucially, because `pathmap::map_for` is a pure prefix replacement (it does not touch the suffix
+after the home prefix), `rel` computed from the **host**'s home and host path is byte-identical to
+`rel` computed from the **container**'s own home (`HomeMount.container`) and the live path inside
+the container. That means **the code running inside the container can recompute `delivered`
+itself, from nothing but its own `HOME`**, with no host-side `CredentialLayout` or profile handed
+to it:
+
+```rust
+/// `(live, delivered)` for every CLI whose sign-in would land under `home` (the sandbox's own
+/// `HOME`, as seen from wherever this runs): `live` is where the CLI itself looks, `delivered` is
+/// where the read-only mount actually puts the file. Self-contained — no host-side layout needed
+/// — because `pathmap::map_for` never touches the suffix after the home prefix, so this produces
+/// the same `delivered` whether computed on the host (building the `MountSet`) or inside the
+/// sandbox (relinking at session start).
+pub fn ai_cli_sign_in_links(home: &Path) -> Vec<(PathBuf, PathBuf)> {
+    crate::session::AiCli::ALL
+        .iter()
+        .filter_map(|cli| {
+            let live = cli.provider().sandbox_auth_file(home)?;
+            Some((live.clone(), ai_cli_auth_delivered_path(home, &live)))
+        })
+        .collect()
+}
+```
+
+Reuse this same function for both: (a) `MountSet::build_for`, to fill `CredentialMount.delivered`
+for the `AiCliAuth` entries it is about to build (match the result back to each `host` path), and
+(b) the daemon's own relink step inside the sandbox, called with its own `home.container` /
+in-container `HOME`.
+
+**The relink function** (new, in `sandbox/mod.rs`, pure/testable without the real-runtime
+feature — no container, no docker — this is what the previous round's "relink function" item
+meant):
+
+```rust
+/// Re-creates the symlink from each AI CLI's live sign-in path to where T065's read-only mount
+/// actually delivered it, inside the sandbox, at every session start (never run outside a
+/// sandbox kind — SC-008 forbids ever touching a host/ssh session's real sign-in file). A pair
+/// whose `delivered` does not exist on disk is skipped (that CLI's sign-in was never shared, or
+/// the opt-in is off): no dangling link is created. Removes whatever is at `live` first — a
+/// stale link from a previous delivery, or (compatibility with containers made before this
+/// change) the file itself. A failure on one pair is logged and skipped, never fatal (FR-019):
+/// one CLI's sign-in failing to link must not stop a session over another's.
+pub fn relink_ai_cli_sign_ins(home: &Path) -> Vec<PathBuf> {
+    ai_cli_sign_in_links(home)
+        .into_iter()
+        .filter(|(_, delivered)| delivered.exists())
+        .filter_map(|(live, delivered)| relink_one(&live, &delivered))
+        .collect()
+}
+```
+(`relink_one` does the actual `create_dir_all` + stale-link-or-file removal + `symlink`, logged on
+failure — write it as a small private helper so the test can assert on `relink_ai_cli_sign_ins`'s
+return value directly.)
+
+**`mount_args` (`argv.rs`)**: drop the per-share `writable` branch entirely (every credential mount
+is read-only now, including `GitConfig` was already — this removes the only `true`):
+```rust
+for c in &mounts.credentials {
+    let container = c.delivered.as_ref().unwrap_or(&c.container);
+    mount(&c.host.display(), &container.display(), false);
+}
+```
+Then `CredentialShare::writable()` has no caller left in `mod.rs`/`argv.rs` — check
+`crates/micold-daemon/tests/sandbox_real_ai_cli_sessions.rs:163` and
+`sandbox_real_no_user_credentials.rs:83` (both call `c.share.writable()` directly in a hand-rolled
+`bind_mount` helper for the real-runtime harness) before deleting the method; update both to assert
+`false`/read-only instead, or inline `false` and delete `writable()` once those are the only
+remaining callers.
+
+**Why pre-creating a mount target under the secrets dir is not needed** (unlike
+`home_dirs_to_create`/`home_files_to_create`'s reason for existing, BUG-006/007): those exist
+because Docker auto-creates a missing bind *target* as root, and a root-owned file under the
+sandbox's own writable home then blocks the CLI from ever writing there again once the share is
+turned off. The new nested target under `CONTAINER_SECRETS_DIR` (itself already a read-only mount,
+nested exactly as `home`'s own sub-mounts already are — precedent in `argv.rs`'s comment at
+`mount_args`'s top) is **never written to by anything**, ever: a root-owned auto-created file there
+is harmless. No new `*_dirs_to_create`/`*_files_to_create` analogue is needed. Say this once, as a
+code comment, so a future reader does not "fix" it by adding one.
+
+**Existing tests to update** (compile breaks from the new `delivered` field; both are struct
+literals missing the field — add `delivered: None`):
+- `crates/micold-core/src/sandbox/argv.rs:522-526` (`argv_mounts_are_exactly_the_mount_set`)
+- `crates/micold-core/src/sandbox/argv.rs:587-591` (`every_mount_is_labelled_shared_exactly_when_selinux_enforces`)
+Both only construct a `GitConfig` mount today, so `delivered: None` is correct for them unchanged;
+neither test's mount-count assertions should need to change (the `AiCliAuth` tests are in
+`crates/micold-core/tests/sandbox_credentials.rs`, not these). Verify those line numbers before
+editing — this round read them but did not edit, so they may have moved by the time the next round
+starts (none of the earlier rounds' finds here were stale, but always confirm before relying on a
+line number).
+
+**`crates/micold-core/tests/sandbox_credentials.rs`** (confirmed present, not re-read line by line
+this round — the previous round's note that it has `each_opt_in_adds_exactly_one_mount`,
+`the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory`,
+`a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create`, and `sign_in_path()`/
+`sharing_the_sign_in()` helpers around line 100-375 still stands): add assertions here, not new
+test files, for (a) `delivered` is `Some` for an `AiCliAuth` mount and under
+`CONTAINER_SECRETS_DIR/ai-cli-auth/`, `None` for `GitConfig`; (b) `relink_ai_cli_sign_ins` with a
+tempdir `home` holding a fake delivered file creates the expected symlink and returns its live
+path; (c) calling it again when the link already points at the right target is a no-op (no error,
+same return); (d) calling it when `delivered` does not exist for a CLI skips that CLI with no
+error and no link created.
+
+**Still to design/implement after T065's container/pod half** (not reinvestigated this round,
+carries over verbatim from the previous round's notes — still believed accurate but re-verify line
+numbers before relying on them):
+- **Pod** (`kube/credentials.rs`, `kube/manifest.rs`): give `KubeCredential::SignIn` a directory
+  Secret with no `subPath`, mirroring `KubeCredential::GitConfig` exactly (`credentials.rs:91-97`,
+  `GIT_CONFIG_DIR` constant at `:24`). Add a `SIGN_IN_DIR`-shaped constant/function (e.g. one
+  directory per CLI under `/run/micold/secrets/sign-in/<cli>`, mirroring `GIT_CONFIG_DIR`'s
+  single fixed constant but parameterised by CLI since there are five). `credential_mount`
+  (`manifest.rs:216-226`) already drops `subPath` when `None`, so no change needed there; `pod()`'s
+  volume loop (`manifest.rs:360-369`) and `home_dirs` (`manifest.rs:285-313`) already key off
+  `credential.mount()`'s path being under `POD_HOME` or not — a `SIGN_IN_DIR` *outside* `POD_HOME`
+  (like `GIT_CONFIG_DIR`) means `home_dirs` naturally excludes it too, no change needed there
+  either. The pod's own daemon then needs the *same* `relink_ai_cli_sign_ins`-shaped call at
+  session start, pointed at `HOME_DIR` (`credentials.rs:17`) and reading from `SIGN_IN_DIR`
+  instead of `CONTAINER_SECRETS_DIR/ai-cli-auth` — if `ai_cli_sign_in_links`/
+  `relink_ai_cli_sign_ins` end up hard-coding the container path, parameterise them by the secrets
+  base so both container and pod share the one function; do not fork it.
+- **The actual call site inside a running sandbox** (container or pod) that invokes the relink at
+  "every session start": not found yet in either round. `crates/micold-daemon/src/state.rs` is
+  where `with_configured_env`/`ai_cli_env_overlay` live (`:757-794`, `:2176-2194` — line numbers
+  drifted slightly from the previous round's `:757-789`/`:2160-2191`, re-verify again next round)
+  and is almost certainly where this belongs, called unconditionally for a sandbox-kind daemon
+  (`daemon_config::Kind::is_sandbox()`, `daemon_config/mod.rs:97-100` roughly, re-verify) right
+  before a session's AI CLI spawns — but this round did not trace the actual spawn call site
+  (`start_session`/`start_session_gated` near `state.rs:6470-6512`, or `spawn_structured` near
+  `:6806`) closely enough to say which one line to add the call at. That tracing is the first thing
+  the next round should do, with an `Explore` subagent if it is not immediately obvious from
+  `documentSymbol`/`findReferences` on `with_configured_env`'s one caller
+  (`ai_cli_env_overlay`) — follow its own callers up from there.
+- **Host/SSH side of T065** (the session gets `<data_dir>/ai/<id>/` as its config dir, sign-in and
+  the user's own settings files linked in, per research D9's table): `daemon_config::ai_cli`'s
+  `place_target`/`settings_file_name` (`crates/micold-core/src/daemon_config/ai_cli.rs:94-136`) are
+  already the right pure path-mapping functions — they take a `config_dir: &Path` parameter, so
+  they work unchanged for a host/ssh config dir, not only the sandbox home their current doc
+  comment on `settings_file_name` singles out as the example (the comment should be loosened once
+  this lands, since it will no longer be sandbox-only). What is still missing is the code that (a)
+  decides `<data_dir>/ai/<id>/` is the config dir to hand the session (the env var:
+  `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`XDG_DATA_HOME`, by CLI — this round did not locate where
+  `with_launch_env`/`ai_cli_env_for` would be the place to add it, but that is the leading
+  candidate, `state.rs:2176` area), and (b) actually creates the symlinks for `sign_in_file`,
+  `settings_file`, and each `place` entry at session start (not yet written anywhere — `write_if_changed`
+  at `state.rs:800-820` is the *write* helper for a different purpose, delivered `daemon.toml`
+  itself, not a model for a symlink step). SC-008's byte-identical/mtime test: write a fake
+  "machine's own" sign-in file, run a session through this path, assert
+  `std::fs::read`/`metadata().modified()` unchanged on the original — this test does not exist yet.
+- **T065a** (`token_file`): unchanged from the previous round's note — smallest of the four,
+  reuses `with_configured_env`'s read-the-secret-file plumbing; do it once the host/ssh wiring
+  above exists to hang it on. Env var is `CLAUDE_CODE_OAUTH_TOKEN` (Claude Code) /
+  `COPILOT_GITHUB_TOKEN` (Copilot), never in argv.
+- **T065b/T065c**: not investigated in either round beyond research D14 (quoted in the brief).
+  T065b needs a new module under `crates/micold-client/src/` watching the host's own sign-in file
+  with `notify` (check `crates/micold-client/src/daemon_config_delivery.rs` for the watcher pattern
+  M1/#1527 already uses) and deriving the no-refresh-token copy per D14's per-CLI rules. T065c is
+  docs-only, `docs/user-guide/sandboxed-daemon.md`.
+
+**Suggested order for the next unit**: (1) `sandbox/mod.rs` — the `delivered` field,
+`relative_to`/`ai_cli_auth_delivered_path`/`ai_cli_sign_in_links`/`relink_ai_cli_sign_ins`, and
+`build_for`'s one-line change to fill `delivered`; (2) `argv.rs`'s `mount_args` plus its two struct
+literals; (3) the `sandbox_credentials.rs` assertions above; (4) run `mise run check` and a targeted
+`cargo test -p micold-core sandbox::` before touching anything else, to catch a mistake in this
+design early and cheaply; (5) `kube/credentials.rs` + `kube/manifest.rs`; (6) find the daemon's
+session-start call site and wire both container and pod relinks into it; (7) host/ssh config-dir
+wiring + SC-008 test; (8) T065a; (9) T065b/T065c if context allows, else hand over again with the
+same discipline this round used.
+
+**Why handing over again without code**: finishing the cross-method correctness check above (which
+`MountSet` methods assume `container` means "the live path", and confirming the simpler
+`delivered`-field design does not regress any of them) took this round past the context cap before
+any file was edited. Rather than leave a half-applied, non-compiling change for the next round to
+untangle, this round reverted its one exploratory edit (`CredentialShare::writable()`'s removal)
+and leaves the tree byte-identical to `0b3324d41`. The design above is more complete and more
+confidently correct than the previous round's (which would have required touching five additional
+methods this round found depend on `container`'s current meaning); implement from it directly.
 
 ## Open escalation
 
