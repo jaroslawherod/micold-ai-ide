@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M2 implementing (handover)
-- **Next step**: finish M2: confirm tests green, docs T016/T025, reviews A+B, visual pass, full gate, PR
+- **Phase**: milestone M2 PR open (#1754), awaiting CI
+- **Next step**: orchestrator waits on CI and merges #1754, then M3
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1705 | Design (spec, plan, tasks) | merged | eb1b62d9967f4d7ad7092c0dc75e6d3a1e7af621 |
 | #1717 | M1 large editor | merged | 509da759cc19a3ca5befaa90815f9475a7b32dcb |
+| #1754 | M2 icon activity indicator and options row | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Large editor: chord/icon opens modal editor, Done/Cancel, shortcut listed | #1717 | merged |
-| M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | | pending |
+| M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | #1754 | in review |
 | M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | | pending |
 
 Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs are one observable behaviour with no earlier deliverable. US2 and US3 are one milestone (M2, 12 tasks): US2 scenario 1 removes the permission selector from the input row and only US3's options row re-homes it (no half-wired UI). T032 (quickstart results) is for the close unit.
@@ -67,9 +68,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 ## Handover
 
-Unit M2 (branch reset to origin/main 509da759c, M1 merged) ran out of context after implementing in the working tree (committed as WIP, not pushed, no gate run yet). Done: T014-T015, T017-T024 code and tests (core settings key `composer_options_open`; `Composers.options_open`, `Msg::OptionsToggled(SessionId)`, `Composers::refusal/expand_options/options_toggled`; shell `update` wrapper + `persist_options_if_changed`, `persist_composer_options_open`, boot restore in startup.rs `restore_folds`, daemon_sync model/effort/permission refusals expand + persist; ui/composer.rs: `status_row` now Option (Stop session + refusal note only), `options_row`, `options_button` (settings IconButton + Bypass marker + tooltip), `activity_indicator` (icon-only via new `BusyIndicator::icon_only(Icon)` in micold-material), `Seams.bypass`; pins updated: gates/composer_fits.rs, composer_tab.rs (Tab now passes Open large editor first), overlay_registration INLINE_FLAGS, state_scan MUTATORS, settings_sections CHOSEN_ELSEWHERE, settings_issue_mapping list, layout_snapshot fixture regenerated with UPDATE_LAYOUT_SNAPSHOT=1).
-
-Next: (1) run `scripts/build-lock.sh cargo test -p micold-client --test main` and `--test layout_snapshot` detached and fix remaining failures (last run before the final composer_fits edits had 5 failures in main: composer_tab x2 (fixed since), feature_write_isolation (MUTATORS entries added), features_composer stop_session test (fixed), overlay_registration (added); layout_snapshot had 3 composer_fits failures (edited since)); (2) docs T016 and T025 in docs/user-guide/structured-input.md (icon indicator with tooltip; settings icon "Session options", options row Model/Effort/Permission, persisted per window, auto-expand on refusal, Bypass marker); also grep docs for places naming the status words/permission selector in the input row; (3) tick T014-T025 in specs/1703-composer-layout-large-editor/tasks.md; (4) showcase/catalogue unaffected unless a test says otherwise; (5) review A (code-review high) with scoped gate, review B (conformance), visual pass (quickstart section B steps 1,2,3,5; fixture layout), full `mise run gate`, push (`git remote prune origin` then `git push -u origin HEAD`), PR titled `feat(1703): icon activity indicator and session options row (#1703)`, ledger PR row.
+None.
 
 ## Open escalation
 
