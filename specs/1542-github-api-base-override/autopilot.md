@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1751 | Design PR | merged | 3093ca085b47775be01ad3dc71649271940a31d4 |
+| #1755 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | PR | in review |
+| M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | #1755 | in review |
 | M2 | T010–T011 | full | Runtime-gated container/kind test (steps 4-8, 10, 11) | | pending |
 
 ## Decisions
