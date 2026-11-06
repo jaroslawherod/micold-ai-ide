@@ -7,17 +7,17 @@ Paths: core `crates/micold-core/src/daemon_config/` (`mod.rs`, `validate.rs`, `f
 
 ## Phase 1: Setup
 
-- [ ] T001 Read `validate.rs` (`Checker::at`, `at_key`, `paths`, `locate`) and `files.rs` (`secret_entries`, V15) and note the reuse points in the PR body; no code change.
+- [x] T001 Read `validate.rs` (`Checker::at`, `at_key`, `paths`, `locate`) and `files.rs` (`secret_entries`, V15) and note the reuse points in the PR body; no code change.
 
 ## Phase 2: User Story 1 + 2 — table, rules and precise errors (P1) 🎯 MVP
 
-- [ ] T002 [US1] Failing tests in `daemon_config/tests.rs`: complete table parses and resolved view shows every key as path and state (US1.1); unknown key refused with `file:line:column` (US1.2); no table gives the same result and view as an existing fixture (US1.3, SC-003); and view-state cases: `path (readable, <mode>)`, `path (missing)` for all four file keys (US3 scenarios 2-3).
-- [ ] T003 [US2] Failing tests in `daemon_config/tests.rs` for rules O1–O5, V4 and type error, each asserting the reported `file:line:column`, both cert/key directions, empty table (two errors), header-position helper for an empty table and a table with keys (SC-001).
-- [ ] T003a [US1][US2] Failing `config check` exit-code test (0 valid, 2 invalid, `file:line:column` on stderr) in `crates/micold-daemon/tests/config_check.rs` (US1.1, US2, FR-006).
-- [ ] T004 [US1] Add `Orchestrator` struct (`deny_unknown_fields`, `SecretPath` file fields, `url: Option<String>`) and `DaemonConfig.orchestrator: Option<Orchestrator>` in `daemon_config/mod.rs`.
-- [ ] T005 [US2] Add the `[orchestrator]` header line:column helper and `Checker::orchestrator()` rules O1–O5 plus V4 entries in `Checker::paths` in `daemon_config/validate.rs` (with the hand-written https URL check, research D2/D7).
-- [ ] T006 [US1] Add `OrchestratorView` and its `Display` block to `daemon_config/resolved.rs`, `None` when the table is absent.
-- [ ] T007 [US1][US2] Add the `[orchestrator]` section, keys, rules O1–O5/V4 and example errors to `docs/user-guide/daemon-configuration.md` (FR-008, SC-004).
+- [x] T002 [US1] Failing tests in `daemon_config/tests.rs`: complete table parses and resolved view shows every key as path and state (US1.1); unknown key refused with `file:line:column` (US1.2); no table gives the same result and view as an existing fixture (US1.3, SC-003); and view-state cases: `path (readable, <mode>)`, `path (missing)` for all four file keys (US3 scenarios 2-3).
+- [x] T003 [US2] Failing tests in `daemon_config/tests.rs` for rules O1–O5, V4 and type error, each asserting the reported `file:line:column`, both cert/key directions, empty table (two errors), header-position helper for an empty table and a table with keys (SC-001).
+- [x] T003a [US1][US2] Failing `config check` exit-code test (0 valid, 2 invalid, `file:line:column` on stderr) in `crates/micold-daemon/tests/config_check.rs` (US1.1, US2, FR-006).
+- [x] T004 [US1] Add `Orchestrator` struct (`deny_unknown_fields`, `SecretPath` file fields, `url: Option<String>`) and `DaemonConfig.orchestrator: Option<Orchestrator>` in `daemon_config/mod.rs`.
+- [x] T005 [US2] Add the `[orchestrator]` header line:column helper and `Checker::orchestrator()` rules O1–O5 plus V4 entries in `Checker::paths` in `daemon_config/validate.rs` (with the hand-written https URL check, research D2/D7).
+- [x] T006 [US1] Add `OrchestratorView` and its `Display` block to `daemon_config/resolved.rs`, `None` when the table is absent.
+- [x] T007 [US1][US2] Add the `[orchestrator]` section, keys, rules O1–O5/V4 and example errors to `docs/user-guide/daemon-configuration.md` (FR-008, SC-004).
 
 ## Phase 3: User Story 3 — secrets never leak, file checks (P1)
 

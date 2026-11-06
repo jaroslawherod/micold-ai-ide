@@ -1054,3 +1054,193 @@ fn a_secret_path_prints_its_path() {
     assert!(format!("{secret:?}").contains("/run/secrets/x"));
     assert_eq!(secret.to_string(), "/run/secrets/x");
 }
+
+// --- #1728: [orchestrator] ---
+
+const ORCH_PAIR: &str = "[orchestrator]\nurl = \"https://orch.example:8443\"\n\
+    ca_file = \"/s/ca.pem\"\ncert_file = \"/s/c.pem\"\nkey_file = \"/s/k.pem\"\n";
+
+#[test]
+fn orchestrator_a_complete_table_parses_and_the_view_shows_paths_and_states() {
+    let config = ok(&host(ORCH_PAIR));
+    let o = config.orchestrator.as_ref().unwrap();
+    assert_eq!(o.url.as_deref(), Some("https://orch.example:8443"));
+    let text = resolved_view(&config).to_string();
+    assert!(
+        text.contains("orchestrator.url: https://orch.example:8443"),
+        "{text}"
+    );
+    for key in ["ca_file", "cert_file", "key_file"] {
+        assert!(
+            text.contains(&format!("orchestrator.{key}: /s/")) && text.contains(".pem (missing)"),
+            "{key}: {text}"
+        );
+    }
+    let token = host("[orchestrator]\nurl = \"https://o\"\nenrollment_token_file = \"/s/t\"\n");
+    let text = resolved_view(&ok(&token)).to_string();
+    assert!(
+        text.contains("orchestrator.enrollment_token_file: /s/t (missing)"),
+        "{text}"
+    );
+}
+
+#[test]
+fn orchestrator_an_unknown_key_is_refused_with_its_position() {
+    let text = host(&format!("{ORCH_PAIR}bogus = 1\n"));
+    let error = expect(&text, "V1", "bogus", "bogus", 12, 1);
+    assert!(error.message.contains("[orchestrator]"), "{error}");
+}
+
+#[test]
+fn orchestrator_no_table_changes_nothing() {
+    for text in [HOST, SSH, CONTAINER, KUBERNETES] {
+        let config = ok(text);
+        assert!(config.orchestrator.is_none());
+        let view = resolved_view(&config);
+        assert!(view.orchestrator.is_none());
+        assert!(!view.to_string().contains("orchestrator"));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn orchestrator_the_view_shows_a_readable_file_with_its_mode_and_never_content() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let mut text = String::new();
+    for keys in [
+        &["ca_file", "cert_file", "key_file"][..],
+        &["enrollment_token_file"][..],
+    ] {
+        let mut body = String::from("[orchestrator]\nurl = \"https://o\"\n");
+        for key in keys {
+            let file = dir.path().join(key);
+            std::fs::write(&file, "s3cr3t-sentinel\n").unwrap();
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+            body.push_str(&format!("{key} = \"{}\"\n", file.display()));
+        }
+        let config = ok(&host(&body));
+        assert!(!format!("{config:?}").contains("s3cr3t-sentinel"));
+        text.push_str(&resolved_view(&config).to_string());
+    }
+    for key in ["ca_file", "cert_file", "key_file", "enrollment_token_file"] {
+        let path = dir.path().join(key);
+        assert!(
+            text.contains(&format!(
+                "orchestrator.{key}: {} (readable, 0600)",
+                path.display()
+            )),
+            "{text}"
+        );
+    }
+    assert!(!text.contains("s3cr3t-sentinel"));
+}
+
+#[test]
+fn orchestrator_the_view_shows_a_missing_file_for_all_four_keys() {
+    let pair = "[orchestrator]\nurl = \"https://o\"\nca_file = \"/nonexistent/ca\"\n\
+        cert_file = \"/nonexistent/c\"\nkey_file = \"/nonexistent/k\"\n";
+    let token = "[orchestrator]\nurl = \"https://o\"\nenrollment_token_file = \"/nonexistent/t\"\n";
+    for (body, path) in [(pair, "ca"), (pair, "c"), (pair, "k"), (token, "t")] {
+        let text = resolved_view(&ok(&host(body))).to_string();
+        assert!(
+            text.contains(&format!("/nonexistent/{path} (missing)")),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn o1_a_missing_url_is_reported_at_the_header() {
+    let text = host("[orchestrator]\nenrollment_token_file = \"/s/t\"\n");
+    expect(&text, "O1", "url", "orchestrator", 7, 1);
+}
+
+#[test]
+fn o2_a_url_that_is_not_https_is_reported_at_its_value() {
+    let text = host("[orchestrator]\nurl = \"http://o\"\nenrollment_token_file = \"/s/t\"\n");
+    let error = expect(&text, "O2", "https", "orchestrator.url", 8, 7);
+    assert!(error.message.contains("https"), "{error}");
+    let text = host("[orchestrator]\nurl = \"not a url\"\nenrollment_token_file = \"/s/t\"\n");
+    expect(&text, "O2", "valid URL", "orchestrator.url", 8, 7);
+    let text = host("[orchestrator]\nurl = \"https://\"\nenrollment_token_file = \"/s/t\"\n");
+    expect(&text, "O2", "valid URL", "orchestrator.url", 8, 7);
+}
+
+#[test]
+fn o3_a_certificate_without_a_key_and_the_reverse_name_the_present_key() {
+    let text = host("[orchestrator]\nurl = \"https://o\"\ncert_file = \"/s/c\"\n");
+    let error = expect(&text, "O3", "key_file", "orchestrator.cert_file", 9, 1);
+    assert!(error.message.contains("requires"), "{error}");
+    let text = host("[orchestrator]\nurl = \"https://o\"\nkey_file = \"/s/k\"\n");
+    expect(&text, "O3", "cert_file", "orchestrator.key_file", 9, 1);
+}
+
+#[test]
+fn o4_a_token_and_a_certificate_pair_are_reported_at_the_token_key() {
+    let text = host(&format!("{ORCH_PAIR}enrollment_token_file = \"/s/t\"\n"));
+    let error = expect(
+        &text,
+        "O4",
+        "not both",
+        "orchestrator.enrollment_token_file",
+        12,
+        1,
+    );
+    assert!(error.message.contains("remove one"), "{error}");
+}
+
+#[test]
+fn o5_neither_a_token_nor_a_pair_is_reported_at_the_header() {
+    let text = host("[orchestrator]\nurl = \"https://o\"\n");
+    let error = expect(&text, "O5", "enrollment_token_file", "orchestrator", 7, 1);
+    assert!(error.message.contains("add one"), "{error}");
+}
+
+#[test]
+fn an_empty_orchestrator_table_reports_the_url_and_the_choice_at_the_header() {
+    let text = host("[orchestrator]\n");
+    let all = errors(&text);
+    assert_eq!(all.len(), 2, "{all:#?}");
+    assert!(all
+        .iter()
+        .any(|e| e.rule == "O1" && (e.line, e.column) == (7, 1)));
+    assert!(all
+        .iter()
+        .any(|e| e.rule == "O5" && (e.line, e.column) == (7, 1)));
+}
+
+#[test]
+fn the_header_position_is_the_opening_bracket_with_keys_below() {
+    let text = host("\n  [orchestrator]\nenrollment_token_file = \"/s/t\"\n");
+    expect(&text, "O1", "url", "orchestrator", 8, 3);
+}
+
+#[test]
+fn v4_a_relative_or_empty_orchestrator_path_is_reported_at_its_value() {
+    for key in ["ca_file", "enrollment_token_file"] {
+        let other = if key == "ca_file" {
+            "enrollment_token_file = \"/s/t\"\n"
+        } else {
+            ""
+        };
+        let text = host(&format!(
+            "[orchestrator]\nurl = \"https://o\"\n{other}{key} = \"rel/x\"\n"
+        ));
+        let line = line_of(&text, "rel/x");
+        let error = errors(&text)
+            .into_iter()
+            .find(|e| e.rule == "V4" && e.key == format!("orchestrator.{key}"))
+            .unwrap_or_else(|| panic!("no V4 for {key}"));
+        assert_eq!((error.line, error.column), (line, key.len() + 4), "{error}");
+    }
+    let text = host("[orchestrator]\nurl = \"https://o\"\nkey_file = \"\"\ncert_file = \"/s/c\"\n");
+    expect(&text, "V4", "key_file", "orchestrator.key_file", 9, 12);
+}
+
+#[test]
+fn a_wrong_value_type_in_the_orchestrator_table_is_reported_at_the_value() {
+    let text = host("[orchestrator]\nurl = 5\n");
+    let error = expect(&text, "type", "", "", 8, 7);
+    assert!(error.to_string().starts_with("daemon.toml:8:7:"), "{error}");
+}

@@ -137,6 +137,38 @@ specific tokens are not an error; the first in the file wins.
 
 At most one of `sign_in_file`, `token_file` and `api_key_file` per CLI.
 
+### `[orchestrator]`
+
+Absent means the daemon does not connect to an orchestrator. Present, it names the orchestrator and
+how this daemon proves who it is. Every `*_file` key is an absolute path to a file; the file holds
+the secret, never the configuration. `micold-daemon config check` shows each as a path and whether it
+is readable, with its mode, never its content.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `orchestrator.url` | required | The orchestrator's `https://host[:port]` address. |
+| `orchestrator.ca_file` | none | The CA bundle that signs the orchestrator's certificate. |
+| `orchestrator.cert_file` | none | This daemon's client certificate. Given with `key_file`. |
+| `orchestrator.key_file` | none | Secret. The certificate's private key. Given with `cert_file`. |
+| `orchestrator.enrollment_token_file` | none | Secret. A one-time token that enrolls the daemon. |
+
+Rules, each reported as `file:line:column: message` with exit status 2:
+
+- **O1**: `url` is required. Reported at the `[orchestrator]` header.
+- **O2**: `url` must be a valid `https` URL. Reported at the `url` value.
+- **O3**: `cert_file` and `key_file` come together; one without the other is refused at the key that
+  is present.
+- **O4**: give `enrollment_token_file` or the `cert_file`/`key_file` pair, not both: the token
+  enrolls, the certificate is the result. Reported at the `enrollment_token_file` key.
+- **O5**: give one of them. Reported at the `[orchestrator]` header.
+- **V4**: every path is absolute, so a relative or empty one is refused at its value.
+- An unknown key, or a value of the wrong type, is refused as in every other table.
+
+```text
+daemon.toml:12:1: `[orchestrator]` needs `enrollment_token_file`, or `cert_file` and `key_file`: add one
+daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https scheme
+```
+
 ### `[session]` and `[network]`
 
 | Key | Default | Meaning |

@@ -242,6 +242,14 @@ impl<'a> Doc<'a> {
         }
     }
 
+    /// The span of the `[table]` header, from its opening bracket; falls back to the key.
+    pub(super) fn header(&self, table: &str) -> Option<Range<usize>> {
+        let span = self.locate(table, true)?;
+        let before = self.text[..span.start].trim_end_matches([' ', '\t']);
+        let start = before.strip_suffix('[').map_or(span.start, str::len);
+        Some(start..span.end)
+    }
+
     /// The line of the value at `path`, for messages that name another entry.
     pub(super) fn line_of(&self, path: &str) -> usize {
         self.position(self.locate(path, false).map_or(0, |s| s.start))
@@ -316,6 +324,22 @@ impl<'a> Doc<'a> {
             self.push(out, "type", "", message, span);
         }
     }
+}
+
+/// `Ok` when `url` is an `https` URL with a host.
+fn check_https_url(url: &str) -> Result<(), &'static str> {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return Err("is not a valid URL (expected `https://host[:port]`)");
+    };
+    if !scheme.eq_ignore_ascii_case("https") {
+        return Err("must use the https scheme");
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = authority.rsplit('@').next().unwrap_or_default();
+    if host.is_empty() || host.starts_with(':') || url.contains(char::is_whitespace) {
+        return Err("is not a valid URL (expected `https://host[:port]`)");
+    }
+    Ok(())
 }
 
 /// The table (`[a.b]`, `[[a.b]]` or "the top level") that holds a key starting at `start`.
@@ -472,6 +496,7 @@ impl Checker<'_, '_> {
         self.startup();
         self.git();
         self.tokens();
+        self.orchestrator();
     }
 
     fn at(&mut self, rule: &'static str, path: &str, message: String) {
@@ -482,6 +507,13 @@ impl Checker<'_, '_> {
     fn at_key(&mut self, rule: &'static str, path: &str, message: String) {
         let span = self.doc.locate(path, true);
         self.doc.push(self.out, rule, path, &message, span);
+    }
+
+    /// A finding at the `[orchestrator]` header, for a rule about a key that is absent.
+    fn at_header(&mut self, rule: &'static str, message: String) {
+        let span = self.doc.header("orchestrator");
+        self.doc
+            .push(self.out, rule, "orchestrator", &message, span);
     }
 
     fn warn(&mut self, rule: &'static str, path: &str, message: String) {
@@ -628,6 +660,18 @@ impl Checker<'_, '_> {
             }
             if let Some(p) = &startup.env_file {
                 add("startup.env_file".into(), p.path());
+            }
+        }
+        if let Some(o) = &c.orchestrator {
+            for (key, secret) in [
+                ("ca_file", &o.ca_file),
+                ("cert_file", &o.cert_file),
+                ("key_file", &o.key_file),
+                ("enrollment_token_file", &o.enrollment_token_file),
+            ] {
+                if let Some(p) = secret {
+                    add(format!("orchestrator.{key}"), p.path());
+                }
             }
         }
         for (key, path) in paths {
@@ -949,6 +993,56 @@ impl Checker<'_, '_> {
                 "V18",
                 "git.ssh_key_file",
                 "`git.ssh_key_file` requires `git.known_hosts_file`".to_string(),
+            );
+        }
+    }
+
+    /// O1-O5 (#1728): `url` is a required https URL; `cert_file` and `key_file` come together;
+    /// exactly one of the pair and `enrollment_token_file` is given.
+    fn orchestrator(&mut self) {
+        let Some(o) = &self.config.orchestrator else {
+            return;
+        };
+        match &o.url {
+            None => self.at_header("O1", "`orchestrator.url` is required".to_string()),
+            Some(url) => {
+                if let Err(why) = check_https_url(url) {
+                    self.at(
+                        "O2",
+                        "orchestrator.url",
+                        format!("`orchestrator.url` \"{url}\" {why}"),
+                    );
+                }
+            }
+        }
+        let (cert, key) = (o.cert_file.is_some(), o.key_file.is_some());
+        if cert != key {
+            let (present, missing) = if cert {
+                ("cert_file", "key_file")
+            } else {
+                ("key_file", "cert_file")
+            };
+            self.at_key(
+                "O3",
+                &format!("orchestrator.{present}"),
+                format!("`orchestrator.{present}` requires `orchestrator.{missing}`"),
+            );
+        }
+        let token = o.enrollment_token_file.is_some();
+        if token && (cert || key) {
+            self.at_key(
+                "O4",
+                "orchestrator.enrollment_token_file",
+                "give either `enrollment_token_file` (it enrolls this daemon) or `cert_file` and \
+                 `key_file` (the result of enrolling), not both: remove one"
+                    .to_string(),
+            );
+        } else if !token && !cert && !key {
+            self.at_header(
+                "O5",
+                "`[orchestrator]` needs `enrollment_token_file`, or `cert_file` and `key_file`: \
+                 add one"
+                    .to_string(),
             );
         }
     }

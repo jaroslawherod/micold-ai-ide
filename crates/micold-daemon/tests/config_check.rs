@@ -238,3 +238,30 @@ fn bad_arguments_print_a_usage_message_and_exit_two() {
         assert!(text(&output.stdout).is_empty(), "{args:?}");
     }
 }
+
+fn check_text(body: &str) -> Output {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("daemon.toml");
+    std::fs::write(
+        &file,
+        format!("schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n{body}"),
+    )
+    .unwrap();
+    check(&[file.to_str().unwrap()])
+}
+
+#[test]
+fn a_valid_orchestrator_table_exits_zero_and_an_invalid_one_exits_two_with_a_position() {
+    let valid = check_text(
+        "[orchestrator]\nurl = \"https://o\"\ncert_file = \"/s/c\"\nkey_file = \"/s/k\"\n",
+    );
+    assert_eq!(valid.status.code(), Some(0), "{}", text(&valid.stderr));
+    assert!(text(&valid.stdout).contains("orchestrator.url: https://o"));
+
+    let invalid =
+        check_text("[orchestrator]\nurl = \"http://o\"\nenrollment_token_file = \"/s/t\"\n");
+    assert_eq!(invalid.status.code(), Some(2));
+    let stderr = text(&invalid.stderr);
+    assert!(stderr.contains("daemon.toml:6:7:"), "{stderr}");
+    assert!(stderr.contains("https"), "{stderr}");
+}
