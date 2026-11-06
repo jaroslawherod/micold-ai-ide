@@ -39,6 +39,7 @@ pub mod review;
 pub mod runs;
 pub mod runtime_status;
 pub mod server;
+pub mod session_extras;
 pub mod settings;
 pub mod setup;
 pub mod singleton;

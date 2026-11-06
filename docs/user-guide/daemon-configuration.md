@@ -211,6 +211,23 @@ daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https sc
 | `session.files` | `[]` | `{ file, as, mode }`: copied into the session home, `mode` default `"0600"`. `as` is relative, stays inside the home and outside every CLI config dir. |
 | `network.ca_file` | none | An extra CA bundle exported to sessions. |
 
+#### SSH remotes, signing and registry files in a container or pod
+
+- **SSH remotes.** With `ssh_key_file` and `known_hosts_file`, a container or pod session's git
+  runs `ssh -i <key> -o UserKnownHostsFile=<hosts> -o IdentitiesOnly=yes`. GitHub still uses a
+  token; this is for other SSH remotes.
+- **Signing.** With `signing_key_file`, `user.signingkey` points at the delivered key; `gpg.format`
+  stays as in your git configuration (use `ssh` for an SSH key). Without it, signing is switched
+  off (`commit.gpgsign` and `tag.gpgsign` are `false`), so a commit does not fail for a key the
+  sandbox lacks. A host or SSH daemon uses your own git configuration and keys.
+- **Corporate CA and proxy.** `network.ca_file` is exported to sessions as `SSL_CERT_FILE`,
+  `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`, and the daemon trusts it for
+  its own HTTPS (the token reach check). The daemon also uses `HTTPS_PROXY` and `NO_PROXY` from
+  `session.env` or `session.secret_env` for that check.
+- **Registry files.** Each `[[session.files]]` entry (`.npmrc`, `.pypirc`) is copied from its
+  read-only `file` to `as` under the session home with `mode` each time a session starts. A target
+  outside the home or inside a CLI's config directory is refused when the file is checked.
+
 These names are reserved and refused in `session.env`, `session.secret_env` and `ai.cli.env`: `PATH`,
 `HOME`, `TERM`, `COLORTERM`, `GIT_CONFIG_*`, `GIT_SSH_COMMAND`, `GH_TOKEN`, `GH_HOST`,
 `GITHUB_TOKEN`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `PI_CODING_AGENT_DIR`,
