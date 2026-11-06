@@ -15,7 +15,8 @@ use micold_core::daemon_config::{
     SocketSpec,
 };
 use micold_core::daemons::{
-    start_script_delivered, DaemonEntry, DaemonId, DaemonRuntime, StartupScript, StartupSettings,
+    start_script_delivered, DaemonEntry, DaemonId, DaemonRuntime, SessionExtras, StartupScript,
+    StartupSettings,
 };
 use micold_core::sandbox::image::{ImageChoice, ImageRef, OwnImage};
 use micold_core::scoped_credential::pat_store::PatStore;
@@ -114,6 +115,8 @@ pub struct DaemonSettings {
     pub startup: Option<StartupTable>,
     /// The `[[github.tokens]]` entries, in file order (#1529).
     pub github_tokens: Vec<GithubTokenSetting>,
+    /// The SSH key, signing key, CA bundle and session files (#1536).
+    pub extras: SessionExtras,
 }
 
 impl DaemonSettings {
@@ -133,6 +136,7 @@ impl DaemonSettings {
             clone_root: None,
             projects: Vec::new(),
             startup: None,
+            extras: SessionExtras::default(),
             github_tokens: Vec::new(),
         }
     }
@@ -219,6 +223,7 @@ impl DaemonSettings {
             idle_stop: survives.then_some(IdleStopSetting::Off).or(file.idle_stop),
             client_token_file: file.client_token_file.clone().or(token_default),
             clone_root: file.clone_root.clone(),
+            extras: file.extras.clone(),
             projects: file.projects.clone(),
             startup: file
                 .startup
@@ -278,6 +283,7 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
     table(&mut out, "storage", |out| {
         key_path(out, "clone_root", &settings.clone_root)
     });
+    render_extras(&mut out, &settings.extras);
     for token in &settings.github_tokens {
         out.push_str("\n[[github.tokens]]\n");
         let _ = writeln!(out, "name = {}", quote(&token.name));
@@ -300,6 +306,24 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
         render_startup(&mut out, startup);
     }
     out
+}
+
+/// The `[git]` keys for the SSH and signing keys, `[network]` and `[[session.files]]` (#1536).
+fn render_extras(out: &mut String, extras: &SessionExtras) {
+    table(out, "git", |out| {
+        key_path(out, "ssh_key_file", &extras.ssh_key_file);
+        key_path(out, "known_hosts_file", &extras.known_hosts_file);
+        key_path(out, "signing_key_file", &extras.signing_key_file);
+    });
+    table(out, "network", |out| {
+        key_path(out, "ca_file", &extras.ca_file)
+    });
+    for file in &extras.files {
+        out.push_str("\n[[session.files]]\n");
+        let _ = writeln!(out, "file = {}", quote(&file.file.to_string_lossy()));
+        let _ = writeln!(out, "as = {}", quote(&file.target.to_string_lossy()));
+        key_str(out, "mode", &file.mode);
+    }
 }
 
 /// The `[startup]` table: only the keys that differ from the schema's defaults, and never a
