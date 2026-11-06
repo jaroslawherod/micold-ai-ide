@@ -303,7 +303,34 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         lang_inherited,
     );
     let config = config_git_edits(&settings, exe.as_deref());
-    combine_git_edits(edits, config)
+    config_extra_edits(combine_git_edits(edits, config), &settings)
+}
+
+/// `edits` with what `[git]`, `[network]` and `[[session.files]]` add (#1536, FR-036..038); the
+/// files are copied into the home now, so each session start finds them. Unchanged for a daemon
+/// with no readable file.
+fn config_extra_edits(
+    edits: Vec<EnvEdit>,
+    settings: &crate::settings::DaemonSettings,
+) -> Vec<EnvEdit> {
+    let Some(loaded) = settings
+        .config_path
+        .as_deref()
+        .and_then(|path| crate::config_load::load_file(path).ok())
+    else {
+        return edits;
+    };
+    let config = &loaded.config;
+    let home = settings
+        .home
+        .clone()
+        .or_else(|| std::env::var_os("HOME").map(std::path::PathBuf::from));
+    if let Some(home) = home {
+        for failure in crate::session_extras::deliver_files(&config.session.files, &home) {
+            tracing::warn!(%failure, "a session file was not delivered");
+        }
+    }
+    crate::session_extras::add_extras(edits, crate::session_extras::extras(config))
 }
 
 /// Whether `key` belongs to the `GIT_CONFIG_COUNT` / `_KEY_n` / `_VALUE_n` block.
@@ -495,7 +522,7 @@ pub(crate) fn container_git_edits(git: &GitFacts<'_>) -> Vec<EnvEdit> {
 }
 
 /// `word` as one shell word: unchanged when it holds only safe characters, else single-quoted.
-fn shell_word(word: &str) -> String {
+pub(crate) fn shell_word(word: &str) -> String {
     let safe = |c: char| c.is_ascii_alphanumeric() || "/._-+=:@%,".contains(c);
     if !word.is_empty() && word.chars().all(safe) {
         word.to_string()

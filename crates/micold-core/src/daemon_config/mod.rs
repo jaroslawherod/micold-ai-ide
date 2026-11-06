@@ -27,7 +27,7 @@ pub use files::{check_files, secret_entries};
 pub use resolved::{resolved_view, ResolvedView, SecretState, SecretStatus};
 pub use secret::{SecretPath, SecretValue};
 pub(crate) use validate::version_ok;
-pub use validate::{diagnose, parse, ConfigError, Severity};
+pub use validate::{diagnose, parse, session_file_refusal, ConfigError, Severity};
 
 /// The schema this build writes and reads.
 pub const SCHEMA_VERSION: u32 = 1;

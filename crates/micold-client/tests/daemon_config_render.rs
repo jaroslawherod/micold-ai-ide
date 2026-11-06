@@ -6,6 +6,7 @@ use crate::fixtures;
 use fixtures::{golden, settings, KINDS};
 use micold_client::daemon_config_render::{render, DaemonSettings, ProjectSetting};
 use micold_core::daemon_config::{parse, Kind, Listen, SocketSpec};
+use std::path::Path;
 
 #[test]
 fn each_kind_renders_byte_for_byte_to_its_golden_file() {
@@ -49,6 +50,7 @@ fn read_back(text: &str, kind: Kind) -> DaemonSettings {
         startup: None,
         github_tokens: vec![],
         git_config_file: None,
+        extras: Default::default(),
     }
 }
 
@@ -145,4 +147,55 @@ fn a_pods_file_names_the_mounted_git_config() {
         text.contains("config_file = \"/run/micold/secrets/git/gitconfig\""),
         "{text}"
     );
+}
+
+#[test]
+fn the_sandbox_extras_render_and_parse_back() {
+    use micold_core::daemons::{SessionExtras, SessionFileSetting};
+    let mut s = settings(Kind::Container);
+    s.extras = SessionExtras {
+        ssh_key_file: Some("/keys/id".into()),
+        known_hosts_file: Some("/keys/known".into()),
+        signing_key_file: Some("/keys/sign".into()),
+        ca_file: Some("/etc/corp-ca.pem".into()),
+        files: vec![SessionFileSetting {
+            file: "/secrets/npmrc".into(),
+            target: ".npmrc".into(),
+            mode: Some("0640".into()),
+        }],
+    };
+    let text = render(&s, Kind::Container);
+    let config = parse(&text, "daemon.toml").unwrap_or_else(|e| panic!("{}\n{text}", e[0]));
+    assert_eq!(
+        config.git.ssh_key_file.unwrap().path(),
+        Path::new("/keys/id")
+    );
+    assert_eq!(
+        config.git.known_hosts_file.as_deref(),
+        Some(Path::new("/keys/known"))
+    );
+    assert_eq!(
+        config.git.signing_key_file.unwrap().path(),
+        Path::new("/keys/sign")
+    );
+    assert_eq!(
+        config.network.unwrap().ca_file.as_deref(),
+        Some(Path::new("/etc/corp-ca.pem"))
+    );
+    let file = &config.session.files[0];
+    assert_eq!(
+        (
+            file.file.as_path(),
+            file.as_path.as_path(),
+            file.mode.as_deref()
+        ),
+        (
+            Path::new("/secrets/npmrc"),
+            Path::new(".npmrc"),
+            Some("0640")
+        )
+    );
+    // Nothing set: none of the tables appears.
+    let plain = render(&settings(Kind::Container), Kind::Container);
+    assert!(!plain.contains("[git]") && !plain.contains("[network]") && !plain.contains("session"));
 }

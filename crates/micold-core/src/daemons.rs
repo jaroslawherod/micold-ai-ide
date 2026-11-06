@@ -224,6 +224,44 @@ pub struct FileSettings {
     /// text is not here: it is a file in the app data (`StartupScript::Inline`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup: Option<StartupSettings>,
+    /// The SSH key, signing key, CA bundle and session files (#1536).
+    #[serde(default, skip_serializing_if = "SessionExtras::is_empty")]
+    pub extras: SessionExtras,
+}
+
+/// A file copied into the session home (`[[session.files]]`, #1536).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionFileSetting {
+    /// The read-only source on the daemon's machine.
+    pub file: PathBuf,
+    /// The target, relative to the session home.
+    pub target: PathBuf,
+    /// An octal mode such as `0600`; unset takes the schema's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+}
+
+/// The extras a sandbox daemon's sessions get (#1536, FR-036..038): `[git] ssh_key_file`,
+/// `known_hosts_file`, `signing_key_file`, `[network] ca_file` and `[[session.files]]`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionExtras {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_file: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_hosts_file: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_key_file: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_file: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<SessionFileSetting>,
+}
+
+impl SessionExtras {
+    /// Whether nothing is set.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
 }
 
 /// Where a daemon's start script comes from (#1533).

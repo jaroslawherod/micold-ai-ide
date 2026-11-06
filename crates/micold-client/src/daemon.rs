@@ -299,14 +299,17 @@ impl std::hash::Hash for SshDial {
 }
 
 /// The secret files an SSH host's configuration names, read from this machine: file name under
-/// `secrets/`, content. Only `client_token_file` is such a field today (#1526 D5(b)).
+/// `secrets/`, content: `client_token_file` (#1526 D5(b)) and the SSH and signing keys (#1536).
 fn named_secrets(settings: &DaemonSettings) -> Vec<(String, Vec<u8>)> {
-    settings
-        .client_token_file
-        .as_ref()
-        .and_then(|path| std::fs::read(path).ok())
-        .map(|bytes| vec![("client-token".to_string(), bytes)])
-        .unwrap_or_default()
+    let extras = &settings.extras;
+    [
+        ("client-token", &settings.client_token_file),
+        ("ssh-key", &extras.ssh_key_file),
+        ("signing-key", &extras.signing_key_file),
+    ]
+    .into_iter()
+    .filter_map(|(name, path)| Some((name.to_string(), std::fs::read(path.as_ref()?).ok()?)))
+    .collect()
 }
 
 /// The start script and `env_file` as files under the host's `secrets/` (mode `0600`): the script
