@@ -38,7 +38,7 @@ use sandbox_real_support::{cli_out, git, seed, start_sandbox, wait_for_accept, S
 const CONTAINER: &str = "micold-scoped-token-probe";
 const NETWORK: &str = "micold-scoped-token-probe-net";
 /// Not 7727, and not a neighbour's: a developer's own sandbox must not be disturbed.
-const PORT: u16 = 17742;
+const PORT: u16 = 17743;
 const TOKEN: &str = "github_pat_FAKE_scratch0001";
 const REPO: &str = "you/scratch";
 /// What the container calls the host: `--add-host` maps it to the runtime's host gateway.
@@ -271,6 +271,7 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
 
 /// Step 11: a kind pod. Reported skipped: the pod harness is `micold-client`'s `kube_real_*` suite.
 #[test]
+#[ignore = "step 11: the kind pod harness lives in micold-client's kube_real_* suite"]
 fn sandbox_real_scoped_token_kind_step_11_is_skipped() {
     eprintln!(
         "SKIPPED sandbox_real_scoped_token step 11: the kind pod harness lives in micold-client's \

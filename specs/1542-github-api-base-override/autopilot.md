@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1542
 - **Worktree branch**: feat/1542_base-url-override-for-the-github-api-and-git-host
 - **Started**: 2026-11-06
-- **Phase**: implement M1
-- **Next step**: M1 PR merge, then M2
+- **Phase**: implement M2
+- **Next step**: user decision on step 11 (kind arm), then full gate (not yet run: build lock contended; the real-runtime test has not been run locally), PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1751 | Design PR | merged | 3093ca085b47775be01ad3dc71649271940a31d4 |
-| #1755 | M1 | open | |
+| #1755 | M1 | merged | 80e93599ba5f1c267a103600c8cd92904cf23bb2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | #1755 | in review |
+| M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | #1755 | merged |
 | M2 | T010–T011 | full | Runtime-gated container/kind test (steps 4-8, 10, 11) | | pending |
 
 ## Decisions
@@ -62,7 +62,9 @@ None.
 
 ## Open escalation
 
-None.
+Category 5 (review B MAJOR, spec conflict): FR-008/US3 scenario 4/SC-002 require a kind-daemon arm (step 11). No kind pod harness is reachable from micold-daemon tests (it is micold-client `kube_real_*`, CI job `kube-cluster`, with no credential/git helper wiring). M2 as built covers the container arm (steps 4-8, 10) and an `#[ignore]`d step-11 placeholder.
+Options: (A, Recommended) accept M2 without the kind arm, amend FR-008/US3.4/SC-002 to say step 11 is covered by a follow-up issue and quickstart row 11 stays UNCOVERED, open that follow-up; (B) add a kind arm in `micold-client` `kube_real_scoped_token.rs` (new pod harness work, a new milestone M3).
+Review A (M2): CLEAN, minors fixed (port 17743, placeholder ignored). Review B: CHANGES on this only.
 
 ## Follow-ups not done
 
