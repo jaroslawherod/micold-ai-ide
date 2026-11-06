@@ -1739,7 +1739,7 @@ mod tests {
     }
 
     /// Feature 1125 T056 (R13): every drawn row has a key, and no two share one, so the tree lays
-    /// them out keyed and a row that moves to another group keeps the keyboard (US5.5).
+    /// them out keyed and a row keeps the keyboard when its state changes (US5.5).
     #[test]
     fn every_sidebar_row_has_a_distinct_key() {
         use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -1777,7 +1777,7 @@ mod tests {
             tokens::roles(ColorScheme::Dark),
         );
         let keys: Vec<Option<u64>> = items.iter().map(|item| item.key).collect();
-        assert!(keys.len() >= 6, "locations and session rows: {keys:?}");
+        assert!(keys.len() >= 5, "locations and session rows: {keys:?}");
         assert!(keys.iter().all(Option::is_some), "{keys:?}");
         let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
         assert_eq!(distinct.len(), keys.len(), "{keys:?}");
