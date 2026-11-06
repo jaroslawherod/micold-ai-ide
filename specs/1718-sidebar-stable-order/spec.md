@@ -144,6 +144,7 @@ the stable order, and keyboard Up/Down steps over every row with no header stop.
   ordering is added.
 - The existing per-row state icon (feature 905) and session-state text suffice as the indicator; the
   plan verifies that the five states differ by glyph or text, and adds one if not.
+  (Plan finding: 905's icon has three glyphs, so a `CardState`-keyed icon supersedes it; research R1.)
 - Group open/closed choices live in memory only (`group_choices`), so no migration is needed.
 - Grouping is removed outright, with no opt-in setting.
 

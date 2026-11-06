@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: plan
-- **Next step**: tasks unit (plan done; finding: 905 StateIcon has 3 glyphs, so StateIcon is re-keyed on CardState, research R1/R6)
+- **Phase**: tasks (design PR open)
+- **Next step**: design PR opened; then milestone M1 (finding: 905 StateIcon has 3 glyphs, so StateIcon is re-keyed on CardState, research R1/R6)
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | | pending |
+| M2 | T015–T022 | full | Five-state row indicator (StateIcon on CardState) | | pending |
 
 ## Decisions
 
@@ -51,3 +53,5 @@ None.
 ## Follow-ups not done
 
 None.
+
+- tasks R1 snapshot 09483c9..:83987a3.. (speckit-analyze: 0 CRITICAL/HIGH; I1,I2,C1,F1 fixed; no plan inconsistency found) -> CLEAN, 3 MINOR path fixes applied. Plan.md line 81 cites `tests/layout_snapshot.rs` without the crate prefix (tasks use the full path).
