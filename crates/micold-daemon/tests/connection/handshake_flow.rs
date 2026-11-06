@@ -157,3 +157,34 @@ async fn build_mismatch_is_refused_distinctly_when_contract_still_matches() {
     );
     server.await.unwrap().unwrap();
 }
+
+/// #1723 FR-006: a routed envelope on a plain connection closes it and delivers nothing; the
+/// `Ping` inside is not answered.
+#[tokio::test]
+async fn a_routed_frame_on_a_plain_connection_closes_it_and_delivers_nothing() {
+    use micold_core::protocol::routing::{ConnectionId, RoutedEnvelope, Sequence};
+
+    let state = std::sync::Arc::new(micold_daemon::state::DaemonState::new(
+        micold_daemon::catalog::Catalog::ephemeral(),
+    ));
+    let mut client = crate::support::conn::connect(&state).await;
+
+    client
+        .send(Frame::Routed(RoutedEnvelope {
+            target: "local".parse().unwrap(),
+            conn: ConnectionId(1),
+            seq: Sequence(1),
+            msg: ClientMsg::Ping { nonce: 5 },
+        }))
+        .await
+        .unwrap();
+
+    let next = tokio::time::timeout(std::time::Duration::from_secs(10), client.next())
+        .await
+        .expect("the daemon closes the connection");
+    assert!(
+        !matches!(next, Some(Ok(Frame::Control(DaemonMsg::Pong { .. })))),
+        "the wrapped Ping must not be delivered, got {next:?}"
+    );
+    assert!(next.is_none() || matches!(next, Some(Err(_))), "{next:?}");
+}

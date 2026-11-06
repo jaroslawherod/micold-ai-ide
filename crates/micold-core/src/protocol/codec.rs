@@ -26,6 +26,17 @@ use crate::protocol::envelope::{
 };
 use crate::protocol::grid::GridFrame;
 use crate::protocol::messages::{ClientMsg, DaemonMsg};
+use crate::protocol::routing::{RoutedEnvelope, RoutingError};
+
+/// Which control kind a codec accepts: plain messages, or messages in a routed envelope.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Routing {
+    /// [`Kind::Control`] frames only (every connection today, and every handshake).
+    #[default]
+    Plain,
+    /// [`Kind::Routed`] frames only, once the handshake is done.
+    Routed,
+}
 
 /// Whether grid frames are `postcard` (default) or JSON (`MICOLD_WIRE=json`, the debug switch).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +63,8 @@ impl WireFormat {
 pub enum Frame<C> {
     /// A control-plane message.
     Control(C),
+    /// A control message in a routed envelope.
+    Routed(RoutedEnvelope<C>),
     /// A grid frame.
     Grid(GridFrame),
 }
@@ -61,6 +74,7 @@ pub enum Frame<C> {
 pub struct WireCodec<In, Out> {
     inner: LengthDelimitedCodec,
     format: WireFormat,
+    routing: Routing,
     _in: PhantomData<fn() -> In>,
     _out: PhantomData<fn(Out)>,
 }
@@ -87,9 +101,21 @@ impl<In, Out> WireCodec<In, Out> {
         Self {
             inner,
             format,
+            routing: Routing::Plain,
             _in: PhantomData,
             _out: PhantomData,
         }
+    }
+
+    /// Build the codec with `routing` already selected.
+    pub fn with_routing(mut self, routing: Routing) -> Self {
+        self.routing = routing;
+        self
+    }
+
+    /// Switch which control kind the codec accepts, e.g. after the plain handshake.
+    pub fn set_routing(&mut self, routing: Routing) {
+        self.routing = routing;
     }
 }
 
@@ -107,6 +133,15 @@ pub enum CodecError {
     Io(std::io::Error),
     /// A malformed envelope header.
     Envelope(EnvelopeError),
+    /// A frame of the wrong control kind for this codec's [`Routing`].
+    WrongRouting {
+        /// The routing the codec is in.
+        expected: Routing,
+        /// The kind that arrived.
+        got: Kind,
+    },
+    /// A routed envelope was refused.
+    Routing(RoutingError),
     /// A control frame did not arrive as JSON (protocol.md §3 requires it).
     ControlNotJson(Encoding),
     /// JSON (de)serialisation failed.
@@ -120,6 +155,10 @@ impl std::fmt::Display for CodecError {
         match self {
             CodecError::Io(e) => write!(f, "wire io error: {e}"),
             CodecError::Envelope(e) => write!(f, "envelope error: {e}"),
+            CodecError::WrongRouting { expected, got } => {
+                write!(f, "{got:?} frame on a codec expecting {expected:?} routing")
+            }
+            CodecError::Routing(e) => write!(f, "routing error: {e}"),
             CodecError::ControlNotJson(enc) => {
                 write!(f, "control frame must be JSON, got encoding {enc:?}")
             }
@@ -153,6 +192,11 @@ impl From<CodecError> for std::io::Error {
 impl From<std::io::Error> for CodecError {
     fn from(e: std::io::Error) -> Self {
         CodecError::Io(e)
+    }
+}
+impl From<RoutingError> for CodecError {
+    fn from(e: RoutingError) -> Self {
+        CodecError::Routing(e)
     }
 }
 impl From<EnvelopeError> for CodecError {
@@ -193,6 +237,10 @@ where
                 EnvelopeHeader::new(Encoding::Json, Kind::Control),
                 serde_json::to_vec(&msg)?,
             ),
+            Frame::Routed(envelope) => (
+                EnvelopeHeader::new(Encoding::Json, Kind::Routed),
+                serde_json::to_vec(&envelope)?,
+            ),
             Frame::Grid(frame) => {
                 let (encoding, body) = self.encode_grid(&frame)?;
                 (EnvelopeHeader::new(encoding, Kind::Grid), body)
@@ -210,6 +258,15 @@ where
     }
 }
 
+/// The [`Routing`] a control-plane `kind` belongs to.
+fn wanted_routing(kind: Kind) -> Routing {
+    if kind == Kind::Routed {
+        Routing::Routed
+    } else {
+        Routing::Plain
+    }
+}
+
 impl<In, Out> Decoder for WireCodec<In, Out>
 where
     In: DeserializeOwned,
@@ -223,12 +280,24 @@ where
         };
         let (header, body) = EnvelopeHeader::parse(&payload)?;
         let item = match header.kind {
+            Kind::Control | Kind::Routed if self.routing != wanted_routing(header.kind) => {
+                return Err(CodecError::WrongRouting {
+                    expected: self.routing,
+                    got: header.kind,
+                });
+            }
             Kind::Control => {
                 // Control is JSON-only; a non-JSON control frame is a protocol violation.
                 if header.encoding != Encoding::Json {
                     return Err(CodecError::ControlNotJson(header.encoding));
                 }
                 Frame::Control(serde_json::from_slice::<In>(body)?)
+            }
+            Kind::Routed => {
+                if header.encoding != Encoding::Json {
+                    return Err(CodecError::ControlNotJson(header.encoding));
+                }
+                Frame::Routed(RoutedEnvelope::<In>::from_json_slice(body)?)
             }
             Kind::Grid => {
                 let frame: GridFrame = match header.encoding {
