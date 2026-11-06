@@ -34,32 +34,20 @@ folder.
 ## Browsing worktrees
 
 - Worktrees discovered under `.claude/worktrees/` appear as top-level items in the sidebar.
-- **The sidebar groups its rows by state**, worst first, under four headers: **Needs action**,
-  **Working**, **Idle** and **Done**, in that order. Each header reads its name and how many rows
-  it holds, for example "Working · 2"; a group with no row (none in that state, or all hidden by a
-  tag filter) is not shown. A row's state is the one its Overview card shows, so the two always
-  agree, and a row moves to its new group as soon as its state changes. A worktree that needs
-  attention (failing checks, a failed session) is listed under **Needs action**; there is no
-  separate group for it. Inside a group, rows keep the sidebar's usual order: *Default* first, then
-  the worktrees as before, and a run group counts as one row.
+- **Rows stay where they are.** The sidebar lists its rows in one flat list in a fixed order:
+  *Default* first, then the worktrees, and a run group counts as one row. There are no state
+  headers, so a row never moves when its state changes; a row's state shows on the row itself, the
+  one its Overview card shows. A worktree whose pull request is merged and removable (Done) is
+  listed like any other row.
 - **A project with no worktrees** shows the [Overview](overview.md#opening-and-closing-it) row, the
-  [chip bar](#filtering-worktrees-by-tag) with **All** only, and the *Default* row under its state's
-  header, with the hint "No worktrees yet. Add one to get started." below.
-- **Done starts collapsed**, unless it holds the session you are looking at; the other groups start
-  open. Press a header, or press Enter or Space while it has the keyboard, to collapse or expand
-  that group. Your choice holds for the rest of the run, per project: rows moving in and out, the
-  worktree list being re-read and switching to another project and back leave it as you set it.
-- **A reveal opens a collapsed group.** When the app brings a row into view (the session you
-  switched to, a row the Overview, the quick switcher or a notification sends you to) or a
-  navigation chord lands on a row in a collapsed group, that group opens first and stays open. The
-  navigation chords step through locations in the grouped order, collapsed groups included.
+  [chip bar](#filtering-worktrees-by-tag) with **All** only, and the *Default* row, with the hint "No worktrees yet. Add one to get started." below.
 - **The keyboard follows the sidebar's order.** Tab visits the Overview row, the chip bar's
-  controls and each group header, top to bottom, in the order they are shown; the location
-  shortcuts (**Ctrl+Shift+,** and **Ctrl+Shift+.**, Cmd+Shift on macOS) put the keyboard on each
-  row in turn, and that row joins the Tab order. When the row that has the keyboard changes state
-  and moves to another group, the keyboard moves with it; it does not stay on whatever row takes
-  its old place. A row that moves out from under a still pointer drops its hover actions until you
-  point at it again; a context menu open on it stays open, on the same worktree.
+  controls and each row, top to bottom; the location shortcuts (**Ctrl+Shift+,** and
+  **Ctrl+Shift+.**, Cmd+Shift on macOS) put the keyboard on each row in turn, and that row joins
+  the Tab order. A reveal (the session you switched to, a row the Overview, the quick switcher or a
+  notification sends you to) scrolls the row into view; no row is hidden, so nothing expands first.
+  When a row changes state it stays where it is, so the keyboard, hover and an open context menu
+  stay on it.
 - Selecting a worktree opens its **main session** in the terminal, whichever session you looked at
   last. A worktree with one session has no toggle and no sub-rows; one with several has a toggle
   (collapsed by default) that lists the main session first and marks each helper "helper". Rename

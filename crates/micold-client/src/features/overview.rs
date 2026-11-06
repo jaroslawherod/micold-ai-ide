@@ -639,7 +639,7 @@ fn open_pull_request<'a>(
 
 /// A location's card state and why (feature 1125, research R2): from its un-archived sessions, the
 /// agent requests waiting on them and its branch's pull request reading. The Overview's card and the
-/// sidebar's state group both ask this, so the two cannot disagree about a location (US1.7).
+/// sidebar's row both ask this, so the two cannot disagree about a location (US1.7).
 pub fn location_card_state(
     app: &crate::app::State,
     location: &SessionLocation,

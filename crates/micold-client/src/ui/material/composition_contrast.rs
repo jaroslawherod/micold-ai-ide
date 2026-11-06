@@ -191,22 +191,6 @@ fn every_state_icon_is_legible_on_every_fill_of_a_sidebar_row() {
     );
 }
 
-/// Feature 1125 (FR-019, R12, T010): a sidebar group header's text, `on_surface_variant` on the
-/// sidebar's `surface_container_low`, is legible in both schemes.
-#[test]
-fn a_sidebar_group_header_is_legible_on_the_sidebar() {
-    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
-        let r = tokens::roles(scheme);
-        let fill = style::to_rgb(style::sidebar_fill(r));
-        assert_eq!(fill, r.surface_container_low, "the sidebar's tone");
-        let ratio = contrast(r.on_surface_variant, fill);
-        assert!(
-            ratio >= AA_TEXT,
-            "{scheme:?}: a group header at {ratio:.2}:1 (needs {AA_TEXT})"
-        );
-    }
-}
-
 /// Feature 1125 (FR-019, SC-004, R12, T024): a location row's two lines on the sidebar's tone, and
 /// the selected row's text on its `primary_container` fill, are legible in both schemes: the
 /// `on_primary_container` both its lines take, and the tints a selected row keeps (a failed

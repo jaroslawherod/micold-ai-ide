@@ -55,11 +55,10 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // a zero-worktree or filtered-to-nothing project still shows the Default row and its
     // start-session action, with a muted hint appended below about worktrees specifically.
     //
-    // The groups hold every entry once, the Default entry among them, so "one entry in all" is
-    // "no worktree entries matched". Built once per render (feature 1125): they give both the hint
-    // and the list.
-    let groups = state.sidebar_groups();
-    let no_worktree_entries = groups.iter().map(|g| g.entries.len()).sum::<usize>() <= 1;
+    // The list holds every entry once, the Default entry among them, so "one entry in all" is
+    // "no worktree entries matched". Built once per render: it gives both the hint and the rows.
+    let entries = state.sidebar_list();
+    let no_worktree_entries = entries.len() <= 1;
     // A project with no discovered worktree takes the "none yet" branch — the "no match / clear
     // filters" branch would offer to clear a filter that was never applied.
     let hint: Option<Element<'_, Message>> = if state.worktree.worktrees.is_empty() {
@@ -92,7 +91,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         None
     };
 
-    let tree: Element<'_, Message> = TreeView::new(list_items(state, groups, r), r)
+    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, 0, None, 0, r), r)
         // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
         // the worktree count visible without scrolling does not drop. A named step on the shared
         // density scale, not a bespoke shrink (FR-026c).
@@ -808,50 +807,6 @@ fn row_actions_cluster(
         .into()
 }
 
-/// The drawn list (feature 1125, contract S4): each state group's header, then the group's
-/// entries when it is open, as [`build_items`] draws them.
-fn list_items(
-    state: &State,
-    groups: Vec<crate::features::sidebar::SidebarGroup>,
-    r: Roles,
-) -> Vec<TreeItem<'static, Message>> {
-    use crate::features::sidebar::ListRow;
-    let mut items = Vec::new();
-    for row in crate::features::sidebar::list_rows(groups) {
-        match row {
-            // A header holds no chord's keyboard row, so a change of its focus tells nobody.
-            ListRow::Header(header) => items.push(
-                group_header(header, r)
-                    .keyboard_focus(false, |_| Message::NoOp)
-                    .key(row_key(RowKey::Header(header.group))),
-            ),
-            ListRow::Entry(entry) => {
-                let at = items.len();
-                items.extend(build_items(state, vec![entry], 0, None, at, r))
-            }
-        }
-    }
-    items
-}
-
-/// A state group's header row (feature 1125, R8): its name and count, the twisty open or closed,
-/// and a press anywhere on it (or Enter or Space) toggling the group.
-fn group_header(
-    header: crate::features::sidebar::GroupHeaderRow,
-    r: Roles,
-) -> TreeItem<'static, Message> {
-    TreeItem::new(
-        0,
-        micold_core::sidebar_groups::header_text(header.group, header.count),
-        r.on_surface_variant,
-    )
-    .heading()
-    .expandable(
-        header.open,
-        Message::Sidebar(SidebarMsg::GroupToggled(header.group)),
-    )
-}
-
 /// Flatten the sidebar's location list (feature 010: the "Default" entry, then worktrees) into
 /// ordered [`TreeItem`]s, each followed by its sessions when expanded.
 fn build_items(
@@ -1106,17 +1061,16 @@ fn build_items(
 }
 
 /// What a sidebar row is (feature 1125, R13): a location's or a session's row by its [`RowRef`], a
-/// state group's header, a run group's row, or a run that has no worktree.
+/// run group's row, or a run that has no worktree.
 #[derive(Hash)]
 enum RowKey {
     Row(RowRef),
-    Header(micold_core::sidebar_groups::StateGroup),
     RunGroup(micold_core::runs::GroupId),
     Run(micold_core::runs::GroupId, u8),
 }
 
 /// The [`TreeItem::key`] of a row: every sidebar row has one, so the keyboard's focus, the ripple
-/// and the hover stay on a row that moves to another group (FR-017, US5.5).
+/// and the hover stay on a row (FR-017, US5.5).
 fn row_key(row: RowKey) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -1691,11 +1645,10 @@ mod tests {
     }
 
     /// Feature 1125 (T045, US5.1, FR-017, SC-005): Tab visits the Overview row, **All**, each
-    /// filter chip, add, hide and more, then the group headers, in display order.
+    /// filter chip, add, hide and more, in display order. Feature 1718: no group header follows.
     #[test]
-    fn tab_visits_the_overview_row_the_chip_bar_then_the_groups_in_display_order() {
+    fn tab_visits_the_overview_row_the_chip_bar_in_display_order() {
         use micold_core::naming::ConventionalType;
-        use micold_core::sidebar_groups::StateGroup;
         let mut state = with_project();
         state.worktree.worktrees = ["feat-a", "fix-b"]
             .into_iter()
@@ -1713,8 +1666,8 @@ mod tests {
                 TagFilter::Type(t),
             )))
         };
-        let stops = tab_order(&state, 8);
-        let mut expected = vec![
+        let stops = tab_order(&state, 7);
+        let expected = vec![
             vec![opened()],
             m(Message::Sidebar(SidebarMsg::FiltersCleared)),
             filter(ConventionalType::Feat),
@@ -1723,13 +1676,6 @@ mod tests {
             m(Message::Sidebar(SidebarMsg::Toggled)),
             m(Message::Sidebar(SidebarMsg::MoreMenuToggled)),
         ];
-        let groups: Vec<StateGroup> = state.sidebar_groups().iter().map(|g| g.group).collect();
-        expected.extend(
-            groups
-                .iter()
-                .take(1)
-                .map(|&g| m(Message::Sidebar(SidebarMsg::GroupToggled(g)))),
-        );
         assert_eq!(stops, expected);
     }
 
@@ -1822,16 +1768,16 @@ mod tests {
             .sessions
             .insert(std::path::PathBuf::from("/repo"), sessions);
         state.sidebar.expanded.insert("feat-a".to_string());
-        let items = list_items(
+        let items = build_items(
             &state,
-            state.sidebar_groups(),
+            state.sidebar_list(),
+            0,
+            None,
+            0,
             tokens::roles(ColorScheme::Dark),
         );
         let keys: Vec<Option<u64>> = items.iter().map(|item| item.key).collect();
-        assert!(
-            keys.len() >= 6,
-            "headers, locations and session rows: {keys:?}"
-        );
+        assert!(keys.len() >= 6, "locations and session rows: {keys:?}");
         assert!(keys.iter().all(Option::is_some), "{keys:?}");
         let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
         assert_eq!(distinct.len(), keys.len(), "{keys:?}");
