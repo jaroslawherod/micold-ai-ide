@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1751 | Design PR | merged | 3093ca085b47775be01ad3dc71649271940a31d4 |
 | #1755 | M1 | merged | 80e93599ba5f1c267a103600c8cd92904cf23bb2 |
+| #1762 | M2 | open | |
 
 ## Milestones
 
@@ -25,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | M2 | Accept M2 without the kind arm (step 11)? | Yes (A): FR-008, US3.4, SC-002 amended; follow-up #1760; quickstart row 11 UNCOVERED | decided by user | review B MAJOR |
 | M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | #1755 | merged |
-| M2 | T010–T011 | full | Runtime-gated container test (steps 4-8, 10; step 11 is #1760) | PR-PENDING | in review |
+| M2 | T010–T011 | full | Runtime-gated container test (steps 4-8, 10; step 11 is #1760) | #1762 | in review |
 
 ## Decisions
 
