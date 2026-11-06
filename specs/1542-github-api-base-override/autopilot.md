@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1542_base-url-override-for-the-github-api-and-git-host
 - **Started**: 2026-11-06
 - **Phase**: implement M2
-- **Next step**: full gate, image + sandbox_real_scoped_token, PR
+- **Next step**: M2 PR merge, then close
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | M2 | Accept M2 without the kind arm (step 11)? | Yes (A): FR-008, US3.4, SC-002 amended; follow-up #1760; quickstart row 11 UNCOVERED | decided by user | review B MAJOR |
 | M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | #1755 | merged |
-| M2 | T010–T011 | full | Runtime-gated container/kind test (steps 4-8, 10, 11) | | pending |
+| M2 | T010–T011 | full | Runtime-gated container test (steps 4-8, 10; step 11 is #1760) | PR-PENDING | in review |
 
 ## Decisions
 
@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 3ce1418f:c695061be | CHANGES: 3 MAJOR; fixed (spec reworded, FR-004 kept open, SC counts, checklist), prose only |
 | Tasks | 1 | a08fafa1:91e6af16 | CHANGES: 1 MAJOR (T006 [[test]] before file), 2 MINOR; fixed (registration folded into T007, dr_case, transport, checklist text), self-checked |
 | M1 review A | 1 | 6ad156f1e8d55f53b91ae4dac6d36b56876288f4:3093ca085b47775be01ad3dc71649271940a31d4 (before fixes) | high: 9 findings (no BLOCKER/MAJOR label); fixed 5 (stale doc links x2, fake thread per connection and case-insensitive header, dead-port race, fake renamed `FakeGithubApi`); declined 4 (below) |
+| M2 review A | 1 | 8aaf4b3d:4b82894e4 | CLEAN; minors fixed (port 17743, step-11 placeholder ignored) |
+| M2 review B | 1 | 8aaf4b3d:4b82894e4 | CHANGES: 1 MAJOR (kind arm missing); resolved by user decision A (spec amended, #1760), prose only |
 | M1 review B | 1 | 05a49d47:b886f8de6 | CLEAN (sonnet; core tests unobserved by B for build-lock wait, covered by the full gate) |
 
 ## Declined review findings
