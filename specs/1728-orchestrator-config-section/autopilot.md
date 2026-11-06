@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
 | #1752 | M1 | merged | fa3664a38bde19508f8ad4215fc28ccc8a6d3a7f |
-| #PR2 | M2 | open | |
+| #1759 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | merged |
-| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #PR2 | in review |
+| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #1759 | in review |
 
 ## Decisions
 
