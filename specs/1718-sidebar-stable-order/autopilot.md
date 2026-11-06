@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | PR_N | open |
+| M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | #1758 | open |
 | M2 | T015–T022 | full | Five-state row indicator (StateIcon on CardState) | | pending |
 
 ## Decisions
