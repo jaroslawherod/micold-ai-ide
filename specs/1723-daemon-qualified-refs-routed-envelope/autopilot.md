@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: implement (M1)
-- **Next step**: design PR, then M1
+- **Phase**: review (M1)
+- **Next step**: M1 gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1746 | design | open | |
+| #1746 | design | merged | 3530aeba08a1047f1d73cc2f88bf5d4b85d8253b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | | pending |
+| M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | | review |
 | M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | | pending |
 | M3 | T023–T029 | full | project identity on project rows | | pending |
 | M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | | pending |
@@ -44,11 +44,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M1 A (code-review high) | 1 | a5e3ecbe92ecefe6042eb4216ef33aeac508537d:78438d64861b2f818d68333ba837d352d8bee242 | 8 findings, 2 fixed (daemon.id restart key + test, stale doc), 6 declined |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | set_daemon_id order-dependent | design: id is read once at startup via set_config, rows before it do not exist |
+| M1 | A | default `local` collides across daemons | spec: absent id means `local`; orchestrator config names ids (later feature) |
+| M1 | A | qualified()/ProjectRef unused | consumed by M2/M3 and the orchestrator |
+| M1 | A | routing.rs tests hashed | same as messages.rs; hash input is by design (T021) |
+| M1 | A | grammar in three places | MINOR taste |
+| M1 | A | new test executable | T010 names unwrapped_client |
 
 ## Handover
 
