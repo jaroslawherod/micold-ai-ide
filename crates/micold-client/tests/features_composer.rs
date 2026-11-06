@@ -1565,7 +1565,7 @@ mod selectors {
         assert_eq!(prompts.mode_menu(s), None);
         prompts.toggle_mode_menu(s, 1);
         assert_eq!(prompts.mode_menu(s), Some(Some(1)));
-        prompts.step_mode_menu(s, Direction::Down, PermissionMode::ALL.len());
+        prompts.step_mode_menu(s, Direction::Next, PermissionMode::ALL.len());
         assert_eq!(prompts.mode_menu(s), Some(Some(2)));
         prompts.close_mode_menu(s);
         assert_eq!(prompts.mode_menu(s), None);

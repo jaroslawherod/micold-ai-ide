@@ -35,7 +35,7 @@ use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keyma
 use crate::ui::material::{
     AttachmentChip, BusyIndicator, Button, CommandPalette, IconButton, MenuSelect, MenuSelectRow,
     PromptCard, QueueRow, Scrollable, Text, TextArea, TextField, Tooltip, TooltipPosition,
-    TypeRole, Typeahead, TypeaheadRow,
+    TypeRole, TypeaheadRow,
 };
 use iced::widget::text::Wrapping;
 use micold_core::session::SessionKind;
