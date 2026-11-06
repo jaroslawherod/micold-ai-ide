@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
+| #1752 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #PRNUM | in review |
+| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | in review |
 | M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #… | pending |
 
 ## Decisions
