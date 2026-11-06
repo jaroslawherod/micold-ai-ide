@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1536
 - **Worktree branch**: feat/1536_ssh-key-signing-key-ca-file-and-session-files-for
 - **Started**: 2026-11-06
-- **Phase**: implement M1 (handover)
+- **Phase**: implement M1 (review)
 - **Next step**: after design PR merges: milestone M1 (T101–T106)
 
 ## Pull requests
@@ -35,27 +35,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| A | 1 | 4d1bf96f235f6da809d05e60b6aa11fd789669c2:5337e2a4cfb10b235ded086dcc01df9bf0c5d775 | CLEAN (3 MINOR) |
+| B | 1 | same | CLEAN (2 MINOR; Verify green) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F2 gpg.format not set | T102 keeps gpg.format from the user config by design |
+| M1 | A | F1, F3 copy-then-chmod, specific roots | MINOR, not fixed; the source is user-owned, bundle must be complete |
 
 ## Handover
 
-Unit 1 of M1 hit 150k waiting on a long shared build-lock queue (use `setsid nohup` + `hold.sh`; a script file under the scratchpad written with Write, because a hook blocks the word `cargo` in a heredoc). Branch is reset to origin/main plus this uncommitted-then-committed WIP.
-
-Done (code written, daemon tests green: `cargo test -p micold-daemon --lib session_extras` 9 passed, `supervisor` 26 passed):
-- core: `daemon_config::session_file_refusal` (V18 extracted from validate.rs `session()`, exported); `daemons::{SessionExtras, SessionFileSetting}` and `FileSettings.extras`.
-- daemon: `crates/micold-daemon/src/session_extras/{mod,tests}.rs` (T101 GIT_SSH_COMMAND, T102 signing key / gpgsign off, T103 CA env + `Egress` for ureq CA/HTTPS_PROXY/NO_PROXY, T104 `deliver_files`); wired in `supervisor.rs` `env_hygiene` via `config_extra_edits`, and `credential_config.rs` `UreqTransport` uses `Egress`.
-- client: `daemon_config_render.rs` renders `[git]` extras, `[network]`, `[[session.files]]` from `DaemonSettings.extras` (T105 render part); `daemon.rs` `named_secrets` adds ssh-key / signing-key; test `the_sandbox_extras_render_and_parse_back` added in `tests/daemon_config_render.rs`; docs added in `docs/user-guide/daemon-configuration.md` (T106).
-- tasks.md: T101-T104, T106 ticked. T105 NOT ticked.
-
-Next step:
-1. Run (queued, via build-lock): `cargo test -p micold-client --test main daemon_config` (the `FileSettings.extras` literal in `tests/daemon_config_validate.rs` was just fixed; also check other `DaemonSettings {..}` / `FileSettings {..}` literals compile, and goldens unchanged), `cargo test -p micold-client --lib daemon`, `cargo test -p micold-core --lib daemon_config` (last run failed only on a stale shared-target build.rs race: "read routing.rs" - rerun).
-2. T105 gap: Settings -> Daemons UI inputs for the four extras (draft fields in `features/daemons.rs`, rows in `ui/settings/daemons.rs`) are NOT done; the model + render + secret delivery are. Decide: add the draft fields (mirror `client_token_file`) or record the UI inputs as a follow-up in *Follow-ups not done*; then tick T105.
-3. Then verify.md, review A (high) in parallel with scoped gate, review B (sonnet), full `mise run gate`, PR per tasks/pr.md (title `feat(daemon-config-file): SSH key, signing key, CA file and session files for sandbox sessions (#1536)`, body ends `Refs #1536`).
-
+None.
 
 ## Open escalation
 
@@ -63,4 +55,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- Settings -> Daemons has inputs for the four path extras (ssh key, known hosts, signing key, CA file); `[[session.files]]` entries have no UI row yet (kept from the daemon file on save, render and delivery work). Add a list editor later.
