@@ -9,7 +9,7 @@ every phase and must fail (red) before the code that makes them pass (Constituti
 
 ## Phase 1: Setup
 
-- [ ] T001 Inventory every use of the removed symbols (`StateGroup`, `Group`, `group_by_state`,
+- [x] T001 Inventory every use of the removed symbols (`StateGroup`, `Group`, `group_by_state`,
   `header_text`, `group_open`, `SidebarGroup`, `GroupHeaderRow`, `ListRow`, `group_choices`,
   `GroupToggled`, `open_group_of_*`, `TypeRole::SidebarGroup`) with `LSP findReferences`, and `grep -rn` "state group", "group header",
   "Done group" across `docs/`, `README.md` and code comments (SC-004); note the files in the
@@ -22,46 +22,46 @@ state together), so they ship as one milestone.
 
 **Tests first (red)**
 
-- [ ] T002 [US1] `crates/micold-client/tests/sidebar_state.rs`: replace the feature 1125 group tests
+- [x] T002 [US1] `crates/micold-client/tests/sidebar_state.rs`: replace the feature 1125 group tests
   with flat-list tests: cycling one location (Default, a worktree, a run group) through all five
   card states leaves `sidebar_list()` identity and index sequence equal to `sidebar_entries()`
   (SC-001, SC-003, FR-001, FR-003, G1); a Done location is listed in stable order; no header row and
   no toggle message exists (FR-002, G2); tag filter removes without reordering.
-- [ ] T003 [US3] `crates/micold-client/tests/navigation_apply.rs`: `location_order`, keyboard Up/Down
+- [x] T003 [US3] `crates/micold-client/tests/navigation_apply.rs`: `location_order`, keyboard Up/Down
   and reveal-current-session walk `sidebar_entries()`; reveal of a Done row selects it with nothing to
   expand and no header stop (FR-006, G3).
-- [ ] T004 [P] [US1] `crates/micold-client/tests/features_sidebar.rs`: `row_heights` has one entry per
+- [x] T004 [P] [US1] `crates/micold-client/tests/features_sidebar.rs`: `row_heights` has one entry per
   location row and no header row (G4).
-- [ ] T005 [P] [US3] `crates/micold-client/tests/composite_call_sites.rs` and
+- [x] T005 [P] [US3] `crates/micold-client/tests/composite_call_sites.rs` and
   `tests/sidebar_spawn_tree.rs`: `ListRow` becomes `SidebarEntry`; `row_index` takes
   `&[SidebarEntry]`.
-- [ ] T006 [P] [US3] FR-008 test in `crates/micold-client/tests/sidebar_state.rs`: a state file written before this change loads unchanged; no `group_choices` key exists.
+- [x] T006 [P] [US3] FR-008 test in `crates/micold-client/tests/sidebar_state.rs`: a state file written before this change loads unchanged; no `group_choices` key exists.
 
 **Implementation**
 
-- [ ] T007 [US3] `crates/micold-core/src/sidebar_groups.rs`, `lib.rs`: delete `StateGroup`, `Group`,
+- [x] T007 [US3] `crates/micold-core/src/sidebar_groups.rs`, `lib.rs`: delete `StateGroup`, `Group`,
   `group_by_state`, `header_text`, `group_open` and their tests; keep `RunCard` and `run_group_state`
   with tests; the module keeps its name `sidebar_groups` (research R3), only its docs change.
-- [ ] T008 [US1] `crates/micold-client/src/features/sidebar.rs`: drop `SidebarGroup`, `GroupHeaderRow`,
+- [x] T008 [US1] `crates/micold-client/src/features/sidebar.rs`: drop `SidebarGroup`, `GroupHeaderRow`,
   `ListRow::Header`, `ListRow`, `group_choices`, `Msg::GroupToggled`, `open_group_of_*`;
   `sidebar_list()` returns `Vec<SidebarEntry>`; `row_heights` and `row_index` take `&[SidebarEntry]`.
-- [ ] T009 [US3] `crates/micold-client/src/features/navigation.rs`: `location_nodes` over
+- [x] T009 [US3] `crates/micold-client/src/features/navigation.rs`: `location_nodes` over
   `sidebar_entries`; remove the `open_group_of_*` calls in `reveal_ready`.
-- [ ] T010 [US1] `crates/micold-client/src/ui/sidebar.rs`: drop `group_header`, the Header row key and
+- [x] T010 [US1] `crates/micold-client/src/ui/sidebar.rs`: drop `group_header`, the Header row key and
   the `SidebarGroup` / `ListRow` uses; render one row per entry.
-- [ ] T011 [P] [US3] Delete the group-only UI parts: the group-heading builder and its tests in
+- [x] T011 [P] [US3] Delete the group-only UI parts: the group-heading builder and its tests in
   `crates/micold-client/src/ui/material/tree_view.rs`; `TypeRole::SidebarGroup` and test
   `a_sidebar_group_header_is_twelve_px_bold` in `crates/micold-material/src/text.rs` and
   `crates/micold-material/src/type_role_mapping.rs`; `a_sidebar_group_header_is_legible_on_the_sidebar` in
   `crates/micold-client/src/ui/material/composition_contrast.rs`; the `SidebarGroup` entry in `crates/micold-client/src/showcase/catalogue.rs`; the
   group header poses in `crates/micold-client/src/showcase/sections/surfaces.rs` and `atoms.rs`; the matching rows in
   `tests/showcase_completeness.rs` (FR-007).
-- [ ] T012 [US3] Re-record the layout snapshot (`crates/micold-client/tests/layout_snapshot.rs` and its fixtures) for
+- [x] T012 [US3] Re-record the layout snapshot (`crates/micold-client/tests/layout_snapshot.rs` and its fixtures) for
   the flat list.
-- [ ] T013 [P] [US1] Docs: `docs/user-guide/worktrees-and-sessions.md` (rows stay in place; no state
+- [x] T013 [P] [US1] Docs: `docs/user-guide/worktrees-and-sessions.md` (rows stay in place; no state
   groups) and `docs/development/layout-snapshot.md` (flat list), and every other doc or comment T001 found that
   mentions state groups (FR-009, SC-004, Constitution VII).
-- [ ] T014 Make T002–T006 green; `mise run gate`.
+- [x] T014 Make T002–T006 green; `mise run gate`.
 
 **Checkpoint**: the sidebar is a flat stable list; nothing group-related is reachable.
 
