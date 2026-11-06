@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::{
     AiCli, CliId, DaemonConfig, IdleStopSetting, Kind, Listen, OnFailure, RepoPattern, RunPolicy,
-    SocketSpec, DEFAULT_FILE_MODE, DEFAULT_FORGE_HOST,
+    SecretPath, SocketSpec, DEFAULT_FILE_MODE, DEFAULT_FORGE_HOST,
 };
 
 /// Whether a secret file can be used, never what it holds.
@@ -118,6 +118,18 @@ pub struct ResolvedView {
     pub session_files: Vec<SessionFileView>,
     pub ca_file: Option<PathBuf>,
     pub startup: Option<StartupView>,
+    /// `None` when the file has no `[orchestrator]` table.
+    pub orchestrator: Option<OrchestratorView>,
+}
+
+/// `[orchestrator]` as shown: the URL, and each file as a path and its state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrchestratorView {
+    pub url: Option<String>,
+    pub ca_file: Option<SecretStatus>,
+    pub cert_file: Option<SecretStatus>,
+    pub key_file: Option<SecretStatus>,
+    pub enrollment_token_file: Option<SecretStatus>,
 }
 
 /// The unix permission bits of the file at `path`: `None` when it cannot be inspected,
@@ -286,6 +298,16 @@ pub fn resolved_view(config: &DaemonConfig) -> ResolvedView {
             run: s.run.unwrap_or(RunPolicy::EveryStart),
             env_file: s.env_file.as_ref().map(|p| probe(p.path())),
             export_env: s.export_env.unwrap_or(true),
+        }),
+        orchestrator: config.orchestrator.as_ref().map(|o| {
+            let status = |p: &Option<SecretPath>| p.as_ref().map(|p| probe(p.path()));
+            OrchestratorView {
+                url: o.url.clone(),
+                ca_file: status(&o.ca_file),
+                cert_file: status(&o.cert_file),
+                key_file: status(&o.key_file),
+                enrollment_token_file: status(&o.enrollment_token_file),
+            }
         }),
     }
 }
@@ -473,6 +495,21 @@ impl std::fmt::Display for ResolvedView {
             )?;
             if let Some(env) = &s.env_file {
                 writeln!(f, "startup.env_file: {env}")?;
+            }
+        }
+        if let Some(o) = &self.orchestrator {
+            if let Some(url) = &o.url {
+                writeln!(f, "orchestrator.url: {url}")?;
+            }
+            for (key, file) in [
+                ("ca_file", &o.ca_file),
+                ("cert_file", &o.cert_file),
+                ("key_file", &o.key_file),
+                ("enrollment_token_file", &o.enrollment_token_file),
+            ] {
+                if let Some(file) = file {
+                    writeln!(f, "orchestrator.{key}: {file}")?;
+                }
             }
         }
         Ok(())

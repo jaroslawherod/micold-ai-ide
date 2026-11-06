@@ -60,6 +60,8 @@ pub struct DaemonConfig {
     pub network: Option<Network>,
     #[serde(default)]
     pub startup: Option<Startup>,
+    #[serde(default)]
+    pub orchestrator: Option<Orchestrator>,
 }
 
 /// What kind of daemon the file is for; sets defaults and is reported, nothing more.
@@ -249,6 +251,18 @@ pub struct Storage {
 pub struct Project {
     pub path: PathBuf,
     pub remote: Option<String>,
+}
+
+/// `[orchestrator]` (#1728): where the orchestrator is and how this daemon proves who it is. Every
+/// `*_file` key is a path; no secret value is ever held.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Orchestrator {
+    pub url: Option<String>,
+    pub ca_file: Option<SecretPath>,
+    pub cert_file: Option<SecretPath>,
+    pub key_file: Option<SecretPath>,
+    pub enrollment_token_file: Option<SecretPath>,
 }
 
 /// `[git]`.

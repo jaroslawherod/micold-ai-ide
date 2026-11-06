@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: design-pr
-- **Next step**: wait for design PR merge, then milestone M1
+- **Phase**: milestone M1
+- **Next step**: M1 PR open; wait for CI and merge, then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1745 | Design | open | … |
+| #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #… | pending |
+| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #… | in review |
 | M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #… | pending |
 
 ## Decisions
@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 573f45826c468a2ca44df1bab5ec62c891f3fc8b:26fcb3b039574a30aac4878ca1a31ac18a4a7c6e | CLEAN; 3 MINOR fixed (prose only: header anchor D7, Windows wording, config_watch.rs) |
 | Tasks | 1 | 4e2263b78b027e73b33b7aac1b5c4db3c8625e09:78ed34c3419f7495841225d1ca695c4749d5e46c | CHANGES: 1 MAJOR (T008 test order), 3 MINOR; all fixed (T003a moved before code, view-state test, Verify, T012 note) |
 | Tasks | 2 | 04bb849807d5e2d3fc5e5f3ee44a5c3faa90e833:78ed34c3419f7495841225d1ca695c4749d5e46c | CLEAN; 1 MINOR fixed |
+| Code (A, high) | 1 | 4b87210200a365755cfba4d6984e645872b543eb:eaaca02fd7fa5893f63520699c9ccd12f28e494d | CLEAN; 3 MINOR (port not validated, userinfo echoed, O3+O4 both fire) left as follow-ups |
 
 ## Declined review findings
 
@@ -58,4 +59,5 @@ None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- M1 review A MINORs: `url` port not parsed; `user:pass@` userinfo would be echoed in the view and O2 message; O3 and O4 both fire for a lone cert/key plus token.
+- Gate: `refused_mutations_are_logged` failed once in the scoped gate (global tracing subscriber already set), unrelated to this diff.
