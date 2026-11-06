@@ -9,22 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: milestone M1
-- **Next step**: M1 PR open (see Pull requests); wait for CI and merge, then M2
+- **Phase**: milestone M2
+- **Next step**: M2 PR open (see Pull requests); wait for CI and merge, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
-| #1752 | M1 | open | |
+| #1752 | M1 | merged | fa3664a38bde19508f8ad4215fc28ccc8a6d3a7f |
+| #PR2 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | in review |
-| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #… | pending |
+| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | merged |
+| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #PR2 | in review |
 
 ## Decisions
 
@@ -52,8 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+None.
 
 ## Open escalation
 
