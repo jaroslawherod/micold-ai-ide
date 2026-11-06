@@ -13,7 +13,7 @@
 
 use crate::app::{EditorAction, Message};
 use crate::features::daemons::{
-    container_name_hint, runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError,
+    container_name_hint, runtime_choices, DaemonDetails, Draft, DraftRuntime, ExtraPath, FormError,
     Msg as DaemonsMsg, Opener, RowAction, Section, State, ViewModel,
 };
 use crate::features::daemons_kube::{AllowedKind, ContextList};
@@ -462,6 +462,40 @@ pub(crate) fn form<'a>(
                     .supporting("Absolute path of the file holding the client token")
                     .on_input(|v| Message::Daemons(DaemonsMsg::ClientTokenFileEdited(v))),
             );
+        for (which, label, hint, id) in [
+            (
+                ExtraPath::SshKey,
+                "SSH key file",
+                "Private key sessions use for git over SSH",
+                FieldId::DaemonSessionSshKey,
+            ),
+            (
+                ExtraPath::KnownHosts,
+                "Known hosts file",
+                "known_hosts for the SSH key",
+                FieldId::DaemonSessionKnownHosts,
+            ),
+            (
+                ExtraPath::SigningKey,
+                "Signing key file",
+                "Key that signs commits in sessions",
+                FieldId::DaemonSessionSigningKey,
+            ),
+            (
+                ExtraPath::CaFile,
+                "CA file",
+                "CA bundle sessions and the daemon trust",
+                FieldId::DaemonSessionCaFile,
+            ),
+        ] {
+            fields = fields.push(
+                TextField::new("Not set", &draft.extra_paths[which as usize], roles)
+                    .label(label)
+                    .track_focus(id, focused)
+                    .supporting(hint)
+                    .on_input(move |v| Message::Daemons(DaemonsMsg::ExtraPathEdited(which, v))),
+            );
+        }
     }
     let open = |section| state.section_open(section);
     let sections: Vec<Element<'a, Message>> = match draft.runtime {
