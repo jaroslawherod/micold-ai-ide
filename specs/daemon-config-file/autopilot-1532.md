@@ -9,10 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M2
-- **Next step**: continue from the ledger's *Handover*: implement T065 (container/pod/host-SSH
-  delivery, design already worked out there), then T065a, T065b, T065c; gate, review, open the M2
-  PR
+- **Phase**: milestone M2a
+- **Next step**: implement T065 (container/pod/host-SSH delivery, design in the ledger's
+  *Handover*); gate, review, open the M2a PR. M2b (T065a–T065c) is a separate unit's scope — see D8.
 
 ## Pull requests
 
@@ -26,17 +25,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M | Deliverable | Tasks | Tier | PR |
 |---|---|---|---|---|
 | M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 (merged, `8470f7464ec548474530511495dd9ded211e5ba4`) |
-| M2 | AI sign-in delivery, read-only on every kind; stays valid without a CLI refresh | T065, T065a, T065b, T065c | full | — |
+| M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | — |
+| M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | — |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | — |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
-M1 is the field-to-launch mapping (tests + implementation together, rule 7); M2 is the read-only
-sign-in delivery plus the OAuth-refresh replacements that make removing the writable mount safe
-(T065 cannot ship without T065a/T065b, else a relayed sign-in goes stale mid-session); M3 is the
-gap-review (research D15) amendments that depend on M2's delivery actually existing; M4 holds the
-UI back until the behaviour it configures exists (rule 6, no half-wired UI on `main`) and carries
-the user-guide task with it (rule 4).
+M1 is the field-to-launch mapping (tests + implementation together, rule 7); M2 was originally cut
+as the read-only sign-in delivery plus the OAuth-refresh replacements together, on the theory that
+T065 could not ship without T065a/T065b — split into M2a/M2b by D8 below once two consecutive units
+proved that grouping did not fit a unit's context; M3 is the gap-review (research D15) amendments
+that depend on M2a's delivery actually existing; M4 holds the UI back until the behaviour it
+configures exists (rule 6, no half-wired UI on `main`) and carries the user-guide task with it
+(rule 4).
 
 Checked 2026-11-05 against the working tree (sibling runs found stale references — fixed here):
 - `crates/micold-core/src/sandbox/mod.rs`: `CredentialShare::writable` is at lines 318-323 (fn
@@ -76,6 +77,7 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D5 | milestone M1 | Review A round 2 F1 (BLOCKER): `AiCliTable::configured(...)` (T061's version/enabled override) is never called from the real client/kube provisioning paths — is wiring them in-scope for M1? | No: neither `kube::start::pod_target` nor `micold-client::daemon::container_target` has a per-CLI `version`/`args`/`model` value available today — both build their `AiCliSelection`/`KubeSettings.providers` from a bare `BTreeSet<AiCli>`, with no field for any `[[ai.cli]]` key beyond which CLIs are chosen. That data model, and the Settings UI that would produce it, is M4's own named scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067) — wiring `.configured()` into those call sites now would mean inventing M4's data model inside M1. `AiCliTable::configured` stays the pure, tested builder M1's Deliverable and Verify line (`provision::ai_cli`, core-only) call for; M4 calls it once its own Settings-side `[[ai.cli]]` values exist | agent-resolved | `grep -rn "AiCliTable::pinned()\|table: AiCliTable" crates/` outside tests; tasks.md M4 line; `KubeSettings.providers`/`AiCliSelection` definitions |
 | D6 | milestone M1→M2 | Open escalation claimed `git push` was blocked (category 4, missing access) in every prior unit's session | Resolved: the container restart had wiped the sandbox's global gitconfig (`GIT_CONFIG_GLOBAL=/var/lib/micold-ai-ide/gitconfig`); the orchestrator reapplied the documented working setup — `url."https://github.com/".insteadOf git@github.com:` plus `core.askPass=/home/jaro/.local/bin/gh-askpass.sh` (supplies `gh auth token`; the sandbox resets `credential.helper` via `GIT_CONFIG_KEY_0`, so askPass is what survives). `git push` and `scripts/autopilot/preflight.sh` both succeed now | decided by user / orchestrator-resolved | PR #1711 merged (`8470f7464ec548474530511495dd9ded211e5ba4`) via a push from this same worktree after the gitconfig fix |
 | D7 | milestone M2 | Connectivity note, not a decision needing a question: should a stalled `git`/`gh` call be treated as a credential failure? | No: GitHub access from this container is intermittent — one round-robin IP black-holes port 443 (why `/home/jaro/.local/bin/gh` is a retry wrapper). A call that stalls ~130s and then reports a connect timeout should simply be retried | agent-resolved | orchestrator's briefing for this unit |
+| D8 | milestone M2 | Two consecutive units spent their full context on M2's design (T065, T065a–c together) and wrote no code — does the milestone still fit one unit? | No: split M2 into M2a (T065 only — read-only sign-in delivery, SC-008) and M2b (T065a–T065c — keeping a delivered sign-in valid without a CLI refresh), each its own PR. `tasks.md`'s M2 section replaced with M2a/M2b per `milestone-format.md`; M3's `Depends on` repointed at M2b. This unit's own scope is M2a | agent-resolved | this unit's briefing (two 150k handovers with no code, `autopilot-1532.md`'s own prior two *Handover* sections); `specs/daemon-config-file/tasks.md` M2a/M2b sections |
 
 ## Review rounds
 
