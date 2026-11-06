@@ -59,7 +59,7 @@ specs/1002-sandbox-scoped-token/quickstart.md       # "not live" table
 |---|---|
 | FR-001, FR-004 | `ApiBase` param on `pat::check` / `pat::check_added`; `probe_url` and the reach URL are built from it. See contracts/api-base.md. |
 | FR-002, SC-003 | `ApiBase::default()` yields exactly `https://api.github.com`; core unit test asserts the old URL strings and `REACH_URL` equality. |
-| FR-003, SC-004 | Production callers (`PatSource::new`, Settings `check_github_token`) pass the default; no env/file/setting read; a test greps nothing: the constructor taking a custom base is `pub` but never called outside tests (asserted by a source-scan test in client tests). |
+| FR-003, SC-004 | Production callers (`PatSource::new`, Settings `check_github_token`) pass the default; no env/file/setting read; the only non-default base is built in tests (`ApiBase::new`); a client test asserts the production constructors use the default. |
 | FR-005 | Fake records request URLs/Authorization; a test asserts the token only reached the fake, and a recording `Transport` shows no `api.github.com` URL when a base is given. |
 | FR-006, FR-011 | `fake_github.rs`: `std::net::TcpListener` on `127.0.0.1:0`, per-test canned routes (probe reply with expiry header/permissions/404, private listing). |
 | FR-007 | `scoped_token_fake_api.rs` drives `shell::scoped_credential::check_and_store` and `PatSource` with `UreqTransport` against the fake; step 12 asserts the Settings help text. |
