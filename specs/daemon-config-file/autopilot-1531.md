@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Tasks 1531 | 1 | 7a198beac8244eaa27e1da4bb57ab949a3097bce:93bc2a7f9a0a8723aa5ec8061cfe36c235c9f6f3 | CHANGES: F1 MAJOR (Depends-on claimed Issue 9 M2, rationale only cites M1 tasks) fixed by narrowing to M1 merged; F2 MINOR (T056 no file path, wrongly tagged `[P]` with T055 in the same file) fixed by adding the path and dropping `[P]`. Both fixes are task-text only, no new round. |
+| M1 code-review (A) | 1 | ea4e8fdc48fc831d572ff1227511a6fbcdb6b16d:d9ad46edb1aa72581e21de5de24e855dadec261d | CHANGES: F1 BLOCKER (no `#[cfg(unix)]` on unix-only `gh_shim.rs` integration tests), F2 MINOR (empty `PATH` entry not treated as `.`). Both fixed in `85fb4e24d`. Done — A runs once per milestone; no further round needed. |
 
 ## Declined review findings
 
@@ -48,58 +49,81 @@ None.
 
 ## Handover
 
-M1 (T055–T057, T095, T058) is implemented and its own tests are green; not yet gated, reviewed or
-opened as a PR. Rebased onto `origin/main` (branch-start.sh REBASED 5, previous PR #1696 MERGED)
-before this work started.
+M1 (T055–T057, T095, T058) is implemented, committed (`34eb48cd9`, `d9ad46edb`, `85fb4e24d`) and
+Review A (code-review, high) is done and acted on. Not yet through the full gate, review B, or a
+PR. All implementation and fix commits are on this branch already — nothing to commit next except
+the full gate's own fallout, if any.
 
-**Done:**
-- `crates/micold-core/src/github.rs`: `split_remote` made `pub` (was module-private) — `gh-token`
-  reuses it to resolve `<dir>`'s `origin` for any forge, not only github.com (a token's `host` may
-  be a GitHub Enterprise host).
-- `crates/micold-daemon/src/gh_shim.rs` (new): `origin_repo` (generic remote parse), `resolve`
-  (builds a synthetic `CredentialRequest{protocol:"https", host, path}` from `origin_repo` and
-  calls `crate::credential_config::answer` — the exact function `git-credential get` uses, so the
-  chooser and per-host matching are shared code, not a reimplementation), `unix_shim`/`windows_shim`
-  (script text), `write_shim` (write-if-changed, mode 0755 on unix), `main` (`gh-token --cwd <dir>`
-  CLI entry: two lines, token then host, on stdout; exit 1 silently with none — T055).
-- `crates/micold-daemon/src/main.rs`: `gh-token` dispatch, same pattern as `git-credential`.
-- `crates/micold-daemon/src/lib.rs`: `pub mod gh_shim;`.
-- `crates/micold-daemon/src/state.rs`: `DaemonState::with_gh_shim_path`, called from
-  `spawn_env_for` after `with_sandbox_path` — writes the shim to `<data_dir>/bin` and puts it
-  first on the session's `PATH`, for every session kind (T057). A missing data directory or
-  current-exe, or a write failure, is a no-op (a session must not fail to spawn over this).
-- `crates/micold-daemon/Cargo.toml`: added the missing `[[test]]` entry for `gh_shim` (the crate
-  has `autotests = false`, so a new integration test file needs one — this was not in tasks.md and
-  is mechanical, not scope creep).
-- `crates/micold-daemon/tests/gh_shim.rs` (new, T055/T056/T095): 7 tests, all green
-  (`scripts/build-lock.sh cargo test -p micold-daemon --test gh_shim`, exit 0) — `gh-token`
-  resolution (github.com and a GitHub Enterprise host, no token, no configuration), and the shim
-  script itself exec'd against a fake `gh` (asserts the real exit code 42 comes through, proving
-  `exec` ran it rather than a copy of the shim): sets `GH_TOKEN`/`GH_HOST` from the chosen token,
-  leaves either alone if already set, leaves both unset with no token chosen.
-- `docs/user-guide/settings.md`: new "`gh` in sessions" subsection under GitHub tokens (T058).
-- `mise run check` (cargo check --workspace) green before the test file existed; the targeted
-  `gh_shim` test is green (see above). **The full `mise run gate` has not been run yet.**
+**Done, this unit (part 3):**
+- Judged part 2's uncommitted edit (a real PATH-walk fix: `unix_shim` now walks `PATH` for the
+  first `gh` outside `bin_dir` instead of stripping a literal `"$bin_dir":` prefix, which breaks if
+  a session's own startup — a shell rc, `direnv`, a version manager — prepends to `PATH` after
+  spawn) and committed it as `d9ad46edb`, after confirming the 7 `gh_shim` integration tests still
+  pass.
+- Dispatched review A (`autopilot-reviewer`, `code-review` high, `origin/main...HEAD`) in the
+  scoped gate's shadow, per `tasks/gate.md` step 1. Snapshot: `ea4e8fdc48fc831d572ff1227511a6fbcdb6b16d:d9ad46edb1aa72581e21de5de24e855dadec261d`.
+  Verdict `CHANGES`: F1 BLOCKER — the new `gh_shim.rs` integration tests (`fake_gh`, `run_shim`,
+  three exec tests) use `std::os::unix::fs::PermissionsExt` and a `#!/bin/sh` script with no
+  `#[cfg(unix)]`, so they would not build on Windows; F2 MINOR — an empty `PATH` entry (`a::b`)
+  must mean `.` like a shell, not be skipped. Fixed both, no re-review needed per
+  `tasks/review-rounds.md` (B has not run yet; A runs once per milestone, so review A's job here is
+  done — any further fallout the gate finds is gate fallout, not a new A round).
+- Ran the scoped gate (`scripts/autopilot/scoped-gate.sh`, which runs `fmt` + `clippy -p
+  micold-core` + `clippy --workspace` + `cargo test --workspace`, i.e. effectively the full test
+  suite). It found two more real breaks, both from M1's own already-committed implementation, not
+  from part 2's or this unit's fix:
+  - `gh_shim.rs`'s own inline unit test `the_unix_shim_leaves_an_existing_gh_token_and_gh_host_alone`
+    still asserted the stale `exec gh "$@"` line the PATH-walk fix (above) replaced with
+    `exec "$real_gh" "$@"`. Fixed.
+  - Six pre-#1531 tests in `state.rs` (`a_sandbox_spawn_path_puts_the_home_folders_after_the_offered_bins`,
+    `an_empty_offer_still_adds_the_home_folders`, `another_daemons_offer_in_a_shared_state_directory_changes_nothing`,
+    `install_env_defaults_reach_a_sandbox_spawn_under_the_resolved_home`,
+    `the_listed_cli_is_offered_and_its_bin_leads_the_spawn_path`,
+    `without_an_offer_the_resolved_path_is_unchanged`) broke because `DaemonState::with_gh_shim_path`
+    (T057, already on `main` via `34eb48cd9`) now puts the `gh` shim's `bin_dir` first on every
+    `spawn_env_for`/`env_include_vars_for`/`spawn_path_for` result, ahead of what each test expected
+    there — this was never caught before because part 1 only ran the new `gh_shim` test file, never
+    the full suite. Added three test helpers in `state.rs`'s `mod tests` (`gh_shim_bin_dir`,
+    `without_gh_shim_dir`, and a `path_var` that now strips the new prefix before comparing) that
+    compute the same `bin_dir` `with_gh_shim_path` does — `crate::settings::current().data_dir`
+    (itself `MICOLD_DATA_DIR` read fresh from the real environment when nothing installed settings,
+    as in a library test) before `micold_core::paths::data_dir()`'s `OnceLock`-backed fallback, in
+    that order; getting the order backwards (settings-less fallback only) silently returns a
+    different, wrong directory once some other test in the same test binary has frozen that
+    `OnceLock` to an unrelated tempdir via `apply_to_process()`, which cost one extra round testing
+    `without_an_offer_the_resolved_path_is_unchanged` alone before the order was right. Committed
+    as `85fb4e24d` together with the inline-test fix and the cfg-gate/empty-PATH fixes above.
+- Started `scripts/build-lock.sh cargo test -p micold-daemon --lib` detached after the `85fb4e24d`
+  commit to confirm all these fixes together, but every attempt this unit made to build (the scoped
+  gate itself, `cargo check`, three separate targeted `cargo test` runs) spent most of its wall
+  time queued behind `scripts/build-lock.sh`'s repo-wide lock — at one point held continuously for
+  roughly 50 minutes by a rotating set of *other* worktrees' own full gates, confirmed genuine (not
+  stuck) by walking `/proc/*/fd` for the lock file's inode each time. This unit hit `hold.sh`'s
+  per-file `STOP 10/10` once and fell back to manual bounded polling loops (`while ... sleep 10 ...
+  done`, under the 240s single-call limit) per `rules/waiting.md`'s "wait once in the background"
+  clause; the *last* verification run was still queued (not yet started compiling) when this unit's
+  context crossed the 150k hand-over cap, so it was not seen through.
 
 **Not done — next unit's work, in order:**
-1. `mise run check`/`mise run gate` have not been re-run since the Cargo.toml/test-file fix; run
-   the scoped gate (`scripts/autopilot/scoped-gate.sh`) first.
-2. Review A (`code-review` skill, level `high`, `origin/main...HEAD`) in the scoped gate's shadow,
-   per `tasks/gate.md` step 1.
-3. Review B (conformance rubric, `autopilot-reviewer`, `model: sonnet`), per `tasks/gate.md` step 2.
-4. Full gate (`mise run gate`), per `tasks/gate.md` step 3.
-5. Commit (nothing is committed yet — see below), push with the `-c` flags this worktree's
-   container needs (#1744, workaround in the ledger's last entry below), open the PR
-   (`feat(daemon-config-file): …`, title ending `(#1531)`, body ending `Refs #1531`), record it here.
+1. **Confirm the `85fb4e24d` fixes actually hold**: `scripts/build-lock.sh cargo test -p
+   micold-daemon --lib` (no filter needed; the fix touches `gh_shim::tests` and
+   `state::offered_tests` together and `cargo test`'s filter only takes one substring). Expect all
+   green; if `without_an_offer_the_resolved_path_is_unchanged` (or any of the other five) still
+   fails, re-check the `gh_shim_bin_dir()` precedence against `with_gh_shim_path`'s exact lookup
+   order in `state.rs` (`crate::settings::current().data_dir.clone().or_else(micold_core::paths::data_dir)`)
+   — do not re-add the single-source version.
+2. Build contention across worktrees was severe this unit (multiple ~15–50 minute queues on
+   `scripts/build-lock.sh`'s lock); if it persists, this is worth a follow-up note (not a fix) once
+   this milestone is through, not something to chase now.
+3. Review B (conformance rubric, `autopilot-reviewer`, `model: sonnet`), per `tasks/gate.md` step 2
+   — not yet dispatched.
+4. Full gate (`mise run gate`), per `tasks/gate.md` step 3 — not yet run (the scoped gate above
+   stood in for it while iterating; the full gate still needs its own green run before push, per
+   `tasks/gate.md`'s "push only what the gate saw").
+5. Push with the `-c` flags this worktree's container needs (#1744), open the PR
+   (`feat(daemon-config-file): …`, title ending `(#1531)`, body ending `Refs #1531`), record it
+   here.
 6. Nothing in this unit touched or depended on #1713 (#1530 M2, still open) — boundary held.
-
-**Not committed.** `git status --porcelain` lists: `M crates/micold-core/src/github.rs`,
-`M crates/micold-daemon/Cargo.toml`, `M crates/micold-daemon/src/lib.rs`,
-`M crates/micold-daemon/src/main.rs`, `M crates/micold-daemon/src/state.rs`,
-`M docs/user-guide/settings.md`, `?? crates/micold-daemon/src/gh_shim.rs`,
-`?? crates/micold-daemon/tests/gh_shim.rs`, plus this ledger edit. The next unit should commit these
-together (one commit for the feature + its tests + Cargo.toml, a separate `docs(1531):` commit for
-this ledger) before running the gate, per `tasks/pr.md`.
 
 ## Open escalation
 
