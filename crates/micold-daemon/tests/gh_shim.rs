@@ -194,7 +194,10 @@ fn the_shim_execs_the_real_gh_with_gh_token_and_gh_host_set_from_the_chosen_toke
     let repo = s.repo("app", "https://github.com/acme/app.git");
 
     let (code, out) = run_shim(&bin_dir, &fake_gh_dir, &repo, Some(&config), &[]);
-    assert_eq!(code, 42, "the shim exec'd the real gh, not a copy of itself");
+    assert_eq!(
+        code, 42,
+        "the shim exec'd the real gh, not a copy of itself"
+    );
     assert!(out.contains("GH_TOKEN=ghp_abc"), "{out}");
     assert!(out.contains("GH_HOST=github.com"), "{out}");
 }
