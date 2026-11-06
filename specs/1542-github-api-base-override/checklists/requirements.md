@@ -12,8 +12,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (one open: FR-004, for the clarify unit)
-- [ ] Requirements are testable and unambiguous (FR-004 open)
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous (FR-004 resolved in Session 2026-11-06)
 - [x] Success criteria are measurable
 - [x] Acceptance scenarios are defined
 - [x] Edge cases are identified
