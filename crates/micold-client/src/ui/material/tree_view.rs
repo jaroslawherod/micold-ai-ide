@@ -142,8 +142,6 @@ pub struct TreeItem<'a, M> {
     /// Whether the application's keyboard focus is on this row, and what a change of it sends
     /// (feature 803, FR-010): the row wears the focus ring, shown as keyboard focus.
     keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,
-    /// Whether the row is a group heading (feature 1125, R8, [`TreeItem::heading`]).
-    heading: bool,
     /// Whether the row is a stop in the Tab order of its own (feature 1125, [`TreeItem::tab_stop`]).
     tab_stop: bool,
     /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
@@ -183,7 +181,6 @@ impl<'a, M> TreeItem<'a, M> {
             unread: RowUnread::Read,
             state_icon: None,
             keyboard_focus: None,
-            heading: false,
             tab_stop: false,
             key: None,
             _marker: std::marker::PhantomData,
@@ -207,14 +204,6 @@ impl<'a, M> TreeItem<'a, M> {
         self
     }
 
-    /// Make the row a group heading (feature 1125, R8): its label in [`TypeRole::SidebarGroup`],
-    /// one line, and the whole row pressable with its twisty's message
-    /// ([`expandable`](Self::expandable)), Enter and Space included while it has the keyboard.
-    pub fn heading(mut self) -> Self {
-        self.heading = true;
-        self
-    }
-
     /// Name the row by what it shows (feature 1125, R13, FR-017). When every row of a view has a
     /// key, the rows are laid out in a [`cdk::Keyed`](crate::ui::cdk::Keyed) column: a row the
     /// list moves keeps its keyboard focus, ripple and hover, and the row that takes its old place
@@ -226,18 +215,15 @@ impl<'a, M> TreeItem<'a, M> {
 
     /// Make the row a stop in the Tab order while it has a press (feature 1125, the sidebar's
     /// Overview row): Tab reaches it whether or not the keyboard was on it, and Enter and Space
-    /// send its press, as a heading's do. A row with no press stays out of the Tab order.
+    /// send its press. A row with no press stays out of the Tab order.
     pub fn tab_stop(mut self) -> Self {
         self.tab_stop = true;
         self
     }
 
-    /// The role this row's label is drawn in: a heading's own role; the view's emphasised role for
-    /// a selected or an unread row, else the view's label role.
+    /// The role this row's label is drawn in: the view's emphasised role for a selected or an
+    /// unread row, else the view's label role.
     fn label_role(&self, label_role: TypeRole, selected_label_role: Option<TypeRole>) -> TypeRole {
-        if self.heading {
-            return TypeRole::SidebarGroup;
-        }
         match selected_label_role {
             Some(role) if self.selected || self.unread == RowUnread::Unread => role,
             _ => label_role,
@@ -495,10 +481,6 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
 
         for mut item in items {
             let key = item.key;
-            // A heading is pressed as a whole: its twisty's message is the row's (feature 1125).
-            if item.heading && item.on_press.is_none() {
-                item.on_press = item.on_toggle.clone();
-            }
             // Minimal base indent (feature 008, FR-009): depth-0 rows sit flush with the
             // sidebar's small left padding; each level nests by one step.
             let indent = f32::from(item.depth) * spacing::MD;
@@ -801,14 +783,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             };
 
             // The keyboard's focus ring, over the row's own shape (feature 803, FR-010).
-            // A heading, or a Tab stop with a press: Tab reaches it, Enter and Space press it.
-            let answers_keys = item.heading || (item.tab_stop && item.on_press.is_some());
+            // A Tab stop with a press: Tab reaches it, Enter and Space press it.
+            let answers_keys = item.tab_stop && item.on_press.is_some();
             let row_el: Element<'a, M> = match item.keyboard_focus {
                 Some((focused, on_change)) => {
                     use super::keyboard_focus::{Indicator, TakesTheKeyboard};
                     let mut wrapper = TakesTheKeyboard::new(row_el, focused || answers_keys);
-                    // A heading answers Enter and Space with its press (feature 1125, FR-017), and
-                    // so does a Tab stop (the Overview row).
+                    // A Tab stop (the Overview row) answers Enter and Space with its press.
                     if let Some(msg) = item.on_press.clone().filter(|_| answers_keys) {
                         wrapper = wrapper
                             .key(iced::keyboard::key::Named::Enter, msg.clone())
@@ -1456,97 +1437,6 @@ mod tests {
                     &[0]
                 )
                 .height,
-            );
-        }
-    }
-
-    // --- Feature 1125 (R8, T009): a group header row ---------------------------------------
-
-    /// A group header as the sidebar builds it, in a dense tree with the sidebar's roles.
-    fn header(open: bool) -> Element<'static, String> {
-        let item = TreeItem::new(0, "Done \u{b7} 4", roles().on_surface_variant)
-            .heading()
-            .expandable(open, "toggle".to_string())
-            .keyboard_focus(false, |focused| format!("focus {focused}"));
-        TreeView::new(vec![item], roles())
-            .density(density::DENSE)
-            .label_role(TypeRole::SidebarName)
-            .selected_label_role(TypeRole::SidebarSessionCurrent)
-            .into()
-    }
-
-    #[test]
-    fn a_heading_is_one_dense_line_high() {
-        let mounted = super::super::test_support::Mounted::new(header(true));
-        let expected = density::height(density::LIST_ROW_BASE, density::DENSE);
-        assert!(
-            (mounted.node.bounds().height - expected).abs() < TOLERANCE,
-            "{} != {expected}",
-            mounted.node.bounds().height
-        );
-    }
-
-    #[test]
-    fn a_headings_label_is_in_the_group_role_and_it_draws_no_icon_slot() {
-        let item = TreeItem::<()>::new(0, "Idle \u{b7} 1", roles().on_surface_variant).heading();
-        assert_eq!(
-            item.label_role(TypeRole::SidebarName, Some(TypeRole::SidebarSessionCurrent)),
-            TypeRole::SidebarGroup
-        );
-        assert!(item.icon.is_none() && item.state_icon.is_none());
-        let mut mounted = super::super::test_support::Mounted::new(header(true));
-        let painted = mounted.painted_text();
-        let label = painted
-            .iter()
-            .find(|p| p.content.contains("Done"))
-            .expect("the label is drawn");
-        assert_eq!(label.size, TypeRole::SidebarGroup.size());
-        assert_eq!(label.font, TypeRole::SidebarGroup.font());
-    }
-
-    #[test]
-    fn a_headings_twisty_shows_open_or_closed() {
-        let glyphs = |open: bool| -> Vec<String> {
-            let mut mounted = super::super::test_support::Mounted::new(header(open));
-            mounted
-                .painted_text()
-                .into_iter()
-                .map(|p| p.content)
-                .collect()
-        };
-        let open = Icon::NavigateUp.glyph().to_string();
-        let closed = Icon::OpenProject.glyph().to_string();
-        assert!(glyphs(true).contains(&open) && !glyphs(true).contains(&closed));
-        assert!(glyphs(false).contains(&closed) && !glyphs(false).contains(&open));
-    }
-
-    #[test]
-    fn a_press_anywhere_on_a_heading_toggles_it() {
-        let mut mounted = super::super::test_support::Mounted::new(header(false));
-        let bounds = mounted.node.bounds();
-        let at = iced::Point::new(bounds.x + bounds.width * 0.6, bounds.center_y());
-        mounted.press(at);
-        let released = mounted.send(
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                iced::mouse::Button::Left,
-            )),
-            iced::mouse::Cursor::Available(at),
-        );
-        assert!(released.contains(&"toggle".to_string()), "{released:?}");
-    }
-
-    #[test]
-    fn enter_and_space_toggle_a_heading_that_has_the_keyboard() {
-        use super::super::test_support::named_key;
-        use iced::keyboard::key::Named;
-        for key in [Named::Enter, Named::Space] {
-            let mut mounted = super::super::test_support::Mounted::new(header(true));
-            mounted.focus_next();
-            mounted.redraw();
-            assert_eq!(
-                mounted.send(named_key(key), iced::mouse::Cursor::Unavailable),
-                ["toggle"],
-                "{key:?}"
             );
         }
     }

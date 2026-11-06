@@ -118,76 +118,43 @@ fn after_a_stop_the_next_press_keeps_the_keyboard_in_the_sidebar() {
     assert_eq!(state.sidebar.keyboard_row, Some(RowRef::Session(a)));
     assert!(state.session.terminal_released);
 }
+// --- Feature 1718 (T003, FR-006, US3.2): chords and reveals walk the flat list ------------------
 
-// --- Feature 1125 (T008, FR-006, US5.4, R5): chords and reveals into a closed group -----------
-
-mod into_a_closed_group {
-    use super::support::sidebar_fixture::{five_states, worktree};
-    use micold_client::app::State;
+mod over_the_flat_list {
+    use super::support::sidebar_fixture::{five_states, session_in, worktree};
     use micold_client::features::navigation::{self, Step};
-    use micold_client::features::sidebar::{location_row, ListRow};
+    use micold_client::features::sidebar::{location_row, SidebarEntry};
     use micold_client::keymap::{NavAction, NavLevel};
     use micold_core::navigation::Dir;
     use micold_core::session::SessionLocation;
-    use micold_core::sidebar_groups::StateGroup;
 
-    fn done_open(state: &State) -> bool {
-        state
-            .sidebar_list()
-            .iter()
-            .any(|row| matches!(row, ListRow::Header(h) if h.group == StateGroup::Done && h.open))
-    }
-
-    fn chosen(state: &State, group: StateGroup) -> Option<bool> {
-        state
-            .workspace
-            .active
-            .as_ref()
-            .and_then(|p| state.sidebar.group_choices.get(p))
-            .and_then(|c| c.get(&group).copied())
-    }
-
-    /// Chords step through the grouped order, closed groups included.
+    /// Chords step through `sidebar_entries()` in order, a Done row included, with no header stop.
     #[test]
-    fn the_location_order_is_the_grouped_order_with_closed_groups() {
+    fn the_location_order_is_the_stable_order() {
         let state = five_states();
         let order = navigation::location_order(&state);
-        let grouped: Vec<SessionLocation> = state
-            .sidebar_groups()
+        let stable: Vec<SessionLocation> = state
+            .sidebar_entries()
             .into_iter()
-            .flat_map(|g| g.entries)
             .map(|e| match e {
-                micold_client::features::sidebar::SidebarEntry::Default(_) => {
-                    SessionLocation::Default
-                }
-                micold_client::features::sidebar::SidebarEntry::Worktree(n) => n.location(),
-                micold_client::features::sidebar::SidebarEntry::Group(_) => unreachable!(),
+                SidebarEntry::Default(_) => SessionLocation::Default,
+                SidebarEntry::Worktree(n) => n.location(),
+                SidebarEntry::Group(_) => unreachable!(),
             })
             .collect();
-        assert_eq!(order, grouped);
-        assert_eq!(
-            order.last(),
-            Some(&worktree("done")),
-            "closed Done included"
-        );
+        assert_eq!(order, stable);
+        assert!(order.contains(&worktree("done")), "Done is a stop");
     }
 
-    /// A next-location chord landing on a location in closed Done opens Done, keeps the row, and
-    /// the reveal brings it fully into view.
+    /// Stepping Next from Default visits every location once and then stops, with nothing to expand.
     #[test]
-    fn a_chord_into_closed_done_opens_it_and_reveals_the_row() {
+    fn next_chords_visit_every_row_once() {
         let mut state = five_states();
         state.sidebar.nav_stop = Some(SessionLocation::Default);
-        state.sidebar.viewport_height = 60;
         let order = navigation::location_order(&state);
-        let at = order
-            .iter()
-            .position(|l| *l == SessionLocation::Default)
-            .unwrap();
-        let mut step = Step::None;
-        // Step on from Default until the chord lands on `done`.
-        for _ in at..order.len() - 1 {
-            step = navigation::update(
+        let mut visited = vec![SessionLocation::Default];
+        for _ in 1..order.len() {
+            let step = navigation::update(
                 &state,
                 NavAction {
                     level: NavLevel::Location,
@@ -195,15 +162,29 @@ mod into_a_closed_group {
                 },
             );
             state.apply_navigation(step.clone(), false);
+            let location = match step {
+                Step::Stop(location) => location,
+                Step::Session(id) => state
+                    .active_sessions()
+                    .iter()
+                    .find(|s| s.id == id)
+                    .map(|s| s.location.clone())
+                    .expect("the chord's session is open"),
+                other => panic!("a chord stops on a location row, never a header: {other:?}"),
+            };
+            visited.push(location);
         }
-        assert_eq!(step, Step::Stop(worktree("done")));
-        assert!(!done_open(&state), "not before the reveal drains");
+        assert_eq!(visited, order);
+    }
+
+    /// A chord onto a Done row selects it and the reveal brings it into view; nothing opens.
+    #[test]
+    fn a_chord_onto_a_done_row_reveals_it() {
+        let mut state = five_states();
+        state.sidebar.viewport_height = 60;
+        state.apply_navigation(Step::Stop(worktree("done")), false);
         assert!(state.reveal_ready(), "the stop armed the reveal");
-        assert!(done_open(&state));
-        assert_eq!(chosen(&state, StateGroup::Done), Some(true));
-        let list = state.sidebar_list();
-        assert!(location_row(&list, &worktree("done")).is_some());
-        assert!(state.current_session_is_listed());
+        assert!(location_row(&state.sidebar_list(), &worktree("done")).is_some());
         let offset = state
             .reveal_scroll_offset()
             .expect("below a 60 px viewport");
@@ -211,62 +192,11 @@ mod into_a_closed_group {
         assert_eq!(state.reveal_scroll_offset(), None, "now fully in view");
     }
 
-    /// A chord into closed Done opens it even while the current session's row is drawn in an
-    /// open group: the reveal's target is the chord's row, not the current session's.
+    /// The current session in a Done location is listed, so its reveal has nothing to expand.
     #[test]
-    fn a_chord_into_closed_done_opens_it_while_the_current_session_is_drawn() {
+    fn the_current_session_in_a_done_row_is_listed() {
         let mut state = five_states();
-        let working = state
-            .active_sessions()
-            .iter()
-            .find(|s| s.location == worktree("work"))
-            .map(|s| s.id)
-            .expect("five_states has a session in `work`");
-        state.session.active = Some(working);
-        state.sidebar.viewport_height = 60;
-        assert!(
-            state.current_session_is_listed(),
-            "Working is open, its row drawn"
-        );
-        state.apply_navigation(Step::Stop(worktree("done")), false);
-        assert!(!done_open(&state));
-        assert!(state.reveal_ready());
-        assert!(done_open(&state));
-        assert_eq!(chosen(&state, StateGroup::Done), Some(true));
-        assert!(location_row(&state.sidebar_list(), &worktree("done")).is_some());
-        let offset = state
-            .reveal_scroll_offset()
-            .expect("below a 60 px viewport");
-        state.sidebar.scroll_offset = offset;
-        assert_eq!(
-            state.reveal_scroll_offset(),
-            None,
-            "the chord's row is in view"
-        );
-    }
-
-    /// The Overview's reveal opens the closed group of its row; an open group's choice stays
-    /// unrecorded.
-    #[test]
-    fn the_overviews_reveal_opens_its_rows_group() {
-        let mut state = five_states();
-        state.sidebar.revealed = Some(worktree("work"));
-        state.open_group_of_revealed();
-        assert_eq!(
-            chosen(&state, StateGroup::Working),
-            None,
-            "Working was open"
-        );
-        state.sidebar.revealed = Some(worktree("done"));
-        state.open_group_of_revealed();
-        assert_eq!(chosen(&state, StateGroup::Done), Some(true));
-    }
-
-    /// The current session's closed group opens when its reveal drains.
-    #[test]
-    fn the_current_sessions_closed_group_opens_on_its_reveal() {
-        let mut state = five_states();
-        let id = super::support::sidebar_fixture::session_in(
+        let id = session_in(
             &mut state,
             worktree("done"),
             micold_core::session::SessionLifecycle::Idle,
@@ -274,13 +204,9 @@ mod into_a_closed_group {
             false,
         );
         state.session.active = Some(id);
-        state.update(micold_client::app::Message::Sidebar(
-            micold_client::features::sidebar::Msg::GroupToggled(StateGroup::Done),
-        ));
-        assert!(!done_open(&state), "the user closed it");
         state.reveal_scroll_armed();
         state.sidebar.viewport_height = 60;
+        assert!(state.current_session_is_listed());
         assert!(state.reveal_ready());
-        assert!(done_open(&state));
     }
 }

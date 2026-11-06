@@ -1,7 +1,7 @@
 //! The command palette fits the composer's narrowest width (#943 T055, FR-007, FR-008, FR-010).
 //!
 //! The showcase's palette is laid out in both schemes at the narrowest pane a split leaves
-//! (`MIN_PANE_COLS` cells of 8 px). Every group header, every command's name and every second line
+//! (`MIN_PANE_COLS` cells of 8 px). Every command group, every command's name and every second line
 //! is drawn inside the panel, every command's name whole, and a terminal-only row's "opens in
 //! terminal" whole: a tag pushed past the edge, or cut away with the description behind it, is a
 //! warning the user never sees (FR-010). A second line too long for the row is cut with an

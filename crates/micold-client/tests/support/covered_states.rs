@@ -475,12 +475,12 @@ pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 2];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
-/// the Idle group's header (feature 1125), the `Default` project row, then `feat-short`, then its
-/// session, then the two remaining worktrees. Index 3 is that session.
+/// the `Default` project row, then `feat-short`, then its session, then the two remaining
+/// worktrees (feature 1718: no group header precedes them). Index 2 is that session.
 ///
 /// Named because this is the node whose height differed from its siblings' for two days with no
 /// fixture able to say so — every other covered state stops at depth 0.
-const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3];
+const SIDEBAR_SESSION_ROW: &[usize] = &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2];
 
 /// Deliberately long, so the label/close-button relationship this gate was built to watch is under
 /// real pressure at the canonical window size (FR-008b, FR-018).
@@ -861,13 +861,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                     // Re-pointed under feature 905 (T008): the row gained its state-icon slot after
                     // the twisty, so the label moved from `…/0/1` to `…/0/2` and the action
                     // cluster from `…/0/2` to `…/0/3`.
-                    // Re-pointed under feature 1125 (T018): the Idle group's header is the tree's
-                    // first row, so the long-named worktree's row moved from index 2 to 3.
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 2],
+                    // Re-pointed under feature 1718: no group header precedes the rows, so the
+                    // long-named worktree's row is back at index 2.
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 2],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 3, 1, 0, 3, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 3, 1],
                 },
                 // `Toolbar`'s leading child, the app mark (feature 1127; its title text before).
                 // Named on both shell states rather than on all eleven: the toolbar is behind every dialog too, and an
@@ -909,8 +909,9 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
-        // Feature 1125 (T018): every group header, Done collapsed as it starts; with the Overview
-        // open (T040, R15), so the selected Overview row is recorded too.
+        // Feature 1125 (T018), flat since feature 1718: one worktree per card state in the stable
+        // order, no group header; with the Overview open (T040, R15), so the selected Overview row
+        // is recorded too.
         CoveredState {
             name: "main-shell-sidebar-grouped",
             build: || {
