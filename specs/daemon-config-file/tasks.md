@@ -644,19 +644,40 @@ sandbox placement rules, so the tier is `full`.
 - **Depends on**: Issue 5 (#1526) M1a and M1b, merged; Issue 6 (#1527) M1, merged; Issue 7 (#1528) M1, merged
 - **Tier**: full
 
-### Issue 11 (#1532) — M2 — AI sign-in delivery, read-only on every kind, stays valid without a CLI refresh
+### Issue 11 (#1532) — M2a — Sign-in delivery, read-only on every kind
 
-One milestone: removing the writable share (T065) without a working replacement for keeping a
-sign-in valid (T065a, token_file; T065b, the client-side relay) would leave the user logged out
-mid-session, and T065c (the per-CLI measurement) is what proves T065's read-only delivery actually
-works per CLI rather than in theory. Four tasks, and it touches the sandbox boundary, the pod Secret
-shape and the client, so the tier is `full`.
+Split from the four-task group along rule 3 (acceptance scenario, not just task count): T065 alone
+(remove the writable share, deliver the sign-in read-only on container, pod and host/SSH, and prove
+the machine's own file is never touched, SC-008) is one complete, observable scenario — a sign-in
+reaches a session without the daemon ever writing to the user's own sign-in file. Keeping it valid
+without a CLI-side refresh (T065a, T065b) is a second, separable scenario that a read-only delivery
+does not need in order to be true and testable on its own; T065c (the per-CLI measurement) only
+documents behaviour across both. Splitting this out is itself the fix for two consecutive prior
+units of this run burning their full context on design with no code landed: one task is small
+enough for a unit to implement, gate, review and ship. It touches the sandbox boundary and the pod
+Secret shape, so the tier is `full`.
 
-- **Tasks**: T065, T065a, T065b, T065c
-- **Deliverable**: `CredentialShare::writable` and the single-file writable sign-in mount are gone; container and pod deliver the sign-in read-only (pod: a directory Secret, no `subPath`); host/SSH give a configured sign-in its own `<data_dir>/ai/<id>/` config dir (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`/OpenCode `XDG_DATA_HOME`) and never touch the machine's own sign-in file; after a session, every delivered sign-in file is byte-identical to before it (SC-008); `token_file` (`CLAUDE_CODE_OAUTH_TOKEN`, `COPILOT_GITHUB_TOKEN`) and the client's sign-in relay (a derived copy with no refresh token, re-delivered on change, host-side refresh scheduled at 75% of token life) keep a relayed sign-in valid with no CLI-side refresh; per-CLI read-only/refresh behaviour is recorded in `docs/user-guide/sandboxed-daemon.md`. FR-040 (the diagnostic shows sign-in expiry) is only partly met here, by T065a's 14-day `token_file` expiry warning in Settings; the full `expiresAt` display on the daemon diagnostic is M3's T100.
-- **Satisfies**: US4; FR-013d, FR-013g, FR-040 (partial, see above), SC-006, SC-008
-- **Verify**: `cargo test -p micold-core sandbox::mod -- credential`; `cargo test -p micold-core kube::credentials`; `cargo test -p micold-client --lib` (sign-in relay watcher)
+- **Tasks**: T065
+- **Deliverable**: `CredentialShare::writable` and the single-file writable sign-in mount are gone; container and pod deliver the sign-in read-only (pod: a directory Secret, no `subPath`); host/SSH give a configured sign-in its own `<data_dir>/ai/<id>/` config dir (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`/OpenCode `XDG_DATA_HOME`) with the sign-in linked in and the user's own settings files linked read-through, and never touch the machine's own sign-in file; after a session, every delivered sign-in file is byte-identical to before it with its mtime unchanged (SC-008).
+- **Satisfies**: US4; FR-013d, FR-013g, SC-008
+- **Verify**: `cargo test -p micold-core sandbox::mod -- credential`; `cargo test -p micold-core kube::credentials`
 - **Depends on**: Issue 11 (#1532) M1
+- **Tier**: full
+
+### Issue 11 (#1532) — M2b — Keeping a delivered sign-in valid without a CLI refresh
+
+Removing the writable share (M2a) without a working replacement for keeping a sign-in valid
+(T065a, `token_file`; T065b, the client-side relay) would leave the user logged out mid-session, so
+this milestone's own scenario is "a relayed sign-in keeps working with no CLI-side refresh", only
+true once both land together; T065c (the per-CLI measurement) is what proves M2a's read-only
+delivery actually works per CLI rather than in theory, and documents it. Three tasks, and it adds a
+client-side watcher, so the tier is `full`.
+
+- **Tasks**: T065a, T065b, T065c
+- **Deliverable**: `token_file` (`CLAUDE_CODE_OAUTH_TOKEN`, `COPILOT_GITHUB_TOKEN`) and the client's sign-in relay (a derived copy with no refresh token, re-delivered on change, host-side refresh scheduled at 75% of token life) keep a relayed sign-in valid with no CLI-side refresh; per-CLI read-only/refresh behaviour is recorded in `docs/user-guide/sandboxed-daemon.md`. FR-040 (the diagnostic shows sign-in expiry) is only partly met here, by T065a's 14-day `token_file` expiry warning in Settings; the full `expiresAt` display on the daemon diagnostic is M3's T100.
+- **Satisfies**: US4; FR-040 (partial, see above), SC-006
+- **Verify**: `cargo test -p micold-client --lib` (sign-in relay watcher)
+- **Depends on**: Issue 11 (#1532) M2a
 - **Tier**: full
 
 ### Issue 11 (#1532) — M3 — The gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry
@@ -674,7 +695,7 @@ seeding rule).
 - **Deliverable**: on host/SSH, `<data_dir>/ai/claude_code/.claude.json` is seeded once from the user's own file (trust and MCP servers kept, `primaryApiKey` dropped, never copied back) when a sign-in is delivered; container and pod mark `hasCompletedOnboarding` whenever Claude Code has a `sign_in_file`, `token_file` or `api_key_file`; `settings_file`/`place` are seeded copies (re-copied only when the source changed), never read-only mounts, so Codex can record folder trust in `config.toml`; `use_machine_sign_in` (host/SSH, off by default) lets a daemon use the machine's own CLI-managed sign-in and config dir instead, with existing daemons migrating with it off; the diagnostic shows each delivered sign-in's `expiresAt`, and the client re-delivers the pod Secret when the host sign-in changes.
 - **Satisfies**: US4; FR-013d, FR-040, FR-043, SC-006
 - **Verify**: `cargo test -p micold-core provision::ai_cli`; `cargo test -p micold-daemon --test ai_cli_config`; `cargo test -p micold-core sandbox::mod -- onboarding`; `cargo test -p micold-daemon --test config_reload`; `cargo test -p micold-core kube::credentials`
-- **Depends on**: Issue 11 (#1532) M2
+- **Depends on**: Issue 11 (#1532) M2b
 - **Tier**: full
 
 ### Issue 11 (#1532) — M4 — Settings → Daemons renders `[[ai.cli]]`, and the user guide
