@@ -342,42 +342,71 @@ fn options_button<'a>(
 }
 
 /// The session's model as the CLI last reported it and whose choice it is, pressed to open the
-/// model picker in its place (#943 FR-013, FR-014).
+/// model list in its place (#943 FR-013, FR-014): a `MenuSelect` like the other two selectors, its
+/// list opening with a filter field (feature 1703 FR-015, FR-017).
 fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Element<'a, Message> {
+    let header = state.model_header(session);
+    let tooltip = format!("Model: {header}");
     let Some(picker) = state.composers.palette.picker(session) else {
-        return Button::text(state.model_header(session), roles)
-            .on_press(send(Msg::ModelPickerRequested(session)))
-            .into();
+        return MenuSelect::new(
+            "Model:",
+            Vec::new(),
+            false,
+            send(Msg::ModelPickerRequested(session)),
+            send(Msg::ModelPickerClosed(session)),
+            roles,
+        )
+        .title(Some(header))
+        .tooltip(tooltip)
+        .width(MODEL_PICKER_WIDTH)
+        .into();
     };
-    let rows = picker.rows();
-    let items: Vec<Option<usize>> = rows.iter().map(|r| r.item).collect();
-    let rows = rows
-        .into_iter()
-        .map(|r| row_with_details(r.label, Vec::new(), r.details))
-        .collect();
-    let typeahead = Typeahead::new(
+    let model_rows = picker.rows();
+    let items: Vec<Option<usize>> = model_rows.iter().map(|r| r.item).collect();
+    let enter = picker.enter_row();
+    let mut rows: Vec<MenuSelectRow<'a, Message>> = vec![MenuSelectRow::filter(
         picker.typed(),
-        rows,
+        MODEL_PLACEHOLDER,
         move |text| send(Msg::ModelPickerTyped { session, text }),
+        model_picker_field(session),
+        roles,
+    )];
+    let stops = model_rows.len();
+    rows.extend(model_rows.into_iter().map(|r| {
+        let current = r
+            .item
+            .and_then(|at| picker.items().get(at))
+            .is_some_and(|i| picker.is_current(i));
+        MenuSelectRow::option_with_chips(
+            Text::new(r.label, TypeRole::Body, roles),
+            current,
+            send(Msg::ModelPicked {
+                session,
+                item: r.item,
+            }),
+            Vec::new(),
+            r.details,
+        )
+    }));
+    let pick = send(Msg::ModelPicked {
+        session,
+        item: enter.and_then(|row| items.get(row).copied().flatten()),
+    });
+    MenuSelect::new(
+        "Model:",
+        rows,
+        true,
+        send(Msg::ModelPickerClosed(session)),
+        send(Msg::ModelPickerClosed(session)),
         roles,
     )
-    .id(model_picker_field(session))
-    .placeholder(MODEL_PLACEHOLDER)
-    .empty_message(crate::features::command_palette::MODEL_LIST_UNAVAILABLE)
-    .open(true)
-    .highlighted(picker.enter_row())
-    .selected(picker.current_row())
+    .title(Some(header))
+    .tooltip(tooltip)
+    .keyboard(enter, stops, enter.is_some())
     .on_move(move |direction| send(Msg::ModelPickerMoved { session, direction }))
-    .on_pick(move |row| {
-        send(Msg::ModelPicked {
-            session,
-            item: items.get(row).copied().flatten(),
-        })
-    })
-    .on_dismiss(send(Msg::ModelPickerClosed(session)));
-    container(typeahead)
-        .width(Length::Fixed(MODEL_PICKER_WIDTH))
-        .into()
+    .on_pick(pick)
+    .width(MODEL_PICKER_WIDTH)
+    .into()
 }
 
 /// The session's effort choice beside the model, pressed to open its picker (#1554 FR-001–FR-003):

@@ -68,6 +68,9 @@ mod markdown_view;
 #[cfg(test)]
 mod menu_anatomy;
 mod menu_select;
+/// The shared selector trigger's anatomy and state treatments (feature 1703, FR-015, FR-016).
+#[cfg(test)]
+mod menu_select_anatomy;
 mod overview_card;
 mod picker;
 /// The transition both lists arrive and leave by, asserted against **each other** and against

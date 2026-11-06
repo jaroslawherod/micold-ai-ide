@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M2 PR open (#1754), awaiting CI
-- **Next step**: orchestrator waits on CI and merges #1754, then M3
+- **Phase**: milestone M3 implementing
+- **Next step**: continue M3 from Handover (compile, fix tests, review, gate, PR)
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1705 | Design (spec, plan, tasks) | merged | eb1b62d9967f4d7ad7092c0dc75e6d3a1e7af621 |
 | #1717 | M1 large editor | merged | 509da759cc19a3ca5befaa90815f9475a7b32dcb |
-| #1754 | M2 icon activity indicator and options row | open | |
+| #1754 | M2 icon activity indicator and options row | merged | 7183a4cc4a7a859991e3091bd2652fd64c6e3787 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Large editor: chord/icon opens modal editor, Done/Cancel, shortcut listed | #1717 | merged |
-| M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | #1754 | in review |
+| M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | #1754 | merged |
 | M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | | pending |
 
 Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs are one observable behaviour with no earlier deliverable. US2 and US3 are one milestone (M2, 12 tasks): US2 scenario 1 removes the permission selector from the input row and only US3's options row re-homes it (no half-wired UI). T032 (quickstart results) is for the close unit.
@@ -68,7 +68,18 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 ## Handover
 
-None.
+M3 (T026-T031) code is written, uncommitted until this commit, and NOT yet compiled/tested beyond
+`cargo check -p micold-material` (green). A `cargo check -p micold-client --lib --tests` was started
+(log: /tmp/claude-1000/chk.log); re-run it. Done so far:
+- micold-material: `style::selector_trigger(roles, open)`, `Button::selector(open)` (32dp via density -2, SMALL radius, XS/SM padding).
+- `ui/material/menu_select.rs`: `MIN_TRIGGER_WIDTH`, `title` takes `Option<impl Into<Cow>>`, `.disabled(reason)`, `MenuSelectRow::filter(value, placeholder, on_input, id, roles)`, trigger uses `.selector(open)`.
+- `features/command_palette.rs`: `ModelPickerState::rows()` filters by typed text (case-insensitive label or cli value), `current_row`/`enter_row` over the filtered rows.
+- `features/permission_prompts.rs` + `shell/permission_prompts.rs`: `Msg::ModeMenuToggled{session,current}`, `ModeMenuMoved`, `ModeMenuClosed`, state `mode_menu`; `ModeRequested` closes it.
+- `ui/mode_control.rs` (permission) and `ui/composer.rs::model_control` migrated to `MenuSelect`; `effort_control` already was one.
+- New tests: `ui/material/menu_select_anatomy.rs` (registered in material/mod.rs), `selectors` mod at the end of `tests/features_composer.rs`.
+- Showcase poses (review.rs `selector_sample`, catalogue.rs `posed`), docs `docs/user-guide/structured-input.md` "The selectors".
+Next: (1) `scripts/build-lock.sh cargo check -p micold-client --lib --tests`, fix errors (unused imports in composer.rs: Typeahead/Button/TypeaheadRow/row_with_details maybe; `Text` import in mode_control; Message::NoOp in menu_select_anatomy); (2) run `menu_select_anatomy` and `features_composer` tests, and `cargo test -p micold-client --test layout_snapshot` + gates `composer_fits.rs` (lines ~687-800 look for painted text == MODE_LABEL "Permissions"; now the trigger paints "Permissions:" and the mode label separately; also model control no longer a Typeahead: gates/other tests on `Typeahead`/model picker may need updating, and `model_picker_field` focus relies on the filter TextField id); (3) tick T026-T031 in tasks.md; (4) review A (high) + B, visual pass (quickstart B steps 4, 7), full gate, PR per tasks/pr.md.
+Branch-start already ran; #1754 recorded merged above.
 
 ## Open escalation
 

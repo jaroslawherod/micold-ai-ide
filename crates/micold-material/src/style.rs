@@ -947,6 +947,37 @@ pub fn outlined(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status)
     }
 }
 
+/// The trigger of a composer selector (feature 1703, FR-015, FR-016): `surface` under a 1 dp
+/// `outline_variant` edge at the small corner, body content in `on_surface`. Hover (+8%) and pressed
+/// (+10%) are layers of the content colour; `open` swaps the edge for 2 dp `primary`; disabled sets
+/// the content to 38% and the container to a 12% `on_surface` layer.
+pub fn selector_trigger(r: Roles, open: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let content = color(r.on_surface);
+        let disabled = matches!(status, button::Status::Disabled);
+        let background = if disabled {
+            Some(Background::Color(alpha(content, state::DISABLED_CONTAINER)))
+        } else {
+            state_overlay(content, status)
+        };
+        let (edge, width) = if open {
+            (color(r.primary), 2.0)
+        } else {
+            (color(r.outline_variant), anatomy::button::OUTLINE)
+        };
+        button::Style {
+            background,
+            text_color: disabled_alpha(content, status),
+            border: Border {
+                color: disabled_alpha(edge, status),
+                width,
+                radius: shape::SMALL.into(),
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
 /// The jump-to field's pill (feature 1127, contract T2): `surface_container_highest` under a 1 dp
 /// edge in `outline` — the role that reaches 3:1 against the field and the title bar in both
 /// schemes, which `outline_variant` does not — at the full pill corner. The hover and press layers
