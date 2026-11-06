@@ -25,18 +25,33 @@ pub const REACH_FILE: &str = "github-reach.json";
 /// GitHub's REST API over HTTPS (`ureq` 3): a 10 second budget, no redirect, a non-2xx status is an
 /// `Ok` reply. The request shape is the client's (`micold_client::pat_source::UreqTransport`).
 pub struct UreqTransport {
-    agent: ureq::Agent,
+    egress: crate::session_extras::Egress,
 }
 
 impl Default for UreqTransport {
+    /// The CA bundle and proxy the daemon's configuration names (#1536, FR-037).
     fn default() -> Self {
-        let agent = ureq::Agent::config_builder()
+        Self {
+            egress: crate::session_extras::Egress::load(
+                crate::settings::current().config_path.as_deref(),
+            ),
+        }
+    }
+}
+
+impl UreqTransport {
+    fn agent_for(&self, url: &str) -> ureq::Agent {
+        let host = url
+            .split_once("://")
+            .map_or(url, |(_, rest)| rest)
+            .split(['/', ':'])
+            .next()
+            .unwrap_or_default();
+        let base = ureq::Agent::config_builder()
             .timeout_global(Some(std::time::Duration::from_secs(10)))
             .max_redirects(0)
-            .http_status_as_error(false)
-            .build()
-            .into();
-        Self { agent }
+            .http_status_as_error(false);
+        self.egress.agent(base, host)
     }
 }
 
@@ -47,7 +62,7 @@ impl Transport for UreqTransport {
             other => micold_core::scoped_credential::pat::short_error(&other.to_string(), token),
         };
         let mut response = self
-            .agent
+            .agent_for(url)
             .get(url)
             .header("Authorization", format!("Bearer {}", token.expose()))
             .header("Accept", "application/vnd.github+json")

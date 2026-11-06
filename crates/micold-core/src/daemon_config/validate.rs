@@ -398,6 +398,26 @@ fn stays_inside(path: &str) -> bool {
     !path.is_empty() && !is_absolute(path) && !components(path).contains(&"..")
 }
 
+/// Why a `[[session.files]]` target `as` is refused (V18, FR-038): outside the home, or inside a
+/// CLI's configuration directory. `None` when it is acceptable (collisions aside).
+pub fn session_file_refusal(target: &str) -> Option<String> {
+    if !stays_inside(target) {
+        return Some(format!(
+            "`session.files.as` \"{target}\" must be relative and stay inside the home"
+        ));
+    }
+    let normalized = components(target)
+        .into_iter()
+        .filter(|c| *c != ".")
+        .collect::<Vec<_>>()
+        .join("/")
+        .to_lowercase();
+    CLI_CONFIG_DIRS
+        .iter()
+        .find(|d| is_under(&normalized, d))
+        .map(|dir| format!("`session.files.as` \"{target}\" is inside a CLI config dir (~/{dir})"))
+}
+
 fn is_under(path: &str, root: &str) -> bool {
     let (path, root) = (components(path), components(root));
     path.len() >= root.len() && path[..root.len()] == root[..]
@@ -927,20 +947,8 @@ impl Checker<'_, '_> {
                 .collect::<Vec<_>>()
                 .join("/")
                 .to_lowercase();
-            if !stays_inside(&target) {
-                self.at(
-                    "V18",
-                    &format!("{base}.as"),
-                    format!(
-                        "`session.files.as` \"{target}\" must be relative and stay inside the home"
-                    ),
-                );
-            } else if let Some(dir) = CLI_CONFIG_DIRS.iter().find(|d| is_under(&normalized, d)) {
-                self.at(
-                    "V18",
-                    &format!("{base}.as"),
-                    format!("`session.files.as` \"{target}\" is inside a CLI config dir (~/{dir})"),
-                );
+            if let Some(why) = session_file_refusal(&target) {
+                self.at("V18", &format!("{base}.as"), why);
             } else if let Some(first) = targets.iter().position(|t| *t == normalized) {
                 self.at(
                     "V18",
