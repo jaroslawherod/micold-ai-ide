@@ -39,7 +39,11 @@ fn origin_repo(dir: &Path) -> Option<(String, String, String)> {
     if owner.is_empty() || name.is_empty() || name.contains('/') {
         return None;
     }
-    Some((host.to_ascii_lowercase(), owner.to_string(), name.to_string()))
+    Some((
+        host.to_ascii_lowercase(),
+        owner.to_string(),
+        name.to_string(),
+    ))
 }
 
 /// What `gh-token --cwd <dir>` resolves.
@@ -87,10 +91,15 @@ pub fn resolve(dir: &Path, now: UnixTime) -> Option<ChosenToken> {
 }
 
 /// The unix shim's `sh` script: it asks `gh-token` for `$PWD`, sets `GH_TOKEN`/`GH_HOST` only when
-/// a token comes back and only where the session's own git left them unset, strips `bin_dir` back
-/// out of `PATH` (it is first on it, T057) so `exec` finds the real `gh`, and replaces this process
-/// with it — the real `gh`'s exit code is then simply this script's (unlike the Windows batch
-/// shim, which cannot replace the process image and must forward it explicitly).
+/// a token comes back and only where the session's own git left them unset, then walks `PATH`
+/// itself for the first `gh` outside `bin_dir` (not a prefix-strip of `PATH`: something later in a
+/// session's own startup — a shell rc, `direnv`, a version manager — may have prepended to `PATH`
+/// after spawn, so `bin_dir` is no longer guaranteed to still be a literal prefix; stripping only a
+/// literal `"$bin_dir":` prefix would then be a no-op and `exec gh "$@"` would re-resolve to this
+/// same shim, recursing) and replaces this process with it — the real `gh`'s exit code is then
+/// simply this script's (unlike the Windows batch shim, which cannot replace the process image and
+/// must forward it explicitly). No `gh` outside `bin_dir` on `PATH`: reports not found like a shell
+/// would (exit 127), same as a session with no `gh` installed at all.
 fn unix_shim(daemon: &Path, bin_dir: &Path) -> String {
     format!(
         "#!/bin/sh\n\
@@ -105,8 +114,23 @@ fn unix_shim(daemon: &Path, bin_dir: &Path) -> String {
          \t: \"${{GH_HOST:=$host}}\"\n\
          \texport GH_TOKEN GH_HOST\n\
          fi\n\
-         PATH=\"${{PATH#\"$bin_dir\":}}\"\n\
-         exec gh \"$@\"\n",
+         real_gh=\n\
+         old_ifs=$IFS\n\
+         IFS=:\n\
+         for dir in $PATH; do\n\
+         \tif [ \"$dir\" = \"$bin_dir\" ]; then\n\
+         \t\tcontinue\n\
+         \tfi\n\
+         \tif [ -z \"$real_gh\" ] && [ -x \"$dir/gh\" ]; then\n\
+         \t\treal_gh=\"$dir/gh\"\n\
+         \tfi\n\
+         done\n\
+         IFS=$old_ifs\n\
+         if [ -z \"$real_gh\" ]; then\n\
+         \techo 'gh: command not found' >&2\n\
+         \texit 127\n\
+         fi\n\
+         exec \"$real_gh\" \"$@\"\n",
         shell_quote(daemon),
         shell_quote(bin_dir),
     )
@@ -215,7 +239,10 @@ mod tests {
                 "ssh://git@ghe.example.com:2222/acme/app",
                 ("ghe.example.com", "acme", "app"),
             ),
-            ("git@GHE.example.com:acme/app.git", ("ghe.example.com", "acme", "app")),
+            (
+                "git@GHE.example.com:acme/app.git",
+                ("ghe.example.com", "acme", "app"),
+            ),
         ] {
             let (host, path, over_ssh) = split_remote(url).unwrap();
             let _ = over_ssh;
@@ -246,7 +273,10 @@ mod tests {
 
     #[test]
     fn the_windows_shim_forwards_the_real_ghs_exit_code() {
-        let script = windows_shim(Path::new(r"C:\micold\micold-daemon.exe"), Path::new(r"C:\data\bin"));
+        let script = windows_shim(
+            Path::new(r"C:\micold\micold-daemon.exe"),
+            Path::new(r"C:\data\bin"),
+        );
         assert!(script.contains("gh %*"));
         assert!(script.contains("exit /b %ERRORLEVEL%"));
         assert!(script.contains("if not defined GH_TOKEN"));
