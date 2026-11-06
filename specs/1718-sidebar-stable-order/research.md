@@ -21,20 +21,31 @@ the session text and width is tight. (c) Only add Done: Needs action and Needs a
 
 **Decision**: `features::overview::location_card_state` (already used by `entry_card_state`), the
 same call as the Overview card, so row and card agree (feature 813). `entry_card_state` is kept,
-renamed `entry_card_state` stays private to sidebar; run group rows use `run_group_state` (kept).
+the private `entry_card_state` method of `features/sidebar.rs` stays; run group rows use `run_group_state` (kept).
 
 **Rejected**: recomputing from `LocationState` (cannot give Done or attention).
 
 ## R3 — Where `run_group_state` / `RunCard` live
 
-**Decision**: keep them in core, delete the rest of `sidebar_groups.rs`, rename the file to
-`sidebar_state.rs` only if the churn is small; otherwise leave the module name and update its docs.
+**Decision**: keep them in core, delete the rest of `sidebar_groups.rs`, and do not rename the module
+(updating its docs only), to keep the diff small.
 **Rejected**: moving into `overview.rs` (large file).
 
 ## R4 — Opt-in grouping, sort, filter
 
-Out of scope per spec (issue alternatives 2 to 5).
+Out of scope per spec (issue alternatives 2 to 5: attention count with jump, state filter, opt-in grouping, debounced reordering). Rejected because each adds a control or setting beyond the stable order the issue's alternative 1 asks for.
 
 ## R5 — Persistence
 
 `group_choices` is `sidebar::State` memory only; nothing to migrate (FR-008).
+
+## R6 — Fate of 905 leftovers and group-only parts
+
+- **Tooltip** (905 FR-009): the state line becomes the card state's word (`CardState::label()`), so the
+  icon and its tooltip agree. Rejected: keeping `LocationState` words (would say Running beside a Done icon).
+- `LocationState` stays in core (it feeds `card_state`); `StateIcon::role` is re-keyed on `CardState`;
+  `Icon::StateBlocked` stays in the icon font (unused by the row; removing it churns `icons_font.rs` for no gain).
+- `TypeRole::SidebarGroup`, the `TreeItem` group-heading builder, their tests and the showcase
+  catalogue entry are deleted: nothing draws a group header (FR-007). Rejected: keep them unused (dead code).
+- `ListRow` is replaced by `SidebarEntry`: `sidebar_list()` returns `Vec<SidebarEntry>`; `row_heights`
+  and `row_index` take `&[SidebarEntry]`. Rejected: a one-variant enum.
