@@ -243,6 +243,32 @@ fn a_parse_error_keeps_the_last_configuration_and_reports_it() {
 }
 
 #[test]
+fn an_invalid_orchestrator_table_keeps_the_last_configuration() {
+    let dir = tempfile::tempdir().unwrap();
+    let token = dir.path().join("enroll");
+    std::fs::write(&token, "x").unwrap();
+    #[cfg(unix)]
+    mode(&token, 0o600);
+    let valid = format!(
+        "[orchestrator]\nurl = \"https://orch.example\"\nenrollment_token_file = \"{}\"\n",
+        token.display()
+    );
+    let (_dir, file, runtime) = setup(&host("1", "info", &valid));
+    let hash = runtime.status().applied_hash;
+    // O2 (http) next to a valid live change.
+    let bad = valid.replace("https://", "http://");
+    replace(&file, &host("2", "info", &bad));
+    assert_eq!(runtime.check(Instant::now()), Outcome::Rejected);
+    assert_eq!(a_of(&runtime), "1", "no key of the new file is in force");
+    let current = runtime.current();
+    let o = current.orchestrator.as_ref().expect("the last table stays");
+    assert_eq!(o.url.as_deref(), Some("https://orch.example"));
+    let status = runtime.status();
+    assert_eq!(status.applied_hash, hash);
+    assert!(status.last_error.unwrap().contains("https"));
+}
+
+#[test]
 fn a_removed_file_keeps_the_last_configuration() {
     let (_dir, file, runtime) = setup(&host("1", "info", ""));
     std::fs::remove_file(&file).unwrap();
