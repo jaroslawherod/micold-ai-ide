@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: spec
-- **Next step**: clarify unit (no open markers; may pass straight to plan)
+- **Phase**: clarify
+- **Next step**: plan unit (clarify round 1: no ambiguities, no questions; plan must check feature 905 icons differ per state)
 
 ## Pull requests
 
