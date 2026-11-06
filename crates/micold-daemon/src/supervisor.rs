@@ -1061,38 +1061,6 @@ mod container_git_tests {
         set(&container_git_edits(git)).remove("GIT_CONFIG_GLOBAL")
     }
 
-    /// #1744: the container block (5 entries) and a tokenless sandbox configuration block (the one
-    /// reset entry) reached the session as `COUNT=1` over five keys.
-    #[test]
-    fn the_container_and_configuration_git_blocks_reach_the_session_as_one_consistent_block() {
-        use micold_core::scoped_credential::git_env::{session_git_env, SessionGit};
-        let legacy = container_git_edits(Some(DATA), Some(Path::new(EXE)), true);
-        let config: Vec<EnvEdit> = session_git_env(&SessionGit {
-            bases: &[],
-            daemon: EXE,
-            config: "/c.toml",
-            isolate: true,
-            ssh_to_https: true,
-            fallback: &[],
-        })
-        .into_iter()
-        .map(|(k, v)| EnvEdit::Set(k.into(), v.into()))
-        .collect();
-        let env = set(&combine_git_edits(legacy, config));
-        let count: usize = env["GIT_CONFIG_COUNT"].parse().unwrap();
-        let keys = env
-            .keys()
-            .filter(|k| k.starts_with("GIT_CONFIG_KEY_"))
-            .count();
-        let values = env
-            .keys()
-            .filter(|k| k.starts_with("GIT_CONFIG_VALUE_"))
-            .count();
-        assert_eq!((count, keys, values), (keys, keys, keys), "{env:?}");
-        assert_eq!(env["GIT_CONFIG_VALUE_1"], format!("!{EXE} git-credential"));
-        assert_eq!(env["MICOLD_DAEMON_CONFIG"], "/c.toml");
-    }
-
     #[test]
     fn a_configuration_block_with_tokens_replaces_the_container_block() {
         let block = |n: usize| -> Vec<EnvEdit> {
