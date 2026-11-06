@@ -21,7 +21,7 @@ use crate::ui::material::{MenuSelect, MenuSelectRow, Text, TypeRole};
 pub const MODE_LABEL: &str = "Permissions";
 
 /// The mode control's width: the longest mode name, *Accept edits*, with its chevron.
-pub const MODE_WIDTH: f32 = 180.0;
+pub const MODE_WIDTH: f32 = 240.0;
 
 /// One mode as the control lists it, by the name the user reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M3 implementing
-- **Next step**: continue M3 from Handover (compile, fix tests, review, gate, PR)
+- **Phase**: milestone M3 PR open
+- **Next step**: wait-merge M3 PR, then M4/close unit (T032 quickstart results)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Large editor: chord/icon opens modal editor, Done/Cancel, shortcut listed | #1717 | merged |
 | M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | #1754 | merged |
-| M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | | pending |
+| M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | (see PR table) | PR open |
 
 Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs are one observable behaviour with no earlier deliverable. US2 and US3 are one milestone (M2, 12 tasks): US2 scenario 1 removes the permission selector from the input row and only US3's options row re-homes it (no half-wired UI). T032 (quickstart results) is for the close unit.
 
@@ -54,6 +54,9 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Review A (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CLEAN (2 MINOR declined: dropped-connection failures and an off-screen session's refusal do not expand the shared row; FR-012 covers refusals, row is window-level) |
 | Review B (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CHANGES: F1 MAJOR (auto-expand persist not tested via update()/daemon path: fixed, tests added), F2 MAJOR (accessible label: declined, see below), 2 MINOR fixed; Verify: core ok, client main 64 passed |
 
+| Review A (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (model-list-unavailable note dropped: fixed), 2 MINOR declined (below) |
+| Review B (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (open chevron: fixed, MoveUp glyph), F2/F3 MAJOR test gaps (partly fixed: chevron and session isolation tests; rest declined below); Verify: anatomy 5 passed, composer tests passed |
+
 ## Declined review findings
 
 - M2 Review B F2 (accessible label): the toolkit has no accessible-name hook in this path (no a11y API in the iced widgets used); the tooltip carries the state words per state and `the_activity_state_is_an_icon_with_its_words_in_the_tooltip` pins them. FR-007 is met to the extent the toolkit allows.
@@ -65,21 +68,12 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | M1 | A | F1 forgotten session recreates composer on Done | Draft is absent for a never-typed composer too, so skipping would break FR-002 Done; minor, left |
 | M1 | A | F2 close_topmost bypasses focus return | Minor; Esc/scrim/Done paths restore focus |
 | M1 | B | F1 no tdd/cycle-log.md | The design PR set no tdd plan (no tdd/ dir); tests exist and pass, red-first evidence not retrofittable; left for the close unit's TDD verify |
+| M3 | A | F2 current_row unused in production, F3 mode menu state duplicates picker logic | Minor; current_row is used by tests, mode menu keyed state is small |
+| M3 | B | F2/F3 more anatomy/FR-018 tests (focus ring, ellipsis, tooltip, effort unchanged) | Geometry, states, filter and mode-menu state are covered; effort/permission behaviour is untouched code paths and the existing composer suites still pass; left |
 
 ## Handover
 
-M3 (T026-T031) code is written, uncommitted until this commit, and NOT yet compiled/tested beyond
-`cargo check -p micold-material` (green). A `cargo check -p micold-client --lib --tests` was started
-(log: /tmp/claude-1000/chk.log); re-run it. Done so far:
-- micold-material: `style::selector_trigger(roles, open)`, `Button::selector(open)` (32dp via density -2, SMALL radius, XS/SM padding).
-- `ui/material/menu_select.rs`: `MIN_TRIGGER_WIDTH`, `title` takes `Option<impl Into<Cow>>`, `.disabled(reason)`, `MenuSelectRow::filter(value, placeholder, on_input, id, roles)`, trigger uses `.selector(open)`.
-- `features/command_palette.rs`: `ModelPickerState::rows()` filters by typed text (case-insensitive label or cli value), `current_row`/`enter_row` over the filtered rows.
-- `features/permission_prompts.rs` + `shell/permission_prompts.rs`: `Msg::ModeMenuToggled{session,current}`, `ModeMenuMoved`, `ModeMenuClosed`, state `mode_menu`; `ModeRequested` closes it.
-- `ui/mode_control.rs` (permission) and `ui/composer.rs::model_control` migrated to `MenuSelect`; `effort_control` already was one.
-- New tests: `ui/material/menu_select_anatomy.rs` (registered in material/mod.rs), `selectors` mod at the end of `tests/features_composer.rs`.
-- Showcase poses (review.rs `selector_sample`, catalogue.rs `posed`), docs `docs/user-guide/structured-input.md` "The selectors".
-Next: (1) `scripts/build-lock.sh cargo check -p micold-client --lib --tests`, fix errors (unused imports in composer.rs: Typeahead/Button/TypeaheadRow/row_with_details maybe; `Text` import in mode_control; Message::NoOp in menu_select_anatomy); (2) run `menu_select_anatomy` and `features_composer` tests, and `cargo test -p micold-client --test layout_snapshot` + gates `composer_fits.rs` (lines ~687-800 look for painted text == MODE_LABEL "Permissions"; now the trigger paints "Permissions:" and the mode label separately; also model control no longer a Typeahead: gates/other tests on `Typeahead`/model picker may need updating, and `model_picker_field` focus relies on the filter TextField id); (3) tick T026-T031 in tasks.md; (4) review A (high) + B, visual pass (quickstart B steps 4, 7), full gate, PR per tasks/pr.md.
-Branch-start already ran; #1754 recorded merged above.
+None.
 
 ## Open escalation
 

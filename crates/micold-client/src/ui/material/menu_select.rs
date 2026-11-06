@@ -382,10 +382,16 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
             }
             None => Space::new().width(Length::Fill).into(),
         };
+        // Open, the chevron points up (FR-016): `keyboard_arrow_up` is the same glyph rotated.
+        let chevron = if s.open {
+            Icon::MoveUp
+        } else {
+            Icon::SelectChevron
+        };
         let label = row![
             Text::new(s.fixed, TypeRole::Body, r).tint(r.on_surface),
             elastic,
-            Glyph::new(Icon::SelectChevron, TypeRole::Action, r).tint(r.on_surface_variant),
+            Glyph::new(chevron, TypeRole::Action, r).tint(r.on_surface_variant),
         ]
         .spacing(spacing::XS)
         .align_y(alignment::Vertical::Center)
