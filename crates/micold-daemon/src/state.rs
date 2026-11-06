@@ -9575,7 +9575,8 @@ mod offered_tests {
         match gh_shim_bin_dir() {
             Some(dir) => {
                 let prefix = format!("{}{}", dir.display(), if cfg!(windows) { ';' } else { ':' });
-                raw.strip_prefix(prefix.as_str()).map_or(raw.clone(), str::to_string)
+                raw.strip_prefix(prefix.as_str())
+                    .map_or(raw.clone(), str::to_string)
             }
             None => raw,
         }

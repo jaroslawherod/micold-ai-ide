@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | D5 | M1 | M1 needs #1530's `TokenChoice` chooser, which is not on `main` (unpushed local work in another worktree): wait, stack on #1530's branch, or implement behind a local seam? | Wait: pause the run with the design merged and resume once #1530's M1 and M2 are on `main`. Rejected stacking (that branch's M1 is unpushed and still in review, so the API may change) and the seam (it would split the acceptance criteria across two runs). Superseded by D6: start M1 now against #1530's merged M1 alone, without waiting for the rest. | decided by user | `AskUserQuestion` 2026-11-05; `git ls-tree origin/main crates/micold-core/src/daemon_config/matching.rs` empty; #1530 M1 commit `324482a39` not on `origin/feat/1530_...` (tip `02cf510bc`) |
 | D6 | M1 | Start M1 now against #1530's merged `TokenChoice` chooser (PR #1700), without waiting for all of #1530? | Yes: start now. #1530's M1 (matching.rs/credential_config.rs/reach.rs/git_credential.rs/git_env.rs — T046–T054, T092–T094) is merged to `main`. #1530's M2 (PR #1713, kind-gated `container_git_edits`, `[git] config_file`/`GIT_CONFIG_GLOBAL`, retiring `GitCredentialGrant`/`Revoke`/`Targets`) is still open and out of scope: not depended on, not duplicated. Supersedes D5. | decided by user | `git ls-tree origin/main` holds matching.rs/credential_config.rs/reach.rs/git_credential.rs/git_env.rs; PR #1700 merged; PR #1713 open |
+| D7 | M1 | M1 passed the handover cap after part 3; authorise a part 4 to finish M1 (confirm `micold-daemon --lib` green, review B, full gate, push, PR), or stop and hand M1 over as it stands? | Authorise part 4: finish M1 and get it to a PR. Part 4 inherits a `CLEAN` review A and a known-small remaining list, so this is not the repeated-failure case the handover cap is meant to catch. | decided by user | part 4 authorised; see superseded *Open escalation* text, parts 1–3 commits `34eb48cd9`, `d9ad46edb`, `85fb4e24d`, `a6f320ad8` |
 
 ## Review rounds
 
@@ -42,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Tasks 1531 | 1 | 7a198beac8244eaa27e1da4bb57ab949a3097bce:93bc2a7f9a0a8723aa5ec8061cfe36c235c9f6f3 | CHANGES: F1 MAJOR (Depends-on claimed Issue 9 M2, rationale only cites M1 tasks) fixed by narrowing to M1 merged; F2 MINOR (T056 no file path, wrongly tagged `[P]` with T055 in the same file) fixed by adding the path and dropping `[P]`. Both fixes are task-text only, no new round. |
 | M1 code-review (A) | 1 | ea4e8fdc48fc831d572ff1227511a6fbcdb6b16d:d9ad46edb1aa72581e21de5de24e855dadec261d | CHANGES: F1 BLOCKER (no `#[cfg(unix)]` on unix-only `gh_shim.rs` integration tests), F2 MINOR (empty `PATH` entry not treated as `.`). Both fixed in `85fb4e24d`. Done — A runs once per milestone; no further round needed. |
+| M1 conformance (B) | 1 | 2b8970bebd0d2b9a7bf25daaea36513ffff7a2e8:faaff33f799022bf55b8813e60b6cf3fc140be5e | CLEAN: F1 MINOR only (`gh_shim.rs::resolve()` duplicates `git_credential.rs::answer_from_config`'s config-load/cache-path/`credential_config::answer` sequence almost line for line). No fix needed per `tasks/review-rounds.md` ("CLEAN, or only MINORs: the review is done"); `cargo test -p micold-daemon --lib` confirmed green separately (`TEST_EXIT=0`) since the reviewer's own `--test gh_shim` run stayed queued behind another worktree's build lock. Done — B runs once per milestone. |
 
 ## Declined review findings
 
@@ -127,24 +129,8 @@ the full gate's own fallout, if any.
 
 ## Open escalation
 
-**M1 passed the handover cap: a fourth part needs the user's go-ahead** (category 5,
-non-convergence, `tasks/dispatch.md`: "A fourth part … is an escalation").
-
-- Question: authorise a part 4 to finish M1, or stop and hand M1 over as it stands?
-- Where M1 actually is: implementation complete and committed (`34eb48cd9`, `d9ad46edb`,
-  `85fb4e24d`, `a6f320ad8`); review A done and `CLEAN` after its BLOCKER and MINOR were fixed;
-  the scoped gate's fallout (one inline `gh_shim` test, six pre-existing `state.rs` tests broken
-  by T057's PATH change) fixed. **Left:** confirm `cargo test -p micold-daemon --lib` is green,
-  review B, the full `mise run gate`, the push, and the PR. No PR exists yet.
-- Why three parts were spent: none of them was spent on the work converging. Parts 1 and 2 each
-  ended their turn while a detached run was going and were cut off; part 3 lost its budget to
-  build-lock contention (15–50 min queues behind other worktrees) and to running the full suite,
-  which parts 1 and 2 never did.
-- Recommendation: **authorise part 4.** It inherits a `CLEAN` review A and a known-small
-  remaining list, so it is not the repeated-failure case the cap is meant to catch. Give it the
-  gate result if the build lock frees up.
-- The alternative is to stop here: M1's code would sit committed and unpushed on this branch with
-  no PR, and no review B, which the feature flow requires before a merge.
+None. (Was: authorise a part 4 to finish M1 — resolved as D7 in *Decisions*: the user authorised
+part 4 to finish M1 and get it to a PR.)
 
 ## Follow-ups not done
 
