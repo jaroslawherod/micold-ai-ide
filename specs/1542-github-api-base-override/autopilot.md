@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1542
 - **Worktree branch**: feat/1542_base-url-override-for-the-github-api-and-git-host
 - **Started**: 2026-11-06
-- **Phase**: spec
-- **Next step**: clarify unit (FR-004 marker)
+- **Phase**: clarify
+- **Next step**: plan unit (clarify done, 1 round, FR-004 resolved)
 
 ## Pull requests
 
