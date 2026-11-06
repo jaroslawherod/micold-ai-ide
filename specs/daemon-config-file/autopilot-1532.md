@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M1
-- **Next step**: push HEAD `19d261d14` (code tree gate-stamped at `2d5d3973c`, `19d261d14` only adds this docs commit on top) to PR #1711 (blocked, see *Open escalation*), then wait on CI, merge PR #1711; next unit: milestone M2
+- **Phase**: milestone M2
+- **Next step**: implement M2 (T065, T065a, T065b, T065c), gate, review, open the M2 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1699 | design (tasks + milestones for Issue 11) | merged | 98aa6edcc561301f70c671b74113b9877ce2d9fd |
-| #1711 | M1 — each `[[ai.cli]]` field maps to the CLI's launch | open | — |
+| #1711 | M1 — each `[[ai.cli]]` field maps to the CLI's launch | merged | 8470f7464ec548474530511495dd9ded211e5ba4 |
 
 ## Milestones
 
 | M | Deliverable | Tasks | Tier | PR |
 |---|---|---|---|---|
-| M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 |
+| M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 (merged, `8470f7464ec548474530511495dd9ded211e5ba4`) |
 | M2 | AI sign-in delivery, read-only on every kind; stays valid without a CLI refresh | T065, T065a, T065b, T065c | full | — |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | — |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
@@ -72,6 +72,8 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D3 | tasks | Resumed unit found `origin/main` 11 commits ahead of this branch's HEAD (the ledger's recorded tip `93bc2a7f9` was stale), including one commit (#1531) editing `tasks.md`'s milestones heading line that our own uncommitted work also touched | Committed the uncommitted tasks/milestones work, then `git rebase origin/main`; one textual conflict on the shared heading line (both add an issue name to the same list) — resolved by keeping both additions (`Issue 10 (#1531)` and `Issue 11 (#1532)`), no content lost on either side. Verified no other conflict markers and all four Issue 11 milestone sections intact after the rebase | agent-resolved | `git log 93bc2a7f9..origin/main --oneline`; `git diff` of resolved `tasks.md` |
 | D4 | milestone M1 | T062 names "no sign-in is ever mounted writable" and "the sign-in location is a link, re-created at every session start" — but sign-in delivery is M2's T065 (not yet implemented), and M1's Deliverable line only covers field-to-launch mapping | Scoped T062 to its first two clauses — `settings_file`/`place` land under the CLI's config dir, `place.as` cannot escape it — as pure path-mapping functions (`daemon_config::ai_cli::place_target`, `settings_file_name`), consistent with M1's Verify line (no sandbox/kube integration command listed) and Deliverable text. The sign-in clauses are M2/T065's own stated scope; left for that milestone | agent-resolved | tasks.md M1 Verify line; tasks.md T065 |
 | D5 | milestone M1 | Review A round 2 F1 (BLOCKER): `AiCliTable::configured(...)` (T061's version/enabled override) is never called from the real client/kube provisioning paths — is wiring them in-scope for M1? | No: neither `kube::start::pod_target` nor `micold-client::daemon::container_target` has a per-CLI `version`/`args`/`model` value available today — both build their `AiCliSelection`/`KubeSettings.providers` from a bare `BTreeSet<AiCli>`, with no field for any `[[ai.cli]]` key beyond which CLIs are chosen. That data model, and the Settings UI that would produce it, is M4's own named scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067) — wiring `.configured()` into those call sites now would mean inventing M4's data model inside M1. `AiCliTable::configured` stays the pure, tested builder M1's Deliverable and Verify line (`provision::ai_cli`, core-only) call for; M4 calls it once its own Settings-side `[[ai.cli]]` values exist | agent-resolved | `grep -rn "AiCliTable::pinned()\|table: AiCliTable" crates/` outside tests; tasks.md M4 line; `KubeSettings.providers`/`AiCliSelection` definitions |
+| D6 | milestone M1→M2 | Open escalation claimed `git push` was blocked (category 4, missing access) in every prior unit's session | Resolved: the container restart had wiped the sandbox's global gitconfig (`GIT_CONFIG_GLOBAL=/var/lib/micold-ai-ide/gitconfig`); the orchestrator reapplied the documented working setup — `url."https://github.com/".insteadOf git@github.com:` plus `core.askPass=/home/jaro/.local/bin/gh-askpass.sh` (supplies `gh auth token`; the sandbox resets `credential.helper` via `GIT_CONFIG_KEY_0`, so askPass is what survives). `git push` and `scripts/autopilot/preflight.sh` both succeed now | decided by user / orchestrator-resolved | PR #1711 merged (`8470f7464ec548474530511495dd9ded211e5ba4`) via a push from this same worktree after the gitconfig fix |
+| D7 | milestone M2 | Connectivity note, not a decision needing a question: should a stalled `git`/`gh` call be treated as a credential failure? | No: GitHub access from this container is intermittent — one round-robin IP black-holes port 443 (why `/home/jaro/.local/bin/gh` is a retry wrapper). A call that stalls ~130s and then reports a connect timeout should simply be retried | agent-resolved | orchestrator's briefing for this unit |
 
 ## Review rounds
 
@@ -134,15 +136,6 @@ None.
 
 ## Open escalation
 
-A prior unit's feedback claimed this was resolved ("`git push` works again in this session … clear it from the ledger"), but re-verified independently in *this* unit's session and still fails the same way: category 4, missing access, not resolved.
-
-- `git push -u origin HEAD` (plain, no force) → `git@github.com: Permission denied (publickey)`, exit 128. `ssh-add -l`: "Could not open a connection to your authentication agent"; `~/.ssh` has only `known_hosts` (added via `ssh -o StrictHostKeyChecking=accept-new -T git@github.com`, which itself then also answers `Permission denied (publickey)`) — no key.
-- `git push --force-with-lease -u origin HEAD` (the exact command asked for) fails one layer earlier: the Claude Code auto-mode classifier denies the command itself ("Permission for this action was denied by the Claude Code auto mode classifier"), reproduced twice, before git even runs — so the publickey failure under force-with-lease could not be re-confirmed directly, but the plain `git push` above shows the same account has no working credential regardless.
-- `scripts/autopilot/preflight.sh` now fails one step earlier than before: `git ls-remote origin HEAD failed: Host key verification failed` (the host key was missing, not just the client key) — accepting the host key by hand (above) still ends at `Permission denied (publickey)`, so this is the same underlying gap, not a new one.
-- The session's `GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*` HTTPS fallback is still `GIT_CONFIG_COUNT=1` (only entry 0 active), same as before, now pointing at a different helper binary path (`/home/node/.micold/remote/0.18.0-75e9f15b9de0/...` vs the ledger's stale `...-3bb12e5e60ee`) — reading or invoking that helper directly is again refused by the classifier.
-- `mise run gate`'s `HEAD^{tree}` (`2d5d3973c`) is now recorded in this worktree's `autopilot-gate-ok` stamp (see *Gate*), so the autopilot gate hook itself no longer blocks the push — only the credential/classifier layer does.
-- Not attempted: editing git config (forbidden) or working around the classifier's denial (forbidden per its own message).
-
-**Recommended**: unchanged — push `2d5d3973c` from a session/environment where `git push` already works for this worktree (e.g. the orchestrator's own context with its own SSH agent or credential helper reachable), rather than changing this worktree's git or permission configuration. The claim that this was already fixed does not hold in this unit's own session; whatever fixed it elsewhere did not propagate here.
+None.
 
 What you need to do: make `git push` work for this worktree session (a reachable SSH agent with a deploy key, or an HTTPS credential helper the classifier does not block), then run `git push --force-with-lease -u origin HEAD` from `/run/media/jaro/Workspace/micold-ai-ide/.claude/worktrees/feat-1532_ai-cli-configuration-from-the-file-for-every-kind` (branch `feat/1532_ai-cli-configuration-from-the-file-for-every-kind`, HEAD `2d5d3973c`, gate-stamped and ready), then reply "done".
