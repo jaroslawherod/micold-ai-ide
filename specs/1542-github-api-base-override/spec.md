@@ -63,9 +63,8 @@ ones; in a release configuration an override value has no effect.
 
 1. **Given** no override, **When** the probe and reach URLs are built, **Then** they are exactly the
    current `https://api.github.com/...` URLs.
-2. **Given** a production (non-test) build, **When** the means FR-004 settles on is supplied (if an
-   environment variable: set in the environment), **Then** it has no effect on the base, and no
-   setting, file or UI exposes it. (Exact form depends on the FR-004 answer.)
+2. **Given** a production (non-test) build, **When** any environment variable or file is set, **Then** it has no effect on the base (the production caller passes the default), and no
+   setting, file or UI exposes it.
 3. **Given** an override in a test build, **When** a token check runs, **Then** the token goes only
    to the overridden base, never to `api.github.com`.
 
@@ -107,6 +106,12 @@ skipped, not failed.
 - Windows/macOS: the normal-suite tests run on every CI platform; the runtime-gated test is Linux only.
 - GitHub Enterprise hosts keep their `<host>/api/v3` base; the override replaces the default only for tests.
 
+## Clarifications
+
+### Session 2026-11-06
+
+- Q: Is the override compiled only into test builds, or an env var shipped builds honour? → A: neither: an injected parameter of the check, default `https://api.github.com`, passed per test. The check already takes an injectable `Transport` (`scoped_credential/pat.rs`), a process-global env var would race between parallel tests (Edge Cases), and the runtime-gated test runs the client check in-process, so it needs no env var; the daemon half keeps `MICOLD_GIT_CREDENTIAL_BASE`. _(agent-resolved: specs/1542-github-api-base-override/spec.md#Edge Cases; crates/micold-core/src/scoped_credential/pat.rs; crates/micold-daemon/src/git_credential.rs)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -115,7 +120,7 @@ skipped, not failed.
   for both the probe and the reach requests.
 - **FR-002**: With no override, the requests MUST be identical to today's.
 - **FR-003**: The override MUST NOT be reachable from any user-facing setting, stored file or UI.
-- **FR-004**: The override MUST be supplied to the code under test and, for the runtime-gated test, to the built client or daemon. [NEEDS CLARIFICATION: is the override compiled only into test builds, or an environment variable honoured by shipped builds too (as `MICOLD_GIT_CREDENTIAL_BASE` is in the daemon)? A test-build-only seam is safer; an env var also lets the runtime job drive a built client.]
+- **FR-004**: The override MUST be an injected parameter of the token check (a base the caller passes, defaulting to `https://api.github.com`), not an environment variable, setting or file read by shipped code. Tests supply it per test; the runtime-gated test drives the client's check in-process with the fake's base and gives the container and kind daemons the git host through the daemon helper's existing `MICOLD_GIT_CREDENTIAL_BASE`. No new env var is honoured by a shipped build.
 - **FR-005**: A token MUST be sent only to the base in force; a test MUST show it is not sent to `api.github.com` when overridden.
 - **FR-006**: A reusable fake GitHub API MUST serve the repository probe (expiry header, push permission, 404), and the private-repository listing, with per-test canned replies.
 - **FR-007**: The normal suite MUST cover Part C steps 2, 3, 8, 10 and 12 through the fake API.
