@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
-- M1 A snapshot 5614aef..:aac273a.. (dispatched); M1 B same snapshot (dispatched)
+- M1 A and B round 1 snapshot f41ea9a..:4bc70c9.. both CLEAN (A: 2 MINOR, left: run_group_state kept by T007, reveal_ready &mut; B: Verify 64 passed). Gate 1 red on one stale test (key count), fixed
 
 - plan R1 snapshot 9c7a789..:5d02cca.. CHANGES (2 MAJOR fixed); R2 snapshot cdf4399..:a38b989.. CHANGES (2 MAJOR: contradictory Complexity Tracking, incomplete file list; fixed, prose only)
 
