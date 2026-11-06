@@ -8,7 +8,6 @@
 //! container by name. Step 7's `/hooks` 403 is a real-GitHub fact and stays manual.
 //!
 //! Step 11 (a kind pod) is follow-up #1760 and not covered here; the ignored test below marks it.
-//! `kube_real_*` suite and is not reachable from this crate.
 //!
 //! Behind `sandbox-real-runtime` (Principle VI). `mise run image && mise run test-sandbox`.
 
