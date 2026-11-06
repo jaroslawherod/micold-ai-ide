@@ -1057,7 +1057,8 @@ mod flat_list {
         let mut state = five_states();
         let baseline = listed_rows(&state);
         let mut seen = vec![card_of(&state, "idle")];
-        let steps: Vec<Box<dyn Fn(&mut State)>> = vec![
+        type Step = Box<dyn Fn(&mut State)>;
+        let steps: Vec<Step> = vec![
             Box::new(|s| pr_read(s, "feat/idle", PrState::Merged, true)),
             Box::new(|s| {
                 s.pr_status.removable.remove("feat/idle");

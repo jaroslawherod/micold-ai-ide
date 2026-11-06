@@ -58,8 +58,8 @@ pub fn deliver(state: &mut State, worktrees: Vec<Worktree>) {
 }
 
 /// Start a session at `location` of `/repo` (the store only; nothing becomes current). It is idle,
-/// so it leaves its location in the Idle state group (feature 1125): every location these
-/// fixtures build is listed in today's order unless a test sets a state.
+/// so it leaves its location in the stable order (feature 1718): every location these
+/// fixtures build is listed in that order whatever its state.
 pub fn session_at(state: &mut State, location: SessionLocation) -> SessionId {
     let mut session = Session::start_new(location, AiCli::ClaudeCode);
     session.lifecycle = micold_core::session::SessionLifecycle::Idle;

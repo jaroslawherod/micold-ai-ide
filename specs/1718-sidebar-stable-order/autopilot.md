@@ -32,6 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+- M1 A snapshot 5614aef..:aac273a.. (dispatched); M1 B same snapshot (dispatched)
+
 - plan R1 snapshot 9c7a789..:5d02cca.. CHANGES (2 MAJOR fixed); R2 snapshot cdf4399..:a38b989.. CHANGES (2 MAJOR: contradictory Complexity Tracking, incomplete file list; fixed, prose only)
 
 | Review | Round | Snapshot | Verdict |
