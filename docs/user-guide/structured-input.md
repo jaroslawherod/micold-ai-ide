@@ -70,7 +70,7 @@ in the row.
 
 ## Session options
 
-The **Session options** button (a settings icon) at the end of the message box row shows or hides
+The **Session options** button (a settings icon) at the start of the message box row shows or hides
 a row holding the session's **Model**, **Effort** and **Permission** selectors. The permission
 selector is no longer in the message box row itself.
 

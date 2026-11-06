@@ -51,9 +51,13 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Review A (M1) | 1 | a32852da698391233b83a80997d596d7b86e9910:72befd849ecd49e1f2db2f8483ea786350fbe122 | CLEAN (3 MINOR) |
 | Review B (M1) | 1 | a32852da698391233b83a80997d596d7b86e9910:72befd849ecd49e1f2db2f8483ea786350fbe122 | CHANGES: 1 MAJOR (no tdd log; declined, see above); Verify 75 passed |
 | Review A (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CLEAN (2 MINOR declined: dropped-connection failures and an off-screen session's refusal do not expand the shared row; FR-012 covers refusals, row is window-level) |
-| Review B (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | running |
+| Review B (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CHANGES: F1 MAJOR (auto-expand persist not tested via update()/daemon path: fixed, tests added), F2 MAJOR (accessible label: declined, see below), 2 MINOR fixed; Verify: core ok, client main 64 passed |
 
 ## Declined review findings
+
+- M2 Review B F2 (accessible label): the toolkit has no accessible-name hook in this path (no a11y API in the iced widgets used); the tooltip carries the state words per state and `the_activity_state_is_an_icon_with_its_words_in_the_tooltip` pins them. FR-007 is met to the extent the toolkit allows.
+- M2 Review A MINORs (dropped-connection failures and an off-screen session's refusal do not expand the shared row): FR-012 covers refusals; the row is window-level.
+- M2 visual pass (headless sway): steps 1 PASS, 2 partial, 3 Ready only, 5 Bypass marker not reached (resumed CLI reported unset mode); Bypass marker, toggle-off and Busy/Waiting are pinned by view tests (T014, T020). Evidence in evidence/m2-*.png and visual-pass-m2.md.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
