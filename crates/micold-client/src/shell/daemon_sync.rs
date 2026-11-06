@@ -6348,6 +6348,31 @@ pub(crate) mod tests {
             }
         }
 
+        /// Feature 1703 FR-012: a refused model, effort or permission change opens the options
+        /// row and writes that down, so the refusal note is not hidden after a restart.
+        #[test]
+        fn a_refused_session_option_opens_and_persists_the_options_row() {
+            use micold_core::settings::FakeSettingsStore;
+            for which in 0..3 {
+                let (mut app, _rx, session) = app_with_session();
+                let store = std::sync::Arc::new(FakeSettingsStore::new());
+                app.caps = app.caps.clone().with_settings(store.clone());
+                let op = match which {
+                    0 => PendingOp::SessionModel { session },
+                    1 => PendingOp::SessionEffort { session },
+                    _ => PendingOp::SetPermissionMode { session },
+                };
+                app.pending_ops.insert(77, op);
+                assert!(!app.core.composers.options_open);
+                let _ = on_daemon_event(&mut app, DAEMON, refused(77, "not allowed"));
+                assert!(app.core.composers.options_open, "the refusal opens the row");
+                assert!(store
+                    .saves()
+                    .last()
+                    .is_some_and(|x| x.composer_options_open));
+            }
+        }
+
         /// The one request sent since the last drain, and its `req`.
         fn sent_one(
             rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,

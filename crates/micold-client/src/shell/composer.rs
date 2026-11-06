@@ -568,9 +568,7 @@ mod tests {
         app.core
             .composers
             .edited(s, "/effort extreme".to_string(), (0, 15));
-        send(&mut app, s);
-        // `send` is the reducer's path; the wrapper writes what a message changed.
-        persist_options_if_changed(&mut app, false);
+        let _ = update(&mut app, Msg::SendRequested(s));
         assert!(app.core.composers.options_open, "a refusal expands the row");
         assert!(store.saves().len() > writes);
         assert!(store

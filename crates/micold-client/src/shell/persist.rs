@@ -1390,9 +1390,9 @@ mod tests {
         );
     }
 
-    /// BUG-1470, FR-016: the toggle writes the open state and leaves the rest as stored.
+    /// Feature 1703 FR-011: the options row's state is written on each change.
     #[test]
-    fn the_options_row_state_is_written_and_a_form_save_keeps_it() {
+    fn the_options_row_state_is_written() {
         let store = FakeSettingsStore::loaded(Settings::default());
         let mut core = State::default();
         core.composers.options_open = true;
@@ -1403,6 +1403,7 @@ mod tests {
         assert!(!store.saves()[1].composer_options_open);
     }
 
+    /// BUG-1470, FR-016: the toggle writes the open state and leaves the rest as stored.
     #[test]
     fn a_filter_toggle_writes_the_open_state() {
         let store = FakeSettingsStore::loaded(Settings::default());
