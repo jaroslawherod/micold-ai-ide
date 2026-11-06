@@ -10,8 +10,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M2a
-- **Next step**: implement T065 (container/pod/host-SSH delivery, design in the ledger's
-  *Handover*); gate, review, open the M2a PR. M2b (T065a–T065c) is a separate unit's scope — see D8.
+- **Next step**: continue from the ledger's *Handover*: `cargo check` the uncommitted T065 diff
+  first, fix what it finds, then finish T065 (pod relink, daemon call site, host/ssh wiring); gate,
+  review, open the M2a PR. M2b (T065a–T065c) is a separate unit's scope — see D8.
 
 ## Pull requests
 
@@ -135,6 +136,108 @@ scoped only, full gate left to CI"; CI's quieter machine is the tie-breaker.
 - M1 review A round 2, F3 [MINOR]: `daemon_config::ai_cli::launch_overlay`'s `args`/`model` fields unread in production (state.rs re-derives via `ai_cli_args_for`/`effective_model_for`). Declined: `effective_model_for` additionally validates the model string with `ModelName::parse` (`launch_overlay` does not — it is a pure capability-mapping function tested in isolation, not the only place the mapping has to be applied correctly), and `ai_cli_args_for` is a one-line accessor; collapsing them would couple the launch-spec wiring to a type (`LaunchOverlay`) built for a different purpose (env mapping, including the two API-key-reaching-env rules). Left as two small, independently correct functions rather than one with a secondary mode.
 
 ## Handover
+
+**M2a (T065) is in progress, uncommitted on this worktree, context cap reached before it compiled.**
+Do not re-derive the design: the previous rounds' design below (ignore the "still not started"
+sentence just below, which is now stale) is correct and this round wrote code from it directly, in
+this order: (1) `sandbox/mod.rs` — done; (2) `sandbox/argv.rs` — done; (3)
+`tests/sandbox_credentials.rs` assertions — done; (4) `kube/credentials.rs` + `kube/manifest.rs` —
+done. None of this has been run through `cargo check` yet (the build lock was held by another
+worktree the whole time this round tried; killed the stuck background check before handing over,
+per `rules/unit.md`'s "never end your turn with a build … still running"). **The next unit's first
+step must be `scripts/build-lock.sh cargo check -p micold-core -p micold-daemon --lib --tests`**
+and fix whatever it finds before going any further — this round did not confirm any of the below
+compiles.
+
+Changed, uncommitted (`git status`/`git diff --stat` for the exact diff):
+- `crates/micold-core/src/sandbox/mod.rs`: `CredentialMount.delivered: Option<PathBuf>` added
+  (`container`'s meaning unchanged, per the correction below); `relative_to` (extracted from
+  `present_under`'s old inline logic), `ai_cli_auth_delivered_path`, `ai_cli_sign_in_links`,
+  `relink_ai_cli_sign_ins` + `relink_one` added (all pub except `relative_to`/`ai_cli_auth_delivered_path`/`relink_one`); `CredentialShare::writable()` deleted (no caller left); `build_for` now
+  computes `delivered` for `AiCliAuth` mounts via a `BTreeMap` built from `ai_cli_sign_in_links`,
+  `None` for `GitConfig`.
+- `crates/micold-core/src/sandbox/argv.rs`: `mount_args`'s credential loop drops the `writable`
+  branch, mounts `c.delivered.unwrap_or(&c.container)` read-only for every credential; both struct
+  literals in `tests` (`argv_mounts_are_exactly_the_mount_set`,
+  `every_mount_is_labelled_shared_exactly_when_selinux_enforces`) gained `delivered: None`.
+- `crates/micold-core/tests/sandbox_credentials.rs`: new test
+  `the_ai_cli_sign_in_is_delivered_under_the_secrets_directory_git_config_is_not` (delivered
+  `Some`/`None` and the `CONTAINER_SECRETS_DIR/ai-cli-auth/` prefix); three new `#[cfg(target_os =
+  "linux")]` tests for `relink_ai_cli_sign_ins` (links, is idempotent, skips a CLI with no
+  delivered file) — gated to Linux only, same precedent as `endpoint.rs`'s
+  `a_symlink_in_place_of_the_directory_is_refused` (Windows CI runners lack symlink privilege).
+- `crates/micold-daemon/tests/sandbox_real_ai_cli_sessions.rs` and
+  `sandbox_real_no_user_credentials.rs`: both hand-rolled `bind_mount(...)` calls updated to use
+  `c.delivered.unwrap_or(&c.container)` and `false` (read-only) instead of `c.share.writable()`.
+  **Not re-verified for real-runtime behavioural correctness** (no container runtime here): once
+  the daemon's own relink call site (still missing, see below) exists, these two real-sandbox
+  harness tests may additionally need to invoke it themselves inside the container before checking
+  CLI behaviour, since they build mounts and `bind_mount` by hand rather than going through the
+  daemon's actual session-start path — check this when `mise run test-sandbox` runs them.
+- `crates/micold-core/src/kube/credentials.rs`: added `pub fn sign_in_dir(cli: AiCli) -> String`
+  (`/run/micold/secrets/sign-in/<cli.tool_name()>`, mirroring `GIT_CONFIG_DIR`); `KubeCredential::mount()`'s `SignIn` arm now returns `Mount { path: sign_in_dir(*cli), sub_path: None }` (a directory
+  Secret, no `subPath`) instead of the old single-file `sub_path`; removed the now-unused `file`
+  closure in `mount()`; updated test `each_credential_has_one_secret_and_one_mount`'s `claude.mount()`
+  assertion to match.
+- `crates/micold-core/src/kube/manifest.rs`: no production code changed (handover's prediction
+  held: `credential_mount` already drops `subPath` when `None`, `home_dirs` already excludes a
+  path outside `POD_HOME`, so a `SIGN_IN_DIR`-based mount needed no change at either site) — only
+  two tests updated: `each_allowed_credential_adds_one_read_only_secret_volume_and_mount`'s `auth`
+  mount assertion now checks `sign_in_dir(ClaudeCode)` + no `subPath` + `readOnly`;
+  `config_and_secret_mounts_are_read_only_and_the_git_one_has_no_sub_path` dropped its sign-in
+  exception (every mount, including the sign-in's, is now uniformly a no-`subPath` directory).
+- `specs/daemon-config-file/tasks.md`: M2 split into M2a (T065 only) and M2b (T065a–T065c, now
+  depended on by M3) — **already committed**, at `c0a18af34`. The design/code changes above are
+  **not yet committed** (left uncommitted deliberately, so `branch-start.sh` in a fresh unit sees
+  them and does not need a stash dance — but check `git status` first thing; if the next unit is
+  *not* continuing this handover directly, commit this diff before doing anything else that could
+  lose it).
+
+**What is still missing for T065** (unchanged from the previous round's notes, still not reached):
+- The pod's own daemon needs the *same* relink call, parameterised to read from `sign_in_dir(cli)`
+  (not `CONTAINER_SECRETS_DIR/ai-cli-auth/<rel-to-home>`) and write to `HOME_DIR`
+  (`kube/credentials.rs:17`) — **this is a real design gap this round found, not just unfinished
+  wiring**: the pod's delivered-path convention (`sign_in_dir(cli)/<filename>`, keyed by the CLI's
+  own auth-file basename) and the sandbox's (`CONTAINER_SECRETS_DIR/ai-cli-auth/<path-relative-to-home>`) are *not* the same shape, so `ai_cli_sign_in_links`/`relink_ai_cli_sign_ins` as written
+  only work for the container kind. Before wiring the pod's call site, decide: either (a) give
+  `ai_cli_sign_in_links` a `secrets_base: SecretsBase` enum/parameter with two variants
+  (`ContainerAuth` → today's relative-to-home scheme, `PodSignIn` → `sign_in_dir`-per-CLI scheme)
+  so both kinds still share the one relink function the way the earlier handover's note intended,
+  or (b) accept two small, separate functions (one per kind) and say in a code comment why they
+  are not unified. Resolve this before touching `kube/credentials.rs`'s pod runtime code further.
+- The actual call site inside a running sandbox (container or pod) that invokes the relink at
+  "every session start": still not found in any round. `crates/micold-daemon/src/state.rs`'s
+  `with_configured_env`/`ai_cli_env_overlay` (around `:757-794`/`:2176-2194` as of the previous
+  round — re-verify, this round did not look) is the leading candidate; trace its one caller up
+  from there (an `Explore` subagent is the efficient way, per `delegate.md`) to find where a
+  sandbox-kind session actually starts, and call `relink_ai_cli_sign_ins`/the pod equivalent there,
+  unconditionally for every sandbox-kind daemon, before the AI CLI spawns.
+- Host/SSH side: `<data_dir>/ai/<id>/` as the session's config dir (`CLAUDE_CONFIG_DIR`/
+  `CODEX_HOME`/OpenCode `XDG_DATA_HOME`), the sign-in and the user's own settings files linked in,
+  and the SC-008 byte-identical/mtime-unchanged test. Not started. `daemon_config::ai_cli`'s
+  `place_target`/`settings_file_name` (`crates/micold-core/src/daemon_config/ai_cli.rs:94-136` as
+  of the previous round) are the right pure path-mapping functions to reuse, already parameterised
+  by `config_dir: &Path` so they need no change for host/ssh.
+- `mise run check`/a targeted `cargo test -p micold-core sandbox::`/`kube::` have **not** been run
+  this round on the new code. Do this literally first, before reading anything else, in the next
+  unit.
+
+**Suggested order for the next unit**: (1) `cargo check -p micold-core -p micold-daemon --lib
+--tests`, fix compile errors; (2) `cargo test -p micold-core sandbox:: kube::` targeted, fix test
+failures; (3) resolve the pod-vs-container `secrets_base` design gap above, then wire
+`kube/credentials.rs`'s secret_data/mount pieces needed for the pod relink (if anything beyond what
+is already landed); (4) find and wire the daemon's session-start call site for both kinds; (5)
+host/ssh config-dir wiring + SC-008 test; (6) gate, review, PR — M2a's scope stops at T065; do not
+start M2b (T065a–T065c, a separate milestone now, D8).
+
+**Why handing over again without a finished PR**: this round spent its budget confirming the
+design held (it did, with the one pod-shape gap above found along the way) and translating it into
+edited files across five source files and two test files, but ran out of context before it could
+run even one `cargo check` to confirm the result compiles — so no gate, no review and no PR could
+responsibly follow. Landing uncompiled, unverified code as "done" would be worse than a precise
+handover naming exactly what changed and what the very next command should be.
+
+---
 
 Milestone M2 (T065, T065a, T065b, T065c) still not started on the tree: no code changes (the tree
 is clean, identical to `0b3324d41`). This round went deeper into T065's exact mechanics — far

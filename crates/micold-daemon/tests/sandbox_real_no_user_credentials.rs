@@ -80,7 +80,10 @@ fn sandbox_real_no_user_credentials_reach_the_container() {
         .credentials
         .iter()
         .filter(|c| c.host.exists())
-        .flat_map(|c| bind_mount(c.host.display(), c.container.display(), c.share.writable()))
+        .flat_map(|c| {
+            let container = c.delivered.as_ref().unwrap_or(&c.container);
+            bind_mount(c.host.display(), container.display(), false)
+        })
         .collect();
 
     let home_str = home.display().to_string();

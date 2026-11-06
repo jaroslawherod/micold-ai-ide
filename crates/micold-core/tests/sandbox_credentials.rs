@@ -247,6 +247,37 @@ fn the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory() {
     );
 }
 
+/// T065: every credential mount is read-only now, and the AI CLI's sign-in no longer lands at its
+/// own live path — it is delivered under the read-only secrets directory instead, and the live
+/// path (`container`, unchanged) is relinked to it at session start.
+#[test]
+fn the_ai_cli_sign_in_is_delivered_under_the_secrets_directory_git_config_is_not() {
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from(CredentialShare::ALL),
+        ..SandboxProfile::default()
+    };
+    let mounts = build(&profile);
+    for c in &mounts.credentials {
+        match c.share {
+            CredentialShare::GitConfig => assert_eq!(c.delivered, None, "{c:?}"),
+            CredentialShare::AiCliAuth => {
+                let delivered = c
+                    .delivered
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("{c:?} has no delivered path"));
+                let prefix = format!(
+                    "{}/ai-cli-auth/",
+                    micold_core::sandbox::CONTAINER_SECRETS_DIR
+                );
+                assert!(
+                    delivered.to_string_lossy().starts_with(&prefix),
+                    "{delivered:?} is not under {prefix}"
+                );
+            }
+        }
+    }
+}
+
 /// Research R11 (BUG-006): a credential mounted inside the sandbox's home needs its parent there.
 ///
 /// The runtime creates a missing mount target's parents as root. Left to it, `<sandbox-home>/.claude`
@@ -662,6 +693,65 @@ fn another_clis_sign_in_does_not_record_claude_setup_as_done() {
         secret(),
     );
     assert_eq!(mounts.onboarding_record(), None);
+}
+
+// --- Relinking a delivered sign-in to its live path (T065, research D13) ---
+//
+// Real symlink creation needs no elevated privilege on Linux but does on Windows CI runners
+// (endpoint.rs's `a_symlink_in_place_of_the_directory_is_refused` is gated the same way), so these
+// run on Linux only; the function itself is not platform-gated, just these tests' fixtures.
+
+/// A fake delivered file creates the expected symlink at the live path, and the return value names
+/// it.
+#[cfg(target_os = "linux")]
+#[test]
+fn relink_links_the_live_path_to_the_delivered_file() {
+    use micold_core::sandbox::{ai_cli_sign_in_links, relink_ai_cli_sign_ins};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let links = ai_cli_sign_in_links(home);
+    let (live, delivered) = links.first().expect("at least one CLI has a sign-in path");
+    std::fs::create_dir_all(delivered.parent().unwrap()).unwrap();
+    std::fs::write(delivered, b"token").unwrap();
+
+    let relinked = relink_ai_cli_sign_ins(home);
+    assert_eq!(relinked, vec![live.clone()]);
+    assert_eq!(std::fs::read_link(live).unwrap(), *delivered);
+    assert_eq!(std::fs::read(live).unwrap(), b"token");
+}
+
+/// Calling it again when the link already points at the right target is a no-op: no error, same
+/// return.
+#[cfg(target_os = "linux")]
+#[test]
+fn relink_run_twice_is_a_no_op() {
+    use micold_core::sandbox::{ai_cli_sign_in_links, relink_ai_cli_sign_ins};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let (_, delivered) = ai_cli_sign_in_links(home).remove(0);
+    std::fs::create_dir_all(delivered.parent().unwrap()).unwrap();
+    std::fs::write(&delivered, b"token").unwrap();
+
+    let first = relink_ai_cli_sign_ins(home);
+    let second = relink_ai_cli_sign_ins(home);
+    assert_eq!(first, second);
+}
+
+/// A CLI whose `delivered` file does not exist (never shared, or the opt-in is off) is skipped: no
+/// link is created and no error is raised for the others.
+#[cfg(target_os = "linux")]
+#[test]
+fn relink_skips_a_cli_with_no_delivered_file() {
+    use micold_core::sandbox::relink_ai_cli_sign_ins;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    // Nothing delivered under this home at all.
+    let relinked = relink_ai_cli_sign_ins(home);
+    assert_eq!(relinked, Vec::<PathBuf>::new());
+    assert!(!home.join(".claude").join(".credentials.json").exists());
 }
 
 // --- No user git identity in a sandbox (#1002, FR-001, FR-014, T002) ---

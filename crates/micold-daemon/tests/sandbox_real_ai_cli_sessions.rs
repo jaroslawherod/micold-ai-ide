@@ -160,7 +160,8 @@ async fn probe(shared: bool, container: &str, port: u16) {
                     "{} is missing: the shared run needs a signed-in host `claude`",
                     c.host.display()
                 );
-                bind_mount(c.host.display(), c.container.display(), c.share.writable())
+                let container = c.delivered.as_ref().unwrap_or(&c.container);
+                bind_mount(c.host.display(), container.display(), false)
             })
             .collect()
     } else {

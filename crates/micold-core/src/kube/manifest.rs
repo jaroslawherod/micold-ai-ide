@@ -887,7 +887,14 @@ mod tests {
         assert!(config.get("subPath").is_none());
         assert_eq!(config["readOnly"], true);
         let auth = find(n.secret(&signin));
-        assert_eq!(auth["mountPath"], "/data/home/.claude/.credentials.json");
+        // A directory of its own too (T065): no single-file mount, so the CLI's own refresh never
+        // has to write through a bind mount.
+        assert_eq!(
+            auth["mountPath"],
+            crate::kube::credentials::sign_in_dir(crate::session::AiCli::ClaudeCode)
+        );
+        assert!(auth.get("subPath").is_none());
+        assert_eq!(auth["readOnly"], true);
         assert_eq!(
             p["spec"]["imagePullSecrets"],
             json!([{ "name": n.pull_secret() }])
@@ -929,15 +936,14 @@ mod tests {
         );
     }
 
-    /// T036/FR-029: every config and secret volume is read-only and no mount is a single file,
-    /// except the sign-in's, which the AI CLI group (T065) moves to a directory.
+    /// T036/FR-029: every config and secret volume is read-only and no mount is a single file —
+    /// the sign-in's included, since T065 moved it to a directory Secret too.
     #[test]
     fn config_and_secret_mounts_are_read_only_and_the_git_one_has_no_sub_path() {
         let signin = KubeCredential::SignIn {
             cli: crate::session::AiCli::ClaudeCode,
         };
-        let p = with_allowed(&[KubeCredential::GitConfig, signin.clone()]);
-        let n = names();
+        let p = with_allowed(&[KubeCredential::GitConfig, signin]);
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
             .unwrap();
@@ -946,9 +952,7 @@ mod tests {
             // The scoped git credential's directory is the daemon's to write.
             if path.starts_with("/run/micold/") && !path.starts_with("/run/micold/git") {
                 assert_eq!(m["readOnly"], true, "{path}");
-                if m["name"] != n.secret(&signin) {
-                    assert!(m.get("subPath").is_none(), "{path}");
-                }
+                assert!(m.get("subPath").is_none(), "{path}");
             }
         }
         let paths: Vec<&str> = mounts
