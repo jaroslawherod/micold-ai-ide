@@ -56,24 +56,25 @@ container's `/`, `$HOME` and `env` find none of them, and that `/run/micold/git`
 
 ### Part C results (#1147, 2026-10-27)
 
-No real fine-grained PAT was made (user decision 2026-10-27), and the app has no base-URL override:
-the client's PAT check uses the literal `https://api.github.com` URLs (`scoped_credential/pat.rs`,
-no override), so a local fake GitHub API cannot be pointed at without product code (out of scope
-for a chore; follow-up #1542). The daemon's git helper already has a test override
-(`MICOLD_GIT_CREDENTIAL_BASE`) and its test uses a local git HTTP backend. So **no step was run live.** What stands in for each, by an automated test CI
-already runs (`mise run gate`):
+No real fine-grained PAT was made (user decision 2026-10-27), so **no step was run live.** The client's
+PAT check takes an injected API base (#1542, `pat::ApiBase`, a parameter the caller passes; every
+shipped caller passes `https://api.github.com`), so a fake GitHub API on loopback
+(`crates/micold-client/tests/support/fake_github.rs`) stands in for it in the normal suite. The
+daemon's git helper has its own test override (`MICOLD_GIT_CREDENTIAL_BASE`) and its test uses a
+local git HTTP backend. What stands in for each step, by an automated test CI already runs
+(`mise run gate`); `fake API` below is `micold-client` `--test scoped_token_fake_api`:
 
 | Step | Result | Covered by (not live) |
 |---|---|---|
 | 1 | NOT RUN: no real PAT | |
-| 2 | NOT RUN live | `micold-core` `scoped_credential::pat` shape/expiry tests; client `shell::scoped_credential` `a_refused_token_is_not_stored_and_an_accepted_one_is`; `features_settings` `a_token_that_is_not_fine_grained_is_refused_before_any_check` |
-| 3 | NOT RUN: real API facts (R2) unverified | only the fake-transport tests: `the_expiry_header_parses_to_unix_seconds`, `the_probe_needs_push_and_a_future_expiry`, `statuses_map_to_their_reasons` (403/404), `the_reach_listing_refuses_another_private_repository_naming_it` |
+| 2 | NOT RUN live | `micold-core` `scoped_credential::pat` shape/expiry tests; client `shell::scoped_credential` `a_refused_token_is_not_stored_and_an_accepted_one_is`; `features_settings` `a_token_that_is_not_fine_grained_is_refused_before_any_check`; fake API `step_2_a_valid_token_is_stored_with_the_expiry_the_fake_reported`, `step_2_a_classic_token_is_refused_before_any_request_and_nothing_is_stored` |
+| 3 | NOT RUN: real API facts (R2) unverified | only the fake-transport tests: `the_expiry_header_parses_to_unix_seconds`, `the_probe_needs_push_and_a_future_expiry`, `statuses_map_to_their_reasons` (403/404), `the_reach_listing_refuses_another_private_repository_naming_it`; fake API `step_3_a_token_for_another_repository_is_refused_and_nothing_is_stored`, `step_3_a_token_with_no_expiry_is_refused_and_nothing_is_stored`, `step_3_a_token_without_push_is_refused_and_nothing_is_stored`, `step_3_a_token_reaching_a_second_private_repository_is_stored_and_its_reach_listed` (the shapes the fake serves are not GitHub's: the real-API facts stay manual) |
 | 4, 5 | NOT RUN live (container) | client `a_stored_token_is_granted_for_its_own_repository_only`; daemon `--test mcp scoped_git_credential` `push_and_pull_succeed_with_the_scoped_credential_and_ssh_remotes_are_rewritten` (git push/pull over HTTP with the helper against a local git HTTP backend) |
 | 6, 7 | NOT RUN live | same daemon test (helper empty for another repo/host); daemon `nothing_is_offered_for_another_repository_or_host` (step 6: helper offers nothing for another repo); `sandbox_real_no_user_credentials_reach_the_container` (`mise run test-sandbox`, CI job `sandbox-runtime`) for the tmpfs credential directory. UNCOVERED: the token file's content in a container and the `/hooks` 403 of step 7 (SC-003, a real-GitHub fact) |
-| 8 | NOT RUN live | client `a_removed_token_is_withdrawn_from_the_daemon`, `a_replaced_token_is_granted_without_a_daemon_restart`, `a_token_removed_while_disconnected_is_revoked_on_the_reconnect` |
+| 8 | NOT RUN live | client `a_removed_token_is_withdrawn_from_the_daemon`, `a_replaced_token_is_granted_without_a_daemon_restart`, `a_token_removed_while_disconnected_is_revoked_on_the_reconnect`; fake API `step_8_a_removed_token_is_withdrawn_and_granted_again_when_pasted_without_a_restart` |
 | 9 | NOT RUN live | `features_daemons` `dismissing_the_notice_clears_it_from_the_registry_and_the_row` |
-| 10 | NOT RUN live | client `at_the_expiry_the_status_is_expired_and_the_daemon_is_told_to_delete_the_token`, `a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry`; core `schedule` tests (injected clock) |
+| 10 | NOT RUN live | client `at_the_expiry_the_status_is_expired_and_the_daemon_is_told_to_delete_the_token`, `a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry`; core `schedule` tests (injected clock); fake API `step_10_a_token_within_a_day_of_its_expiry_warns_and_a_past_expiry_is_withdrawn` |
 | 11 | NOT RUN (kind) | none (`kube::start_tests` is a fake of the manifest only) |
-| 12 | NOT RUN live | `features_settings` `the_help_names_the_permissions_and_the_risks` (names *Contents: Read and write*, *Metadata: Read*, the risks; the *Pull requests* sentence was not checked) |
+| 12 | NOT RUN live | `features_settings` `the_help_names_the_permissions_and_the_risks` (names *Contents: Read and write*, *Metadata: Read*, the risks; the *Pull requests* sentence was not checked); fake API `step_12_the_paste_form_help_names_the_permissions_the_sandbox_and_the_risks` (also the sandbox-can-use-everything sentence, which is what covers a *Pull requests* permission the user adds) |
 
 The live check against real GitHub and the visual pass of the status rows (T055) remain open on #1147.

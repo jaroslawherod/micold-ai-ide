@@ -26,6 +26,7 @@ pub mod kube;
 pub mod links;
 pub mod notification_icon;
 pub mod overlay;
+pub mod pat_source;
 pub mod reveal_trace;
 pub mod selection;
 pub mod showcase;

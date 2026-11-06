@@ -191,6 +191,8 @@ scripts/basic-image-hash.sh           micold-daemon-runtime
 crates/micold-client/src/daemon.rs             micold-daemon-runtime
 crates/micold-client/src/shell/sandbox.rs      micold-daemon-runtime
 crates/micold-client/src/shell/sandbox_real.rs micold-daemon-runtime
+# The fake GitHub API the runtime-gated scoped-token test in micold-daemon includes (#1542).
+crates/micold-client/tests/support/fake_github.rs micold-daemon-runtime
 # The workflow itself: an edit to a job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-daemon-runtime
 

@@ -9,23 +9,27 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1542
 - **Worktree branch**: feat/1542_base-url-override-for-the-github-api-and-git-host
 - **Started**: 2026-11-06
-- **Phase**: tasks
-- **Next step**: design PR opened; wait for merge, then M1
+- **Phase**: implement M1
+- **Next step**: M1 reviews and gate, then open the M1 PR; then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1751 | Design PR | open | |
+| #1751 | Design PR | merged | 3093ca085b47775be01ad3dc71649271940a31d4 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | | pending |
+| M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | | implemented |
 | M2 | T010–T011 | full | Runtime-gated container/kind test (steps 4-8, 10, 11) | | pending |
 
 ## Decisions
+
+- M1: the token-check HTTP types (`PatSource`, `UreqTransport`, `check_and_store`) moved from the binary's `shell::scoped_credential` to the library (`micold_client::pat_source`), because an integration test cannot reach `shell` (binary only). `shell::scoped_credential` re-exports `PatSource`. `PatSource::with_api_base` is the only way to give a source another base; no shipped caller uses it.
+- M1: the #1002 step 3 scenario "token reaching a second private repository is refused" is stale since #1529 (FR-009 there: any number of repos accepted, reach listed). The fake-API test asserts the current behaviour (stored, reach listed).
+- M1: the "Pull requests sentence" of step 12 is covered by the existing help sentence "The sandbox can use everything the token can, and the client cannot narrow it."; the help has no sentence naming Pull requests, and no product text was added.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -38,16 +42,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 55f713a4:7bd55840 | CHANGES: 1 MAJOR (test targets unregistered), 3 MINOR; fixed (Cargo.toml [[test]], .gitattributes, FR-009 row, git backend R6), structural doc edits, self-checked |
 | Spec | 1 | 3ce1418f:c695061be | CHANGES: 3 MAJOR; fixed (spec reworded, FR-004 kept open, SC counts, checklist), prose only |
 | Tasks | 1 | a08fafa1:91e6af16 | CHANGES: 1 MAJOR (T006 [[test]] before file), 2 MINOR; fixed (registration folded into T007, dr_case, transport, checklist text), self-checked |
+| M1 review A | 1 | 6ad156f1e8d55f53b91ae4dac6d36b56876288f4:3093ca085b47775be01ad3dc71649271940a31d4 (before fixes) | high: 9 findings (no BLOCKER/MAJOR label); fixed 5 (stale doc links x2, fake thread per connection and case-insensitive header, dead-port race, fake renamed `FakeGithubApi`); declined 4 (below) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | #1751 | Design PR | open | |
+| M1 | A | `.gitattributes` marks `fake_github.rs` runtime but no daemon test includes it yet | Required by T006; M2 (T010) adds the daemon test that includes it. |
+| M1 | A | `ApiBase::new` should reuse `reach::api_base` | Its semantics differ (empty means the default here; `api_base("")` gives `https:///api/v3`); a core unit test pins the literal. |
+| M1 | A | `ApiBase::new` / `with_api_base` are public, empty falls back to production, http is accepted | Empty-is-default is the specified edge case; an injected parameter is FR-004's design and an integration test cannot use `cfg(test)`; no shipped caller passes a non-default base. |
+| M1 | A | `on_device` and `check_github_token` defaults not observed by a test | `on_device` calls `new`, which a test covers; `check_github_token` passes `ApiBase::default()` in one line. |
 
 ## Handover
 
-None.
+M1 (T001-T009) is implemented and ticked in tasks.md; all changes are committed locally on the branch, NOT pushed, no M1 PR yet. Done: review A (round 1, fixes applied, declined findings recorded above). Running when this unit stopped: (1) full gate `mise run gate` detached, log `/tmp/claude-1000/gate1.log` (started on a tree before the review-A fixes: rerun it on the final tree if the commit tree differs or the push hook refuses), may still be waiting on the build lock; (2) review B subagent (conformance, sonnet, snapshot db095845038e4b5f6ae2355ba6c5c755818d7923:3093ca085b47775be01ad3dc71649271940a31d4), its result is lost with this unit: dispatch it again (fresh `autopilot-reviewer`, `model: sonnet`, rubric rubrics/conformance.md, Verify = `scripts/build-lock.sh cargo test -p micold-client --test scoped_token_fake_api` and `mise run test-core`). Next: re-dispatch review B, act on it, run `mise run gate` once on the final tree (hold.sh with AUTOPILOT_HOLD_SECS=170, the bash tool backgrounds calls after 180 s), then pr.md: push, open the M1 PR titled `feat(1542): token check takes an injected API base, fake GitHub API tests (#1542)`, body with Agent review / Local gate sections, record the PR number. Local test results so far: core `scoped_credential::pat` 28 pass; `--test scoped_token_fake_api` 11 pass; client bin `scoped_credential` 18 pass. No visual pass needed (no UI change). Note for the PR body: no tdd/cycle-log.md was kept (tests and code were written together); the daemon runtime test is M2.
 
 ## Open escalation
 

@@ -23,7 +23,7 @@ use micold_core::scoped_credential::{SecretToken, UnixTime};
 pub const REACH_FILE: &str = "github-reach.json";
 
 /// GitHub's REST API over HTTPS (`ureq` 3): a 10 second budget, no redirect, a non-2xx status is an
-/// `Ok` reply. The request shape is the client's (`scoped_credential::UreqTransport`).
+/// `Ok` reply. The request shape is the client's (`micold_client::pat_source::UreqTransport`).
 pub struct UreqTransport {
     agent: ureq::Agent,
 }

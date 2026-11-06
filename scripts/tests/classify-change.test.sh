@@ -253,6 +253,7 @@ dr_case "ci.yml itself"                  true  .github/workflows/ci.yml
 dr_case "client container bring-up"      true  crates/micold-client/src/shell/sandbox.rs
 dr_case "client connection actor"        true  crates/micold-client/src/daemon.rs
 dr_case "client container e2e test"      true  crates/micold-client/src/shell/sandbox_real.rs
+dr_case "client fake GitHub API"        true  crates/micold-client/tests/support/fake_github.rs
 dr_case "client shell source"            false crates/micold-client/src/shell/daemons.rs
 dr_case "client UI source"               false crates/micold-client/src/ui/a.rs
 dr_case "client feature source"          false crates/micold-client/src/features/a.rs

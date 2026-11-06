@@ -286,6 +286,10 @@ name = "popover_displacement"
 path = "tests/popover_displacement.rs"
 
 [[test]]
+name = "scoped_token_fake_api"
+path = "tests/scoped_token_fake_api.rs"
+
+[[test]]
 name = "service_capability_fakes"
 path = "tests/service_capability_fakes.rs"
 
