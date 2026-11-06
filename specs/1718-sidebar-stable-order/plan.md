@@ -51,6 +51,13 @@ e8f4, `CardDone` e86c, `StateIdle` e034). Decisions: [research.md](research.md).
 | VII Documentation | Pass | FR-009: user guide, layout-snapshot doc, showcase, module docs updated |
 | VIII Reusable UI | Pass | `StateIcon` stays the one shared component; reuses `overview_card::state_icon` |
 
+No violation.
+
+## Complexity Tracking
+
+None. Re-keying `StateIcon` supersedes feature 905's contract `state-icon.md` S1 (three states) for the
+row; recorded in research R1 and R6.
+
 No violation; Complexity Tracking is empty. Re-checked after design: unchanged.
 
 ## Project Structure
@@ -64,6 +71,12 @@ crates/micold-client/src/features/navigation.rs # location_nodes over sidebar_en
 crates/micold-client/src/ui/sidebar.rs        # drop group_header, Header row key; pass card state to StateIcon
 crates/micold-client/src/ui/material/state_icon.rs # re-key on CardState
 crates/micold-client/src/showcase/sections/{surfaces,atoms}.rs # drop group header poses; five-state icon pose
+crates/micold-material/src/text.rs, type_role_mapping.rs  # delete TypeRole::SidebarGroup and test a_sidebar_group_header_is_twelve_px_bold
+crates/micold-client/src/ui/material/tree_view.rs # delete the group-heading builder and its tests (~210, 239, 1494-1503); rewrite StateIcon tests (~1290-1303) on CardState
+crates/micold-client/src/ui/material/composition_contrast.rs # drop a_sidebar_group_header_is_legible_on_the_sidebar; re-key the state-icon test on CardState and the five roles
+crates/micold-client/src/showcase/catalogue.rs    # drop the SidebarGroup entry
+crates/micold-client/tests/showcase_completeness.rs # poses Running/Blocked/Idle/Unknown become the five card states
+crates/micold-client/tests/icons_font.rs          # only if Icon::StateBlocked is dropped (R6: it is kept)
 docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, tests/layout_snapshot.rs
 ```
 
@@ -89,4 +102,6 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
 - **Unit in `state_icon.rs`**: five states give five different glyph code points (SC-002) and
   equal-width slots; each state's role colour is in `composition_contrast.rs`.
 - **Geometry gates**: layout snapshot and `gates/*` re-recorded for the flat list.
+- **Tooltip** (F2): the row tooltip's state line is `CardState::label()`; tested in `tests/features_sidebar.rs`
+  (`with_state_line` takes a `CardState`).
 - **Quickstart §B**: visual pass of the flat sidebar with all five states.
