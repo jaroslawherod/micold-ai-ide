@@ -68,7 +68,13 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 });
             }
         }
+        Msg::ModeMenuToggled { session, current } => prompts.toggle_mode_menu(session, current),
+        Msg::ModeMenuMoved { session, direction } => {
+            prompts.step_mode_menu(session, direction, PermissionMode::ALL.len());
+        }
+        Msg::ModeMenuClosed(session) => prompts.close_mode_menu(session),
         Msg::ModeRequested { session, mode } => {
+            app.core.permission_prompts.close_mode_menu(session);
             // Bypass: its confirmation opens as every dialog does, over nothing else and with no
             // field holding the keyboard; cleared first, since clearing cancels open dialogs.
             if mode == PermissionMode::Bypass {

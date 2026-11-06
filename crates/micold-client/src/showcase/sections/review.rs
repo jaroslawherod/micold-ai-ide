@@ -36,9 +36,9 @@ use micold_core::tokens;
 use crate::ui::syntax;
 
 use crate::ui::material::{
-    BrowseBar, CardState, ChangeBar, DiffLayout, DiffView, InlineDiff, ReviewBar,
-    ReviewCommentCard, ReviewPanelRow, SideSheet, Tag, Text, TextArea, TypeRole, VirtualRows,
-    PANEL_ROW_HEIGHT,
+    BrowseBar, CardState, ChangeBar, DiffLayout, DiffView, InlineDiff, MenuSelect, MenuSelectRow,
+    ReviewBar, ReviewCommentCard, ReviewPanelRow, SideSheet, Tag, Text, TextArea, TypeRole,
+    VirtualRows, PANEL_ROW_HEIGHT,
 };
 use micold_core::review::bar::{error_text, send_button, ScopeCounts};
 
@@ -1226,6 +1226,45 @@ pub fn menu_select_sample<M: Clone + 'static>(
     .into()
 }
 
+/// The composer's selector as the showcase poses it (feature 1703 FR-015–FR-017): a model-style
+/// selector, closed, disabled with its reason, or open with the filter field as its first row.
+fn selector_sample<'a>(open: bool, disabled: bool, roles: Roles) -> Element<'a, Message> {
+    let rows = if open {
+        vec![
+            MenuSelectRow::filter(
+                "op",
+                "Model name",
+                |_| Message::NoOp,
+                iced::widget::Id::unique(),
+                roles,
+            ),
+            MenuSelectRow::option(
+                Text::new("opus", TypeRole::Body, roles),
+                true,
+                Message::NoOp,
+            ),
+            MenuSelectRow::option(
+                Text::new("Use op", TypeRole::Body, roles),
+                false,
+                Message::NoOp,
+            ),
+        ]
+    } else {
+        Vec::new()
+    };
+    let select = MenuSelect::new("Model:", rows, open, Message::NoOp, Message::NoOp, roles)
+        .title(Some("claude-opus-4 · Default"))
+        .width(Length::Fixed(280.0));
+    let select = if disabled {
+        select.disabled("Changing the model is not possible while Claude is working")
+    } else {
+        select
+    };
+    container(select)
+        .width(Length::Fixed(MENU_SAMPLE_WIDTH))
+        .into()
+}
+
 /// `MenuSelect` — the review's source control closed, with a long title, open in every
 /// pull-request list state and on the Default entry (feature 1272, T018). What has to be checked by
 /// eye: the list floating over the line below, the chips and note inside the Working tree option,
@@ -1245,8 +1284,22 @@ pub fn menu_select<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
             };
         posed(label, sample, roles)
     };
+    let selector = |label: &'a str, open: bool, disabled: bool| {
+        let sample = selector_sample(open, disabled, roles);
+        let sample: Element<'a, Message> = if open {
+            container(sample)
+                .height(Length::Fixed(MENU_LIST_HEIGHT + OPEN_POSE_ROOM))
+                .into()
+        } else {
+            sample
+        };
+        posed(label, sample, roles)
+    };
     arrange(
         vec![
+            selector("selector, closed", false, false),
+            selector("selector, disabled", false, true),
+            selector("selector, open with a filter", true, false),
             pose("closed", MenuPose::Closed),
             pose("closed, a long title", MenuPose::ClosedLongTitle),
             pose("open, no pull requests shown", MenuPose::Absent),

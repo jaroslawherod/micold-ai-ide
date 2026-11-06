@@ -104,6 +104,7 @@ pub struct Button<'a, M> {
     tooltip: Option<String>,
     mark: Option<super::UnreadMark<'a, M>>,
     selected: bool,
+    selector: Option<bool>,
     host: Option<style::Host>,
     id: Option<iced::advanced::widget::Id>,
 }
@@ -143,6 +144,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             tooltip: None,
             mark: None,
             selected: false,
+            selector: None,
             width: None,
             shape: None,
             density: micold_core::tokens::density::STANDARD,
@@ -288,13 +290,33 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         self
     }
 
+    /// Draw the button as a selector's trigger (feature 1703, FR-015): 32dp high, the small
+    /// corner, XS by SM padding, a 1dp `outline_variant` edge that becomes a 2dp `primary` one while
+    /// `open`, and the disabled look of no `on_press`. The label, glyph and tooltip stay the
+    /// caller's.
+    pub fn selector(mut self, open: bool) -> Self {
+        self.selector = Some(open);
+        self.density = -2;
+        self.shape = Some(shape::SMALL);
+        self.padding = Some(Padding {
+            top: spacing::XS,
+            bottom: spacing::XS,
+            left: spacing::SM,
+            right: spacing::SM,
+        });
+        self
+    }
+
     /// The style the rendering stack's button is given: the variant's own, with the corner
     /// overridden if the caller asked, and the selected layer where it is toggled on.
     fn style_fn(&self) -> ButtonStyleFn {
         // A decorator rather than a parameter threaded through `style.rs`: the radius and the
         // selected layer are the only things an override touches, and every other call site keeps
         // the style function it has always had.
-        let base = self.variant.style(self.roles, self.host);
+        let base: ButtonStyleFn = match self.selector {
+            Some(open) => Box::new(style::selector_trigger(self.roles, open)),
+            None => self.variant.style(self.roles, self.host),
+        };
         let (radius, selected) = (self.shape, self.selected);
         let layer = style::color(self.variant.content(self.roles, self.host));
         Box::new(move |theme, status| {

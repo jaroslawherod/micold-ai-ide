@@ -25,7 +25,7 @@
 use std::borrow::Cow;
 
 use super::picker::{animated_menu, marker, row_surface, EXIT, GAP, MAX_ROWS_BEFORE_SCROLL};
-use super::{ButtonVariant, Ellipsized, Glyph, Text, ToggleChip, TypeRole};
+use super::{ButtonVariant, Ellipsized, Glyph, Text, TextField, ToggleChip, TypeRole};
 use crate::icons::Icon;
 use crate::ui::cdk::picker::Picker as Behaviour;
 use iced::widget::{button, column, container, row, Space};
@@ -36,6 +36,10 @@ use micold_core::typeahead::Direction;
 /// The list's height before it scrolls, unless the caller sets its own: the picker's eight menu
 /// items.
 pub const DEFAULT_LIST_HEIGHT: f32 = density::MENU_ITEM_BASE * MAX_ROWS_BEFORE_SCROLL;
+
+/// The least width a fixed-width trigger takes (feature 1703 FR-015): `Label: Value` and its
+/// chevron stay readable, and the value ends in `…` past it.
+pub const MIN_TRIGGER_WIDTH: f32 = 140.0;
 
 /// The role an option's note is set in: supporting text under the option, as a picker row's second
 /// line is.
@@ -61,6 +65,26 @@ enum Line<'a, M> {
     Heading(Cow<'a, str>),
     Note(Cow<'a, str>),
     Controls(Element<'a, M>),
+}
+
+impl<'a, M: Clone + 'a> MenuSelectRow<'a, M> {
+    /// A type-to-filter field as a list's first row (feature 1703 FR-017): it shows `value`, prompts
+    /// with `placeholder`, sends `on_input` with the text typed and takes the keyboard once `id` is
+    /// focused. Narrowing the options to `value` is the caller's: it builds the rows that follow.
+    /// Like [`controls`](Self::controls), the line is no keyboard stop.
+    pub fn filter(
+        value: &'a str,
+        placeholder: impl Into<String>,
+        on_input: impl Fn(String) -> M + 'a,
+        id: iced::widget::Id,
+        roles: Roles,
+    ) -> Self {
+        Self::controls(
+            TextField::new(placeholder, value, roles)
+                .id(id)
+                .on_input(on_input),
+        )
+    }
 }
 
 impl<'a, M> MenuSelectRow<'a, M> {
@@ -127,13 +151,14 @@ impl<'a, M> MenuSelectRow<'a, M> {
 /// `MenuSelect::new(fixed, rows, open, on_toggle, on_dismiss, roles).title(t).keyboard(..).into()`.
 pub struct MenuSelect<'a, M> {
     fixed: Cow<'a, str>,
-    title: Option<&'a str>,
+    title: Option<Cow<'a, str>>,
     rows: Vec<MenuSelectRow<'a, M>>,
     open: bool,
     on_toggle: M,
     on_dismiss: M,
     roles: Roles,
     tooltip: Option<String>,
+    disabled: bool,
     highlight: Option<usize>,
     stops: usize,
     highlighted_enabled: bool,
@@ -165,6 +190,7 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
             on_dismiss,
             roles,
             tooltip: None,
+            disabled: false,
             highlight: None,
             stops: 0,
             highlighted_enabled: false,
@@ -178,8 +204,16 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
 
     /// The label's elastic part, after the fixed one: the only part that ends in `…` when the
     /// trigger is too narrow (research R5).
-    pub fn title(mut self, title: Option<&'a str>) -> Self {
-        self.title = title;
+    pub fn title(mut self, title: Option<impl Into<Cow<'a, str>>>) -> Self {
+        self.title = title.map(Into::into);
+        self
+    }
+
+    /// Draw the selector disabled (feature 1703 FR-016): 38% content on a 12% container, no press
+    /// or key opens it, and its tooltip gives `reason`.
+    pub fn disabled(mut self, reason: impl Into<String>) -> Self {
+        self.disabled = true;
+        self.tooltip = Some(reason.into());
         self
     }
 
@@ -224,7 +258,10 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
 
     /// The trigger's width, which the list takes too. `Fill` unless set.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
-        self.width = width.into();
+        self.width = match width.into() {
+            Length::Fixed(w) => Length::Fixed(w.max(MIN_TRIGGER_WIDTH)),
+            other => other,
+        };
         self
     }
 
@@ -340,7 +377,9 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
 
         // The trigger: the fixed part whole, the title in what is left, the chevron at the end.
         let elastic: Element<'a, M> = match s.title {
-            Some(title) => Ellipsized::at_role_spaced(title, TypeRole::Body, r.on_surface).into(),
+            Some(title) => {
+                Ellipsized::at_role_spaced(title.into_owned(), TypeRole::Body, r.on_surface).into()
+            }
             None => Space::new().width(Length::Fill).into(),
         };
         let label = row![
@@ -352,8 +391,9 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill);
         let trigger = super::Button::with_content(label, ButtonVariant::Outlined, r)
+            .selector(s.open)
             .width(s.width)
-            .on_press(s.on_toggle);
+            .on_press_maybe((!s.disabled).then_some(s.on_toggle));
 
         let mut behaviour = Behaviour::new(trigger, menu, s.open, GAP)
             .exit(EXIT)

@@ -320,11 +320,16 @@ impl ModelPickerState {
 
     /// What the window lists: each item, then the typed name when one is typed (FR-014).
     pub fn rows(&self) -> Vec<ModelRow> {
-        let items = self.items.iter().enumerate().map(|(at, item)| ModelRow {
-            label: item.label.clone(),
-            details: item.description.clone(),
-            item: Some(at),
-        });
+        let items = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| self.matches_typed(item))
+            .map(|(at, item)| ModelRow {
+                label: item.label.clone(),
+                details: item.description.clone(),
+                item: Some(at),
+            });
         let typed = (!self.typed.trim().is_empty()).then(|| ModelRow {
             label: use_typed(self.typed.trim()),
             details: None,
@@ -333,15 +338,27 @@ impl ModelPickerState {
         items.chain(typed).collect()
     }
 
-    /// The row of the current choice.
-    pub fn current_row(&self) -> Option<usize> {
-        self.items.iter().position(|item| self.is_current(item))
+    /// Whether `item` survives the filter: its label or model name holds the typed text, ignoring
+    /// case (feature 1703 FR-017). Everything survives while nothing is typed.
+    fn matches_typed(&self, item: &ModelItem) -> bool {
+        let typed = self.typed.trim().to_lowercase();
+        typed.is_empty()
+            || item.label.to_lowercase().contains(&typed)
+            || item.choice.cli_value().to_lowercase().contains(&typed)
     }
 
-    /// The row Enter takes: the highlighted item, else the typed name's.
+    /// The row of the current choice among the rows drawn.
+    pub fn current_row(&self) -> Option<usize> {
+        self.rows()
+            .iter()
+            .position(|row| row.item.is_some_and(|at| self.is_current(&self.items[at])))
+    }
+
+    /// The row Enter takes: the highlighted item, else the typed name's (the last row).
     pub fn enter_row(&self) -> Option<usize> {
-        self.highlight
-            .or_else(|| (!self.typed.trim().is_empty()).then_some(self.items.len()))
+        self.highlight.or_else(|| {
+            (!self.typed.trim().is_empty()).then(|| self.rows().len().saturating_sub(1))
+        })
     }
 
     /// Item `item`'s choice; `None`, the typed name (FR-014). A row the window drew names one or

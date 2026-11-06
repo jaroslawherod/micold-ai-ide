@@ -81,6 +81,15 @@ selector is no longer in the message box row itself.
 - While **Bypass permissions** is on, the settings icon carries a warning marker and its tooltip says so.
 - The button is reachable with Tab; **Space** or **Enter** toggles the row.
 
+### The selectors
+
+**Model**, **Effort** and **Permission** look and behave the same: a 32 px high box with a thin
+border, `Label: Value` inline and a chevron at the end, and the same hover, focus, pressed, open
+and disabled looks. A disabled selector says why in its tooltip. Each opens a floating list; the
+**Model** list starts with a **filter** field that has the keyboard as it opens. Type to narrow the
+models (case does not matter); a typed name that is no listed model is offered as **Use <name>**.
+The arrow keys move through the list, **Enter** takes the highlighted row and **Esc** closes it.
+
 ## Finding the shortcut
 
 Type **/shortcuts** in the message box and send it to open the shortcut sheet, the same dialog the
