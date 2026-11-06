@@ -1573,4 +1573,18 @@ mod selectors {
         prompts.toggle_mode_menu(s, 0);
         assert_eq!(prompts.mode_menu(s), None, "a second press closes it");
     }
+
+    #[test]
+    fn the_list_is_dismissed_by_the_mode_state_not_left_stale_across_sessions() {
+        let (a, b) = (SessionId::new(), SessionId::new());
+        let mut prompts = Prompts::default();
+        prompts.toggle_mode_menu(a, 0);
+        assert_eq!(
+            prompts.mode_menu(b),
+            None,
+            "another session's list stays shut"
+        );
+        prompts.close_mode_menu(b);
+        assert_eq!(prompts.mode_menu(a), Some(Some(0)));
+    }
 }

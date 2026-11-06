@@ -75,12 +75,12 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 **Goal**: model, effort, permission share one trigger style and state treatments; model list opens the floating list with a filter first row.
 **Independent test**: hover/focus/press/open/disable each selector: identical treatments (quickstart §B 4).
 
-- [ ] T026 [P] [US4] Geometry gate test `crates/micold-client/src/ui/material/menu_select_anatomy.rs` (new, modelled on `select_anatomy.rs`): 32 dp height, 8 dp radius, XS/SM padding, 1 dp outline-variant, min 140 dp, five states, disabled tooltip (FR-015, FR-016, SC-004)
-- [ ] T027 [P] [US4] Tests that `MenuSelectRow::filter` filters the list by typed text, and that model, effort and permission choices, change behaviour and disabled rules are unchanged (FR-017, FR-018) in `crates/micold-client/tests/features_composer.rs`
-- [ ] T028 [US4] Extend `crates/micold-client/src/ui/material/menu_select.rs`: shared trigger style, disabled state with tooltip, `MenuSelectRow::filter` first row (builder API kept)
-- [ ] T029 [US4] Migrate model (`Typeahead`/`Button::text`) and permission (`Select`) to `MenuSelect` in `crates/micold-client/src/ui/composer.rs` (`model_control`, `effort_control`) and `crates/micold-client/src/ui/mode_control.rs`; `Select` stays for other callers
-- [ ] T030 [P] [US4] Showcase `MenuSelect` disabled and filter variants in `crates/micold-client/src/showcase/sections/controls.rs` (and `catalogue.rs` if an entry is needed)
-- [ ] T031 [P] [US4] User guide: selector look and model filter in `docs/user-guide/structured-input.md`
+- [x] T026 [P] [US4] Geometry gate test `crates/micold-client/src/ui/material/menu_select_anatomy.rs` (new, modelled on `select_anatomy.rs`): 32 dp height, 8 dp radius, XS/SM padding, 1 dp outline-variant, min 140 dp, five states, disabled tooltip (FR-015, FR-016, SC-004)
+- [x] T027 [P] [US4] Tests that `MenuSelectRow::filter` filters the list by typed text, and that model, effort and permission choices, change behaviour and disabled rules are unchanged (FR-017, FR-018) in `crates/micold-client/tests/features_composer.rs`
+- [x] T028 [US4] Extend `crates/micold-client/src/ui/material/menu_select.rs`: shared trigger style, disabled state with tooltip, `MenuSelectRow::filter` first row (builder API kept)
+- [x] T029 [US4] Migrate model (`Typeahead`/`Button::text`) and permission (`Select`) to `MenuSelect` in `crates/micold-client/src/ui/composer.rs` (`model_control`, `effort_control`) and `crates/micold-client/src/ui/mode_control.rs`; `Select` stays for other callers
+- [x] T030 [P] [US4] Showcase `MenuSelect` disabled and filter variants in `crates/micold-client/src/showcase/sections/controls.rs` (and `catalogue.rs` if an entry is needed)
+- [x] T031 [P] [US4] User guide: selector look and model filter in `docs/user-guide/structured-input.md`
 
 ## Polish (close unit, no code)
 

@@ -265,16 +265,17 @@ fn options_row<'a>(
     roles: Roles,
     permission: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    let mut options = row![model_control(state, session, roles)]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
+    let mut controls = vec![model_control(state, session, roles)];
     if state.offers_effort(session) {
-        options = options.push(effort_control(state, session, roles));
+        controls.push(effort_control(state, session, roles));
     }
-    if let Some(permission) = permission {
-        options = options.push(permission);
-    }
-    options.into()
+    controls.extend(permission);
+    // Wraps onto a further line when the window is too narrow for the three (spec: narrow window).
+    Row::with_children(controls)
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center)
+        .wrap()
+        .into()
 }
 
 /// The activity indicator's words and whether it turns (FR-010): its tooltip, and what a screen
@@ -371,6 +372,11 @@ fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Elem
         model_picker_field(session),
         roles,
     )];
+    if picker.items().is_empty() {
+        rows.push(MenuSelectRow::note(
+            crate::features::command_palette::MODEL_LIST_UNAVAILABLE,
+        ));
+    }
     let stops = model_rows.len();
     rows.extend(model_rows.into_iter().map(|r| {
         let current = r
