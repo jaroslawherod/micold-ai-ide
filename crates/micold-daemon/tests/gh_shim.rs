@@ -128,6 +128,9 @@ fn gh_token_matches_a_non_default_host_for_a_github_enterprise_token() {
 /// A fake `gh` that prints `GH_TOKEN=<...>` and `GH_HOST=<...>` (each `unset` if absent) and exits
 /// with a code no real `gh` or the shim's own fallback (`1`) would produce, so the test can tell
 /// the shim's `exec` really replaced the process image rather than, say, silently swallowing it.
+/// Unix only: it is a `#!/bin/sh` script execed as `gh` on `PATH`, same shape as the shim itself
+/// (`write_shim` names the Windows shim `gh.cmd`, a batch file, which this does not stand in for).
+#[cfg(unix)]
 fn fake_gh(dir: &Path) -> PathBuf {
     std::fs::create_dir_all(dir).unwrap();
     let file = dir.join("gh");
@@ -145,7 +148,9 @@ fn fake_gh(dir: &Path) -> PathBuf {
 
 /// Runs the shim `write_shim` wrote in `bin_dir`, with `fake_gh_dir` next on `PATH` (standing in
 /// for the real `gh`), `cwd` and `extra_env` (e.g. a pre-set `GH_TOKEN`, T056's "leaves an
-/// existing one alone"). Returns the fake `gh`'s exit code and what it printed.
+/// existing one alone"). Returns the fake `gh`'s exit code and what it printed. Unix only: it runs
+/// the shim by its unix name `gh` (`write_shim`'s Windows name is `gh.cmd`).
+#[cfg(unix)]
 fn run_shim(
     bin_dir: &Path,
     fake_gh_dir: &Path,
@@ -180,6 +185,7 @@ fn run_shim(
     )
 }
 
+#[cfg(unix)]
 #[test]
 fn the_shim_execs_the_real_gh_with_gh_token_and_gh_host_set_from_the_chosen_token() {
     let s = Setup::new();
@@ -202,6 +208,7 @@ fn the_shim_execs_the_real_gh_with_gh_token_and_gh_host_set_from_the_chosen_toke
     assert!(out.contains("GH_HOST=github.com"), "{out}");
 }
 
+#[cfg(unix)]
 #[test]
 fn the_shim_leaves_an_existing_gh_token_and_gh_host_alone() {
     let s = Setup::new();
@@ -227,6 +234,7 @@ fn the_shim_leaves_an_existing_gh_token_and_gh_host_alone() {
     assert!(out.contains("GH_HOST=preset.example.com"), "{out}");
 }
 
+#[cfg(unix)]
 #[test]
 fn the_shim_leaves_gh_token_and_gh_host_unset_with_no_token_chosen() {
     let s = Setup::new();

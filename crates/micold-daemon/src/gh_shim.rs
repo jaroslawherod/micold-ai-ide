@@ -118,6 +118,9 @@ fn unix_shim(daemon: &Path, bin_dir: &Path) -> String {
          old_ifs=$IFS\n\
          IFS=:\n\
          for dir in $PATH; do\n\
+         \tif [ -z \"$dir\" ]; then\n\
+         \t\tdir=.\n\
+         \tfi\n\
          \tif [ \"$dir\" = \"$bin_dir\" ]; then\n\
          \t\tcontinue\n\
          \tfi\n\
@@ -268,7 +271,7 @@ mod tests {
         let script = unix_shim(Path::new("/opt/micold-daemon"), Path::new("/data/bin"));
         assert!(script.contains(": \"${GH_TOKEN:=$token}\""));
         assert!(script.contains(": \"${GH_HOST:=$host}\""));
-        assert!(script.contains("exec gh \"$@\""));
+        assert!(script.contains("exec \"$real_gh\" \"$@\""));
     }
 
     #[test]
