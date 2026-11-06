@@ -25,8 +25,8 @@ Format: `[ID] [P?] [Story] description with file path`. `[P]` = disjoint files, 
 
 ## Phase 3: User Story 3 - Container and kind credential flow, runtime-gated (P2)
 
-- [ ] T010 [US3] Runtime-gated `crates/micold-daemon/tests/sandbox_real_scoped_token.rs` (`#![cfg(all(feature = "sandbox-real-runtime", unix))]`, includes the fake via `#[path = "../../micold-client/tests/support/fake_github.rs"]`): runs `pat::check` in-process with the fake's base through `UreqTransport` (if not `pub` to the daemon, a 10-line ureq `Transport` local to the test), grants the credential to a container daemon and a kind daemon with `MICOLD_GIT_CREDENTIAL_BASE` on the existing local git HTTP backend of `git_credential_grant.rs`; asserts steps 4-8 and 10, and step 11 for kind; skipped (reported) without runtime or kind (FR-008, US3). Register `[[test]] sandbox_real_scoped_token` in `crates/micold-daemon/Cargo.toml` like `sandbox_real_no_user_credentials`.
-- [ ] T011 [US3] Update `specs/1002-sandbox-scoped-token/quickstart.md` rows 4-7, 11 (and 8, 10) to name `sandbox_real_scoped_token`; step 7's `/hooks` 403 stays manual.
+- [x] T010 [US3] Runtime-gated `crates/micold-daemon/tests/sandbox_real_scoped_token.rs` (`#![cfg(all(feature = "sandbox-real-runtime", unix))]`, includes the fake via `#[path = "../../micold-client/tests/support/fake_github.rs"]`): runs `pat::check` in-process with the fake's base through `UreqTransport` (if not `pub` to the daemon, a 10-line ureq `Transport` local to the test), grants the credential to a container daemon and a kind daemon with `MICOLD_GIT_CREDENTIAL_BASE` on the existing local git HTTP backend of `git_credential_grant.rs`; asserts steps 4-8 and 10, and step 11 for kind; skipped (reported) without runtime or kind (FR-008, US3). Register `[[test]] sandbox_real_scoped_token` in `crates/micold-daemon/Cargo.toml` like `sandbox_real_no_user_credentials`.
+- [x] T011 [US3] Update `specs/1002-sandbox-scoped-token/quickstart.md` rows 4-7, 11 (and 8, 10) to name `sandbox_real_scoped_token`; step 7's `/hooks` 403 stays manual.
 
 **Checkpoint**: with a runtime, `mise run image && mise run test-sandbox` runs it; without, it is skipped.
 

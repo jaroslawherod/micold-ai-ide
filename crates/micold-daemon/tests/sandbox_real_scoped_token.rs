@@ -14,6 +14,7 @@
 
 #![cfg(all(feature = "sandbox-real-runtime", unix))]
 
+#[allow(dead_code)]
 #[path = "../../micold-client/tests/support/fake_github.rs"]
 mod fake_github;
 #[path = "support/git_http.rs"]
