@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::process::Command;
 
 use micold_core::daemon_config::DaemonConfig;
+use micold_core::process::no_window;
 
 use super::*;
 
@@ -126,8 +128,8 @@ fn commit_with(dir: &Path, edits: &[EnvEdit]) -> Option<bool> {
         0o600,
     );
     let git = |args: &[&str]| {
-        let mut cmd = std::process::Command::new("git");
-        micold_core::process::no_window(&mut cmd)
+        let mut cmd = Command::new("git");
+        no_window(&mut cmd)
             .current_dir(&repo)
             .args(args)
             .env("GIT_CONFIG_GLOBAL", &global)
@@ -147,7 +149,7 @@ fn commit_with(dir: &Path, edits: &[EnvEdit]) -> Option<bool> {
 }
 
 fn ssh_keygen(path: &Path) -> Option<()> {
-    micold_core::process::no_window(&mut std::process::Command::new("ssh-keygen"))
+    no_window(&mut Command::new("ssh-keygen"))
         .args(["-q", "-t", "ed25519", "-N", "", "-f"])
         .arg(path)
         .status()
@@ -172,7 +174,7 @@ fn a_signed_commit_succeeds_with_the_key_and_an_unsigned_one_without() {
         return;
     };
     assert!(signed, "a commit signed with the delivered key");
-    let log = micold_core::process::no_window(&mut std::process::Command::new("git"))
+    let log = no_window(&mut Command::new("git"))
         .current_dir(dir.path().join("repo"))
         .args(["cat-file", "-p", "HEAD"])
         .output()
