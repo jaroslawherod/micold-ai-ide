@@ -67,3 +67,5 @@ None yet.
 
 - M2 follow-up: replacing `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount (T094 text) was not done: the sanitized copy stays the delivery mechanism and container and pod daemons name it as `[git] config_file`. Also `Msg::CredentialStatuses` in the client feature is now without a producer (review A F1, MINOR).
 - Review A (high): CLEAN, 3 MINOR (F2 fixed: stale module doc and unused `RENEW_MARGIN_SECS` removed). Review B (sonnet): F1 MAJOR (no cycle-log entry) fixed; F2/F3 MINOR noted.
+
+- Rebase onto origin/main (M2 part 6): shell `scoped_credential` module removed (main moved UreqTransport/check_and_store to `pat_source`); `scoped_token_fake_api` steps 8 and 10 dropped with the retired grant schedule; supervisor git edits keep main's `combine_git_edits`. Windows red test was `spawn::tests::terminate_falls_back...` (78ae518f1 addresses it).
