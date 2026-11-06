@@ -14,3 +14,9 @@ Decision: `ApiBase` accepts any string URL; `ureq` follows its scheme. Productio
 
 ## R5 Kind
 Decision: kind steps reuse the container flow with a kind daemon; gated on `kind` and the runtime being installed, else skipped (reported skipped).
+
+## R6 Git host for the runtime test
+Decision: reuse the existing local git HTTP backend of `git_credential_grant.rs`/`git_credential_pod.rs` (daemon tests) via `MICOLD_GIT_CREDENTIAL_BASE`. Rejected: a second git server in the fake (duplication).
+
+## R5 addendum
+Rejected for kind: a separate kind-only test (duplicates the container flow).
