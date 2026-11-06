@@ -127,8 +127,24 @@ the full gate's own fallout, if any.
 
 ## Open escalation
 
-None open. The M1 blocker was asked and answered: see D5, superseded by D6 (start now). Not waiting
-on the rest of #1530.
+**M1 passed the handover cap: a fourth part needs the user's go-ahead** (category 5,
+non-convergence, `tasks/dispatch.md`: "A fourth part … is an escalation").
+
+- Question: authorise a part 4 to finish M1, or stop and hand M1 over as it stands?
+- Where M1 actually is: implementation complete and committed (`34eb48cd9`, `d9ad46edb`,
+  `85fb4e24d`, `a6f320ad8`); review A done and `CLEAN` after its BLOCKER and MINOR were fixed;
+  the scoped gate's fallout (one inline `gh_shim` test, six pre-existing `state.rs` tests broken
+  by T057's PATH change) fixed. **Left:** confirm `cargo test -p micold-daemon --lib` is green,
+  review B, the full `mise run gate`, the push, and the PR. No PR exists yet.
+- Why three parts were spent: none of them was spent on the work converging. Parts 1 and 2 each
+  ended their turn while a detached run was going and were cut off; part 3 lost its budget to
+  build-lock contention (15–50 min queues behind other worktrees) and to running the full suite,
+  which parts 1 and 2 never did.
+- Recommendation: **authorise part 4.** It inherits a `CLEAN` review A and a known-small
+  remaining list, so it is not the repeated-failure case the cap is meant to catch. Give it the
+  gate result if the build lock frees up.
+- The alternative is to stop here: M1's code would sit committed and unpushed on this branch with
+  no PR, and no review B, which the feature flow requires before a merge.
 
 ## Follow-ups not done
 
