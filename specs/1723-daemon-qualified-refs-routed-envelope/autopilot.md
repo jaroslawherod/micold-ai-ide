@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1746 | design | merged | 3530aeba08a1047f1d73cc2f88bf5d4b85d8253b |
+| #1753 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | | review |
+| M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | #1753 | open |
 | M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | | pending |
 | M3 | T023–T029 | full | project identity on project rows | | pending |
 | M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | | pending |
