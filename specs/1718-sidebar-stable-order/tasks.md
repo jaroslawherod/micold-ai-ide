@@ -51,7 +51,7 @@ state together), so they ship as one milestone.
   the `SidebarGroup` / `ListRow` uses; render one row per entry.
 - [ ] T011 [P] [US3] Delete the group-only UI parts: the group-heading builder and its tests in
   `crates/micold-client/src/ui/material/tree_view.rs`; `TypeRole::SidebarGroup` and test
-  `a_sidebar_group_header_is_twelve_px_bold` in x and
+  `a_sidebar_group_header_is_twelve_px_bold` in `crates/micold-material/src/text.rs` and
   `crates/micold-material/src/type_role_mapping.rs`; `a_sidebar_group_header_is_legible_on_the_sidebar` in
   `crates/micold-client/src/ui/material/composition_contrast.rs`; the `SidebarGroup` entry in `crates/micold-client/src/showcase/catalogue.rs`; the
   group header poses in `crates/micold-client/src/showcase/sections/surfaces.rs` and `atoms.rs`; the matching rows in
