@@ -16,11 +16,11 @@ use micold_client::app::Message;
 use micold_client::features::settings::Msg;
 
 use micold_client::features::settings::github_tokens;
-use micold_core::scoped_credential::pat;
+use micold_client::pat_source::{check_and_store, UreqTransport};
+use micold_core::scoped_credential::pat::{self, ApiBase};
 use micold_core::scoped_credential::pat_store::PatStore;
 
 use crate::shell::persist;
-use crate::shell::scoped_credential::{check_and_store, UreqTransport};
 use crate::App;
 
 /// Read the stored GitHub tokens into the section (Settings opened).
@@ -54,6 +54,7 @@ fn check_github_token(app: &mut App) -> Task<Message> {
             tokio::task::spawn_blocking(move || {
                 check_and_store(
                     &UreqTransport::default(),
+                    &ApiBase::default(),
                     PatStore::on_device().as_ref(),
                     &request.name,
                     request.repos,

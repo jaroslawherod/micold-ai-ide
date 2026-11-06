@@ -38,7 +38,7 @@ impl Reply {
     }
 }
 
-/// How a check reaches GitHub: one authenticated GET of an `https://api.github.com` URL. An `Err` is
+/// How a check reaches GitHub: one authenticated GET of an [`ApiBase`] URL. An `Err` is
 /// a transport failure (timeout, DNS, TLS), as short text.
 pub trait Transport: Send + Sync {
     /// `GET url` with `Authorization: Bearer <token>` and the headers of contract §2.
@@ -176,6 +176,44 @@ struct ListedRepo {
 /// page lists; the Settings text says when the list may be longer.
 pub const REACH_URL: &str = "https://api.github.com/user/repos?visibility=private&per_page=100";
 
+/// Where the GitHub API is: `https://api.github.com` unless a caller passes another (#1542, FR-001,
+/// FR-004). Only a test builds a non-default base, to point the check at a loopback fake; every
+/// shipped caller passes [`ApiBase::default`], so the requests are byte-identical to before. Nothing
+/// here reads an environment variable, a setting or a file. A token goes only to URLs built from the
+/// base the check was given; a malformed base surfaces as `SourceUnreachable` from the transport.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiBase(String);
+
+const DEFAULT_API_BASE: &str = "https://api.github.com";
+
+impl Default for ApiBase {
+    fn default() -> Self {
+        Self(DEFAULT_API_BASE.to_string())
+    }
+}
+
+impl ApiBase {
+    /// A base from `base`; empty (after trimming) is the default, a trailing `/` is dropped.
+    pub fn new(base: &str) -> Self {
+        let trimmed = base.trim().trim_end_matches('/');
+        if trimmed.is_empty() {
+            Self::default()
+        } else {
+            Self(trimmed.to_string())
+        }
+    }
+
+    /// The URL of the repository probe for `repo`.
+    pub fn probe_url(&self, repo: &GithubRepo) -> String {
+        format!("{}/repos/{}/{}", self.0, repo.owner(), repo.name())
+    }
+
+    /// The URL of the private-repository listing ([`REACH_URL`] for the default base).
+    pub fn reach_url(&self) -> String {
+        format!("{}/user/repos?visibility=private&per_page=100", self.0)
+    }
+}
+
 /// Judge the answer to [`REACH_URL`] (contract §2, *reach*): the full names of the private
 /// repositories the token reaches. A token may reach any number of them (#1529, FR-009): nothing is
 /// refused for the count, the list is for Settings to show. An answer that is not a `200` listing
@@ -204,21 +242,14 @@ pub fn parse_reach(reply: &Reply) -> Result<Vec<String>, NoCredentialReason> {
 /// the expiry GitHub reports. Nothing is stored or sent by this.
 pub fn check(
     transport: &dyn Transport,
+    base: &ApiBase,
     repo: &GithubRepo,
     token: &SecretToken,
     now: UnixTime,
 ) -> Result<UnixTime, NoCredentialReason> {
     check_shape(token)?;
-    let probe = get(transport, token, probe_url(repo))?;
+    let probe = get(transport, token, base.probe_url(repo))?;
     parse_probe(&probe, repo, now)
-}
-
-fn probe_url(repo: &GithubRepo) -> String {
-    format!(
-        "https://api.github.com/repos/{}/{}",
-        repo.owner(),
-        repo.name()
-    )
 }
 
 fn get(
@@ -245,15 +276,16 @@ pub struct Checked {
 /// probe's, or the listing's header when there is no repository to probe. Nothing is stored.
 pub fn check_added(
     transport: &dyn Transport,
+    base: &ApiBase,
     token: &SecretToken,
     probe: Option<&GithubRepo>,
     now: UnixTime,
 ) -> Result<Checked, NoCredentialReason> {
     check_shape(token)?;
-    let listing = get(transport, token, REACH_URL.to_string())?;
+    let listing = get(transport, token, base.reach_url())?;
     let reach = parse_reach(&listing)?;
     let expires_at = match probe {
-        Some(repo) => parse_probe(&get(transport, token, probe_url(repo))?, repo, now)?,
+        Some(repo) => parse_probe(&get(transport, token, base.probe_url(repo))?, repo, now)?,
         None => {
             if listing.status != 200 {
                 return Err(status_reason(&listing, &"any repository"));
@@ -475,7 +507,14 @@ mod tests {
     #[test]
     fn a_good_token_passes_the_shape_and_probe_checks() {
         let t = Script::new(vec![Ok(good_probe())]);
-        let expires = check(&t, &repo(), &SecretToken::new(PAT), NOW).unwrap();
+        let expires = check(
+            &t,
+            &ApiBase::default(),
+            &repo(),
+            &SecretToken::new(PAT),
+            NOW,
+        )
+        .unwrap();
         assert_eq!(
             expires,
             parse_expiration("2023-11-20 00:00:00 UTC").unwrap()
@@ -493,7 +532,8 @@ mod tests {
             ..good_probe()
         };
         let t = Script::new(vec![Ok(listing)]);
-        let checked = check_added(&t, &SecretToken::new(PAT), None, NOW).unwrap();
+        let checked =
+            check_added(&t, &ApiBase::default(), &SecretToken::new(PAT), None, NOW).unwrap();
         assert_eq!(checked.reach, ["o/a", "o/b"]);
         assert_eq!(
             checked.expires_at,
@@ -507,7 +547,7 @@ mod tests {
         let listing = reply(403, &[("x-github-sso", "required; url=https://x")], "");
         let t = Script::new(vec![Ok(listing)]);
         assert_eq!(
-            check_added(&t, &SecretToken::new(PAT), None, NOW),
+            check_added(&t, &ApiBase::default(), &SecretToken::new(PAT), None, NOW),
             Err(refused(
                 "authorise the token for the organisation's SSO in GitHub"
             ))
@@ -521,7 +561,14 @@ mod tests {
             ..good_probe()
         };
         let t = Script::new(vec![Ok(listing), Ok(good_probe())]);
-        let checked = check_added(&t, &SecretToken::new(PAT), Some(&repo()), NOW).unwrap();
+        let checked = check_added(
+            &t,
+            &ApiBase::default(),
+            &SecretToken::new(PAT),
+            Some(&repo()),
+            NOW,
+        )
+        .unwrap();
         assert!(checked.reach.is_empty());
         assert_eq!(
             t.asked.lock().unwrap()[1],
@@ -530,10 +577,61 @@ mod tests {
     }
 
     #[test]
+    fn the_default_base_gives_exactly_the_production_urls() {
+        for base in [ApiBase::default(), ApiBase::new("")] {
+            assert_eq!(base.probe_url(&repo()), "https://api.github.com/repos/o/r");
+            assert_eq!(base.reach_url(), REACH_URL);
+        }
+    }
+
+    #[test]
+    fn a_base_is_trimmed_of_a_trailing_slash_and_keeps_a_path_prefix() {
+        let base = ApiBase::new("http://127.0.0.1:9/api/v3/");
+        assert_eq!(
+            base.probe_url(&repo()),
+            "http://127.0.0.1:9/api/v3/repos/o/r"
+        );
+        assert_eq!(
+            base.reach_url(),
+            "http://127.0.0.1:9/api/v3/user/repos?visibility=private&per_page=100"
+        );
+    }
+
+    #[test]
+    fn a_given_base_is_the_only_host_a_token_is_sent_to() {
+        let listing = Reply {
+            body: "[]".into(),
+            ..good_probe()
+        };
+        let t = Script::new(vec![Ok(listing), Ok(good_probe()), Ok(good_probe())]);
+        let base = ApiBase::new("http://127.0.0.1:9");
+        check_added(&t, &base, &SecretToken::new(PAT), Some(&repo()), NOW).unwrap();
+        check(&t, &base, &repo(), &SecretToken::new(PAT), NOW).unwrap();
+        let asked = t.asked.lock().unwrap();
+        assert_eq!(asked.len(), 3);
+        assert!(asked.iter().all(|u| u.starts_with("http://127.0.0.1:9/")));
+    }
+
+    #[test]
+    fn a_malformed_base_is_unreachable_from_the_transport_with_no_fallback() {
+        let t = Script::new(vec![Err("invalid url".into())]);
+        let base = ApiBase::new("not a url");
+        let out = check(&t, &base, &repo(), &SecretToken::new(PAT), NOW);
+        assert!(matches!(out, Err(NoCredentialReason::SourceUnreachable(_))));
+        assert_eq!(*t.asked.lock().unwrap(), ["not a url/repos/o/r"]);
+    }
+
+    #[test]
     fn a_classic_token_is_refused_before_any_request() {
         let t = Script::new(vec![]);
         assert_eq!(
-            check(&t, &repo(), &SecretToken::new("ghp_classic"), NOW),
+            check(
+                &t,
+                &ApiBase::default(),
+                &repo(),
+                &SecretToken::new("ghp_classic"),
+                NOW
+            ),
             Err(refused("not a fine-grained token"))
         );
         assert!(t.asked.lock().unwrap().is_empty());
@@ -542,9 +640,13 @@ mod tests {
     #[test]
     fn a_transport_failure_is_unreachable_and_never_carries_the_token() {
         let t = Script::new(vec![Err(format!("tls error for Bearer {PAT}\nmore"))]);
-        let Err(NoCredentialReason::SourceUnreachable(reason)) =
-            check(&t, &repo(), &SecretToken::new(PAT), NOW)
-        else {
+        let Err(NoCredentialReason::SourceUnreachable(reason)) = check(
+            &t,
+            &ApiBase::default(),
+            &repo(),
+            &SecretToken::new(PAT),
+            NOW,
+        ) else {
             panic!("expected unreachable");
         };
         assert!(
@@ -560,7 +662,7 @@ mod tests {
         let shown = format!("{token:?}");
         assert!(!shown.contains("FAKE0123"));
         let t = Script::new(vec![Ok(reply(403, &[], ""))]);
-        let err = check(&t, &repo(), &token, NOW).unwrap_err();
+        let err = check(&t, &ApiBase::default(), &repo(), &token, NOW).unwrap_err();
         assert!(!format!("{err:?} {}", err.message()).contains("FAKE0123"));
     }
 }

@@ -8,6 +8,13 @@ use std::sync::Mutex;
 use micold_core::local_time::rfc3339_utc;
 use micold_core::protocol::messages::ClientMsg;
 
+use micold_client::pat_source::{check_and_store, UreqTransport};
+use micold_core::daemon_config::RepoPattern;
+use micold_core::github::GithubRepo;
+use micold_core::scoped_credential::pat::{ApiBase, Reply, Transport};
+use micold_core::scoped_credential::pat_store::{PatStore, StoredPat};
+use micold_core::scoped_credential::{NoCredentialReason, SecretToken};
+
 use super::*;
 
 const T0: UnixTime = 1_800_000_000;
@@ -46,6 +53,10 @@ impl FakeGithub {
 
     fn requests(&self) -> usize {
         self.requests.lock().unwrap().len()
+    }
+
+    fn urls(&self) -> Vec<String> {
+        self.requests.lock().unwrap().clone()
     }
 }
 
@@ -411,6 +422,7 @@ fn a_refused_token_is_not_stored_and_an_accepted_one_is() {
     let only_a = || vec![RepoPattern::Exact("o".into(), "a".into())];
     let bad = check_and_store(
         &*rig.github,
+        &ApiBase::default(),
         Some(&rig.store),
         "a",
         only_a(),
@@ -421,6 +433,7 @@ fn a_refused_token_is_not_stored_and_an_accepted_one_is() {
     assert!(rig.store.get("a").is_none());
     let good = check_and_store(
         &*rig.github,
+        &ApiBase::default(),
         Some(&rig.store),
         "a",
         only_a(),
@@ -570,4 +583,42 @@ fn a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry() {
         "the warning is news"
     );
     assert_eq!(rig.manager.next_wake(rig.now()), Some(T0 + 30 * DAY));
+}
+
+/// #1542, FR-003, SC-003, SC-004: no shipped constructor takes another base, so the requests are the
+/// production ones, `https://api.github.com/...`.
+#[test]
+fn the_source_and_the_settings_check_use_the_production_api_base_by_default() {
+    let rig = Rig::new();
+    rig.store_pat("a", PAT_A);
+    let clock = rig.clock.clone();
+    let source = PatSource::new(
+        Some(rig.store.clone()),
+        rig.github.clone(),
+        Arc::new(move || clock.load(Ordering::SeqCst)),
+    );
+    source.issue(&repo("a"), Grant::default()).unwrap();
+    assert_eq!(
+        rig.github.urls(),
+        ["https://api.github.com/repos/o/a".to_string()]
+    );
+
+    let only_a = vec![RepoPattern::Exact("o".into(), "a".into())];
+    check_and_store(
+        &*rig.github,
+        &ApiBase::default(),
+        Some(&rig.store),
+        "b",
+        only_a,
+        SecretToken::new(PAT_B),
+        T0,
+    )
+    .unwrap();
+    assert_eq!(
+        rig.github.urls()[1..],
+        [
+            "https://api.github.com/user/repos?visibility=private&per_page=100".to_string(),
+            "https://api.github.com/repos/o/a".to_string()
+        ]
+    );
 }
