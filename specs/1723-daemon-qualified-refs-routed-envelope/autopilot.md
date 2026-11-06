@@ -77,3 +77,4 @@ Round 1 snapshot 0a3a5600:11174021: CHANGES 3 MAJOR. F1 declined: the FR-008 mar
 ## CI notes
 
 - PR #1753 attempt 1: the only red test was `streaming_child::unix::a_natural_exit_still_ends_what_it_left_running` (grandchild outlived the run; file untouched by this feature, passes on main). Treated as a flake; re-run by a docs-only push. The earlier local `schema_hash` failure did not reproduce in CI.
+- PR #1753 attempt 2: rebased onto origin/main (one conflict, daemon_config/tests.rs, kept both tests); mise check and fmt green; targeted tests starved by the shared build lock, CI validates. Now MERGEABLE.
