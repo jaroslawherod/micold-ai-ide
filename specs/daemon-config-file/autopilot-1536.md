@@ -35,13 +35,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| #1748 | design: M1 milestone cut | open | - |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-| #1748 | design: M1 milestone cut | open | - |
 
 ## Handover
 
