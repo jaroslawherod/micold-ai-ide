@@ -14,7 +14,7 @@ a paragraph over a bulleted essay, when either communicates the same information
 ## Follow-ups go to the project chat
 
 Do not reply in a finished cloud thread to ask a follow-up: after more than an hour idle, one reply
-re-writes the whole cache (about $2 each). Ask in the project chat, or start a fresh thread.
+re-writes the whole cache. Ask in the project chat, or start a fresh thread.
 
 ## "Start work on issue": worktree and autopilot session
 
