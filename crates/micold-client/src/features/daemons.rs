@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use micold_core::daemons::{
     container_name_long_enough, default_container_name, Binding, ConnectionError,
     DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry, DaemonRuntime,
-    DaemonState, DaemonView, FileSettings, RegistryError, StateChange, WorktreeRef,
+    DaemonState, DaemonView, FileSettings, RegistryError, SessionExtras, StateChange, WorktreeRef,
     CONTAINER_NAME_MIN,
 };
 use micold_core::kube::lifecycle::leftovers;
@@ -158,6 +158,8 @@ pub struct Draft {
     pub clone_root: String,
     /// The daemon file's `auth.client_token_file` as typed; empty means the kind's default.
     pub client_token_file: String,
+    /// The session extras' file paths as typed (#1536); empty means unset.
+    pub extra_paths: [String; 4],
     /// The Start script group (#1533); shown only for a kind whose script is delivered.
     pub start: super::daemons_start::StartDraft,
     /// The host or `Host` alias (SSH runtime only, feature 489).
@@ -175,6 +177,15 @@ pub struct Draft {
     /// Which fields the user has left and whether a save was attempted, for the required errors
     /// (feature 937). Fresh when the form opens, dropped with it.
     pub required: RequiredMarks<FieldId>,
+}
+
+/// Which session extras path a form field holds (#1536); the index into `Draft::extra_paths`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtraPath {
+    SshKey,
+    KnownHosts,
+    SigningKey,
+    CaFile,
 }
 
 /// A stored path as the form shows it.
@@ -197,6 +208,13 @@ impl Draft {
             data_dir: path(&self.data_dir),
             clone_root: path(&self.clone_root),
             client_token_file: path(&self.client_token_file),
+            extras: SessionExtras {
+                ssh_key_file: path(&self.extra_paths[ExtraPath::SshKey as usize]),
+                known_hosts_file: path(&self.extra_paths[ExtraPath::KnownHosts as usize]),
+                signing_key_file: path(&self.extra_paths[ExtraPath::SigningKey as usize]),
+                ca_file: path(&self.extra_paths[ExtraPath::CaFile as usize]),
+                files: stored.extras.files.clone(),
+            },
             ..stored.clone()
         }
     }
@@ -1009,6 +1027,7 @@ pub fn begin_add(state: &mut State) {
         data_dir: String::new(),
         clone_root: String::new(),
         client_token_file: String::new(),
+        extra_paths: Default::default(),
         start: Default::default(),
         kube: KubeDraft::new(&state.default_providers),
         kube_edited: false,
@@ -1097,6 +1116,12 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         data_dir: path_text(&entry.file.data_dir),
         clone_root: path_text(&entry.file.clone_root),
         client_token_file: path_text(&entry.file.client_token_file),
+        extra_paths: [
+            path_text(&entry.file.extras.ssh_key_file),
+            path_text(&entry.file.extras.known_hosts_file),
+            path_text(&entry.file.extras.signing_key_file),
+            path_text(&entry.file.extras.ca_file),
+        ],
         start: super::daemons_start::StartDraft::new(
             entry.file.startup.as_ref(),
             crate::daemon_config_render::load_inline_script(
@@ -2088,6 +2113,8 @@ pub enum Msg {
     CloneRootEdited(String),
     /// The file's client token path was typed in the form.
     ClientTokenFileEdited(String),
+    /// A session extras file path was typed in the form (#1536).
+    ExtraPathEdited(ExtraPath, String),
     /// The Start script's source was chosen (#1533).
     StartSourceChosen(super::daemons_start::StartSource),
     /// The Start script's file path was typed.
@@ -2428,6 +2455,9 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::DataDirEdited(v) => edit(state, &|d| d.data_dir = v.clone()),
         Msg::CloneRootEdited(v) => edit(state, &|d| d.clone_root = v.clone()),
         Msg::ClientTokenFileEdited(v) => edit(state, &|d| d.client_token_file = v.clone()),
+        Msg::ExtraPathEdited(which, v) => {
+            edit(state, &|d| d.extra_paths[which as usize] = v.clone())
+        }
         Msg::StartSourceChosen(v) => edit(state, &|d| d.start.source = v),
         Msg::StartFileEdited(v) => edit(state, &|d| d.start.file = v.clone()),
         Msg::StartTextAction(action) => edit(state, &|d| {

@@ -212,6 +212,14 @@ pub enum FieldId {
     DaemonCloneRoot,
     /// Settings → Daemons: the form's client token file field (#1525).
     DaemonClientTokenFile,
+    /// Settings → Daemons: the SSH key file for sessions (#1536).
+    DaemonSessionSshKey,
+    /// Settings → Daemons: the known-hosts file for sessions (#1536).
+    DaemonSessionKnownHosts,
+    /// Settings → Daemons: the commit signing key file (#1536).
+    DaemonSessionSigningKey,
+    /// Settings → Daemons: the CA bundle file (#1536).
+    DaemonSessionCaFile,
     /// Settings → Daemons: the Start script group's script file path (#1533).
     DaemonStartFile,
     /// Settings → Daemons: the Start script group's shell (#1533).
