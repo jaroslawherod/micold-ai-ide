@@ -20,6 +20,12 @@ groups and are hard to track". Labels: enhancement. Reverses the grouping of fea
   that is the order `State::sidebar_entries` returns (Default entry first, then worktrees in their
   existing listing order). It does not depend on any session's or card's state.
 
+## Clarifications
+
+### Session 2026-11-06
+
+No critical ambiguities. The plan verifies feature 905's icons differ per state by glyph or text (FR-004, SC-002).
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Rows stay where they are when a session's state changes (Priority: P1)
