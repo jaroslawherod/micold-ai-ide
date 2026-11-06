@@ -232,7 +232,7 @@ commit, reaches an HTTPS host behind a custom CA, and finds the configured `.npm
 - [x] T102 [P] [US1] `[git] signing_key_file`: `user.signingkey` points at the delivered key, `gpg.format` kept from the user's config; test that a signed commit succeeds and that without it signing is off (T094)
 - [x] T103 [P] [US1] `[network] ca_file`: export `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO`, `REQUESTS_CA_BUNDLE` to sessions and trust it in the daemon's own HTTPS (reach discovery, `ureq`); the daemon honours `HTTPS_PROXY`/`NO_PROXY` from `session.env`/`secret_env`
 - [x] T104 [P] [US1] `[[session.files]]`: copy each read-only source to `as` under the session home with `mode` at session start; V18 refusals tested
-- [ ] T105 [US1] Render the four extras from Settings (`crates/micold-client/src/daemon_config_render.rs`, Settings → Daemons) and deliver them with the secrets per kind
+- [x] T105 [US1] Render the four extras from Settings (`crates/micold-client/src/daemon_config_render.rs`, Settings → Daemons) and deliver them with the secrets per kind
 - [x] T106 [US1] Document in `docs/user-guide/daemon-configuration.md` (SSH remotes, signing, corporate CA and proxy, registry files)
 
 ---
