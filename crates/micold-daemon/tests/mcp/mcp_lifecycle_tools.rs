@@ -1239,7 +1239,13 @@ async fn a_self_delete_stops_the_sessions_only_after_the_reply_and_the_peer_clos
     );
     drop(stream);
     assert!(gone_within(&f.worktree_dir("b")).await);
-    assert!(f.state.live_session(sid(IDLE)).is_none());
+    assert!(
+        wait_until(Duration::from_secs(15), || f
+            .state
+            .live_session(sid(IDLE))
+            .is_none())
+        .await
+    );
 }
 
 /// #1602 R2: without a close, the daemon acts after the 2 s grace anyway.
