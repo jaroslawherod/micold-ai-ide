@@ -822,19 +822,58 @@ fn ai_cli_auth_delivered_path(home: &Path, live: &Path) -> PathBuf {
     ))
 }
 
+/// Which sandbox kind's mount shape [`ai_cli_sign_in_links`] and [`relink_ai_cli_sign_ins`]
+/// compute `delivered` for (T065). One relink function, parameterised, rather than two near-
+/// identical ones: both kinds skip, remove-then-link and report failures the same way
+/// ([`relink_one`]); only where the mount actually put the file differs.
+///
+/// - **Container**: every CLI's sign-in shares one bind mount tree, so `delivered` has to be
+///   reconstructed from `live`'s own suffix after `home` — there is no other way to tell, from
+///   inside the sandbox, which file under [`CONTAINER_SECRETS_DIR`] is whose
+///   ([`ai_cli_auth_delivered_path`]).
+/// - **Pod**: each CLI already gets its own directory Secret, named by the CLI and keyed by
+///   `live`'s basename ([`crate::kube::credentials::sign_in_dir`]) — the shape the Kubernetes
+///   manifest and the pod's own daemon agree on without needing `home` at all, so the pod case
+///   does not reuse `ai_cli_auth_delivered_path`'s container-relative scheme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretsBase {
+    /// `CONTAINER_SECRETS_DIR/ai-cli-auth/<path-relative-to-home>` (container daemons).
+    ContainerAuth,
+    /// `kube::credentials::sign_in_dir(cli)/<live's basename>` (pod daemons).
+    PodSignIn,
+}
+
+impl SecretsBase {
+    /// Where `live` (one CLI's sign-in, under `home`) is actually delivered for this base.
+    fn delivered(self, cli: crate::session::AiCli, home: &Path, live: &Path) -> PathBuf {
+        match self {
+            Self::ContainerAuth => ai_cli_auth_delivered_path(home, live),
+            Self::PodSignIn => {
+                let name = live
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                PathBuf::from(format!(
+                    "{}/{name}",
+                    crate::kube::credentials::sign_in_dir(cli)
+                ))
+            }
+        }
+    }
+}
+
 /// `(live, delivered)` for every CLI whose sign-in would land under `home` (the sandbox's own
 /// `HOME`, as seen from wherever this runs): `live` is where the CLI itself looks, `delivered` is
-/// where the read-only mount actually puts the file. Self-contained — no host-side
-/// [`CredentialLayout`] or profile needed — because `pathmap::map_for` never touches the suffix
-/// after the home prefix, so this produces the same `delivered` whether computed on the host
+/// where `base`'s mount actually puts the file. Self-contained — no host-side [`CredentialLayout`]
+/// or profile needed — because this produces the same `delivered` whether computed on the host
 /// (building the [`MountSet`]) or inside the sandbox (relinking at session start,
 /// [`relink_ai_cli_sign_ins`]).
-pub fn ai_cli_sign_in_links(home: &Path) -> Vec<(PathBuf, PathBuf)> {
+pub fn ai_cli_sign_in_links(home: &Path, base: SecretsBase) -> Vec<(PathBuf, PathBuf)> {
     crate::session::AiCli::ALL
         .iter()
         .filter_map(|cli| {
             let live = cli.provider().sandbox_auth_file(home)?;
-            Some((live.clone(), ai_cli_auth_delivered_path(home, &live)))
+            Some((live.clone(), base.delivered(*cli, home, &live)))
         })
         .collect()
 }
@@ -848,8 +887,8 @@ pub fn ai_cli_sign_in_links(home: &Path) -> Vec<(PathBuf, PathBuf)> {
 /// file itself. A failure on one pair is skipped, never fatal (FR-019): one CLI's sign-in failing
 /// to link must not stop a session over another's; this crate is render- and log-free (its own
 /// `FR-040`), so the caller logs what [`Self::relink_ai_cli_sign_ins`] leaves out of its result.
-pub fn relink_ai_cli_sign_ins(home: &Path) -> Vec<PathBuf> {
-    ai_cli_sign_in_links(home)
+pub fn relink_ai_cli_sign_ins(home: &Path, base: SecretsBase) -> Vec<PathBuf> {
+    ai_cli_sign_in_links(home, base)
         .into_iter()
         .filter(|(_, delivered)| delivered.exists())
         .filter_map(|(live, delivered)| relink_one(&live, &delivered))
@@ -924,7 +963,7 @@ impl MountSet {
         // container-mapped live path — computed from the *container*'s own home so it matches
         // exactly what the sandbox recomputes for itself at relink time (`relink_ai_cli_sign_ins`).
         let ai_cli_delivered: std::collections::BTreeMap<PathBuf, PathBuf> =
-            ai_cli_sign_in_links(&pathmap::map_for(home, windows_host))
+            ai_cli_sign_in_links(&pathmap::map_for(home, windows_host), SecretsBase::ContainerAuth)
                 .into_iter()
                 .collect();
         let credentials = profile
