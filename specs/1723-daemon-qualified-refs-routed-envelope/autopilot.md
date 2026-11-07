@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
 - **Phase**: review (M2)
-- **Next step**: M2 gate, PR
+- **Next step**: M2 CI, merge
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1746 | design | merged | 3530aeba08a1047f1d73cc2f88bf5d4b85d8253b |
 | #1753 | M1 | merged | 045d2f75cbc3c4098a1a489be95f3cabf2ecdb2d |
-| (M2 PR) | M2 | pending | |
+| #PRNUM | M2 | open | |
 
 ## Milestones
 
@@ -81,3 +81,4 @@ Round 1 snapshot 0a3a5600:11174021: CHANGES 3 MAJOR. F1 declined: the FR-008 mar
 
 - PR #1753 attempt 1: the only red test was `streaming_child::unix::a_natural_exit_still_ends_what_it_left_running` (grandchild outlived the run; file untouched by this feature, passes on main). Treated as a flake; re-run by a docs-only push. The earlier local `schema_hash` failure did not reproduce in CI.
 - PR #1753 attempt 2: rebased onto origin/main (one conflict, daemon_config/tests.rs, kept both tests); mise check and fmt green; targeted tests starved by the shared build lock, CI validates. Now MERGEABLE.
+- PR M2: scoped gate: fmt, clippy and tests green except `ai_cli_config::a_configured_model_is_claude_codes_default_launch_model` (fails 2 of 2 locally: stand-in never records its launch in 5 s; file and area untouched by this milestone, probably environmental). Full gate left to CI.
