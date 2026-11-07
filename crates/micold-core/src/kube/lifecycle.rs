@@ -203,7 +203,7 @@ mod tests {
         stop(&fake, NS, &names()).await.unwrap();
         assert!(fake.names(NS, ObjectKind::Pod).is_empty());
         assert_eq!(fake.names(NS, ObjectKind::PersistentVolumeClaim).len(), 1);
-        assert_eq!(fake.names(NS, ObjectKind::Secret).len(), 3);
+        assert_eq!(fake.names(NS, ObjectKind::Secret).len(), 2);
         let calls = fake.calls();
         let pod = names().pod();
         assert_eq!(

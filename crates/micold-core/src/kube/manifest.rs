@@ -525,7 +525,8 @@ mod tests {
         assert!(holds_retired_credential(&stamp(
             r#"[{"kind":"git_credentials"}]"#
         )));
-        assert!(!holds_retired_credential(&stamp(
+        // The git config became a retired kind in #1530: the pod still mounts its old secret.
+        assert!(holds_retired_credential(&stamp(
             r#"[{"kind":"git_config"}]"#
         )));
         assert!(!holds_retired_credential(&stamp("[]")));
