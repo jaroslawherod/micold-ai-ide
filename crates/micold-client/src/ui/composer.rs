@@ -315,7 +315,7 @@ pub fn options_tooltip(bypass: bool) -> &'static str {
     }
 }
 
-/// The settings icon at the input row's start: toggles the options row, tonal while it is open,
+/// The settings icon right of the text area, before Stop and Send (#1764): toggles the options row, tonal while it is open,
 /// with a warning marker while the mode is Bypass (feature 1703 FR-009, FR-010, FR-014).
 fn options_button<'a>(
     open: bool,

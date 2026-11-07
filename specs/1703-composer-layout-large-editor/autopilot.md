@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M3 gate blocked
+- **Phase**: milestone M3 PR open
 - **Next step**: wait-merge M3 PR, then M4/close unit (T032 quickstart results)
 
 ## Pull requests
@@ -56,6 +56,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Review B (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CHANGES: F1 MAJOR (auto-expand persist not tested via update()/daemon path: fixed, tests added), F2 MAJOR (accessible label: declined, see below), 2 MINOR fixed; Verify: core ok, client main 64 passed |
 
 | Review A (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (model-list-unavailable note dropped: fixed), 2 MINOR declined (below) |
+| Review B (M3, #1764 round) | 1 | HEAD at swap | CHANGES: F1 MAJOR (declined/carried, see Declined), F2 F3 MINOR fixed |
 | Review B (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (open chevron: fixed, MoveUp glyph), F2/F3 MAJOR test gaps (partly fixed: chevron and session isolation tests; rest declined below); Verify: anatomy 5 passed, composer tests passed |
 
 ## Declined review findings
@@ -70,6 +71,8 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | M1 | A | F2 close_topmost bypasses focus return | Minor; Esc/scrim/Done paths restore focus |
 | M1 | B | F1 no tdd/cycle-log.md | The design PR set no tdd plan (no tdd/ dir); tests exist and pass, red-first evidence not retrofittable; left for the close unit's TDD verify |
 | M3 | A | F2 current_row unused in production, F3 mode menu state duplicates picker logic | Minor; current_row is used by tests, mode menu keyed state is small |
+| M3 | B (#1764) | F1 options-row narrow layout (pre-fix FAIL in visual-pass/m3-notes.md) | Wrap fix landed after that capture; the #1764 pass re-captured the input row at ~620 px (PASS), not the options row at 420/520 px; carried to the close unit (T032) |
+| M3 | B (#1764) | F4 duplicate m3-*.png | Minor; left |
 | M3 | B | F2/F3 more anatomy/FR-018 tests (focus ring, ellipsis, tooltip, effort unchanged) | Geometry, states, filter and mode-menu state are covered; effort/permission behaviour is untouched code paths and the existing composer suites still pass; left |
 
 ## Handover
