@@ -598,6 +598,15 @@ mod tests {
     }
 
     #[test]
+    fn a_whitespace_only_base_is_the_default_and_a_padded_base_is_trimmed() {
+        assert_eq!(ApiBase::new("  "), ApiBase::default());
+        assert_eq!(
+            ApiBase::new("  https://h.example/x/  ").probe_url(&repo()),
+            "https://h.example/x/repos/o/r"
+        );
+    }
+
+    #[test]
     fn a_given_base_is_the_only_host_a_token_is_sent_to() {
         let listing = Reply {
             body: "[]".into(),

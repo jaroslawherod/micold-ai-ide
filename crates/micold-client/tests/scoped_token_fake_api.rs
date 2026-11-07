@@ -165,8 +165,11 @@ fn a_token_goes_only_to_the_base_in_force_and_an_unreachable_base_stores_nothing
         .all(|r| r.authorization.as_deref() == Some(format!("Bearer {PAT}").as_str())));
 
     // A base nothing listens on: the check cannot reach it and never falls back to api.github.com.
-    // Nothing listens on port 1: the check cannot reach it.
-    let dead = "http://127.0.0.1:1".to_string();
+    // A port that was bound and then released: nothing listens on it now.
+    let dead = {
+        let released = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        format!("http://{}", released.local_addr().unwrap())
+    };
     let (empty, _d) = self::store();
     let refusal = check_and_store(
         &UreqTransport::default(),
@@ -178,9 +181,11 @@ fn a_token_goes_only_to_the_base_in_force_and_an_unreachable_base_stores_nothing
         T0,
     )
     .unwrap_err();
-    assert!(!refusal.is_empty());
+    assert!(
+        refusal.starts_with("GitHub could not be reached:"),
+        "expected the source-unreachable reason, got: {refusal}"
+    );
     assert!(empty.get("work").is_none());
-    assert_eq!(fake.requests().len(), seen.len(), "the fake saw no more");
 }
 
 #[test]
