@@ -301,7 +301,15 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
         let startup = startup_in(dir.path(), true);
-        deliver_container("box", &profile(false), home, &delivery, None, Some(&startup)).unwrap();
+        deliver_container(
+            "box",
+            &profile(false),
+            home,
+            &delivery,
+            None,
+            Some(&startup),
+        )
+        .unwrap();
 
         deliver_container("box", &profile(false), home, &delivery, None, None).unwrap();
 

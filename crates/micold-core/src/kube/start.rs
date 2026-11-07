@@ -765,9 +765,7 @@ pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarge
             install: StartPhase::Install.bound(),
             ..StepBounds::container()
         },
-        env: super::credentials::daemon_env()
-            .into_iter()
-            .collect(),
+        env: super::credentials::daemon_env().into_iter().collect(),
         config: None,
     }
 }

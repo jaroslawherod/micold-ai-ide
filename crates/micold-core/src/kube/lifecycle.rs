@@ -276,10 +276,9 @@ mod tests {
 
     #[test]
     fn forget_locally_lists_the_deterministic_names_without_a_cluster() {
-        let allowed: BTreeSet<KubeCredential> =
-            [KubeCredential::SignIn { cli: AiCli::Codex }]
-                .into_iter()
-                .collect();
+        let allowed: BTreeSet<KubeCredential> = [KubeCredential::SignIn { cli: AiCli::Codex }]
+            .into_iter()
+            .collect();
         let n = names();
         assert_eq!(
             leftovers(&allowed, &n),

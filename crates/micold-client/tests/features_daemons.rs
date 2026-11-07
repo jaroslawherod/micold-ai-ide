@@ -456,8 +456,8 @@ mod kubernetes {
         );
         assert_eq!(
             AllowedKind::all().len(),
-            2 + AiCli::ALL.len(),
-            "git config, one sign-in per CLI, registry pull: {labels:?}"
+            1 + AiCli::ALL.len(),
+            "one sign-in per CLI, registry pull: {labels:?}"
         );
     }
 
@@ -490,7 +490,9 @@ mod kubernetes {
         );
         send(&mut state, &mut w, Msg::Saved);
         let allowed = stored(&w, id).allowed;
-        assert!(allowed.contains(&KubeCredential::SignIn { cli: AiCli::ClaudeCode }));
+        assert!(allowed.contains(&KubeCredential::SignIn {
+            cli: AiCli::ClaudeCode
+        }));
         assert!(allowed.contains(&KubeCredential::SignIn { cli: AiCli::Pi }));
         assert_eq!(allowed.len(), 2);
         let mut state = open(&mut w, id);
@@ -1224,9 +1226,9 @@ mod retired_git_identity {
     }
 
     #[test]
-    fn the_container_credential_rows_offer_only_git_configuration_and_ai_cli_sign_in() {
+    fn the_container_credential_rows_offer_only_ai_cli_sign_in() {
         let labels: Vec<&str> = CredentialShare::ALL.iter().map(|s| s.label()).collect();
-        assert_eq!(labels, ["Git configuration", "AI CLI sign-in"]);
+        assert_eq!(labels, ["AI CLI sign-in"]);
     }
 
     #[test]

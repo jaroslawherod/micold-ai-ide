@@ -1707,7 +1707,10 @@ mod tests {
     fn a_stored_git_config_share_is_dropped_without_a_notice() {
         let profile: SandboxProfile =
             serde_json::from_str(r#"{"credentials": ["git_config", "ai_cli_auth"]}"#).unwrap();
-        assert_eq!(profile.credentials, BTreeSet::from([CredentialShare::AiCliAuth]));
+        assert_eq!(
+            profile.credentials,
+            BTreeSet::from([CredentialShare::AiCliAuth])
+        );
         assert!(!profile.removed_git_credentials);
         let saved = serde_json::to_string(&profile).unwrap();
         assert!(!saved.contains("git_config"), "{saved}");
