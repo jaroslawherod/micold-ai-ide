@@ -132,14 +132,14 @@ fn the_sandbox_configuration_survives_switching_back_to_the_host() {
         .daemon
         .profile
         .credentials
-        .insert(CredentialShare::GitConfig);
+        .insert(CredentialShare::AiCliAuth);
     draft.daemon.placement = PlacementKind::HostProcess;
 
     let valid = draft.validate().expect("every field is in range");
 
     assert_eq!(
         valid.daemon.sandbox.credentials,
-        BTreeSet::from([CredentialShare::GitConfig]),
+        BTreeSet::from([CredentialShare::AiCliAuth]),
         "turning the sandbox off discarded what was shared with it — switching back would mean \
          setting it up again"
     );

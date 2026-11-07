@@ -485,7 +485,7 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
             namespace: Some("apps".into()),
         },
     ]))));
-    for kind in [AllowedKind::GitConfig, AllowedKind::RegistryPull] {
+    for kind in [AllowedKind::SignIn(micold_core::session::AiCli::ClaudeCode), AllowedKind::RegistryPull] {
         state.update(Message::Daemons(DaemonsMsg::AllowedToggled(kind, true)));
     }
     state.update(Message::Daemons(DaemonsMsg::Saved));

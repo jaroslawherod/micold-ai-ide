@@ -446,9 +446,9 @@ had: none of this applies to them, and they write none of these files.
 
 ## Credentials
 
-Nothing of yours is shared unless you say so. Each item is a separate opt-in:
+Your AI CLI sign-in is shared only if you say so. Your git configuration needs no opt-in:
 
-- **Git configuration** — your commit name and email, read-only. The sandbox gets a copy without
+- **Git configuration** — your commit name and email, when you have a `~/.gitconfig`. The sandbox gets a copy without
   credential helpers, tokens embedded in URLs, extra HTTP headers, includes, or a custom SSH or
   askpass command, and git inside it ignores any helper that is left. The daemon's file names the
   copy as `[git] config_file`, and git in every session of a container or pod reads it through

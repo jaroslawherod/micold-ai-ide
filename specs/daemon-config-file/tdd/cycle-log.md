@@ -213,3 +213,19 @@ against the rule each covers and run green together once the sequence compiled.
 - Full gate at the milestone's final HEAD (`a630e05ff`): 12656 tests run, 11 failed — all 11 proven
   pre-existing on a clean detached `origin/main` worktree (see `autopilot-1532.md`'s *Gate* section);
   none of this milestone's own tests are among them.
+
+## Issue 9 (#1530) M3: the git config only from `[git] config_file` (T139)
+
+- No red run was recorded (`TEST_AFTER`, stated honestly): the shared build lock was held by other
+  worktrees' gates for over an hour, so the tests were written alongside the code in one working tree
+  and first compiled after the whole change existed.
+- New tests: `a_stored_git_config_share_is_dropped_without_a_notice` (core sandbox),
+  `allowed_naming_the_removed_items...` (kube settings, now with `git_config`),
+  `the_git_config_is_a_key_of_the_startup_secret_and_no_secret_of_its_own` (kube start_tests),
+  `the_shared_copy_is_none_without_a_file_and_carries_no_helper` (scoped_credential),
+  `the_git_config_is_given_as_a_sanitized_copy_without_any_share` (client shell/sandbox),
+  `a_git_config_copy_is_delivered_and_named_and_removed_when_there_is_none` (daemon_config_delivery_host),
+  `no_git_config_is_mounted_into_the_container` (sandbox_argv). The golden `pod_spec.json` lost the
+  `gitconfig` subPath mount.
+- Removed: `CredentialShare::GitConfig`, `KubeCredential::GitConfig`, `AllowedKind::GitConfig`, the
+  `-gitconfig` secret (now retired, deleted on the next start), `GIT_CONFIG_GLOBAL` from `daemon_env()`.

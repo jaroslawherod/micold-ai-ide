@@ -1062,7 +1062,7 @@ fn share_credential(surface: &mut Surface, share: bool) {
         draft
             .profile
             .credentials
-            .insert(micold_core::sandbox::CredentialShare::GitConfig);
+            .insert(micold_core::sandbox::CredentialShare::AiCliAuth);
     } else {
         draft.profile.credentials.clear();
     }

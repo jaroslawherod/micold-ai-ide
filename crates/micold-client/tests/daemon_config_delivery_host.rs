@@ -194,7 +194,7 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
 
-        assert!(deliver_container("box", &profile(true), home, &delivery, None).unwrap());
+        assert!(deliver_container("box", &profile(true), home, &delivery, None, None).unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
         assert!(errors.is_empty(), "{errors:?}\n{text}");
@@ -227,11 +227,11 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
 
-        assert!(deliver_container("box", &profile(false), home, &delivery, None).unwrap());
+        assert!(deliver_container("box", &profile(false), home, &delivery, None, None).unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         assert!(!text.contains("idle_stop"), "{text}");
-        assert!(!deliver_container("box", &profile(false), home, &delivery, None).unwrap());
-        assert!(deliver_container("box", &profile(true), home, &delivery, None).unwrap());
+        assert!(!deliver_container("box", &profile(false), home, &delivery, None, None).unwrap());
+        assert!(deliver_container("box", &profile(true), home, &delivery, None, None).unwrap());
     }
 
     fn startup_in(app: &Path, with_env: bool) -> micold_client::daemon_config_render::StartupTable {
@@ -264,6 +264,7 @@ mod container {
             &profile(false),
             Path::new("/home/jaro"),
             &delivery,
+            None,
             Some(&startup),
         )
         .unwrap();
@@ -300,12 +301,43 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
         let startup = startup_in(dir.path(), true);
-        deliver_container("box", &profile(false), home, &delivery, Some(&startup)).unwrap();
+        deliver_container("box", &profile(false), home, &delivery, None, Some(&startup)).unwrap();
 
-        deliver_container("box", &profile(false), home, &delivery, None).unwrap();
+        deliver_container("box", &profile(false), home, &delivery, None, None).unwrap();
 
         assert!(!delivery.config.join("startup.sh").exists());
         assert!(!delivery.secrets.join("startup.env").exists());
+    }
+
+    /// #1530: a sanitized git configuration lands in the secrets folder and the file names it as
+    /// `[git] config_file`; without one the copy is removed again and the key is gone.
+    #[test]
+    fn a_git_config_copy_is_delivered_and_named_and_removed_when_there_is_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let home = Path::new("/home/jaro");
+        let copy = delivery.secrets.join("gitconfig");
+
+        deliver_container(
+            "box",
+            &profile(false),
+            home,
+            &delivery,
+            Some("[user]\n\tname = \"Ada\"\n"),
+            None,
+        )
+        .unwrap();
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        assert!(
+            text.contains("config_file = \"/run/micold/secrets/gitconfig\""),
+            "{text}"
+        );
+        assert!(std::fs::read_to_string(&copy).unwrap().contains("Ada"));
+
+        deliver_container("box", &profile(false), home, &delivery, None, None).unwrap();
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        assert!(!text.contains("config_file"), "{text}");
+        assert!(!copy.exists());
     }
 
     #[test]
@@ -322,6 +354,7 @@ mod container {
             &profile(false),
             Path::new("/home/jaro"),
             &delivery,
+            None,
             Some(&startup),
         )
         .unwrap_err();

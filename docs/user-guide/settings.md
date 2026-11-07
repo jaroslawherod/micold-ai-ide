@@ -641,18 +641,19 @@ Caps on what the sandbox may consume (CPU, memory, process count and writable st
 
 #### Credentials
 
-The container starts with **none** of your credentials, and upgrading the app never opts you in.
-Each share is separate, and only what you tick is passed in:
+The container starts with **none** of your credentials, and upgrading the app never opts you in
+to one. Only what you tick is passed in:
 
-- **Git configuration** — `~/.gitconfig`, read-only: your commit identity. The sandbox gets a
-  sanitized copy, named by `[git] config_file` in the daemon's configuration, and commit and tag
-  signing switches are removed from it unless the daemon has a `signing_key_file`.
 - **AI CLI sign-in** — the AI CLI's own authentication material.
 
 The **SSH agent** and **Git credentials** shares were removed: they handed the sandbox your whole
 git identity. A daemon that had either on keeps working without it, and its entry in the daemon list
 shows a one-time notice with a **Dismiss** button. Until you paste a GitHub token for its
 repository (see [GitHub tokens](#github-tokens)), a sandbox cannot push.
+
+Your `~/.gitconfig` (your commit identity) is not a share: every container gets a sanitized copy,
+named by `[git] config_file` in the daemon's configuration. Commit and tag signing switches are
+removed from it unless the daemon has a `signing_key_file`.
 
 While either of these is on, the form lists exactly which ones by name, and the rail marks
 **Daemons** with a *Sharing* badge — so you can tell at a glance, from any section, that

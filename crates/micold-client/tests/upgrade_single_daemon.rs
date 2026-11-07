@@ -164,7 +164,7 @@ fn a_tuned_container_install_shows_every_legacy_value_in_the_one_migrated_daemon
     assert_eq!(p.network, NetworkPosture::Outbound);
     assert_eq!(
         p.credentials,
-        [CredentialShare::GitConfig, CredentialShare::AiCliAuth].into()
+        [CredentialShare::AiCliAuth].into()
     );
     assert_eq!(p.budget.cpus_milli, Some(MilliCpus(3500)));
     assert_eq!(p.budget.memory_bytes, Some(Bytes(8 << 30)));
