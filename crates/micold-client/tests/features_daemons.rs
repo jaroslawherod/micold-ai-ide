@@ -481,7 +481,7 @@ mod kubernetes {
         send(
             &mut state,
             &mut w,
-            Msg::AllowedToggled(AllowedKind::GitConfig, true),
+            Msg::AllowedToggled(AllowedKind::SignIn(AiCli::ClaudeCode), true),
         );
         send(
             &mut state,
@@ -490,7 +490,7 @@ mod kubernetes {
         );
         send(&mut state, &mut w, Msg::Saved);
         let allowed = stored(&w, id).allowed;
-        assert!(allowed.contains(&KubeCredential::GitConfig));
+        assert!(allowed.contains(&KubeCredential::SignIn { cli: AiCli::ClaudeCode }));
         assert!(allowed.contains(&KubeCredential::SignIn { cli: AiCli::Pi }));
         assert_eq!(allowed.len(), 2);
         let mut state = open(&mut w, id);
@@ -500,11 +500,11 @@ mod kubernetes {
             .unwrap()
             .kube
             .allowed
-            .contains(&AllowedKind::GitConfig));
+            .contains(&AllowedKind::SignIn(AiCli::ClaudeCode)));
         send(
             &mut state,
             &mut w,
-            Msg::AllowedToggled(AllowedKind::GitConfig, false),
+            Msg::AllowedToggled(AllowedKind::SignIn(AiCli::ClaudeCode), false),
         );
         send(&mut state, &mut w, Msg::Saved);
         assert_eq!(stored(&w, id).allowed.len(), 1);

@@ -64,8 +64,8 @@ Everything is labelled `app.kubernetes.io/managed-by=micold-ai-ide` and `micold.
 | Volume claim (your worktrees, the daemon, the AI CLIs) | `micold-<name>-<key>-data` | Remove |
 | Secret, SSH access (the pod's host key and your computer's public key) | `micold-<name>-<key>-ssh-access` | Remove |
 | Config map, the daemon's `daemon.toml` | `micold-<name>-<key>-config` | Remove |
-| Secret, the start script's `env_file` (only while the daemon has one) | `micold-<name>-<key>-startup` | the next start after you remove the `env_file`, or Remove |
-| One secret per allowed credential | `...-gitconfig`, `...-git-credentials`, `...-git-ssh`, `...-signin-<cli>`, `...-pull` | the next start after you withdraw it, or Remove |
+| Secret, the start script's `env_file` and your sanitized git configuration (only while there is one) | `micold-<name>-<key>-startup` | the next start after neither is left, or Remove |
+| One secret per allowed credential | `...-signin-<cli>`, `...-pull` | the next start after you withdraw it, or Remove |
 
 **No Service, Ingress, network policy, service account, role or namespace is created.** Micold
 reaches the pod only through the Kubernetes API's port-forward, so nothing is exposed in the cluster
@@ -124,11 +124,11 @@ text nor a secret is in `daemon.toml`. Remove deletes the secret with the rest. 
 ## Allowed credentials
 
 **Nothing reaches the pod unless it is ticked.** Each tick becomes a secret in the namespace,
-mounted read-only, and never goes into the image:
+mounted read-only, and never goes into the image. Your git configuration is not one of them: the pod
+gets a sanitized copy (no credential helpers, tokens embedded in URLs, extra HTTP headers, includes,
+or a custom SSH or askpass command) as the file `gitconfig` of the startup secret, named by
+`[git] config_file`.
 
-- **the git config**, as the file `gitconfig` in the read-only directory `/run/micold/secrets/git`
-  (git is told with `GIT_CONFIG_GLOBAL`), as a copy without credential helpers, tokens embedded in
-  URLs, extra HTTP headers, includes, or a custom SSH or askpass command;
 - **the sign-in** of each AI CLI (Claude Code, GitHub Copilot, Pi Coding Agent), at the path that
   CLI reads under its home;
 - **the registry credentials**, with its **Registry credentials file**, as an image-pull secret.

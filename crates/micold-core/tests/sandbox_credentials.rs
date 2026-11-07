@@ -149,12 +149,12 @@ fn every_active_share_is_individually_identifiable() {
 #[test]
 fn an_opt_in_with_no_known_path_is_skipped_rather_than_substituted() {
     let profile = SandboxProfile {
-        credentials: BTreeSet::from([CredentialShare::GitConfig]),
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
         ..SandboxProfile::default()
     };
     let mut layout = layout();
-    // No git config: the user has the share enabled, and there is nothing to share.
-    layout.git_config = None;
+    // No sign-in file: the user has the share enabled, and there is nothing to share.
+    layout.ai_cli_auth.clear();
     let mounts = MountSet::build(
         &[],
         &profile,
@@ -207,24 +207,6 @@ fn the_runtimes_control_socket_is_never_reachable() {
         let p = path.display().to_string();
         assert!(!p.contains("docker.sock"), "{p} is reachable");
         assert!(!p.contains("podman.sock"), "{p} is reachable");
-    }
-}
-
-/// Credentials keep their own absolute paths inside the container, for the same reason projects do:
-/// the tools that read them look where they always are.
-#[test]
-fn credentials_appear_at_the_paths_their_tools_expect() {
-    let profile = SandboxProfile {
-        credentials: BTreeSet::from([CredentialShare::GitConfig]),
-        ..SandboxProfile::default()
-    };
-    let mounts = build(&profile);
-    let c = &mounts.credentials[0];
-    // The source is the sanitized copy in the state directory (FR-004); the target is the path the
-    // tool looks at.
-    assert_eq!(c.host, mounts.state.host.join("gitconfig"));
-    if cfg!(not(windows)) {
-        assert!(c.container.ends_with(".gitconfig"));
     }
 }
 
@@ -773,7 +755,7 @@ fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settin
     .unwrap();
     assert_eq!(
         profile.credentials,
-        BTreeSet::from([CredentialShare::GitConfig, CredentialShare::AiCliAuth])
+        BTreeSet::from([CredentialShare::AiCliAuth])
     );
     let spec = host.container_spec(profile);
     // The kept items are mounted, so the search below is not over an empty start-up.
@@ -781,7 +763,7 @@ fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settin
         .mounts
         .credentials
         .iter()
-        .any(|c| c.share == CredentialShare::GitConfig));
+        .any(|c| c.share == CredentialShare::AiCliAuth));
 
     let args: Vec<String> = argv::create(&spec, &docker_caps())
         .iter()

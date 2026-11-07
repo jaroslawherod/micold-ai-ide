@@ -20,7 +20,7 @@ fn a_draft_with_a_context_and_namespace_makes_settings_and_round_trips() {
     let mut draft = KubeDraft::new(&[]);
     draft.context = "prod".into();
     draft.namespace = "dev".into();
-    draft.allowed.insert(AllowedKind::GitConfig);
+    draft.allowed.insert(AllowedKind::SignIn(AiCli::ClaudeCode));
     let settings = draft.settings().unwrap();
     assert_eq!(KubeDraft::of(&settings).settings().unwrap(), settings);
 }

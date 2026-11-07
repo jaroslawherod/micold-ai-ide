@@ -361,7 +361,7 @@ fn profile_fields_round_trip_through_save() {
         Msg::ContainerRuntimeChosen(RuntimeKind::Podman),
         Msg::ImageKindChosen(daemons::ImageKind::Own),
         Msg::ImagePathEdited("/tmp/image.tar".into()),
-        Msg::CredentialToggled(CredentialShare::GitConfig, true),
+        Msg::CredentialToggled(CredentialShare::AiCliAuth, true),
         Msg::NetworkChosen(NetworkPosture::NoOutbound),
         Msg::CpuLimitEdited("1.5".into()),
         Msg::MemoryLimitEdited("2048".into()),
@@ -378,7 +378,7 @@ fn profile_fields_round_trip_through_save() {
         p.image,
         ImageChoice::Own(OwnImage::Archive("/tmp/image.tar".into()))
     );
-    assert!(p.credentials.contains(&CredentialShare::GitConfig));
+    assert!(p.credentials.contains(&CredentialShare::AiCliAuth));
     assert_eq!(p.network, NetworkPosture::NoOutbound);
     assert_eq!(p.budget.cpus_milli.map(|c| c.0), Some(1500));
     assert_eq!(p.budget.pids, Some(600));
@@ -623,7 +623,7 @@ fn the_sharing_badge_follows_the_stored_daemons_and_the_open_form() {
     send(
         &mut state,
         &mut w,
-        Msg::CredentialToggled(CredentialShare::GitConfig, true),
+        Msg::CredentialToggled(CredentialShare::AiCliAuth, true),
     );
     assert!(daemons::views(&state, &w.model()).shares_credentials);
 
@@ -640,7 +640,7 @@ fn the_sharing_badge_follows_the_stored_daemons_and_the_open_form() {
     send(
         &mut state,
         &mut w,
-        Msg::CredentialToggled(CredentialShare::GitConfig, false),
+        Msg::CredentialToggled(CredentialShare::AiCliAuth, false),
     );
     assert!(!daemons::views(&state, &w.model()).shares_credentials);
 }

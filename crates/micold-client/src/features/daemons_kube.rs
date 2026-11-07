@@ -38,8 +38,6 @@ pub enum ContextList {
 /// One line of the allowed-credentials list (FR-008).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AllowedKind {
-    /// `~/.gitconfig`.
-    GitConfig,
     /// One AI CLI's sign-in.
     SignIn(AiCli),
     /// A registry `auths` file; needs a file.
@@ -49,7 +47,7 @@ pub enum AllowedKind {
 impl AllowedKind {
     /// Every line, in the order the form lists them.
     pub fn all() -> Vec<AllowedKind> {
-        let mut all = vec![Self::GitConfig];
+        let mut all: Vec<AllowedKind> = Vec::new();
         all.extend(AiCli::ALL.iter().map(|cli| Self::SignIn(*cli)));
         all.push(Self::RegistryPull);
         all
@@ -58,7 +56,6 @@ impl AllowedKind {
     /// The checkbox label.
     pub fn label(self) -> String {
         match self {
-            Self::GitConfig => KubeCredential::GitConfig.label(),
             Self::SignIn(cli) => KubeCredential::SignIn { cli }.label(),
             Self::RegistryPull => KubeCredential::RegistryPull {
                 auths: PathBuf::new(),
@@ -70,7 +67,6 @@ impl AllowedKind {
     /// The noun-only name a closed section's summary lists (feature 890, FR-014).
     pub fn short_label(self) -> String {
         match self {
-            Self::GitConfig => "Git config".into(),
             Self::SignIn(cli) => format!("{} sign-in", cli.provider().display_name()),
             Self::RegistryPull => "Registry credentials".into(),
         }
@@ -158,7 +154,6 @@ impl KubeDraft {
         };
         for credential in &settings.allowed {
             match credential {
-                KubeCredential::GitConfig => draft.allowed.insert(AllowedKind::GitConfig),
                 KubeCredential::SignIn { cli } => draft.allowed.insert(AllowedKind::SignIn(*cli)),
                 KubeCredential::RegistryPull { auths } => {
                     draft.pull_file = auths.display().to_string();
@@ -274,7 +269,6 @@ impl KubeDraft {
         let mut out = BTreeSet::new();
         for kind in &self.allowed {
             match kind {
-                AllowedKind::GitConfig => out.insert(KubeCredential::GitConfig),
                 AllowedKind::SignIn(cli) => out.insert(KubeCredential::SignIn { cli: *cli }),
                 AllowedKind::RegistryPull => true,
             };

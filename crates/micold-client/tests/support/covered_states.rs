@@ -1867,7 +1867,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     .daemon
                     .profile
                     .credentials
-                    .insert(micold_core::sandbox::CredentialShare::GitConfig);
+                    .insert(micold_core::sandbox::CredentialShare::AiCliAuth);
                 // Through `report`, not by setting the field: the section a rejection shows is the
                 // rejection's own business (FR-029), and a fixture that set both by hand could
                 // record a pairing the application cannot produce.
@@ -1948,7 +1948,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     .daemon
                     .profile
                     .credentials
-                    .insert(micold_core::sandbox::CredentialShare::GitConfig);
+                    .insert(micold_core::sandbox::CredentialShare::AiCliAuth);
                 state.settings.settings_draft = Some(draft);
                 state.settings.settings_rail_collapsed = true;
                 StateUnderTest::new(state)

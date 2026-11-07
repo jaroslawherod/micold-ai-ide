@@ -686,19 +686,6 @@ mod tests {
     /// …and the summary stops calling it shared. Alone, there is nothing shared to state.
     #[test]
     fn an_unshared_sign_in_is_not_called_shared() {
-        let both = sharing(&[CredentialShare::GitConfig, CredentialShare::AiCliAuth]);
-        let summary = sharing_summary(&view_of(&both, Some(LOOKED_FOR)))
-            .expect("git configuration is still shared");
-        assert!(
-            !summary.contains(CredentialShare::AiCliAuth.label()),
-            "the sign-in is listed as shared: {summary}"
-        );
-        assert!(!summary.contains("replace"), "{summary}");
-        assert!(
-            summary.contains(CredentialShare::GitConfig.label()),
-            "{summary}"
-        );
-
         let alone = sharing(&[CredentialShare::AiCliAuth]);
         assert_eq!(
             sharing_summary(&view_of(&alone, Some(LOOKED_FOR))),
@@ -719,9 +706,9 @@ mod tests {
             "{summary}"
         );
 
-        let git_only = sharing(&[CredentialShare::GitConfig]);
+        let nothing_shared = sharing(&[]);
         assert_eq!(
-            unshared_sign_in_notice(&view_of(&git_only, Some(LOOKED_FOR))),
+            unshared_sign_in_notice(&view_of(&nothing_shared, Some(LOOKED_FOR))),
             None
         );
     }

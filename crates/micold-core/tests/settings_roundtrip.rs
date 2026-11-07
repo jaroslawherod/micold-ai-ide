@@ -374,7 +374,7 @@ fn a_full_v4_document_round_trips() {
         .daemon
         .sandbox
         .credentials
-        .insert(micold_core::sandbox::CredentialShare::GitConfig);
+        .insert(micold_core::sandbox::CredentialShare::AiCliAuth);
 
     store.save(&settings).unwrap();
     assert_eq!(store.load().settings, settings);

@@ -253,10 +253,9 @@ mod summaries {
             Some("Nothing shared")
         );
         d.profile.credentials.insert(CredentialShare::AiCliAuth);
-        d.profile.credentials.insert(CredentialShare::GitConfig);
         assert_eq!(
             said(&d, Section::Credentials).as_deref(),
-            Some("Shared: Git configuration, AI CLI sign-in")
+            Some("Shared: AI CLI sign-in")
         );
         d.profile.network = NetworkPosture::NoOutbound;
         assert_eq!(
@@ -330,10 +329,16 @@ mod summaries {
             Some("Nothing allowed")
         );
         d.kube.allowed.insert(AllowedKind::RegistryPull);
-        d.kube.allowed.insert(AllowedKind::GitConfig);
+        d.kube.allowed.insert(AllowedKind::SignIn(AiCli::Pi));
         assert_eq!(
             said(&d, Section::Credentials).as_deref(),
-            Some("Allowed: Git config, Registry credentials")
+            Some(
+                format!(
+                    "Allowed: {}, Registry credentials",
+                    AllowedKind::SignIn(AiCli::Pi).short_label()
+                )
+                .as_str()
+            )
         );
         d.kube.cpu_request = String::new();
         d.kube.cpu_limit = String::new();
@@ -452,7 +457,6 @@ mod summaries {
 
     #[test]
     fn allowed_kinds_have_short_labels() {
-        assert_eq!(AllowedKind::GitConfig.short_label(), "Git config");
         assert_eq!(
             AllowedKind::SignIn(AiCli::ClaudeCode).short_label(),
             format!("{} sign-in", AiCli::ClaudeCode.provider().display_name())

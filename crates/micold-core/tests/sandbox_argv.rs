@@ -65,7 +65,7 @@ fn spec_for(windows_host: bool) -> SandboxSpec {
     };
     let profile = SandboxProfile {
         image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
-        credentials: BTreeSet::from([CredentialShare::GitConfig, CredentialShare::AiCliAuth]),
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
         ..SandboxProfile::default()
     };
     let layout = CredentialLayout::conventional(Path::new(home), None);
@@ -362,7 +362,7 @@ fn a_containers_projects_are_its_project_mounts() {
     let mounts = MountSet::build_for(
         &[PathBuf::from("/proj/P")],
         &SandboxProfile {
-            credentials: BTreeSet::from([CredentialShare::GitConfig]),
+            credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
             ..SandboxProfile::default()
         },
         &CredentialLayout::conventional(Path::new("/home/u"), None),
@@ -542,27 +542,24 @@ fn git_in_the_container_resets_every_credential_helper() {
     }
 }
 
-/// FR-004: the `~/.gitconfig` mount's source is the sanitized copy in the daemon state directory,
-/// not the host's file, whichever platform the host is.
+/// #1530: the git configuration is no mount any more: the app hands the daemon a sanitized copy as
+/// a secret and `[git] config_file`, whichever platform the host is.
 #[test]
-fn the_git_config_mount_is_the_sanitized_copy_not_the_host_file() {
+fn no_git_config_is_mounted_into_the_container() {
     for windows_host in [false, true] {
         let spec = spec_for(windows_host);
-        let mount = spec
+        assert!(spec
             .mounts
             .credentials
             .iter()
-            .find(|c| c.share == CredentialShare::GitConfig)
-            .expect("the spec shares the git configuration");
-        assert_eq!(mount.host, spec.mounts.state.host.join("gitconfig"));
-        assert!(mount.container.to_string_lossy().ends_with(".gitconfig"));
+            .all(|c| !c.container.to_string_lossy().ends_with(".gitconfig")));
         let args = argv::create(&spec, &caps());
-        let volume = volumes(&args)
-            .into_iter()
-            .find(|(_, container, _)| container.ends_with(".gitconfig"))
-            .expect("the git configuration is mounted");
-        assert_eq!(volume.2, "ro");
-        assert!(!volume.0.ends_with(".gitconfig"), "{volume:?}");
+        assert!(
+            volumes(&args)
+                .into_iter()
+                .all(|(_, container, _)| !container.ends_with(".gitconfig")),
+            "a .gitconfig is mounted: {args:?}"
+        );
     }
 }
 
