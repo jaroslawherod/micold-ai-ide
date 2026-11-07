@@ -411,10 +411,9 @@ fn a_press_on_the_composer_takes_the_keyboard_from_the_pane() {
     );
     let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
-    // Inside the text area, which starts at the pane's left; #942's mode control sits between it
-    // and Send.
+    // Inside the text area, which starts right of the activity and attach icons (#1764).
     let at = iced::Point::new(
-        transcript.x + 100.0,
+        transcript.x + 200.0,
         send.origin.y + send.natural_height / 2.0,
     );
     let under = StateUnderTest::new(state.clone());
@@ -579,10 +578,9 @@ fn the_composer_keeps_the_keyboard_when_a_queue_row_appears_above_it() {
     report(&mut state, id, busy(InterruptAsk::None), false, 0);
     let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
-    // Inside the text area, which starts at the pane's left; #942's mode control sits between it
-    // and Send.
+    // Inside the text area, which starts right of the activity and attach icons (#1764).
     let at = iced::Point::new(
-        transcript.x + 100.0,
+        transcript.x + 200.0,
         send.origin.y + send.natural_height / 2.0,
     );
     let under = StateUnderTest::new(state.clone());
