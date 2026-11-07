@@ -98,7 +98,7 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
         // The read goes through the app's clipboard, as the terminal pane's paste does: the
         // editor's own synchronous read yields nothing on a live Wayland clipboard (#1721).
         Msg::PasteRequested(session) => {
-            app.core.composers.menu = None;
+            app.core.composers.close_menu();
             return iced::clipboard::read()
                 .map(move |text| Message::Composer(Msg::Pasted { session, text }));
         }
@@ -108,8 +108,8 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
                 edited(app, session, &EditorAction(paste));
             }
         }
-        Msg::MenuOpened { session, origin } => app.core.composers.menu = Some((session, origin)),
-        Msg::MenuDismissed(_) => app.core.composers.menu = None,
+        Msg::MenuOpened { session, origin } => app.core.composers.open_menu(session, origin),
+        Msg::MenuDismissed(_) => app.core.composers.close_menu(),
         Msg::SendRequested(session) => send(app, session),
         Msg::StopRequested(session) => interrupt(app, session),
         Msg::StopSessionRequested(session) => {
