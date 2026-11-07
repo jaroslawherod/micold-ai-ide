@@ -1255,3 +1255,131 @@ fn daemon_id_defaults_to_local_reads_a_valid_id_and_names_a_bad_one() {
     assert!(error.message.contains("daemon id"), "{error}");
     assert!(error.to_string().contains("id"), "{error}");
 }
+
+#[cfg(unix)]
+fn orch_files(dir: &std::path::Path, mode: u32) -> String {
+    let mut body = String::from("[orchestrator]\nurl = \"https://o\"\n");
+    for key in ["ca_file", "cert_file", "key_file"] {
+        let file = secret_file(dir, key, mode);
+        body.push_str(&format!("{key} = \"{}\"\n", file.display()));
+    }
+    body
+}
+
+#[cfg(unix)]
+#[test]
+fn orchestrator_no_secret_content_reaches_debug_display_or_the_view() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = orch_files(dir.path(), 0o600);
+    let token = secret_file(dir.path(), "token", 0o600);
+    let texts = [
+        host(&body),
+        host(&format!(
+            "[orchestrator]\nurl = \"https://o\"\nenrollment_token_file = \"{}\"\n",
+            token.display()
+        )),
+    ];
+    for text in texts {
+        let config = ok(&text);
+        let view = resolved_view(&config);
+        let mut shown = format!("{config:?}\n{view:?}\n{view}\n");
+        let o = config.orchestrator.as_ref().unwrap();
+        for secret in [
+            &o.ca_file,
+            &o.cert_file,
+            &o.key_file,
+            &o.enrollment_token_file,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            shown.push_str(&format!("{secret:?} {secret}\n"));
+        }
+        for finding in check_files(&text, ORIGIN, &config) {
+            shown.push_str(&format!("{finding}\n"));
+        }
+        assert!(!shown.contains("s3cr3t-value"), "{shown}");
+        assert!(shown.contains("(readable, 0600)"), "{shown}");
+    }
+}
+
+#[test]
+fn orchestrator_files_v15_a_missing_file_is_an_error_for_all_four_keys() {
+    let pair = "[orchestrator]\nurl = \"https://o\"\nca_file = \"/nonexistent/ca\"\n\
+        cert_file = \"/nonexistent/c\"\nkey_file = \"/nonexistent/k\"\n";
+    let token = "[orchestrator]\nurl = \"https://o\"\nenrollment_token_file = \"/nonexistent/t\"\n";
+    for (body, keys) in [
+        (pair, &["ca_file", "cert_file", "key_file"][..]),
+        (token, &["enrollment_token_file"][..]),
+    ] {
+        let text = host(body);
+        let found = check_files(&text, ORIGIN, &ok(&text));
+        for key in keys {
+            let key = format!("orchestrator.{key}");
+            let f = found
+                .iter()
+                .find(|f| f.rule == "V15" && f.key == key)
+                .unwrap_or_else(|| panic!("no V15 for {key}: {found:#?}"));
+            assert_eq!(f.severity, Severity::Error);
+            assert_eq!(f.line, line_of(&text, key.rsplit('.').next().unwrap()));
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn orchestrator_files_v15_a_directory_is_not_a_regular_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = host(&format!(
+        "[orchestrator]\nurl = \"https://o\"\nenrollment_token_file = \"{}\"\n",
+        dir.path().display()
+    ));
+    let found = check_files(&text, ORIGIN, &ok(&text));
+    assert!(
+        found
+            .iter()
+            .any(|f| f.rule == "V15" && f.key == "orchestrator.enrollment_token_file"),
+        "{found:#?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn orchestrator_files_v14_key_and_token_modes_warn_on_host_and_fail_in_a_container() {
+    let dir = tempfile::tempdir().unwrap();
+    let pair = orch_files(dir.path(), 0o644);
+    let token_file = secret_file(dir.path(), "token", 0o644);
+    let token = format!(
+        "[orchestrator]\nurl = \"https://o\"\nenrollment_token_file = \"{}\"\n",
+        token_file.display()
+    );
+    for (body, key) in [
+        (&pair, "orchestrator.key_file"),
+        (&token, "orchestrator.enrollment_token_file"),
+    ] {
+        for (text, severity) in [
+            (host(body), Severity::Warning),
+            (container(body), Severity::Error),
+        ] {
+            let found = check_files(&text, ORIGIN, &ok(&text));
+            let f = found
+                .iter()
+                .find(|f| f.rule == "V14" && f.key == key)
+                .unwrap_or_else(|| panic!("no V14 for {key}: {found:#?}"));
+            assert_eq!(f.severity, severity);
+        }
+    }
+    // The CA and the certificate are public: no V14 for them.
+    let text = host(&pair);
+    assert!(check_files(&text, ORIGIN, &ok(&text))
+        .iter()
+        .all(|f| f.rule != "V14" || f.key == "orchestrator.key_file"));
+}
+
+#[cfg(unix)]
+#[test]
+fn orchestrator_files_owner_only_files_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = host(&orch_files(dir.path(), 0o600));
+    assert!(check_files(&text, ORIGIN, &ok(&text)).is_empty());
+}

@@ -21,11 +21,11 @@ Paths: core `crates/micold-core/src/daemon_config/` (`mod.rs`, `validate.rs`, `f
 
 ## Phase 3: User Story 3 — secrets never leak, file checks (P1)
 
-- [ ] T009 [US3] Failing sentinel leak test in `daemon_config/tests.rs` over `Debug`, `Display` and the resolved view (SC-002).
-- [ ] T010 [US3] Failing `--files` tests in `daemon_config/tests.rs`: missing file and directory are errors (V15), `key_file`/token mode warning on host and error in container/pod (V14).
-- [ ] T011 [US3] Add V15 entries for the four files in `files.rs` and `key_file` + token file to `secret_entries()` (V14).
-- [ ] T012 [US3] Add a regression reload test (expected green once T004–T005 land, FR-011 uses the existing `config_watch.rs` reject path) in `crates/micold-daemon/tests/config_reload.rs`: an invalid `[orchestrator]` table keeps the last configuration (FR-011).
-- [ ] T013 [US3] Document `--files` behaviour, severities and the no-leak guarantee in `docs/user-guide/daemon-configuration.md`.
+- [x] T009 [US3] Failing sentinel leak test in `daemon_config/tests.rs` over `Debug`, `Display` and the resolved view (SC-002).
+- [x] T010 [US3] Failing `--files` tests in `daemon_config/tests.rs`: missing file and directory are errors (V15), `key_file`/token mode warning on host and error in container/pod (V14).
+- [x] T011 [US3] Add V15 entries for the four files in `files.rs` and `key_file` + token file to `secret_entries()` (V14).
+- [x] T012 [US3] Add a regression reload test (expected green once T004–T005 land, FR-011 uses the existing `config_watch.rs` reject path) in `crates/micold-daemon/tests/config_reload.rs`: an invalid `[orchestrator]` table keeps the last configuration (FR-011).
+- [x] T013 [US3] Document `--files` behaviour, severities and the no-leak guarantee in `docs/user-guide/daemon-configuration.md`.
 
 ## Dependencies
 
@@ -53,6 +53,6 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T009–T013
 - **Deliverable**: `config check --files` errors on missing or non-regular files and flags permissive key/token modes; no secret content appears in `Debug`, `Display` or the resolved view; an invalid reload keeps the last configuration.
 - **Satisfies**: US3 acceptance scenarios 1, 4 (leak, file checks); FR-007, FR-009, FR-011; SC-002
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-daemon --test config_reload`
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-daemon --test main config_reload`
 - **Depends on**: M1
 - **Tier**: full

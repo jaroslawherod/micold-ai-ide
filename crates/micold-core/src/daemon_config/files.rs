@@ -41,6 +41,9 @@ pub fn check_files(text: &str, origin: &str, config: &DaemonConfig) -> Vec<Confi
             required.push((format!("ai.cli[{i}].place[{j}].file"), &place.file));
         }
     }
+    for (key, file) in orchestrator_files(config) {
+        required.push((format!("orchestrator.{key}"), file));
+    }
     for (key, path) in required {
         if !path.is_file() {
             let shown = path.display();
@@ -137,5 +140,26 @@ pub fn secret_entries(config: &DaemonConfig) -> Vec<(String, &Path)> {
     if let Some(p) = config.startup.as_ref().and_then(|s| s.env_file.as_ref()) {
         secrets.push(("startup.env_file".into(), p.path()));
     }
+    for (key, file) in orchestrator_files(config) {
+        if matches!(key, "key_file" | "enrollment_token_file") {
+            secrets.push((format!("orchestrator.{key}"), file));
+        }
+    }
     secrets
+}
+
+/// The files `[orchestrator]` names, by key (#1728).
+fn orchestrator_files(config: &DaemonConfig) -> Vec<(&'static str, &Path)> {
+    let Some(o) = &config.orchestrator else {
+        return Vec::new();
+    };
+    [
+        ("ca_file", &o.ca_file),
+        ("cert_file", &o.cert_file),
+        ("key_file", &o.key_file),
+        ("enrollment_token_file", &o.enrollment_token_file),
+    ]
+    .into_iter()
+    .filter_map(|(key, p)| p.as_ref().map(|p| (key, p.path())))
+    .collect()
 }

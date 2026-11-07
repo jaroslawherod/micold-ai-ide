@@ -9,22 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: milestone M1
-- **Next step**: M1 PR open (see Pull requests); wait for CI and merge, then M2
+- **Phase**: milestone M2
+- **Next step**: M2 PR open (see Pull requests); wait for CI and merge, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
-| #1752 | M1 | open | |
+| #1752 | M1 | merged | fa3664a38bde19508f8ad4215fc28ccc8a6d3a7f |
+| #1759 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | in review |
-| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #… | pending |
+| M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | merged |
+| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #1759 | in review |
 
 ## Decisions
 
@@ -52,8 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+Rebased onto origin/main 8470f7464 (one trivial conflict in daemon_config/tests.rs: both new tests kept; HEAD c0ce24a3f, local only, NOT pushed). Full `mise run gate` is red on this machine on one test outside this diff: `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` (from #1532 on main; fails identically twice, passes with a different `$HOME`, so it depends on the real `~/.local/share/micold-ai-ide/daemons` data; origin/main CI is red too, on another test). Next: get a green gate (clean HOME for that test, or fix #1532's test), then `git push --force-with-lease -u origin HEAD`.
 
 ## Open escalation
 

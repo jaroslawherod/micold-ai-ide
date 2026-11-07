@@ -16,7 +16,9 @@ Exit status 0 prints the configuration with every default filled in. A secret is
 and state, `path (readable, 0600)` or `path (missing)`, never its content. Exit status 2 prints
 `file:line:column: message` for the errors found; a file that cannot be parsed or has an unknown key
 reports the first such error. Without `--files` the files the configuration names need not exist
-yet; with it, a missing script, settings file or client-token file is an error, and a secret file
+yet; with it, a missing script, settings file, client-token file or `[orchestrator]` file (`ca_file`,
+`cert_file`, `key_file`, `enrollment_token_file`), or one that is not a regular file, is an error,
+and a secret file (including `orchestrator.key_file` and `orchestrator.enrollment_token_file`)
 readable by others is a warning on a host or SSH daemon and an error in a container or pod.
 
 Settings renders a file for each daemon from the settings you enter for it (the data directory,
@@ -144,6 +146,12 @@ Absent means the daemon does not connect to an orchestrator. Present, it names t
 how this daemon proves who it is. Every `*_file` key is an absolute path to a file; the file holds
 the secret, never the configuration. `micold-daemon config check` shows each as a path and whether it
 is readable, with its mode, never its content.
+
+No secret content appears anywhere the configuration is printed: not in the output of
+`config check`, not in logs, and not in the error messages. With `--files`, a missing or non-regular
+file is an error (V15), and a `key_file` or `enrollment_token_file` readable by others is a warning
+on a host or SSH daemon and an error in a container or pod (V14). A live reload with an invalid
+`[orchestrator]` table keeps the last valid configuration and reports the error.
 
 | Key | Default | Meaning |
 |---|---|---|
