@@ -67,7 +67,7 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 - [x] T021 [US3] Add `composer_options_open: bool` (`#[serde(default)]`, default false, serde mirror; `settings_version` unchanged) in `crates/micold-core/src/settings.rs`
 - [x] T022 [US3] `persist_composer_options_open` and the form-save exclusion in `crates/micold-client/src/shell/persist.rs`; read it into core state at boot in `crates/micold-client/src/shell/startup.rs`
 - [x] T023 [US3] `options_open` flag, `OptionsToggled`, auto-expand at the model/effort/permission refusal notice sites in `crates/micold-client/src/features/composer.rs`; call `persist_composer_options_open` on every change in `crates/micold-client/src/shell/composer.rs`
-- [x] T024 [US3] Layout in `crates/micold-client/src/ui/composer.rs`: settings `IconButton` at the input row start, options row (Model, Effort, Permission) when open, Bypass warning marker; `crates/micold-client/src/ui/mode_control.rs` `seams` drops the permission control from the input row (FR-008)
+- [x] T024 [US3] Layout in `crates/micold-client/src/ui/composer.rs`: settings `IconButton` after the text area (#1764: swapped with the indicator and attach), options row (Model, Effort, Permission) when open, Bypass warning marker; `crates/micold-client/src/ui/mode_control.rs` `seams` drops the permission control from the input row (FR-008)
 - [x] T025 [P] [US3] User guide: options row, settings icon, persistence, auto-expand, Bypass marker in `docs/user-guide/structured-input.md`
 
 ## Phase 6: User Story 4 - One consistent selector style (P2)

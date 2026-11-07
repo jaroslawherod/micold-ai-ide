@@ -40,6 +40,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | D4 | spec | Persist expanded state | Yes, per window | agent-resolved (owner default) | spec.md#decisions |
 | D5 | spec | Bypass warning marker | On settings icon | agent-resolved (owner default) | spec.md#decisions |
 | D6 | spec | Large editor attachments | Text only | agent-resolved (owner default) | spec.md#decisions |
+| D7 | M3 | #1764 order of the swap (issue ambiguous) | Literal swap: input row [activity][attach][text area][settings][Stop][Send] | assumption (agent-resolved; user did not choose) | issue #1764; contracts/composer-layout.md |
 
 ## Review rounds
 
