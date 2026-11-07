@@ -192,4 +192,20 @@ build-lock load — the load was real but incidental. It does not touch the sepa
 
 ## Open escalation
 
-None.
+M2a is fully done except opening the PR: branch pushed (`origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind`
+at `c308b6677`), review A and review B both recorded clean (findings fixed) in *Review rounds*,
+and the final gate run recorded in *Gate* (11 pre-existing failures, matching the known baseline,
+confirmed by both a full and a scoped run). `gh pr create`/`gh pr list` failed on every one of 22+
+retries over several minutes (`dial tcp 140.82.121.5:443: i/o timeout` / `.6:443`), so this is the
+documented intermittent `api.github.com` black-hole (D7), not a credential problem (credentials are
+fine per D6; `git push` to the same host succeeded). Please run, once connectivity recovers:
+
+```
+gh pr create --base main --title "feat(1532): deliver AI CLI sign-in read-only on every kind (#1532)" \
+  --body-file "/tmp/claude-1000/-run-media-jaro-Workspace-micold-ai-ide--claude-worktrees-feat-1532-ai-cli-configuration-from-the-file-for-every-kind/9dc0ca22-c19f-4a99-bcf2-d656a7464a3e/scratchpad/pr-body.md" \
+  --head feat/1532_ai-cli-configuration-from-the-file-for-every-kind
+```
+
+(If that scratchpad path is gone, the body is reproducible from this ledger's *Review rounds* and
+*Gate* M2a entries plus `tasks.md`'s M2a block — see `pr.md`'s template.) Record the resulting PR
+number in this ledger's *Pull requests* table and the M2a milestone row once opened.
