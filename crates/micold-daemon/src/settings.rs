@@ -59,7 +59,7 @@ pub struct DaemonSettings {
 }
 
 /// Whether the retired start-up variables still count: the daemon's own tests only.
-const TEST_ENV: bool = cfg!(any(test, feature = "test-env"));
+const TEST_ENV: bool = retired_env::TEST_ENV;
 
 /// Warnings for retired variables found set, not yet logged: tracing is not up when the settings
 /// are read, so [`log_retired_warnings`] writes them once it is.

@@ -152,26 +152,20 @@ fn the_two_new_refusals_are_distinct_values() {
 // the_wire_changes_for_this_feature_cost_exactly_one_version_bump`: one pin, so a bump edits one
 // literal.
 
-/// The daemon finds its token where the image says it will. If these two drift, a sandbox starts
-/// and then refuses every connection, with the cause a mount path away from anything visible.
+/// The image names no token path: the delivered configuration file does (`auth.client_token_file`,
+/// #1537). A variable set again here would be ignored with a warning on every container start.
 #[test]
-fn the_container_token_path_matches_what_the_image_declares() {
+fn the_image_no_longer_sets_the_retired_token_variable() {
     let containerfile = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../packaging/sandbox/Containerfile"
     ))
     .expect("read the Containerfile");
-    // The path is the mount point the delivered file names (`auth.client_token_file`); the image
-    // no longer sets `MICOLD_TOKEN_PATH` (#1537).
     assert!(
         !containerfile
             .lines()
             .any(|l| !l.trim_start().starts_with('#') && l.contains(TOKEN_PATH_ENV)),
         "the image must not set {TOKEN_PATH_ENV}"
-    );
-    assert!(
-        containerfile.contains(CONTAINER_TOKEN_PATH),
-        "the image documents the mount point {CONTAINER_TOKEN_PATH}"
     );
 }
 
