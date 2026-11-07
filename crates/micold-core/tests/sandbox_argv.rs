@@ -128,6 +128,8 @@ fn volumes(args: &[std::ffi::OsString]) -> Vec<(String, String, String)> {
 /// mapping. Its host half is an application-owned directory and its container half is the user's
 /// home path, and the two are supposed to differ on every platform — that is what shadowing the
 /// host home means. Only its container half comes from [`pathmap`], which the Windows test below
+/// still covers by asserting every container half is a Linux path.
+///
 /// Every AI CLI's sign-in is excluded for the state directory's reason (T065): it is no longer
 /// mounted at its own live path but under [`CONTAINER_SECRETS_DIR`]`/ai-cli-auth/<suffix>`, a fixed
 /// container path the sandbox's own relink step resolves — so its two halves are supposed to
