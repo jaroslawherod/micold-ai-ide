@@ -19,6 +19,7 @@ use micold_core::sandbox::runtime::{
 };
 use micold_core::sandbox::{
     CredentialLayout, CredentialShare, MountSet, SandboxProfile, SandboxSpec, SecretMount,
+    CONTAINER_SECRETS_DIR,
 };
 use micold_core::session::AiCli;
 use std::collections::BTreeSet;
@@ -127,7 +128,10 @@ fn volumes(args: &[std::ffi::OsString]) -> Vec<(String, String, String)> {
 /// mapping. Its host half is an application-owned directory and its container half is the user's
 /// home path, and the two are supposed to differ on every platform — that is what shadowing the
 /// host home means. Only its container half comes from [`pathmap`], which the Windows test below
-/// still covers by asserting every container half is a Linux path.
+/// Every AI CLI's sign-in is excluded for the state directory's reason (T065): it is no longer
+/// mounted at its own live path but under [`CONTAINER_SECRETS_DIR`]`/ai-cli-auth/<suffix>`, a fixed
+/// container path the sandbox's own relink step resolves — so its two halves are supposed to
+/// differ on every platform, Linux included.
 fn mapped_volumes(
     spec: &SandboxSpec,
     args: &[std::ffi::OsString],
@@ -166,6 +170,7 @@ fn mapped_volumes(
     volumes(args)
         .into_iter()
         .filter(|(host, _, _)| !fixed.contains(host))
+        .filter(|(_, container, _)| !container.starts_with(CONTAINER_SECRETS_DIR))
         .collect()
 }
 
@@ -192,15 +197,11 @@ fn a_windows_host_mounts_every_path_under_the_container_root() {
         );
     }
 
-    // The project and the credentials all come from the host's filesystem, so all six
-    // land under the container root. The state and token mounts do not: they have fixed container
-    // paths the image dictates.
+    // The project comes from the host's filesystem, so it lands under the container root. The
+    // state, token and sign-in mounts do not: they have fixed container paths the image dictates
+    // (the sign-ins since T065 — read-only under the secrets directory, relinked inside).
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
-    assert_eq!(
-        mapped.len(),
-        4,
-        "one project and three sign-in files: {mapped:?}"
-    );
+    assert_eq!(mapped.len(), 1, "the one project: {mapped:?}");
     assert!(
         mapped
             .iter()
@@ -257,9 +258,9 @@ fn a_unix_host_mounts_every_path_at_itself() {
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
     assert_eq!(
         mapped.len(),
-        4,
-        "one project and three sign-in files, the git config being the state-directory copy: \
-         {mapped:?}"
+        1,
+        "the one project; the git config is the state-directory copy and every sign-in is \
+         delivered under the secrets directory (T065): {mapped:?}"
     );
     for (host, container, _) in mapped {
         assert_eq!(
@@ -295,12 +296,15 @@ fn git_routes_to_the_daemon_exactly_when_the_mounted_paths_differ() {
     }
 }
 
-/// Rule N-4 (BUG-006, FR-004e): the sign-in token is the one credential the sandbox may write.
+/// SC-008 (T065): no credential mount is writable any more, the sign-in included.
 ///
-/// `claude` replaces its own token when it refreshes it, so a read-only token stops working the
-/// first time it expires. Every other share is only ever read, and stays read-only.
+/// It used to be the one exception (rule N-4, BUG-006, FR-004e) because `claude` replaces its own
+/// token when it refreshes it, and a read-only token stops working the first time it expires.
+/// T065 removes the exception instead of the capability: the sign-in is mounted read-only under
+/// the secrets directory and the sandbox symlinks the CLI's live path to it at session start, so
+/// the CLI's refresh writes a fresh file in its own home and never writes through a host mount.
 #[test]
-fn only_the_ai_cli_sign_in_is_mounted_writable() {
+fn no_credential_is_mounted_writable_not_even_the_ai_cli_sign_in() {
     let spec = spec_for(false);
     let credential_hosts: Vec<String> = spec
         .mounts
@@ -320,24 +324,32 @@ fn only_the_ai_cli_sign_in_is_mounted_writable() {
         "the spec shares the sign-in, or this test checks nothing: {credential_hosts:?}"
     );
 
-    for (host, _, mode) in volumes(&argv::create(&spec, &caps())) {
+    // Every CLI's sign-in file, as that provider names it (feature 488, T036): named explicitly so
+    // this still asserts something about the sign-ins in particular, not just "all mounts are ro".
+    let sign_ins: Vec<String> = AiCli::ALL
+        .iter()
+        .filter_map(|cli| cli.provider().sandbox_auth_file(Path::new(NIX_HOME)))
+        .map(|f| f.to_string_lossy().into_owned())
+        .collect();
+    let mut seen_sign_in = 0;
+    for (host, container, mode) in volumes(&argv::create(&spec, &caps())) {
         if !credential_hosts.contains(&host) {
             continue;
         }
-        // Every CLI's sign-in file, as that provider names it (feature 488, T036).
-        let is_sign_in = [
-            AiCli::ClaudeCode,
-            AiCli::Codex,
-            AiCli::OpenCode,
-            AiCli::Copilot,
-            AiCli::Pi,
-        ]
-        .iter()
-        .filter_map(|cli| cli.provider().sandbox_auth_file(Path::new(NIX_HOME)))
-        .any(|f| f.to_string_lossy() == host.as_str());
-        let expected = if is_sign_in { "rw" } else { "ro" };
-        assert_eq!(mode, expected, "credential mount {host} has the wrong mode");
+        assert_eq!(mode, "ro", "credential mount {host} must be read-only");
+        if sign_ins.contains(&host) {
+            seen_sign_in += 1;
+            assert!(
+                container.starts_with(CONTAINER_SECRETS_DIR),
+                "a sign-in is delivered under {CONTAINER_SECRETS_DIR}, not at its live path: \
+                 {host} -> {container}"
+            );
+        }
     }
+    assert!(
+        seen_sign_in > 0,
+        "no sign-in was mounted, so this test checked nothing"
+    );
 }
 
 /// U52, FR-036c (BUG-574): which projects a container shares. One this bring-up created shares its
