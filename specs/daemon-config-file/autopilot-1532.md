@@ -137,8 +137,7 @@ scoped only, full gate left to CI"; CI's quieter machine is the tie-breaker.
 
 ## Handover
 
-M2a (T065) is implemented, reviewed (A and B, MAJORs fixed) and committed on the branch, rebased on origin/main, `mise run check` green. NOT pushed, no PR yet: the full gate never ran because `build-lock.sh` stayed held by other worktrees for 45+ min. A detached `mise run gate` was left queued (log in the unit's scratchpad `gate.log`; it dies with the session if not running). Pushing without a green gate was refused (recording the gate-ok tree to let CI validate was denied by the permission classifier; do not retry it).
-Next step: `mise run gate` detached, wait, fix, then push and open the M2a PR (`pr.md`). Deferred: Keychain per-CLI check (T065c/M2b); no daemon-level test for `with_host_config_dir`/`relink_ai_cli_sign_ins_before_launch` (Review B F2: add one if cheap); review A F3 (non-atomic relink) declined as MINOR; container sign-in stays a read-only single-file mount.
+None.
 
 ## Open escalation
 

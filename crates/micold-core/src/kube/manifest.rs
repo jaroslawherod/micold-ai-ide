@@ -788,41 +788,16 @@ mod tests {
         pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE), None)
     }
 
-    /// #1439 FR-019 (BUG-1500): the folders credential files are mounted into are made by the image
-    /// user in an init container, so the runtime does not make them root-owned and the daemon can
-    /// write `~/.claude/CLAUDE.md`. Not part of the pod stamp, so no running pod drifts.
+    /// #1439 FR-019 (BUG-1500): no credential mounts under the image user's home any more (T065
+    /// moved the sign-in to a directory Secret under `/run/micold`; the daemon relinks it), so
+    /// nothing in the home is made root-owned by a mount and no init container is needed.
     #[test]
-    fn agent_guide_home_dirs_init_container_makes_the_credential_mount_folders() {
+    fn no_credential_mounts_under_the_home_so_no_init_container() {
         let signin = KubeCredential::SignIn {
             cli: crate::session::AiCli::ClaudeCode,
         };
-        let p = with_allowed(&[signin.clone(), KubeCredential::GitConfig]);
-        let inits = p["spec"]["initContainers"]
-            .as_array()
-            .expect("init containers");
-        assert_eq!(inits.len(), 1);
-        let init = &inits[0];
-        assert_eq!(init["name"], "home-dirs");
-        assert_eq!(init["image"], IMAGE);
-        assert_eq!(
-            init["command"],
-            json!(["mkdir", "-p", "/data/home/.claude"])
-        );
-        let main = &p["spec"]["containers"][0];
-        assert_eq!(init["securityContext"], main["securityContext"]);
-        assert_eq!(init.get("resources"), main.get("resources"));
-        assert_eq!(
-            init["volumeMounts"],
-            json!([{ "name": "data", "mountPath": DATA_MOUNT }])
-        );
-
-        let p = with_allowed(&[KubeCredential::RegistryPull { auths: "/a".into() }]);
+        let p = with_allowed(&[signin, KubeCredential::GitConfig]);
         assert!(p["spec"].get("initContainers").is_none());
-        assert!(with_allowed(&[])["spec"].get("initContainers").is_none());
-
-        let mut s = settings();
-        s.allowed = [signin].into_iter().collect();
-        assert!(!PodStamp::of(&s, IMAGE).as_str().contains("home-dirs"));
     }
 
     #[test]

@@ -888,7 +888,13 @@ pub fn ai_cli_sign_in_links(home: &Path, base: SecretsBase) -> Vec<(PathBuf, Pat
 /// to link must not stop a session over another's; this crate is render- and log-free (its own
 /// `FR-040`), so the caller logs what [`Self::relink_ai_cli_sign_ins`] leaves out of its result.
 pub fn relink_ai_cli_sign_ins(home: &Path, base: SecretsBase) -> Vec<PathBuf> {
-    ai_cli_sign_in_links(home, base)
+    relink_pairs(ai_cli_sign_in_links(home, base))
+}
+
+/// [`relink_ai_cli_sign_ins`] over explicit `(live, delivered)` pairs, so a test can point
+/// `delivered` somewhere writable (the real ones are under `/run/micold`).
+pub fn relink_pairs(links: Vec<(PathBuf, PathBuf)>) -> Vec<PathBuf> {
+    links
         .into_iter()
         .filter(|(_, delivered)| delivered.exists())
         .filter_map(|(live, delivered)| relink_one(&live, &delivered))
