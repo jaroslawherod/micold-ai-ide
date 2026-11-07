@@ -9,22 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: review (M1)
-- **Next step**: M1 gate, PR
+- **Phase**: review (M2)
+- **Next step**: M2 gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1746 | design | merged | 3530aeba08a1047f1d73cc2f88bf5d4b85d8253b |
-| #1753 | M1 | open | |
+| #1753 | M1 | merged | 045d2f75cbc3c4098a1a489be95f3cabf2ecdb2d |
+| (M2 PR) | M2 | pending | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | #1753 | open |
-| M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | | pending |
+| M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | #1753 | merged |
+| M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | | in progress |
 | M3 | T023–T029 | full | project identity on project rows | | pending |
 | M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | | pending |
 
@@ -46,6 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | M1 A (code-review high) | 1 | a5e3ecbe92ecefe6042eb4216ef33aeac508537d:78438d64861b2f818d68333ba837d352d8bee242 | 8 findings, 2 fixed (daemon.id restart key + test, stale doc), 6 declined |
+| M2 A (autopilot-reviewer, correctness) | 1 | fca14197d (committed tree) | CLEAN; 1 MINOR fixed (InvalidTarget names the JSON type, not the value) |
+| M2 B (conformance, sonnet) | 1 | same | CLEAN; 3 MINOR: non-JSON routed test added; header list test and cycle-log not added |
 
 ## Declined review findings
 

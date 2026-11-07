@@ -69,7 +69,7 @@ async fn ask_env(
                 return (available, env);
             }
             Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
-            Frame::Grid(_) => continue,
+            Frame::Grid(_) | Frame::Routed(_) => continue,
             other => panic!("expected AiCliAvailability, got {other:?}"),
         }
     }
@@ -507,7 +507,9 @@ async fn a_slow_environment_does_not_hold_up_the_next_request_on_the_connection(
                 "the availability answer arrived before the request sent after it: resolving the \
                  environment held up the connection loop for the script's {SLOW_SECONDS}s"
             ),
-            Frame::Control(DaemonMsg::CatalogChanged { .. }) | Frame::Grid(_) => continue,
+            Frame::Control(DaemonMsg::CatalogChanged { .. })
+            | Frame::Grid(_)
+            | Frame::Routed(_) => continue,
             other => panic!("expected LogLocation, got {other:?}"),
         }
     }

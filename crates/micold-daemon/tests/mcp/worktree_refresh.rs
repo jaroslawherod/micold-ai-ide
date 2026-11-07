@@ -98,7 +98,7 @@ async fn expect_control(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) 
     loop {
         match client.next().await.expect("stream open").unwrap() {
             Frame::Control(m) if pred(&m) => return m,
-            Frame::Control(_) | Frame::Grid(_) => continue,
+            Frame::Control(_) | Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }
@@ -109,7 +109,7 @@ async fn next_control(client: &mut Client) -> DaemonMsg {
     loop {
         match client.next().await.expect("stream open").unwrap() {
             Frame::Control(m) => return m,
-            Frame::Grid(_) => continue,
+            Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }

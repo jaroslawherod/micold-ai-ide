@@ -167,7 +167,7 @@ async fn a_routed_frame_on_a_plain_connection_closes_it_and_delivers_nothing() {
     let state = std::sync::Arc::new(micold_daemon::state::DaemonState::new(
         micold_daemon::catalog::Catalog::ephemeral(),
     ));
-    let mut client = crate::support::conn::connect(&state).await;
+    let mut client = crate::conn::connect(&state).await;
 
     client
         .send(Frame::Routed(RoutedEnvelope {
