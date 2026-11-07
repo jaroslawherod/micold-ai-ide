@@ -685,21 +685,23 @@ fn input_row<'a>(
             key_binding(session, press, caret, lines, selecting, phase, palette)
         })
         .track_focus(FieldId::Composer(session), None);
-    let mut controls = row![
-        options_button(composers.options_open, bypass, session, roles),
-        text_area_with_button(state, session, area.into(), lines, roles),
+    // #1764: activity indicator and attach lead the text area, settings sits after it.
+    let controls = row![
         activity_indicator(phase, waiting, roles),
+        // #1464 FR-006: **Add attachment**; disabled, not hidden, while the session cannot
+        // accept input or its picker is open, so the row does not shift.
+        attach_button(
+            roles,
+            composers
+                .can_attach(session)
+                .then(|| send(Msg::AttachRequested(session))),
+        ),
+        text_area_with_button(state, session, area.into(), lines, roles),
+        options_button(composers.options_open, bypass, session, roles),
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::End);
-    // #1464 FR-006: **Add attachment**, before Stop and Send; disabled, not hidden, while the
-    // session cannot accept input or its picker is open, so the row does not shift.
-    controls = controls.push(attach_button(
-        roles,
-        composers
-            .can_attach(session)
-            .then(|| send(Msg::AttachRequested(session))),
-    ));
+    let mut controls = controls;
     if composers.offers_stop(session) {
         controls = controls
             .push(Button::outlined("Stop", roles).on_press(send(Msg::StopRequested(session))));
