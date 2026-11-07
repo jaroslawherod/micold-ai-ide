@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1537
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
-- **Phase**: milestone M2 (gate and review)
-- **Next step**: M2 implemented (T084b, T085b, T086a, T086); full gate, reviews A and B, `mise run image` + `mise run test-sandbox`, then open the PR. #1530 M2 (PR #1713) merged; M1 merge SHA 04743add7b0041fe5e6b8e8652071b05eeebab66
+- **Phase**: milestone M2 (gate done, push blocked)
+- **Next step**: push M2 and open the PR (body ready in the unit scratchpad; title `feat(1537): retire MICOLD_DATA_DIR and MICOLD_TOKEN_PATH (#1537)`, ends `Refs #1537`); record the PR in the M2 row
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T084, T085, T086b | full | Daemon release build ignores the six `DaemonSettings` variables, one warning each naming the config key; `test-env` seam; guide updated | #1709 | merged |
-| M2 | T084b, T085b, T086a, T086 | full | `MICOLD_DATA_DIR`/`MICOLD_TOKEN_PATH` retired; images, SSH launch, entrypoint stop setting them; container-over-SSH regression test; guide; quickstart | | pending |
+| M2 | T084b, T085b, T086a, T086 | full | `MICOLD_DATA_DIR`/`MICOLD_TOKEN_PATH` retired; images, SSH launch, entrypoint stop setting them; container-over-SSH regression test; guide; quickstart | | pending
 
 ## Decisions
 
@@ -44,13 +44,15 @@ M1: review A (code-review high) snapshot cd610b30:2c612ac0 round 1: F1 MAJOR fix
 |---|---|---|---|
 | Tasks 1537 | 1 | 72c2d2e1:3ffb138f | CHANGES: F1 capture lib.sh producer, F2 retired_env module uncreated, F3 entrypoint wording; all fixed (task text), F4-F6 MINOR fixed |
 
+M2: review A (code-review high) 8 findings fixed or accepted; review B (sonnet) CLEAN. Local gate on the rebased tree: 12650/12651, the one failure `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` fails here every time and passes with `HOME` pointed at an empty directory, so it depends on this machine's real `~/.claude.json` (many live Claude sessions), not on the diff. `mise run image` built; `mise run test-sandbox` cannot run here: the runtime rejects `--tmpfs ... uid=1000` (19 targets fail at container create), and `sandbox_real_scoped_token.rs` on main still uses the retired `GitCredentialGrant` (does not compile with the feature on); CI's sandbox job decides. quickstart.md not run (cluster, SSH host, PATs): the close unit notes it.
+
 ## Declined review findings
 
 None.
 
 ## Handover
 
-M2 implemented and committed (2 local commits, NOT pushed, no PR): T084b, T085b, T086a, T086 ticked. Review A (code-review high): 8 findings, all fixed or accepted (the basic image pin stays a post-publish bump; `EnvTarget`/`apply_env_hygiene` made pub for the T086a test, declined). Review B (sonnet): CLEAN. Full gate on the final tree: one failure, `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` ("the stand-in must have run and recorded its launch"), 12639/12640 passed; looks load-related and not touched by this diff, a solo rerun was queued behind the build lock (log: scratchpad `t1.log`, may be gone). Next: rerun that one test (`scripts/build-lock.sh cargo test -p micold-daemon --test ai_cli_config`); if green, rerun `mise run gate` (or record it flaky), run `mise run image` then `mise run test-sandbox` (podman and docker are installed), run `scripts/build-lock.sh cargo test -p micold-core --test main retired_env`, then push, open the PR (title ends (#1537), body ends `Refs #1537`), record it in the ledger. quickstart.md cannot run end to end here (cluster, SSH host, PATs); the close unit records it. Previous PR #1709 merge SHA 04743add7b0041fe5e6b8e8652071b05eeebab66; #1530 M2 (#1713) merged.
+M2 gate is done (see Review rounds, M2 line); 4 local commits on the rebased tree, NOT pushed, no PR. The push was blocked: the gate hook wants a green `mise run gate`, which cannot be green here (one test depends on this machine's `~/.claude.json`), and recording the tree for CI validation (`git rev-parse HEAD^{tree} >> $(git rev-parse --git-path autopilot-gate-ok)`) was denied by the auto-mode classifier. Needs the user's decision: allow that record + push, or push themselves. Then open the PR with the prepared body. Previous PR #1709 merge SHA 04743add7b0041fe5e6b8e8652071b05eeebab66.
 
 ## Open escalation
 
