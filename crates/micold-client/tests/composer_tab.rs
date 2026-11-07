@@ -242,7 +242,8 @@ fn places(state: &State) -> (Point, Point, Point) {
     (send, send_queued, Point::new(send.x - 200.0, send.y))
 }
 
-/// Tab from the text area passes **Add attachment** (#1464 FR-010) and lands on **Send**, and the
+/// Tab from the text area passes the settings icon and **Add attachment** (#1464 FR-010, #1703 D8)
+/// and lands on **Send**, and the
 /// window still holds the keyboard after the next event: a composer control has it, not the pane.
 #[test]
 fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
@@ -263,16 +264,15 @@ fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
         mounted.focus_at(area);
         mounted.event(&tab_released());
         // The area is focused, so its **Open large editor** button shows and Tab reaches it first
-        // (feature 1703 FR-004).
+        // (feature 1703 FR-004); the settings icon follows, and Add attachment sits beside Send (D8).
         mounted.operate(Box::new(focusable::focus_next::<()>()));
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
-        // #1764: Add attachment now leads the text area, so Tab goes on to the settings icon.
-        let settings = lowest_glyph(&state, "\u{e8b8}");
+        let attach = lowest_glyph(&state, "\u{e226}");
         let at = mounted.focused().expect("Tab lands somewhere");
         assert!(
-            at.contains(settings),
-            "Tab lands on the settings icon first at {settings:?}: {at:?}"
+            at.contains(attach),
+            "Tab lands on Add attachment next at {attach:?}: {at:?}"
         );
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
@@ -404,22 +404,22 @@ fn the_options_row_holds_the_selectors_only_while_open() {
     assert!((model.y - effort.y).abs() < 4.0, "one row");
 }
 
-/// #1764: the input row reads [activity][attach][text area][settings][Stop][Send]: the activity
-/// and attach icons lead, the settings icon sits right of the text area, just before Send.
+/// #1703 D8: the input row reads [activity][text area][settings][attach][Stop][Send]: the activity
+/// icon leads, the settings icon sits right of the text area, attach stays beside Send.
 #[test]
-fn the_input_row_puts_activity_and_attach_before_the_text_and_settings_after() {
+fn the_input_row_puts_activity_first_and_attach_beside_send() {
     let (state, _) = crowded();
     let settings = lowest_glyph(&state, &Icon::Settings.glyph().to_string());
     let attach = lowest_glyph(&state, &Icon::Attach.glyph().to_string());
     let activity = lowest_glyph(&state, &Icon::ActivityEnded.glyph().to_string());
     let send = painted_at(&StateUnderTest::new(state.clone()), "Send");
-    assert!(activity.x < attach.x, "activity before attach");
     assert!(
-        settings.x - attach.x > 400.0,
-        "the text area lies between attach and settings"
+        settings.x - activity.x > 400.0,
+        "the text area lies between the activity icon and settings"
     );
-    assert!(settings.x < send.x, "settings before Send");
-    assert!(send.x - settings.x < 120.0, "settings next to the buttons");
+    assert!(settings.x < attach.x, "settings before attach");
+    assert!(attach.x < send.x, "attach before Send");
+    assert!(send.x - attach.x < 120.0, "attach next to the buttons");
     // The bottom-aligned row centres the padded indicator with the icon buttons (it sat 16 px low).
     assert!(
         (activity.y - attach.y).abs() < 6.0 && (settings.y - attach.y).abs() < 6.0,
