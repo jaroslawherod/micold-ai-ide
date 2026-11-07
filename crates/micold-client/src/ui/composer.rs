@@ -689,9 +689,12 @@ fn input_row<'a>(
             key_binding(session, press, caret, lines, selecting, phase, palette)
         })
         .track_focus(FieldId::Composer(session), None);
-    // #1764: activity indicator and attach lead the text area, settings sits after it.
+    // #1703 D8: the activity indicator leads the text area; settings follows it, then attach
+    // beside Stop and Send.
     let controls = row![
         activity_indicator(phase, waiting, roles),
+        text_area_with_button(state, session, area.into(), lines, roles),
+        options_button(composers.options_open, bypass, session, roles),
         // #1464 FR-006: **Add attachment**; disabled, not hidden, while the session cannot
         // accept input or its picker is open, so the row does not shift.
         attach_button(
@@ -700,8 +703,6 @@ fn input_row<'a>(
                 .can_attach(session)
                 .then(|| send(Msg::AttachRequested(session))),
         ),
-        text_area_with_button(state, session, area.into(), lines, roles),
-        options_button(composers.options_open, bypass, session, roles),
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::End);

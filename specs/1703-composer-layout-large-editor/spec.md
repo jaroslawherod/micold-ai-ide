@@ -57,8 +57,8 @@ check the composer holds the edited text; repeat with cancel and check it holds 
 
 ### User Story 2 - Activity indicator beside the input (Priority: P1)
 
-The activity indicator sits at the input row's leading edge, left of the attach button and the text
-area (#1764; the permission selector used to be right of the text area). It shows only the icon; the status words
+The activity indicator sits at the input row's leading edge, left of the text area (#1764; the
+permission selector used to be right of the text area); the attach button stays beside Send (D8). It shows only the icon; the status words
 (Ready, Busy, Waiting) are available as its tooltip and accessible label.
 
 **Why this priority**: Core layout change; frees the status row.
@@ -69,7 +69,7 @@ row, the permission selector is not, and the tooltip/label names the state.
 **Acceptance Scenarios**:
 
 1. **Given** any session state, **When** the composer is shown, **Then** the activity indicator is
-   at the input row's leading edge, left of the attach button and the text area, and no permission
+   at the input row's leading edge, left of the text area, and no permission
    selector is there.
 2. **Given** the session is Ready, Busy or Waiting, **When** the user hovers the indicator or a
    screen reader reads it, **Then** it reports that state's word.
@@ -80,7 +80,7 @@ row, the permission selector is not, and the tooltip/label names the state.
 
 ### User Story 3 - Session options row behind a settings icon (Priority: P1)
 
-A settings icon at the input row's trailing side, right of the text area and before Stop and Send (#1764) (labelled "Session options") expands and collapses
+A settings icon at the input row's trailing side, right of the text area, before the attach button, Stop and Send (#1764, D8) (labelled "Session options") expands and collapses
 the session options row, which holds the model, effort and permission selectors. The row is hidden
 by default.
 
@@ -173,12 +173,12 @@ state treatments; they match, differing only in label and value.
   `docs/user-guide/structured-input.md` and the shortcuts table of
   `docs/user-guide/terminal-panes.md`.
 - **FR-006**: The activity indicator MUST be icon-only (24 dp), placed at the input row's leading edge,
-  left of the attach button and the text area (#1764).
+  left of the text area (#1764, D8).
 - **FR-007**: The activity state words MUST be the indicator's tooltip and accessible label, and
   MUST no longer be drawn as visible text in the status row.
 - **FR-008**: The permission selector MUST NOT appear in the input row.
 - **FR-009**: A settings icon button (40 dp, labelled "Session options") MUST sit right of the text
-  area, before Stop and Send (#1764), be a keyboard tab stop, and toggle on click, Space and Enter; it MUST look
+  area, before the attach button, Stop and Send (#1764, D8), be a keyboard tab stop, and toggle on click, Space and Enter; it MUST look
   tonal while the row is expanded.
 - **FR-010**: The session options row MUST hold the model, effort and permission selectors, in that
   order, and MUST be hidden by default.
@@ -236,6 +236,7 @@ Open questions of the design brief, resolved by the owner's suggested defaults.
 | D4 | Persist expanded state | Yes, per window, default collapsed. |
 | D5 | Bypass-mode warning | Marker on the settings icon while collapsed or expanded. |
 | D6 | Large editor attachments | Text only. |
+| D8 | Input row order (#1764, user correction) | [activity][text area][settings][attach][Stop][Send]: the attach button stays beside Send. Replaces D7's literal swap, which put attach at the leading edge; the user corrected it. |
 
 ## Clarifications
 

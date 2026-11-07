@@ -78,7 +78,7 @@ crates/micold-client/src/features/composer.rs  # options_open flag, toggle, auto
 crates/micold-client/src/features/large_editor.rs  # NEW render-free: LargeEditor{session,content}, open/confirm/cancel reducer
 crates/micold-client/src/overlay/registry.rs   # register the large-editor dialog
 crates/micold-client/src/ui/large_editor.rs    # NEW dialog body (Modal, TextArea, Done, Cancel)
-crates/micold-client/src/ui/composer.rs        # new layout: settings IconButton after the text area, indicator and attach before it (#1764), options row, open-editor IconButton
+crates/micold-client/src/ui/composer.rs        # new layout: indicator before the text area, settings IconButton after it, then attach beside Send (#1764, D8), options row, open-editor IconButton
 crates/micold-client/src/ui/mode_control.rs    # permission selector becomes a MenuSelect (the `Select` use here is dropped; `Select` stays for other callers); leaves the input row
 crates/micold-client/src/ui/material/menu_select.rs  # NEW API: disabled state + tooltip, MenuSelectRow::filter; shared trigger 32dp/8dp/states/disabled+tooltip; MenuSelectRow::filter
 crates/micold-client/src/features/changes/keys.rs    # shortcut-sheet entry (next to Add attachment, l.480)

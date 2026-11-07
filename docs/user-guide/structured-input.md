@@ -62,7 +62,7 @@ its end.
 
 ## The activity indicator
 
-An icon at the left of the message box row (before the attach button) shows what the session is doing: a spinning icon while Claude Code
+An icon at the left of the message box shows what the session is doing: a spinning icon while Claude Code
 works, a different icon while it waits for you (a question or a permission request), and a resting
 icon otherwise. Hover the icon to read the state ("Working", "Waiting for you", "Ready", "Not
 running"); no status text is shown in the row. **Stop session** and any refusal note stay visible
@@ -70,7 +70,7 @@ in the row.
 
 ## Session options
 
-The **Session options** button (a settings icon) right of the message box, before **Stop** and **Send**, shows or hides
+The **Session options** button (a settings icon) right of the message box, before the attach button, **Stop** and **Send**, shows or hides
 a row holding the session's **Model**, **Effort** and **Permission** selectors. The permission
 selector is no longer in the message box row itself.
 
