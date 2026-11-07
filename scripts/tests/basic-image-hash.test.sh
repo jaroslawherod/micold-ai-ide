@@ -327,10 +327,10 @@ else
   pass "Containerfile installs $packages"
 fi
 
-# --- no image sets XDG_DATA_HOME (1286) ---------------------------------------------------------
+# --- no image sets XDG_DATA_HOME (1286), and nothing in packaging/ or site/ sets a retired variable --
 # Every process in the container inherits an image-wide ENV, and `/var/lib` is not writable by the
-# session user, so XDG-aware tools (mise) fail. The daemon is pointed at its state directory through
-# MICOLD_DATA_DIR instead.
+# session user, so XDG-aware tools (mise) fail. The daemon learns its state directory from the
+# delivered configuration file (`daemon.data_dir`), not from a variable (#1537, SC-001).
 
 for image in basic sandbox; do
   cases=$((cases + 1))
@@ -338,13 +338,20 @@ for image in basic sandbox; do
   instructions="$(grep -v '^[[:space:]]*#' "$file")"
   if printf '%s\n' "$instructions" | grep -q 'XDG_DATA_HOME'; then
     fail "the $image image does not set XDG_DATA_HOME" "$file sets it"
-  elif ! printf '%s\n' "$instructions" | grep -q '^ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide$'; then
-    fail "the $image image points the daemon at its state directory with MICOLD_DATA_DIR" \
-      "$file has no 'ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide'"
   else
-    pass "the $image image sets MICOLD_DATA_DIR, not XDG_DATA_HOME"
+    pass "the $image image does not set XDG_DATA_HOME"
   fi
 done
+
+retired='MICOLD_(HOME|IMAGE_REFERENCE|LISTEN_ADDR|IDLE_STOP|LOG|REPOS_ROOT|DATA_DIR|TOKEN_PATH)'
+cases=$((cases + 1))
+setters="$(grep -rnE "\b$retired\b" "$ROOT/packaging" "$ROOT/site/capture" 2>/dev/null \
+  | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' || true)"
+if [ -n "$setters" ]; then
+  fail "no file under packaging/ or site/capture/ uses a retired start-up variable" "$setters"
+else
+  pass "no file under packaging/ or site/capture/ uses a retired start-up variable"
+fi
 
 # --- the X11/Wayland libraries match CI's Linux test job (1439, FR-007) -------------------------
 cases=$((cases + 1))

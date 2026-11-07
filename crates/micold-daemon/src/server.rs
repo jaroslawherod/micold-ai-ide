@@ -142,9 +142,9 @@ fn start_config_reload(state: &Arc<DaemonState>) {
 
 /// Adopt the authentication token, if this daemon was started with one (feature 027, research R1).
 ///
-/// The path comes from the environment because the container is what supplies it: the runtime
-/// bind-mounts the host's `0600` token file at `MICOLD_TOKEN_PATH`, and the image sets that
-/// variable. A daemon started without it is the host-process placement, which authenticates by the
+/// The path comes from the configuration file (`auth.client_token_file`) because the container is
+/// what supplies it: the runtime bind-mounts the host's `0600` token file there, and the delivered
+/// file names it. A daemon started without it is the host-process placement, which authenticates by the
 /// `0700` directory guarding its socket and needs no token.
 ///
 /// A token path that is set but unreadable is **fatal**. Falling back to accepting everyone would
@@ -158,9 +158,8 @@ fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
         io::Error::new(
             e.kind(),
             format!(
-                "the authentication token file {} (`auth.client_token_file` or {}) could not be read: {e}",
+                "the authentication token file {} (`auth.client_token_file`) could not be read: {e}",
                 path.display(),
-                micold_core::protocol::auth::TOKEN_PATH_ENV,
             ),
         )
     })?;

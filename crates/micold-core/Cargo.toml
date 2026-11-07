@@ -25,6 +25,9 @@ sandbox-real-runtime = []
 ssh-real-runtime = []
 # Feature 686: exposes `kube::fake::FakeCluster` to client tests.
 kube-fake = []
+# #1537: the retired `MICOLD_DATA_DIR` is read only with this feature, which the crate's own tests
+# turn on (a dev-dependency on itself) and the daemon's `test-env` forwards.
+test-env = []
 
 [dependencies]
 serde = { workspace = true }
@@ -67,6 +70,7 @@ libc = { workspace = true }
 windows-sys = { workspace = true }
 
 [dev-dependencies]
+micold-core = { path = ".", features = ["test-env"] }
 tempfile = { workspace = true }
 # Feature 686: phase bounds are tested on a paused clock.
 tokio = { workspace = true, features = ["test-util"] }

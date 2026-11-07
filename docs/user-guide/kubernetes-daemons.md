@@ -90,7 +90,7 @@ Settings into the config map `micold-<name>-<key>-config` at every start (it rep
 when it changed). The config map is mounted as a read-only directory, never as a single file, so
 the kubelet can update it in place; a session cannot write under `/run/micold/config` or
 `/run/micold/secrets`. The pod's environment is `HOME`, `TMPDIR`, `LANG=C.UTF-8` and, when Settings
-has a time zone, `TZ`: no `MICOLD_*` variable. `kubectl get pod <pod> -o yaml` shows exactly that. The old start-up variables are ignored, with one warning in the daemon's log naming the key that replaces each: `MICOLD_HOME` is `daemon.home`, `MICOLD_IMAGE_REFERENCE` is `daemon.image`, `MICOLD_LISTEN_ADDR` is `listen.tcp`, `MICOLD_IDLE_STOP` is `daemon.idle_stop`, `MICOLD_LOG` is `daemon.log` and `MICOLD_REPOS_ROOT` is `storage.clone_root`.
+has a time zone, `TZ`: no `MICOLD_*` variable. `kubectl get pod <pod> -o yaml` shows exactly that. The old start-up variables are ignored, with one warning in the daemon's log naming the key that replaces each: `MICOLD_HOME` is `daemon.home`, `MICOLD_IMAGE_REFERENCE` is `daemon.image`, `MICOLD_LISTEN_ADDR` is `listen.tcp`, `MICOLD_IDLE_STOP` is `daemon.idle_stop`, `MICOLD_LOG` is `daemon.log`, `MICOLD_REPOS_ROOT` is `storage.clone_root`, `MICOLD_DATA_DIR` is `daemon.data_dir` and `MICOLD_TOKEN_PATH` is `auth.client_token_file`. The image sets none of them.
 The daemon sets its own `TZ` from the file, so a changed time zone reaches new sessions with the
 file; the pod's own `TZ` changes when the pod is next recreated. A pod has no `[listen]` table: the
 client reaches it through the SSH server's bridge.

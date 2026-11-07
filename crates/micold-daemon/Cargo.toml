@@ -28,7 +28,7 @@ ssh-real-runtime = ["micold-core/ssh-real-runtime"]
 # #1537: the retired `MICOLD_*` start-up variables (`micold_core::retired_env`) are read only with
 # this feature, which the daemon's own tests turn on (a dev-dependency on itself), so a release
 # build ignores them and warns.
-test-env = []
+test-env = ["micold-core/test-env"]
 
 [dependencies]
 micold-core = { workspace = true }
@@ -102,6 +102,11 @@ workspace = true
 [[test]]
 name = "main"
 path = "tests/main.rs"
+
+# #1537: installs the process-wide settings (one `OnceLock` per process), so a target of its own.
+[[test]]
+name = "container_over_ssh_without_data_dir"
+path = "tests/container_over_ssh_without_data_dir.rs"
 
 [[test]]
 name = "activity_pipeline"

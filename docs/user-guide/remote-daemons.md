@@ -71,7 +71,7 @@ The application owns these files and rewrites them from its settings when it con
 edit is overwritten. To change a setting, change it in the application. To look at the file, or
 check one you prepared, read it on the host or run `micold-daemon config check
 ~/.micold/remote/daemon.toml`; the format is in [daemon-configuration.md](daemon-configuration.md).
-No `MICOLD_*` environment variable is set on the host: the file is the only channel. A daemon release build ignores the old start-up variables and logs one warning naming the key that replaces each: `MICOLD_HOME` is `daemon.home`, `MICOLD_IMAGE_REFERENCE` is `daemon.image`, `MICOLD_LISTEN_ADDR` is `listen.tcp`, `MICOLD_IDLE_STOP` is `daemon.idle_stop`, `MICOLD_LOG` is `daemon.log` and `MICOLD_REPOS_ROOT` is `storage.clone_root`.
+No `MICOLD_*` environment variable is set on the host: the file is the only channel. A daemon release build ignores the old start-up variables and logs one warning naming the key that replaces each: `MICOLD_HOME` is `daemon.home`, `MICOLD_IMAGE_REFERENCE` is `daemon.image`, `MICOLD_LISTEN_ADDR` is `listen.tcp`, `MICOLD_IDLE_STOP` is `daemon.idle_stop`, `MICOLD_LOG` is `daemon.log`, `MICOLD_REPOS_ROOT` is `storage.clone_root`, `MICOLD_DATA_DIR` is `daemon.data_dir` and `MICOLD_TOKEN_PATH` is `auth.client_token_file`. The image sets none of them.
 
 A hand edit does not survive the next connect: any file whose content differs from the one Micold
 renders is replaced, and a file left readable by others is made `0600` again. The same holds for

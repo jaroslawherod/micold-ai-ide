@@ -81,7 +81,7 @@ use sandbox_real_support::{original_xdg, start_sandbox, wait_for_accept, Sandbox
 /// Write a catalogue holding `ROUNDS` shell sessions at `project`, where the daemon will find it.
 ///
 /// `$XDG_DATA_HOME/micold-ai-ide/projects.json` is the daemon's own convention on the host; the
-/// image sets `MICOLD_DATA_DIR=/var/lib/micold-ai-ide` and bind-mounts the host state directory there, so the
+/// delivered file sets `daemon.data_dir = "/var/lib/micold-ai-ide"` and the runtime bind-mounts the host state directory there, so the
 /// containerised daemon reads the very file this writes. That shared convention is what makes the
 /// two arms comparable rather than merely similar.
 fn seed(data_home: &Path, project: &Path) -> Vec<SessionId> {

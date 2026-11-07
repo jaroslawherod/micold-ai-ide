@@ -131,6 +131,7 @@ mod pull_request_stale;
 mod quickstart_a_runs_everywhere;
 mod release_notice_windows;
 mod release_publishes_complete_sets;
+mod retired_env;
 mod review_bar;
 mod review_browse;
 mod review_drawer;

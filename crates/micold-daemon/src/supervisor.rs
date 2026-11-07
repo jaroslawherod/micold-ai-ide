@@ -209,7 +209,8 @@ impl Supervised {
 /// A command a spawn can edit the environment of: the PTY path's [`CommandBuilder`] and a
 /// structured session's [`std::process::Command`] (feature 938, R3). Both get the same edits from
 /// [`env_hygiene`], so a session's environment does not depend on which way it was spawned.
-pub(crate) trait EnvTarget {
+#[doc(hidden)]
+pub trait EnvTarget {
     /// The variables the command itself carries, as UTF-8: on Windows a [`CommandBuilder`] also
     /// carries the registry's, which the daemon's own environment does not show.
     fn own_vars(&self) -> Vec<(String, String)>;
@@ -275,11 +276,12 @@ pub(crate) const CONTAINER_LANG: &str = "C.UTF-8";
 
 /// The edits every session spawn makes before its own variables are applied: on Windows
 /// [`prefer_process_path`], then [`strip_inherited_terminal_identity`], and the removal of the
-/// daemon's own `MICOLD_DATA_DIR` (1286): it beats `XDG_DATA_HOME` in `micold_core::paths`, so a
-/// micold build run inside a session would otherwise write the live state directory.
+/// daemon's own `MICOLD_DATA_DIR` (1286, retired in #1537 but still honoured by a `test-env` build):
+/// it beats `XDG_DATA_HOME` in `micold_core::paths`, so such a build run inside a session would
+/// otherwise write the live state directory.
 pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
     // From the installed settings: the configuration file's `data_dir` (a container daemon started
-    // over SSH is passed no `MICOLD_DATA_DIR`, #1527), else the variable.
+    // over SSH is passed no variable, #1527), else the variable a `test-env` build reads.
     let data_dir = crate::settings::current()
         .data_dir
         .as_ref()
@@ -505,7 +507,8 @@ fn shell_word(word: &str) -> String {
 }
 
 /// Apply [`env_hygiene`] to `target`.
-pub(crate) fn apply_env_hygiene(target: &mut impl EnvTarget) {
+#[doc(hidden)]
+pub fn apply_env_hygiene(target: &mut impl EnvTarget) {
     for edit in env_hygiene(target) {
         match edit {
             EnvEdit::Set(key, value) => target.set_var(key, value),
