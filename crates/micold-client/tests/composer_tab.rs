@@ -243,8 +243,8 @@ fn places(state: &State) -> (Point, Point, Point) {
 }
 
 /// Tab from the text area passes the settings icon and **Add attachment** (#1464 FR-010, #1703 D8)
-/// and lands on **Send**, and the
-/// window still holds the keyboard after the next event: a composer control has it, not the pane.
+/// and lands on **Send**, and the window still holds the keyboard after the next event: a
+/// composer control has it, not the pane.
 #[test]
 fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
     let (mut state, id) = crowded();
@@ -263,9 +263,14 @@ fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
         let mut mounted = Mounted::new(view(&state));
         mounted.focus_at(area);
         mounted.event(&tab_released());
-        // The area is focused, so its **Open large editor** button shows and Tab reaches it first
-        // (feature 1703 FR-004); the settings icon follows, and Add attachment sits beside Send (D8).
+        // D8: Tab from the area reaches the settings icon, then Add attachment beside Send.
         mounted.operate(Box::new(focusable::focus_next::<()>()));
+        let settings = lowest_glyph(&state, "\u{e8b8}");
+        let at = mounted.focused().expect("Tab lands somewhere");
+        assert!(
+            at.contains(settings),
+            "Tab lands on the settings icon first at {settings:?}: {at:?}"
+        );
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
         let attach = lowest_glyph(&state, "\u{e226}");
