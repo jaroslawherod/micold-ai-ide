@@ -232,7 +232,17 @@ impl<M: serde::de::DeserializeOwned> RoutedEnvelope<M> {
             Some(serde_json::Value::String(s)) => WireDaemonId::new(s.as_str())
                 .map_err(|e| RoutingError::InvalidTarget(e.to_string()))?,
             Some(v) if looks_like_envelope(v) => return Err(RoutingError::NestedEnvelope),
-            Some(other) => return Err(RoutingError::InvalidTarget(other.to_string())),
+            Some(other) => {
+                let kind = match other {
+                    serde_json::Value::Bool(_) => "a boolean",
+                    serde_json::Value::Number(_) => "a number",
+                    serde_json::Value::Array(_) => "an array",
+                    _ => "an object",
+                };
+                return Err(RoutingError::InvalidTarget(format!(
+                    "expected a string, got {kind}"
+                )));
+            }
         };
         if object.get("msg").is_some_and(looks_like_envelope) {
             return Err(RoutingError::NestedEnvelope);

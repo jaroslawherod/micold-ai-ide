@@ -21,7 +21,7 @@ async fn next_control(client: &mut Client) -> DaemonMsg {
         match client.next().await.unwrap().unwrap() {
             Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
             Frame::Control(msg) => return msg,
-            Frame::Grid(_) => continue,
+            Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }

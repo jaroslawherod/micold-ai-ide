@@ -92,7 +92,7 @@ fn ask(
 async fn next(rx: &mut UnboundedReceiver<Frame<DaemonMsg>>) -> DaemonMsg {
     match rx.recv().await.expect("window channel open") {
         Frame::Control(msg) => msg,
-        Frame::Grid(_) => panic!("no grid frame expected"),
+        Frame::Grid(_) | Frame::Routed(_) => panic!("no grid or routed frame expected"),
     }
 }
 
@@ -349,7 +349,7 @@ async fn next_on_wire(client: &mut Client) -> DaemonMsg {
         match client.next().await.expect("stream open").unwrap() {
             Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
             Frame::Control(msg) => return msg,
-            Frame::Grid(_) => continue,
+            Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }
