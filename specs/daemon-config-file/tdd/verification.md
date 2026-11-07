@@ -842,3 +842,126 @@ Sampling: 8 mutants on the highest-risk behaviors (FR-029 read-only, FR-005 no `
 - `docs/user-guide/kubernetes-daemons.md` content beyond the diff stat; the CI log of the kubernetes job.
 - Mutants on `for_pod` fields, `access_reviews`, `remove`'s delete, `live.rs` `ConfigMap` mapping (reached only by the kind test). No coverage tool.
 - Earlier sections untouched. Tasks not appended to `tasks.md` (request scoped writes to this file).
+
+# Issue 9 (#1530) M1 + M2: the credential helper chooses the token; git setup from `daemon.kind`
+
+```yaml
+scope: Issue 9 (#1530), tasks T046-T054, T092-T094; M1 PR #1686 (commit 3ffb138fb on this branch), M2 PR #1713 (669154c84, cbb61967f, 1e61bc310); follow-ups a0e1f15ce, 86468d87c, e3a7ac744
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 86468d87c
+independent: true # auditor did not write these tests; no subagent smell pass (read by the auditor)
+verdict: FAIL
+behaviors: 0 listed in tdd/test-list.md (no #1530 rows); 10 task-derived behaviors audited
+proven: 0
+likely: 0
+test_after: 10
+no_test: 0
+high_findings: 3 # I9-1, I9-2, I9-3
+mutants_tried: 0
+mutation_score: unmeasured # no tool; deliberate mutants not run (build queue, see "What was not audited")
+suite: partial. micold-core --lib (daemon_config::matching, scoped_credential::) 81 passed, 0 failed, 0.92 s; the daemon binaries were queued behind ~15 builds and not run by this audit
+```
+
+**Verdict: FAIL.** Every behavior is `TEST_AFTER` (tests and code landed together, `cycle-log.md:155-172` records no red), and T094 is ticked
+`[x]` although the cycle log itself says its central change (replacing `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount) was deferred.
+
+## Test-first evidence (Issue 9)
+
+`tdd/test-list.md` is the #1523 list; there are no #1530 rows, so behaviors are derived from the tasks. M1 is one commit (`3ffb138fb`: source,
+tests, docs, ticks). M2 is `669154c84` (code and test rewrite together) then `cbb61967f`. T046-T049 are worded "Failing tests" but the
+log says "No red run was recorded: tests and code landed together (`TEST_AFTER`)" for both milestones. History agrees.
+
+| Behavior (task) | Tests | Class |
+|---|---|---|
+| B1 `TokenChoice` order, ties, expiry, reach (T046) | `matching.rs` tests (6), `git_credential_config.rs` | TEST_AFTER |
+| B2 reach discovery and cache (T047, T050) | `reach.rs` tests (8), `git_credential_config.rs:174` | TEST_AFTER |
+| B3 stateless helper from `MICOLD_DAEMON_CONFIG` (T051) | `git_credential_config.rs:140` (real binary, fake forge) | TEST_AFTER |
+| B4 fallback helpers, untouched git with no token (T048) | `git_credential_config.rs:216`, `credential_config.rs:244-271`, `supervisor.rs:1582`, `git_env.rs:227` | TEST_AFTER |
+| B5 sandbox clears inherited helpers (T049) | `git_env.rs:219`, `supervisor.rs:1606` (string asserts only, see I9-4) | TEST_AFTER |
+| B6 session git env per kind (T052) | `git_env.rs:232`, `supervisor.rs:1587,1617` | TEST_AFTER |
+| B7 per-host rewrite and token `host` (T093) | `git_env.rs:256`, `reach.rs:220`, forge tests use a loopback `host` | TEST_AFTER |
+| B8 `container_git_edits` by `daemon.kind`, both start paths (T092) | `supervisor.rs:1094-1131` | TEST_AFTER |
+| B9 `[git] config_file`, signing switches stripped (T094) | `gitconfig.rs:301,320`, `daemon_config_render.rs:140`; container delivery untested (I9-5) | TEST_AFTER |
+| B10 grant messages retired, protocol bump (T053) | `protocol_roundtrip.rs`, `schema_hash.rs` (compile-time removal) | TEST_AFTER |
+| T054 user guide | none | NOT_APPLICABLE |
+
+## Changes to tests that already existed (Issue 9)
+
+No skip, ignore, filter, or threshold change. Read in the diffs:
+- Deleted with the code they covered, authorized by T053 ("delete or rewrite"): `daemon/tests/git_credential_grant.rs` (599 lines),
+  `git_credential_pod.rs` (68), `client/src/shell/scoped_credential/tests.rs` (624), the `schedule.rs` and `fake.rs` tests,
+  `scoped_token_fake_api.rs` `step_8_*` and `step_10_*` (`a0e1f15ce`), the grant samples and
+  `a_credential_grant_round_trips_and_prints_without_its_token` in `protocol_roundtrip.rs`. Not a weakening. Behavior with no successor:
+  the one-day expiry warning of `step_10` (`EXPIRY_WARNING_SECS`) is no longer exercised by any test in this feature; confirm it is retired by spec.
+- `supervisor.rs`: `the_container_and_configuration_git_blocks_reach_the_session_as_one_consistent_block` (#1744) deleted in `86468d87c`
+  because the container no longer sets a helper block. Consistent with I9-7.
+- **`core/src/spawn.rs:568` (`e3a7ac744`): `waited >= 5 s` widened to `>= 4900 ms`.** A loosened tolerance on an existing assertion, outside
+  this feature; the stated reason (OS wait and `Instant` clocks differ) is plausible and the bound still pins the wait to 2%. Recorded as I9-8.
+- `protocol_roundtrip.rs`: `the_protocol_version_is_77` asserting 78 became `..._79` asserting 79 (name fixed with the value).
+
+## Findings (Issue 9)
+
+- **I9-1 HIGH.** No red for any behavior (above); `test-list.md` has no #1530 rows or baseline. The `cycle-log.md:156` baseline names tests that
+  were then deleted. Add the rows (traces US2, US3, FR-008, FR-010, FR-016, SC-004) and, for the gaps below, new tests written red first.
+- **I9-2 HIGH.** `tasks.md:152` T094 is `[x]`, but `cycle-log.md:169-171` says "Deferred: replacing `CredentialShare::GitConfig` and the kube `gitconfig`
+  Secret mount". `KubeCredential::GitConfig` is still built and mounted (`kube/credentials.rs:46,94,118,148`). The ticked task claims work its own log says is not done.
+  Untick or finish; add a test that the pod has no `gitconfig` `subPath` mount if it is finished.
+- **I9-3 HIGH (conditional logic).** `supervisor.rs:1155-1203` `env_hygiene_reads_the_installed_data_dir_and_leaves_tz_and_session_env_to_win`:
+  the `LANG` assertion sits under `if !inherited` (`:1188`), so on a machine with `LANG` set it asserts nothing; and it depends on the process-global
+  `settings::install` winning ("another test installed settings first", `:1166-1170`), i.e. on test order. Pre-existing from #1527, edited here (`:1160-1164`).
+  The `GIT_CONFIG_GLOBAL` assertion beside it is unconditional, so the T092 behavior itself is covered. Drive `env_hygiene_with` with explicit facts (as `:1115` does) for the LANG case.
+- **I9-4 MED.** The new session git env is never run through real git. `session_git_env`/`config_git_edits` are asserted as strings (`git_env.rs:218-278`,
+  `supervisor.rs:1581-1634`) and the helper is called directly (`git_credential_config.rs`, `Command` on `git-credential get`). The retained
+  `mcp/scoped_git_credential.rs` uses the legacy `git_env(&base)` plus `MICOLD_GIT_CREDENTIAL_ROOT`, not `session_git_env`. So US2.1 (a push uses the chosen token),
+  US2.3 (no token: git falls back) and T049 (inherited helper cleared) are not proven end to end: a wrong key spelling in `session_git_env` passes every test. Add a
+  test that sets the env block from `session_git_env` over a loopback forge with a planted host helper and runs `git ls-remote`/`push`.
+- **I9-5 MED.** `daemon_config_delivery.rs:138-147` (container `git_config_file`, set only when `CredentialShare::GitConfig` is shared) has no test: the render test sets
+  `git_config_file: None` (`tests/daemon_config_render.rs:51`) and the delivery tests never mention it. Dropping the `.then(...)` or inverting `contains` passes the client suite.
+  Likewise both delivery callers pass `signing_key = false` (`shell/sandbox.rs:476`, `kube/credentials.rs:123`) and no test asserts the delivered copy has `gpgsign` removed
+  (`gpgsign` appears only in `gitconfig.rs`). Add a delivery test with `commit.gpgsign = true` in the source and assert it is absent from the delivered copy.
+- **I9-6 MED.** Reach cache gaps in `credential_config::answer`: no test for the stale refresh (`fetched_at` older than 15 min through `answer`; only the pure `should_fetch` is tested),
+  for a failed request keeping the last answer (`:139-145`, the "offline uses cached reach" rule), for pruning a replaced token's entry (`store.retain`, `:154-168`), or for a replaced
+  unfiltered token getting its own fingerprint entry (US2.6 is tested for a filtered token only, `git_credential_config.rs:140`). The T047 text lists "on token change" as a refresh trigger.
+- **I9-7 MED.** `combine_git_edits` (`supervisor.rs:332-346`) is dead in production: `container_git_edits` now returns only `GIT_CONFIG_GLOBAL` (`:478-495`), so
+  `git_block_count(&legacy)` is always `None` and the function reduces to `chain`. `a_configuration_block_with_tokens_replaces_the_container_block` (`:1065-1091`) pins the dead branch with synthetic `k`/`v`
+  blocks. Remove both, or keep the function and give it a producer.
+- **I9-8 MED.** `core/src/spawn.rs:568` tolerance widened (above). Justified, listed because the rubric treats any widened tolerance as a finding.
+- **I9-9 MED.** `mcp/scoped_git_credential.rs` and `helper::answer`'s credential-file path test code with no production writer: `render_credential_file` is referenced only by
+  `helper.rs` and tests; the grant that wrote those files is retired. `git_credential.rs:71-75` still serves it when `MICOLD_DAEMON_CONFIG` is unset. Tests tracing to nothing: delete them with the path, or record the requirement.
+- **I9-10 LOW.** `gitconfig.rs:289-292` returns silently ("skipped: no git on this host") from `a_value_with_quotes_and_newlines_survives_a_round_trip_through_git`, so on a host without git it asserts nothing (pre-existing; `:320` uses `.expect`).
+  `matching.rs:123-146` packs two cases in one test (`equally_specific...`), and `git_credential_config.rs:174-203` is eager (cache, fingerprint, secret-free file, miss rate limit in one test); failure output will not say which broke.
+- Not findings: assertions are value-style (`{out}`) where the profile asks for rule-style messages (style only); no HIGH tautology, doubled subject, or vacuous assertion found in `matching.rs`, `reach.rs`, `git_env.rs`, `credential_config.rs`, `git_credential_config.rs`.
+  `git_credential_config.rs` hand-rolls a forge and a `Setup`; no recorded helper provides a loopback HTTP fake for this crate, so it is not a bypass. Its `sleep`-free design is good; the forge thread never stops (leaks one thread per test, harmless).
+- Properties: the new core tests are pure and fast (0.92 s for 81). `git_credential_config.rs` spawns the real binary per call and binds loopback ports; deterministic, no sleeps. Its timings were not measured here.
+
+## Mutation results (Issue 9)
+
+None run. No tool in the profile, and the deliberate-mutant step was not performed: the shared build lock was held by about 15 queued builds for over an hour and the daemon crate could not
+be compiled in reasonable time. Strength is unmeasured, not passing. Mutants to run first (one at a time, restore, re-run): `matching.rs:59` drop `Reverse` (expect `exact_beats_owner_beats_unfiltered` to fail);
+`reach.rs:108` `&&` to `||`; `credential_config.rs:124` drop the `!expired`; `git_env.rs:82` drop `!git.isolate`; `supervisor.rs:480` accept `Kind::Host`; `daemon_config_delivery.rs:138` drop `.then`; `gitconfig.rs:133` drop the `tag.gpgsign` arm.
+
+## Traceability (Issue 9)
+
+| Criterion | Tests | End to end |
+|---|---|---|
+| FR-008 choose the most specific token, first in file wins | `matching.rs`, `git_credential_config.rs:156` | Yes (real binary, fake forge) |
+| FR-008 learn and keep the reach | `reach.rs`, `git_credential_config.rs:174` | Partly (I9-6) |
+| FR-010 git uses the token through the helper | `git_credential_config.rs`, string asserts on the env | No (I9-4) |
+| FR-010 sandbox clears inherited helpers (T049) | `git_env.rs:219`, `supervisor.rs:1606` | No (I9-4) |
+| FR-010 host and SSH keep their helpers as fallback (T048) | `git_credential_config.rs:216`, `supervisor.rs:1582` | Helper yes; session env no |
+| FR-016 grant messages retired | `protocol_roundtrip.rs`, `schema_hash.rs`, deletions | Yes (compile) |
+| SC-004 replaced token used in 5 s | `git_credential_config.rs:140` | Yes (filtered token) |
+| US2.5 equal tokens, first in file | `matching.rs:137`, `git_credential_config.rs:156` | Yes |
+| US2.6 replaced token | `git_credential_config.rs:140` | Filtered only (I9-6) |
+| D15 row 2 `daemon.kind` gate, both start paths (T092) | `supervisor.rs:1094-1131` | Unit only |
+| D15 rows 1, 9 `[git] config_file`, signing stripped (T094) | `gitconfig.rs`, `daemon_config_render.rs:140` | No (I9-2, I9-5) |
+
+Untested criteria: none outright; the "No" rows lack an end-to-end test. Tests tracing to nothing: I9-7, I9-9.
+
+## What was not audited (Issue 9)
+
+- The daemon binaries (`micold-daemon --lib supervisor credential_config git_credential`, `--test git_credential_config`), `protocol_roundtrip`, `schema_hash`: queued behind other worktrees' builds and not run by this audit. Only `micold-core --lib` filtered (81 passed) ran. Whether they pass today rests on the PR's CI.
+- All mutation and deliberate mutants (above). No coverage tool.
+- `mise run gate`, `test-sandbox`, Windows and macOS legs, real git/forge runs.
+- `docs/user-guide/sandboxed-daemon.md` and `settings.md` content beyond grep for `config_file`; the one-day expiry warning's fate; `#1531` (`gh` token) tests.
+- Earlier sections untouched.

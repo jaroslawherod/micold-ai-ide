@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1530
 - **Worktree branch**: feat/1530_the-daemon-s-credential-helper-chooses-the-token
 - **Started**: 2026-11-04
-- **Phase**: M2 gate and PR
-- **Next step**: merge M2 PR, then the Close unit (last milestone)
+- **Phase**: M3 (cut by Close)
+- **Next step**: implement M3 (T139), then a new Close unit does T140-T147 from tdd/verification.md (Issue 9)
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1686 | Design (milestones for Issue 9) | MERGED | 826681cfb63664b82f65026abfd61abb190956c5 |
 | #1700 | M1 | MERGED | 3ffb138fbe2f1fbacfb8cbad179ad4a99202e95f |
-| #1713 | M2 | OPEN | |
+| #1713 | M2 | MERGED | 86468d87ced75974d0aeca37c7d7675976d1a934 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T046–T052, T093, T054 | full | helper chooses token from config (most specific, ties first), reach cached by fingerprint, per-kind session git env with fallback/clear, per-host rewrite | #1700 | merged |
-| M2 | T092, T094, T053 | full | git setup from daemon.kind on every start path, GIT_CONFIG_GLOBAL, gpgsign stripped, grant messages retired + protocol bump | #1713 | PR open |
+| M2 | T092, T094, T053 | full | git setup from daemon.kind on every start path, GIT_CONFIG_GLOBAL, gpgsign stripped, grant messages retired + protocol bump | #1713 | merged |
+| M3 | T139 | full | container and pod git config only from `[git] config_file`: remove `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount (T094 remainder, I9-2) | | pending |
 
 ## Decisions
 
@@ -33,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | D1 | spec | Write a new spec.md for #1530? | No: the design of the whole feature is on main and covers this issue; a second spec would duplicate FR-008/010/016/030/031/035. Skipped as for #1524/#1525/#1526/#1529/#1534. Blockers #1524 and #1529 are merged (#1529 via PR #1684). | agent-resolved | specs/daemon-config-file/autopilot-1529.md |
 | D2 | tasks | Split Issue 9? | Yes: 11 tasks, two stories (rule 3). M1 = helper + env (T046–T052, T093) with T054 guide (rule 4); M2 = kind gating, git config file, retirement T053 (wire change reviewed alone). Both full: security check, sandbox boundary, wire protocol. | agent-resolved | milestones.md |
+| D3 | close | Unbuilt T094 half becomes M3? | Yes (close rule 2): T094 ticked, its GitConfig/kube Secret replacement deferred. Test-strength findings I9-1, I9-3..I9-10 (T140-T147) stay for the next Close; mutation testing was not run (build-lock queue), T147 does it. | agent-resolved | tdd/verification.md Issue 9 |
 
 ## Review rounds
 
