@@ -294,6 +294,8 @@ enum RawShare {
     // The git configuration is no share since #1530: the app delivers a sanitized copy to every
     // container as `[git] config_file`. Dropped without a notice, as no credential is lost.
     Retired(#[allow(dead_code)] RetiredShare),
+    // A share a newer build wrote: dropped, so one unknown entry cannot lose the whole list.
+    Unknown(#[allow(dead_code)] serde::de::IgnoredAny),
 }
 
 /// The share #1530 retired.
@@ -426,7 +428,7 @@ impl From<RawProfile> for SandboxProfile {
                 .into_iter()
                 .filter_map(|share| match share {
                     RawShare::Kept(kept) => Some(kept),
-                    RawShare::Removed(_) | RawShare::Retired(_) => None,
+                    RawShare::Removed(_) | RawShare::Retired(_) | RawShare::Unknown(_) => None,
                 })
                 .collect(),
             survive_logout: raw.survive_logout,
