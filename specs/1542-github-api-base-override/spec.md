@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Draft
+**Status**: Closed 2026-11-07 — shipped in PRs #1751, #1755, #1762
 
 **Input**: Issue #1542 (from #1147; refs #1002): the scoped-token PAT check reaches GitHub only at the
 literal `https://api.github.com`, so quickstart Part C of #1002 cannot run against a local fake. Add a
@@ -90,7 +90,7 @@ skipped, not failed.
 2. **Given** the same daemon, **When** it asks for another repository, **Then** it gets no credential;
    the token file holds the token (steps 6, 7; the real-GitHub `/hooks` 403 stays manual).
 3. **Given** the token is removed, **Then** push fails and, after re-pasting, succeeds without a
-   daemon restart (step 8); **Given** the token expires, **Then** the file is gone and push fails
+   daemon restart (step 8); **Given** the token expires, **Then** the helper stops answering and push fails
    until a new token is pasted (step 10).
 4. ~~**Given** a kind-cluster daemon, **When** steps 4-5 are repeated, **Then** they hold (step 11).~~ Moved to follow-up #1760 (decided by user, M2: the kind pod harness has no credential wiring); step 11 stays UNCOVERED here.
 5. **Given** no container runtime or kind, **When** the test runs, **Then** it is skipped.

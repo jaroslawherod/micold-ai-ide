@@ -9,7 +9,7 @@ The token check in `micold-core` (`scoped_credential/pat.rs`) builds its URLs fr
 (FR-004: an injected parameter, no env var, setting or file). Production callers pass
 `ApiBase::default()` (byte-identical URLs). Tests build a base from a loopback fake. A reusable fake
 GitHub API (plain HTTP, random port) backs normal-suite tests for Part C steps 2, 3, 8, 10, 12 and a
-runtime-gated test in `micold-daemon` for steps 4-8, 10, 11. The #1002 quickstart "not live" table is
+runtime-gated test in `micold-daemon` for steps 4-8, 10 (step 11 in kind: follow-up #1760). The #1002 quickstart "not live" table is
 updated.
 
 ## Technical Context
@@ -49,7 +49,7 @@ crates/micold-core/src/scoped_credential/reach.rs   # existing api_base(host) (G
 crates/micold-client/src/shell/scoped_credential.rs # PatSource field + check_and_store param
 crates/micold-client/tests/support/fake_github.rs   # shared fake (new), include!/#[path]
 crates/micold-client/tests/scoped_token_fake_api.rs # steps 2, 3, 8, 10, 12 (new)
-crates/micold-daemon/tests/sandbox_real_scoped_token.rs # steps 4-8, 10, 11 (new, gated)
+crates/micold-daemon/tests/sandbox_real_scoped_token.rs # steps 4-8, 10 (step 11 in kind: follow-up #1760) (new, gated)
 specs/1002-sandbox-scoped-token/quickstart.md       # "not live" table
 crates/micold-client/Cargo.toml                     # [[test]] scoped_token_fake_api (autotests = false)
 crates/micold-daemon/Cargo.toml                     # [[test]] sandbox_real_scoped_token, like sandbox_real_no_user_credentials
@@ -76,5 +76,5 @@ slash trimmed; malformed base yields `SourceUnreachable` from the transport and 
 
 - core unit (`pat.rs` tests): default URLs identical, trailing slash, empty, path prefix.
 - client integration with the fake: steps 2, 3, 8, 10, 12, and FR-005.
-- daemon runtime-gated: steps 4-8, 10, 11 (skipped without runtime/kind). The git host is the existing local git HTTP backend of `git_credential_grant.rs`/`git_credential_pod.rs` (R6). The test file is gated by the `sandbox-real-runtime` feature the same way its `sandbox_real_*` siblings are.
+- daemon runtime-gated: steps 4-8, 10 (step 11 in kind: follow-up #1760) (skipped without runtime/kind). The git host is the existing local git HTTP backend of `git_credential_grant.rs`/`git_credential_pod.rs` (R6). The test file is gated by the `sandbox-real-runtime` feature the same way its `sandbox_real_*` siblings are.
 - No geometry or visual pass (no UI change).
