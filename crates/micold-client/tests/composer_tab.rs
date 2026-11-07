@@ -20,7 +20,9 @@ use micold_client::features::composer::InputState;
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::window::FieldId;
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::protocol::messages::{QueueEntryId, QueuedSummary, TurnPhase};
+use micold_core::protocol::messages::{
+    InterruptAsk, QueueEntryId, QueuedSummary, TurnId, TurnPhase,
+};
 use micold_core::session::SessionId;
 use support::covered_states::structured_pane;
 use support::layout::{self as lay, StateUnderTest, WINDOW};
@@ -332,6 +334,13 @@ fn words(state: &State) -> Vec<String> {
     painted_words(state).into_iter().map(|(w, _)| w).collect()
 }
 
+fn busy() -> TurnPhase {
+    TurnPhase::Busy {
+        turn: TurnId(1),
+        interrupt: InterruptAsk::None,
+    }
+}
+
 /// FR-006, FR-007, SC-003: no state word is drawn, in any state; the icon is in the input row.
 #[test]
 fn the_activity_state_is_an_icon_with_its_words_in_the_tooltip() {
@@ -340,11 +349,13 @@ fn the_activity_state_is_an_icon_with_its_words_in_the_tooltip() {
         (TurnPhase::Idle, false, READY, false),
         (TurnPhase::NotRunning, false, NOT_RUNNING, false),
         (TurnPhase::Idle, true, WAITING, false),
+        (busy(), false, BUSY, true),
+        (busy(), true, WAITING, false),
     ] {
         assert_eq!(activity(phase, waiting), (label, busy));
     }
     let (mut state, id) = crowded();
-    for phase in [TurnPhase::Idle, TurnPhase::NotRunning] {
+    for phase in [TurnPhase::Idle, TurnPhase::NotRunning, busy()] {
         state.composers.input_reported(
             id,
             InputState {
@@ -387,8 +398,9 @@ fn the_options_row_holds_the_selectors_only_while_open() {
             .map(|(_, p)| *p)
             .unwrap_or_else(|| panic!("`{needle}` is drawn: {open:?}"))
     };
-    let (model, effort) = (at(&model), at("ffort"));
+    let (model, effort, permission) = (at(&model), at("ffort"), at("Permissions"));
     assert!(model.x < effort.x, "Model before Effort");
+    assert!(effort.x < permission.x, "Permission after Effort");
     assert!((model.y - effort.y).abs() < 4.0, "one row");
 }
 
@@ -408,6 +420,11 @@ fn the_input_row_puts_activity_and_attach_before_the_text_and_settings_after() {
     );
     assert!(settings.x < send.x, "settings before Send");
     assert!(send.x - settings.x < 120.0, "settings next to the buttons");
+    // The bottom-aligned row centres the padded indicator with the icon buttons (it sat 16 px low).
+    assert!(
+        (activity.y - attach.y).abs() < 6.0 && (settings.y - attach.y).abs() < 6.0,
+        "the activity, attach and settings icons share one centre line: {activity:?} {attach:?} {settings:?}"
+    );
 }
 
 fn crowded_id(state: &State) -> SessionId {
@@ -454,6 +471,126 @@ fn the_settings_icon_toggles_from_the_keyboard() {
                 Message::Composer(ComposerMsg::OptionsToggled(s)) if *s == id
             )),
             "{named:?} presses the icon: {messages:?}"
+        );
+    }
+}
+
+// --- feature 1703 FR-004, FR-007, FR-009, FR-014: the settings icon's marker, tint and words -------
+
+fn in_bypass(state: &mut State, id: SessionId, on: bool) {
+    state
+        .workspace
+        .find_session_mut(id)
+        .expect("the pane's session")
+        .1
+        .permission_mode = if on {
+        micold_core::session::PermissionMode::Bypass
+    } else {
+        micold_core::session::PermissionMode::Default
+    };
+}
+
+/// FR-014, US3.5: the settings icon carries a warning mark exactly while the mode is Bypass.
+#[test]
+fn the_settings_icon_carries_a_warning_mark_only_in_bypass() {
+    let warning = Icon::UsageWarning.glyph().to_string();
+    let count = |state: &State| {
+        painted_words(state)
+            .iter()
+            .filter(|(w, _)| *w == warning)
+            .count()
+    };
+    let (mut state, id) = crowded();
+    in_bypass(&mut state, id, false);
+    let without = count(&state);
+    in_bypass(&mut state, id, true);
+    assert!(count(&state) > without, "Bypass adds a warning mark");
+    let mark = lowest_glyph(&state, &warning);
+    let settings = lowest_glyph(&state, &Icon::Settings.glyph().to_string());
+    assert!(
+        (mark.x - settings.x).abs() < 48.0 && (mark.y - settings.y).abs() < 48.0,
+        "the mark sits on the settings icon: {mark:?} vs {settings:?}"
+    );
+}
+
+/// The window's pixels in a square around `at`.
+fn pixels_around(state: &State, at: Point) -> Vec<u8> {
+    let under = StateUnderTest::new(state.clone());
+    let frame = lay::runtime_frame(|| lay::view_of(&under), WINDOW);
+    let width = WINDOW.width as usize;
+    let (x0, y0) = (
+        (at.x as usize).saturating_sub(16),
+        (at.y as usize).saturating_sub(16),
+    );
+    (y0..y0 + 32)
+        .flat_map(|y| frame[(y * width + x0) * 4..(y * width + x0 + 32) * 4].to_vec())
+        .collect()
+}
+
+/// FR-009: the settings icon is drawn tonal while the options row is open, and plain when closed.
+#[test]
+fn the_settings_icon_is_tonal_only_while_the_options_row_is_open() {
+    let glyph = Icon::Settings.glyph().to_string();
+    let (closed, _) = crowded();
+    let mut open = closed.clone();
+    open.composers.options_open = true;
+    let (at_closed, at_open) = (lowest_glyph(&closed, &glyph), lowest_glyph(&open, &glyph));
+    assert_eq!(
+        at_closed, at_open,
+        "the icon does not move when the row opens"
+    );
+    assert_ne!(
+        pixels_around(&closed, at_closed),
+        pixels_around(&open, at_open),
+        "an open row tints the icon's surface"
+    );
+    // Same state twice is the same pixels, so the difference above is the tint and nothing else.
+    assert_eq!(
+        pixels_around(&closed, at_closed),
+        pixels_around(&closed, at_closed)
+    );
+}
+
+/// FR-007: the settings icon's tooltip says what it is, and warns while the mode is Bypass.
+#[test]
+fn the_settings_icon_tooltip_names_it_and_warns_in_bypass() {
+    use micold_client::ui::composer::{options_tooltip, OPTIONS_LABEL};
+    assert_eq!(options_tooltip(false), OPTIONS_LABEL);
+    assert_eq!(
+        options_tooltip(true),
+        "Session options (Bypass permissions is on)"
+    );
+    let glyph = Icon::Settings.glyph().to_string();
+    for bypass in [false, true] {
+        let (mut state, id) = crowded();
+        in_bypass(&mut state, id, bypass);
+        let at = lowest_glyph(&state, &glyph);
+        let under = StateUnderTest::new(state);
+        let mut renderer = lay::renderer();
+        let (_, boxes) = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
+        let path = boxes
+            .iter()
+            .filter(|b| {
+                b.layer == lay::Layer::Base
+                    && b.width > 0.0
+                    && b.height > 0.0
+                    && (b.x..=b.x + b.width).contains(&at.x)
+                    && (b.y..=b.y + b.height).contains(&at.y)
+            })
+            .max_by_key(|b| b.path.len())
+            .expect("a node holds the settings icon")
+            .path
+            .clone();
+        let mut renderer = lay::renderer();
+        let (painted, _) =
+            lay::painted_text_hovering_at(lay::view_of(&under), &mut renderer, &path, WINDOW);
+        let want = options_tooltip(bypass);
+        assert!(
+            painted
+                .iter()
+                .any(|p| p.content == want && p.layer == lay::Layer::Overlay),
+            "hovering the settings icon shows `{want}`: {:?}",
+            painted.iter().map(|p| &p.content).collect::<Vec<_>>()
         );
     }
 }

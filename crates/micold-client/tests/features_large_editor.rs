@@ -5,6 +5,7 @@ use micold_client::app::{EditorAction, State};
 use micold_client::features::large_editor::{editor_key, update, Msg};
 use micold_client::keymap::{Key, KeyInput, Mods, NamedKey, PhysicalKey};
 use micold_core::session::SessionId;
+use micold_core::structured::attachment::admit;
 
 fn press(named: NamedKey, mods: Mods) -> KeyInput {
     KeyInput {
@@ -92,9 +93,16 @@ fn done_writes_to_a_session_that_ended_meanwhile() {
     let (mut state, a) = with_draft("a");
     update(&mut state, Msg::Requested(a));
     update(&mut state, typed("b"));
-    // The session ended; its composer is still the draft's home.
+    // The session ended: its composer is forgotten, as closing or removing it does.
+    state.forget_structured(a);
+    assert!(state.composers.draft(a).is_none(), "the composer is gone");
     update(&mut state, Msg::Done);
-    assert_eq!(draft(&state, a), "ab");
+    assert!(state.large_editor.open.is_none());
+    assert_eq!(
+        draft(&state, a),
+        "ab",
+        "Done still writes the text, without a panic"
+    );
 }
 
 #[test]
@@ -107,13 +115,42 @@ fn cancelled_leaves_the_draft_unchanged() {
     assert_eq!(draft(&state, a), "keep");
 }
 
+/// A draft holding `text` and two pictures.
+fn with_two_images(text: &str) -> (State, SessionId, Vec<String>) {
+    let (mut state, session) = with_draft("");
+    let images = ["one.png", "two.png"]
+        .map(|name| admit(&[], name, b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec()).expect("a PNG"))
+        .to_vec();
+    state.composers.taken(session, text.to_owned(), images);
+    let names = image_names(&state, session);
+    assert_eq!(names.len(), 2);
+    (state, session, names)
+}
+
+fn image_names(state: &State, session: SessionId) -> Vec<String> {
+    state
+        .composers
+        .draft(session)
+        .unwrap()
+        .images
+        .iter()
+        .map(|i| format!("{i:?}"))
+        .collect()
+}
+
 #[test]
 fn attachments_are_never_read_or_written() {
-    let (mut state, a) = with_draft("t");
-    let before = state.composers.draft(a).unwrap().images.len();
-    update(&mut state, Msg::Requested(a));
-    update(&mut state, Msg::Done);
-    assert_eq!(state.composers.draft(a).unwrap().images.len(), before);
+    for finish in [Msg::Done, Msg::Cancelled] {
+        let (mut state, a, before) = with_two_images("t");
+        update(&mut state, Msg::Requested(a));
+        update(&mut state, typed("x"));
+        update(&mut state, finish.clone());
+        assert_eq!(
+            image_names(&state, a),
+            before,
+            "the same two pictures after {finish:?}"
+        );
+    }
 }
 
 #[test]

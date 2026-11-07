@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft
+**Status**: Closed 2026-11-07 — shipped in PRs #1705, #1717, #1754, #1770
 
 **Input**: User description: "Implement GitHub issue #1703: Structured view: composer layout —
 large-editor shortcut, activity icon beside input, settings toggle for model/effort/permission
