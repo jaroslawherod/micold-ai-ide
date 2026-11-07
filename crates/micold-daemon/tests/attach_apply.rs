@@ -83,7 +83,7 @@ async fn expect(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) -> Daemo
     loop {
         match client.next().await.expect("stream open").unwrap() {
             Frame::Control(m) if pred(&m) => return m,
-            Frame::Control(_) | Frame::Grid(_) => continue,
+            Frame::Control(_) | Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }
@@ -173,7 +173,7 @@ async fn apply_items(
                 ..
             }) => return (last, results),
             Frame::Control(m @ DaemonMsg::OperationError { .. }) => panic!("{m:?}"),
-            Frame::Control(_) | Frame::Grid(_) => continue,
+            Frame::Control(_) | Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }

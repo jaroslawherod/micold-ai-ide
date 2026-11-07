@@ -196,7 +196,7 @@ async fn next_announced_lifecycle(client: &mut Client, id: SessionId) -> Option<
                         return lifecycle;
                     }
                 }
-                Frame::Grid(_) => continue,
+                Frame::Grid(_) | Frame::Routed(_) => continue,
             }
         }
     })

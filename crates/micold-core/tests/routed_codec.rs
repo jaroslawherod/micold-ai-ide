@@ -138,3 +138,17 @@ fn grid_frames_pass_in_both_routings() {
         assert_eq!(got, Some(Frame::Grid(sample_grid_frame())));
     }
 }
+
+#[test]
+fn a_routed_frame_must_be_json() {
+    let mut payload = vec![1u8, Kind::Routed as u8, 0, 0];
+    payload.extend_from_slice(b"{}");
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    buf.extend_from_slice(&payload);
+    let err = DaemonCodec::new()
+        .with_routing(Routing::Routed)
+        .decode(&mut buf)
+        .unwrap_err();
+    assert!(matches!(err, CodecError::ControlNotJson(_)), "{err}");
+}
