@@ -90,7 +90,7 @@ Close gate notes: first full gate was red on `pressing_the_mode_control_...` (pr
 
 ## Open escalation
 
-None.
+Push blocked: origin/main (18a4aa800, contains #1757 dff37460) is already merged in, but the full gate is still red on the untouched `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` (ai_cli_config.rs:271 "the stand-in must have run and recorded its launch"; 12650 passed, 1 failed). #1757 fixed other tests (#1615), not this one. gate-ok not recorded; push hook refuses. Awaiting a decision: fix on main first, or CI-validates route per tasks/gate.md.
 
 ## Follow-ups not done
 
