@@ -54,6 +54,13 @@ fn now() -> UnixTime {
         .as_secs()
 }
 
+/// The `github-authentication-token-expiration` header value GitHub sends for a token expiring at `at`.
+fn expiry_header(at: UnixTime) -> String {
+    rfc3339_utc(at as i64)
+        .replace('T', " ")
+        .replace('Z', " UTC")
+}
+
 /// `(exit status, stdout+stderr)` of `script` run in the container as `user`.
 fn sh(user: &str, script: &str) -> (i32, String) {
     let out = cli_out(&[
@@ -116,10 +123,7 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
     // The fake GitHub API: the token reaches only you/scratch and expires in 30 days.
     let api = FakeGithubApi::start();
     let expiry = now() + 30 * 86_400;
-    let header = rfc3339_utc(expiry as i64)
-        .replace('T', " ")
-        .replace('Z', " UTC");
-    api.probe(REPO, true, Some(&header));
+    api.probe(REPO, true, Some(&expiry_header(expiry)));
     let checked = pat::check(
         &UreqTransport::default(),
         &api.base(),
@@ -257,7 +261,23 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
 
     // Step 10: the token expires; push fails until a new one is pasted -----------------------------
     grant(&mut conn, now() + 6).await;
-    std::thread::sleep(Duration::from_secs(8));
+    // The helper stops answering for the repository once the grant's expiry passes (the file stays
+    // until the client revokes it, so "gone" is the helper's refusal, not the file's absence).
+    // Poll for that refusal rather than sleeping a guessed time.
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let (_, filled) = git_in(&format!(
+            "printf 'protocol=http\\nhost={HOST_NAME}:{port}\\npath=you/scratch\\n\\n' | git credential fill"
+        ));
+        if !filled.contains("password=") {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the helper still answers 60 s after the grant expired: {filled}"
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    }
     let (code, out) = git_in("cd /tmp/a && echo four >d.txt && git add . && git commit -q -m four && git push -q origin HEAD:main");
     assert_ne!(code, 0, "push succeeded with an expired credential: {out}");
     revoke(&mut conn).await;

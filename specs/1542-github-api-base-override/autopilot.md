@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1542
 - **Worktree branch**: feat/1542_base-url-override-for-the-github-api-and-git-host
 - **Started**: 2026-11-06
-- **Phase**: implement M2
-- **Next step**: M2 PR merge, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,7 +18,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1751 | Design PR | merged | 3093ca085b47775be01ad3dc71649271940a31d4 |
 | #1755 | M1 | merged | 80e93599ba5f1c267a103600c8cd92904cf23bb2 |
-| #1762 | M2 | open | |
+| #1769 | Close | open | |
+| #1762 | M2 | merged (first CI run failed on flake `sandbox_real_limits_stop_the_session_not_the_daemon`, unrelated; passed on rerun) | aa3ce998c3f1256c9dfd4e6318c41f08f221450f |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | M2 | Accept M2 without the kind arm (step 11)? | Yes (A): FR-008, US3.4, SC-002 amended; follow-up #1760; quickstart row 11 UNCOVERED | decided by user | review B MAJOR |
 | M1 | T001–T009 | full | ApiBase parameter, fake GitHub API, tests for Part C steps 2, 3, 8, 10, 12 | #1755 | merged |
-| M2 | T010–T011 | full | Runtime-gated container test (steps 4-8, 10; step 11 is #1760) | #1762 | in review |
+| M2 | T010–T011 | full | Runtime-gated container test (steps 4-8, 10; step 11 is #1760) | #1762 | merged |
 
 ## Decisions
 
@@ -49,6 +50,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A | 1 | 8aaf4b3d:4b82894e4 | CLEAN; minors fixed (port 17743, step-11 placeholder ignored) |
 | M2 review B | 1 | 8aaf4b3d:4b82894e4 | CHANGES: 1 MAJOR (kind arm missing); resolved by user decision A (spec amended, #1760), prose only |
 | M1 review B | 1 | 05a49d47:b886f8de6 | CLEAN (sonnet; core tests unobserved by B for build-lock wait, covered by the full gate) |
+| Close converge | 1 | - | no unbuilt behaviour; doc drift (step 11 wording in plan/tasks/quickstart) fixed, prose only |
+| Close diff review | 1 | aeb8ff3f:aa3ce998c | CLEAN; MINOR declined: the removed `fake.requests().len()==seen.len()` assert was tautological (dead base is not the fake) |
+| Close tdd-verify | 1 | - | FAIL: fixed findings 1, 3, 4, 5 (spec US3.3 reworded: helper stops answering, daemon keeps the file), 7, 8; declined 2 (no TDD extension in autopilot flow), 6, 9, 10 (acceptable; positive control exists, one acceptance test by design) |
 
 ## Declined review findings
 
