@@ -50,7 +50,7 @@ None.
 
 ## Handover
 
-None.
+M2 implemented and committed (2 local commits, NOT pushed, no PR): T084b, T085b, T086a, T086 ticked. Review A (code-review high): 8 findings, all fixed or accepted (the basic image pin stays a post-publish bump; `EnvTarget`/`apply_env_hygiene` made pub for the T086a test, declined). Review B (sonnet): CLEAN. Full gate on the final tree: one failure, `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` ("the stand-in must have run and recorded its launch"), 12639/12640 passed; looks load-related and not touched by this diff, a solo rerun was queued behind the build lock (log: scratchpad `t1.log`, may be gone). Next: rerun that one test (`scripts/build-lock.sh cargo test -p micold-daemon --test ai_cli_config`); if green, rerun `mise run gate` (or record it flaky), run `mise run image` then `mise run test-sandbox` (podman and docker are installed), run `scripts/build-lock.sh cargo test -p micold-core --test main retired_env`, then push, open the PR (title ends (#1537), body ends `Refs #1537`), record it in the ledger. quickstart.md cannot run end to end here (cluster, SSH host, PATs); the close unit records it. Previous PR #1709 merge SHA 04743add7b0041fe5e6b8e8652071b05eeebab66; #1530 M2 (#1713) merged.
 
 ## Open escalation
 
