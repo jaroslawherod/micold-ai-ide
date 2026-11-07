@@ -86,7 +86,7 @@ where
     assert_eq!(&back, value, "postcard round-trip mismatch");
 }
 
-fn sample_client_msgs() -> Vec<ClientMsg> {
+pub(crate) fn sample_client_msgs() -> Vec<ClientMsg> {
     vec![
         ClientMsg::RepoClone {
             url: "git@github.com:acme/app.git".into(),
@@ -582,7 +582,7 @@ fn wide_char_line() -> WireLine {
     }
 }
 
-fn sample_grid_frame() -> GridFrame {
+pub(crate) fn sample_grid_frame() -> GridFrame {
     GridFrame {
         session: sid(),
         process: SessionProcess::Primary,

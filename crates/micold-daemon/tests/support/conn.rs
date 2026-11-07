@@ -194,7 +194,7 @@ pub async fn connect_and_attach(state: &Arc<DaemonState>, project: &Path) -> Cli
         match client.next().await.expect("stream open").expect("a frame") {
             Frame::Control(DaemonMsg::Attached { .. }) => attached = true,
             Frame::Control(DaemonMsg::CatalogChanged { .. }) if attached => return client,
-            Frame::Control(_) | Frame::Grid(_) => {}
+            Frame::Control(_) | Frame::Grid(_) | Frame::Routed(_) => {}
         }
     }
 }

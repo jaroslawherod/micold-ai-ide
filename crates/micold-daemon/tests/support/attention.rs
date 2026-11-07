@@ -319,7 +319,7 @@ pub async fn claims(window: &mut Window, session: SessionId, seq: u64) -> Vec<Da
             }
             Some(Frame::Control(DaemonMsg::CatalogChanged { .. })) => {}
             Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
+            Some(Frame::Grid(_) | Frame::Routed(_)) => {}
             None => panic!("the service closed the connection of a window that claimed"),
         }
     }
@@ -349,7 +349,7 @@ pub async fn received(window: &mut Window) -> Vec<DaemonMsg> {
                 return before_the_pong;
             }
             Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
+            Some(Frame::Grid(_) | Frame::Routed(_)) => {}
             None => panic!("the service closed the connection of a window that pinged"),
         }
     }

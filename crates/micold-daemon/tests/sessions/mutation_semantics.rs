@@ -134,7 +134,7 @@ async fn expect_control(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) 
             match client.next().await.expect("stream open").unwrap() {
                 Frame::Control(m) if pred(&m) => return m,
                 Frame::Control(m) => skipped.push(format!("{m:?}")),
-                Frame::Grid(_) => continue,
+                Frame::Grid(_) | Frame::Routed(_) => continue,
             }
         }
     };
@@ -1771,7 +1771,7 @@ async fn the_streamed_worktree_list_matches_local_git_discovery() {
             Frame::Control(DaemonMsg::OperationError {
                 message, detail, ..
             }) => panic!("a worktree create failed: {message} ({detail:?})"),
-            Frame::Control(_) | Frame::Grid(_) => continue,
+            Frame::Control(_) | Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     };
 

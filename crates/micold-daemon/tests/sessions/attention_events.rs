@@ -56,7 +56,7 @@ async fn reports(window: &mut Window, focused: bool, in_view: Option<SessionId>)
                 return before_the_pong;
             }
             Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
+            Some(Frame::Grid(_) | Frame::Routed(_)) => {}
             None => panic!("the service closed the connection of a window that reported its view"),
         }
     }

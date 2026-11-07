@@ -131,6 +131,142 @@ pub struct ProjectRef {
     pub path: PathBuf,
 }
 
+/// A logical connection carried over one link, so a router can tell apart several clients sharing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ConnectionId(pub u64);
+
+/// A position in the stream of one logical connection, so a stream can resume after a drop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Sequence(pub u64);
+
+/// Why a routed envelope was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoutingError {
+    /// The envelope has no `target`, or it is `null` or an empty string.
+    MissingTarget,
+    /// The `target` is present but is not a valid [`WireDaemonId`].
+    InvalidTarget(String),
+    /// The envelope is itself wrapped in another envelope.
+    NestedEnvelope,
+    /// A row belongs to a different daemon than the envelope's target.
+    ForeignRow {
+        /// The envelope's target.
+        target: WireDaemonId,
+        /// The daemon that owns the row.
+        row: WireDaemonId,
+    },
+    /// The envelope is not valid JSON, or its other fields are malformed.
+    Malformed(String),
+}
+
+impl fmt::Display for RoutingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RoutingError::MissingTarget => f.write_str("routed envelope has no target daemon id"),
+            RoutingError::InvalidTarget(why) => {
+                write!(f, "routed envelope has an invalid target daemon id: {why}")
+            }
+            RoutingError::NestedEnvelope => {
+                f.write_str("routed envelope target is itself a routed envelope")
+            }
+            RoutingError::ForeignRow { target, row } => write!(
+                f,
+                "row of daemon {row} does not belong to the envelope's target daemon {target}"
+            ),
+            RoutingError::Malformed(why) => write!(f, "malformed routed envelope: {why}"),
+        }
+    }
+}
+
+impl std::error::Error for RoutingError {}
+
+/// A message `msg` addressed to the daemon `target`, on logical connection `conn`, at position `seq`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RoutedEnvelope<M> {
+    /// The daemon that must receive `msg`.
+    pub target: WireDaemonId,
+    /// The logical connection `msg` belongs to.
+    pub conn: ConnectionId,
+    /// The position of `msg` in that connection's stream.
+    pub seq: Sequence,
+    /// The wrapped message.
+    pub msg: M,
+}
+
+impl<M> RoutedEnvelope<M> {
+    /// Checks that a row owned by `row_daemon` may travel in this envelope.
+    pub fn owns(&self, row_daemon: &WireDaemonId) -> Result<(), RoutingError> {
+        if *row_daemon == self.target {
+            Ok(())
+        } else {
+            Err(RoutingError::ForeignRow {
+                target: self.target.clone(),
+                row: row_daemon.clone(),
+            })
+        }
+    }
+}
+
+/// Whether `value` looks like a routed envelope (an object with `target` and `msg`).
+fn looks_like_envelope(value: &serde_json::Value) -> bool {
+    value
+        .as_object()
+        .is_some_and(|o| o.contains_key("target") && o.contains_key("msg"))
+}
+
+impl<M: serde::de::DeserializeOwned> RoutedEnvelope<M> {
+    /// Decode an envelope from JSON, checking the target before the payload is interpreted.
+    pub fn from_json_slice(bytes: &[u8]) -> Result<Self, RoutingError> {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|e| RoutingError::Malformed(e.to_string()))?;
+        let object = value
+            .as_object_mut()
+            .ok_or_else(|| RoutingError::Malformed("not a JSON object".into()))?;
+        let target = match object.get("target") {
+            None | Some(serde_json::Value::Null) => return Err(RoutingError::MissingTarget),
+            Some(serde_json::Value::String(s)) if s.is_empty() => {
+                return Err(RoutingError::MissingTarget)
+            }
+            Some(serde_json::Value::String(s)) => WireDaemonId::new(s.as_str())
+                .map_err(|e| RoutingError::InvalidTarget(e.to_string()))?,
+            Some(v) if looks_like_envelope(v) => return Err(RoutingError::NestedEnvelope),
+            Some(other) => {
+                let kind = match other {
+                    serde_json::Value::Bool(_) => "a boolean",
+                    serde_json::Value::Number(_) => "a number",
+                    serde_json::Value::Array(_) => "an array",
+                    _ => "an object",
+                };
+                return Err(RoutingError::InvalidTarget(format!(
+                    "expected a string, got {kind}"
+                )));
+            }
+        };
+        if object.get("msg").is_some_and(looks_like_envelope) {
+            return Err(RoutingError::NestedEnvelope);
+        }
+        let mut field = |name: &str| {
+            object
+                .remove(name)
+                .ok_or_else(|| RoutingError::Malformed(format!("missing field `{name}`")))
+        };
+        let conn = serde_json::from_value(field("conn")?)
+            .map_err(|e| RoutingError::Malformed(e.to_string()))?;
+        let seq = serde_json::from_value(field("seq")?)
+            .map_err(|e| RoutingError::Malformed(e.to_string()))?;
+        let msg = serde_json::from_value(field("msg")?)
+            .map_err(|e| RoutingError::Malformed(e.to_string()))?;
+        Ok(Self {
+            target,
+            conn,
+            seq,
+            msg,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +321,85 @@ mod tests {
         let set: std::collections::HashSet<_> = [a.clone(), a.clone(), b].into_iter().collect();
         assert_eq!(set.len(), 2);
         assert_eq!(WireDaemonId::default().as_str(), "local");
+    }
+
+    fn envelope(json: &str) -> Result<RoutedEnvelope<serde_json::Value>, RoutingError> {
+        RoutedEnvelope::from_json_slice(json.as_bytes())
+    }
+
+    #[test]
+    fn a_missing_or_empty_target_is_missing() {
+        for json in [
+            r#"{"conn":1,"seq":1,"msg":{}}"#,
+            r#"{"target":null,"conn":1,"seq":1,"msg":{}}"#,
+            r#"{"target":"","conn":1,"seq":1,"msg":{}}"#,
+        ] {
+            assert_eq!(envelope(json), Err(RoutingError::MissingTarget), "{json}");
+        }
+    }
+
+    #[test]
+    fn a_malformed_target_is_invalid() {
+        for json in [
+            r#"{"target":"Bad Id","conn":1,"seq":1,"msg":{}}"#,
+            r#"{"target":7,"conn":1,"seq":1,"msg":{}}"#,
+        ] {
+            assert!(
+                matches!(envelope(json), Err(RoutingError::InvalidTarget(_))),
+                "{json}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_double_wrapped_envelope_is_nested() {
+        let inner = r#"{"target":"a","conn":1,"seq":1,"msg":{}}"#;
+        let as_target = format!(r#"{{"target":{inner},"conn":1,"seq":1,"msg":{{}}}}"#);
+        let as_msg = format!(r#"{{"target":"b","conn":1,"seq":1,"msg":{inner}}}"#);
+        assert_eq!(envelope(&as_target), Err(RoutingError::NestedEnvelope));
+        assert_eq!(envelope(&as_msg), Err(RoutingError::NestedEnvelope));
+    }
+
+    #[test]
+    fn the_payload_is_not_interpreted_when_the_target_is_bad() {
+        let err = RoutedEnvelope::<u8>::from_json_slice(br#"{"conn":1,"seq":1,"msg":"nope"}"#);
+        assert_eq!(err, Err(RoutingError::MissingTarget));
+    }
+
+    #[test]
+    fn conn_and_seq_round_trip_including_the_maximum() {
+        let sent = RoutedEnvelope {
+            target: WireDaemonId::new("a").unwrap(),
+            conn: ConnectionId(u64::MAX),
+            seq: Sequence(u64::MAX),
+            msg: 5u8,
+        };
+        let json = serde_json::to_vec(&sent).unwrap();
+        assert_eq!(RoutedEnvelope::<u8>::from_json_slice(&json).unwrap(), sent);
+    }
+
+    #[test]
+    fn the_same_conn_with_two_targets_is_two_envelopes() {
+        let to = |t: &str| RoutedEnvelope {
+            target: WireDaemonId::new(t).unwrap(),
+            conn: ConnectionId(1),
+            seq: Sequence(1),
+            msg: (),
+        };
+        assert_ne!(to("a"), to("b"));
+    }
+
+    #[test]
+    fn owns_refuses_a_row_of_another_daemon() {
+        let env = RoutedEnvelope {
+            target: WireDaemonId::new("a").unwrap(),
+            conn: ConnectionId(1),
+            seq: Sequence(1),
+            msg: (),
+        };
+        assert_eq!(env.owns(&WireDaemonId::new("a").unwrap()), Ok(()));
+        let err = env.owns(&WireDaemonId::new("b").unwrap()).unwrap_err();
+        assert!(matches!(err, RoutingError::ForeignRow { .. }));
+        assert!(err.to_string().contains('b'));
     }
 }

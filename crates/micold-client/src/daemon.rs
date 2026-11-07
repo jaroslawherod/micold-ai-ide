@@ -1152,6 +1152,8 @@ async fn connect_and_pump(
                         Message::daemon(id, ConnectionMsg::Event(dm))
                     }
                     Frame::Grid(frame) => Message::daemon(id, ConnectionMsg::GridFrame(frame)),
+                    // A daemon never sends a routed envelope to a client: a protocol violation.
+                    Frame::Routed(_) => return PumpEnd::Disconnected,
                 };
                 if output.send(msg).await.is_err() {
                     return PumpEnd::AppGone;

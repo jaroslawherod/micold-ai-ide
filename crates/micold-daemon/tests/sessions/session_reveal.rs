@@ -51,7 +51,7 @@ async fn exchange(window: &mut Window, msg: Option<ClientMsg>) -> Vec<DaemonMsg>
                 return before_the_pong;
             }
             Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
+            Some(Frame::Grid(_) | Frame::Routed(_)) => {}
             None => panic!("the service closed the connection of a window"),
         }
     }

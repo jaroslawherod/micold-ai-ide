@@ -251,7 +251,7 @@ impl Window {
                     .expect("a frame")
                 {
                     Frame::Control(msg) => return msg,
-                    Frame::Grid(_) => {}
+                    Frame::Grid(_) | Frame::Routed(_) => {}
                 }
             }
         })

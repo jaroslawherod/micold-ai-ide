@@ -46,7 +46,7 @@ async fn next_control(client: &mut Client) -> DaemonMsg {
             | Frame::Control(DaemonMsg::RunGroupsChanged { .. })
             | Frame::Control(DaemonMsg::Pong { .. }) => continue,
             Frame::Control(msg) => return msg,
-            Frame::Grid(_) => continue,
+            Frame::Grid(_) | Frame::Routed(_) => continue,
         }
     }
 }
@@ -177,7 +177,8 @@ async fn a_displaced_client_is_not_terminated() {
             Frame::Control(
                 DaemonMsg::CatalogChanged { .. } | DaemonMsg::RunGroupsChanged { .. },
             )
-            | Frame::Grid(_) => continue,
+            | Frame::Grid(_)
+            | Frame::Routed(_) => continue,
             other => panic!("expected Pong, got {other:?}"),
         }
     }

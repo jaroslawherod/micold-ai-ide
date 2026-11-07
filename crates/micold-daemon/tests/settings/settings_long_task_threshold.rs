@@ -181,7 +181,7 @@ async fn sends(window: &mut Window, msg: ClientMsg) -> Vec<DaemonMsg> {
                 return before_the_pong;
             }
             Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
+            Some(Frame::Grid(_) | Frame::Routed(_)) => {}
             None => panic!("the service closed the connection of a window that sent a message"),
         }
     }
@@ -237,7 +237,7 @@ async fn received(window: &mut Window) -> Vec<DaemonMsg> {
                 return before_the_pong;
             }
             Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
+            Some(Frame::Grid(_) | Frame::Routed(_)) => {}
             None => panic!("the service closed the connection of a window that pinged"),
         }
     }

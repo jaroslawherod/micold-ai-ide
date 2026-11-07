@@ -103,7 +103,7 @@ async fn answers_to(client: &mut Client, request: ClientMsg) -> Vec<DaemonMsg> {
             {
                 Frame::Control(DaemonMsg::Pong { nonce }) if nonce == NONCE => return seen,
                 Frame::Control(msg) => seen.push(msg),
-                Frame::Grid(_) => {}
+                Frame::Grid(_) | Frame::Routed(_) => {}
             }
         }
     })
