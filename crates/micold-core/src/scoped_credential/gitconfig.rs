@@ -207,7 +207,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join(".gitconfig");
         assert_eq!(shared_copy(&file), Ok(None));
-        std::fs::write(&file, "[user]\n\tname = Ada\n[credential]\n\thelper = store\n").unwrap();
+        std::fs::write(
+            &file,
+            "[user]\n\tname = Ada\n[credential]\n\thelper = store\n",
+        )
+        .unwrap();
         match shared_copy(&file) {
             Ok(Some(text)) => assert!(
                 text.contains("name = \"Ada\"") && !text.contains("store"),

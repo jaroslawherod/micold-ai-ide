@@ -1060,7 +1060,7 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
     let signin = KubeCredential::SignIn {
         cli: AiCli::ClaudeCode,
     };
-    let s = allowing(&[signin.clone()]);
+    let s = allowing(std::slice::from_ref(&signin));
     let fake = cluster();
     fake.progress(&names().pod(), vec![running()]);
     let (outcome, _) = run_reading(&fake, &s, &client("c1"), DriftChoice::Ask, &home_files).await;
@@ -1104,14 +1104,19 @@ async fn the_git_config_is_a_key_of_the_startup_secret_and_no_secret_of_its_own(
     let secret = fake
         .manifest(NS, ObjectKind::Secret, &n.startup_secret())
         .expect("the startup secret exists for the git config alone");
-    assert_eq!(secret["stringData"]["gitconfig"], "[user]\n\tname = \"Ada\"\n");
+    assert_eq!(
+        secret["stringData"]["gitconfig"],
+        "[user]\n\tname = \"Ada\"\n"
+    );
     assert!(secret["stringData"].get("startup.env").is_none());
     assert!(!fake
         .names(NS, ObjectKind::Secret)
         .iter()
         .any(|name| name.ends_with("-gitconfig")));
     let pod = fake.manifest(NS, ObjectKind::Pod, &n.pod()).unwrap();
-    let mounts = pod["spec"]["containers"][0]["volumeMounts"].as_array().unwrap();
+    let mounts = pod["spec"]["containers"][0]["volumeMounts"]
+        .as_array()
+        .unwrap();
     assert!(
         mounts.iter().all(|m| m.get("subPath").is_none()),
         "no file mount: {mounts:?}"

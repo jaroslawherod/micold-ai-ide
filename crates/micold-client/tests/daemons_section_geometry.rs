@@ -485,7 +485,10 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
             namespace: Some("apps".into()),
         },
     ]))));
-    for kind in [AllowedKind::SignIn(micold_core::session::AiCli::ClaudeCode), AllowedKind::RegistryPull] {
+    for kind in [
+        AllowedKind::SignIn(micold_core::session::AiCli::ClaudeCode),
+        AllowedKind::RegistryPull,
+    ] {
         state.update(Message::Daemons(DaemonsMsg::AllowedToggled(kind, true)));
     }
     state.update(Message::Daemons(DaemonsMsg::Saved));
@@ -789,11 +792,15 @@ fn each_group_label_sits_above_its_controls_at_their_left_edge() {
     use micold_client::features::daemons::DraftRuntime::{Container, Kubernetes};
     let (_, container) = open_form(Container);
     let (_, kube) = open_form(Kubernetes);
+    let kube_first = micold_client::features::daemons_kube::AllowedKind::SignIn(
+        micold_core::session::AiCli::ClaudeCode,
+    )
+    .label();
     for (shown, label, first) in [
         (&container, "AI tools in this daemon", "Claude Code"),
-        (&container, "Shared with the container", "Git configuration"),
+        (&container, "Shared with the container", "AI CLI sign-in"),
         (&kube, "AI CLIs installed in the pod", "Claude Code"),
-        (&kube, "Allowed credentials", "the git config"),
+        (&kube, "Allowed credentials", kube_first.as_str()),
     ] {
         let (_, lx, ly) = find(shown, label);
         let (_, fx, fy) = find(shown, first);

@@ -162,10 +162,7 @@ fn a_tuned_container_install_shows_every_legacy_value_in_the_one_migrated_daemon
     let p = &c.profile;
     assert_eq!(p.runtime, RuntimeKind::Podman);
     assert_eq!(p.network, NetworkPosture::Outbound);
-    assert_eq!(
-        p.credentials,
-        [CredentialShare::AiCliAuth].into()
-    );
+    assert_eq!(p.credentials, [CredentialShare::AiCliAuth].into());
     assert_eq!(p.budget.cpus_milli, Some(MilliCpus(3500)));
     assert_eq!(p.budget.memory_bytes, Some(Bytes(8 << 30)));
     assert_eq!(p.budget.pids, Some(1024));

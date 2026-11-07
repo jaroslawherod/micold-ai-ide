@@ -288,9 +288,6 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         .and_then(|dir| dir.to_str().map(str::to_owned));
     let exe = std::env::current_exe().ok();
     let settings = crate::settings::current();
-    let identity_exists = std::path::Path::new(micold_core::ssh::argv::CONTAINER_DATA_DIR)
-        .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE)
-        .is_file();
     let lang_inherited = std::env::var_os("LANG").is_some_and(|v| !v.is_empty());
     let edits = env_hygiene_with(
         target,
@@ -300,7 +297,6 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
             // A file that is not there (the copy could not be written) would make every git call
             // fail; leave the user's git configuration out instead.
             config_file: settings.git_config_file.as_deref().filter(|f| f.is_file()),
-            legacy_identity_exists: identity_exists,
         },
         lang_inherited,
     );
@@ -466,8 +462,6 @@ pub(crate) struct GitFacts<'a> {
     pub kind: Option<micold_core::daemon_config::Kind>,
     /// `[git] config_file`.
     pub config_file: Option<&'a std::path::Path>,
-    /// The sanitized copy of the user's `~/.gitconfig` an older app mounted exists.
-    pub legacy_identity_exists: bool,
 }
 
 /// The global git configuration a session in a container or pod reads (#1438, specs/1002 FR-004,
@@ -476,24 +470,20 @@ pub(crate) struct GitFacts<'a> {
 /// Chosen by `daemon.kind`, not by the data directory's value, so a daemon started over SSH and
 /// the one the entrypoint starts both get it. The credential helper, the reset and the HTTPS
 /// rewrite come from the file's tokens ([`config_git_edits`]); this adds the identity: `[git]
-/// config_file`, else the copy an older app mounts at the state directory. Empty on host and SSH.
+/// config_file` only. Empty on host and SSH.
 pub(crate) fn container_git_edits(git: &GitFacts<'_>) -> Vec<EnvEdit> {
     use micold_core::daemon_config::Kind;
     if !matches!(git.kind, Some(Kind::Container | Kind::Kubernetes)) {
         return Vec::new();
     }
-    let identity = match (git.config_file, git.legacy_identity_exists) {
-        (Some(file), _) => file.as_os_str().to_owned(),
-        // A container path is always Linux: spelled with `/`, not the host's separator.
-        (None, true) => format!(
-            "{}/{}",
-            micold_core::ssh::argv::CONTAINER_DATA_DIR,
-            micold_core::sandbox::SANDBOX_GITCONFIG_FILE
-        )
-        .into(),
-        (None, false) => return Vec::new(),
+    // No file, no identity: an older app's copy in the state directory is not read any more.
+    let Some(file) = git.config_file else {
+        return Vec::new();
     };
-    vec![EnvEdit::Set("GIT_CONFIG_GLOBAL".into(), identity)]
+    vec![EnvEdit::Set(
+        "GIT_CONFIG_GLOBAL".into(),
+        file.as_os_str().to_owned(),
+    )]
 }
 
 /// `word` as one shell word: unchanged when it holds only safe characters, else single-quoted.
@@ -1052,11 +1042,10 @@ mod container_git_tests {
 
     const SHARED: &str = "/run/micold/secrets/gitconfig";
 
-    fn facts(kind: Option<Kind>, file: Option<&'static str>, legacy: bool) -> GitFacts<'static> {
+    fn facts(kind: Option<Kind>, file: Option<&'static str>) -> GitFacts<'static> {
         GitFacts {
             kind,
             config_file: file.map(Path::new),
-            legacy_identity_exists: legacy,
         }
     }
 
@@ -1096,22 +1085,22 @@ mod container_git_tests {
     #[test]
     fn a_container_or_pod_session_reads_the_configured_git_file() {
         for kind in [Kind::Container, Kind::Kubernetes] {
-            let git = facts(Some(kind), Some(SHARED), true);
+            let git = facts(Some(kind), Some(SHARED));
             assert_eq!(global(&git).as_deref(), Some(SHARED), "{kind:?}");
         }
     }
 
     #[test]
-    fn without_a_git_file_the_older_mounted_copy_is_the_identity_when_present() {
-        let git = facts(Some(Kind::Container), None, true);
-        assert_eq!(global(&git), Some(format!("{DATA}/gitconfig")));
-        assert_eq!(global(&facts(Some(Kind::Container), None, false)), None);
+    fn without_a_git_file_a_session_gets_no_identity_even_if_an_older_copy_is_in_the_state_dir() {
+        for kind in [Kind::Container, Kind::Kubernetes] {
+            assert_eq!(global(&facts(Some(kind), None)), None, "{kind:?}");
+        }
     }
 
     #[test]
     fn host_ssh_and_a_daemon_with_no_file_get_nothing_whatever_the_data_dir() {
         for kind in [None, Some(Kind::Host), Some(Kind::Ssh)] {
-            assert!(container_git_edits(&facts(kind, Some(SHARED), true)).is_empty());
+            assert!(container_git_edits(&facts(kind, Some(SHARED))).is_empty());
         }
     }
 
@@ -1121,7 +1110,7 @@ mod container_git_tests {
             set(&env_hygiene_with(
                 &std::process::Command::new("true"),
                 data_dir,
-                facts(kind, Some(SHARED), false),
+                facts(kind, Some(SHARED)),
                 false,
             ))
         };
