@@ -467,7 +467,10 @@ async fn sandbox_real_container_daemon_runs_a_session_end_to_end() {
         sel.update(Anchor::new(last, cache.cols() - 1), text);
         let outcome = selection::copy_request(Some(&sel), text);
         let Some(micold_client::features::Outcome::ClipboardWrite(copied)) = outcome else {
-            panic!("nothing to copy from a container session's screen:\n{}", link.text());
+            panic!(
+                "nothing to copy from a container session's screen:\n{}",
+                link.text()
+            );
         };
         assert!(
             copied.contains(&format!("{STANDIN_ECHO}hello from the e2e")),

@@ -74,6 +74,10 @@ tiny-skia = { workspace = true }
 notify = { workspace = true }
 # Feature 487: a pasted clipboard image is read with `arboard` and saved as PNG.
 arboard = { workspace = true }
+# Bug 1720: the terminal copy/paste/link diagnostics (`MICOLD_LOG=micold_client=debug`), the same
+# facility the daemon logs with.
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
 [target.'cfg(windows)'.dependencies]
