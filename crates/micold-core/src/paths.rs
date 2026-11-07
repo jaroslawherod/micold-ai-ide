@@ -28,12 +28,10 @@ pub fn set_data_dir(dir: PathBuf) {
 }
 
 fn data_dir_override() -> Option<PathBuf> {
-    CONFIGURED_DATA_DIR.get().cloned().or_else(|| {
-        data_dir_from_env(
-            std::env::var_os(DATA_DIR_ENV),
-            cfg!(any(test, feature = "test-env")),
-        )
-    })
+    CONFIGURED_DATA_DIR
+        .get()
+        .cloned()
+        .or_else(|| data_dir_from_env(std::env::var_os(DATA_DIR_ENV), crate::retired_env::TEST_ENV))
 }
 
 /// [`DATA_DIR_ENV`]'s `raw` value as the override it yields. The variable is retired (#1537): it
@@ -49,12 +47,12 @@ pub fn data_dir_from_env(
         .map(PathBuf::from)
 }
 
-/// The per-user data directory (XDG / Application Support / roaming AppData), or [`DATA_DIR_ENV`].
+/// The per-user data directory (XDG / Application Support / roaming AppData), or the file-less override ([`DATA_DIR_ENV`], honoured only by a `test-env` build).
 pub fn data_dir() -> Option<PathBuf> {
     data_dir_override().or_else(|| project_dirs().map(|dirs| dirs.data_dir().to_path_buf()))
 }
 
-/// The per-user local data directory (the same as [`data_dir`] off Windows), or [`DATA_DIR_ENV`].
+/// The per-user local data directory (the same as [`data_dir`] off Windows), or the `test-env` override ([`DATA_DIR_ENV`]).
 pub fn data_local_dir() -> Option<PathBuf> {
     data_dir_override().or_else(|| project_dirs().map(|dirs| dirs.data_local_dir().to_path_buf()))
 }

@@ -7,6 +7,10 @@
 
 use std::ffi::OsString;
 
+/// Whether a retired variable still counts in this build: the `test-env` feature, or this crate's
+/// own unit tests. Every reader of a retired variable asks this, so the rule is spelled once.
+pub const TEST_ENV: bool = cfg!(any(test, feature = "test-env"));
+
 /// One retired variable and the configuration key that replaces it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Retired {

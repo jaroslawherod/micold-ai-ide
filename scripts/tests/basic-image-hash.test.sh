@@ -345,12 +345,12 @@ done
 
 retired='MICOLD_(HOME|IMAGE_REFERENCE|LISTEN_ADDR|IDLE_STOP|LOG|REPOS_ROOT|DATA_DIR|TOKEN_PATH)'
 cases=$((cases + 1))
-setters="$(grep -rnE "\b$retired\b" "$ROOT/packaging" "$ROOT/site/capture" 2>/dev/null \
+setters="$(grep -rnE "\b$retired\b" "$ROOT/packaging" "$ROOT/site" --exclude-dir=node_modules 2>/dev/null \
   | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' || true)"
 if [ -n "$setters" ]; then
-  fail "no file under packaging/ or site/capture/ uses a retired start-up variable" "$setters"
+  fail "no file under packaging/ or site/ uses a retired start-up variable" "$setters"
 else
-  pass "no file under packaging/ or site/capture/ uses a retired start-up variable"
+  pass "no file under packaging/ or site/ uses a retired start-up variable"
 fi
 
 # --- the X11/Wayland libraries match CI's Linux test job (1439, FR-007) -------------------------

@@ -23,10 +23,8 @@ fn put(dir: &Path, name: &str, text: &str) -> std::path::PathBuf {
 
 #[test]
 fn a_container_session_started_over_ssh_keeps_its_git_setup_without_a_data_dir_variable() {
-    assert!(
-        std::env::var_os("MICOLD_DATA_DIR").is_none(),
-        "the test is about a daemon that was passed no MICOLD_DATA_DIR"
-    );
+    // The test is about a daemon that was passed no `MICOLD_DATA_DIR`, whatever the shell exports.
+    std::env::remove_var("MICOLD_DATA_DIR");
     let dir = tempfile::tempdir().unwrap();
     let api_token = put(dir.path(), "github-token", "ghp_x\n");
     let client_token = put(dir.path(), "token", "t\n");

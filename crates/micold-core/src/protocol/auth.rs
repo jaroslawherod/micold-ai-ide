@@ -26,12 +26,13 @@ use uuid::Uuid;
 
 use super::hashing::hex;
 
-/// Where the daemon reads its token from inside the container. Matches the `Containerfile`'s
-/// `MICOLD_TOKEN_PATH`, and is the mount point the runtime attaches the host file to.
+/// Where the daemon reads its token from inside the container. The delivered
+/// configuration file names it (`auth.client_token_file`); it is the mount point the runtime
+/// attaches the host file to.
 pub const CONTAINER_TOKEN_PATH: &str = "/run/micold/token";
 
-/// The environment variable naming the token file, so the daemon does not hard-code the path and a
-/// host-process daemon can be handed one for testing.
+/// The retired variable that named the token file (#1537): `auth.client_token_file` replaces it, and
+/// only a `test-env` daemon build still reads it. The name stays for the warning and the tests.
 pub const TOKEN_PATH_ENV: &str = "MICOLD_TOKEN_PATH";
 
 /// A handshake token: 32 bytes of CSPRNG output, hex-encoded.
