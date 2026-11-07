@@ -35,7 +35,7 @@ use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keyma
 use crate::ui::material::{
     AttachmentChip, BusyIndicator, Button, CommandPalette, IconButton, MenuSelect, MenuSelectRow,
     PromptCard, QueueRow, Scrollable, Text, TextArea, TextField, Tooltip, TooltipPosition,
-    TypeRole, Typeahead, TypeaheadRow,
+    TypeRole, TypeaheadRow,
 };
 use iced::widget::text::Wrapping;
 use micold_core::session::SessionKind;
@@ -265,16 +265,17 @@ fn options_row<'a>(
     roles: Roles,
     permission: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    let mut options = row![model_control(state, session, roles)]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
+    let mut controls = vec![model_control(state, session, roles)];
     if state.offers_effort(session) {
-        options = options.push(effort_control(state, session, roles));
+        controls.push(effort_control(state, session, roles));
     }
-    if let Some(permission) = permission {
-        options = options.push(permission);
-    }
-    options.into()
+    controls.extend(permission);
+    // Wraps onto a further line when the window is too narrow for the three (spec: narrow window).
+    Row::with_children(controls)
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center)
+        .wrap()
+        .into()
 }
 
 /// The activity indicator's words and whether it turns (FR-010): its tooltip, and what a screen
@@ -314,7 +315,7 @@ pub fn options_tooltip(bypass: bool) -> &'static str {
     }
 }
 
-/// The settings icon at the input row's start: toggles the options row, tonal while it is open,
+/// The settings icon right of the text area, before Stop and Send (#1764): toggles the options row, tonal while it is open,
 /// with a warning marker while the mode is Bypass (feature 1703 FR-009, FR-010, FR-014).
 fn options_button<'a>(
     open: bool,
@@ -342,42 +343,76 @@ fn options_button<'a>(
 }
 
 /// The session's model as the CLI last reported it and whose choice it is, pressed to open the
-/// model picker in its place (#943 FR-013, FR-014).
+/// model list in its place (#943 FR-013, FR-014): a `MenuSelect` like the other two selectors, its
+/// list opening with a filter field (feature 1703 FR-015, FR-017).
 fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Element<'a, Message> {
+    let header = state.model_header(session);
+    let tooltip = format!("Model: {header}");
     let Some(picker) = state.composers.palette.picker(session) else {
-        return Button::text(state.model_header(session), roles)
-            .on_press(send(Msg::ModelPickerRequested(session)))
-            .into();
+        return MenuSelect::new(
+            "Model:",
+            Vec::new(),
+            false,
+            send(Msg::ModelPickerRequested(session)),
+            send(Msg::ModelPickerClosed(session)),
+            roles,
+        )
+        .title(Some(header))
+        .tooltip(tooltip)
+        .width(MODEL_PICKER_WIDTH)
+        .into();
     };
-    let rows = picker.rows();
-    let items: Vec<Option<usize>> = rows.iter().map(|r| r.item).collect();
-    let rows = rows
-        .into_iter()
-        .map(|r| row_with_details(r.label, Vec::new(), r.details))
-        .collect();
-    let typeahead = Typeahead::new(
+    let model_rows = picker.rows();
+    let items: Vec<Option<usize>> = model_rows.iter().map(|r| r.item).collect();
+    let enter = picker.enter_row();
+    let mut rows: Vec<MenuSelectRow<'a, Message>> = vec![MenuSelectRow::filter(
         picker.typed(),
-        rows,
+        MODEL_PLACEHOLDER,
         move |text| send(Msg::ModelPickerTyped { session, text }),
+        model_picker_field(session),
+        roles,
+    )];
+    if picker.items().is_empty() {
+        rows.push(MenuSelectRow::note(
+            crate::features::command_palette::MODEL_LIST_UNAVAILABLE,
+        ));
+    }
+    let stops = model_rows.len();
+    rows.extend(model_rows.into_iter().map(|r| {
+        let current = r
+            .item
+            .and_then(|at| picker.items().get(at))
+            .is_some_and(|i| picker.is_current(i));
+        MenuSelectRow::option_with_chips(
+            Text::new(r.label, TypeRole::Body, roles),
+            current,
+            send(Msg::ModelPicked {
+                session,
+                item: r.item,
+            }),
+            Vec::new(),
+            r.details,
+        )
+    }));
+    let pick = send(Msg::ModelPicked {
+        session,
+        item: enter.and_then(|row| items.get(row).copied().flatten()),
+    });
+    MenuSelect::new(
+        "Model:",
+        rows,
+        true,
+        send(Msg::ModelPickerClosed(session)),
+        send(Msg::ModelPickerClosed(session)),
         roles,
     )
-    .id(model_picker_field(session))
-    .placeholder(MODEL_PLACEHOLDER)
-    .empty_message(crate::features::command_palette::MODEL_LIST_UNAVAILABLE)
-    .open(true)
-    .highlighted(picker.enter_row())
-    .selected(picker.current_row())
+    .title(Some(header))
+    .tooltip(tooltip)
+    .keyboard(enter, stops, enter.is_some())
     .on_move(move |direction| send(Msg::ModelPickerMoved { session, direction }))
-    .on_pick(move |row| {
-        send(Msg::ModelPicked {
-            session,
-            item: items.get(row).copied().flatten(),
-        })
-    })
-    .on_dismiss(send(Msg::ModelPickerClosed(session)));
-    container(typeahead)
-        .width(Length::Fixed(MODEL_PICKER_WIDTH))
-        .into()
+    .on_pick(pick)
+    .width(MODEL_PICKER_WIDTH)
+    .into()
 }
 
 /// The session's effort choice beside the model, pressed to open its picker (#1554 FR-001–FR-003):
@@ -650,21 +685,23 @@ fn input_row<'a>(
             key_binding(session, press, caret, lines, selecting, phase, palette)
         })
         .track_focus(FieldId::Composer(session), None);
-    let mut controls = row![
-        options_button(composers.options_open, bypass, session, roles),
-        text_area_with_button(state, session, area.into(), lines, roles),
+    // #1764: activity indicator and attach lead the text area, settings sits after it.
+    let controls = row![
         activity_indicator(phase, waiting, roles),
+        // #1464 FR-006: **Add attachment**; disabled, not hidden, while the session cannot
+        // accept input or its picker is open, so the row does not shift.
+        attach_button(
+            roles,
+            composers
+                .can_attach(session)
+                .then(|| send(Msg::AttachRequested(session))),
+        ),
+        text_area_with_button(state, session, area.into(), lines, roles),
+        options_button(composers.options_open, bypass, session, roles),
     ]
     .spacing(spacing::SM)
     .align_y(Alignment::End);
-    // #1464 FR-006: **Add attachment**, before Stop and Send; disabled, not hidden, while the
-    // session cannot accept input or its picker is open, so the row does not shift.
-    controls = controls.push(attach_button(
-        roles,
-        composers
-            .can_attach(session)
-            .then(|| send(Msg::AttachRequested(session))),
-    ));
+    let mut controls = controls;
     if composers.offers_stop(session) {
         controls = controls
             .push(Button::outlined("Stop", roles).on_press(send(Msg::StopRequested(session))));

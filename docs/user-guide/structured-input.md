@@ -62,7 +62,7 @@ its end.
 
 ## The activity indicator
 
-An icon beside the message box shows what the session is doing: a spinning icon while Claude Code
+An icon at the left of the message box row (before the attach button) shows what the session is doing: a spinning icon while Claude Code
 works, a different icon while it waits for you (a question or a permission request), and a resting
 icon otherwise. Hover the icon to read the state ("Working", "Waiting for you", "Ready", "Not
 running"); no status text is shown in the row. **Stop session** and any refusal note stay visible
@@ -70,7 +70,7 @@ in the row.
 
 ## Session options
 
-The **Session options** button (a settings icon) at the start of the message box row shows or hides
+The **Session options** button (a settings icon) right of the message box, before **Stop** and **Send**, shows or hides
 a row holding the session's **Model**, **Effort** and **Permission** selectors. The permission
 selector is no longer in the message box row itself.
 
@@ -80,6 +80,15 @@ selector is no longer in the message box row itself.
   refused selector is visible.
 - While **Bypass permissions** is on, the settings icon carries a warning marker and its tooltip says so.
 - The button is reachable with Tab; **Space** or **Enter** toggles the row.
+
+### The selectors
+
+**Model**, **Effort** and **Permission** look and behave the same: a 32 px high box with a thin
+border, `Label: Value` inline and a chevron at the end, and the same hover, focus, pressed, open
+and disabled looks. A disabled selector says why in its tooltip. Each opens a floating list; the
+**Model** list starts with a **filter** field that has the keyboard as it opens. Type to narrow the
+models (case does not matter); a typed name that is no listed model is offered as **Use <name>**.
+The arrow keys move through the list, **Enter** takes the highlighted row and **Esc** closes it.
 
 ## Finding the shortcut
 

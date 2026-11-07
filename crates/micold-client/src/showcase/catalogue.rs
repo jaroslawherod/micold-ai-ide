@@ -405,6 +405,9 @@ pub const COMPONENTS: &[Entry] = &[
         variants: &[],
         density: &[],
         posed: &[
+            "selector, closed",
+            "selector, disabled",
+            "selector, open with a filter",
             "closed",
             "closed, a long title",
             "open, no pull requests shown",

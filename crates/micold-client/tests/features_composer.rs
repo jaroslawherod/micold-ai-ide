@@ -1503,3 +1503,88 @@ fn stop_session_and_the_refusal_note_stay_outside_the_collapsed_row() {
         "the note is the composer's own, shown whatever the row"
     );
 }
+
+// --- one selector style (feature 1703 US4, FR-017, FR-018) ---------------------------------------
+
+mod selectors {
+    use super::{session_of, window_with, Window};
+    use micold_client::features::command_palette::DEFAULT_MODEL;
+    use micold_client::features::permission_prompts::State as Prompts;
+    use micold_core::session::{PermissionMode, SessionId, SessionKind};
+    use micold_core::typeahead::Direction;
+
+    fn open_picker() -> (Window, SessionId) {
+        let session = session_of(SessionKind::Structured);
+        let s = session.id;
+        let mut w = window_with(vec![session]);
+        w.open_model_picker(s);
+        (w, s)
+    }
+
+    fn labels(w: &Window, s: SessionId) -> Vec<String> {
+        let picker = w.composers.palette.picker(s).expect("open");
+        picker.rows().into_iter().map(|r| r.label).collect()
+    }
+
+    #[test]
+    fn typing_in_the_filter_narrows_the_models_ignoring_case() {
+        let (mut w, s) = open_picker();
+        assert_eq!(labels(&w, s).len(), 4, "Default and the three shortcuts");
+        w.model_picker_typed(s, "OPU".into());
+        assert_eq!(
+            labels(&w, s),
+            ["opus", "Use OPU"],
+            "opus, and the typed name"
+        );
+        w.model_picker_typed(s, String::new());
+        assert_eq!(labels(&w, s)[0], DEFAULT_MODEL, "an empty filter lists all");
+        assert_eq!(labels(&w, s).len(), 4);
+    }
+
+    #[test]
+    fn enter_takes_the_typed_name_row_after_the_filtered_models() {
+        let (mut w, s) = open_picker();
+        w.model_picker_typed(s, "opu".into());
+        let picker = w.composers.palette.picker(s).expect("open");
+        assert_eq!(picker.enter_row(), Some(picker.rows().len() - 1));
+        assert_eq!(picker.rows().last().map(|r| r.item), Some(None));
+    }
+
+    #[test]
+    fn the_models_offered_and_the_current_mark_are_unchanged() {
+        let (w, s) = open_picker();
+        let picker = w.composers.palette.picker(s).expect("open");
+        assert_eq!(picker.items().len(), 4);
+        assert_eq!(picker.current_row(), Some(0), "Default is current");
+    }
+
+    #[test]
+    fn the_mode_list_opens_on_the_current_mode_steps_and_closes_on_a_pick() {
+        let s = SessionId::new();
+        let mut prompts = Prompts::default();
+        assert_eq!(prompts.mode_menu(s), None);
+        prompts.toggle_mode_menu(s, 1);
+        assert_eq!(prompts.mode_menu(s), Some(Some(1)));
+        prompts.step_mode_menu(s, Direction::Next, PermissionMode::ALL.len());
+        assert_eq!(prompts.mode_menu(s), Some(Some(2)));
+        prompts.close_mode_menu(s);
+        assert_eq!(prompts.mode_menu(s), None);
+        prompts.toggle_mode_menu(s, 0);
+        prompts.toggle_mode_menu(s, 0);
+        assert_eq!(prompts.mode_menu(s), None, "a second press closes it");
+    }
+
+    #[test]
+    fn the_list_is_dismissed_by_the_mode_state_not_left_stale_across_sessions() {
+        let (a, b) = (SessionId::new(), SessionId::new());
+        let mut prompts = Prompts::default();
+        prompts.toggle_mode_menu(a, 0);
+        assert_eq!(
+            prompts.mode_menu(b),
+            None,
+            "another session's list stays shut"
+        );
+        prompts.close_mode_menu(b);
+        assert_eq!(prompts.mode_menu(a), Some(Some(0)));
+    }
+}

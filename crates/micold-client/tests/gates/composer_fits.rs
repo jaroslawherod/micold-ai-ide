@@ -411,10 +411,9 @@ fn a_press_on_the_composer_takes_the_keyboard_from_the_pane() {
     );
     let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
-    // Inside the text area, which starts at the pane's left; #942's mode control sits between it
-    // and Send.
+    // Inside the text area, which starts right of the activity and attach icons (#1764).
     let at = iced::Point::new(
-        transcript.x + 100.0,
+        transcript.x + 200.0,
         send.origin.y + send.natural_height / 2.0,
     );
     let under = StateUnderTest::new(state.clone());
@@ -579,10 +578,9 @@ fn the_composer_keeps_the_keyboard_when_a_queue_row_appears_above_it() {
     report(&mut state, id, busy(InterruptAsk::None), false, 0);
     let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
-    // Inside the text area, which starts at the pane's left; #942's mode control sits between it
-    // and Send.
+    // Inside the text area, which starts right of the activity and attach icons (#1764).
     let at = iced::Point::new(
-        transcript.x + 100.0,
+        transcript.x + 200.0,
         send.origin.y + send.natural_height / 2.0,
     );
     let under = StateUnderTest::new(state.clone());
@@ -703,10 +701,12 @@ fn the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode() {
             in_mode(&mut state, id, mode);
             // Collapsed, the options row is not drawn (feature 1703 FR-008).
             let (collapsed, _) = paint(themed(state.clone(), scheme), id);
-            assert!(!collapsed.iter().any(|p| p.content == MODE_LABEL));
+            assert!(!collapsed
+                .iter()
+                .any(|p| p.content == format!("{MODE_LABEL}:")));
             state.composers.options_open = true;
             let (painted, transcript) = paint(themed(state, scheme), id);
-            under_the_transcript(&painted, transcript, MODE_LABEL);
+            under_the_transcript(&painted, transcript, &format!("{MODE_LABEL}:"));
             under_the_transcript(&painted, transcript, mode.label());
             let send = find(&painted, "Send");
             let shown = find(&painted, mode.label());
@@ -755,15 +755,21 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
     report(&mut state, id, TurnPhase::Idle, false, 0);
     in_mode(&mut state, id, PermissionMode::Default);
     state.composers.options_open = true;
+    // The list is state-driven (#1703 FR-017): the press only asks, so the state opens it.
+    state.permission_prompts.toggle_mode_menu(id, 0);
     let under = StateUnderTest::new(state);
 
     let mut renderer = lay::renderer();
     let (resting, boxes) =
         lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
-    let control = press_path(&resting, &boxes, MODE_LABEL);
+    let control = press_path(&resting, &boxes, &format!("{MODE_LABEL}:"));
 
     let mut renderer = lay::renderer();
-    let opened = lay::painted_text_pressing(lay::view_of(&under), &mut renderer, &control);
+    let opened = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW).0;
+    assert!(
+        opened.iter().any(|p| p.content == "\u{e316}"),
+        "an open selector draws its chevron pointing up (FR-016)"
+    );
     let rows: Vec<&Overflow> = PermissionMode::ALL
         .iter()
         .map(|mode| {

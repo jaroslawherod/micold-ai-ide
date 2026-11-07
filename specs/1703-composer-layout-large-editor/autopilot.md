@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M2 PR open (#1754), awaiting CI
-- **Next step**: orchestrator waits on CI and merges #1754, then M3
+- **Phase**: milestone M3 PR open
+- **Next step**: wait-merge M3 PR, then M4/close unit (T032 quickstart results)
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1705 | Design (spec, plan, tasks) | merged | eb1b62d9967f4d7ad7092c0dc75e6d3a1e7af621 |
 | #1717 | M1 large editor | merged | 509da759cc19a3ca5befaa90815f9475a7b32dcb |
-| #1754 | M2 icon activity indicator and options row | open | |
+| #1754 | M2 icon activity indicator and options row | merged | 7183a4cc4a7a859991e3091bd2652fd64c6e3787 |
+| #1770 | M3 one selector style + #1764 row order | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Large editor: chord/icon opens modal editor, Done/Cancel, shortcut listed | #1717 | merged |
-| M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | #1754 | in review |
-| M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | | pending |
+| M2 | T014–T025 | full | Icon activity indicator + settings-icon options row, persisted, auto-expand | #1754 | merged |
+| M3 | T026–T031 | full | One selector style (MenuSelect), model filter row | (see PR table) | PR open |
 
 Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs are one observable behaviour with no earlier deliverable. US2 and US3 are one milestone (M2, 12 tasks): US2 scenario 1 removes the permission selector from the input row and only US3's options row re-homes it (no half-wired UI). T032 (quickstart results) is for the close unit.
 
@@ -40,6 +41,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | D4 | spec | Persist expanded state | Yes, per window | agent-resolved (owner default) | spec.md#decisions |
 | D5 | spec | Bypass warning marker | On settings icon | agent-resolved (owner default) | spec.md#decisions |
 | D6 | spec | Large editor attachments | Text only | agent-resolved (owner default) | spec.md#decisions |
+| D7 | M3 | #1764 order of the swap (issue ambiguous) | Literal swap: input row [activity][attach][text area][settings][Stop][Send] | assumption (agent-resolved; user did not choose) | issue #1764; contracts/composer-layout.md |
 
 ## Review rounds
 
@@ -54,6 +56,10 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Review A (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CLEAN (2 MINOR declined: dropped-connection failures and an off-screen session's refusal do not expand the shared row; FR-012 covers refusals, row is window-level) |
 | Review B (M2) | 1 | dd6f1b38db22eedffbb16259624b62dd6acc2e74:92fe173006dfdeb7e92b7dfafac2431b3bc32fdf | CHANGES: F1 MAJOR (auto-expand persist not tested via update()/daemon path: fixed, tests added), F2 MAJOR (accessible label: declined, see below), 2 MINOR fixed; Verify: core ok, client main 64 passed |
 
+| Review A (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (model-list-unavailable note dropped: fixed), 2 MINOR declined (below) |
+| Review B (M3, #1764 round) | 1 | HEAD at swap | CHANGES: F1 MAJOR (declined/carried, see Declined), F2 F3 MINOR fixed |
+| Review B (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (open chevron: fixed, MoveUp glyph), F2/F3 MAJOR test gaps (partly fixed: chevron and session isolation tests; rest declined below); Verify: anatomy 5 passed, composer tests passed |
+
 ## Declined review findings
 
 - M2 Review B F2 (accessible label): the toolkit has no accessible-name hook in this path (no a11y API in the iced widgets used); the tooltip carries the state words per state and `the_activity_state_is_an_icon_with_its_words_in_the_tooltip` pins them. FR-007 is met to the extent the toolkit allows.
@@ -65,6 +71,10 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | M1 | A | F1 forgotten session recreates composer on Done | Draft is absent for a never-typed composer too, so skipping would break FR-002 Done; minor, left |
 | M1 | A | F2 close_topmost bypasses focus return | Minor; Esc/scrim/Done paths restore focus |
 | M1 | B | F1 no tdd/cycle-log.md | The design PR set no tdd plan (no tdd/ dir); tests exist and pass, red-first evidence not retrofittable; left for the close unit's TDD verify |
+| M3 | A | F2 current_row unused in production, F3 mode menu state duplicates picker logic | Minor; current_row is used by tests, mode menu keyed state is small |
+| M3 | B (#1764) | F1 options-row narrow layout (pre-fix FAIL in visual-pass/m3-notes.md) | Wrap fix landed after that capture; the #1764 pass re-captured the input row at ~620 px (PASS), not the options row at 420/520 px; carried to the close unit (T032) |
+| M3 | B (#1764) | F4 duplicate m3-*.png | Minor; left |
+| M3 | B | F2/F3 more anatomy/FR-018 tests (focus ring, ellipsis, tooltip, effort unchanged) | Geometry, states, filter and mode-menu state are covered; effort/permission behaviour is untouched code paths and the existing composer suites still pass; left |
 
 ## Handover
 
@@ -72,7 +82,7 @@ None.
 
 ## Open escalation
 
-None.
+M3 full gate: all client/material tests green; 3 micold-daemon tests fail in code this branch does not touch (ai_cli_config a_configured_model_is_claude_codes_default_launch_model, mcp a_hangup_after_the_accept_still_runs_the_removal, structured_permission two_sessions_waiting_are_marked_separately); CI on main is red too (fix-1615). Recording the tree for a CI-validated push was denied by the permission classifier. Need: user permission to push on CI, or wait for main to go green. Then push the branch and open the PR (title: feat(1703): one selector style for model, effort and permission (#1703); body ends Refs #1703). Narrow-window wrap fix is not re-captured visually.
 
 ## Follow-ups not done
 

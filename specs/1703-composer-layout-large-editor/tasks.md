@@ -67,7 +67,7 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 - [x] T021 [US3] Add `composer_options_open: bool` (`#[serde(default)]`, default false, serde mirror; `settings_version` unchanged) in `crates/micold-core/src/settings.rs`
 - [x] T022 [US3] `persist_composer_options_open` and the form-save exclusion in `crates/micold-client/src/shell/persist.rs`; read it into core state at boot in `crates/micold-client/src/shell/startup.rs`
 - [x] T023 [US3] `options_open` flag, `OptionsToggled`, auto-expand at the model/effort/permission refusal notice sites in `crates/micold-client/src/features/composer.rs`; call `persist_composer_options_open` on every change in `crates/micold-client/src/shell/composer.rs`
-- [x] T024 [US3] Layout in `crates/micold-client/src/ui/composer.rs`: settings `IconButton` at the input row start, options row (Model, Effort, Permission) when open, Bypass warning marker; `crates/micold-client/src/ui/mode_control.rs` `seams` drops the permission control from the input row (FR-008)
+- [x] T024 [US3] Layout in `crates/micold-client/src/ui/composer.rs`: settings `IconButton` after the text area (#1764: swapped with the indicator and attach), options row (Model, Effort, Permission) when open, Bypass warning marker; `crates/micold-client/src/ui/mode_control.rs` `seams` drops the permission control from the input row (FR-008)
 - [x] T025 [P] [US3] User guide: options row, settings icon, persistence, auto-expand, Bypass marker in `docs/user-guide/structured-input.md`
 
 ## Phase 6: User Story 4 - One consistent selector style (P2)
@@ -75,12 +75,12 @@ None. The persisted flag belongs to US3; the editor needs no shared plumbing.
 **Goal**: model, effort, permission share one trigger style and state treatments; model list opens the floating list with a filter first row.
 **Independent test**: hover/focus/press/open/disable each selector: identical treatments (quickstart §B 4).
 
-- [ ] T026 [P] [US4] Geometry gate test `crates/micold-client/src/ui/material/menu_select_anatomy.rs` (new, modelled on `select_anatomy.rs`): 32 dp height, 8 dp radius, XS/SM padding, 1 dp outline-variant, min 140 dp, five states, disabled tooltip (FR-015, FR-016, SC-004)
-- [ ] T027 [P] [US4] Tests that `MenuSelectRow::filter` filters the list by typed text, and that model, effort and permission choices, change behaviour and disabled rules are unchanged (FR-017, FR-018) in `crates/micold-client/tests/features_composer.rs`
-- [ ] T028 [US4] Extend `crates/micold-client/src/ui/material/menu_select.rs`: shared trigger style, disabled state with tooltip, `MenuSelectRow::filter` first row (builder API kept)
-- [ ] T029 [US4] Migrate model (`Typeahead`/`Button::text`) and permission (`Select`) to `MenuSelect` in `crates/micold-client/src/ui/composer.rs` (`model_control`, `effort_control`) and `crates/micold-client/src/ui/mode_control.rs`; `Select` stays for other callers
-- [ ] T030 [P] [US4] Showcase `MenuSelect` disabled and filter variants in `crates/micold-client/src/showcase/sections/controls.rs` (and `catalogue.rs` if an entry is needed)
-- [ ] T031 [P] [US4] User guide: selector look and model filter in `docs/user-guide/structured-input.md`
+- [x] T026 [P] [US4] Geometry gate test `crates/micold-client/src/ui/material/menu_select_anatomy.rs` (new, modelled on `select_anatomy.rs`): 32 dp height, 8 dp radius, XS/SM padding, 1 dp outline-variant, min 140 dp, five states, disabled tooltip (FR-015, FR-016, SC-004)
+- [x] T027 [P] [US4] Tests that `MenuSelectRow::filter` filters the list by typed text, and that model, effort and permission choices, change behaviour and disabled rules are unchanged (FR-017, FR-018) in `crates/micold-client/tests/features_composer.rs`
+- [x] T028 [US4] Extend `crates/micold-client/src/ui/material/menu_select.rs`: shared trigger style, disabled state with tooltip, `MenuSelectRow::filter` first row (builder API kept)
+- [x] T029 [US4] Migrate model (`Typeahead`/`Button::text`) and permission (`Select`) to `MenuSelect` in `crates/micold-client/src/ui/composer.rs` (`model_control`, `effort_control`) and `crates/micold-client/src/ui/mode_control.rs`; `Select` stays for other callers
+- [x] T030 [P] [US4] Showcase `MenuSelect` disabled and filter variants in `crates/micold-client/src/showcase/sections/controls.rs` (and `catalogue.rs` if an entry is needed)
+- [x] T031 [P] [US4] User guide: selector look and model filter in `docs/user-guide/structured-input.md`
 
 ## Polish (close unit, no code)
 

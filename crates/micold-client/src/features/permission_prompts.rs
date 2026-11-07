@@ -14,6 +14,7 @@ use micold_core::protocol::messages::{
 use micold_core::session::{PermissionMode, SessionId};
 use micold_core::structured::permission::request::RequestKind;
 use micold_core::structured::transcript::{EntryKey, Transcript};
+use micold_core::typeahead::{move_highlight, Direction};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::app::Message;
@@ -115,6 +116,19 @@ pub enum Msg {
         session: SessionId,
         mode: PermissionMode,
     },
+    /// The mode control's trigger was pressed: its list opens, or closes (feature 1703 FR-017).
+    ModeMenuToggled {
+        session: SessionId,
+        /// The stop of the session's current mode, where the keyboard starts.
+        current: usize,
+    },
+    /// An arrow key moved the highlight in the mode control's list.
+    ModeMenuMoved {
+        session: SessionId,
+        direction: Direction,
+    },
+    /// The mode control's list was dismissed (Escape, Tab, a press outside it).
+    ModeMenuClosed(SessionId),
     /// The Bypass confirmation was accepted.
     ModeConfirmed,
     /// The Bypass confirmation was dismissed.
@@ -288,6 +302,8 @@ pub struct State {
     /// The session whose mode change to Bypass awaits its confirmation (FR-017). Its presence is
     /// the confirmation dialog being shown.
     mode_confirmation: Option<SessionId>,
+    /// The sessions whose mode control's list is open, each with the stop the keyboard is on.
+    mode_menu: HashMap<SessionId, Option<usize>>,
 }
 
 impl State {
@@ -539,6 +555,31 @@ impl State {
         Some(mode)
     }
 
+    /// The stop the keyboard is on in `session`'s open mode list: `None` when the list is closed,
+    /// `Some(None)` when it is open with no stop highlighted.
+    pub fn mode_menu(&self, session: SessionId) -> Option<Option<usize>> {
+        self.mode_menu.get(&session).copied()
+    }
+
+    /// Open `session`'s mode list with the keyboard on the current mode's stop, or close it.
+    pub fn toggle_mode_menu(&mut self, session: SessionId, current: usize) {
+        if self.mode_menu.remove(&session).is_none() {
+            self.mode_menu.insert(session, Some(current));
+        }
+    }
+
+    /// An arrow key in `session`'s open mode list, which has `stops` stops.
+    pub fn step_mode_menu(&mut self, session: SessionId, direction: Direction, stops: usize) {
+        if let Some(at) = self.mode_menu.get_mut(&session) {
+            *at = move_highlight(*at, direction, stops);
+        }
+    }
+
+    /// Close `session`'s mode list.
+    pub fn close_mode_menu(&mut self, session: SessionId) {
+        self.mode_menu.remove(&session);
+    }
+
     /// The session whose Bypass confirmation is shown.
     pub fn mode_confirmation(&self) -> Option<SessionId> {
         self.mode_confirmation
@@ -600,6 +641,7 @@ impl State {
     /// Forget `session`'s prompts (the session was closed or removed).
     pub fn forget(&mut self, session: SessionId) {
         self.sessions.remove(&session);
+        self.mode_menu.remove(&session);
         if self.mode_confirmation == Some(session) {
             self.mode_confirmation = None;
         }

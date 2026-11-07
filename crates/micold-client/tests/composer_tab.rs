@@ -215,6 +215,22 @@ fn tab_released() -> Event {
     })
 }
 
+/// The centre of the lowest `glyph` painted: the composer's, below the window chrome's.
+fn lowest_glyph(state: &State, glyph: &str) -> Point {
+    let under = StateUnderTest::new(state.clone());
+    let mut renderer = lay::renderer();
+    let (painted, _) = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW);
+    let text = painted
+        .iter()
+        .filter(|p| p.content == glyph)
+        .max_by(|a, b| a.origin.y.total_cmp(&b.origin.y))
+        .unwrap_or_else(|| panic!("`{glyph}` is drawn"));
+    Point::new(
+        text.origin.x + text.natural_width.min(text.allowed_width) / 2.0,
+        text.origin.y + 4.0,
+    )
+}
+
 /// Where **Send**, **Send queued** and the text area are, in the crowded pose.
 fn places(state: &State) -> (Point, Point, Point) {
     let under = StateUnderTest::new(state.clone());
@@ -249,11 +265,12 @@ fn tab_from_the_text_area_lands_on_send_and_the_window_keeps_the_keyboard() {
         mounted.operate(Box::new(focusable::focus_next::<()>()));
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
-        let attach = painted_at(&StateUnderTest::new(state.clone()), "\u{e226}");
+        // #1764: Add attachment now leads the text area, so Tab goes on to the settings icon.
+        let settings = lowest_glyph(&state, "\u{e8b8}");
         let at = mounted.focused().expect("Tab lands somewhere");
         assert!(
-            at.contains(attach),
-            "Tab lands on Add attachment first at {attach:?}: {at:?}"
+            at.contains(settings),
+            "Tab lands on the settings icon first at {settings:?}: {at:?}"
         );
         mounted.event(&tab_released());
         mounted.operate(Box::new(focusable::focus_next::<()>()));
@@ -373,6 +390,24 @@ fn the_options_row_holds_the_selectors_only_while_open() {
     let (model, effort) = (at(&model), at("ffort"));
     assert!(model.x < effort.x, "Model before Effort");
     assert!((model.y - effort.y).abs() < 4.0, "one row");
+}
+
+/// #1764: the input row reads [activity][attach][text area][settings][Stop][Send]: the activity
+/// and attach icons lead, the settings icon sits right of the text area, just before Send.
+#[test]
+fn the_input_row_puts_activity_and_attach_before_the_text_and_settings_after() {
+    let (state, _) = crowded();
+    let settings = lowest_glyph(&state, &Icon::Settings.glyph().to_string());
+    let attach = lowest_glyph(&state, &Icon::Attach.glyph().to_string());
+    let activity = lowest_glyph(&state, &Icon::ActivityEnded.glyph().to_string());
+    let send = painted_at(&StateUnderTest::new(state.clone()), "Send");
+    assert!(activity.x < attach.x, "activity before attach");
+    assert!(
+        settings.x - attach.x > 400.0,
+        "the text area lies between attach and settings"
+    );
+    assert!(settings.x < send.x, "settings before Send");
+    assert!(send.x - settings.x < 120.0, "settings next to the buttons");
 }
 
 fn crowded_id(state: &State) -> SessionId {
