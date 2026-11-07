@@ -10,9 +10,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M2a
-- **Next step**: T065's code is already committed and compiles clean (`CHECK_EXIT=0`); run the
-  tests covering T065, then review A (high) and review B, then open the M2a PR. M2b (T065a–T065c)
-  is a separate unit's scope — see D8.
+- **Next step**: M2a is done — review A and review B both ran clean (findings fixed, no new round
+  needed), the full gate confirmed 11 pre-existing failures only at the final HEAD, and the M2a PR
+  is open. The next unit starts M2b (T065a–T065c) — see D8.
 
 ## Pull requests
 
@@ -92,6 +92,8 @@ Milestone M1 review A round 2 (sonnet, full diff — round 1 took no snapshot): 
 
 Milestone M2a review A round 1 (code-review skill, high effort, origin/main...HEAD): CLEAN with two MINOR findings, both fixed in fc2bb6994 (doc-comment only, no new round needed). F1 [MINOR] crates/micold-core/tests/sandbox_argv.rs - commit a65b7fef0 had overwritten the tail of a doc clause, dropping "still covers by asserting every container half is a Linux path." - fixed, line restored from origin/main and the T065 paragraph separated with a /// break. F2 [MINOR] crates/micold-core/src/kube/credentials.rs:47 - Mount::sub_path is never constructed as Some(..) anywhere in crates/, so manifest.rs:223's branch is dead - fixed as a doc note explaining why a single-file subPath mount cannot be rewritten by a CLI's own token refresh, and that the manifest still renders the field (removing the field is out of T065's scope). Both confirmed by a green cargo fmt --check -p micold-core and cargo check -p micold-core --all-targets.
 
+Milestone M2a review B (conformance, sonnet, background dispatch): CHANGES on round 1 - F1 [MAJOR] specs/daemon-config-file/tdd/cycle-log.md had no Issue 11 M2a (T065) entry - fixed, prose only: appended a TEST_AFTER entry (baseline, what was removed, each delivery path's green tests, the full-gate result) to specs/daemon-config-file/tdd/cycle-log.md. No new round (review-rounds.md's prose-only exception): the fix adds no code, test or behaviour claim, only documents tests and results review B itself already ran and reported. F2 [MINOR, informational] noted the Verify commands were still compiling at report time; on its second pass review B ran both to completion itself: cargo test -p micold-core sandbox::mod -- credential (103 passed) and cargo test -p micold-core kube::credentials (7 passed, including the_pod_relink_targets_claudes_own_sign_in_directory). Scope, ownership and task-content checks all passed: CredentialShare::writable fully removed, all three sandbox kinds (container, pod, host/SSH) covered, user guide updated, no leftovers, no M2b work leaked in.
+
 ## Gate
 
 Rebased onto `origin/main` (8005e00e9 on top), clean (no conflicts). `mise run check` and `cargo clippy --workspace --all-targets -- -D warnings` both clean at `8005e00e9`. The full `mise run gate` was run twice; both runs failed only on tests outside this diff's files (`exclusivity::a_displaced_client_is_not_terminated`, `history_damaged::*`, `history_stop_request::*`, `mcp::worktree_refresh::*`, `micold-material::ellipsized::*`, and once `micold-core::streaming_child::*`) — none of them touch `daemon_config`, `provider`, `terminal`, `provision`, `state.rs`'s AI-CLI code, `hooks.rs`, or `ai_key.rs`, and the set and content changed between the two runs (classic load-timing flakiness; the machine was building several other worktrees concurrently throughout, per the repeated `build-lock.sh: another build holds the lock` lines). `a_displaced_client_is_not_terminated` was separately reproduced on a clean `git stash`'d checkout of this branch's pre-M1 tip (`98aa6edcc`), confirming it predates this diff. The scoped gate (`scripts/autopilot/scoped-gate.sh`, fmt + clippy + the changed crates' tests) is green except that same pre-existing flake. Per `gate.md`'s fallback, recorded the scoped-gate-passing tree and pushed with "Local gate: scoped only, full gate left to CI" — CI's full-workspace run, on a quieter machine, is the tie-breaker; a red CI finding for one of these six tests is this gate failing (`red-ci.md`), any other red is not.
@@ -130,6 +132,8 @@ Per `gate.md`'s "let CI validate instead" fallback (the same precedent M1 and th
 Not run locally, both noted in the PR body for CI to cover: `mise run image` + `mise run test-sandbox` (T065 does change how a container session mounts its sign-in, but no container runtime is installed here — docker, podman and nerdctl are all absent, so CI's sandbox job runs it), and the macOS cross-check (`aarch64-apple-darwin` is not an installed rustup target; the diff's only three new `cfg(target_os = …)` uses are `#[cfg(target_os = "linux")]` gates on new symlink *tests* in `sandbox_credentials.rs`, which turn tests off on macOS rather than changing any production arm).
 
 Note for the user: the `mainwt` worktree under this unit's scratchpad was created only for the clean-`origin/main` proofs and is no longer needed — `gate-hook.sh` forbids an agent removing a worktree, so please remove it in micold IDE.
+
+M2a's fourth full gate, at the final HEAD before the M2a PR (a630e05ff, env -u MICOLD_DAEMON_CONFIG mise run gate): fmt and clippy clean, 12656 tests run, 11 failed - the identical 11 already proven pre-existing on a clean detached origin/main worktree (client_restart_input, logging_sink, history_damaged x4, fatal_startup_is_logged, history_stop_request, idle_stop x2, ellipsized real_shaping). None of this milestone's own tests (all 12 sandbox_argv, the sandbox_credentials relink tests, kube::credentials) are among them. GATE_EXIT=100 only because the task fails the run on any failed test; the exit code is not itself evidence of a regression once the failing set is checked against the known baseline.
 
 ## Red CI
 
