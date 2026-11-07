@@ -22,7 +22,6 @@ use micold_core::structured::model::{ModelChoice, ModelName, MODEL_SHORTCUTS};
 use micold_core::structured::{
     parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
 };
-use micold_core::typeahead::Direction;
 
 fn press(named: NamedKey) -> KeyInput {
     KeyInput {
