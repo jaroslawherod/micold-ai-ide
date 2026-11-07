@@ -151,7 +151,7 @@ pub struct DaemonState {
     /// The shared secret this daemon requires of a client, if it was started with one (feature
     /// 027, research R1).
     ///
-    /// Set once at startup from the file named by `MICOLD_TOKEN_PATH`, which the container runtime
+    /// Set once at startup from the file `auth.client_token_file` names, which the container runtime
     /// bind-mounts read-only. **Absent for the host-process placement**, whose `0700`-guarded
     /// socket already proves the caller is the user — requiring a token there would break every
     /// existing installation and protect nothing that is not already protected.

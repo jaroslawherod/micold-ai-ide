@@ -296,7 +296,7 @@ from `/run/micold/secrets`. The application writes the file before it creates th
 the container mounts both folders **read-only**: a session runs as the daemon's user but cannot
 rewrite either. The same file is read whether the container is started when the application opens
 or the daemon is started over SSH, and no `MICOLD_*` variable is set on the container (`podman
-inspect` shows none). The old start-up variables are ignored, with one warning in the daemon's log naming the key that replaces each: `MICOLD_HOME` is `daemon.home`, `MICOLD_IMAGE_REFERENCE` is `daemon.image`, `MICOLD_LISTEN_ADDR` is `listen.tcp`, `MICOLD_IDLE_STOP` is `daemon.idle_stop`, `MICOLD_LOG` is `daemon.log` and `MICOLD_REPOS_ROOT` is `storage.clone_root`. The folders are on your computer in `<data folder>.delivery/config` and
+inspect` shows none). The old start-up variables are ignored, with one warning in the daemon's log naming the key that replaces each: `MICOLD_HOME` is `daemon.home`, `MICOLD_IMAGE_REFERENCE` is `daemon.image`, `MICOLD_LISTEN_ADDR` is `listen.tcp`, `MICOLD_IDLE_STOP` is `daemon.idle_stop`, `MICOLD_LOG` is `daemon.log`, `MICOLD_REPOS_ROOT` is `storage.clone_root`, `MICOLD_DATA_DIR` is `daemon.data_dir` and `MICOLD_TOKEN_PATH` is `auth.client_token_file`. The image sets none of them. The folders are on your computer in `<data folder>.delivery/config` and
 `<data folder>.delivery/secrets`, beside the daemon's data folder.
 
 The only variables the container still gets are `HOME`, `TZ` and git's credential settings. Sessions

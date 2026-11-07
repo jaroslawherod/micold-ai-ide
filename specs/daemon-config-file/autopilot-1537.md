@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1537
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
-- **Phase**: milestone M2 (blocked)
-- **Next step**: M2 is blocked on #1530 M2 (PR #1713, open, `build + test (windows-latest)` red). Resume once #1713 merges, then dispatch the M2 milestone unit
+- **Phase**: milestone M2 (gate and review)
+- **Next step**: M2 implemented (T084b, T085b, T086a, T086); full gate, reviews A and B, `mise run image` + `mise run test-sandbox`, then open the PR. #1530 M2 (PR #1713) merged; M1 merge SHA 04743add7b0041fe5e6b8e8652071b05eeebab66
 
 ## Pull requests
 

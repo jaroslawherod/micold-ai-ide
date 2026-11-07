@@ -444,8 +444,8 @@ fn wait_until_absent(program: &str, list: &[&str], key: &str, name: &str) {
 /// contract names them, the SSH port published on loopback. The daemon is not started here: the
 /// first [`wait_for_accept`] provisions it over SSH, as the client does.
 ///
-/// Mounts the *state* directory, one level below the data home — the image sets
-/// `MICOLD_DATA_DIR=/var/lib/micold-ai-ide`, so that is where the daemon reads its catalogue.
+/// Mounts the *state* directory, one level below the data home — the delivered file sets
+/// `daemon.data_dir = "/var/lib/micold-ai-ide"`, so that is where the daemon reads its catalogue.
 /// Mounting the data home itself gives the daemon an empty catalogue, and every session start then
 /// fails with `no such session in the catalog` while the container looks perfectly healthy.
 pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {

@@ -29,7 +29,7 @@ pub struct ConfiguredProject {
 pub struct DaemonSettings {
     /// `daemon.kind`; `None` when the daemon runs without a file.
     pub kind: Option<Kind>,
-    /// `daemon.data_dir` / `MICOLD_DATA_DIR`.
+    /// `daemon.data_dir` (the retired `MICOLD_DATA_DIR` fills in only in a `test-env` build).
     pub data_dir: Option<PathBuf>,
     /// `daemon.home`.
     pub home: Option<PathBuf>,
@@ -44,7 +44,7 @@ pub struct DaemonSettings {
     pub log: Option<String>,
     /// `listen.tcp`.
     pub listen_tcp: Option<String>,
-    /// `auth.client_token_file` / `MICOLD_TOKEN_PATH`.
+    /// `auth.client_token_file` (the retired `MICOLD_TOKEN_PATH` fills in only in a `test-env` build).
     pub token_file: Option<PathBuf>,
     /// `storage.clone_root`.
     pub clone_root: Option<PathBuf>,

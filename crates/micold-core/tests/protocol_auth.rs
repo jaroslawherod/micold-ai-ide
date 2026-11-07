@@ -161,9 +161,17 @@ fn the_container_token_path_matches_what_the_image_declares() {
         "/../../packaging/sandbox/Containerfile"
     ))
     .expect("read the Containerfile");
+    // The path is the mount point the delivered file names (`auth.client_token_file`); the image
+    // no longer sets `MICOLD_TOKEN_PATH` (#1537).
     assert!(
-        containerfile.contains(&format!("{TOKEN_PATH_ENV}={CONTAINER_TOKEN_PATH}")),
-        "the image must set {TOKEN_PATH_ENV} to {CONTAINER_TOKEN_PATH}"
+        !containerfile
+            .lines()
+            .any(|l| !l.trim_start().starts_with('#') && l.contains(TOKEN_PATH_ENV)),
+        "the image must not set {TOKEN_PATH_ENV}"
+    );
+    assert!(
+        containerfile.contains(CONTAINER_TOKEN_PATH),
+        "the image documents the mount point {CONTAINER_TOKEN_PATH}"
     );
 }
 
@@ -236,7 +244,7 @@ fn the_token_survives_no_debug_rendering_on_the_handshake_path() {
 /// P-3: the token is not in the container's argument vector, which `docker inspect` shows anyone.
 ///
 /// It reaches the container as a **file**: a `0600` host file bind-mounted at
-/// `CONTAINER_TOKEN_PATH`, named to the daemon by `MICOLD_TOKEN_PATH`. So the argv should contain
+/// `CONTAINER_TOKEN_PATH`, named to the daemon by `auth.client_token_file`. So the argv should contain
 /// the mount and the path and never the secret. Asserted by generating a real argv from a spec
 /// whose secret mount is a token file, and grepping every argument.
 #[test]

@@ -2666,6 +2666,7 @@ dependencies = [
  "futures-util",
  "interprocess",
  "libc",
+ "micold-core",
  "postcard",
  "pulldown-cmark",
  "serde",

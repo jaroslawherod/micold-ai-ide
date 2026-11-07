@@ -13,10 +13,9 @@ pub fn project_dirs() -> Option<ProjectDirs> {
     ProjectDirs::from("", "", APP_ID)
 }
 
-/// The variable that points the daemon at its state directory directly (1286). A container image
-/// sets this instead of `XDG_DATA_HOME`, which every process in the container would inherit and
-/// which names a directory the session user cannot write (`mise` and other XDG-aware tools then
-/// fail under `/var/lib`).
+/// The retired variable that pointed the daemon at its state directory (1286, #1537): `daemon.data_dir`
+/// replaces it, and only a `test-env` build still reads it. The name stays for the warning and for
+/// the tests that unset it.
 pub const DATA_DIR_ENV: &str = "MICOLD_DATA_DIR";
 
 /// The data directory the daemon's configuration file names (`daemon.data_dir`, #1524): it wins
@@ -29,14 +28,25 @@ pub fn set_data_dir(dir: PathBuf) {
 }
 
 fn data_dir_override() -> Option<PathBuf> {
-    CONFIGURED_DATA_DIR
-        .get()
-        .cloned()
-        .or_else(|| override_from(std::env::var_os(DATA_DIR_ENV)))
+    CONFIGURED_DATA_DIR.get().cloned().or_else(|| {
+        data_dir_from_env(
+            std::env::var_os(DATA_DIR_ENV),
+            cfg!(any(test, feature = "test-env")),
+        )
+    })
 }
 
-fn override_from(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
-    value.filter(|value| !value.is_empty()).map(PathBuf::from)
+/// [`DATA_DIR_ENV`]'s `raw` value as the override it yields. The variable is retired (#1537): it
+/// counts only in a `test_env_enabled` build (the `test-env` feature), and a release build ignores
+/// it; the daemon's own start-up logs the warning naming `daemon.data_dir`.
+pub fn data_dir_from_env(
+    raw: Option<std::ffi::OsString>,
+    test_env_enabled: bool,
+) -> Option<PathBuf> {
+    crate::retired_env::resolve(DATA_DIR_ENV, raw, test_env_enabled)
+        .value
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
 }
 
 /// The per-user data directory (XDG / Application Support / roaming AppData), or [`DATA_DIR_ENV`].
@@ -80,11 +90,11 @@ mod tests {
     #[test]
     fn the_data_dir_variable_names_the_directory_and_empty_means_unset() {
         assert_eq!(
-            override_from(Some("/var/lib/micold-ai-ide".into())),
+            data_dir_from_env(Some("/var/lib/micold-ai-ide".into()), true),
             Some(PathBuf::from("/var/lib/micold-ai-ide"))
         );
-        assert_eq!(override_from(Some("".into())), None);
-        assert_eq!(override_from(None), None);
+        assert_eq!(data_dir_from_env(Some("".into()), true), None);
+        assert_eq!(data_dir_from_env(None, true), None);
     }
 
     #[test]
