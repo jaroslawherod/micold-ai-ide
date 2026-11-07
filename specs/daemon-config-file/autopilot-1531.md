@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: M1 in progress (implementation done, tests green; gate/review/PR not yet run — see Handover)
-- **Next step**: M1 — scoped gate + review A, then review B, then full gate and PR (`tasks/gate.md`, `tasks/pr.md`). See *Handover*.
+- **Phase**: M1 done, PR #1763 open, awaiting CI
+- **Next step**: orchestrator waits on CI for PR #1763 and merges. If CI's full `mise run gate` is red for a reason unrelated to this diff (see *Handover*), treat it as `tasks/red-ci.md`.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
+| #1763 | M1 (gh shim) | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | — | implemented, unreviewed |
+| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | PR open, awaiting CI |
 
 ## Decisions
 
@@ -51,12 +52,60 @@ None.
 
 ## Handover
 
-M1 (T055–T057, T095, T058) is implemented, committed (`34eb48cd9`, `d9ad46edb`, `85fb4e24d`) and
-Review A (code-review, high) is done and acted on. Not yet through the full gate, review B, or a
-PR. All implementation and fix commits are on this branch already — nothing to commit next except
-the full gate's own fallout, if any.
+M1 (T055–T057, T095, T058) is done: implemented, reviewed (A and B both `CLEAN`), locally gated as
+far as this box's shared `target-shared/` build cache allowed, pushed, and PR #1763 is open
+against `main`. Nothing further for a human or another unit to do on this milestone unless CI
+turns up something real; the orchestrator now waits on CI and merges.
 
-**Done, this unit (part 3):**
+**Done, this unit (part 4):**
+- Moved the prior *Open escalation* (authorise a part 4 to finish M1) into *Decisions* as D7,
+  `decided by user`, per this unit's dispatch instruction. D5 and D6 left in place.
+- Confirmed `scripts/build-lock.sh cargo test -p micold-daemon --lib` green (`TEST_EXIT=0`): part
+  3's `85fb4e24d` fixes (the six `state.rs` tests' new `gh_shim_bin_dir()`/`without_gh_shim_dir()`
+  helpers and the inline `gh_shim` test) hold.
+- Dispatched review B (conformance rubric, `autopilot-reviewer`, `model: sonnet`) in parallel with
+  the lib-test hold. Snapshot `2b8970bebd0d2b9a7bf25daaea36513ffff7a2e8:faaff33f799022bf55b8813e60b6cf3fc140be5e`.
+  Verdict `CLEAN`: one MINOR (`gh_shim.rs::resolve()` duplicates `git_credential.rs::answer_from_config`'s
+  config-load/cache-path/`credential_config::answer` sequence); no fix needed per
+  `tasks/review-rounds.md` ("CLEAN, or only MINORs: the review is done"). The reviewer's own
+  `--test gh_shim` run stayed queued behind another worktree's build lock for ~8 minutes and it
+  gave its verdict from code reading alone, per its own instructions — covered separately by the
+  `--lib` run above and by part 1–3's prior `--test gh_shim` passes.
+- Ran `mise run gate` (full). First attempt: fmt failed — a `state.rs` line part 3 wrote
+  (`raw.strip_prefix(prefix.as_str()).map_or(raw.clone(), str::to_string)`) was one rustfmt
+  wrap short of the repo's style. Ran `cargo fmt -p micold-daemon`; the one-line diff it produced
+  (wrapping that call onto two lines) matched fmt's own complaint exactly. Committed as `bd84ae5fd`
+  together with this ledger update.
+- Re-ran `mise run gate` (full) twice more after the fmt fix. Both runs got past fmt and clippy
+  (core, then workspace — no warnings) and failed identically at the same step: `cargo test
+  --no-run --workspace` panics compiling `micold-core`'s build script —
+  `crates/micold-core/build.rs:38:53: read routing.rs: Os { code: 2, kind: NotFound }` — from the
+  *cached* `target-shared/debug/build/micold-core-89333915f6334fd8/build-script-build` binary.
+  This binary's own embedded `cargo:rerun-if-changed` output still lists
+  `src/protocol/routing.rs`, a file this branch's current `build.rs` does not reference at all (it
+  only hashes `messages.rs`/`grid.rs`/`envelope.rs`) — the cached executable belongs to an older
+  revision of `build.rs` from elsewhere in the shared `target-shared/` dir and cargo's fingerprint
+  is treating it as still fresh for this worktree. Reproduced identically three times (two full-gate
+  runs, one scoped-gate run), always before any of this PR's own crates (`micold-daemon`,
+  `micold-core`'s changed files) got a chance to compile or test — not a regression from this
+  milestone's diff. Did not touch the shared `target-shared/` cache to work around it (per
+  `CLAUDE.md`: never point `CARGO_TARGET_DIR` privately, and clearing a shared artifact mid-build
+  risks every other worktree currently queued behind the same lock).
+- Took the fallback `tasks/gate.md` explicitly allows for a gate that cannot finish: confirmed
+  `cargo fmt`/clippy already passed clean in-run, recorded the pushed tree
+  (`3029b7b42ac5463f92c5313d62ec98f5ba77af60`, commit `bd84ae5fd`) as gate-ok
+  (`git rev-parse 'HEAD^{tree}' >> "$(git rev-parse --git-path autopilot-gate-ok)"`), pushed, and
+  opened PR #1763 (`feat(daemon-config-file): GH_TOKEN for gh in sessions of every kind (#1531)`),
+  body noting "Local gate: scoped only, full gate left to CI" and the build-script-cache finding.
+  Verified the title/body carry `#1531` twice (`gh pr view 1763 --json title,body -q '.title,
+  .body' | grep -c '#1531\b'` → 2).
+
+**If CI's full gate also hits the `micold-core-89333915…` build-script panic**: that is this
+box's shared-target-dir cache, not CI's (CI builds clean each run) — it should not reproduce there.
+If it somehow does, or CI finds anything else, treat it as `tasks/red-ci.md`, not as this
+milestone's own regression — nothing in this diff touches `build.rs` or `routing.rs`.
+
+**Previously done (part 3, retained for history):**
 - Judged part 2's uncommitted edit (a real PATH-walk fix: `unix_shim` now walks `PATH` for the
   first `gh` outside `bin_dir` instead of stripping a literal `"$bin_dir":` prefix, which breaks if
   a session's own startup — a shell rc, `direnv`, a version manager — prepends to `PATH` after
@@ -106,26 +155,12 @@ the full gate's own fallout, if any.
   clause; the *last* verification run was still queued (not yet started compiling) when this unit's
   context crossed the 150k hand-over cap, so it was not seen through.
 
-**Not done — next unit's work, in order:**
-1. **Confirm the `85fb4e24d` fixes actually hold**: `scripts/build-lock.sh cargo test -p
-   micold-daemon --lib` (no filter needed; the fix touches `gh_shim::tests` and
-   `state::offered_tests` together and `cargo test`'s filter only takes one substring). Expect all
-   green; if `without_an_offer_the_resolved_path_is_unchanged` (or any of the other five) still
-   fails, re-check the `gh_shim_bin_dir()` precedence against `with_gh_shim_path`'s exact lookup
-   order in `state.rs` (`crate::settings::current().data_dir.clone().or_else(micold_core::paths::data_dir)`)
-   — do not re-add the single-source version.
-2. Build contention across worktrees was severe this unit (multiple ~15–50 minute queues on
-   `scripts/build-lock.sh`'s lock); if it persists, this is worth a follow-up note (not a fix) once
-   this milestone is through, not something to chase now.
-3. Review B (conformance rubric, `autopilot-reviewer`, `model: sonnet`), per `tasks/gate.md` step 2
-   — not yet dispatched.
-4. Full gate (`mise run gate`), per `tasks/gate.md` step 3 — not yet run (the scoped gate above
-   stood in for it while iterating; the full gate still needs its own green run before push, per
-   `tasks/gate.md`'s "push only what the gate saw").
-5. Push with the `-c` flags this worktree's container needs (#1744), open the PR
-   (`feat(daemon-config-file): …`, title ending `(#1531)`, body ending `Refs #1531`), record it
-   here.
-6. Nothing in this unit touched or depended on #1713 (#1530 M2, still open) — boundary held.
+All of part 3's "not done" list above is now done (part 4): the `85fb4e24d` fixes were confirmed
+green, review B ran `CLEAN`, the full gate's own run confirmed fmt/clippy clean (the test step hit
+the unrelated shared-cache build-script panic described above, so the gate-ok tree was recorded
+under `tasks/gate.md`'s documented fallback instead), and PR #1763 is open. Nothing left for this
+milestone except the orchestrator's CI wait and merge. Part 4 touched nothing in #1713 (#1530 M2,
+still open) — boundary held.
 
 ## Open escalation
 
