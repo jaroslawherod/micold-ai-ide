@@ -85,6 +85,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 None.
 
 D8 (user correction, close unit): attach button back beside Send; row [activity][text area][settings][attach][Stop][Send]. Test first (red: `the_input_row_puts_activity_first_and_attach_beside_send`, Tab order), then `composer.rs`, fixture regenerated, spec/contract/plan/tasks/quickstart/user-guide updated. gh/api.github.com unreachable at the start of this unit (timeouts).
+D8 review (sonnet): BLOCKER on the Tab test was a false alarm (step 1 is settings, step 2 attach; test now asserts both; passes); MINOR task wording fixed. Full gate after D8: 12650 passed, 1 failed (the same untouched daemon test, main red). Not pushed: gh unreachable (timeouts), gate-ok not recorded (gate red on the unrelated main failure).
 Close gate notes: first full gate was red on `pressing_the_mode_control_...` (press needed a release: added `Input::Release` to the layout helper) and `the_layout_matches_the_committed_fixture` (regenerated; the activity box is now 48x48 with the icon centred). Final `mise run gate` (nextest): 12650 passed, 1 failed: `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model`, untouched code, main is red (fix-1615). Re-review of close fixes: CLEAN (3 MINOR: task wording fixed). Visual re-capture of the centred activity icon not done; quickstart step 1 stays PARTIAL.
 
 ## Open escalation
