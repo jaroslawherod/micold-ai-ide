@@ -22,6 +22,7 @@ use micold_core::structured::model::{ModelChoice, ModelName, MODEL_SHORTCUTS};
 use micold_core::structured::{
     parse_line, ReportedCommand, ReportedModel, SequencedEvent, StructuredEvent,
 };
+use micold_core::typeahead::Direction;
 
 fn press(named: NamedKey) -> KeyInput {
     KeyInput {
@@ -580,6 +581,41 @@ fn the_picker_rows_end_with_the_typed_name_and_enter_takes_the_highlight_or_it()
     assert_eq!(use_typed("x"), "Use x");
 
     assert_eq!(w.model_picked(s, None), Some(named("claude-opus-4-1")));
+}
+
+#[test]
+fn the_arrows_move_over_the_narrowed_picker_rows_and_reach_the_typed_row() {
+    let (mut w, s) = window(Some(started(reported_models())));
+    w.open_model_picker(s);
+    // "a" keeps DEFAULT and HAIKU (not OPUS) and adds the typed row: three rows to move over.
+    w.model_picker_typed(s, "a".into());
+    let picker = w.composers.palette.picker(s).expect("open");
+    let rows = picker.rows();
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(rows[2].label, use_typed("a"));
+    assert_eq!(rows[2].item, None);
+    assert_eq!(
+        picker.enter_row(),
+        Some(2),
+        "nothing highlighted: the typed row"
+    );
+
+    let mut highlighted = Vec::new();
+    for _ in 0..3 {
+        w.model_picker_moved(s, Direction::Next);
+        highlighted.push(w.composers.palette.picker(s).expect("open").enter_row());
+    }
+    assert_eq!(
+        highlighted,
+        [Some(0), Some(1), Some(2)],
+        "the arrows walk the items, then reach the typed row"
+    );
+    w.model_picker_moved(s, Direction::Prev);
+    assert_eq!(
+        w.composers.palette.picker(s).expect("open").enter_row(),
+        Some(1),
+        "and walk back"
+    );
 }
 
 // ---- #1554 T027: `/effort` in the composer (US2; FR-007–FR-009, SC-003) ----

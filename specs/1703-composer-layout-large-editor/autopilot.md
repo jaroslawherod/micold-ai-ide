@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M3 PR open
-- **Next step**: wait-merge M3 PR, then M4/close unit (T032 quickstart results)
+- **Phase**: close
+- **Next step**: review the close diff, gate, open the close PR
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1705 | Design (spec, plan, tasks) | merged | eb1b62d9967f4d7ad7092c0dc75e6d3a1e7af621 |
 | #1717 | M1 large editor | merged | 509da759cc19a3ca5befaa90815f9475a7b32dcb |
 | #1754 | M2 icon activity indicator and options row | merged | 7183a4cc4a7a859991e3091bd2652fd64c6e3787 |
-| #1770 | M3 one selector style + #1764 row order | open | |
+| #1770 | M3 one selector style + #1764 row order | merged | 18a4aa800239feca2c6a67502ee804ec70b7ec06 |
 
 ## Milestones
 
@@ -59,6 +59,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Review A (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (model-list-unavailable note dropped: fixed), 2 MINOR declined (below) |
 | Review B (M3, #1764 round) | 1 | HEAD at swap | CHANGES: F1 MAJOR (declined/carried, see Declined), F2 F3 MINOR fixed |
 | Review B (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (open chevron: fixed, MoveUp glyph), F2/F3 MAJOR test gaps (partly fixed: chevron and session isolation tests; rest declined below); Verify: anatomy 5 passed, composer tests passed |
+| Close review | 1 | 18c810760cc0c6b439fd293d1c7e61e4ef4aceb6:18a4aa800239feca2c6a67502ee804ec70b7ec06 | CHANGES: F1 (T033-T041 unticked: fixed, T039/T040 left as follow-ups), F2 (no alignment test: added), F3 (pre-fix PNGs cited: step 1 PARTIAL), 2 MINOR fixed |
 
 ## Declined review findings
 
@@ -78,12 +79,14 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 ## Handover
 
-None.
+Done (uncommitted until this commit): T032 quickstart results, TDD verify and test fixes (T033-T038), activity alignment fix + centre-line test (passes), close review round 1 findings fixed. Next: confirm the full gate (log /tmp/claude-1000/sp/gate2.log, started on this tree; rerun `mise run gate` if it is not GATE_EXIT=0), set Phase done / Next step handoff, add the close PR to the table, push, open the close PR (title docs(1703): close the spec (#1703), body ends Refs #1703). T039/T040 stay follow-ups.
 
 ## Open escalation
 
-M3 full gate: all client/material tests green; 3 micold-daemon tests fail in code this branch does not touch (ai_cli_config a_configured_model_is_claude_codes_default_launch_model, mcp a_hangup_after_the_accept_still_runs_the_removal, structured_permission two_sessions_waiting_are_marked_separately); CI on main is red too (fix-1615). Recording the tree for a CI-validated push was denied by the permission classifier. Need: user permission to push on CI, or wait for main to go green. Then push the branch and open the PR (title: feat(1703): one selector style for model, effort and permission (#1703); body ends Refs #1703). Narrow-window wrap fix is not re-captured visually.
+None.
 
 ## Follow-ups not done
 
 None.
+
+Close unit: TDD verify FAIL on 4 HIGH test-strength findings (1-4) plus MED 6-8; fixed in tests (mutants for Bypass marker, tonal icon and tooltip now fail). Left as recorded in tdd/verification.md: no test-first evidence (5), selector focus/ripple/disabled-tooltip checks (9), form-save exclusion behavioural test (10), layout fixture review (12), LOW 13-14. Activity circle misalignment (16 px low) was a real defect; fixed by centring the indicator in the 48 dp target in activity_indicator, pinned by a centre-line assertion in composer_tab; not re-captured visually (quickstart step 1 PARTIAL). Follow-ups: T039, T040 (menu select anatomy focus/disabled tooltip, form-save exclusion test).

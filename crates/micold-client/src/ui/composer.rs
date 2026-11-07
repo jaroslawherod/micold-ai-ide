@@ -297,12 +297,16 @@ fn activity_indicator<'a>(phase: TurnPhase, waiting: bool, roles: Roles) -> Elem
     } else {
         Icon::ActivityEnded
     };
-    Tooltip::new(
-        BusyIndicator::new(label, roles).busy(busy).icon_only(rest),
-        label,
-        roles,
+    // Centred in the 48 dp target of the neighbouring `IconButton`s, so the bottom-aligned row lines them up.
+    container(
+        Tooltip::new(
+            BusyIndicator::new(label, roles).busy(busy).icon_only(rest),
+            label,
+            roles,
+        )
+        .position(TooltipPosition::Top),
     )
-    .position(TooltipPosition::Top)
+    .center(micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET)
     .into()
 }
 

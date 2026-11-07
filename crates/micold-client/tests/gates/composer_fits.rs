@@ -755,7 +755,31 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
     report(&mut state, id, TurnPhase::Idle, false, 0);
     in_mode(&mut state, id, PermissionMode::Default);
     state.composers.options_open = true;
-    // The list is state-driven (#1703 FR-017): the press only asks, so the state opens it.
+    // The list is state-driven (#1703 FR-017): the press only asks, so the closed control is
+    // pressed first and the state then opens it.
+    let closed = StateUnderTest::new(state.clone());
+    let mut renderer = lay::renderer();
+    let closed_painted =
+        lay::painted_text_settled_at(lay::view_of(&closed), &mut renderer, WINDOW).0;
+    let trigger = find(&closed_painted, &format!("{MODE_LABEL}:"));
+    let pressed = lay::messages_after(
+        lay::view_of(&closed),
+        &lay::renderer(),
+        &[lay::Input::Press(
+            iced::Point::new(
+                trigger.origin.x + 2.0,
+                trigger.origin.y + trigger.natural_height / 2.0,
+            ),
+            iced::mouse::Button::Left,
+        )],
+    );
+    assert!(
+        pressed.iter().any(|m| matches!(
+            m,
+            Message::PermissionPrompts(PromptsMsg::ModeMenuToggled { session, .. }) if *session == id
+        )),
+        "a press on the mode control asks to toggle its list: {pressed:?}"
+    );
     state.permission_prompts.toggle_mode_menu(id, 0);
     let under = StateUnderTest::new(state);
 
