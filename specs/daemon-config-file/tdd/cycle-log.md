@@ -233,5 +233,10 @@ against the rule each covers and run green together once the sequence compiled.
   `gitconfig` secret (`stop_deletes_the_pod_by_uid...` 3 -> 2 secrets, `only_a_stamp_allowing_a_retired_kind...`
   now true for `git_config`, `a_kubernetes_start_up_carries_no_user_git_credential...` 3 -> 2 kept items). They
   were stale expectations, fixed to the new behaviour (not weakened: the stamp now recreates the pod).
+  This was a red for stale expectations, not red-first evidence for the new tests.
+- Red evidence after the fact (review B F1): the two named tests are red against `origin/main` by
+  construction, they do not compile there: `KubeStartRequest.git_config` (kube `start.rs`) and
+  `sanitized_git_config` (client `shell/sandbox.rs`) do not exist on `origin/main` (`git grep` finds neither).
+  Compile failure is their red; no behavioural red run was made (`TEST_AFTER` stands).
 - Green: `micold-core --lib kube` 153 passed; `micold-client --test main -- daemon_config_delivery_host` 14 passed;
   `micold-daemon --lib supervisor` (with the legacy state-dir fallback removed, review A F1) passed.
