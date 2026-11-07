@@ -65,6 +65,9 @@ pub const MUTATORS: &[&str] = &[
     "notice",
     "refusal",
     "options_toggled",
+    // #1721: the composer's Paste menu opens and closes.
+    "open_menu",
+    "close_menu",
     "expand_options",
     "clear_notice",
     "kind_changed",
