@@ -411,7 +411,7 @@ fn a_press_on_the_composer_takes_the_keyboard_from_the_pane() {
     );
     let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
-    // Inside the text area, which starts right of the activity and attach icons (#1764).
+    // Inside the text area, which starts right of the activity icon (#1703 D8).
     let at = iced::Point::new(
         transcript.x + 200.0,
         send.origin.y + send.natural_height / 2.0,
@@ -578,7 +578,7 @@ fn the_composer_keeps_the_keyboard_when_a_queue_row_appears_above_it() {
     report(&mut state, id, busy(InterruptAsk::None), false, 0);
     let (painted, transcript) = paint(state.clone(), id);
     let send = find(&painted, "Send");
-    // Inside the text area, which starts right of the activity and attach icons (#1764).
+    // Inside the text area, which starts right of the activity icon (#1703 D8).
     let at = iced::Point::new(
         transcript.x + 200.0,
         send.origin.y + send.natural_height / 2.0,
