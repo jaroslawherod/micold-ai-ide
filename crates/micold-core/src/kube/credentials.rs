@@ -19,12 +19,8 @@ pub const HOME_DIR: &str = "/data/home";
 /// Where the daemon keeps its clones (research K8).
 pub const REPOS_ROOT: &str = "/data/repos";
 
-/// Where the shared git configuration is mounted, as a directory holding the key `gitconfig`: each
-/// Secret has a directory of its own under `/run/micold/secrets`, read-only, never a single file.
-pub const GIT_CONFIG_DIR: &str = "/run/micold/secrets/git";
-
 /// Where one CLI's sign-in Secret is mounted (T065, research D13): a directory of its own under
-/// `/run/micold/secrets`, like [`GIT_CONFIG_DIR`] — never a single-file mount with a `subPath`, so
+/// `/run/micold/secrets`, read-only — never a single-file mount with a `subPath`, so
 /// the CLI's own refresh never has to write through a bind mount. The pod's daemon relinks the
 /// CLI's live sign-in path to the delivered file in here at every session start, the same relink
 /// the container kind runs (`sandbox::relink_ai_cli_sign_ins`, parameterised by this base).
@@ -56,8 +52,6 @@ pub struct Mount {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum KubeCredential {
-    /// `~/.gitconfig`.
-    GitConfig,
     /// One AI CLI's sign-in.
     SignIn {
         /// Which CLI.
@@ -74,7 +68,6 @@ impl KubeCredential {
     /// The credential as the form and the failures name it.
     pub fn label(&self) -> String {
         match self {
-            Self::GitConfig => "the git config".into(),
             Self::SignIn { cli } => format!("the {} sign-in", cli.provider().display_name()),
             Self::RegistryPull { .. } => "the registry credentials".into(),
         }
@@ -99,12 +92,6 @@ impl KubeCredential {
     /// Where the secret is mounted; `None` for a pull secret, which is no mount.
     pub fn mount(&self) -> Option<Mount> {
         match self {
-            // A directory of its own, never a single-file mount; `GIT_CONFIG_GLOBAL` names the
-            // file in it ([`daemon_env`]).
-            Self::GitConfig => Some(Mount {
-                path: GIT_CONFIG_DIR.into(),
-                sub_path: None,
-            }),
             Self::SignIn { cli } => Self::sign_in_file(*cli).map(|_| Mount {
                 path: sign_in_dir(*cli),
                 sub_path: None,
@@ -128,18 +115,6 @@ impl KubeCredential {
         };
         let one = |key: &str, text: String| BTreeMap::from([(key.to_string(), text)]);
         match self {
-            Self::GitConfig => {
-                let path = home.join(".gitconfig");
-                // The shared copy carries no credential helper, embedded token, extra header or
-                // include (FR-004). A host without `git` cannot be sanitized, so shares nothing.
-                let text = source(&path)?;
-                let sanitized = crate::scoped_credential::sanitize_gitconfig_text(&text, false)
-                    .map_err(|_| KubeFailure::CredentialSource {
-                        credential: self.label(),
-                        path: path.clone(),
-                    })?;
-                Ok(one("gitconfig", sanitized))
-            }
             Self::SignIn { cli } => {
                 let (_, key) =
                     Self::sign_in_file(*cli).ok_or_else(|| KubeFailure::CredentialSource {
@@ -157,12 +132,9 @@ impl KubeCredential {
 /// One of each kind of credential, to find the secrets a withdrawn one left behind (the names do
 /// not depend on the payload).
 pub fn every_kind() -> Vec<KubeCredential> {
-    let mut all = vec![
-        KubeCredential::GitConfig,
-        KubeCredential::RegistryPull {
-            auths: PathBuf::new(),
-        },
-    ];
+    let mut all = vec![KubeCredential::RegistryPull {
+        auths: PathBuf::new(),
+    }];
     all.extend(AiCli::ALL.map(|cli| KubeCredential::SignIn { cli }));
     all
 }
@@ -174,10 +146,8 @@ pub const POD_ENV: &str = "MICOLD_KUBERNETES_POD";
 
 /// The environment the daemon runs with (the pod's own env does not reach it: sshd starts sessions
 /// clean). Not one `MICOLD_*` variable (FR-005): the idle stop, the clone root and the pod kind come
-/// from `daemon.toml`. `allowed` is what the user allowed the pod to receive.
-pub fn daemon_env(
-    allowed: &std::collections::BTreeSet<KubeCredential>,
-) -> BTreeMap<String, String> {
+/// from `daemon.toml`, and so does the git configuration (`[git] config_file`, #1530).
+pub fn daemon_env() -> BTreeMap<String, String> {
     // Nothing allowed reaches the env since #1002 removed the git credential store and the SSH key
     // (FR-001): what remains is mounted as files where the tools look for them. Git is told to
     // ignore every credential helper the shared configuration might still name (FR-004).
@@ -192,12 +162,6 @@ pub fn daemon_env(
         crate::scoped_credential::GITHUB_BASE,
         &daemon,
     ));
-    if allowed.contains(&KubeCredential::GitConfig) {
-        env.insert(
-            "GIT_CONFIG_GLOBAL".to_string(),
-            format!("{GIT_CONFIG_DIR}/gitconfig"),
-        );
-    }
     env
 }
 
@@ -209,6 +173,7 @@ pub(crate) enum RawKubeCredential {
     Kept(KubeCredential),
     // Read only to recognise the removed names; what it held is dropped.
     Removed(#[allow(dead_code)] RemovedKubeCredential),
+    Retired(#[allow(dead_code)] RetiredKubeCredential),
 }
 
 /// The items #1002 removed: they carried the user's whole git identity into the cluster.
@@ -217,6 +182,14 @@ pub(crate) enum RawKubeCredential {
 pub(crate) enum RemovedKubeCredential {
     GitCredentials,
     GitSshKey {},
+}
+
+/// The item #1530 retired: the git configuration is delivered as `[git] config_file`, so nothing
+/// is lost and the stored item is dropped without a notice.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum RetiredKubeCredential {
+    GitConfig {},
 }
 
 #[cfg(test)]
@@ -254,10 +227,9 @@ mod tests {
             cli: AiCli::ClaudeCode,
         };
         assert_eq!(
-            KubeCredential::GitConfig.mount(),
-            mount("/run/micold/secrets/git", None)
+            claude.mount(),
+            mount(&sign_in_dir(AiCli::ClaudeCode), None)
         );
-        assert_eq!(claude.mount(), mount(&sign_in_dir(AiCli::ClaudeCode), None));
         let pull = KubeCredential::RegistryPull { auths: "/a".into() };
         assert_eq!(pull.mount(), None);
         assert_eq!(pull.secret_type(), "kubernetes.io/dockerconfigjson");
@@ -292,19 +264,11 @@ mod tests {
     #[test]
     fn secret_data_is_read_from_the_sources() {
         let read = reader(&[
-            (
-                "/h/.gitconfig",
-                "[user]\n\tname = Ada\n[credential]\n\thelper = store\n",
-            ),
             ("/h/.claude/.credentials.json", "{}"),
             ("/a", "{\"auths\":{}}"),
         ]);
         let data = |c: KubeCredential| c.secret_data(Path::new("/h"), &read).unwrap();
         let one = |k: &str, v: &str| BTreeMap::from([(k.to_string(), v.to_string())]);
-        assert_eq!(
-            data(KubeCredential::GitConfig),
-            one("gitconfig", "[user]\n\tname = \"Ada\"\n")
-        );
         assert_eq!(
             data(KubeCredential::SignIn {
                 cli: AiCli::ClaudeCode
@@ -320,16 +284,6 @@ mod tests {
     #[test]
     fn a_missing_source_names_the_credential_and_the_path() {
         let read = reader(&[]);
-        let failure = KubeCredential::GitConfig
-            .secret_data(Path::new("/h"), &read)
-            .unwrap_err();
-        assert_eq!(
-            failure,
-            KubeFailure::CredentialSource {
-                credential: "the git config".into(),
-                path: "/h/.gitconfig".into()
-            }
-        );
         let no_file = KubeCredential::SignIn {
             cli: AiCli::Copilot,
         };
@@ -347,12 +301,12 @@ mod tests {
         for retired in ["agent", "git_credentials", "ssh_key"] {
             assert!(!json.contains(retired), "{retired} in {json}");
         }
-        assert_eq!(every_kind().len(), 2 + AiCli::ALL.len());
+        assert_eq!(every_kind().len(), 1 + AiCli::ALL.len());
     }
 
     #[test]
     fn the_daemon_env_carries_no_credential_and_resets_the_helpers() {
-        let env = daemon_env(&Default::default());
+        let env = daemon_env();
         // The idle stop, the clone root and the pod kind are in `daemon.toml` (FR-005, T037).
         let micold: Vec<_> = env.keys().filter(|k| k.starts_with("MICOLD_")).collect();
         assert!(micold.is_empty(), "{micold:?}");
@@ -371,21 +325,5 @@ mod tests {
             assert_eq!(env[&key], value, "{key}");
         }
         assert!(!env.keys().any(|k| k.contains("SSH") || k.contains("TOKEN")));
-    }
-
-    #[test]
-    fn the_shared_git_configuration_is_named_by_the_directory_it_is_mounted_in() {
-        let allowed = [KubeCredential::GitConfig].into_iter().collect();
-        let env = daemon_env(&allowed);
-        assert_eq!(
-            env["GIT_CONFIG_GLOBAL"],
-            "/run/micold/secrets/git/gitconfig"
-        );
-        assert!(env.keys().all(|k| !k.starts_with("MICOLD_")));
-        let mount = KubeCredential::GitConfig.mount().expect("a mount");
-        assert_eq!(
-            (mount.path.as_str(), mount.sub_path),
-            (GIT_CONFIG_DIR, None)
-        );
     }
 }

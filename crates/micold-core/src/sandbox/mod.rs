@@ -278,8 +278,6 @@ pub enum NetworkPosture {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CredentialShare {
-    /// `~/.gitconfig` — the user's commit identity, read-only.
-    GitConfig,
     /// The AI CLI's sign-in token file, and only that file (FR-004e).
     AiCliAuth,
 }
@@ -293,6 +291,16 @@ enum RawShare {
     Kept(CredentialShare),
     // Read only to recognise the removed names; which one it was does not matter.
     Removed(#[allow(dead_code)] RemovedShare),
+    // The git configuration is no share since #1530: the app delivers a sanitized copy to every
+    // container as `[git] config_file`. Dropped without a notice, as no credential is lost.
+    Retired(#[allow(dead_code)] RetiredShare),
+}
+
+/// The share #1530 retired.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RetiredShare {
+    GitConfig,
 }
 
 /// The shares #1002 removed (FR-001, FR-002).
@@ -305,12 +313,11 @@ enum RemovedShare {
 
 impl CredentialShare {
     /// Every share, for rendering the opt-in list.
-    pub const ALL: [CredentialShare; 2] = [CredentialShare::GitConfig, CredentialShare::AiCliAuth];
+    pub const ALL: [CredentialShare; 1] = [CredentialShare::AiCliAuth];
 
     /// The user-facing label.
     pub fn label(self) -> &'static str {
         match self {
-            CredentialShare::GitConfig => "Git configuration",
             CredentialShare::AiCliAuth => "AI CLI sign-in",
         }
     }
@@ -419,7 +426,7 @@ impl From<RawProfile> for SandboxProfile {
                 .into_iter()
                 .filter_map(|share| match share {
                     RawShare::Kept(kept) => Some(kept),
-                    RawShare::Removed(_) => None,
+                    RawShare::Removed(_) | RawShare::Retired(_) => None,
                 })
                 .collect(),
             survive_logout: raw.survive_logout,
@@ -493,8 +500,8 @@ pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold-ai-ide";
 /// can look at from the host. It is *not* the user's home — see [`HomeMount`].
 pub const SANDBOX_HOME_DIR: &str = "sandbox-home";
 
-/// The sanitized copy of the host's `~/.gitconfig`, in the daemon state directory (#1002, FR-004).
-/// The bring-up writes it; the container mounts it where `~/.gitconfig` was, so the host's file
+/// The sanitized copy of the host's `~/.gitconfig`, in the container's secrets directory (#1002,
+/// FR-004; #1530). The bring-up writes it and `[git] config_file` names it, so the host's file
 /// itself, with whatever credential helper or token it holds, is never mounted.
 pub const SANDBOX_GITCONFIG_FILE: &str = "gitconfig";
 
@@ -794,7 +801,6 @@ impl CredentialLayout {
 
     fn paths_for(&self, share: CredentialShare) -> Vec<&Path> {
         match share {
-            CredentialShare::GitConfig => self.git_config.as_deref().into_iter().collect(),
             CredentialShare::AiCliAuth => self.ai_cli_auth.iter().map(PathBuf::as_path).collect(),
         }
     }
@@ -984,17 +990,9 @@ impl MountSet {
                     let container = pathmap::map_for(host, windows_host);
                     CredentialMount {
                         share: *share,
-                        delivered: match share {
-                            CredentialShare::GitConfig => None,
-                            CredentialShare::AiCliAuth => ai_cli_delivered.get(&container).cloned(),
-                        },
+                        delivered: ai_cli_delivered.get(&container).cloned(),
                         container,
-                        // The git configuration is mounted from its sanitized copy, never from
-                        // the host's file (FR-004).
-                        host: match share {
-                            CredentialShare::GitConfig => state_dir.join(SANDBOX_GITCONFIG_FILE),
-                            CredentialShare::AiCliAuth => host.to_path_buf(),
-                        },
+                        host: host.to_path_buf(),
                     }
                 })
             })
@@ -1687,7 +1685,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             profile.credentials,
-            BTreeSet::from([CredentialShare::GitConfig, CredentialShare::AiCliAuth])
+            BTreeSet::from([CredentialShare::AiCliAuth])
         );
         assert!(profile.removed_git_credentials);
         let saved = serde_json::to_string(&profile).unwrap();
@@ -1700,6 +1698,19 @@ mod tests {
         let reloaded: SandboxProfile = serde_json::from_str(&saved).unwrap();
         assert!(!reloaded.removed_git_credentials);
         assert_eq!(reloaded.credentials, profile.credentials);
+    }
+
+    /// #1530 (T139): the git configuration is no share any more, it reaches the container only as
+    /// `[git] config_file`. A profile saved with it loads without it, saves without it, and raises
+    /// no notice, because no credential was lost.
+    #[test]
+    fn a_stored_git_config_share_is_dropped_without_a_notice() {
+        let profile: SandboxProfile =
+            serde_json::from_str(r#"{"credentials": ["git_config", "ai_cli_auth"]}"#).unwrap();
+        assert_eq!(profile.credentials, BTreeSet::from([CredentialShare::AiCliAuth]));
+        assert!(!profile.removed_git_credentials);
+        let saved = serde_json::to_string(&profile).unwrap();
+        assert!(!saved.contains("git_config"), "{saved}");
     }
 
     #[test]
@@ -1722,13 +1733,13 @@ mod credential_attribution_tests {
         let missing = MissingCredential::for_operation(
             &SandboxProfile::default(),
             "the commit",
-            CredentialShare::GitConfig,
+            CredentialShare::AiCliAuth,
         )
         .expect("nothing is shared by default");
 
         let message = missing.message();
         assert!(message.contains("sandbox"), "{message}");
-        assert!(message.contains("git configuration"), "{message}");
+        assert!(message.contains("ai cli sign-in"), "{message}");
         // FR-034: names the setting that fixes it, not just the problem.
         assert!(message.contains("Settings"), "{message}");
     }
@@ -1738,11 +1749,11 @@ mod credential_attribution_tests {
         // With the opt-in on, a failure is a real failure and belongs to git. Claiming the sandbox
         // caused it would send the user to the wrong place just as surely.
         let profile = SandboxProfile {
-            credentials: BTreeSet::from([CredentialShare::GitConfig]),
+            credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
             ..SandboxProfile::default()
         };
         assert_eq!(
-            MissingCredential::for_operation(&profile, "the commit", CredentialShare::GitConfig),
+            MissingCredential::for_operation(&profile, "the commit", CredentialShare::AiCliAuth),
             None
         );
     }

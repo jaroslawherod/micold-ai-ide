@@ -94,6 +94,7 @@ fn start_request<'a>(
         config: CONFIG,
         startup_script: None,
         startup_env: None,
+        git_config: None,
         time_zone: Some("Europe/Berlin"),
     }
 }
@@ -1059,17 +1060,13 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
     let signin = KubeCredential::SignIn {
         cli: AiCli::ClaudeCode,
     };
-    let s = allowing(&[KubeCredential::GitConfig, signin.clone()]);
+    let s = allowing(&[signin.clone()]);
     let fake = cluster();
     fake.progress(&names().pod(), vec![running()]);
     let (outcome, _) = run_reading(&fake, &s, &client("c1"), DriftChoice::Ask, &home_files).await;
     let started = ready(outcome);
     let n = names();
-    let mut want = vec![
-        n.access_secret(),
-        n.secret(&KubeCredential::GitConfig),
-        n.secret(&signin),
-    ];
+    let mut want = vec![n.access_secret(), n.secret(&signin)];
     want.sort();
     assert_eq!(fake.names(NS, ObjectKind::Secret), want);
     let made: Vec<_> = started
@@ -1079,7 +1076,7 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
         .filter(|c| c.kind == ObjectKind::Secret)
         .map(|c| c.name.clone())
         .collect();
-    assert_eq!(made.len(), 3);
+    assert_eq!(made.len(), 2);
     let pod = fake.manifest(NS, ObjectKind::Pod, &n.pod()).unwrap();
     let mounted: Vec<&str> = pod["spec"]["volumes"]
         .as_array()
@@ -1087,18 +1084,48 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
         .iter()
         .filter_map(|v| v["secret"]["secretName"].as_str())
         .collect();
-    assert_eq!(mounted.len(), 4); // and the optional startup secret (#1533)
+    assert_eq!(mounted.len(), 3); // and the optional startup secret (#1533)
     assert!(want.iter().all(|w| mounted.contains(&w.as_str())));
-    let data = fake.manifest(
-        NS,
-        ObjectKind::Secret,
-        &n.secret(&KubeCredential::GitConfig),
+}
+
+/// #1530 (T139): the git configuration is no allowed credential with a secret and a mount of its
+/// own. The app hands the sanitized copy over and it is one more key of the startup secret, which
+/// the pod mounts as a directory (no `subPath`) where `[git] config_file` names it.
+#[tokio::test(start_paused = true)]
+async fn the_git_config_is_a_key_of_the_startup_secret_and_no_secret_of_its_own() {
+    let fake = cluster();
+    let (keys, client) = (FakeKeyGen::default(), client("c1"));
+    let read = |p: &Path| std::fs::read_to_string(p);
+    let (s, n) = (settings(), names());
+    let mut request = start_request(&fake, &s, &n, &keys, &client, DriftChoice::Ask, &read);
+    request.git_config = Some("[user]\n\tname = \"Ada\"\n");
+    ready(start(&request, &mut |_| {}).await);
+
+    let secret = fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .expect("the startup secret exists for the git config alone");
+    assert_eq!(secret["stringData"]["gitconfig"], "[user]\n\tname = \"Ada\"\n");
+    assert!(secret["stringData"].get("startup.env").is_none());
+    assert!(!fake
+        .names(NS, ObjectKind::Secret)
+        .iter()
+        .any(|name| name.ends_with("-gitconfig")));
+    let pod = fake.manifest(NS, ObjectKind::Pod, &n.pod()).unwrap();
+    let mounts = pod["spec"]["containers"][0]["volumeMounts"].as_array().unwrap();
+    assert!(
+        mounts.iter().all(|m| m.get("subPath").is_none()),
+        "no file mount: {mounts:?}"
     );
-    // The sanitized copy: the host's credential helper is not in it (FR-004).
-    assert_eq!(
-        data.unwrap()["stringData"]["gitconfig"],
-        "[user]\n\tname = \"Ada\"\n"
-    );
+    assert!(mounts
+        .iter()
+        .any(|m| m["mountPath"] == crate::kube::manifest::STARTUP_ENV_MOUNT));
+
+    // Without a copy to share the secret goes again.
+    request.git_config = None;
+    ready(start(&request, &mut |_| {}).await);
+    assert!(fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .is_none());
 }
 
 #[tokio::test(start_paused = true)]
@@ -1151,7 +1178,9 @@ async fn the_pod_has_a_memory_backed_volume_for_the_git_credential() {
 #[tokio::test(start_paused = true)]
 async fn a_withdrawn_secret_of_ours_is_deleted_and_one_not_ours_is_left() {
     let n = names();
-    let cfg = KubeCredential::GitConfig;
+    let cfg = KubeCredential::SignIn {
+        cli: crate::session::AiCli::ClaudeCode,
+    };
     let fake = cluster();
     fake.progress(&n.pod(), vec![running()]);
     let allowed = allowing(std::slice::from_ref(&cfg));
@@ -1509,7 +1538,6 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
     let mut stored = serde_json::to_value(settings()).unwrap();
     // The kept items as this build writes them, beside the two removed ones as they were written.
     let kept = serde_json::to_value([
-        KubeCredential::GitConfig,
         KubeCredential::SignIn {
             cli: crate::session::AiCli::ClaudeCode,
         },
@@ -1548,7 +1576,9 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
     // The kept items did reach the cluster, so the search is not over an empty start-up.
     let secrets = fake.names(NS, ObjectKind::Secret);
     assert!(
-        secrets.contains(&n.secret(&KubeCredential::GitConfig)),
+        secrets.contains(&n.secret(&KubeCredential::SignIn {
+            cli: crate::session::AiCli::ClaudeCode
+        })),
         "{secrets:?}"
     );
     let mut start_up = fake.calls().join("\n");
@@ -1563,7 +1593,7 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
             }
         }
     }
-    for (name, value) in crate::kube::credentials::daemon_env(&settings.allowed) {
+    for (name, value) in crate::kube::credentials::daemon_env() {
         start_up.push_str(&format!("\n{name}={value}"));
     }
     assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");

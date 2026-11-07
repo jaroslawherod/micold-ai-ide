@@ -43,6 +43,10 @@ pub const STARTUP_ENV_MOUNT: &str = "/run/micold/secrets/startup";
 /// The startup secret's key, which is the `env_file`'s name under [`STARTUP_ENV_MOUNT`].
 pub const STARTUP_ENV_FILE: &str = "startup.env";
 
+/// The startup secret's key for the sanitized git configuration (#1530), `[git] config_file`: a
+/// file of the secret's directory, never a `subPath` mount.
+pub const STARTUP_GIT_CONFIG_FILE: &str = "gitconfig";
+
 /// The volume of the startup secret.
 const STARTUP_ENV_VOLUME: &str = "startup-env";
 
@@ -113,7 +117,7 @@ pub fn drift(on_pod: &str, now: &PodStamp) -> Vec<&'static str> {
 /// by the `kind` tags those variants serialized as: the pod mounts the user's key and sets
 /// `GIT_SSH_COMMAND`, so it is recreated whatever the user chose about drift (FR-001).
 pub fn holds_retired_credential(on_pod: &str) -> bool {
-    const RETIRED_KINDS: [&str; 2] = ["git_credentials", "git_ssh_key"];
+    const RETIRED_KINDS: [&str; 3] = ["git_credentials", "git_ssh_key", "git_config"];
     let on_pod: Value = serde_json::from_str(on_pod).unwrap_or(Value::Null);
     on_pod["allowed"].as_array().is_some_and(|allowed| {
         allowed
@@ -760,7 +764,9 @@ mod tests {
         assert!(drift(on_pod.as_str(), &PodStamp::of(&s, IMAGE)).is_empty());
         let mut t = s.clone();
         t.allowed
-            .insert(crate::kube::credentials::KubeCredential::GitConfig);
+            .insert(crate::kube::credentials::KubeCredential::SignIn {
+                cli: crate::session::AiCli::Codex,
+            });
         t.tolerations = vec![Toleration::parse("gpu:Exists:NoExecute").unwrap()];
         t.node_selector = BTreeMap::from([(LabelKey("a".into()), LabelValue("b".into()))]);
         t.resources.cpu_limit = Some(MilliCpus(1));
@@ -796,7 +802,7 @@ mod tests {
         let signin = KubeCredential::SignIn {
             cli: crate::session::AiCli::ClaudeCode,
         };
-        let p = with_allowed(&[signin, KubeCredential::GitConfig]);
+        let p = with_allowed(&[signin]);
         assert!(p["spec"].get("initContainers").is_none());
     }
 
@@ -841,7 +847,7 @@ mod tests {
             cli: crate::session::AiCli::ClaudeCode,
         };
         let pull = KubeCredential::RegistryPull { auths: "/a".into() };
-        let p = with_allowed(&[KubeCredential::GitConfig, signin.clone(), pull.clone()]);
+        let p = with_allowed(&[signin.clone(), pull.clone()]);
         let n = names();
         let volumes: Vec<&str> = p["spec"]["volumes"]
             .as_array()
@@ -850,17 +856,12 @@ mod tests {
             .filter_map(|v| v["secret"]["secretName"].as_str())
             .collect();
         // The pull secret is read by the kubelet, not mounted.
-        assert_eq!(volumes.len(), 4, "{volumes:?}");
+        assert_eq!(volumes.len(), 3, "{volumes:?}");
         assert!(!volumes.contains(&n.pull_secret().as_str()));
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
             .unwrap();
         let find = |name: String| mounts.iter().find(|m| m["name"] == name).unwrap();
-        let config = find(n.secret(&KubeCredential::GitConfig));
-        // A directory of its own: no single-file mount (FR-029).
-        assert_eq!(config["mountPath"], "/run/micold/secrets/git");
-        assert!(config.get("subPath").is_none());
-        assert_eq!(config["readOnly"], true);
         let auth = find(n.secret(&signin));
         // A directory of its own too (T065): no single-file mount, so the CLI's own refresh never
         // has to write through a bind mount.
@@ -874,7 +875,7 @@ mod tests {
             p["spec"]["imagePullSecrets"],
             json!([{ "name": n.pull_secret() }])
         );
-        assert_eq!(mounts.len(), 6 + 2);
+        assert_eq!(mounts.len(), 6 + 1);
     }
 
     fn golden(name: &str) -> Value {
@@ -883,12 +884,13 @@ mod tests {
         serde_json::from_str(&text).unwrap_or_else(|e| panic!("{path}: {e}"))
     }
 
-    /// T036: the whole pod as the daemon sees it: `daemon.toml` from the config map, the shared git
-    /// configuration as a directory Secret, a time zone, and not one `MICOLD_*`.
+    /// T036: the whole pod as the daemon sees it: `daemon.toml` from the config map, the startup
+    /// secret (which holds the git configuration, #1530) as a directory, a time zone, and not one
+    /// `MICOLD_*`.
     #[test]
     fn golden_pod_mounts_the_config_map_and_the_secrets_as_directories() {
         let mut s = settings();
-        s.allowed = [KubeCredential::GitConfig].into_iter().collect();
+        s.allowed = [].into_iter().collect();
         let p = pod(
             &s,
             &names(),
@@ -914,11 +916,11 @@ mod tests {
     /// T036/FR-029: every config and secret volume is read-only and no mount is a single file —
     /// the sign-in's included, since T065 moved it to a directory Secret too.
     #[test]
-    fn config_and_secret_mounts_are_read_only_and_the_git_one_has_no_sub_path() {
+    fn config_and_secret_mounts_are_read_only_and_only_the_sign_in_is_a_file() {
         let signin = KubeCredential::SignIn {
             cli: crate::session::AiCli::ClaudeCode,
         };
-        let p = with_allowed(&[KubeCredential::GitConfig, signin]);
+        let p = with_allowed(&[signin]);
         let mounts = p["spec"]["containers"][0]["volumeMounts"]
             .as_array()
             .unwrap();

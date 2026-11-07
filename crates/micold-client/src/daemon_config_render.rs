@@ -145,14 +145,15 @@ impl DaemonSettings {
     /// client token: the pod is reached through the bridge its SSH server starts, which relays to
     /// the daemon's socket, so there is no address to serve and no token to check.
     ///
-    /// `git_config` is whether the shared git configuration is mounted in the pod: the file then
-    /// names the mounted copy as `[git] config_file` (#1530, FR-016).
+    /// `git_config` is whether the sanitized git configuration is delivered to the pod, as a key
+    /// of the startup secret: the file then names it as `[git] config_file` (#1530, FR-016).
     pub fn for_pod(name: &str, image: &str, time_zone: Option<&str>, git_config: bool) -> Self {
         Self {
             git_config_file: git_config.then(|| {
                 PathBuf::from(format!(
-                    "{}/gitconfig",
-                    micold_core::kube::credentials::GIT_CONFIG_DIR
+                    "{}/{}",
+                    micold_core::kube::manifest::STARTUP_ENV_MOUNT,
+                    micold_core::kube::manifest::STARTUP_GIT_CONFIG_FILE
                 ))
             }),
             listen: None,

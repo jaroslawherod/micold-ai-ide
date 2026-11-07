@@ -518,9 +518,9 @@ mod tests {
         // forbids is a mount `argv` invents, and the count is what makes that difference bite.
         let mut s = spec();
         s.mounts.credentials = vec![CredentialMount {
-            share: CredentialShare::GitConfig,
-            host: PathBuf::from("/home/u/.gitconfig"),
-            container: PathBuf::from("/home/u/.gitconfig"),
+            share: CredentialShare::AiCliAuth,
+            host: PathBuf::from("/home/u/.claude/.credentials.json"),
+            container: PathBuf::from("/home/u/.claude/.credentials.json"),
             delivered: None,
         }];
         for kind in RuntimeKind::ALL {
@@ -556,7 +556,7 @@ mod tests {
                 .any(|m| m.ends_with("/run/micold/ssh/authorized_keys:ro")));
             assert!(mounted
                 .iter()
-                .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
+                .any(|m| m.contains(".credentials.json") && m.ends_with(":rw")));
         }
     }
 
@@ -584,9 +584,9 @@ mod tests {
             container: PathBuf::from("/var/lib/micold-ai-ide/terminal-history"),
         });
         s.mounts.credentials = vec![CredentialMount {
-            share: CredentialShare::GitConfig,
-            host: PathBuf::from("/home/u/.gitconfig"),
-            container: PathBuf::from("/home/u/.gitconfig"),
+            share: CredentialShare::AiCliAuth,
+            host: PathBuf::from("/home/u/.claude/.credentials.json"),
+            container: PathBuf::from("/home/u/.claude/.credentials.json"),
             delivered: None,
         }];
         for kind in RuntimeKind::ALL {

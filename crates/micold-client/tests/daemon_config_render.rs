@@ -142,7 +142,7 @@ fn a_pods_file_names_the_mounted_git_config() {
     let text = micold_client::daemon_config_render::prepare(&settings, Kind::Kubernetes)
         .unwrap_or_else(|e| panic!("{}", e[0]));
     assert!(
-        text.contains("config_file = \"/run/micold/secrets/git/gitconfig\""),
+        text.contains("config_file = \"/run/micold/secrets/startup/gitconfig\""),
         "{text}"
     );
 }

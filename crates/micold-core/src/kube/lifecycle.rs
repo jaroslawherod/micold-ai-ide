@@ -164,12 +164,9 @@ mod tests {
 
     /// The credentials the daemon was allowed.
     fn allowed() -> BTreeSet<KubeCredential> {
-        [
-            KubeCredential::GitConfig,
-            KubeCredential::SignIn {
-                cli: AiCli::ClaudeCode,
-            },
-        ]
+        [KubeCredential::SignIn {
+            cli: AiCli::ClaudeCode,
+        }]
         .into_iter()
         .collect()
     }
@@ -185,7 +182,6 @@ mod tests {
         fake.insert(NS, ObjectKind::ConfigMap, &n.config_map(), n.labels());
         for secret in [
             n.access_secret(),
-            n.secret(&KubeCredential::GitConfig),
             n.secret(&KubeCredential::SignIn {
                 cli: AiCli::ClaudeCode,
             }),
@@ -280,12 +276,10 @@ mod tests {
 
     #[test]
     fn forget_locally_lists_the_deterministic_names_without_a_cluster() {
-        let allowed: BTreeSet<KubeCredential> = [
-            KubeCredential::GitConfig,
-            KubeCredential::SignIn { cli: AiCli::Codex },
-        ]
-        .into_iter()
-        .collect();
+        let allowed: BTreeSet<KubeCredential> =
+            [KubeCredential::SignIn { cli: AiCli::Codex }]
+                .into_iter()
+                .collect();
         let n = names();
         assert_eq!(
             leftovers(&allowed, &n),
@@ -294,7 +288,6 @@ mod tests {
                 pvc: n.pvc(),
                 secrets: vec![
                     n.access_secret(),
-                    n.secret(&KubeCredential::GitConfig),
                     n.secret(&KubeCredential::SignIn { cli: AiCli::Codex }),
                     n.startup_secret(),
                 ],

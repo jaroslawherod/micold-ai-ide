@@ -115,11 +115,16 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 /// A start script goes into `delivery.config` and its `env_file` into `delivery.secrets`, and the
 /// file names them at `/run/micold/config/startup.sh` and `/run/micold/secrets/startup.env`
 /// (#1533, FR-011). Without a script, a copy left by an earlier one is removed.
+///
+/// `git_config` is the sanitized git configuration ([`micold_core::scoped_credential::shared_copy`]):
+/// it goes into `delivery.secrets` and the file names it as `[git] config_file` at
+/// `/run/micold/secrets/gitconfig` (#1530); `None` removes a copy left by an earlier start.
 pub fn deliver_container(
     name: &str,
     profile: &micold_core::sandbox::SandboxProfile,
     home: &Path,
     delivery: &micold_core::sandbox::DeliveryMount,
+    git_config: Option<&str>,
     startup: Option<&StartupTable>,
 ) -> io::Result<bool> {
     use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
@@ -133,17 +138,14 @@ pub fn deliver_container(
         idle_stop: profile.survive_logout.then_some(IdleStopSetting::Off),
         ssh_dir: Some(CONTAINER_SSH_DIR.into()),
         startup: startup.cloned(),
-        // The sanitized copy of the user's `.gitconfig` the bring-up mounts in the data
-        // directory (read-only), when *Git configuration* is shared (#1530, D15 row 1).
-        git_config_file: profile
-            .credentials
-            .contains(&micold_core::sandbox::CredentialShare::GitConfig)
-            .then(|| {
-                PathBuf::from(format!(
-                    "{CONTAINER_DATA_DIR}/{}",
-                    micold_core::sandbox::SANDBOX_GITCONFIG_FILE
-                ))
-            }),
+        // The sanitized copy of the user's `.gitconfig`, delivered in the secrets folder (read-only)
+        // whenever the host has one (#1530, D15 row 1).
+        git_config_file: git_config.map(|_| {
+            PathBuf::from(format!(
+                "{CONTAINER_SECRETS_DIR}/{}",
+                micold_core::sandbox::SANDBOX_GITCONFIG_FILE
+            ))
+        }),
         ..DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto))
     };
     let files = read_startup_files(&settings)?;
@@ -164,7 +166,13 @@ pub fn deliver_container(
     micold_core::owner_only::ensure_dir(&delivery.secrets)?;
     let script = delivery.config.join(SCRIPT_NAME);
     let env = delivery.secrets.join(ENV_NAME);
-    let mut wrote = false;
+    let git_config_copy = delivery
+        .secrets
+        .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE);
+    let mut wrote = match git_config {
+        Some(text) => write_if_changed(&git_config_copy, text.as_bytes())?,
+        None => remove_if_present(&git_config_copy)?,
+    };
     match &files {
         Some(files) => {
             wrote |= write_if_changed(&script, &files.script)?;

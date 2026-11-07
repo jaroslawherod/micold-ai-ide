@@ -158,6 +158,21 @@ pub fn sanitize_gitconfig_text(text: &str, signing_key: bool) -> io::Result<Stri
     })
 }
 
+/// The sanitized copy of the host's git configuration at `source`, the text the app delivers as
+/// `[git] config_file` to a container or a pod (#1530). `Ok(None)` when the host has no such file,
+/// which shares nothing; an error says why a file that exists could not be shared (unreadable, or
+/// no `git` to sanitize it with).
+pub fn shared_copy(source: &Path) -> Result<Option<String>, String> {
+    let text = match std::fs::read_to_string(source) {
+        Ok(text) => text,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("could not read {}: {e}", source.display())),
+    };
+    sanitize_gitconfig_text(&text, false)
+        .map(Some)
+        .map_err(|e| format!("could not sanitize {}: {e}", source.display()))
+}
+
 fn list_entries(file: &Path) -> io::Result<Vec<(String, String)>> {
     let mut git = Command::new("git");
     crate::process::no_window(&mut git);
@@ -183,6 +198,25 @@ mod tests {
 
     fn e(key: &str, value: &str) -> (String, String) {
         (key.to_string(), value.to_string())
+    }
+
+    /// #1530: a host without a git configuration shares none, and one with a credential helper
+    /// shares it without.
+    #[test]
+    fn the_shared_copy_is_none_without_a_file_and_carries_no_helper() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(".gitconfig");
+        assert_eq!(shared_copy(&file), Ok(None));
+        std::fs::write(&file, "[user]\n\tname = Ada\n[credential]\n\thelper = store\n").unwrap();
+        match shared_copy(&file) {
+            Ok(Some(text)) => assert!(
+                text.contains("name = \"Ada\"") && !text.contains("store"),
+                "{text}"
+            ),
+            // No `git` on this host: nothing is shared.
+            Err(_) => {}
+            other => panic!("{other:?}"),
+        }
     }
 
     /// The sanitizer keeps `filter.lfs.*` (`required = true`), so a basic image without `git-lfs`
