@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T046–T052, T093, T054 | full | helper chooses token from config (most specific, ties first), reach cached by fingerprint, per-kind session git env with fallback/clear, per-host rewrite | #1700 | merged |
 | M2 | T092, T094, T053 | full | git setup from daemon.kind on every start path, GIT_CONFIG_GLOBAL, gpgsign stripped, grant messages retired + protocol bump | #1713 | merged |
-| M3 | T139 | full | container and pod git config only from `[git] config_file`: remove `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount (T094 remainder, I9-2) | | pending |
+| M3 | T139 | full | container and pod git config only from `[git] config_file`: remove `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount (T094 remainder, I9-2) | PR_N | PR open; a Close unit (T140-T147 from tdd/verification.md) follows |
 
 ## Decisions
 
@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M1: review A (code-review high) 10 findings, 4 fixed (host reset now per forge, fallback on unreadable config, absolute config path, token file leading blank line); review B (sonnet) CLEAN, 3 MINOR (F1 fixed). Snapshot 503b13b8:826681cfb.
 
-- M3: review A (code-review high, snapshot 5e2ddf9c:e2e690bc) CHANGES: F1 MAJOR (daemon still falls back to the state-dir gitconfig copy) fixed by removing `legacy_identity_exists` and the fallback arm, round 2 not needed beyond the gate (fix is local, covered by supervisor tests). Review B (sonnet) at 83d6e936:7d2ff7d1 in progress.
+- M3: review A (code-review high, snapshot 5e2ddf9c:e2e690bc) CHANGES: F1 MAJOR (daemon still falls back to the state-dir gitconfig copy) fixed by removing `legacy_identity_exists` and the fallback arm, round 2 not needed beyond the gate (fix is local, covered by supervisor tests). Review B (sonnet, snapshot 1cff3b64:6ab641d5) CHANGES: F1 MAJOR (no red evidence) fixed by recording in the cycle-log that the new tests do not compile on origin/main (no behavioural red run possible; code and tests landed together), F2 MINOR fixed; prose only, no round 2.
 - M2: review A (code-review high) CLEAN, 3 MINOR (F2 fixed, F1 noted in Follow-ups); review B (sonnet) F1 MAJOR (no cycle-log entry) fixed, F2/F3 MINOR noted. Rebased onto origin/main afterwards; full gate re-run on the rebased tree. A Close unit follows this last milestone.
 
 | Review | Round | Snapshot | Verdict |
