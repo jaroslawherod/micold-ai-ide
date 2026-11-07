@@ -99,6 +99,7 @@ impl Pending {
                     Some(found) => return found,
                     None => self.0.push(msg),
                 },
+                Ok(Some(Ok(Frame::Routed(_)))) => {}
                 Ok(Some(Err(e))) => panic!("stream error while waiting for {what}: {e}"),
                 Ok(None) => panic!("the daemon closed the connection while waiting for {what}"),
                 Err(_) => {
