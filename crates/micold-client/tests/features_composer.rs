@@ -6,6 +6,13 @@
 
 use crate::support;
 
+use iced::keyboard::{key::Physical, Key as IcedKey, Modifiers};
+use iced::widget::text_editor::{Binding, KeyPress, Status};
+use micold_client::app::Message;
+use micold_client::features::composer::Msg;
+use micold_client::ui::composer::key_binding;
+use micold_core::protocol::messages::TurnPhase as PasteTurnPhase;
+
 use std::path::PathBuf;
 
 use micold_client::app::State as Window;
@@ -1502,4 +1509,50 @@ fn stop_session_and_the_refusal_note_stay_outside_the_collapsed_row() {
         Some("not allowed"),
         "the note is the composer's own, shown whatever the row"
     );
+}
+
+// #1721: Ctrl/Cmd+V pastes through the app's own clipboard read (the terminal pane's), never the
+// editor's synchronous read, which yields nothing on a live Wayland clipboard.
+
+fn paste_press(c: &str, modifiers: Modifiers) -> KeyPress {
+    KeyPress {
+        key: IcedKey::Character(c.into()),
+        modified_key: IcedKey::Character(c.into()),
+        physical_key: Physical::Unidentified(iced::keyboard::key::NativeCode::Unidentified),
+        modifiers,
+        text: None,
+        status: Status::Focused { is_hovered: true },
+    }
+}
+
+fn paste_bound(c: &str, modifiers: Modifiers) -> Option<Binding<Message>> {
+    key_binding(
+        SessionId::new(),
+        paste_press(c, modifiers),
+        (0, 0),
+        1,
+        false,
+        PasteTurnPhase::NotRunning,
+        None,
+    )
+}
+
+#[test]
+fn ctrl_v_in_the_composer_asks_the_app_for_the_clipboard_not_the_editor() {
+    let binding = paste_bound("v", Modifiers::CTRL);
+    assert!(
+        matches!(
+            binding,
+            Some(Binding::Custom(Message::Composer(Msg::PasteRequested(_))))
+        ),
+        "Ctrl+V must request the app's clipboard read"
+    );
+}
+
+#[test]
+fn other_edit_keys_in_the_composer_stay_the_editors() {
+    assert!(matches!(
+        paste_bound("c", Modifiers::CTRL),
+        Some(Binding::Copy)
+    ));
 }

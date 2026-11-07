@@ -14426,6 +14426,65 @@ mod panes {
         assert!(!picked.core.composers.picker_open(p));
     }
 
+    /// #1721: a paste asked for in the composer reads the clipboard through the app (one task) and
+    /// inserts the text at the caret, replacing a selection, multi-line text included; a clipboard
+    /// with no text changes nothing; the context menu opens, offers Paste and closes on it.
+    #[test]
+    fn a_paste_in_the_composer_inserts_the_clipboard_text_over_the_selection() {
+        use iced::widget::text_editor::{Action, Motion};
+        let (mut app, s, _, _rx) = structured_beside_a_terminal();
+        let typed = |app: &mut App, a: Action| {
+            let _ = update(
+                app,
+                Message::Composer(Msg::Edited {
+                    session: s,
+                    action: micold_client::app::EditorAction(a),
+                }),
+            );
+        };
+        typed(
+            &mut app,
+            Action::Edit(iced::widget::text_editor::Edit::Paste(
+                "old".to_string().into(),
+            )),
+        );
+        typed(&mut app, Action::Select(Motion::DocumentStart));
+        let work = update(&mut app, Message::Composer(Msg::PasteRequested(s)));
+        assert!(work.units() > 0, "the clipboard is read through the app");
+        let paste = |app: &mut App, text: Option<&str>| {
+            let _ = update(
+                app,
+                Message::Composer(Msg::Pasted {
+                    session: s,
+                    text: text.map(str::to_owned),
+                }),
+            );
+        };
+        paste(&mut app, None);
+        assert_eq!(app.core.composers.editor(s).text(), "old");
+        paste(&mut app, Some("one\ntwo"));
+        assert_eq!(app.core.composers.editor(s).text(), "one\ntwo");
+        assert_eq!(
+            app.core.composers.composer(s).unwrap().draft.text,
+            "one\ntwo"
+        );
+
+        let _ = update(
+            &mut app,
+            Message::Composer(Msg::MenuOpened {
+                session: s,
+                origin: (5, 6),
+            }),
+        );
+        assert_eq!(app.core.composers.menu, Some((s, (5, 6))));
+        let work = update(&mut app, Message::Composer(Msg::PasteRequested(s)));
+        assert!(
+            app.core.composers.menu.is_none(),
+            "choosing Paste closes the menu"
+        );
+        assert!(work.units() > 0);
+    }
+
     /// FR-012, FR-015 (#1464): the shell opens one picker per request, refuses a result that comes
     /// back for a session that ended meanwhile (nothing is read), and lets a close reopen it.
     #[test]
