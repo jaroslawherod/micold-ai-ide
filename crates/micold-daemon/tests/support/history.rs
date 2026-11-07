@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
+#[allow(clippy::duplicate_mod)] // shared by sibling support modules in one test crate
 #[path = "stand_in_build.rs"]
 pub mod stand_in_build;
 
