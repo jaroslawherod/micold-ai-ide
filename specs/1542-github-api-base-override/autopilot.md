@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1751 | Design PR | merged | 3093ca085b47775be01ad3dc71649271940a31d4 |
 | #1755 | M1 | merged | 80e93599ba5f1c267a103600c8cd92904cf23bb2 |
+| #1769 | Close | open | |
 | #1762 | M2 | merged (first CI run failed on flake `sandbox_real_limits_stop_the_session_not_the_daemon`, unrelated; passed on rerun) | aa3ce998c3f1256c9dfd4e6318c41f08f221450f |
 
 ## Milestones
