@@ -44,6 +44,11 @@ pub struct Mount {
     /// The path in the container.
     pub path: String,
     /// The secret key mounted as that one file; `None` mounts the whole secret as a directory.
+    ///
+    /// Every credential this crate builds now mounts its whole secret as a directory (T065: a
+    /// single-file `subPath` mount cannot be rewritten by the CLI's own token refresh), so nothing
+    /// in production sets this. It is kept for a future credential kind that genuinely wants one
+    /// key at one path, and [`crate::kube::manifest`] still renders it.
     pub sub_path: Option<String>,
 }
 
