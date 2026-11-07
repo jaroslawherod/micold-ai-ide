@@ -218,7 +218,7 @@ fn an_unknown_credential_entry_is_dropped_and_the_rest_survive() {
     // A file written by a newer build naming a share this one has never heard of. Failing the
     // whole load over it would lock the user out of their settings for a forward-compatible file.
     let (_dir, store, _path) = store_with(
-        r#"{"settings_version": 4, "daemon": {"sandbox": {"credentials": ["git_config"]}}}"#,
+        r#"{"settings_version": 4, "daemon": {"sandbox": {"credentials": ["some_future_share", "ai_cli_auth"]}}}"#,
     );
     let creds = store.load().settings.daemon.sandbox.credentials;
     assert_eq!(creds.len(), 1);

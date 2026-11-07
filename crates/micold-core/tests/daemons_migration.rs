@@ -181,7 +181,8 @@ fn a_daemon_whose_settings_named_a_removed_git_credential_item_stores_the_notice
             "{removed} is dropped on save: {saved}"
         );
     }
-    assert!(saved.contains("git_config"), "the kept item stays: {saved}");
+    // The git configuration share is retired too (#1530): dropped without a trace.
+    assert!(!saved.contains("\"git_config\""), "{saved}");
     assert_eq!(
         store.load().settings.daemons[0].notice,
         Some(MigrationNotice::RemovedGitCredentials),

@@ -1215,6 +1215,14 @@ impl MountSet {
                             .map(|host| path(&pathmap::map_for(host, cfg!(windows))))
                             .collect::<Vec<_>>()
                     }))
+                    // The git configuration is no share since #1530, but a container made before
+                    // still mounts it: it is a credential, not a project.
+                    .chain(
+                        layout
+                            .git_config
+                            .iter()
+                            .map(|host| path(&pathmap::map_for(host, cfg!(windows)))),
+                    )
                     .collect();
                 mounted
                     .iter()
