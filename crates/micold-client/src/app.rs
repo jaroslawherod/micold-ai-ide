@@ -1472,10 +1472,10 @@ impl State {
             // #1721: the composer's Paste menu is a registered popover; opening and closing it is
             // pure state.
             Message::Composer(crate::features::composer::Msg::MenuOpened { session, origin }) => {
-                self.composers.menu = Some((session, origin));
+                self.composers.open_menu(session, origin);
             }
             Message::Composer(crate::features::composer::Msg::MenuDismissed(_)) => {
-                self.composers.menu = None;
+                self.composers.close_menu();
             }
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here (of the permission prompts' messages, all

@@ -555,6 +555,16 @@ pub struct State {
 }
 
 impl State {
+    /// Open the Paste menu of `session`'s composer at `origin` (#1721).
+    pub fn open_menu(&mut self, session: SessionId, origin: (u16, u16)) {
+        self.menu = Some((session, origin));
+    }
+
+    /// Close the Paste menu (#1721).
+    pub fn close_menu(&mut self) {
+        self.menu = None;
+    }
+
     /// The editor `session`'s composer draws: an empty one before it has a composer.
     pub fn editor(&self, session: SessionId) -> &crate::app::Editor {
         self.composer(session).map_or(&self.blank, |c| &c.editor)
