@@ -9,7 +9,7 @@
 - Composer text area focused: Ctrl+Shift+M / Cmd+Shift+M -> request. In the editor: Ctrl/Cmd+Enter -> Done; Esc -> Cancel.
 
 ## Layout (top to bottom)
-queue / hold / notice / [options row if open: Model, Effort, Permission] / Stop session + refusal note / chips / completion / input row: [activity indicator 24 dp | attach | text area (+ open-editor IconButton top-right) | settings IconButton 40 dp | Stop | Send] (#1764: settings swapped with the activity indicator and attach).
+queue / hold / notice / [options row if open: Model, Effort, Permission] / Stop session + refusal note / chips / completion / input row: [activity indicator 24 dp | text area (+ open-editor IconButton top-right) | settings IconButton 40 dp | attach | Stop | Send] (#1764, D8: the activity indicator leads, attach stays beside Send).
 
 ## Settings file
 `composer_options_open` (bool, optional key, default false).

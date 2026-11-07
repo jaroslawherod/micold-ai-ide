@@ -20,7 +20,7 @@ Evidence in `evidence/t032-*.png`; earlier captures in `evidence/m2-*`, `evidenc
 
 | Step | Result | Notes |
 |---|---|---|
-| 1 | PARTIAL | One control row in the #1764 order (activity icon, attach, text, settings, Send); no options row on a fresh start. The `t032-*` captures predate the activity-icon alignment fix (circle ~16 px low); the fix is pinned by a centre-line test, not re-captured. |
+| 1 | PARTIAL | One control row in the #1764 order (activity icon, text, settings, attach, Send; D8); no options row on a fresh start. The `t032-*` captures predate the activity-icon alignment fix (circle ~16 px low); the fix is pinned by a centre-line test, not re-captured. |
 | 2 | PASS | Settings icon opens Model/Effort/Permissions and turns tonal; `composer_options_open` persisted true/false; restored after restart. `t032-options-420.png`, `t032-options-520.png`. |
 | 3 | PARTIAL | Ready and Busy ("Working") tooltips seen, no status text (`t032-busy-tooltip.png`). Waiting not reached: the installed CLI runs in mode `auto` and never asks for permission; pinned by view tests (T014). |
 | 4 | PASS | One selector style; permission list `t032-permissions-list.png`; model list with filter row `evidence/m3-model-list.png`. Hover/focus/press/disabled treatments are pinned by the anatomy tests. |

@@ -42,7 +42,8 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | D4 | spec | Persist expanded state | Yes, per window | agent-resolved (owner default) | spec.md#decisions |
 | D5 | spec | Bypass warning marker | On settings icon | agent-resolved (owner default) | spec.md#decisions |
 | D6 | spec | Large editor attachments | Text only | agent-resolved (owner default) | spec.md#decisions |
-| D7 | M3 | #1764 order of the swap (issue ambiguous) | Literal swap: input row [activity][attach][text area][settings][Stop][Send] | assumption (agent-resolved; user did not choose) | issue #1764; contracts/composer-layout.md |
+| D8 | close | #1764 row order, user correction ("attach button should stay near the send button") | Input row [activity][text area][settings][attach][Stop][Send]; supersedes D7 | user | user message in the close unit; spec.md D8 |
+| D7 | M3 | #1764 order of the swap (issue ambiguous) | Literal swap: input row [activity][attach][text area][settings][Stop][Send] | assumption (agent-resolved; user did not choose) | superseded by D8; issue #1764; contracts/composer-layout.md |
 
 ## Review rounds
 
@@ -83,6 +84,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 None.
 
+D8 (user correction, close unit): attach button back beside Send; row [activity][text area][settings][attach][Stop][Send]. Test first (red: `the_input_row_puts_activity_first_and_attach_beside_send`, Tab order), then `composer.rs`, fixture regenerated, spec/contract/plan/tasks/quickstart/user-guide updated. gh/api.github.com unreachable at the start of this unit (timeouts).
 Close gate notes: first full gate was red on `pressing_the_mode_control_...` (press needed a release: added `Input::Release` to the layout helper) and `the_layout_matches_the_committed_fixture` (regenerated; the activity box is now 48x48 with the icon centred). Final `mise run gate` (nextest): 12650 passed, 1 failed: `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model`, untouched code, main is red (fix-1615). Re-review of close fixes: CLEAN (3 MINOR: task wording fixed). Visual re-capture of the centred activity icon not done; quickstart step 1 stays PARTIAL.
 
 ## Open escalation

@@ -50,7 +50,7 @@ status markers.
 | Folder | **Other**: a worktree with no conventional type | Overview cards |
 | Link | **Included** worktree | Overview cards |
 | Crossed-out folder | **Orphan**: a missing or invalid worktree | Overview cards |
-| Paperclip | **Add attachment**: choose files to attach to the message | Structured session composer, left of the message box |
+| Paperclip | **Add attachment**: choose files to attach to the message | Structured session composer, beside the Send button |
 | Arrow into a door | **Open**: go to the card's location, as clicking the card does | First entry of an Overview card's right-click menu |
 
 Every icon follows the active theme: it is tinted to match the text around it and is legible
