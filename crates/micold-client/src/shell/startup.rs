@@ -72,7 +72,20 @@ fn window_settings() -> iced::window::Settings {
     settings
 }
 
+/// Bug 1720: send the client's `tracing` events to stderr, filtered by `MICOLD_LOG` (the daemon's
+/// variable), `warn` when unset. `MICOLD_LOG=micold_client=debug` shows the terminal copy, paste and
+/// link trace. Terminal and clipboard contents are never logged, only lengths and flags.
+fn init_tracing() {
+    let filter = tracing_subscriber::EnvFilter::try_from_env("MICOLD_LOG")
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 pub fn run() -> iced::Result {
+    init_tracing();
     // Resolve the measurement run before opening a window, so a malformed `MICOLD_FRAME_PROBE`
     // is refused at the terminal the operator is looking at rather than after the UI is up.
     if let Some(config) = probe_config() {

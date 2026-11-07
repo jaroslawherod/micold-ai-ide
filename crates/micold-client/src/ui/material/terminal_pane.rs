@@ -878,6 +878,20 @@ impl<'a> TerminalPane<'a> {
         }
     }
 
+    /// Bug 1720: one debug line saying the pane received a copy/paste/link gesture, with the state
+    /// that decides where it goes. Lengths and flags only, never terminal or clipboard content.
+    fn trace_gesture(&self, what: &str, len: Option<usize>) {
+        tracing::debug!(
+            what,
+            focused = self.focused,
+            mouse_mode = self.mouse_mode(),
+            has_selection = self.selection.is_some(),
+            bracketed = self.grid.bracketed_paste(),
+            len,
+            "terminal pane gesture"
+        );
+    }
+
     /// The currently-selected text (for copy), or empty when nothing is selected.
     fn selectable_content(&self) -> String {
         self.selection
@@ -1508,6 +1522,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.link_press.as_ref(),
                 );
                 state.link_press = None;
+                self.trace_gesture(
+                    "link_release",
+                    Some(usize::from(matches!(step, GestureStep::Release(Some(_))))),
+                );
                 if let GestureStep::Release(Some(link)) = step {
                     shell.publish(Message::Session(SessionMsg::LinkActivated(link)));
                 }
@@ -1537,6 +1555,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 state.dragging = false;
                 state.press_cell = None;
+                self.trace_gesture("selection_release", None);
                 // Auto-copy on release (FR-013), decided by the shell against the selection as
                 // this gesture left it. `self.selection` is the one this pane was built with: when
                 // the press and release arrive in one batch it predates the press, and copying it
@@ -1564,10 +1583,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.reporting_button = Some(1);
                     state.reported_cell = Some((col, line));
                 } else {
-                    shell.publish(paste_message(
-                        clipboard.read(ClipboardKind::Standard),
-                        self.grid.bracketed_paste(),
-                    ));
+                    let read = clipboard.read(ClipboardKind::Standard);
+                    self.trace_gesture("middle_paste", read.as_ref().map(String::len));
+                    shell.publish(paste_message(read, self.grid.bracketed_paste()));
                 }
                 shell.capture_event();
                 return;
@@ -1758,16 +1776,16 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     // clipboard keeps whatever the user put there (FR-013c, BUG-004) — the same rule
                     // the shell's auto-copy on release follows in `selection::copy_request`.
                     let selected = self.selectable_content();
+                    self.trace_gesture("copy_chord", Some(selected.len()));
                     if !selected.is_empty() {
                         clipboard.write(ClipboardKind::Standard, selected);
                     }
                     shell.capture_event();
                 }
                 KeyRouting::Paste => {
-                    shell.publish(paste_message(
-                        clipboard.read(ClipboardKind::Standard),
-                        self.grid.bracketed_paste(),
-                    ));
+                    let read = clipboard.read(ClipboardKind::Standard);
+                    self.trace_gesture("paste_chord", read.as_ref().map(String::len));
+                    shell.publish(paste_message(read, self.grid.bracketed_paste()));
                     shell.capture_event();
                 }
                 KeyRouting::Navigate(action) => {

@@ -17,6 +17,12 @@ use crate::App;
 /// The root applies the message and returns the effect requests: an open goes to [`perform`], a
 /// clipboard write to `shell::clipboard::interpret`.
 pub fn on_link_message(app: &mut App, msg: SessionMsg) -> Task<Message> {
+    tracing::debug!(
+        msg = link_msg_name(&msg),
+        session = ?app.core.session.active,
+        sandbox = ?app.sandbox.state,
+        "link message"
+    );
     let effects = match msg {
         // The confirmation's answer turns on whether the sandbox is still live (contract
         // link-opening §4). That lives on `App`, so the shell reads it and the reducer decides.
@@ -26,10 +32,22 @@ pub fn on_link_message(app: &mut App, msg: SessionMsg) -> Task<Message> {
         }
         other => app.core.update_session_for_effects(other),
     };
+    tracing::debug!(effects = effects.len(), "link message: effects requested");
     Task::batch(effects.into_iter().map(|effect| match effect {
         Outcome::OpenLink(request) => perform(app, request),
         other => crate::shell::clipboard::interpret(other),
     }))
+}
+
+/// Bug 1720: the variant of a link message, for the trace (never its address).
+fn link_msg_name(msg: &SessionMsg) -> &'static str {
+    match msg {
+        SessionMsg::LinkActivated(_) => "LinkActivated",
+        SessionMsg::LinkOpenConfirmed => "LinkOpenConfirmed",
+        SessionMsg::ContextMenuOpenLink => "ContextMenuOpenLink",
+        SessionMsg::ContextMenuCopyLinkAddress => "ContextMenuCopyLinkAddress",
+        _ => "other",
+    }
 }
 
 /// Whether the sandbox is up enough for a path it shared to still mean that path.
@@ -48,6 +66,13 @@ fn sandbox_is_live(app: &App) -> bool {
 /// Hand `request` to the opener on a blocking task, with nothing in between (SC-003).
 pub(crate) fn perform(app: &App, request: OpenRequest) -> Task<Message> {
     let opener = app.caps.link_opener();
+    tracing::debug!(
+        kind = match &request {
+            OpenRequest::Url(_) => "url",
+            OpenRequest::Path { .. } => "path",
+        },
+        "link open started"
+    );
     match request {
         OpenRequest::Url(address) => Task::perform(
             async move {
@@ -55,6 +80,7 @@ pub(crate) fn perform(app: &App, request: OpenRequest) -> Task<Message> {
                 let result = tokio::task::spawn_blocking(move || opener.open(&target))
                     .await
                     .unwrap_or_else(|e| Err(OpenFailure::LaunchFailed(e.to_string())));
+                tracing::debug!(ok = result.is_ok(), "link open finished");
                 (address, result)
             },
             |(address, result)| Message::Session(SessionMsg::LinkOpenFinished { address, result }),
@@ -66,6 +92,7 @@ pub(crate) fn perform(app: &App, request: OpenRequest) -> Task<Message> {
                 let result = tokio::task::spawn_blocking(move || open_path(&*opener, &path))
                     .await
                     .unwrap_or_else(|e| Err(OpenFailure::LaunchFailed(e.to_string())));
+                tracing::debug!(ok = result.is_ok(), "link open finished");
                 (address, result)
             },
             |(address, result)| Message::Session(SessionMsg::LinkOpenFinished { address, result }),

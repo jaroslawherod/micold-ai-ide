@@ -3477,8 +3477,18 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
     // input (FR-024). Bail before stamping so no serial is consumed (a consumed-but-unsent
     // serial would be an unrecoverable gap in the input log, G2).
     if active_project_displaced(app) {
+        tracing::debug!(
+            len = bytes.len(),
+            "terminal bytes dropped: project displaced"
+        );
         return Task::none();
     }
+    tracing::debug!(
+        len = bytes.len(),
+        session = ?app.core.session.active,
+        has_outbox = app.active_outbox().is_some(),
+        "terminal bytes to session"
+    );
     if let Some(id) = app.core.session.active {
         // The daemon owns process liveness: it routes input to the session's attached
         // process and drops it harmlessly if that process isn't running. Gating on a

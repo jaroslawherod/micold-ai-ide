@@ -112,7 +112,29 @@ pub fn selection_copy_request(app: &App) -> Option<Outcome> {
 pub fn on_copy_requested(app: &mut App) -> Task<Message> {
     app.core
         .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
-    selection_copy_request(app).map_or_else(Task::none, interpret)
+    let request = selection_copy_request(app);
+    trace_copy("copy_requested", app, request.as_ref());
+    request.map_or_else(Task::none, interpret)
+}
+
+/// Bug 1720: one debug line for a copy decision, lengths and flags only.
+fn trace_copy(what: &str, app: &App, request: Option<&Outcome>) {
+    let len = match request {
+        Some(Outcome::ClipboardWrite(t)) | Some(Outcome::ClipboardWriteChecked { text: t, .. }) => {
+            Some(t.len())
+        }
+        _ => None,
+    };
+    tracing::debug!(
+        what,
+        session = ?app.core.session.active,
+        sandbox = ?app.sandbox.state,
+        has_selection = app.selection.is_some(),
+        has_grid = app.displayed_terminal().is_some_and(|t| app.grids.contains_key(&t)),
+        copy_len = ?len,
+        task_issued = len.is_some(),
+        "terminal copy"
+    );
 }
 
 /// Auto-copy the current selection when a selection gesture ends (FR-013).
@@ -121,7 +143,9 @@ pub fn on_copy_requested(app: &mut App) -> Task<Message> {
 /// after the gesture's own `TerminalSelectStart`/`TerminalSelectUpdate` were applied — so a click,
 /// which selects nothing, copies nothing (FR-013e, BUG-008).
 pub fn on_selection_released(app: &mut App) -> Task<Message> {
-    selection_copy_request(app).map_or_else(Task::none, interpret)
+    let request = selection_copy_request(app);
+    trace_copy("selection_released", app, request.as_ref());
+    request.map_or_else(Task::none, interpret)
 }
 
 /// Where a paste takes its content from (feature 487, FR-006, FR-009).
@@ -156,7 +180,19 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
         .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
     let bracketed = app.attached_grid().is_some_and(|g| g.bracketed_paste());
     let image_target = image_target(app);
+    tracing::debug!(
+        session = ?app.core.session.active,
+        sandbox = ?app.sandbox.state,
+        bracketed,
+        has_image_target = image_target.is_some(),
+        "terminal paste requested: clipboard read task issued"
+    );
     iced::clipboard::read().then(move |c| {
+        tracing::debug!(
+            read_some = c.is_some(),
+            read_len = c.as_ref().map(String::len),
+            "terminal paste: clipboard read completed"
+        );
         let text = c.unwrap_or_default();
         // Whether an image is there is only learned by reading it, so `has_image` is optimistic
         // here and `save_clipboard_image` falls back to an empty paste when there is none.

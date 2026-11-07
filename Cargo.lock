@@ -2643,6 +2643,8 @@ dependencies = [
  "tempfile",
  "tiny-skia 0.12.0",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "ttf-parser",
  "two-face 0.5.2+bat-0.26.1",
  "ureq",
