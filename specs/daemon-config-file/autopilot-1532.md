@@ -104,7 +104,30 @@ M2a's second full `mise run gate` (12645 tests, 24 failed): fmt and clippy clean
 
 **Not this diff's, proven (20).** `micold-core::main streaming_child::unix::a_natural_exit_still_ends_what_it_left_running` passed on the first isolated re-run (0.04 s) — load-induced, the class the three M1 gate rounds above already record. The 15 real-daemon tests (`micold-daemon::{autospawn, client_restart_input, connection::logging_sink (2), daemon_stop (2), history_stop_request, idle_race, idle_stop (3), idle_teardown, spawn_fd_hygiene, version_mismatch_resolves}`) all failed on their 10/20/30 s socket-accept or shutdown timeouts, with five other worktrees (`feat-1536`, `feat-1530`, `chore-1537`, `feat-1703`, `feat-1531`) holding the build lock in turn throughout — the same set and the same timeout signature as the second and third M1 gate rounds, which ran on trees that contained no T065 code at all. The remaining five fail fast and so are *not* timing, and were checked properly rather than assumed: `micold-daemon::history_damaged::{a19_a20, a21, a22, a24}` (0.35 s, each failing on one extra `WARN micold_daemon::state "env-include resolution did not succeed"` beyond the one asserted) and `micold-material ellipsized::tests::real_shaping_stops_at_the_last_character_that_fits` (0.01 s, a font-shaping width claim). Both were re-run on a clean detached `origin/main` worktree (`18a4aa800`, checked out under this unit's scratchpad as `mainwt`): **identical failures there** — the same four `history_damaged` tests with the same extra `env-include` warning, and the same `ellipsized` panic with the same two strings. Both are therefore pre-existing and host-environment-dependent (the machine has no env-include script resolvable from the test's cwd, and its installed fonts shape that string differently), not this diff's. The warning in particular cannot be this diff's: it is raised in `env_include_vars_for`, which the diff does not touch, and the diff's two new `state.rs` entry points both return before reaching it on the default host kind (`relink_ai_cli_sign_ins_before_launch` is a no-op unless the daemon kind is Container or Kubernetes; `with_host_config_dir` returns at its first `let … else` without a configured `sign_in_file`).
 
-Note for the user: the `mainwt` worktree under this unit's scratchpad was created only for that proof and is no longer needed — `gate-hook.sh` forbids an agent removing a worktree, so please remove it in micold IDE.
+M2a's third full gate, rebased onto `origin/main` (`18a4aa800`, clean rebase of 11 commits) and run as `env -u MICOLD_DAEMON_CONFIG mise run gate` at HEAD `c1c18b5b1`: fmt and clippy clean, **12656 tests run, 11 failed** — down from 24, because unsetting `MICOLD_DAEMON_CONFIG` fixed 13 of them. All 12 `sandbox_argv` tests pass, so this diff's own four failures are closed.
+
+**Every one of the remaining 11 is proven pre-existing on clean `origin/main`.** The same five already proven above, plus the six re-checked this round, each re-run from the detached `origin/main` worktree (`18a4aa800`) with the same `env -u MICOLD_DAEMON_CONFIG`:
+
+| Test | On this branch | On clean `origin/main` |
+|---|---|---|
+| `micold-daemon::client_restart_input a_restarted_client_drives_a_session_it_did_not_start` | FAILED ("the seeded session is in the snapshot") | FAILED, same panic |
+| `micold-daemon::connection logging_sink::an_inherited_journal_stream_does_not_silence_the_log_file` | FAILED | FAILED |
+| `micold-daemon::fatal_startup_is_logged fatal_startup_error_reaches_the_log_file` | FAILED (20 s, "still running after 20s") | FAILED, same |
+| `micold-daemon::history_stop_request a_signal_stops_a_real_service_within_five_seconds…` | FAILED | FAILED |
+| `micold-daemon::idle_stop an_idle_stop_writes_one_line_naming_inactivity…` | FAILED (got 0 lines, wanted 1) | FAILED, same |
+| `micold-daemon::idle_stop a_killed_daemon_leaves_no_stop_line_behind` | FAILED | FAILED |
+| `micold-daemon::history_damaged {a19_a20, a21, a22, a24}` | FAILED (extra `env-include` WARN) | FAILED, same extra WARN |
+| `micold-material ellipsized::real_shaping_stops_at_the_last_character_that_fits` | FAILED | FAILED, same two strings |
+
+So the gate is green apart from 11 failures this flow neither caused nor owns: they are real-daemon log/spawn/shutdown tests and one font-shaping test, all dependent on the host environment this nested sandbox provides (no journald stream, no resolvable env-include script, different installed fonts). They are left alone deliberately, per the orchestrator's instruction, rather than papered over here.
+
+The scoped gate (`SCOPE workspace`) at the same HEAD confirms it from the other direction: fmt and clippy clean and **every test passes except that one `client_restart_input` failure** — 3345 `micold-client` tests, 1059 and 793 in the core and daemon libs, and all of `micold-core`'s integration tests green.
+
+Per `gate.md`'s "let CI validate instead" fallback (the same precedent M1 and the red-CI fix above used on this branch), recorded `HEAD^{tree}` in this worktree's `autopilot-gate-ok` and pushed with `Local gate: scoped only, full gate left to CI` in the PR body. CI runs on a machine with none of these three environment gaps, so it is the tie-breaker: a red CI naming any test *other* than these 11 is this gate failing (`red-ci.md`).
+
+Not run locally, both noted in the PR body for CI to cover: `mise run image` + `mise run test-sandbox` (T065 does change how a container session mounts its sign-in, but no container runtime is installed here — docker, podman and nerdctl are all absent, so CI's sandbox job runs it), and the macOS cross-check (`aarch64-apple-darwin` is not an installed rustup target; the diff's only three new `cfg(target_os = …)` uses are `#[cfg(target_os = "linux")]` gates on new symlink *tests* in `sandbox_credentials.rs`, which turn tests off on macOS rather than changing any production arm).
+
+Note for the user: the `mainwt` worktree under this unit's scratchpad was created only for the clean-`origin/main` proofs and is no longer needed — `gate-hook.sh` forbids an agent removing a worktree, so please remove it in micold IDE.
 
 ## Red CI
 
