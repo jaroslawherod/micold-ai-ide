@@ -10,9 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M2a
-- **Next step**: M2a is done — review A and review B both ran clean (findings fixed, no new round
-  needed), the full gate confirmed 11 pre-existing failures only at the final HEAD, and the M2a PR
-  is open. The next unit starts M2b (T065a–T065c) — see D8.
+- **Next step**: waiting on the M2a PR's (#1772) CI and merge.
 
 ## Pull requests
 
@@ -20,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1699 | design (tasks + milestones for Issue 11) | merged | 98aa6edcc561301f70c671b74113b9877ce2d9fd |
 | #1711 | M1 — each `[[ai.cli]]` field maps to the CLI's launch | merged | 8470f7464ec548474530511495dd9ded211e5ba4 |
+| #1772 | M2a — sign-in delivery, read-only on every kind (SC-008) | open | — |
 
 ## Milestones
 
 | M | Deliverable | Tasks | Tier | PR |
 |---|---|---|---|---|
 | M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 (merged, `8470f7464ec548474530511495dd9ded211e5ba4`) |
-| M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | this PR |
+| M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | #1772 |
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | — |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | — |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
@@ -192,20 +191,4 @@ build-lock load — the load was real but incidental. It does not touch the sepa
 
 ## Open escalation
 
-M2a is fully done except opening the PR: branch pushed (`origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind`
-at `c308b6677`), review A and review B both recorded clean (findings fixed) in *Review rounds*,
-and the final gate run recorded in *Gate* (11 pre-existing failures, matching the known baseline,
-confirmed by both a full and a scoped run). `gh pr create`/`gh pr list` failed on every one of 22+
-retries over several minutes (`dial tcp 140.82.121.5:443: i/o timeout` / `.6:443`), so this is the
-documented intermittent `api.github.com` black-hole (D7), not a credential problem (credentials are
-fine per D6; `git push` to the same host succeeded). Please run, once connectivity recovers:
-
-```
-gh pr create --base main --title "feat(1532): deliver AI CLI sign-in read-only on every kind (#1532)" \
-  --body-file "/tmp/claude-1000/-run-media-jaro-Workspace-micold-ai-ide--claude-worktrees-feat-1532-ai-cli-configuration-from-the-file-for-every-kind/9dc0ca22-c19f-4a99-bcf2-d656a7464a3e/scratchpad/pr-body.md" \
-  --head feat/1532_ai-cli-configuration-from-the-file-for-every-kind
-```
-
-(If that scratchpad path is gone, the body is reproducible from this ledger's *Review rounds* and
-*Gate* M2a entries plus `tasks.md`'s M2a block — see `pr.md`'s template.) Record the resulting PR
-number in this ledger's *Pull requests* table and the M2a milestone row once opened.
+None.
