@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: close
-- **Next step**: review the close diff, gate, open the close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1717 | M1 large editor | merged | 509da759cc19a3ca5befaa90815f9475a7b32dcb |
 | #1754 | M2 icon activity indicator and options row | merged | 7183a4cc4a7a859991e3091bd2652fd64c6e3787 |
 | #1770 | M3 one selector style + #1764 row order | merged | 18a4aa800239feca2c6a67502ee804ec70b7ec06 |
+| (close) | Close the spec: quickstart results, TDD remediation, activity alignment | open | |
 
 ## Milestones
 
@@ -59,6 +60,7 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 | Review A (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (model-list-unavailable note dropped: fixed), 2 MINOR declined (below) |
 | Review B (M3, #1764 round) | 1 | HEAD at swap | CHANGES: F1 MAJOR (declined/carried, see Declined), F2 F3 MINOR fixed |
 | Review B (M3) | 1 | cd753d94af41f46dc8fc4e7c82e9e78c12dd3581:4efde2106008636584391eb8028b9da80e247063 | CHANGES: F1 MAJOR (open chevron: fixed, MoveUp glyph), F2/F3 MAJOR test gaps (partly fixed: chevron and session isolation tests; rest declined below); Verify: anatomy 5 passed, composer tests passed |
+| Close review (re-review) | 2 | 36273276f | CLEAN (3 MINOR: task wording fixed, prose only) |
 | Close review | 1 | 18c810760cc0c6b439fd293d1c7e61e4ef4aceb6:18a4aa800239feca2c6a67502ee804ec70b7ec06 | CHANGES: F1 (T033-T041 unticked: fixed, T039/T040 left as follow-ups), F2 (no alignment test: added), F3 (pre-fix PNGs cited: step 1 PARTIAL), 2 MINOR fixed |
 
 ## Declined review findings
@@ -79,7 +81,9 @@ Note: M1 (13 tasks) is not split: editor, open button, shortcut entry and docs a
 
 ## Handover
 
-Done (uncommitted until this commit): T032 quickstart results, TDD verify and test fixes (T033-T038), activity alignment fix + centre-line test (passes), close review round 1 findings fixed. Next: confirm the full gate (log /tmp/claude-1000/sp/gate2.log, started on this tree; rerun `mise run gate` if it is not GATE_EXIT=0), set Phase done / Next step handoff, add the close PR to the table, push, open the close PR (title docs(1703): close the spec (#1703), body ends Refs #1703). T039/T040 stay follow-ups.
+None.
+
+Close gate notes: first full gate was red on `pressing_the_mode_control_...` (press needed a release: added `Input::Release` to the layout helper) and `the_layout_matches_the_committed_fixture` (regenerated; the activity box is now 48x48 with the icon centred). Final `mise run gate` (nextest): 12650 passed, 1 failed: `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model`, untouched code, main is red (fix-1615). Re-review of close fixes: CLEAN (3 MINOR: task wording fixed). Visual re-capture of the centred activity icon not done; quickstart step 1 stays PARTIAL.
 
 ## Open escalation
 
