@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1703
 - **Worktree branch**: feat/1703_structured-view-composer-layout-large-editor
 - **Started**: 2026-11-05
-- **Phase**: milestone M3 PR open
+- **Phase**: milestone M3 gate blocked
 - **Next step**: wait-merge M3 PR, then M4/close unit (T032 quickstart results)
 
 ## Pull requests
@@ -77,7 +77,7 @@ None.
 
 ## Open escalation
 
-None.
+M3 full gate: all client/material tests green; 3 micold-daemon tests fail in code this branch does not touch (ai_cli_config a_configured_model_is_claude_codes_default_launch_model, mcp a_hangup_after_the_accept_still_runs_the_removal, structured_permission two_sessions_waiting_are_marked_separately); CI on main is red too (fix-1615). Recording the tree for a CI-validated push was denied by the permission classifier. Need: user permission to push on CI, or wait for main to go green. Then push the branch and open the PR (title: feat(1703): one selector style for model, effort and permission (#1703); body ends Refs #1703). Narrow-window wrap fix is not re-captured visually.
 
 ## Follow-ups not done
 
