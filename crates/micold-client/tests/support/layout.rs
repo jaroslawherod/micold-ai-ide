@@ -1203,6 +1203,8 @@ pub enum Input {
     Move(iced::Point),
     /// Press this button with the pointer here.
     Press(iced::Point, iced::mouse::Button),
+    /// Release this button with the pointer here (a button publishes on release).
+    Release(iced::Point, iced::mouse::Button),
 }
 
 /// The messages the element published in answer to `inputs`, dispatched in order — each one to the
@@ -1248,6 +1250,7 @@ pub fn messages_after<'a, M: 'a>(
             ),
             Input::Move(at) => (mouse::Event::CursorMoved { position: at }, at),
             Input::Press(at, button) => (mouse::Event::ButtonPressed(button), at),
+            Input::Release(at, button) => (mouse::Event::ButtonReleased(button), at),
         };
         let mut shell = Shell::new(&mut published);
         element.as_widget_mut().update(
