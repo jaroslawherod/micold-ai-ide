@@ -125,6 +125,8 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // Feature 1550's transcript menu (Copy, Select all): like the terminal's own right-click menu,
     // it closes nothing and no other popover closes it (FR-013).
     ("transcript_context_menu", &[]),
+    // #1721's composer Paste menu: closes nothing, and no other popover closes it.
+    ("composer_context_menu", &[]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -170,6 +172,12 @@ fn opener(id: &str) -> Message {
                 },
             ),
         )),
+        "composer_context_menu" => {
+            Message::Composer(micold_client::features::composer::Msg::MenuOpened {
+                session: SessionId::new(),
+                origin: (60, 60),
+            })
+        }
         other => panic!("no opener for `{other}`"),
     }
 }

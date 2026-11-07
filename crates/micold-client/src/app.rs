@@ -1469,6 +1469,14 @@ impl State {
             Message::Composer(crate::features::composer::Msg::SwitchDismissed(session)) => {
                 self.switch_dismissed_for(session);
             }
+            // #1721: the composer's Paste menu is a registered popover; opening and closing it is
+            // pure state.
+            Message::Composer(crate::features::composer::Msg::MenuOpened { session, origin }) => {
+                self.composers.open_menu(session, origin);
+            }
+            Message::Composer(crate::features::composer::Msg::MenuDismissed(_)) => {
+                self.composers.close_menu();
+            }
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here (of the permission prompts' messages, all
             // but the `ModeCancelled` and `ModeConfirmed` above, which close a registered dialog). Listed explicitly (not a catch-all) so the

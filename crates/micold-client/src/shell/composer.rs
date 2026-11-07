@@ -95,6 +95,21 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
             run(app, session, intent);
         }
         Msg::Edited { session, action } => edited(app, session, &action),
+        // The read goes through the app's clipboard, as the terminal pane's paste does: the
+        // editor's own synchronous read yields nothing on a live Wayland clipboard (#1721).
+        Msg::PasteRequested(session) => {
+            app.core.composers.close_menu();
+            return iced::clipboard::read()
+                .map(move |text| Message::Composer(Msg::Pasted { session, text }));
+        }
+        Msg::Pasted { session, text } => {
+            if let Some(text) = text.filter(|t| !t.is_empty()) {
+                let paste = Action::Edit(Edit::Paste(std::sync::Arc::new(text)));
+                edited(app, session, &EditorAction(paste));
+            }
+        }
+        Msg::MenuOpened { session, origin } => app.core.composers.open_menu(session, origin),
+        Msg::MenuDismissed(_) => app.core.composers.close_menu(),
         Msg::SendRequested(session) => send(app, session),
         Msg::StopRequested(session) => interrupt(app, session),
         Msg::StopSessionRequested(session) => {
@@ -291,6 +306,8 @@ fn session_of(msg: &Msg) -> SessionId {
         Msg::Key { session, .. }
         | Msg::TranscriptKey { session, .. }
         | Msg::Edited { session, .. }
+        | Msg::Pasted { session, .. }
+        | Msg::MenuOpened { session, .. }
         | Msg::AttachmentRemoved { session, .. }
         | Msg::QueueRemoveRequested { session, .. }
         | Msg::QueueTakeRequested { session, .. }
@@ -299,6 +316,7 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::QueueEditAttachmentRemoved { session, .. }
         | Msg::Dropped { session, .. }
         | Msg::AttachRequested(session)
+        | Msg::PasteRequested(session)
         | Msg::LargeEditorRequested(session)
         | Msg::OptionsToggled(session)
         | Msg::AttachPicked { session, .. }
@@ -322,6 +340,7 @@ fn session_of(msg: &Msg) -> SessionId {
         | Msg::EffortPickerClosed(session)
         | Msg::SwitchConfirmed(session)
         | Msg::SwitchDismissed(session)
+        | Msg::MenuDismissed(session)
         | Msg::LoginOffered(session) => *session,
     }
 }
