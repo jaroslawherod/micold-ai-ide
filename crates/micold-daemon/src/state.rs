@@ -1509,6 +1509,44 @@ impl DaemonState {
             })
     }
 
+    /// Which T065 mount shape this daemon's own sign-in relink should target, from
+    /// `daemon.kind`: `Some` only for a sandbox kind (`is_sandbox`, container or kubernetes) —
+    /// `None` on host and SSH, where [`Self::relink_ai_cli_sign_ins_before_launch`] must not run
+    /// at all (SC-008 forbids ever touching a host/SSH session's real sign-in file). `None` too
+    /// with no configuration file: a daemon that was never told its own kind cannot know which
+    /// mount shape to recompute, so it relinks nothing rather than guessing.
+    fn ai_cli_secrets_base(&self) -> Option<micold_core::sandbox::SecretsBase> {
+        use micold_core::daemon_config::Kind;
+        use micold_core::sandbox::SecretsBase;
+        match self.config.get()?.current().daemon.kind {
+            Kind::Container => Some(SecretsBase::ContainerAuth),
+            Kind::Kubernetes => Some(SecretsBase::PodSignIn),
+            Kind::Host | Kind::Ssh => None,
+        }
+    }
+
+    /// Re-creates every AI CLI's sign-in symlink from its live path to where this sandbox's own
+    /// mount actually delivered it (T065), right before an AI-CLI session spawns: a container or
+    /// pod daemon is the process that already lives inside the sandbox
+    /// (`crates/micold-daemon/src/supervisor.rs`'s `CommandBuilder` spawns the AI CLI directly,
+    /// no further `exec` into anything), so a plain call here reaches the sandbox's own
+    /// filesystem with no extra indirection. A no-op on host and SSH
+    /// ([`Self::ai_cli_secrets_base`]), and never fatal to the session: one CLI's sign-in failing
+    /// to link must not stop another's (FR-019), and this call only logs what relinked.
+    fn relink_ai_cli_sign_ins_before_launch(&self, id: SessionId) {
+        let Some(base) = self.ai_cli_secrets_base() else {
+            return;
+        };
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        for path in micold_core::sandbox::relink_ai_cli_sign_ins(&home, base) {
+            tracing::debug!(
+                session = %id.0,
+                sign_in = %path.display(),
+                "relinked AI CLI sign-in before launch"
+            );
+        }
+    }
+
     /// Whether `which` is explicitly disabled by the configuration (contract row `enabled`):
     /// `enabled = false`, never the absence of an entry (default `true`).
     fn ai_cli_disabled(&self, which: AiCli) -> bool {
@@ -6660,6 +6698,9 @@ impl DaemonState {
         let mut seeded = None;
         let spawned = match plan.mode {
             TerminalMode::AiCli => {
+                // T065: a sandbox-kind daemon re-links every AI CLI's sign-in to this sandbox's
+                // own read-only mount before the CLI itself ever starts; a no-op on host and SSH.
+                self.relink_ai_cli_sign_ins_before_launch(id);
                 // The configured default model (#1532, contract row `model`) is resolved once and
                 // fed to both `effort`'s lookup and `model` itself: `launch_effort` looks an
                 // effort level up by the model that is actually launching

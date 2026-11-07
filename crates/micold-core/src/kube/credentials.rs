@@ -263,6 +263,30 @@ mod tests {
         assert_eq!(claude.secret_type(), "Opaque");
     }
 
+    /// T065: the pod's own relink (`sandbox::relink_ai_cli_sign_ins`, parameterised by
+    /// [`crate::sandbox::SecretsBase::PodSignIn`]) targets exactly the file this module's own
+    /// `mount()`/`secret_data()` deliver — the live sign-in's basename under its directory Secret
+    /// — never the container's relative-to-home scheme.
+    #[test]
+    fn the_pod_relink_targets_claudes_own_sign_in_directory() {
+        use crate::sandbox::{ai_cli_sign_in_links, SecretsBase};
+
+        let home = Path::new(HOME_DIR);
+        let live = AiCli::ClaudeCode
+            .provider()
+            .sandbox_auth_file(home)
+            .expect("claude has a sign-in path");
+        let name = live.file_name().unwrap().to_str().unwrap();
+        let (_, delivered) = ai_cli_sign_in_links(home, SecretsBase::PodSignIn)
+            .into_iter()
+            .find(|(l, _)| *l == live)
+            .expect("claude is among the pod's sign-in links");
+        assert_eq!(
+            delivered,
+            PathBuf::from(format!("{}/{name}", sign_in_dir(AiCli::ClaudeCode)))
+        );
+    }
+
     #[test]
     fn secret_data_is_read_from_the_sources() {
         let read = reader(&[

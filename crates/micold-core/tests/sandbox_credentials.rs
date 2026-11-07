@@ -706,16 +706,16 @@ fn another_clis_sign_in_does_not_record_claude_setup_as_done() {
 #[cfg(target_os = "linux")]
 #[test]
 fn relink_links_the_live_path_to_the_delivered_file() {
-    use micold_core::sandbox::{ai_cli_sign_in_links, relink_ai_cli_sign_ins};
+    use micold_core::sandbox::{ai_cli_sign_in_links, relink_ai_cli_sign_ins, SecretsBase};
 
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path();
-    let links = ai_cli_sign_in_links(home);
+    let links = ai_cli_sign_in_links(home, SecretsBase::ContainerAuth);
     let (live, delivered) = links.first().expect("at least one CLI has a sign-in path");
     std::fs::create_dir_all(delivered.parent().unwrap()).unwrap();
     std::fs::write(delivered, b"token").unwrap();
 
-    let relinked = relink_ai_cli_sign_ins(home);
+    let relinked = relink_ai_cli_sign_ins(home, SecretsBase::ContainerAuth);
     assert_eq!(relinked, vec![live.clone()]);
     assert_eq!(std::fs::read_link(live).unwrap(), *delivered);
     assert_eq!(std::fs::read(live).unwrap(), b"token");
@@ -726,16 +726,16 @@ fn relink_links_the_live_path_to_the_delivered_file() {
 #[cfg(target_os = "linux")]
 #[test]
 fn relink_run_twice_is_a_no_op() {
-    use micold_core::sandbox::{ai_cli_sign_in_links, relink_ai_cli_sign_ins};
+    use micold_core::sandbox::{ai_cli_sign_in_links, relink_ai_cli_sign_ins, SecretsBase};
 
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path();
-    let (_, delivered) = ai_cli_sign_in_links(home).remove(0);
+    let (_, delivered) = ai_cli_sign_in_links(home, SecretsBase::ContainerAuth).remove(0);
     std::fs::create_dir_all(delivered.parent().unwrap()).unwrap();
     std::fs::write(&delivered, b"token").unwrap();
 
-    let first = relink_ai_cli_sign_ins(home);
-    let second = relink_ai_cli_sign_ins(home);
+    let first = relink_ai_cli_sign_ins(home, SecretsBase::ContainerAuth);
+    let second = relink_ai_cli_sign_ins(home, SecretsBase::ContainerAuth);
     assert_eq!(first, second);
 }
 
@@ -744,12 +744,12 @@ fn relink_run_twice_is_a_no_op() {
 #[cfg(target_os = "linux")]
 #[test]
 fn relink_skips_a_cli_with_no_delivered_file() {
-    use micold_core::sandbox::relink_ai_cli_sign_ins;
+    use micold_core::sandbox::{relink_ai_cli_sign_ins, SecretsBase};
 
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path();
     // Nothing delivered under this home at all.
-    let relinked = relink_ai_cli_sign_ins(home);
+    let relinked = relink_ai_cli_sign_ins(home, SecretsBase::ContainerAuth);
     assert_eq!(relinked, Vec::<PathBuf>::new());
     assert!(!home.join(".claude").join(".credentials.json").exists());
 }

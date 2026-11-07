@@ -135,6 +135,57 @@ pub fn settings_file_name(cli: CliId) -> Option<&'static str> {
     }
 }
 
+/// The environment variable a host or SSH session's config dir is pointed at through (T065,
+/// research D9's per-CLI table): `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, OpenCode's `XDG_DATA_HOME`
+/// (one level above its own `opencode` subdirectory — [`host_config_dir`] accounts for that).
+/// `None` for Copilot and Pi, which have no shareable sign-in to isolate
+/// (`validate.rs`'s V7 already refuses `sign_in_file` for them).
+pub fn host_config_dir_variable(cli: CliId) -> Option<&'static str> {
+    match cli {
+        CliId::ClaudeCode => Some("CLAUDE_CONFIG_DIR"),
+        CliId::Codex => Some("CODEX_HOME"),
+        CliId::Opencode => Some("XDG_DATA_HOME"),
+        CliId::Copilot | CliId::Pi => None,
+    }
+}
+
+/// `<data_dir>/ai/<id>` (Claude, Codex), or `<data_dir>/ai/opencode/data` for OpenCode, whose
+/// [`host_config_dir_variable`] is `XDG_DATA_HOME` — a directory *above* the `opencode` subfolder
+/// OpenCode itself appends, not the config dir itself (research D9; `provider.rs`'s own
+/// `config_dir()` joins `"opencode"` onto `XDG_DATA_HOME` the same way).
+pub fn host_config_dir(data_dir: &Path, cli: CliId) -> PathBuf {
+    match cli {
+        CliId::Opencode => data_dir.join("ai").join("opencode").join("data"),
+        _ => data_dir.join("ai").join(cli.as_str()),
+    }
+}
+
+/// The delivered sign-in's file name under [`host_config_dir`] (research D9's per-CLI table):
+/// Claude's own `.credentials.json`, Codex's and OpenCode's shared `auth.json` — exactly the
+/// basename each provider's own `sandbox_auth_file`/`config_dir` already uses, so the session sees
+/// its sign-in exactly where it always looks. `None` for a CLI with no shareable sign-in
+/// (Copilot, Pi).
+pub fn host_sign_in_file_name(cli: CliId) -> Option<&'static str> {
+    match cli {
+        CliId::ClaudeCode => Some(".credentials.json"),
+        CliId::Codex | CliId::Opencode => Some("auth.json"),
+        CliId::Copilot | CliId::Pi => None,
+    }
+}
+
+/// The files and directories linked read-through from the CLI's own live config dir into its
+/// isolated host/SSH one (research D9: "The daemon links the user's own settings files... into
+/// it (read-through links, never copies back)"), so only the sign-in differs. OpenCode has none
+/// named today (Issue 11 found no per-CLI settings file worth isolating from, beyond the sign-in
+/// itself); Copilot and Pi have no isolated config dir at all ([`host_config_dir_variable`]).
+pub fn host_linked_extras(cli: CliId) -> &'static [&'static str] {
+    match cli {
+        CliId::ClaudeCode => &["settings.json", "CLAUDE.md", "agents", "commands"],
+        CliId::Codex => &["config.toml", "AGENTS.md"],
+        CliId::Opencode | CliId::Copilot | CliId::Pi => &[],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,5 +320,35 @@ mod tests {
         assert_eq!(settings_file_name(CliId::Opencode), Some("opencode.json"));
         assert_eq!(settings_file_name(CliId::Copilot), None);
         assert_eq!(settings_file_name(CliId::Pi), None);
+    }
+
+    #[test]
+    fn host_config_dir_is_data_dir_ai_id_except_opencodes_data_level() {
+        let data_dir = Path::new("/var/lib/micold");
+        assert_eq!(
+            host_config_dir(data_dir, CliId::ClaudeCode),
+            data_dir.join("ai").join("claude_code")
+        );
+        assert_eq!(
+            host_config_dir(data_dir, CliId::Codex),
+            data_dir.join("ai").join("codex")
+        );
+        assert_eq!(
+            host_config_dir(data_dir, CliId::Opencode),
+            data_dir.join("ai").join("opencode").join("data")
+        );
+    }
+
+    #[test]
+    fn host_config_dir_variable_and_sign_in_file_name_cover_only_the_clis_with_a_sign_in() {
+        for cli in [CliId::ClaudeCode, CliId::Codex, CliId::Opencode] {
+            assert!(host_config_dir_variable(cli).is_some());
+            assert!(host_sign_in_file_name(cli).is_some());
+        }
+        for cli in [CliId::Copilot, CliId::Pi] {
+            assert_eq!(host_config_dir_variable(cli), None);
+            assert_eq!(host_sign_in_file_name(cli), None);
+            assert!(host_linked_extras(cli).is_empty());
+        }
     }
 }
