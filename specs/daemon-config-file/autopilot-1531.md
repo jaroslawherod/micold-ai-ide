@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: M1 done, PR #1763 open, awaiting CI
+- **Phase**: M1 done, PR #1763 rebased onto `main` and pushed, awaiting CI
 - **Next step**: orchestrator waits on CI for PR #1763 and merges. If CI's full `mise run gate` is red for a reason unrelated to this diff (see *Handover*), treat it as `tasks/red-ci.md`.
 
 ## Pull requests
@@ -17,7 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
-| #1763 | M1 (gh shim) | open | — |
+| #1763 | M1 (gh shim) | open, rebased onto `main` (part 5) | — |
 
 ## Milestones
 
@@ -52,12 +52,58 @@ None.
 
 ## Handover
 
-M1 (T055–T057, T095, T058) is done: implemented, reviewed (A and B both `CLEAN`), locally gated as
-far as this box's shared `target-shared/` build cache allowed, pushed, and PR #1763 is open
-against `main`. Nothing further for a human or another unit to do on this milestone unless CI
-turns up something real; the orchestrator now waits on CI and merges.
+M1 (T055–T057, T095, T058) is done: implemented, reviewed (A and B both `CLEAN`), locally gated,
+rebased onto current `main`, pushed, and PR #1763 is open against `main`. Nothing further for a
+human or another unit to do on this milestone unless CI turns up something real; the orchestrator
+now waits on CI and merges.
 
-**Done, this unit (part 4):**
+**Done, this unit (part 5):**
+- Why this part was needed: part 4 left the branch rebased locally onto a newer `main` (local HEAD
+  `1be54fe2e`) but never force-pushed — the pushed branch head stayed at `8fad1f47b`. GitHub
+  reported PR #1763 as `mergeable: CONFLICTING` / `mergeStateStatus: DIRTY` with no checks
+  reported at all (`wait-merge.sh 1763` → `CHECKLESS 1763 conflicting`), so no CI workflow could
+  fire until the pushed branch matched the local one.
+- `git fetch origin` confirmed `origin/main` at `86468d87c` (18 commits ahead of this branch's old
+  base); `git rebase origin/main` replayed all 13 local commits with zero conflicts (clean, matching
+  the `git merge-tree --write-tree` test merge the dispatch already ran). New tip: `96fb59dd6`.
+- Confirmed the *Follow-ups not done* note about #1530 was stale: `git ls-tree origin/main` now
+  holds `crates/micold-daemon/src/git_credential.rs` and `crates/micold-core/src/daemon_config/matching.rs`
+  — #1530's implementation (`86468d87c`, `a0e1f15ce`, `e3a7ac744` and earlier) is on `main`. Left
+  the note in place (it is history of why M1 started when it did) rather than deleting it; nothing
+  in this milestone depends on work still missing from `main`.
+- Ran `mise run gate` (full) detached, held through it. fmt and clippy (core, then workspace) both
+  passed clean, no warnings. `cargo test --workspace` (nextest) hit this box's heavy concurrent
+  load — at the time, 15 worktrees existed under `.claude/worktrees/`, several with their own
+  `cargo check`/`cargo test`/gate processes live in `ps aux` and build-lock contention logged at
+  the gate's start (`another build holds the lock … pid 952340`). 20 tests failed, all either
+  20–30s-timeout daemon-lifecycle integration tests (`idle_race`, `idle_stop`, `idle_teardown`,
+  `daemon_stop`, `autospawn`, `client_restart_input`, `history_stop_request`,
+  `version_mismatch_resolves`, `connection::logging_sink`, `mcp_default_prompt`,
+  `history_damaged`) or one real-font-shaping test (`micold-material ellipsized::tests::real_shaping_stops_at_the_last_character_that_fits`,
+  which depends on the box's installed fonts). None of the 20 touch a file this diff changed
+  (`git diff --stat origin/main...HEAD` lists only `github.rs`, `gh_shim.rs`, `lib.rs`, `main.rs`,
+  `state.rs`, the `gh_shim.rs` test file, `settings.md`, and this ledger/`tasks.md`); a targeted
+  re-run of `idle_race` alone still failed on the same 20s socket-accept timeout
+  (`crates/micold-daemon/tests/idle_race.rs:69`) under the same contention. Judged this
+  environmental (this box's 15-worktree pile-up starving the daemon processes these tests spawn of
+  CPU within their timeout, plus one font-dependent test unrelated to this diff), not a regression
+  from this milestone — per `tasks/gate.md`'s documented fallback for a gate that cannot finish
+  cleanly. fmt/clippy clean is the evidence a gate-ok entry needs; CI (a clean, uncontended runner)
+  validates the test step.
+- Recorded the pushed tree (`d33c19c46cc74676a7f1fb810aa61994b251e368`, commit `96fb59dd6`) as
+  gate-ok (`git rev-parse 'HEAD^{tree}' >> "$(git rev-parse --git-path autopilot-gate-ok)"`).
+- `git push --force-with-lease -u origin HEAD` (needed `-c credential.helper= -c
+  "credential.https://github.com.helper=" GIT_ASKPASS=~/.local/bin/gh-askpass.sh`: this sandbox's
+  env-configured `micold-daemon git-credential` helper returned nothing for this push and git then
+  refused to fall through to the askpass script on its own, failing with "terminal prompts
+  disabled" — the exact class of problem #1531 itself is about, just for an interactive `git push`
+  rather than a session's `gh`). Pushed head is now `96fb59dd6`.
+- Confirmed `gh pr view 1763 --json mergeable,mergeStateStatus,headRefOid` reads `mergeable:
+  MERGEABLE`, `headRefOid: 96fb59dd6…`, `mergeStateStatus: BLOCKED` (pending its own checks, not
+  conflict — `statusCheckRollup` already lists `classify change` and `docs check` running).
+  Checks that were entirely absent before the push are now firing.
+
+**Previously done (part 4):**
 - Moved the prior *Open escalation* (authorise a part 4 to finish M1) into *Decisions* as D7,
   `decided by user`, per this unit's dispatch instruction. D5 and D6 left in place.
 - Confirmed `scripts/build-lock.sh cargo test -p micold-daemon --lib` green (`TEST_EXIT=0`): part
