@@ -570,28 +570,16 @@ fn the_picker_rows_end_with_the_typed_name_and_enter_takes_the_highlight_or_it()
         "nothing highlighted, nothing typed"
     );
 
+    // Typing narrows the models (#1703 FR-017): none contains the name, so only the typed row stays.
     w.model_picker_typed(s, "claude-opus-4-1".into());
     let picker = w.composers.palette.picker(s).expect("open");
     let rows = picker.rows();
-    assert_eq!(rows.len(), 4);
-    assert_eq!(rows[3].label, use_typed("claude-opus-4-1"));
-    assert_eq!(rows[3].item, None, "the typed name is no item");
-    assert_eq!(rows[1].item, Some(1));
-    assert_eq!(picker.enter_row(), Some(3), "Enter takes the typed name");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, use_typed("claude-opus-4-1"));
+    assert_eq!(rows[0].item, None, "the typed name is no item");
+    assert_eq!(picker.enter_row(), Some(0), "Enter takes the typed name");
     assert_eq!(use_typed("x"), "Use x");
 
-    w.model_picker_moved(s, Direction::Next);
-    let picker = w.composers.palette.picker(s).expect("open");
-    assert_eq!(picker.enter_row(), Some(0), "the arrows highlight an item");
-    for _ in 0..3 {
-        w.model_picker_moved(s, Direction::Next);
-    }
-    let picker = w.composers.palette.picker(s).expect("open");
-    assert_eq!(
-        picker.enter_row(),
-        Some(3),
-        "the arrows reach the typed row too"
-    );
     assert_eq!(w.model_picked(s, None), Some(named("claude-opus-4-1")));
 }
 
