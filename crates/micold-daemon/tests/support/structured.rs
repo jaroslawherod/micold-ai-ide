@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+#[path = "stand_in_build.rs"]
+pub mod stand_in_build;
+#[allow(unused_imports)]
+pub use stand_in_build::scratch_home;
+
 use micold_core::session::AiCli;
 
 #[cfg(not(windows))]
@@ -604,39 +609,12 @@ fn call_tool_server(args: &[String], file: &str) -> Option<String> {
 pub fn fake_stream_cli() {
     static READY: OnceLock<PathBuf> = OnceLock::new();
     READY.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("micold-938-stream-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("a directory for the stand-in");
-        let source = dir.join("stand_in.rs");
         let answer = fixture("command-initialize.jsonl");
         let source_text = format!(
             "const INITIALIZE_ANSWER: &str = {:?};\n{STAND_IN_SOURCE}",
             answer.display().to_string()
         );
-        std::fs::write(&source, source_text).expect("write the stand-in's source");
-        let exe = dir.join(STAND_IN);
-        let rustc_name = if cfg!(windows) { "rustc.exe" } else { "rustc" };
-        let rustc = std::env::var_os("RUSTC")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("CARGO")
-                    .map(PathBuf::from)
-                    .and_then(|cargo| cargo.parent().map(|dir| dir.join(rustc_name)))
-                    .filter(|rustc| rustc.exists())
-            })
-            .unwrap_or_else(|| PathBuf::from("rustc"));
-        let out = std::process::Command::new(&rustc)
-            .args(["--edition", "2021"])
-            .arg(&source)
-            .arg("-o")
-            .arg(&exe)
-            .output()
-            .unwrap_or_else(|err| panic!("run {}: {err}", rustc.display()));
-        assert!(
-            out.status.success(),
-            "compile the stand-in with {}: {}",
-            rustc.display(),
-            String::from_utf8_lossy(&out.stderr)
-        );
+        let dir = stand_in_build::stand_in_dir(&source_text, STAND_IN);
         let mut path = vec![dir.clone()];
         path.extend(
             std::env::var_os("PATH")
