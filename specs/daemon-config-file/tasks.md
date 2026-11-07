@@ -482,6 +482,19 @@ protocol change (wire format) is reviewed on its own. It changes a wire protocol
 - **Depends on**: Issue 9 (#1530) M1
 - **Tier**: full
 
+### Issue 9 (#1530) — M3 — Container and pod git configuration comes only from `[git] config_file`
+
+One task, cut by the close unit: T094 was ticked in M2 but its replacement of `CredentialShare::GitConfig` and the kube
+`gitconfig` Secret mount was deferred (`tdd/cycle-log.md`, `tdd/verification.md` I9-2). It changes the sandbox boundary and
+what a pod mounts, so the tier is `full`. The test-strength tasks T140–T147 stay with the close unit that follows.
+
+- **Tasks**: T139
+- **Deliverable**: container and pod sessions get `GIT_CONFIG_GLOBAL` from the delivered read-only `[git] config_file`; `CredentialShare::GitConfig` and the kube `gitconfig` Secret `subPath` mount are gone.
+- **Satisfies**: US3; FR-030, FR-031
+- **Verify**: `cargo test -p micold-core --lib kube`; `cargo test -p micold-client --test daemon_config_delivery_host`; `cargo test -p micold-daemon supervisor`
+- **Depends on**: Issue 9 (#1530) M2
+- **Tier**: full
+
 ### Issue 10 (#1531) — M1 — `GH_TOKEN` for `gh` in sessions of every kind
 
 One milestone: five tasks, one shim. The failing tests for the `gh-token` subcommand and the shim's
@@ -710,3 +723,17 @@ including the file-vs-`settings.json` rule and ships with the UI that completes 
 - **Verify**: `cargo test -p micold-client --test main daemon_config_render`; `cargo test -p micold-client settings::daemons`
 - **Depends on**: Issue 11 (#1532) M3
 - **Tier**: full
+
+## Phase 24: TDD remediation (Issue 9 / #1530, from `tdd/verification.md`, section "Issue 9")
+
+Verdict FAIL: Issue 9 is not done until T139 and T140 are cleared.
+
+- [ ] T139 [US3] I9-2: finish T094's deferred half (milestone M3): container and pod sessions take `GIT_CONFIG_GLOBAL` from the delivered `[git] config_file` only; remove `CredentialShare::GitConfig` and the kube `gitconfig` Secret `subPath` mount (`crates/micold-core/src/kube/credentials.rs:46,94,118`, `crates/micold-client/src/shell/sandbox.rs:463`), with a failing-first test that the pod has no `gitconfig` `subPath` mount and that a container session's config comes from the file; `cargo test -p micold-core --lib kube`
+- [ ] T140 [US2] I9-1: add the #1530 rows (B1-B10, `traces` US2, US3, FR-008, FR-010, FR-016, SC-004) and a baseline to `tdd/test-list.md` with the cycle-log red for each new test below; `grep -c 1530 specs/daemon-config-file/tdd/test-list.md`
+- [ ] T141 [US3] I9-4: add a daemon test that applies the `session_git_env` block to a real `git ls-remote`/`push` against the loopback forge with a planted host helper: the chosen token authenticates, a repository no token reaches falls back, and a sandbox never runs the planted helper; `cargo test -p micold-daemon --test git_credential_config`
+- [ ] T142 [US3] I9-3: remove the `if !inherited` branch and the dependence on `settings::install` order in `supervisor.rs:1155-1203` (drive `env_hygiene_with` with explicit facts); `cargo test -p micold-daemon --lib container_git_tests`
+- [ ] T143 [US3] I9-5: test `deliver_container` with `CredentialShare::GitConfig` shared and not (`daemon_config_delivery.rs:138`), and that the delivered copy loses `commit.gpgsign`/`tag.gpgsign` in both the sandbox (`shell/sandbox.rs:476`) and pod (`kube/credentials.rs:123`) paths; `cargo test -p micold-client --test daemon_config_delivery_host`
+- [ ] T144 [US2] I9-6: test through `credential_config::answer` a stale entry refreshed after 15 min, a failed request keeping the last answer, a replaced unfiltered token getting its own entry with the old one pruned; `cargo test -p micold-daemon --lib credential_config`
+- [ ] T145 [US3] I9-7, I9-9: remove `combine_git_edits` and its test (dead since `86468d87c`) and decide the legacy file path (`git_credential.rs:71-75`, `mcp/scoped_git_credential.rs`): delete it with its tests or give it a producer; `mise run check`
+- [ ] T146 [US2] I9-8, I9-10: record the `spawn.rs:568` 4900 ms tolerance as intended in the test comment's rule, make `gitconfig.rs:289` fail rather than skip without git, split `git_credential_config.rs:174` into one test per rule; `cargo test -p micold-core --lib scoped_credential::gitconfig`
+- [ ] T147 [US2] Run the deliberate mutants listed under "Mutation results (Issue 9)" one at a time, restore each, and record caught or survived in `tdd/verification.md`
