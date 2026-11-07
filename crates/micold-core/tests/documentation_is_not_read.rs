@@ -55,6 +55,12 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "Claude Code's user-level instruction file in a sandbox home (`~/.claude/CLAUDE.md`), joined \
          to a home path the daemon is given; never this repository's CLAUDE.md (#1439 FR-019).",
     ),
+    (
+        "crates/micold-core/src/daemon_config/ai_cli.rs",
+        "CLAUDE.md",
+        "A file name in Claude Code's own config directory that the daemon links into the isolated \
+         one (`~/.claude/CLAUDE.md`); never this repository's CLAUDE.md (#1532).",
+    ),
 ];
 
 /// This file, which is exempt from its own scan.
