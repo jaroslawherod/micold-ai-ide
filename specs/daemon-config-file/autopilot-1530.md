@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1530_the-daemon-s-credential-helper-chooses-the-token
 - **Started**: 2026-11-04
 - **Phase**: M3 (cut by Close)
-- **Next step**: implement M3 (T139), then a new Close unit does T140-T147 from tdd/verification.md (Issue 9)
+- **Next step**: M3 PR open; then a new Close unit does T140-T147 from tdd/verification.md (Issue 9)
 
 ## Pull requests
 
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M1: review A (code-review high) 10 findings, 4 fixed (host reset now per forge, fallback on unreadable config, absolute config path, token file leading blank line); review B (sonnet) CLEAN, 3 MINOR (F1 fixed). Snapshot 503b13b8:826681cfb.
 
+- M3: review A (code-review high, snapshot 5e2ddf9c:e2e690bc) CHANGES: F1 MAJOR (daemon still falls back to the state-dir gitconfig copy) fixed by removing `legacy_identity_exists` and the fallback arm, round 2 not needed beyond the gate (fix is local, covered by supervisor tests). Review B (sonnet) at 83d6e936:7d2ff7d1 in progress.
 - M2: review A (code-review high) CLEAN, 3 MINOR (F2 fixed, F1 noted in Follow-ups); review B (sonnet) F1 MAJOR (no cycle-log entry) fixed, F2/F3 MINOR noted. Rebased onto origin/main afterwards; full gate re-run on the rebased tree. A Close unit follows this last milestone.
 
 | Review | Round | Snapshot | Verdict |
@@ -55,15 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 (T139) in progress, uncompiled WIP committed locally (nothing built: the shared build lock was held by other worktrees' gates for 1 h+; no red run exists, tests were written first in the same working tree, see below). Not pushed, no PR.
-
-Design chosen: no opt-in any more. The app always delivers the sanitized `~/.gitconfig` (new `micold_core::scoped_credential::shared_copy(path) -> Result<Option<String>,String>`): container -> `delivery.secrets/gitconfig`, `[git] config_file = /run/micold/secrets/gitconfig` (`deliver_container` got a `git_config: Option<&str>` param before `startup`); pod -> key `gitconfig` of the `<name>-startup` secret (`StartRequest.git_config`, `manifest::STARTUP_GIT_CONFIG_FILE`), `[git] config_file = /run/micold/secrets/startup/gitconfig`. `CredentialShare::GitConfig` and `KubeCredential::GitConfig` removed; stored `git_config` entries are dropped silently (`RawShare::Retired`, `RetiredKubeCredential`); `names.retired_secrets()` is now 3 (adds `-gitconfig`); `holds_retired_credential` recreates a pod whose stamp allows `git_config`; `daemon_env()` lost its param and the `GIT_CONFIG_GLOBAL` insert.
-
-Done (edited, never compiled): core `sandbox/mod.rs`, `sandbox/argv.rs` tests, `kube/{credentials,names,manifest,start,start_tests,lifecycle,settings}.rs`, golden `tests/golden/kube/pod_spec.json`, `scoped_credential/{gitconfig,mod}.rs` (+ test); client `daemon.rs`, `daemon_config_render.rs`, `daemon_config_delivery.rs`, `shell/sandbox.rs` (share_sanitized_git_config replaced by `sanitized_git_config(facts)`, test rewritten), `tests/daemon_config_render.rs`; daemon `tests/sandbox_real_support/mod.rs` (extra `None` arg).
-
-Next: run `scripts/build-lock.sh cargo check --workspace --tests` (or `mise run check`) and fix what is left of `GitConfig`: `crates/micold-client/src/features/daemons_kube.rs` (AllowedKind::GitConfig, drop it), `ui/settings/container_fields.rs` tests (~689-725 use GitConfig; use AiCliAuth-only cases), `features/daemon_sections.rs`, tests `daemons_feature.rs:364,381,626,643`, `features_daemon_sections.rs:256`, `features_settings.rs:135,142`, `features_daemons.rs:1228`, `settings_rail_motion.rs:1065`, `upgrade_single_daemon.rs:167`, `support/covered_states.rs:1870,1951`, core `tests/sandbox_credentials.rs` (101-218, 328, 518, 687-695), `tests/settings_roundtrip.rs:377`, daemon `tests/settings/catalog_adoption.rs:439,463`, `tests/daemons_kube`/`features_daemons_kube.rs`; `deliver_container` callers in `tests/daemon_config_delivery_host.rs` (add the `None` arg; add a test that a `Some` copy lands in `secrets/gitconfig` with `config_file` and `None` removes it); `daemon_config_delivery.rs` unused `CONTAINER_DATA_DIR` check; docs `docs/user-guide/sandboxed-daemon.md` / `settings.md` if they name the Git configuration share. Then record red/green in `tdd/cycle-log.md`: the new tests are `a_stored_git_config_share_is_dropped_without_a_notice` (core sandbox), `allowed_naming_the_removed_items...` (kube settings, now with `git_config`), `the_git_config_is_a_key_of_the_startup_secret_and_no_secret_of_its_own` (start_tests), `the_shared_copy_is_none_without_a_file_and_carries_no_helper`, `the_git_config_is_given_as_a_sanitized_copy_without_any_share`; say honestly red was not run (build queue). Run Verify (`cargo test -p micold-core --lib kube`, `-p micold-client --test daemon_config_delivery_host`, `-p micold-daemon supervisor`), tick T139, reviews A/B, full gate, PR.
-
-Stale leftover: pid 1123420 (`bash -c scripts/build-lock.sh cargo test -p micold-core --lib -- daemon_config::matching ...; ... ALLDONE`) and its queued child 1663635 from the earlier verify worker are still waiting on the build lock in this worktree; I was not allowed to kill them. Kill them first so they do not compile against the half-edited tree.
+None.
 
 ## Open escalation
 

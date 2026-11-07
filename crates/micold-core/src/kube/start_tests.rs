@@ -1558,7 +1558,7 @@ async fn a_kubernetes_start_up_carries_no_user_git_credential_whatever_the_saved
     allowed.extend(kept.as_array().unwrap().iter().cloned());
     stored["allowed"] = serde_json::Value::Array(allowed);
     let settings: KubeSettings = serde_json::from_value(stored).unwrap();
-    assert_eq!(settings.allowed.len(), 3, "{:?}", settings.allowed);
+    assert_eq!(settings.allowed.len(), 2, "{:?}", settings.allowed);
 
     let fake = cluster();
     let n = names();

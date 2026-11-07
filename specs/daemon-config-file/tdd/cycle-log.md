@@ -229,3 +229,9 @@ against the rule each covers and run green together once the sequence compiled.
   `gitconfig` subPath mount.
 - Removed: `CredentialShare::GitConfig`, `KubeCredential::GitConfig`, `AllowedKind::GitConfig`, the
   `-gitconfig` secret (now retired, deleted on the next start), `GIT_CONFIG_GLOBAL` from `daemon_env()`.
+- First run of Verify (review B): `micold-core --lib kube` was red, 3 of 153: tests still expecting the
+  `gitconfig` secret (`stop_deletes_the_pod_by_uid...` 3 -> 2 secrets, `only_a_stamp_allowing_a_retired_kind...`
+  now true for `git_config`, `a_kubernetes_start_up_carries_no_user_git_credential...` 3 -> 2 kept items). They
+  were stale expectations, fixed to the new behaviour (not weakened: the stamp now recreates the pod).
+- Green: `micold-core --lib kube` 153 passed; `micold-client --test main -- daemon_config_delivery_host` 14 passed;
+  `micold-daemon --lib supervisor` (with the legacy state-dir fallback removed, review A F1) passed.
