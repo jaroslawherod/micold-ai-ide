@@ -962,40 +962,35 @@ impl MountSet {
         // Where each AI CLI's sign-in actually lands when delivered read-only (T065), keyed by its
         // container-mapped live path — computed from the *container*'s own home so it matches
         // exactly what the sandbox recomputes for itself at relink time (`relink_ai_cli_sign_ins`).
-        let ai_cli_delivered: std::collections::BTreeMap<PathBuf, PathBuf> =
-            ai_cli_sign_in_links(&pathmap::map_for(home, windows_host), SecretsBase::ContainerAuth)
-                .into_iter()
-                .collect();
+        let ai_cli_delivered: std::collections::BTreeMap<PathBuf, PathBuf> = ai_cli_sign_in_links(
+            &pathmap::map_for(home, windows_host),
+            SecretsBase::ContainerAuth,
+        )
+        .into_iter()
+        .collect();
         let credentials = profile
             .credentials
             .iter()
             .flat_map(|share| {
-                layout
-                    .paths_for(*share)
-                    .into_iter()
-                    .map(|host| {
-                        // Credentials are mounted at their own absolute paths for the same reason
-                        // projects are: the tools inside look for them where they always are.
-                        let container = pathmap::map_for(host, windows_host);
-                        CredentialMount {
-                            share: *share,
-                            delivered: match share {
-                                CredentialShare::GitConfig => None,
-                                CredentialShare::AiCliAuth => {
-                                    ai_cli_delivered.get(&container).cloned()
-                                }
-                            },
-                            container,
-                            // The git configuration is mounted from its sanitized copy, never from
-                            // the host's file (FR-004).
-                            host: match share {
-                                CredentialShare::GitConfig => {
-                                    state_dir.join(SANDBOX_GITCONFIG_FILE)
-                                }
-                                CredentialShare::AiCliAuth => host.to_path_buf(),
-                            },
-                        }
-                    })
+                layout.paths_for(*share).into_iter().map(|host| {
+                    // Credentials are mounted at their own absolute paths for the same reason
+                    // projects are: the tools inside look for them where they always are.
+                    let container = pathmap::map_for(host, windows_host);
+                    CredentialMount {
+                        share: *share,
+                        delivered: match share {
+                            CredentialShare::GitConfig => None,
+                            CredentialShare::AiCliAuth => ai_cli_delivered.get(&container).cloned(),
+                        },
+                        container,
+                        // The git configuration is mounted from its sanitized copy, never from
+                        // the host's file (FR-004).
+                        host: match share {
+                            CredentialShare::GitConfig => state_dir.join(SANDBOX_GITCONFIG_FILE),
+                            CredentialShare::AiCliAuth => host.to_path_buf(),
+                        },
+                    }
+                })
             })
             .collect();
 

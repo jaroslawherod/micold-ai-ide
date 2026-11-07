@@ -252,10 +252,7 @@ mod tests {
             KubeCredential::GitConfig.mount(),
             mount("/run/micold/secrets/git", None)
         );
-        assert_eq!(
-            claude.mount(),
-            mount(&sign_in_dir(AiCli::ClaudeCode), None)
-        );
+        assert_eq!(claude.mount(), mount(&sign_in_dir(AiCli::ClaudeCode), None));
         let pull = KubeCredential::RegistryPull { auths: "/a".into() };
         assert_eq!(pull.mount(), None);
         assert_eq!(pull.secret_type(), "kubernetes.io/dockerconfigjson");

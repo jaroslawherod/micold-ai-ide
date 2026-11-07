@@ -497,6 +497,11 @@ sandbox's home and comes back if you move the service into the container again.
 
 A few limits of the sign-in share:
 
+- **The shared sign-in is read-only.** The sandbox (container or pod) sees your token file as a
+  read-only file and links it where the CLI looks, so a CLI cannot refresh or overwrite your
+  machine's token. On a host or SSH daemon, a configured `sign_in_file` gives the session its own
+  config folder under the data directory (`<data_dir>/ai/<cli>/`), with the sign-in and your
+  settings files linked in; your own sign-in file is never modified.
 - **macOS keeps the token in the Keychain**, not in a file, so there is nothing to share. The
   share stays on and mounts nothing; sign in inside a session instead, with `/login`. The same is
   true anywhere the token file is missing, such as before your first sign-in or when you

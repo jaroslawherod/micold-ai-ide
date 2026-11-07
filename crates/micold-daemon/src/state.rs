@@ -1537,7 +1537,13 @@ impl DaemonState {
         let Some(base) = self.ai_cli_secrets_base() else {
             return;
         };
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        let Some(home) = std::env::var_os("HOME")
+            .filter(|h| !h.is_empty())
+            .map(PathBuf::from)
+        else {
+            tracing::debug!(session = %id.0, "HOME is unset; no AI CLI sign-in relinked");
+            return;
+        };
         for path in micold_core::sandbox::relink_ai_cli_sign_ins(&home, base) {
             tracing::debug!(
                 session = %id.0,
@@ -2216,9 +2222,49 @@ impl DaemonState {
         which: AiCli,
     ) -> Vec<(String, String)> {
         match self.configured_ai_cli(which) {
-            Some(cli) => with_configured_env(env, &cli),
+            Some(cli) => {
+                let env = with_configured_env(env, &cli);
+                self.with_host_config_dir(env, which, &cli)
+            }
             None => env,
         }
+    }
+
+    /// T065, host and SSH: a configured `sign_in_file` wins, so the session gets
+    /// `<data_dir>/ai/<id>/` as its config dir with the sign-in and the user's own settings linked
+    /// in ([`micold_core::daemon_config::ai_cli::prepare_host_config_dir`]); the machine's own
+    /// sign-in file is never touched. A no-op on a sandbox kind (its sign-in arrives through the
+    /// read-only mount) and without a data directory; a failure is logged, never fatal (FR-019).
+    fn with_host_config_dir(
+        &self,
+        mut env: Vec<(String, String)>,
+        which: AiCli,
+        cli: &micold_core::daemon_config::AiCli,
+    ) -> Vec<(String, String)> {
+        use micold_core::daemon_config::{ai_cli::prepare_host_config_dir, Kind};
+        let (Some(sign_in), Some(data_dir)) = (&cli.sign_in_file, self.pasted_data_dir.get())
+        else {
+            return env;
+        };
+        let on_host = matches!(
+            self.config.get().map(|c| c.current().daemon.kind),
+            Some(Kind::Host | Kind::Ssh)
+        );
+        if !on_host {
+            return env;
+        }
+        let live = which.provider().config_dir();
+        match prepare_host_config_dir(data_dir, cli.id, sign_in.path(), live.as_deref()) {
+            Ok(Some((name, dir))) => {
+                env.retain(|(existing, _)| existing != name);
+                env.push((name.to_string(), dir.display().to_string()));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, cli = ?cli.id, "could not prepare the sign-in config dir")
+            }
+        }
+        env
     }
 
     /// The `PATH` a session spawned in `cwd` gets (feature 029, BUG-001, FR-003b): the one the
