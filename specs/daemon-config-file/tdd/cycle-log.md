@@ -182,3 +182,34 @@ below is by mutation on the green tree, not an observed failing-first run.
   (only exercised `GitCredentialTargets`), and the schedule/fake modules.
 - Deferred: replacing `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount. The sanitized
   copy stays the delivery mechanism; both container and pod name it as `[git] config_file`.
+
+## Issue 11 (#1532) M2a: sign-in delivery, read-only on every kind (T065)
+
+Honest account (`TEST_AFTER`, as for Issue 5 M1a and Issue 9 M1/M2): the writable-share removal and
+its replacement landed as a sequence of `wip` commits (`2481b2c17`, `5d9492176`) that did not
+compile until `30ca6c579`, so there is no clean per-behaviour red run; the tests below were written
+against the rule each covers and run green together once the sequence compiled.
+
+- Baseline: before this milestone, `CredentialShare::writable` existed and the pod mount used a
+  single-file `subPath` Secret; container, pod and host/SSH delivery for a sign-in used that
+  writable path.
+- Removed: `CredentialShare::writable` and every `.writable()` call site
+  (`crates/micold-core/src/sandbox/mod.rs`); confirmed by `grep -rn '\.writable()' crates/` finding
+  none.
+- Green, container: `relink_ai_cli_sign_ins`'s pair-filtering loop (`sandbox/mod.rs`, extracted as
+  the public `relink_pairs` seam in `0b55d2d07` so a test can point `delivered` at a writable
+  tempdir) and `sandbox_credentials.rs`'s new relink tests plus the delivered-path test —
+  `cargo test -p micold-core sandbox::mod -- credential`, 103 passed.
+- Green, pod: `kube::credentials::sign_in_dir` delivers a directory Secret with no `subPath`;
+  `kube/manifest.rs`'s rewritten init-container/mount tests and `kube/credentials.rs`'s
+  `the_pod_relink_targets_claudes_own_sign_in_directory` — `cargo test -p micold-core
+  kube::credentials`, 7 passed.
+- Green, host/SSH: `daemon_config::ai_cli::prepare_host_config_dir` builds
+  `<data_dir>/ai/<id>/` with the sign-in linked in and the user's own settings files linked
+  read-through; `ai_cli.rs`'s `preparing_a_host_config_dir_links_the_sign_in_and_leaves_the_original_untouched`
+  asserts SC-008 directly (mtime and content of the live sign-in file unchanged after two runs).
+- Argv coverage: `sandbox_argv.rs`'s rewritten writable/mapped-volume tests cover all 12 `sandbox_argv`
+  cases, all passing.
+- Full gate at the milestone's final HEAD (`a630e05ff`): 12656 tests run, 11 failed — all 11 proven
+  pre-existing on a clean detached `origin/main` worktree (see `autopilot-1532.md`'s *Gate* section);
+  none of this milestone's own tests are among them.
