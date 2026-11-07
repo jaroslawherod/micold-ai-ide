@@ -943,6 +943,7 @@ pub fn view_with<'a>(
         .push_maybe(card_menu)
         .push_maybe(shell_instance_menu)
         .push_maybe(transcript_menu)
+        .push_maybe(composer::context_menu(state, roles))
         .push_maybe(session_start_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)

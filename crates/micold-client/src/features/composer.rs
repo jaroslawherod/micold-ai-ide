@@ -518,6 +518,22 @@ pub enum Msg {
     SwitchDismissed(SessionId),
     /// The `/login` offer beside an authentication failure taken (#943 FR-022a).
     LoginOffered(SessionId),
+    /// Paste the system clipboard's text into `session`'s composer: Ctrl/Cmd+V or the context
+    /// menu's **Paste** (#1721). The shell reads the clipboard the way the terminal pane does.
+    PasteRequested(SessionId),
+    /// The clipboard's text, read for [`Msg::PasteRequested`]; `None` when it holds no text.
+    Pasted {
+        session: SessionId,
+        text: Option<String>,
+    },
+    /// A right press on `session`'s composer: the context menu opens at `origin`, in window
+    /// pixels (#1721).
+    MenuOpened {
+        session: SessionId,
+        origin: (u16, u16),
+    },
+    /// The composer's context menu closed.
+    MenuDismissed(SessionId),
 }
 
 /// Every session's composer in this window (data-model *Composers*).
@@ -532,6 +548,8 @@ pub struct State {
     /// Whether the session options row (model, effort, permission) is shown: one value for the
     /// window, persisted as `Settings.composer_options_open` (feature 1703 FR-009, FR-011).
     pub options_open: bool,
+    /// The open context menu of a composer, and where (window pixels) (#1721).
+    pub menu: Option<(SessionId, (u16, u16))>,
     /// The editor of a session that has no composer yet: empty.
     blank: crate::app::Editor,
 }
@@ -1286,5 +1304,31 @@ mod tests {
         assert!(open_editor_visible(2, false, false));
         assert!(open_editor_visible(1, true, false));
         assert!(open_editor_visible(1, false, true));
+    }
+}
+
+/// A composer's right-click menu (**Paste**), as a floating surface (#1721): Escape and a click
+/// elsewhere close it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ComposerContextMenu(pub SessionId);
+
+impl crate::overlay::FloatingSurface for ComposerContextMenu {
+    fn id(&self) -> crate::overlay::SurfaceId {
+        crate::overlay::SurfaceId::new("composer_context_menu")
+    }
+
+    fn layer(&self) -> micold_core::overlay::Layer {
+        micold_core::overlay::Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> crate::overlay::DismissalRules {
+        crate::overlay::DismissalRules::for_layer(micold_core::overlay::Layer::ContextMenu)
+            .cancelled_by(crate::app::Message::Composer(Msg::MenuDismissed(self.0)))
+    }
+}
+
+impl crate::overlay::registry::Registered for ComposerContextMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.composers.menu.map(|(session, _)| Self(session))
     }
 }

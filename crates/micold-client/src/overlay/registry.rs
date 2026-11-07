@@ -341,6 +341,8 @@ register! {
     // Feature 1550: a structured transcript's Copy / Select all menu (FR-013, M-4).
     crate::features::transcript_selection::TranscriptContextMenu,
     crate::features::session::ShellInstanceMenu,
+    // #1721: a structured composer's Paste menu.
+    crate::features::composer::ComposerContextMenu,
     // Settings is deliberately absent as of feature 027: it is a full-surface view reached from
     // the toolbar, not a floating surface, so it has no dismissal rules, no layer, and nothing to
     // displace. `SettingsDialog` and `ui/settings_form.rs` went with the registration.

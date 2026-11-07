@@ -29,6 +29,7 @@ use crate::features::large_editor::Msg as LargeEditorMsg;
 use crate::features::window::{FieldId, Msg as WindowMsg};
 use crate::icons::Icon;
 use crate::keymap::KeyInput;
+use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
@@ -649,12 +650,43 @@ fn text_area_with_button<'a>(
         Space::new().into()
     };
     let field: Element<'a, Message> = stack![container(area).width(Length::Fill), overlay].into();
-    mouse_area(field)
+    let hover = mouse_area(field)
         .on_enter(Message::LargeEditor(LargeEditorMsg::Hovered(session, true)))
         .on_exit(Message::LargeEditor(LargeEditorMsg::Hovered(
             session, false,
-        )))
+        )));
+    ContextArea::new(hover)
+        .on_secondary_press(move |origin| send(Msg::MenuOpened { session, origin }))
         .into()
+}
+
+/// The label of the composer context menu's only item (#1721).
+pub const MENU_PASTE: &str = "Paste";
+
+/// The open composer context menu, at the right press's window point kept inside the window.
+pub fn context_menu<'a>(
+    state: &State,
+    roles: Roles,
+) -> Option<crate::ui::cdk::overlay::Surface<'a, Message>> {
+    let (session, origin) = state.composers.menu?;
+    let items = vec![crate::ui::material::MenuItem {
+        message: Some(send(Msg::PasteRequested(session))),
+        ..crate::ui::material::MenuItem::labeled(MENU_PASTE, send(Msg::MenuDismissed(session)))
+    }];
+    let origin = crate::features::project::clamp_menu_anchor(
+        origin,
+        crate::ui::material::menu_panel_size(items.len()),
+        state.window.window_size,
+    );
+    Some(
+        crate::ui::material::ContextMenu::new(
+            items,
+            origin,
+            send(Msg::MenuDismissed(session)),
+            roles,
+        )
+        .into(),
+    )
 }
 
 /// The text area beside #942's control, **Send** and, while busy, **Stop** (FR-004, FR-012).
@@ -765,6 +797,14 @@ pub fn key_binding(
 ) -> Option<Binding<Message>> {
     if !matches!(press.status, Status::Focused { .. }) {
         return Binding::from_key_press(press);
+    }
+    // Paste is the app's clipboard read, the terminal pane's, not the editor's own synchronous
+    // one, which gets nothing from a live Wayland clipboard (#1721).
+    if press.key.to_latin(press.physical_key) == Some('v')
+        && press.modifiers.command()
+        && !press.modifiers.alt()
+    {
+        return Some(Binding::Custom(send(Msg::PasteRequested(session))));
     }
     let Some(input) = key_input(
         &press.key,
