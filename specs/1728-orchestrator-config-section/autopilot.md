@@ -53,7 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Rebased onto origin/main 8470f7464 (one trivial conflict in daemon_config/tests.rs: both new tests kept; HEAD c0ce24a3f, local only, NOT pushed). Full `mise run gate` is red on this machine on one test outside this diff: `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` (from #1532 on main; fails identically twice, passes with a different `$HOME`, so it depends on the real `~/.local/share/micold-ai-ide/daemons` data; origin/main CI is red too, on another test). Next: get a green gate (clean HOME for that test, or fix #1532's test), then `git push --force-with-lease -u origin HEAD`.
 
 ## Open escalation
 
