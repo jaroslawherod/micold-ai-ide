@@ -2088,7 +2088,42 @@ impl DaemonState {
     /// Environment page lists the directory with what the script printed. The log line names the
     /// directory and the outcome's kind only, never the script's output.
     fn spawn_env_for(&self, cwd: &Path) -> ResolvedEnv {
-        self.with_sandbox_path(self.resolved_env_for(cwd))
+        self.with_gh_shim_path(self.with_sandbox_path(self.resolved_env_for(cwd)))
+    }
+
+    /// `resolved` with `<data_dir>/bin` first on its `PATH` (#1531, T057): the `gh` shim written
+    /// there resolves `GH_TOKEN`/`GH_HOST` for every `gh` call through the configuration's
+    /// chooser, on every session kind (host, SSH, container, Kubernetes) alike — unlike
+    /// [`Self::with_sandbox_path`], this needs no `offered.json` of its own. A no-op without a data
+    /// directory or this process's own executable path (both the shim bakes in), and when writing
+    /// it fails: a session must not fail to spawn over a shim it does not strictly need.
+    fn with_gh_shim_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
+        let Some(data_dir) = crate::settings::current()
+            .data_dir
+            .clone()
+            .or_else(micold_core::paths::data_dir)
+        else {
+            return resolved;
+        };
+        let Ok(exe) = std::env::current_exe() else {
+            return resolved;
+        };
+        let Ok(bin_dir) = crate::gh_shim::write_shim(&data_dir.join("bin"), &exe) else {
+            return resolved;
+        };
+        let mut joined = bin_dir.into_os_string();
+        joined.push(if cfg!(windows) { ";" } else { ":" });
+        joined.push(session_path(&resolved.vars));
+        let joined = joined.to_string_lossy().into_owned();
+        match resolved
+            .vars
+            .iter_mut()
+            .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
+        {
+            Some((_, value)) => *value = joined,
+            None => resolved.vars.push(("PATH".to_string(), joined)),
+        }
+        resolved
     }
 
     /// [`Self::spawn_env_for`] before [`Self::with_sandbox_path`] orders its `PATH`.
@@ -9430,6 +9465,33 @@ mod offered_tests {
         std::env::split_paths(&state.spawn_path_for(cwd)).collect()
     }
 
+    /// `DaemonState::with_gh_shim_path` (#1531, T057) puts this first on every spawn's `PATH` in
+    /// this test binary too: nothing here configures `daemon.data_dir`, so it falls back to the
+    /// real per-user data directory, same as a host daemon with no configuration of its own.
+    /// `None` only where that directory cannot be resolved at all (`with_gh_shim_path` is then a
+    /// no-op, and so is this).
+    fn gh_shim_bin_dir() -> Option<PathBuf> {
+        // Mirrors `DaemonState::with_gh_shim_path`'s own precedence exactly: settings' `data_dir`
+        // (itself `MICOLD_DATA_DIR` read fresh from this process's real environment when nothing
+        // installed settings, as here) before `micold_core::paths::data_dir()`'s fallback — not
+        // the fallback alone, which an earlier test's `apply_to_process()` may have frozen to a
+        // tempdir through its process-wide `OnceLock` by the time this one runs.
+        crate::settings::current()
+            .data_dir
+            .clone()
+            .or_else(micold_core::paths::data_dir)
+            .map(|dir| dir.join("bin"))
+    }
+
+    /// `path`, without a leading `gh_shim_bin_dir()` — these pre-#1531 tests are about the rest of
+    /// the ordering, which the dedicated `tests/gh_shim.rs` does not cover.
+    fn without_gh_shim_dir(mut path: Vec<PathBuf>) -> Vec<PathBuf> {
+        if path.first() == gh_shim_bin_dir().as_ref() {
+            path.remove(0);
+        }
+        path
+    }
+
     #[test]
     fn the_listed_cli_is_offered_and_its_bin_leads_the_spawn_path() {
         let store = tempfile::tempdir().unwrap();
@@ -9437,13 +9499,10 @@ mod offered_tests {
         let bin = bin_of(&dir, "claude-bin", &[AiCli::ClaudeCode]);
         offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
         let cwd = tempfile::tempdir().unwrap();
-        assert_eq!(path_of(&state, cwd.path())[0], bin);
+        assert_eq!(without_gh_shim_dir(path_of(&state, cwd.path()))[0], bin);
         assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::ClaudeCode]);
         let spawn = state.spawn_env_for(cwd.path());
-        assert!(spawn
-            .vars
-            .iter()
-            .any(|(k, v)| k == "PATH" && v.starts_with(&*bin.to_string_lossy())));
+        assert!(path_var(&spawn.vars).starts_with(&*bin.to_string_lossy()));
     }
 
     #[test]
@@ -9504,11 +9563,23 @@ mod offered_tests {
             .unwrap();
     }
 
+    /// The `PATH` in `vars`, stripped of the leading `gh_shim_bin_dir()` segment
+    /// `DaemonState::with_gh_shim_path` (#1531, T057) puts there — these pre-#1531 tests are about
+    /// the rest of the ordering.
     fn path_var(vars: &[(String, String)]) -> String {
-        vars.iter()
+        let raw = vars
+            .iter()
             .find(|(k, _)| k == "PATH")
             .map(|(_, v)| v.clone())
-            .expect("a PATH in the spawn environment")
+            .expect("a PATH in the spawn environment");
+        match gh_shim_bin_dir() {
+            Some(dir) => {
+                let prefix = format!("{}{}", dir.display(), if cfg!(windows) { ';' } else { ':' });
+                raw.strip_prefix(prefix.as_str())
+                    .map_or(raw.clone(), str::to_string)
+            }
+            None => raw,
+        }
     }
 
     /// The first folder of `path` holding `command`, as a spawn would find it.

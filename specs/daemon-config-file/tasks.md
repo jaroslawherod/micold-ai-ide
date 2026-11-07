@@ -156,11 +156,11 @@ early (`crates/micold-daemon/src/server.rs:2773`).
 
 ## Issue 10 — feat: `GH_TOKEN` for `gh` in sessions of every kind (needs 9)
 
-- [ ] T055 [P] [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs`: `micold-daemon gh-token --cwd <dir>` prints the token chosen for the cwd's `origin`; exits 1 silently with none
-- [ ] T056 [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs` (same file as T055, different test functions, so not `[P]`): the shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set, and leaves an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH`
-- [ ] T057 [US2] Implement `crates/micold-daemon/src/gh_shim.rs` and the PATH entry at session spawn in `crates/micold-daemon/src/state.rs`; the Windows `gh.cmd` shim forwards the real `gh`'s exit code, since a batch file cannot replace the process image the way the unix `sh` shim's `exec` does
-- [ ] T095 [US2] The `gh` shim sets `GH_HOST` from the chosen token's `host` (D15 row 7), left alone with no token chosen, same as `GH_TOKEN` (T056); test in `crates/micold-daemon/tests/gh_shim.rs`
-- [ ] T058 [US2] Document `gh` support in `docs/user-guide/settings.md`
+- [x] T055 [P] [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs`: `micold-daemon gh-token --cwd <dir>` prints the token chosen for the cwd's `origin`; exits 1 silently with none
+- [x] T056 [US2] Failing test in `crates/micold-daemon/tests/gh_shim.rs` (same file as T055, different test functions, so not `[P]`): the shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set, and leaves an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH`
+- [x] T057 [US2] Implement `crates/micold-daemon/src/gh_shim.rs` and the PATH entry at session spawn in `crates/micold-daemon/src/state.rs`; the Windows `gh.cmd` shim forwards the real `gh`'s exit code, since a batch file cannot replace the process image the way the unix `sh` shim's `exec` does
+- [x] T095 [US2] The `gh` shim sets `GH_HOST` from the chosen token's `host` (D15 row 7), left alone with no token chosen, same as `GH_TOKEN` (T056); test in `crates/micold-daemon/tests/gh_shim.rs`
+- [x] T058 [US2] Document `gh` support in `docs/user-guide/settings.md`
 
 ---
 
