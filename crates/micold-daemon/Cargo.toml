@@ -412,6 +412,10 @@ name = "spawn_fd_hygiene"
 path = "tests/spawn_fd_hygiene.rs"
 
 [[test]]
+name = "stand_in_build"
+path = "tests/stand_in_build.rs"
+
+[[test]]
 name = "structured_commands"
 path = "tests/structured_commands.rs"
 

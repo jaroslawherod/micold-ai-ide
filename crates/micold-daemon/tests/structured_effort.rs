@@ -15,7 +15,7 @@
 #![cfg(unix)]
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -56,14 +56,14 @@ const TERMINAL: &str = "ready>\n";
 
 /// The stand-in on `PATH` and `CLAUDE_CONFIG_DIR` at a directory of this process's, set once.
 fn setup() -> &'static Path {
-    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    static HOME: OnceLock<tempfile::TempDir> = OnceLock::new();
     fake_stream_cli();
     HOME.get_or_init(|| {
-        let home = std::env::temp_dir().join(format!("micold-1554-effort-{}", std::process::id()));
-        std::fs::create_dir_all(&home).expect("a claude config directory");
-        std::env::set_var("CLAUDE_CONFIG_DIR", &home);
+        let home = structured::scratch_home("micold-1554-effort-");
+        std::env::set_var("CLAUDE_CONFIG_DIR", home.path());
         home
     })
+    .path()
 }
 
 fn level(name: &str) -> EffortChoice {

@@ -63,14 +63,14 @@ const PROMPT: &str = "the first prompt";
 /// The stand-in on `PATH` and `CLAUDE_CONFIG_DIR` at a directory of this process's, set once before
 /// any case reads either; each case records its conversations under its own project's key.
 fn setup() -> &'static Path {
-    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    static HOME: OnceLock<tempfile::TempDir> = OnceLock::new();
     fake_stream_cli();
     HOME.get_or_init(|| {
-        let home = std::env::temp_dir().join(format!("micold-938-resume-{}", std::process::id()));
-        std::fs::create_dir_all(&home).expect("a claude config directory");
-        std::env::set_var("CLAUDE_CONFIG_DIR", &home);
+        let home = structured::scratch_home("micold-938-resume-");
+        std::env::set_var("CLAUDE_CONFIG_DIR", home.path());
         home
     })
+    .path()
 }
 
 /// `claude`'s transcript of `id` in `cwd` (its layout: `projects/<cwd with non-alphanumerics as

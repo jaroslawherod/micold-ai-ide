@@ -61,12 +61,11 @@ const TERMINAL: &str = "ready>\n";
 /// The stand-in on `PATH`, `CLAUDE_CONFIG_DIR` at a directory of this process's, and every folder
 /// under the temporary directory trusted there, so a terminal's first input is typed (034 FR-017).
 fn setup() -> &'static Path {
-    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    static HOME: OnceLock<tempfile::TempDir> = OnceLock::new();
     fake_stream_cli();
     HOME.get_or_init(|| {
-        let home = std::env::temp_dir().join(format!("micold-943-switch-{}", std::process::id()));
-        std::fs::create_dir_all(&home).expect("a claude config directory");
-        std::env::set_var("CLAUDE_CONFIG_DIR", &home);
+        let home = structured::scratch_home("micold-943-switch-");
+        std::env::set_var("CLAUDE_CONFIG_DIR", home.path());
         let tmp = std::env::temp_dir();
         let mut projects = serde_json::Map::new();
         for dir in [tmp.clone(), tmp.canonicalize().unwrap_or(tmp)] {
@@ -76,12 +75,13 @@ fn setup() -> &'static Path {
             );
         }
         std::fs::write(
-            home.join(".claude.json"),
+            home.path().join(".claude.json"),
             serde_json::json!({ "projects": projects }).to_string(),
         )
         .unwrap();
         home
     })
+    .path()
 }
 
 /// `claude`'s transcript of conversation `id` in `cwd`, in its layout.
