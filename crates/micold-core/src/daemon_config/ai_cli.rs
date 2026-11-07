@@ -186,6 +186,78 @@ pub fn host_linked_extras(cli: CliId) -> &'static [&'static str] {
     }
 }
 
+/// Links `target` at `link`, replacing whatever link or file was there (a stale link from an
+/// earlier session). A symlink on Unix; a copy elsewhere, where creating one needs a privilege the
+/// user may lack — either way `target` itself is only ever read, never written (SC-008).
+fn replace_link(target: &Path, link: &Path) -> std::io::Result<()> {
+    // The live config dir can already be the isolated one (the daemon inherited its variable):
+    // removing `link` would then delete `target` itself.
+    if same_file(target, link) {
+        return Ok(());
+    }
+    match std::fs::remove_file(link) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::copy(target, link).map(|_| ())
+    }
+}
+
+/// Whether `a` and `b` name the same existing file, following links.
+fn same_file(a: &Path, b: &Path) -> bool {
+    matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
+}
+
+/// Builds `<data_dir>/ai/<id>/` for a host or SSH session whose entry names a `sign_in_file`
+/// (T065, research D9/D13): the configured sign-in linked in at the file name the CLI reads, and
+/// each of the user's own settings files ([`host_linked_extras`]) linked read-through from the
+/// CLI's live config dir `live_config`, when it has them. Returns the environment variable and
+/// value that point the session at it ([`host_config_dir_variable`]). The machine's own sign-in
+/// file is never opened for writing: every entry here is a link to it, or a copy on a platform
+/// without links. `None` for a CLI with no shareable sign-in.
+pub fn prepare_host_config_dir(
+    data_dir: &Path,
+    cli: CliId,
+    sign_in: &Path,
+    live_config: Option<&Path>,
+) -> std::io::Result<Option<(&'static str, PathBuf)>> {
+    let (Some(variable), Some(name)) = (host_config_dir_variable(cli), host_sign_in_file_name(cli))
+    else {
+        return Ok(None);
+    };
+    let dir = host_config_dir(data_dir, cli);
+    // OpenCode reads `$XDG_DATA_HOME/opencode/auth.json`; the variable names the level above.
+    let sign_in_dir = if cli == CliId::Opencode {
+        dir.join("opencode")
+    } else {
+        dir.clone()
+    };
+    std::fs::create_dir_all(&sign_in_dir)?;
+    replace_link(sign_in, &sign_in_dir.join(name))?;
+    // Extras are best effort: one that cannot be linked (a directory on a platform that can only
+    // copy files, say) must not drop the sign-in or the variable (FR-019).
+    if let Some(live) = live_config.filter(|live| !same_file(live, &dir)) {
+        for extra in host_linked_extras(cli) {
+            let source = live.join(extra);
+            if source.exists() {
+                #[cfg(not(unix))]
+                if source.is_dir() {
+                    continue;
+                }
+                let _ = replace_link(&source, &dir.join(extra));
+            }
+        }
+    }
+    Ok(Some((variable, dir)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,5 +422,56 @@ mod tests {
             assert_eq!(host_sign_in_file_name(cli), None);
             assert!(host_linked_extras(cli).is_empty());
         }
+    }
+
+    /// SC-008: the machine's own sign-in is only linked, never touched.
+    #[cfg(unix)]
+    #[test]
+    fn preparing_a_host_config_dir_links_the_sign_in_and_leaves_the_original_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = tmp.path().join("data");
+        let live = tmp.path().join("live");
+        std::fs::create_dir_all(&live).unwrap();
+        let sign_in = tmp.path().join("configured.json");
+        std::fs::write(&sign_in, b"{\"token\":\"x\"}").unwrap();
+        std::fs::write(live.join("settings.json"), b"{}").unwrap();
+        let before = std::fs::metadata(&sign_in).unwrap().modified().unwrap();
+
+        for _ in 0..2 {
+            let (var, dir) =
+                prepare_host_config_dir(&data, CliId::ClaudeCode, &sign_in, Some(&live))
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(var, "CLAUDE_CONFIG_DIR");
+            assert_eq!(dir, data.join("ai").join("claude_code"));
+            assert_eq!(
+                std::fs::read(dir.join(".credentials.json")).unwrap(),
+                b"{\"token\":\"x\"}"
+            );
+            assert!(dir.join("settings.json").exists());
+            assert!(!dir.join("CLAUDE.md").exists());
+        }
+        assert_eq!(std::fs::read(&sign_in).unwrap(), b"{\"token\":\"x\"}");
+        assert_eq!(
+            std::fs::metadata(&sign_in).unwrap().modified().unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn opencodes_sign_in_lands_one_level_below_the_variable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sign_in = tmp.path().join("auth.json");
+        std::fs::write(&sign_in, b"k").unwrap();
+        let (var, dir) = prepare_host_config_dir(tmp.path(), CliId::Opencode, &sign_in, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(var, "XDG_DATA_HOME");
+        assert!(dir.join("opencode").join("auth.json").exists());
+        assert!(
+            prepare_host_config_dir(tmp.path(), CliId::Pi, &sign_in, None)
+                .unwrap()
+                .is_none()
+        );
     }
 }
