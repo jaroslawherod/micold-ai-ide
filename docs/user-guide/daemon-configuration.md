@@ -179,6 +179,12 @@ daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https sc
 | `session.files` | `[]` | `{ file, as, mode }`: copied into the session home, `mode` default `"0600"`. `as` is relative, stays inside the home and outside every CLI config dir. |
 | `network.ca_file` | none | An extra CA bundle exported to sessions. |
 
+These names are reserved and refused in `session.env`, `session.secret_env` and `ai.cli.env`: `PATH`,
+`HOME`, `TERM`, `COLORTERM`, `GIT_CONFIG_*`, `GIT_SSH_COMMAND`, `GH_TOKEN`, `GH_HOST`,
+`GITHUB_TOKEN`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `PI_CODING_AGENT_DIR`,
+`XDG_DATA_HOME`, `MICOLD_*`, and the key variable of a CLI that has an `api_key_file` or `token_file`
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `COPILOT_GITHUB_TOKEN`).
+
 #### SSH remotes, signing and registry files in a container or pod
 
 - **SSH remotes.** With `ssh_key_file` and `known_hosts_file`, a container or pod session's git
@@ -195,12 +201,6 @@ daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https sc
 - **Registry files.** Each `[[session.files]]` entry (`.npmrc`, `.pypirc`) is copied from its
   read-only `file` to `as` under the session home with `mode` each time a session starts. A target
   outside the home or inside a CLI's config directory is refused when the file is checked.
-
-These names are reserved and refused in `session.env`, `session.secret_env` and `ai.cli.env`: `PATH`,
-`HOME`, `TERM`, `COLORTERM`, `GIT_CONFIG_*`, `GIT_SSH_COMMAND`, `GH_TOKEN`, `GH_HOST`,
-`GITHUB_TOKEN`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `PI_CODING_AGENT_DIR`,
-`XDG_DATA_HOME`, `MICOLD_*`, and the key variable of a CLI that has an `api_key_file` or `token_file`
-(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `COPILOT_GITHUB_TOKEN`).
 
 ### `[startup]`
 
