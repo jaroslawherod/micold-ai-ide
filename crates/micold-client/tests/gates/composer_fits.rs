@@ -761,17 +761,19 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
     let mut renderer = lay::renderer();
     let closed_painted =
         lay::painted_text_settled_at(lay::view_of(&closed), &mut renderer, WINDOW).0;
-    let trigger = find(&closed_painted, &format!("{MODE_LABEL}:"));
+    // The trigger is the control showing the current mode, not the field label beside it.
+    let trigger = find(&closed_painted, PermissionMode::Default.label());
+    let at = iced::Point::new(
+        trigger.origin.x + trigger.natural_width / 2.0,
+        trigger.origin.y + trigger.natural_height / 2.0,
+    );
     let pressed = lay::messages_after(
         lay::view_of(&closed),
         &lay::renderer(),
-        &[lay::Input::Press(
-            iced::Point::new(
-                trigger.origin.x + 2.0,
-                trigger.origin.y + trigger.natural_height / 2.0,
-            ),
-            iced::mouse::Button::Left,
-        )],
+        &[
+            lay::Input::Press(at, iced::mouse::Button::Left),
+            lay::Input::Release(at, iced::mouse::Button::Left),
+        ],
     );
     assert!(
         pressed.iter().any(|m| matches!(
