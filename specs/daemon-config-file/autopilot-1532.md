@@ -147,24 +147,19 @@ scoped only, full gate left to CI"; CI's quieter machine is the tie-breaker.
 
 ## Handover
 
-This unit (a second dispatch for "Milestone M2a 1532 part 2") found another live session already
-working this exact ledger/branch concurrently (same worktree, PID tree confirms a separate `claude`
-process, session `7dc9118b…`) — it had already diagnosed the same gate failures (env-pollution from
-`MICOLD_DAEMON_CONFIG` inherited from this nested sandbox, plus genuine pre-existing `main`-branch
-bugs in `history_damaged`/`ellipsized`, both independently reproduced by this unit too on a clean
-detached `origin/main` worktree) and was mid-fix (commits `55f3eab6c`, `e54f0b1a2`) with its own
-*Gate* section already written above. To avoid a duplicate PR or a conflicting push, this unit made
-no code or push changes and is standing down. Next step: check `gh pr list` / this ledger's *Pull
-requests* table for an M2a PR before dispatching another unit — if none exists yet, resume plainly
-from this ledger's current *Gate* section and finish `gate.md` step 3 (full gate once more) then
-`pr.md`; if one exists, this milestone is done.
+A second dispatch for M2a was issued by the orchestrator in error while this unit was mid-fix; it
+made no code or push changes and stood down (its stand-down note, commit `cb1d5c5ab`, is replaced
+by this section). M2a is owned and finished by this unit — there is no concurrent session to defer
+to, and nothing here should tell the next unit to stand down.
 
-Finding worth keeping regardless of who finishes M2a: `mise run gate`, run from inside a nested
-micold session (as every autopilot unit's shell is), inherits `MICOLD_DAEMON_CONFIG` from the
-environment, which makes every `micold-daemon` integration test that spawns a real daemon fail or
-flake (the daemon refuses the default config location). `env -u MICOLD_DAEMON_CONFIG mise run gate`
-removes that specific failure mode; it does not fix the separate pre-existing `history_damaged`/
-`ellipsized` failures on `main`, which are real bugs outside this flow.
+Finding that unit contributed, worth keeping: `mise run gate`, run from inside a nested micold
+session (as every autopilot unit's shell is), inherits `MICOLD_DAEMON_CONFIG` from the environment
+(`/run/micold/config/daemon.toml`), which makes every `micold-daemon` integration test that spawns
+a real daemon fail or flake. Run the gate as `env -u MICOLD_DAEMON_CONFIG mise run gate`. That is
+the actual cause of the 15 real-daemon timeout failures the *Gate* section above attributed to
+build-lock load — the load was real but incidental. It does not touch the separate pre-existing
+`history_damaged`/`ellipsized` failures, which both units reproduced on a clean detached
+`origin/main` worktree and which are outside this flow's ownership.
 
 ## Open escalation
 
