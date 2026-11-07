@@ -636,6 +636,7 @@ fn start_sandbox_on(
         &profile,
         Path::new(spec.home),
         &delivery,
+        None,
         STARTUP.lock().unwrap_or_else(|e| e.into_inner()).as_ref(),
     )
     .expect("deliver the daemon's configuration");

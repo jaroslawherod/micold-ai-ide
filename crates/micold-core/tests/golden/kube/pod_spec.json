@@ -62,11 +62,6 @@
           "readOnly": true
         },
         {
-          "mountPath": "/run/micold/secrets/git",
-          "name": "micold-build-box-8384f9ba-gitconfig",
-          "readOnly": true
-        },
-        {
           "mountPath": "/run/micold/git",
           "name": "git-credential"
         }
@@ -115,13 +110,6 @@
         "defaultMode": 288,
         "optional": true,
         "secretName": "micold-build-box-8384f9ba-startup"
-      }
-    },
-    {
-      "name": "micold-build-box-8384f9ba-gitconfig",
-      "secret": {
-        "defaultMode": 288,
-        "secretName": "micold-build-box-8384f9ba-gitconfig"
       }
     },
     {

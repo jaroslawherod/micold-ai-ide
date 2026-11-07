@@ -116,18 +116,19 @@ impl ResourceNames {
     /// The secret holding one allowed credential (`RegistryPull` is the pull secret).
     pub fn secret(&self, credential: &KubeCredential) -> String {
         match credential {
-            KubeCredential::GitConfig => format!("{}-gitconfig", self.base),
             KubeCredential::SignIn { cli } => format!("{}-signin-{}", self.base, cli_slug(*cli)),
             KubeCredential::RegistryPull { .. } => self.pull_secret(),
         }
     }
 
-    /// The secrets of the credential kinds #1002 removed (the git credential store, an SSH key): no
-    /// daemon creates them any more, and start and remove delete any a cluster still holds.
-    pub fn retired_secrets(&self) -> [String; 2] {
+    /// The secrets of the credential kinds #1002 removed (the git credential store, an SSH key) and
+    /// the git config secret #1530 replaced with a key of the startup secret: no daemon creates
+    /// them any more, and start and remove delete any a cluster still holds.
+    pub fn retired_secrets(&self) -> [String; 3] {
         [
             format!("{}-git-credentials", self.base),
             format!("{}-git-ssh", self.base),
+            format!("{}-gitconfig", self.base),
         ]
     }
 
@@ -240,12 +241,12 @@ mod tests {
         assert_eq!(n.pod(), base);
         assert_eq!(n.pvc(), format!("{base}-data"));
         assert_eq!(
-            n.secret(&KubeCredential::GitConfig),
-            format!("{base}-gitconfig")
-        );
-        assert_eq!(
             n.retired_secrets(),
-            [format!("{base}-git-credentials"), format!("{base}-git-ssh")]
+            [
+                format!("{base}-git-credentials"),
+                format!("{base}-git-ssh"),
+                format!("{base}-gitconfig")
+            ]
         );
         assert_eq!(
             n.secret(&KubeCredential::SignIn {
@@ -281,7 +282,6 @@ mod tests {
             "with nothing allowed only the access secret"
         );
         let allowed = BTreeSet::from([
-            KubeCredential::GitConfig,
             KubeCredential::SignIn { cli: AiCli::Pi },
             KubeCredential::RegistryPull { auths: "/a".into() },
         ]);

@@ -183,6 +183,9 @@ pub struct StartRequest<'a> {
     pub startup_script: Option<&'a str>,
     /// The start script's `env_file`, the startup secret's content (#1533); `None` without one.
     pub startup_env: Option<&'a str>,
+    /// The sanitized git configuration, a key of the startup secret that `[git] config_file`
+    /// names (#1530); `None` when the host has none to share.
+    pub git_config: Option<&'a str>,
     /// The daemon's `daemon.time_zone`, the pod's `TZ`.
     pub time_zone: Option<&'a str>,
 }
@@ -393,11 +396,12 @@ async fn secrets(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), Kube
     credential_secrets(r, attempt).await
 }
 
-/// The secret `<name>-startup` holding the start script's `env_file`: created or refreshed when the
-/// daemon has one, deleted when it has none and the one in the cluster is ours (#1533).
+/// The secret `<name>-startup` holding the start script's `env_file` and the sanitized git
+/// configuration: created or refreshed when the daemon has either, deleted when it has none and the
+/// one in the cluster is ours (#1533, #1530).
 async fn startup_secret(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
     let name = r.names.startup_secret();
-    let Some(env) = r.startup_env else {
+    if r.startup_env.is_none() && r.git_config.is_none() {
         if let Some(view) = r
             .cluster
             .get(namespace(r), ObjectKind::Secret, &name)
@@ -408,8 +412,14 @@ async fn startup_secret(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(
             }
         }
         return Ok(());
-    };
-    let data = BTreeMap::from([(manifest::STARTUP_ENV_FILE.to_string(), env.to_string())]);
+    }
+    let data: BTreeMap<String, String> = [
+        (manifest::STARTUP_ENV_FILE, r.startup_env),
+        (manifest::STARTUP_GIT_CONFIG_FILE, r.git_config),
+    ]
+    .into_iter()
+    .filter_map(|(key, text)| Some((key.to_string(), text?.to_string())))
+    .collect();
     let manifest = manifest::secret(r.names, &name, &data);
     if let Ensured::Adopted(view) = ensure(r, ObjectKind::Secret, manifest.clone(), attempt).await?
     {
@@ -612,7 +622,8 @@ async fn pod(
         // keeping it would keep them, so it is recreated whatever the user chose about drift.
         let retired = manifest::holds_retired_credential(on_pod)
             || manifest::lacks_config_map(on_pod)
-            || (r.startup_env.is_some() && manifest::lacks_startup_secret(on_pod));
+            || ((r.startup_env.is_some() || r.git_config.is_some())
+                && manifest::lacks_startup_secret(on_pod));
         match r.drift {
             _ if retired => delete_and_wait(r, ObjectKind::Pod, &r.names.pod(), &view.uid).await?,
             _ if fields.is_empty() => return Ok(Vec::new()),
@@ -739,7 +750,7 @@ pub const STATE_DIR: &str = "/data/home/.local/share/micold-ai-ide";
 
 /// The shared sequence's target for the pod: SSH through the relay's loopback port, AI CLIs
 /// installing the daemon's `providers`, the 120 s step bounds and the 15 minute install. The
-/// daemon runs with [`super::credentials::daemon_env`] for its `allowed` credentials: its idle
+/// daemon runs with [`super::credentials::daemon_env`]: its idle
 /// stop off (FR-010), its clone root, and what the credentials need.
 pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarget {
     ProvisionTarget {
@@ -754,7 +765,7 @@ pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarge
             install: StartPhase::Install.bound(),
             ..StepBounds::container()
         },
-        env: super::credentials::daemon_env(&settings.allowed)
+        env: super::credentials::daemon_env()
             .into_iter()
             .collect(),
         config: None,

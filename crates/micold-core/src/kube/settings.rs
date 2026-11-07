@@ -220,7 +220,7 @@ impl From<RawKubeSettings> for KubeSettings {
                 .into_iter()
                 .filter_map(|c| match c {
                     RawKubeCredential::Kept(kept) => Some(kept),
-                    RawKubeCredential::Removed(_) => None,
+                    RawKubeCredential::Removed(_) | RawKubeCredential::Retired(_) => None,
                 })
                 .collect(),
             removed_git_credentials,
@@ -500,7 +500,6 @@ mod tests {
     #[test]
     fn allowed_naming_the_removed_items_loads_keeps_the_rest_and_drops_them_on_save() {
         let kept = [
-            KubeCredential::GitConfig,
             KubeCredential::SignIn {
                 cli: AiCli::ClaudeCode,
             },
@@ -512,6 +511,9 @@ mod tests {
         let mut allowed = serde_json::to_value(&kept).unwrap();
         let list = allowed.as_array_mut().unwrap();
         list.insert(0, serde_json::json!({ "kind": "git_credentials" }));
+        // #1530 (T139): the git config is no credential any more, the app delivers it as
+        // `[git] config_file`; a stored one is dropped like the removed ones.
+        list.insert(0, serde_json::json!({ "kind": "git_config" }));
         list.push(serde_json::json!({ "kind": "git_ssh_key", "key": "/home/u/.ssh/id_ed25519" }));
         stored["allowed"] = allowed;
 
