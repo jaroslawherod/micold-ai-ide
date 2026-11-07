@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: M1 PR open
+- **Phase**: design amendment (highlight + cleanup state) blocked on escalation
 - **Next step**: design PR opened; then milestone M1 (finding: 905 StateIcon has 3 glyphs, so StateIcon is re-keyed on CardState, research R1/R6)
 
 ## Pull requests
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | #1758 | open |
+| M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | #1758 | merged 8b1039d2c123f8e414806ecc75ab0cd6ae5a7c3f |
 | M2 | T015–T022 | full | Five-state row indicator (StateIcon on CardState) | | pending |
 
 ## Decisions
@@ -52,7 +52,12 @@ None.
 
 ## Open escalation
 
-None.
+Amend-design unit (Material highlight + cleanup-candidate state), phase plan. Finding: the signal exists and a state for it already exists. `CardState::Done` ("the work is merged and the worktree can go", `micold_core::overview::card_state` row 9) = PR merged AND branch containment-verified removable (`pr_status.removable`, feature 813 FR-017: only a merged PR's branch is ever removable) AND no running session (Working outranks it). It already has its own glyph (CardDone e86c), so a sixth state for "merged, no session" would duplicate Done. The only extra case in the user's wording is a CLOSED (unmerged) PR: `PrState::Closed` is read but deliberately never removable (unmerged work may be the only copy). A sixth `CardState` would also touch feature 813 (Overview order, counts, filters, `Ord`). No new data source is needed either way (Principle IV holds). Highlight request (1) is unambiguous and needs no decision. Nothing else edited yet.
+
+Question: how to realise the cleanup candidate?
+- (Recommended) No sixth state: Done is the cleanup candidate. Row highlight: Needs action and Needs attention get a louder container tint, Done a quieter tertiary/neutral container tint plus its existing glyph and tooltip "merged"; closed-unmerged PRs stay Idle, recorded as a follow-up. Evidence: card_state row 9, CurrentPr.merged, removable invariant.
+- Add a sixth CardState `CleanupCandidate` = (merged-removable OR PR closed) with no running session, own glyph and tint. Costs: edits feature 813's state table/ordering/Overview, widens "can be deleted" to unmerged closed work (data-loss risk), six states in tests/docs.
+- Keep five states and ship the highlight only; drop the cleanup request.
 
 ## Follow-ups not done
 
