@@ -50,6 +50,9 @@ pub fn stand_in_dir(source_text: &str, exe_name: &str) -> PathBuf {
         .arg(partial.join(exe_name))
         .output()
         .unwrap_or_else(|err| panic!("run {}: {err}", rustc.display()));
+    if !out.status.success() {
+        let _ = std::fs::remove_dir_all(&partial);
+    }
     assert!(
         out.status.success(),
         "compile the stand-in with {}: {}",
