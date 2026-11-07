@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: M1 done, PR #1763 rebased onto `main` and pushed, awaiting CI
-- **Next step**: orchestrator waits on CI for PR #1763 and merges. If CI's full `mise run gate` is red for a reason unrelated to this diff (see *Handover*), treat it as `tasks/red-ci.md`.
+- **Phase**: M1 done, PR #1763 open; CI red on two jobs, both outside this flow — escalated (category 5, blocked by work outside my flow)
+- **Next step**: orchestrator waits for the user's answer to the *Open escalation*; nothing merges until then.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
-| #1763 | M1 (gh shim) | open, rebased onto `main` (part 5) | — |
+| #1763 | M1 (gh shim) | open, rebased onto `main`; CI red on out-of-flow jobs (see *Open escalation*) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | PR open, awaiting CI |
+| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | PR open, CI red outside this flow — escalated |
 
 ## Decisions
 
@@ -210,8 +210,46 @@ still open) — boundary held.
 
 ## Open escalation
 
-None. (Was: authorise a part 4 to finish M1 — resolved as D7 in *Decisions*: the user authorised
-part 4 to finish M1 and get it to a PR.)
+**PR #1763's CI is red, and both failures are outside this flow's code. How should M1 proceed —
+escalated as category 5, *blocked by work outside my flow*?**
+
+Options:
+
+- **(Recommended)** Hold #1763 unmerged until `origin/main` is green again: the `sandbox against a
+  real runtime (linux)` job cannot pass on any branch while `main` carries the broken test, so no
+  amount of work on this flow can turn `ci complete` green.
+- Authorise this flow to fix the out-of-flow breakage itself (one-line edit/removal in
+  `crates/micold-daemon/tests/sandbox_real_scoped_token.rs`, which belongs to #1530's M2), then
+  re-gate and push.
+
+Evidence:
+
+- `wait-merge.sh 1763` returned `RED 1763 42365707879`. Failed checks: `sandbox against a real
+  runtime (linux)` and `build + test (ubuntu-latest)`; every other job passed.
+- `sandbox against a real runtime (linux)`: compile error, not a test failure — `error[E0599]: no
+  variant named GitCredentialGrant found for enum ClientMsg` at
+  `crates/micold-daemon/tests/sandbox_real_scoped_token.rs:75`, and the same for
+  `GitCredentialRevoke` at `:85`. Those variants were retired by #1530's M2. The file is **not** in
+  this diff (`git diff --name-only origin/main...HEAD` lists no sandbox file) and `origin/main`
+  still contains it (`git grep -n GitCredentialGrant origin/main -- crates` →
+  `origin/main:crates/micold-daemon/tests/sandbox_real_scoped_token.rs:75`). `main`'s own CI run
+  `42359504296` fails the same job. `mise run gate` never builds it: it is behind
+  `--features sandbox-real-runtime`, which is why the local gate was green.
+- `build + test (ubuntu-latest)`: one test,
+  `micold-daemon::attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`,
+  panicked at `crates/micold-daemon/tests/attention_error_notice.rs:452` with `assertion left ==
+  right failed; left: []; right: [SessionErrorNotice { … }]` (12646 of 12647 tests passed). A
+  multi-thread notice-ordering test, last touched on `main` in `865f03af3`/`d71b8fa25`, untouched
+  by this diff; this diff's `state.rs` change only adds `with_gh_shim_path` plus two test helpers,
+  nothing in the attention/notice path. Reads as a flake.
+- The `tasks/ci.md` rerun-once step was started (`gh run rerun 42365707879 --failed`) and then
+  abandoned on the user's instruction ("skip the rerun, escalate now"); no rerun verdict was
+  collected.
+- A further M1 part would be part 6, past the handover cap (parts 1–5 done; part 4 was authorised
+  as D7), so it needs authorisation in its own right.
+
+(Was: authorise a part 4 to finish M1 — resolved as D7 in *Decisions*: the user authorised part 4
+to finish M1 and get it to a PR.)
 
 ## Follow-ups not done
 
