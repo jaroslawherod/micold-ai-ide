@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | M1 A (code-review high) | 1 | a5e3ecbe92ecefe6042eb4216ef33aeac508537d:78438d64861b2f818d68333ba837d352d8bee242 | 8 findings, 2 fixed (daemon.id restart key + test, stale doc), 6 declined |
 | M2 A (autopilot-reviewer, correctness) | 1 | fca14197d (committed tree) | CLEAN; 1 MINOR fixed (InvalidTarget names the JSON type, not the value) |
+| M3 A (code-review high) | 1 | dff811436e3204a50436d87f225dc4e8f1e7eee4:8bfb8a2d209fab73d84f1a3ecd4c29a4fe4df55e | 8 findings: fixed protocol bump to 80, cache lock held across git, failed reads cached, bare-tag identity accepted; 4 declined (see below), git under state lock noted as follow-up |
 | M2 B (conformance, sonnet) | 1 | same | CLEAN; 3 MINOR: non-JSON routed test added; header list test and cycle-log not added |
 
 ## Declined review findings
@@ -60,6 +61,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | routing.rs tests hashed | same as messages.rs; hash input is by design (T021) |
 | M1 | A | grammar in three places | MINOR taste |
 | M1 | A | new test executable | T010 names unwrapped_client |
+| M3 | A | path case not folded in remote identity | FR-008 lowercases the host only; path case is left as written |
+| M3 | A | `Default for ProjectIdentity` public | 17 test fixtures in other crates need it; value is a valid tagged identity |
+| M3 | A | one-letter scp host treated as local path | needed to tell `C:/x` apart (spec T023); narrow |
+| M3 | A | cache never evicts removed projects | one small entry per path, bounded by projects ever added |
 
 ## Handover
 
@@ -72,6 +77,7 @@ None.
 ## Follow-ups not done
 
 - specs/orchestrator/ (spec.md, issues.md) exists only on branch docs/orchestrator-and-web-client-plan, not on main; contracts/ under it must be created by this feature's PR.
+- M3: `Catalog::snapshot` reads git config (2 spawns per project, cached 30 s) with the state lock held, against `snapshot_locked`'s no-git-under-lock note. Plan put the read in `catalog.rs`; moving it to a background refresh is a follow-up.
 
 ## Review notes (spec, round 1)
 
