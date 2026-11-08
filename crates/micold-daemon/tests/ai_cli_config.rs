@@ -89,6 +89,18 @@ fn catalog_with_ai_cli_session(
     JsonFileStore::at(projects_path.clone())
         .save(&workspace)
         .unwrap();
+    // Environment-include off (#1774): its default sources the developer's own shell profile, and
+    // the `PATH` that yields replaces the one the test set, so a machine with a real `claude`
+    // launched it instead of the stand-in.
+    {
+        use micold_core::settings::{Settings, SettingsStore};
+        JsonFileSettingsStore::at(store_dir.join("settings.json"))
+            .save(&Settings {
+                env_include_enabled: false,
+                ..Settings::default()
+            })
+            .unwrap();
+    }
     let catalog = Catalog::load(
         Box::new(JsonFileStore::at(projects_path)),
         Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
