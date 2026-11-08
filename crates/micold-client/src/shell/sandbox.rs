@@ -405,6 +405,26 @@ pub fn start_attempt<R: CommandRunner>(
         }
     }
 
+    // And the file each one is delivered read-only *onto*, inside the secrets directory: that
+    // whole directory is itself mounted read-only first (above), so the runtime has no directory
+    // left to create this mountpoint's parents in once it gets here (T065).
+    for file in mounts.secrets_files_to_create() {
+        if let Some(parent) = file.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                return Err(preparation_failed(format!(
+                    "could not create {} for the delivered credential: {e}",
+                    parent.display()
+                )));
+            }
+        }
+        if let Err(e) = ensure_writable_file(&file) {
+            return Err(preparation_failed(format!(
+                "could not create {} for the delivered credential: {e}",
+                file.display()
+            )));
+        }
+    }
+
     // With the sign-in shared, tell the sandbox's `claude` its first-run setup is done, in the
     // sandbox's own home (FR-004f, BUG-007). Otherwise its setup asks for a login method over the
     // shared token, and a sign-in there replaces the host's. Not a reason to refuse the sandbox:

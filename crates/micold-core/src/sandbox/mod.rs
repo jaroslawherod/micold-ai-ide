@@ -1089,6 +1089,38 @@ impl MountSet {
         files
     }
 
+    /// The files inside [`Self::delivery`]'s secrets directory that must exist before the runtime
+    /// runs (T065).
+    ///
+    /// A credential's `delivered` path is mounted read-only *inside* [`CONTAINER_SECRETS_DIR`],
+    /// which [`Self::delivery`] mounts there as one whole directory, already read-only, first. A
+    /// runtime that has to create a mountpoint's parent directories does so inside whatever is
+    /// mounted there so far — so creating the ai-cli-auth tree only once the secrets directory is
+    /// already a read-only mount fails outright, the same failure [`Self::home_files_to_create`]
+    /// exists to avoid on the home side. Pre-creating the (empty) file here, in the host directory
+    /// [`Self::delivery`] mounts *from*, means the runtime finds it already there and only has to
+    /// perform the mount, never create anything. No `delivery` (no secrets mount at all) needs
+    /// nothing created.
+    pub fn secrets_files_to_create(&self) -> Vec<PathBuf> {
+        let Some(delivery) = &self.delivery else {
+            return Vec::new();
+        };
+        let mut files: Vec<PathBuf> = Vec::new();
+        for c in &self.credentials {
+            let Some(delivered) = &c.delivered else {
+                continue;
+            };
+            let Ok(relative) = delivered.strip_prefix(CONTAINER_SECRETS_DIR) else {
+                continue;
+            };
+            let file = delivery.secrets.join(relative);
+            if !files.contains(&file) {
+                files.push(file);
+            }
+        }
+        files
+    }
+
     /// Where the bring-up records that the AI CLI's first-run setup is done — the sandbox home's
     /// own `.claude.json` — or `None` when it must not (FR-004f, BUG-007).
     ///

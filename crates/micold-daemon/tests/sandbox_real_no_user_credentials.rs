@@ -75,6 +75,14 @@ fn sandbox_real_no_user_credentials_reach_the_container() {
             container: PathBuf::from("/run/micold/token"),
         },
     );
+    // A credential delivered under the secrets directory is mounted onto a path inside what
+    // `start_sandbox` mounts there as one whole, already read-only, directory — so its mountpoint
+    // has to exist on the host side beforehand, the same way the application creates it (T065).
+    for file in mounts.secrets_files_to_create() {
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, b"").unwrap();
+    }
+
     // Only what the profile still shares is mounted, read-only.
     let extra: Vec<String> = mounts
         .credentials
