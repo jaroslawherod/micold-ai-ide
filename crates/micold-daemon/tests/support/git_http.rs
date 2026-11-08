@@ -1,6 +1,7 @@
-//! A smart-HTTP git remote over `git http-backend` with basic auth `x-access-token:<token>`, shared by
-//! the loopback test of the helper (`mcp/scoped_git_credential.rs`) and the runtime-gated container
-//! test (`sandbox_real_scoped_token.rs`, which binds every interface so a container reaches it).
+//! A smart-HTTP git remote over `git http-backend` with basic auth `x-access-token:<token>`, used by
+//! the loopback test of the helper (`mcp/scoped_git_credential.rs`). The runtime-gated container
+//! test that used to share it (`sandbox_real_scoped_token.rs`) was retired with the grant/revoke
+//! wire messages it drove (#1530).
 
 #![allow(dead_code)]
 
