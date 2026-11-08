@@ -35,7 +35,7 @@ impl fmt::Display for InvalidProjectIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{:?} is not a project identity: it must start with `remote:`, `override:` or `local:`",
+            "{:?} is not a project identity: it must be `remote:`, `override:` or `local:` followed by a value",
             self.0
         )
     }
@@ -54,7 +54,7 @@ impl ProjectIdentity {
         let text = text.into();
         if ["remote:", "override:", "local:"]
             .iter()
-            .any(|tag| text.starts_with(tag))
+            .any(|tag| text.strip_prefix(tag).is_some_and(|rest| !rest.is_empty()))
         {
             Ok(Self(text))
         } else {
@@ -254,5 +254,6 @@ mod tests {
         let ok: ProjectIdentity = serde_json::from_str("\"remote:h/o/r\"").unwrap();
         assert_eq!(ok.as_str(), "remote:h/o/r");
         assert!(serde_json::from_str::<ProjectIdentity>("\"h/o/r\"").is_err());
+        assert!(serde_json::from_str::<ProjectIdentity>("\"remote:\"").is_err());
     }
 }

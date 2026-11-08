@@ -594,7 +594,7 @@ A sandboxed daemon (in a container or a pod) holds no git identity of the user. 
 helper (`micold-daemon git-credential`) chooses the token for a repository from the daemon's
 configuration at git time; the pasted tokens are checked and stored by the application's Settings.
 The grant messages (`GitCredentialGrant`, `GitCredentialRevoke`, `GitCredentialTargets`) were retired
-in protocol 79. The token is never logged (`SecretToken`'s `Debug` is redacted) and never written
+in protocol 79 (the current version is 80). The token is never logged (`SecretToken`'s `Debug` is redacted) and never written
 where git could keep it.
 
 ## Finding the logs and recent errors
