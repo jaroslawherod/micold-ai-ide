@@ -62,6 +62,8 @@ fn snapshot(sessions: Vec<SessionSummary>, worktrees: Vec<WorktreeSnapshot>) -> 
         schema_version: 1,
         last_active: None,
         projects: vec![ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: None,
             path: PathBuf::from(PROJECT),
             display_name: "repo".into(),

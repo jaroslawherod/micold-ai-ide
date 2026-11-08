@@ -593,6 +593,8 @@ mod tests {
             projects: projects
                 .into_iter()
                 .map(|(path, n)| ProjectSnapshot {
+                    daemon: Default::default(),
+                    identity: Default::default(),
                     pane_layout: None,
                     path: PathBuf::from(path),
                     display_name: "p".into(),

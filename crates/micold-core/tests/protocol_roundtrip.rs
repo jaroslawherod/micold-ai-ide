@@ -537,6 +537,8 @@ fn sample_catalog() -> CatalogSnapshot {
         schema_version: 1,
         last_active: Some(PathBuf::from("/a")),
         projects: vec![ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: Some("{\"layout_version\":1}".into()),
             path: PathBuf::from("/a"),
             display_name: "Alpha".into(),
@@ -3137,4 +3139,28 @@ fn the_same_local_ref_under_two_daemons_is_unequal_and_hashes_apart() {
     wa.daemon = daemon("a");
     wb.daemon = daemon("b");
     assert_ne!(wa.qualified(project), wb.qualified(project));
+}
+
+#[test]
+fn a_project_row_carries_its_daemon_and_identity_and_its_ref_survives_both_wires() {
+    use micold_core::project_identity::ProjectIdentity;
+    use micold_core::protocol::routing::ProjectRef;
+
+    let mut project = sample_catalog().projects.remove(0);
+    project.daemon = daemon("dev-box");
+    project.identity = ProjectIdentity::new("remote:host/o/r").unwrap();
+    json_roundtrip(&project);
+    postcard_roundtrip(&project);
+
+    let decoded: ProjectSnapshot =
+        serde_json::from_str(&serde_json::to_string(&project).unwrap()).unwrap();
+    assert_eq!(decoded.identity.as_str(), "remote:host/o/r");
+    let expected = ProjectRef {
+        daemon: daemon("dev-box"),
+        path: project.path.clone(),
+    };
+    assert_eq!(project.qualified(), expected);
+    assert_eq!(decoded.qualified(), expected);
+    json_roundtrip(&decoded.qualified());
+    postcard_roundtrip(&decoded.qualified());
 }

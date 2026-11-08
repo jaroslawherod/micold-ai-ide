@@ -117,6 +117,13 @@ pub trait Git {
     /// `Ok("")`, not an error. Contract: `specs/034-github-issue-worktree/contracts/remote-list-rpc.md`.
     fn remote_list(&self, repo: &Path) -> io::Result<String>;
 
+    /// The value of `key` in `repo`'s own (`--local`) git config, `None` when it is not set (#1723).
+    ///
+    /// Local config only, like [`Git::remote_list`]: it MUST NOT contact a remote and MUST NOT read
+    /// global config, so the answer is the same wherever the daemon runs. The value has no
+    /// trailing newline.
+    fn config_local_get(&self, repo: &Path, key: &str) -> io::Result<Option<String>>;
+
     /// The commit local branch `branch` points at
     /// (`git rev-parse --verify --quiet refs/heads/<branch>^{commit}`), or `None` when the
     /// repository has no such branch or git could not be asked (feature 040, FR-015).
@@ -582,6 +589,21 @@ impl Git for GitCli {
         }
     }
 
+    fn config_local_get(&self, repo: &Path, key: &str) -> io::Result<Option<String>> {
+        let args = ["config", "--local", "--get", key];
+        let output = git_output(repo, &args)?;
+        match output.status.code() {
+            Some(0) => Ok(Some(
+                String::from_utf8_lossy(&output.stdout)
+                    .trim_end_matches(['\r', '\n'])
+                    .to_owned(),
+            )),
+            // `--get` exits 1 when the key is not set.
+            Some(1) => Ok(None),
+            _ => Err(git_failed(&args, &output.stderr)),
+        }
+    }
+
     fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String> {
         // A name carrying revision syntax (`~`, `^`, `@{`, `:`) would make git resolve another
         // commit than the branch's tip: such a name has no tip here.
@@ -990,6 +1012,8 @@ struct FakeState {
     upstreams: BTreeMap<PathBuf, BTreeMap<String, String>>,
     /// repo -> (remote name, URL), in the order added (feature 034).
     remotes: BTreeMap<PathBuf, Vec<(String, String)>>,
+    /// repo -> (local config key, value), as scripted (#1723).
+    local_config: BTreeMap<(PathBuf, String), String>,
     /// repo -> local branch -> the commit it points at, as scripted (feature 040).
     branch_tips: BTreeMap<PathBuf, BTreeMap<String, String>>,
     /// repo -> (tip, head) -> whether `tip` is an ancestor of `head`, as scripted (feature 040).
@@ -1227,6 +1251,15 @@ impl FakeGit {
             .entry(repo.into())
             .or_default()
             .push((name.to_string(), url.to_string()));
+        self
+    }
+
+    /// Script [`Git::config_local_get`]: `key` is set to `value` in `repo`'s local config (#1723).
+    pub fn with_local_config(self, repo: impl Into<PathBuf>, key: &str, value: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .local_config
+            .insert((repo.into(), key.to_string()), value.to_string());
         self
     }
 
@@ -1522,6 +1555,14 @@ impl Git for FakeGit {
         Ok(out)
     }
 
+    fn config_local_get(&self, repo: &Path, key: &str) -> io::Result<Option<String>> {
+        let state = self.inner.borrow();
+        Ok(state
+            .local_config
+            .get(&(repo.to_path_buf(), key.to_string()))
+            .cloned())
+    }
+
     fn branch_tip(&self, repo: &Path, branch: &str) -> Option<String> {
         self.inner
             .borrow()
@@ -1706,5 +1747,68 @@ impl Git for FakeGit {
             .get(dir)
             .cloned()
             .ok_or_else(|| io::Error::other("no loss scripted"))
+    }
+}
+
+#[cfg(test)]
+mod config_local_get_tests {
+    use super::*;
+
+    fn run(dir: &Path, args: &[&str]) {
+        let out = git_output(dir, args).expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    #[test]
+    fn git_cli_reads_a_set_key_and_reports_an_unset_one() {
+        let dir = tempfile::tempdir().unwrap();
+        run(dir.path(), &["init", "-q"]);
+        let git = GitCli::new();
+        assert_eq!(
+            git.config_local_get(dir.path(), "micold.projectId")
+                .unwrap(),
+            None
+        );
+        run(
+            dir.path(),
+            &["config", "--local", "micold.projectId", "team-x"],
+        );
+        assert_eq!(
+            git.config_local_get(dir.path(), "micold.projectId")
+                .unwrap(),
+            Some("team-x".to_owned())
+        );
+        run(
+            dir.path(),
+            &["config", "--local", "--unset", "micold.projectId"],
+        );
+        assert_eq!(
+            git.config_local_get(dir.path(), "micold.projectId")
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn fake_git_answers_only_the_scripted_key_of_the_scripted_repo() {
+        let git = FakeGit::new().with_local_config("/r", "micold.projectId", "v");
+        assert_eq!(
+            git.config_local_get(Path::new("/r"), "micold.projectId")
+                .unwrap(),
+            Some("v".to_owned())
+        );
+        assert_eq!(
+            git.config_local_get(Path::new("/r"), "other").unwrap(),
+            None
+        );
+        assert_eq!(
+            git.config_local_get(Path::new("/x"), "micold.projectId")
+                .unwrap(),
+            None
+        );
     }
 }

@@ -110,7 +110,7 @@ impl fmt::Display for GithubRepo {
 
 /// The `(host, path, over_ssh)` of a remote URL in a form git accepts (`http(s)`, `git`, `ssh`
 /// or scp), `None` for anything else — a local path, another scheme, a non-numeric port.
-fn split_remote(url: &str) -> Option<(&str, &str, bool)> {
+pub(crate) fn split_remote(url: &str) -> Option<(&str, &str, bool)> {
     let url = url.trim();
     let (host, path, over_ssh) = match url.split_once("://") {
         Some((scheme, rest)) => {

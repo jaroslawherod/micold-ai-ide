@@ -5283,6 +5283,8 @@ pub(crate) mod tests {
             schema_version: 1,
             last_active: Some(PathBuf::from(path)),
             projects: vec![ProjectSnapshot {
+                daemon: Default::default(),
+                identity: Default::default(),
                 pane_layout: None,
                 path: PathBuf::from(path),
                 display_name: "demo".into(),

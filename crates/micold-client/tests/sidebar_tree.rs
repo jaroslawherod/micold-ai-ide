@@ -1051,6 +1051,8 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
         schema_version: 1,
         last_active: Some(PathBuf::from("/repo")),
         projects: vec![ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: None,
             path: PathBuf::from("/repo"),
             display_name: "repo".to_string(),

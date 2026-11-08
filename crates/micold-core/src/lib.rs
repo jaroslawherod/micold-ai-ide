@@ -71,6 +71,7 @@ pub mod plan_usage;
 pub mod pr_list;
 pub mod process;
 pub mod project;
+pub mod project_identity;
 pub mod prompt_template;
 pub mod protocol;
 pub mod provider;
