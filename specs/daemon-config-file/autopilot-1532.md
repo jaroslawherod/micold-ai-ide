@@ -168,6 +168,57 @@ timeout) reproduced twice in isolation under the same concurrent-build load — 
 this diff's. Per `gate.md`'s fallback, recorded the scoped-gate tree and pushed with "Local gate:
 scoped only, full gate left to CI"; CI's quieter machine is the tie-breaker.
 
+### Red CI round 2 (attempt 1/3): PR #1772, sandbox real-runtime compile break
+
+PR #1772, run `42413909844`, job "sandbox against a real runtime (linux)" (`ci complete` also red
+as a consequence): **FAILED TO COMPILE**, not a behavioural failure as this milestone's own
+Handover had predicted (it worried about `sandbox_real_ai_cli_sessions.rs` and
+`sandbox_real_no_user_credentials.rs` needing to call `relink_ai_cli_sign_ins_before_launch`
+themselves — checked that against this log and it does not apply here). The real cause:
+`crates/micold-daemon/tests/sandbox_real_scoped_token.rs:75,85` called
+`ClientMsg::GitCredentialGrant`/`GitCredentialRevoke`, two wire variants that commit `5b9bd6b08`
+(#1530, "retire the git credential grant messages") removed from
+`crates/micold-core/src/protocol/messages.rs` on **origin/main itself**, before #1532 branched
+(`git merge-base origin/main HEAD` == `origin/main`'s own tip). #1530 deleted the other two tests
+that drove the grant/revoke path (`git_credential_grant.rs`, `git_credential_pod.rs`) but missed
+this one, because `sandbox_real_scoped_token.rs` only compiles under the `sandbox-real-runtime`
+feature, which the normal gate never builds — so nobody caught it until a real CI run with a
+container tried to. Not a regression of this milestone's own diff; still blocks this PR's merge.
+
+Fixed the code's break, not by patching the test to match a message that no longer exists: deleted
+`sandbox_real_scoped_token.rs` and its `[[test]]` entry in `crates/micold-daemon/Cargo.toml`. The
+config-file credential path it tested (`#1530`'s own replacement) is already covered by
+`crates/micold-daemon/tests/git_credential_config.rs` and `sandbox_real_no_user_credentials.rs`;
+`support/git_http.rs` stays (still shared with `mcp/scoped_git_credential.rs`), its doc comment
+updated to drop the dead reference. Added a note to
+`specs/1002-sandbox-scoped-token/quickstart.md` flagging that its steps 4-8/10 table still names
+the retired test and the also-deleted `micold-client::shell::scoped_credential` tests — stale, but
+untangling that table is follow-up, not #1532's.
+
+No container runtime is installed in this worktree (no `docker`/`podman`), confirmed by `which`;
+`mise run image && mise run test-sandbox` cannot run here, so the fix rests on CI's
+`sandbox-runtime` job for real-runtime verification. Locally confirmed instead:
+`scripts/build-lock.sh cargo check -p micold-daemon --tests --features sandbox-real-runtime` exits
+0 (the actual compile error is gone). Full `mise run gate` (run twice, both times contended by
+another worktree's build on the shared lock): 19 then 12 failures, all in daemon spawn/socket-
+accept timing (`client_restart_input`, `connection logging_sink`, `daemon_stop`, `history_damaged`,
+`history_stop_request`, `idle_stop`/`idle_race`/`idle_teardown`, `fatal_startup_is_logged`,
+`streaming_child`, `version_mismatch_resolves`, `spawn_fd_hygiene`) and one
+`micold-material::ellipsized` shaping test — none touching `sandbox_real_scoped_token`,
+`ai_cli`, `daemon_config`, `Cargo.toml`'s test registration, or anything else in this diff; the
+same load-related flakiness class already recorded above for M1/M2a's own gate rounds (also
+confirmed `MICOLD_DAEMON_CONFIG` was set in this shell's environment, the documented false-failure
+cause from this milestone's Handover note; `env -u MICOLD_DAEMON_CONFIG` cut the failure count from
+19 to 12, not to 0 — the rest is the build-lock contention this round also hit, including from a
+second worktree, `fix-sandbox-scoped-token-test-stale-clientmsg-variants`, independently fixing the
+same `#1530` gap). Scoped gate also ran under contention and hit one of the same flakes
+(`client_restart_input`). Per `gate.md`'s fallback, recorded the tree
+(`7008388c04321b87189f4453532795555eda15bf`) in `autopilot-gate-ok` and pushed with "Local gate:
+scoped only, full gate left to CI".
+
+Pushed commit `56cc12131` to PR #1772's existing branch (no new PR: red-ci.md keeps the fix on the
+open PR). Waiting on CI.
+
 ## Declined review findings
 
 - M1 review A round 2, F1 [BLOCKER]: `AiCliTable::configured(...)` not called from the real provisioning call sites (`kube::start::pod_target`, `micold-client::daemon::container_target`). Declined — see D5: neither production call site has a per-CLI `version`/`enabled` value to pass in today (`KubeSettings.providers` and `AiCliSelection` are both a bare `AiCli` set, no version/args/model field exists on the client side yet); that data model is M4's own stated scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067). `AiCliTable::configured` is exactly what M1's Deliverable and Verify line (`cargo test -p micold-core provision::ai_cli`, core-only) call for: the pure builder, ready for M4 to call once the Settings-side data exists.
