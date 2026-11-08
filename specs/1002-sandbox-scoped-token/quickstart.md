@@ -78,3 +78,12 @@ local git HTTP backend. What stands in for each step, by an automated test CI al
 | 12 | NOT RUN live | `features_settings` `the_help_names_the_permissions_and_the_risks` (names *Contents: Read and write*, *Metadata: Read*, the risks; the *Pull requests* sentence was not checked); fake API `step_12_the_paste_form_help_names_the_permissions_the_sandbox_and_the_risks` (also the sandbox-can-use-everything sentence, which is what covers a *Pull requests* permission the user adds) |
 
 The live check against real GitHub and the visual pass of the status rows (T055) remain open on #1147.
+
+**Retired (#1530, 2026-11-05):** the grant/revoke wire messages (`ClientMsg::GitCredentialGrant`,
+`ClientMsg::GitCredentialRevoke`) and the daemon's `sandbox_real_scoped_token` real-runtime test
+that drove them no longer exist — a sandboxed daemon's git credential now comes from its
+configuration file (`micold-daemon git-credential get`, `crates/micold-daemon/src/credential_config.rs`),
+covered by `crates/micold-daemon/tests/git_credential_config.rs` and
+`sandbox_real_no_user_credentials.rs`. Rows 4-8 and 10 above that name `sandbox_real_scoped_token`
+or the deleted `micold-client` `shell::scoped_credential` tests are stale and not re-verified here;
+untangling this table is follow-up, not part of #1532.

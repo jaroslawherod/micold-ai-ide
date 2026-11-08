@@ -352,10 +352,6 @@ name = "sandbox_real_no_user_credentials"
 path = "tests/sandbox_real_no_user_credentials.rs"
 
 [[test]]
-name = "sandbox_real_scoped_token"
-path = "tests/sandbox_real_scoped_token.rs"
-
-[[test]]
 name = "sandbox_real_parity"
 path = "tests/sandbox_real_parity.rs"
 
