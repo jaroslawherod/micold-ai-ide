@@ -13949,6 +13949,8 @@ mod panes {
             schema_version: 1,
             last_active: Some(PathBuf::from(project)),
             projects: vec![ProjectSnapshot {
+                daemon: Default::default(),
+                identity: Default::default(),
                 pane_layout: layout,
                 path: PathBuf::from(project),
                 display_name: "demo".into(),
@@ -14125,6 +14127,8 @@ mod panes {
         );
         let mut catalog = catalog_with_layout("/repo/panes", None);
         catalog.projects.push(ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: Some(stored.to_json()),
             path: other.clone(),
             display_name: "other".into(),

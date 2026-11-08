@@ -1720,6 +1720,8 @@ fn adopt(
         schema_version: 1,
         last_active: None,
         projects: vec![ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: None,
             path: project_path(),
             display_name: "repo".to_string(),

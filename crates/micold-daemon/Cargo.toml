@@ -132,6 +132,10 @@ name = "autospawn"
 path = "tests/autospawn.rs"
 
 [[test]]
+name = "project_identity_row"
+path = "tests/project_identity_row.rs"
+
+[[test]]
 name = "catalog_join"
 path = "tests/catalog_join.rs"
 

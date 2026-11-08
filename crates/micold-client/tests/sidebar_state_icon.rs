@@ -295,6 +295,8 @@ fn catalog(sessions: &[(SessionId, &str, WireLifecycle, ActivitySignal)]) -> Cat
         schema_version: 1,
         last_active: Some(PathBuf::from(REPO)),
         projects: vec![ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: None,
             path: PathBuf::from(REPO),
             display_name: "repo".to_string(),

@@ -284,6 +284,8 @@ mod tests {
             schema_version: 1,
             last_active: Some(PathBuf::from("/srv/r")),
             projects: vec![ProjectSnapshot {
+                daemon: Default::default(),
+                identity: Default::default(),
                 path: PathBuf::from("/srv/r"),
                 display_name: "r".into(),
                 is_git_repo: true,

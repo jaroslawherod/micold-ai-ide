@@ -316,6 +316,8 @@ fn a_session_the_restarted_daemon_lacks_shows_lost_to_daemon_on_its_row() {
         schema_version: 1,
         last_active: Some(project.clone()),
         projects: vec![ProjectSnapshot {
+            daemon: Default::default(),
+            identity: Default::default(),
             pane_layout: None,
             path: project.clone(),
             display_name: "demo".into(),

@@ -103,6 +103,30 @@ it too.
 | `known_hosts_file` | none | `UserKnownHostsFile` for that key. |
 | `signing_key_file` | none | Secret. The commit-signing key. Without it, `commit.gpgsign` and `tag.gpgsign` are removed. |
 
+### Telling daemons which clones are the same project (`micold.projectId`)
+
+Every project row the daemon sends carries a project identity, so an orchestrator driving several
+daemons can tell that two clones are one project. The daemon derives it from the repository's own
+git configuration, never from the network:
+
+1. If the clone's local git config sets `micold.projectId`, that value is the identity.
+2. Otherwise the `origin` remote (the first remote in the config when there is no `origin`) names
+   it, so `git@host:o/r.git` and `https://host/o/r` are the same project.
+3. A repository with no remote, or only a local-path remote, is its own project on each daemon: two
+   daemons never merge it.
+
+Set the override once in each clone that should join the same project, with the same value on every
+daemon:
+
+```sh
+git -C /path/to/clone config --local micold.projectId my-team/my-app
+```
+
+The value is 1 to 128 characters with no whitespace or control characters; any other value is
+ignored and the remote is used. Only the clone's own `.git/config` counts, not your global git
+configuration. The daemon rereads it within 30 seconds, so no restart is needed. Remove it with
+`git config --local --unset micold.projectId`.
+
 ### `[[github.tokens]]`
 
 | Key | Default | Meaning |

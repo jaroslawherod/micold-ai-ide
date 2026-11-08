@@ -21,14 +21,16 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use micold_core::fs_scan::FolderScanner;
+use micold_core::git::{parse_remote_list, Git, GitCli};
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::origin::{
     validate_origin, OriginNode, OriginRejected, OriginStatus, SessionOrigin,
 };
 use micold_core::project::Availability;
+use micold_core::project_identity::{ProjectIdentity, PROJECT_ID_CONFIG_KEY};
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonMsg, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
@@ -179,7 +181,14 @@ pub struct Catalog {
     /// The id this daemon announces on every row it projects (#1723), `local` until the
     /// configuration says otherwise.
     daemon: WireDaemonId,
+    /// Project identities read from git config, kept for [`IDENTITY_TTL`] so a snapshot does not
+    /// run git for every project each time (#1723).
+    identities: Mutex<std::collections::BTreeMap<PathBuf, (Instant, ProjectIdentity)>>,
 }
+
+/// How long a derived project identity is reused before git config is read again, so a remote or
+/// `micold.projectId` change shows within this time without a daemon restart.
+const IDENTITY_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// One project's Jira change a service-settings write merges into the maps on disk: its
 /// connection (feature 533) or its base URL (feature 1122). The default changes neither.
@@ -208,6 +217,35 @@ impl Catalog {
     /// Set the id every projected row carries (#1723).
     pub fn set_daemon_id(&mut self, daemon: WireDaemonId) {
         self.daemon = daemon;
+        self.identities.lock().expect("identity cache").clear();
+    }
+
+    /// The identity of project `path` (#1723, FR-008), from its local git config: the
+    /// `micold.projectId` override, else its remote, else its own per-daemon identity. A project
+    /// that is not a git repository, or whose config cannot be read, has no remote and no override.
+    fn project_identity(&self, git: &dyn Git, path: &Path, is_git_repo: bool) -> ProjectIdentity {
+        let mut cache = self.identities.lock().expect("identity cache");
+        if let Some((at, identity)) = cache.get(path) {
+            if at.elapsed() < IDENTITY_TTL {
+                return identity.clone();
+            }
+        }
+        let (remotes, override_value) = if is_git_repo {
+            (
+                git.remote_list(path)
+                    .map(|raw| parse_remote_list(&raw))
+                    .unwrap_or_default(),
+                git.config_local_get(path, PROJECT_ID_CONFIG_KEY)
+                    .ok()
+                    .flatten(),
+            )
+        } else {
+            (Vec::new(), None)
+        };
+        let identity =
+            ProjectIdentity::derive(&remotes, override_value.as_deref(), &self.daemon, path);
+        cache.insert(path.to_path_buf(), (Instant::now(), identity.clone()));
+        identity
     }
 
     /// The id every projected row carries (#1723).
@@ -231,6 +269,7 @@ impl Catalog {
             recovered_backup: loaded.preserved,
             origin_events: Vec::new(),
             daemon: WireDaemonId::local(),
+            identities: Mutex::default(),
         }
     }
 
@@ -257,6 +296,7 @@ impl Catalog {
             recovered_backup: None,
             origin_events: Vec::new(),
             daemon: WireDaemonId::local(),
+            identities: Mutex::default(),
         }
     }
 
@@ -355,6 +395,11 @@ impl Catalog {
     /// A full snapshot of the durable state, projected onto the wire types (idempotent by
     /// construction — messages.md §Ordering 4).
     pub fn snapshot(&self) -> CatalogSnapshot {
+        self.snapshot_with(&GitCli::new())
+    }
+
+    /// [`Catalog::snapshot`] reading project identities through `git`.
+    pub fn snapshot_with(&self, git: &dyn Git) -> CatalogSnapshot {
         let projects = self
             .workspace
             .projects
@@ -395,6 +440,8 @@ impl Catalog {
                     .collect();
 
                 ProjectSnapshot {
+                    daemon: self.daemon.clone(),
+                    identity: self.project_identity(git, &p.path, p.is_git_repo),
                     pane_layout: self
                         .workspace
                         .pane_layouts

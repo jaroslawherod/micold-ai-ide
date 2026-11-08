@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: review (M2)
-- **Next step**: M2 CI, merge
+- **Phase**: review (M3)
+- **Next step**: M3 scoped gate, review A and B, full gate, PR
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1746 | design | merged | 3530aeba08a1047f1d73cc2f88bf5d4b85d8253b |
 | #1753 | M1 | merged | 045d2f75cbc3c4098a1a489be95f3cabf2ecdb2d |
-| #1767 | M2 | open | |
+| #1767 | M2 | merged | b7c07fdaff23114f1f42d3f6eace69a63918dc8e |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | #1753 | merged |
-| M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | | in progress |
-| M3 | T023–T029 | full | project identity on project rows | | pending |
+| M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | #1767 | merged |
+| M3 | T023–T029 | full | project identity on project rows | | in progress |
 | M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | | pending |
 
 ## Decisions

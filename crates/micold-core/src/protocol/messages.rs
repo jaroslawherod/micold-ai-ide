@@ -2047,9 +2047,23 @@ impl WorktreeSnapshot {
     }
 }
 
+impl ProjectSnapshot {
+    /// The daemon-qualified ref of this project (#1723).
+    pub fn qualified(&self) -> crate::protocol::routing::ProjectRef {
+        crate::protocol::routing::ProjectRef {
+            daemon: self.daemon.clone(),
+            path: self.path.clone(),
+        }
+    }
+}
+
 /// A project within a [`CatalogSnapshot`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectSnapshot {
+    /// The daemon that owns this project (#1723). No serde default, as on [`SessionSummary`].
+    pub daemon: crate::protocol::routing::WireDaemonId,
+    /// Which project this is across daemons (#1723, FR-008): equal identities are the same project.
+    pub identity: crate::project_identity::ProjectIdentity,
     /// Identity path (lexically canonicalised).
     pub path: PathBuf,
     /// Display name.
