@@ -151,6 +151,14 @@ async fn probe(shared: bool, container: &str, port: u16) {
         for dir in mounts.home_dirs_to_create() {
             std::fs::create_dir_all(dir).unwrap();
         }
+        // A credential delivered under the secrets directory is mounted onto a path inside what
+        // `start_sandbox` mounts there as one whole, already read-only, directory — so its
+        // mountpoint has to exist on the host side beforehand, the same way the application
+        // creates it (T065).
+        for file in mounts.secrets_files_to_create() {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, b"").unwrap();
+        }
         mounts
             .credentials
             .iter()
