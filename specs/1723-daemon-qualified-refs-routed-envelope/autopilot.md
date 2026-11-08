@@ -83,3 +83,9 @@ Round 1 snapshot 0a3a5600:11174021: CHANGES 3 MAJOR. F1 declined: the FR-008 mar
 - PR #1753 attempt 2: rebased onto origin/main (one conflict, daemon_config/tests.rs, kept both tests); mise check and fmt green; targeted tests starved by the shared build lock, CI validates. Now MERGEABLE.
 - PR #1767: scoped gate: fmt, clippy and tests green except `ai_cli_config::a_configured_model_is_claude_codes_default_launch_model` (fails 2 of 2 locally: stand-in never records its launch in 5 s; file and area untouched by this milestone, probably environmental). Full gate left to CI.
 - PR #1767 RED run 42358944370: (1) `streaming_child::unix::a_natural_exit_still_ends_what_it_left_running` again, file untouched by this PR, same flake as #1753 attempt 1; no code change. (2) sandbox job: real bug of this PR, `sandbox_real_mise_setup.rs` matched `Frame` without the new `Routed` arm (E0004, feature-gated so the default build missed it); fixed, `cargo check --tests` with all three `sandbox-real-runtime` features is green. Full local gate: fmt, clippy green; tests red only on `ai_cli_config` (environmental, as above) and `structured_permission::two_sessions_waiting_are_marked_separately` (flake, passes on rerun). CI validates the rest.
+
+## Red CI, PR #1767, attempt 1
+
+- `sandbox against a real runtime (linux)`: `sandbox_real_scoped_token.rs` uses `ClientMsg::GitCredentialGrant/Revoke`, retired on main by #1530 (5b9bd6b08). Same failure on main's own CI (run 42442505836). Not caused by M2; not ours to fix.
+- `build + test (ubuntu-latest)`: `streaming_child::unix::a_natural_exit_still_ends_what_it_left_running` (timing, unrelated files untouched); failed job rerun (run 42370434844).
+- `ai_cli_config a_configured_model_is_claude_codes_default_launch_model` is not in the CI failure.
