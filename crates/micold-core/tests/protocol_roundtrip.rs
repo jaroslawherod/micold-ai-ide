@@ -983,8 +983,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
 }
 
 #[test]
-fn the_protocol_version_is_79() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 79);
+fn the_protocol_version_is_80() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 80);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a

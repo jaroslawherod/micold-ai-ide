@@ -224,27 +224,44 @@ impl Catalog {
     /// `micold.projectId` override, else its remote, else its own per-daemon identity. A project
     /// that is not a git repository, or whose config cannot be read, has no remote and no override.
     fn project_identity(&self, git: &dyn Git, path: &Path, is_git_repo: bool) -> ProjectIdentity {
-        let mut cache = self.identities.lock().expect("identity cache");
-        if let Some((at, identity)) = cache.get(path) {
-            if at.elapsed() < IDENTITY_TTL {
-                return identity.clone();
-            }
+        let cached = self
+            .identities
+            .lock()
+            .expect("identity cache")
+            .get(path)
+            .filter(|(at, _)| at.elapsed() < IDENTITY_TTL)
+            .map(|(_, identity)| identity.clone());
+        if let Some(identity) = cached {
+            return identity;
         }
+        // Git runs outside the cache lock, so one slow repository does not hold up the others.
+        let mut read_ok = true;
         let (remotes, override_value) = if is_git_repo {
             (
                 git.remote_list(path)
                     .map(|raw| parse_remote_list(&raw))
-                    .unwrap_or_default(),
+                    .unwrap_or_else(|_| {
+                        read_ok = false;
+                        Vec::new()
+                    }),
                 git.config_local_get(path, PROJECT_ID_CONFIG_KEY)
-                    .ok()
-                    .flatten(),
+                    .unwrap_or_else(|_| {
+                        read_ok = false;
+                        None
+                    }),
             )
         } else {
             (Vec::new(), None)
         };
         let identity =
             ProjectIdentity::derive(&remotes, override_value.as_deref(), &self.daemon, path);
-        cache.insert(path.to_path_buf(), (Instant::now(), identity.clone()));
+        // A failed read is not remembered: the next snapshot asks git again.
+        if read_ok {
+            self.identities
+                .lock()
+                .expect("identity cache")
+                .insert(path.to_path_buf(), (Instant::now(), identity.clone()));
+        }
         identity
     }
 
