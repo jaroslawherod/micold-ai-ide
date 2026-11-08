@@ -78,6 +78,7 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D6 | milestone M1→M2 | Open escalation claimed `git push` was blocked (category 4, missing access) in every prior unit's session | Resolved: the container restart had wiped the sandbox's global gitconfig (`GIT_CONFIG_GLOBAL=/var/lib/micold-ai-ide/gitconfig`); the orchestrator reapplied the documented working setup — `url."https://github.com/".insteadOf git@github.com:` plus `core.askPass=/home/jaro/.local/bin/gh-askpass.sh` (supplies `gh auth token`; the sandbox resets `credential.helper` via `GIT_CONFIG_KEY_0`, so askPass is what survives). `git push` and `scripts/autopilot/preflight.sh` both succeed now | decided by user / orchestrator-resolved | PR #1711 merged (`8470f7464ec548474530511495dd9ded211e5ba4`) via a push from this same worktree after the gitconfig fix |
 | D7 | milestone M2 | Connectivity note, not a decision needing a question: should a stalled `git`/`gh` call be treated as a credential failure? | No: GitHub access from this container is intermittent — one round-robin IP black-holes port 443 (why `/home/jaro/.local/bin/gh` is a retry wrapper). A call that stalls ~130s and then reports a connect timeout should simply be retried | agent-resolved | orchestrator's briefing for this unit |
 | D8 | milestone M2 | Two consecutive units spent their full context on M2's design (T065, T065a–c together) and wrote no code — does the milestone still fit one unit? | No: split M2 into M2a (T065 only — read-only sign-in delivery, SC-008) and M2b (T065a–T065c — keeping a delivered sign-in valid without a CLI refresh), each its own PR. `tasks.md`'s M2 section replaced with M2a/M2b per `milestone-format.md`; M3's `Depends on` repointed at M2b. This unit's own scope is M2a | agent-resolved | this unit's briefing (two 150k handovers with no code, `autopilot-1532.md`'s own prior two *Handover* sections); `specs/daemon-config-file/tasks.md` M2a/M2b sections |
+| D9 | milestone M2b | T065a's bullet says Settings runs `claude setup-token`/takes a pasted token and warns 14 days before expiry; T065b's bullet says the client re-delivers a derived sign-in and schedules a host-side refresh. Neither Settings UI for `[[ai.cli]]` nor a client→daemon secret-push message exists yet (both are M4/T066-T067's and M3/T100's own scope) — does M2b need to build them too? | No, same precedent as D4/D5: scope to M2b's own Deliverable/Verify lines, not the task bullets' UI detail. **T065a**: implement the backend only — `token_file` env wiring at session start (never argv) plus a 14-day expiry warning computed server-side and surfaced through the *existing* `ConfigStatus`/daemon-details-dialog diagnostic text (extending the same loop that already shows GitHub `TokenReach` lines, no new widget) rather than a `[[ai.cli]]`-table Settings UI (M4's, not built yet). **T065b**: implement only the pure, unit-tested relay logic in `crates/micold-client/src/ai_cli_relay.rs` (derive-copy-with-no-refresh-token, expiry/scheduling math, an `apply_relay` that writes the derived copy to a given destination path and never touches the source) — exactly what the Verify line (`cargo test -p micold-client --lib`) and the task's own two named tests ask for. The live notify watcher, the per-daemon destination-path lookup and the actual host/SSH/pod delivery channel are left as named follow-up: no client→daemon protocol message exists to push a secret (confirmed by exploration), the client has no structured read of a target daemon's `[[ai.cli]]` config yet (that is M4's), and pod re-delivery on a host sign-in change is already M3's own stated Deliverable. State this gap plainly in the M2b PR body | agent-resolved | exploration of `ConfigStatus`/`TokenReach` (`crates/micold-core/src/protocol/messages.rs:2433-2506`, `crates/micold-daemon/src/config_watch.rs:123-143`, `crates/micold-client/src/ui/daemon_details_dialog.rs:60-85`) and of client-side watch/scheduling/protocol building blocks (`crates/micold-client/src/shell/changes_watch.rs`, `crates/micold-client/src/shell/subscriptions.rs:286`, `crates/micold-client/src/daemon_config_delivery.rs`) found no existing client→daemon secret-push message and no client-side `[[ai.cli]]` config awareness; `specs/daemon-config-file/tasks.md` M4 line (T066/T067, Settings → Daemons renders `[[ai.cli]]`) and M3 line (T100, "the client re-delivers the pod Secret when the host sign-in changes") |
 
 ## Review rounds
 
@@ -280,7 +281,81 @@ verdict; attempt 3 is this scope's last before an escalation.
 
 ## Handover
 
-None.
+Milestone M2b (T065a–T065c): design and exploration are done (ledger D9), **no code written yet** —
+this unit hit the 150k context cap during research, before the first edit. The next unit should
+implement directly from the plan below; do not re-derive it.
+
+**T065a** (token_file wiring + 14-day expiry warning, backend only — D9):
+1. `crates/micold-core/src/daemon_config/ai_cli.rs` (after `api_key_env_variable`, ~line 35): add
+   `pub fn token_file_env_variable(cli: CliId) -> Option<&'static str>` — `ClaudeCode` →
+   `"CLAUDE_CODE_OAUTH_TOKEN"`, `Copilot` → `"COPILOT_GITHUB_TOKEN"`, `Pi`/`Codex`/`Opencode` →
+   `None` (V9 already refuses `token_file` for those). Add
+   `pub const TOKEN_FILE_EXPIRY_WARNING_WINDOW: std::time::Duration` (14 days) and
+   `pub fn token_file_expires_within(expires_at: u64, now: std::time::SystemTime, window:
+   std::time::Duration) -> bool`. Tests next to the existing `mod tests` (pattern at line 261+;
+   `cli()` fixture already there).
+2. `crates/micold-daemon/src/state.rs` `with_configured_env` (~line 748-786): mirror the
+   `api_key_file` block — read `cli.token_file`, parse with
+   `micold_core::daemon_config::matching::parse_token_file` (matching.rs:75, already used for
+   `[[github.tokens]]`) to strip any trailing `expires_at=` line before it reaches the env value,
+   inject via `token_file_env_variable`, replacing any existing value of that name; never put it in
+   argv. A read failure logs and contributes nothing (FR-019, same as `api_key_file`).
+3. `crates/micold-core/src/protocol/messages.rs`: add `AiCliTokenExpiry { pub cli: String, pub
+   expires_at_secs: u64 }` near `TokenReach` (~line 2500), and `#[serde(default)] pub ai_cli_tokens:
+   Vec<AiCliTokenExpiry>` on `ConfigStatus` (~line 2433-2456).
+4. `crates/micold-daemon/src/config_watch.rs` `status_of` (~line 123-143): populate
+   `ai_cli_tokens` from `config.ai.cli` — for each entry with a `token_file`, read + `parse_token_file`
+   it, keep only those whose `expires_at` is `Some` and within `token_file_expires_within(..,
+   SystemTime::now(), TOKEN_FILE_EXPIRY_WARNING_WINDOW)`.
+5. `crates/micold-client/src/ui/daemon_details_dialog.rs` `configuration_lines` (~line 60-85):
+   add a loop over `status.ai_cli_tokens` pushing a `Note` line, right beside the existing
+   `for token in &status.tokens` loop.
+- Verify: `cargo test -p micold-core daemon_config::ai_cli`; `cargo test -p micold-daemon --test
+  ai_cli_config --test ai_cli_availability`; `cargo test -p micold-core provision::ai_cli`.
+
+**T065b** (sign-in relay, pure logic only — D9): new file `crates/micold-client/src/ai_cli_relay.rs`
+(register it beside `daemon_config_delivery`'s own module declaration — check how that one is
+wired into `lib.rs`/`main.rs` and follow it):
+- `derive_relay_copy(cli: micold_core::session::AiCli, source: &[u8], now: SystemTime) ->
+  Result<Vec<u8>, RelayError>`: parse `source` as `serde_json::Value`, drop the refresh token
+  research D14 names (Claude `claudeAiOauth.refreshToken`; Codex `tokens.refresh_token`, and set
+  `last_refresh` to `now` as ISO-8601; OpenCode: for every top-level provider object, its `refresh`
+  field) and re-serialize. `RelayError::NotJson | Unsupported(cli)` (Copilot/Pi have no sign-in
+  file).
+- `access_token_expiry(cli, derived: &[u8]) -> Option<SystemTime>`: Claude Code —
+  `claudeAiOauth.expiresAt` (ms epoch); Codex — decode `tokens.access_token`'s JWT `exp` claim
+  (base64url middle segment, no signature check needed, just the expiry hint); OpenCode — `None`
+  (research D14 itself: format "not installed here", don't invent one).
+- `schedule_refresh_at(delivered_at, expires_at) -> Option<SystemTime>` = `delivered_at + 0.75 *
+  (expires_at - delivered_at)`; `enum RefreshUrgency { ScheduledAt(SystemTime), WarnNow }` +
+  `refresh_urgency(now, expires_at, scheduled_at)` → `WarnNow` when under 1h remains, else
+  `ScheduledAt`.
+- `apply_relay(source: &Path, dest: &Path, cli, now) -> io::Result<bool>`: read `source`, derive,
+  write to `dest` only if different (reuse/mirror `write_if_changed` already in
+  `crates/micold-client/src/daemon_config_delivery.rs`), **never writes `source`**.
+- Tests (bottom `#[cfg(test)] mod tests`, per the task's own two named requirements): fixtures
+  proving the derived copy has no refresh token (one per CLI) and that `apply_relay` never writes
+  the source (bytes + mtime unchanged); plus Codex's `last_refresh`, and the schedule/urgency math.
+- Explicitly out of scope here (D9): the live `notify`-based watcher (follow
+  `crates/micold-client/src/shell/changes_watch.rs`'s `Subscription` pattern), the per-daemon
+  destination-path lookup, and the actual delivery channel (local write / `scp` / `kubectl apply`
+  per research D5) — no client→daemon secret-push message exists, the client has no structured
+  `[[ai.cli]]` read yet (M4's), and pod re-delivery on change is M3's own stated Deliverable. Say so
+  in the PR body.
+
+**T065c**: doc-only — write the per-CLI measurement table into
+`docs/user-guide/sandboxed-daemon.md`, using research.md D14's "What each CLI does with a read-only
+credential file" table (research.md ~line 469-477) verbatim in substance; mark rows "not yet
+observed"/"not installed here" exactly as research does, since this unit has no container runtime
+and no CLIs installed to measure anything new.
+
+**Process notes for the next unit**: no `tdd/test-list.md` heading exists yet for Issue 11/M2b;
+write failing tests first against current `origin/main` and record cycle-log entries, or add a
+"Test list: Issue 11 (#1532), milestone M2b" section and drive it through `/speckit.tdd.run` — either
+is fine, the design above does not need re-deriving either way. Tick T065a/T065b/T065c `[X]` in
+`tasks.md` only once each actually lands with tests. No escalation needed — this is pure
+implementation; D9's scope choices are agent-resolved like D4/D5. No PR opened yet. Full disk
+headroom (271G free); no sandbox/kube changes here, so no image rebuild or `test-sandbox` needed.
 
 ## Open escalation
 
