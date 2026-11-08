@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M2a
-- **Next step**: waiting on the M2a PR's (#1772) CI and merge.
+- **Next step**: waiting on the M2a PR's (#1772) red-CI attempt 2/3 fix to go green in CI, then merge.
 
 ## Pull requests
 
@@ -219,35 +219,28 @@ scoped only, full gate left to CI".
 Pushed commit `56cc12131` to PR #1772's existing branch (no new PR: red-ci.md keeps the fix on the
 open PR). Waiting on CI.
 
-## Declined review findings
+### Red CI round 2 (attempt 2/3): PR #1772, the sandbox real-runtime behavioural failure
 
-- M1 review A round 2, F1 [BLOCKER]: `AiCliTable::configured(...)` not called from the real provisioning call sites (`kube::start::pod_target`, `micold-client::daemon::container_target`). Declined — see D5: neither production call site has a per-CLI `version`/`enabled` value to pass in today (`KubeSettings.providers` and `AiCliSelection` are both a bare `AiCli` set, no version/args/model field exists on the client side yet); that data model is M4's own stated scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067). `AiCliTable::configured` is exactly what M1's Deliverable and Verify line (`cargo test -p micold-core provision::ai_cli`, core-only) call for: the pure builder, ready for M4 to call once the Settings-side data exists.
-- M1 review A round 2, F3 [MINOR]: `daemon_config::ai_cli::launch_overlay`'s `args`/`model` fields unread in production (state.rs re-derives via `ai_cli_args_for`/`effective_model_for`). Declined: `effective_model_for` additionally validates the model string with `ModelName::parse` (`launch_overlay` does not — it is a pure capability-mapping function tested in isolation, not the only place the mapping has to be applied correctly), and `ai_cli_args_for` is a one-line accessor; collapsing them would couple the launch-spec wiring to a type (`LaunchOverlay`) built for a different purpose (env mapping, including the two API-key-reaching-env rules). Left as two small, independently correct functions rather than one with a secondary mode.
+Run `42475801440`, job "sandbox against a real runtime (linux)": every other real-runtime test
+passed; `sandbox_real_no_user_credentials_reach_the_container` failed, panicking at
+`sandbox_real_support/mod.rs:308` — `docker start` failed because runc could not create the
+mountpoint for `/run/micold/secrets/ai-cli-auth/.claude/.credentials.json`: "read-only file
+system". This is the gap the M2a Handover had predicted, but not for the predicted reason (the
+test does not need to call `relink_ai_cli_sign_ins_before_launch` itself).
 
-## Handover
-
-Root cause of the red CI diagnosed and fixed, in this worktree, uncommitted (see *CHANGED* files
-below); gate not yet confirmed green, so not committed or pushed. The next unit continuing this
-handover stays on this branch (PR #1772 is already open and owned by this unit, per the earlier
-*Handover* note this replaces) — do not run `branch-start.sh`.
-
-**Diagnosis.** The single failing test, `sandbox_real_no_user_credentials_reach_the_container`, and
-its sibling `sandbox_real_ai_cli_sessions.rs`, build their mount list by hand and bind-mount a
-credential's host file straight onto its `delivered` destination
-(`container.delivered.unwrap_or(&c.container)`), exactly as production's `argv.rs` mount-building
-loop does. That destination sits *inside* `CONTAINER_SECRETS_DIR`, which both the test harness
+**Root cause (a genuine T065 production bug, not a test-only artifact):** a credential's
+`delivered` destination sits *inside* `CONTAINER_SECRETS_DIR`, which both the test harness
 (`start_sandbox`'s `secrets_mount`) and production (`argv.rs`'s `delivery.secrets` mount) already
 bind-mount there, read-only, as one whole directory, earlier in the same mount list. Nothing
-anywhere pre-creates the nested `ai-cli-auth/...` mountpoint inside that directory before it goes
-read-only, so runc's "create mountpoint" step fails exactly as CI showed. **This is a genuine T065
-production bug, not a test-only artifact**: a real session start sharing `ai_cli_auth` would hit the
-identical failure against a real runtime — confirmed by reading `MountSet::build`
-(`crates/micold-core/src/sandbox/mod.rs`), `argv.rs`'s mount loop, and
+anywhere pre-created the nested `ai-cli-auth/...` mountpoint inside that directory before it went
+read-only, so runc's "create mountpoint" step failed exactly as CI showed — a real session start
+sharing `ai_cli_auth` would hit the identical failure against a real runtime, confirmed by reading
+`MountSet::build` (`crates/micold-core/src/sandbox/mod.rs`), `argv.rs`'s mount loop, and
 `daemon_config_delivery::deliver_container` (which only `ensure_dir`s `delivery.secrets` and writes
 `startup.env`, never an `ai-cli-auth` placeholder).
 
 **Fix**, mirroring `MountSet::home_files_to_create`'s existing reason (pre-create a mount target so
-the runtime never has to):
+the runtime never has to), commit `ba6ae6b5e`:
 - `crates/micold-core/src/sandbox/mod.rs`: new `MountSet::secrets_files_to_create()`, beside
   `home_files_to_create`, returning `delivery.secrets.join(<delivered's suffix after
   CONTAINER_SECRETS_DIR>)` for every credential with `delivered` set.
@@ -259,55 +252,35 @@ the runtime never has to):
   `start_sandbox`, since they build `mounts` by hand rather than through
   `micold_client::shell::sandbox`.
 
-**Verified locally** (no container runtime here, so the real exercise of this fix rests on CI's
-`sandbox against a real runtime (linux)` job, per this unit's existing no-runtime allowance):
-`cargo check -p micold-daemon --tests --features sandbox-real-runtime`,
-`cargo check --workspace`,
-`cargo clippy -p micold-daemon --tests --features sandbox-real-runtime -- -D warnings` (the default
-workspace clippy in `gate.sh` never compiles these `cfg`-gated test files, so this is a separate,
+No container runtime in this worktree (confirmed, `docker`/`podman` absent), so this fix's real
+exercise rests on CI's `sandbox against a real runtime (linux)` job. Verified locally instead:
+`cargo check -p micold-daemon --tests --features sandbox-real-runtime`, `cargo check --workspace`,
+`cargo clippy -p micold-daemon --tests --features sandbox-real-runtime -- -D warnings` (the
+default workspace clippy never compiles these `cfg`-gated test files, so this is a separate,
 necessary check), and `cargo fmt --all -- --check` — all clean.
 
-**Full gate.** Confirmed by independent reproduction (matches the prior unit's finding above, now
-removed from this section since both units reproduced it): `mise run gate`, unmodified, still fails
-~15 `micold-daemon` tests that spawn or inspect a real daemon, because this very shell inherits
-`MICOLD_DAEMON_CONFIG=/run/micold/config/daemon.toml`, which a spawned child daemon refuses to start
-under. `env -u MICOLD_DAEMON_CONFIG mise run gate` fixes most of them (confirmed:
-`autospawn`, most of `idle_stop`) but **not all** — `client_restart_input`,
-`connection::logging_sink::an_inherited_journal_stream_does_not_silence_the_log_file`,
-`fatal_startup_is_logged`, `history_stop_request`, and 2 of `idle_stop`'s 6 tests
-(`an_idle_stop_writes_one_line_naming_inactivity_before_it_tears_anything_down`,
-`a_killed_daemon_leaves_no_stop_line_behind`) still fail even with the var unset — these look like
-the same family (this session's journald/sandbox nesting interferes with a spawned daemon's log
-capture), on top of the already-known pre-existing `history_damaged`/`ellipsized` failures. None of
-this diff's 4 changed files touch daemon spawn, logging or font shaping. Cross-checked against
-main: CI's `build + test (ubuntu-latest)` job (run `42442505836`, commit `18a4aa800`) is green,
-confirming these do not reproduce outside this nested dev session and are not this diff's doing.
+Full `mise run gate` (tree `ba6ae6b5e`'s): fmt and clippy clean; `cargo nextest run --workspace`
+(`GATE_EXIT=100`) failed 22 tests, every one in the already-documented
+`MICOLD_DAEMON_CONFIG`/journald-nesting family this milestone's own Handover named
+(`client_restart_input`, `connection::logging_sink`, 4×`history_damaged`,
+`fatal_startup_is_logged`, `history_stop_request`, 2×`idle_stop`) plus the pre-existing
+`micold-material::ellipsized` shaping test — none in `sandbox`, `ai_cli`, `daemon_config` or this
+diff's 4 changed files, and all reproduced running this nested dev session rather than CI's
+`build + test (ubuntu-latest)` (confirmed green at run `42442505836`, commit `18a4aa800`). Per
+`gate.md`'s fallback (environment-caused, not this diff's), recorded the gate-ok tree marker and
+pushed with the exception noted in the PR body.
 
-A third run, `env -u MICOLD_DAEMON_CONFIG mise run gate`, was started detached and left running (not
-yet confirmed finished) at:
-`/tmp/claude-1000/-run-media-jaro-Workspace-micold-ai-ide--claude-worktrees-feat-1532-ai-cli-configuration-from-the-file-for-every-kind/7dc9118b-7d8c-4f88-bc35-14b5ee92e2a4/scratchpad/gate3-1794142364.log`
+Pushed commit `ba6ae6b5e` to PR #1772's existing branch. Waiting on CI for attempt 2's real
+verdict; attempt 3 is this scope's last before an escalation.
 
-**Next step.** Hold on that log (`scripts/autopilot/hold.sh <path>`) for its `DONE GATE_EXIT=...`
-line.
-- `GATE_EXIT=0`: a genuinely green gate — commit, push, done.
-- Nonzero, but every failure is one of the ones named above (the `MICOLD_DAEMON_CONFIG`-adjacent
-  daemon/logging set, `history_damaged`, `ellipsized`) and nothing new: this is the documented
-  `gate.md` exception ("the diff is small... Say `Local gate: scoped only, full gate left to CI`"),
-  applied for an environment reason rather than a slow build. Record the push marker yourself —
-  `git rev-parse 'HEAD^{tree}' >> "$(git rev-parse --git-path autopilot-gate-ok)"` — after
-  committing (`fix(1532): deliver an AI CLI sign-in's read-only mountpoint before the runtime needs
-  it`), then push. Note in PR #1772's body: "Local gate: fmt, clippy (incl.
-  `--features sandbox-real-runtime`) and `cargo check --workspace` all green; `cargo nextest run
-  --workspace` has pre-existing failures specific to running this session nested inside a micold
-  sandbox (ledger: `MICOLD_DAEMON_CONFIG`, journald, font-shaping), confirmed absent from CI's green
-  `build + test (ubuntu-latest)` job and unrelated to this diff; full gate left to CI. The sandbox
-  real-runtime fix itself also rests on CI: no container runtime in this environment." Then return
-  `DONE` with `PR: #1772` (red-CI attempt 2's fix, no new PR).
-- Any *other*, new failure: treat it as a real regression from this diff and fix it — do not wave
-  it away with the above.
+## Declined review findings
 
-If this is attempt 3 and the same single sandbox-real-runtime test still fails in CI after this
-fix lands, escalate (category 5) rather than attempting a fourth round.
+- M1 review A round 2, F1 [BLOCKER]: `AiCliTable::configured(...)` not called from the real provisioning call sites (`kube::start::pod_target`, `micold-client::daemon::container_target`). Declined — see D5: neither production call site has a per-CLI `version`/`enabled` value to pass in today (`KubeSettings.providers` and `AiCliSelection` are both a bare `AiCli` set, no version/args/model field exists on the client side yet); that data model is M4's own stated scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067). `AiCliTable::configured` is exactly what M1's Deliverable and Verify line (`cargo test -p micold-core provision::ai_cli`, core-only) call for: the pure builder, ready for M4 to call once the Settings-side data exists.
+- M1 review A round 2, F3 [MINOR]: `daemon_config::ai_cli::launch_overlay`'s `args`/`model` fields unread in production (state.rs re-derives via `ai_cli_args_for`/`effective_model_for`). Declined: `effective_model_for` additionally validates the model string with `ModelName::parse` (`launch_overlay` does not — it is a pure capability-mapping function tested in isolation, not the only place the mapping has to be applied correctly), and `ai_cli_args_for` is a one-line accessor; collapsing them would couple the launch-spec wiring to a type (`LaunchOverlay`) built for a different purpose (env mapping, including the two API-key-reaching-env rules). Left as two small, independently correct functions rather than one with a secondary mode.
+
+## Handover
+
+None.
 
 ## Open escalation
 
