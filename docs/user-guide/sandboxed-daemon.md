@@ -528,6 +528,20 @@ A few limits of the sign-in share:
   setup: sign in with `/login`.
 - **Sign-ins can collide.** If Claude Code on your computer and a sandboxed session refresh the
   token at the same moment, one of them may be asked to sign in again. Nothing else is lost.
+- **What each CLI does with a read-only sign-in file**, so you know what to expect once the share
+  is on:
+
+  | CLI | Read-only file | What happens |
+  |---|---|---|
+  | Claude Code | `.credentials.json` (OAuth), or a long-lived `CLAUDE_CODE_OAUTH_TOKEN` | Runs. A session starts and uses the token; it only fails if the token itself has expired, not because the file cannot be written. Not yet observed: a token that expires partway through a long session. |
+  | Codex | `auth.json` | Not installed here to measure; Codex is expected to run the same way, and the application's derived copy (no refresh token, a fresh `last_refresh`) is built to avoid the one case that would need to write the file. An API key is unaffected either way. |
+  | OpenCode | `auth.json`, per provider | Not installed here to measure. A provider signed in by API key never refreshes; one signed in by OAuth past its own expiry is expected to try to refresh and write the file. |
+  | Copilot | none shared yet | Not applicable today: Copilot signs in inside the sandbox. A future `COPILOT_GITHUB_TOKEN` would need no refresh. |
+  | Pi | none shared | Not installed here to measure. Pi is understood to take a lock file next to its own `auth.json` before reading or refreshing it, which a read-only directory may stop at session start — this is why Pi's sign-in is not shared today. |
+
+  Measuring the three "not installed here" rows, and Claude Code's mid-session expiry, needs each
+  CLI actually running against a near-expiry or already-expired token; neither is available in
+  this environment.
 
 While any of them is on, the settings view shows which — a partially shared sandbox should never
 look like a fully isolated one.

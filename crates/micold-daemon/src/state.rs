@@ -750,8 +750,9 @@ fn with_configured_env(
     cli: &micold_core::daemon_config::AiCli,
 ) -> Vec<(String, String)> {
     use micold_core::daemon_config::ai_cli::{
-        launch_overlay, uses_api_key_helper, CLAUDE_API_KEY_FILE_VAR,
+        launch_overlay, token_file_env_variable, uses_api_key_helper, CLAUDE_API_KEY_FILE_VAR,
     };
+    use micold_core::daemon_config::matching::parse_token_file;
     let api_key = if uses_api_key_helper(cli.id) {
         None
     } else {
@@ -780,6 +781,28 @@ fn with_configured_env(
                 CLAUDE_API_KEY_FILE_VAR.to_string(),
                 file.path().display().to_string(),
             ));
+        }
+    }
+    // `token_file`'s content (sign-in token, e.g. `claude setup-token`'s output) at session
+    // start, never on argv (contract row `api_key_file`'s same rule, applied to the sign-in
+    // token): the stored shape may carry a trailing `expires_at=` line (T065a), which
+    // `parse_token_file` strips before the token reaches the session's environment. A missing
+    // variable for this CLI (`validate.rs`'s V9 already refuses `token_file` for it) means there
+    // is nothing to inject. A read failure logs and contributes nothing (FR-019, same as
+    // `api_key_file`).
+    if let Some(var) = token_file_env_variable(cli.id) {
+        if let Some(file) = &cli.token_file {
+            match file.read() {
+                Ok(value) => {
+                    if let Some((token, _expires_at)) = parse_token_file(value.expose()) {
+                        env.retain(|(existing, _)| existing != var);
+                        env.push((var.to_string(), token));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, cli = ?cli.id, "token_file could not be read");
+                }
+            }
         }
     }
     env

@@ -84,6 +84,12 @@ pub fn configuration_lines(status: &ConfigStatus) -> Vec<String> {
         };
         lines.push(format!("Token {}: {reach}", token.name));
     }
+    for expiring in &status.ai_cli_tokens {
+        lines.push(format!(
+            "AI CLI {} sign-in: expires at {}, no refresh scheduled by this CLI",
+            expiring.cli, expiring.expires_at_secs
+        ));
+    }
     lines.push(match &status.startup {
         None => "Start script: has not run".to_string(),
         Some(run) => {
@@ -177,7 +183,7 @@ fn configuration_block<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::protocol::messages::{StartupReport, TokenReach};
+    use micold_core::protocol::messages::{AiCliTokenExpiry, StartupReport, TokenReach};
 
     const SECRET: &str = "ghp_SECRET_VALUE_1234";
 
@@ -201,6 +207,7 @@ mod tests {
                     repos: Vec::new(),
                 },
             ],
+            ai_cli_tokens: Vec::new(),
             startup: Some(StartupReport {
                 outcome: StartupOutcome::Warned,
                 reason: Some(StartupReason::Exit(3)),
@@ -222,6 +229,22 @@ mod tests {
         ] {
             assert!(text.contains(want), "{want:?} missing from:\n{text}");
         }
+    }
+
+    /// T065a: a `token_file` close to its recorded `expires_at` surfaces as its own diagnostic
+    /// line, beside the existing GitHub token lines, with no new widget.
+    #[test]
+    fn a_soon_to_expire_ai_cli_token_surfaces_its_own_line() {
+        let mut s = status();
+        s.ai_cli_tokens = vec![AiCliTokenExpiry {
+            cli: "claude_code".into(),
+            expires_at_secs: 1_700_500_000,
+        }];
+        let text = configuration_lines(&s).join("\n");
+        assert!(
+            text.contains("AI CLI claude_code sign-in: expires at 1700500000"),
+            "{text}"
+        );
     }
 
     /// US4.1/US4.2: a refused or warned start shows its exit status and the output tail; a run

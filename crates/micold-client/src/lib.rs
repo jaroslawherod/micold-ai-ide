@@ -8,6 +8,7 @@
 //! The shared domain model and persistence live in [`micold_core`]; the PTY/VT session host
 //! lives in the daemon.
 
+pub mod ai_cli_relay;
 pub mod app;
 /// Folding the daemon's catalog snapshot into client state. In the library, not the binary,
 /// so `tests/` can drive the daemon → wire → client join (see the module docs).
