@@ -74,10 +74,10 @@ fn sh(user: &str, script: &str) -> (i32, String) {
 const CONFIG_FILE: &str = "/tmp/micold-scoped-daemon.toml";
 const TOKEN_FILE: &str = "/tmp/micold-scoped-token";
 
-/// The daemon configuration the helper reads: one token for `REPO` on the loopback git host.
+/// The daemon configuration the helper reads (it must validate): one token for `REPO` on the loopback git host.
 fn config_toml(base: &str) -> String {
     format!(
-        "[[github.tokens]]\nname = \"scratch\"\ntoken_file = \"{TOKEN_FILE}\"\n\
+        "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"container\"\n\n[[github.tokens]]\nname = \"scratch\"\ntoken_file = \"{TOKEN_FILE}\"\n\
          repos = [\"{REPO}\"]\nhost = \"{base}\"\n"
     )
 }
