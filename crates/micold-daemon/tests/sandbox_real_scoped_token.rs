@@ -3,8 +3,9 @@
 //!
 //! The token is checked in-process by the core's `pat::check` against a loopback fake GitHub API
 //! (`fake_github.rs`, shared with the client's tests) through the client's own `UreqTransport`.
-//! The result is granted to the daemon in the container, whose helper answers for a local smart-HTTP
-//! git remote (`MICOLD_GIT_CREDENTIAL_BASE`), bound on every interface and reached from the
+//! The token is "pasted" by writing the token file of a `[[github.tokens]]` entry in the container
+//! (#1530 retired the grant messages), and the daemon's helper answers for a local smart-HTTP
+//! git remote (the `host` of that entry), bound on every interface and reached from the
 //! container by name. Step 7's `/hooks` 403 is a real-GitHub fact and stays manual.
 //!
 //! Step 11 (a kind pod) is follow-up #1760 and not covered here; the ignored test below marks it.
@@ -23,13 +24,10 @@ mod sandbox_real_support;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fake_github::FakeGithubApi;
-use futures_util::SinkExt;
 use micold_client::pat_source::UreqTransport;
 use micold_core::github::GithubRepo;
 use micold_core::local_time::rfc3339_utc;
-use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::ClientMsg;
-use micold_core::scoped_credential::git_env::git_env_with_helper;
+use micold_core::scoped_credential::git_env::{git_env_with_helper, CONFIG_ENV};
 use micold_core::scoped_credential::pat;
 use micold_core::scoped_credential::{SecretToken, UnixTime};
 use sandbox_real_support::{cli_out, git, seed, start_sandbox, wait_for_accept, SandboxSpec};
@@ -71,42 +69,32 @@ fn sh(user: &str, script: &str) -> (i32, String) {
     (code.trim().parse().expect("a status"), body.to_string())
 }
 
-async fn grant(conn: &mut micold_core::connect::DaemonConnection, expires_at: UnixTime) {
-    conn.send(Frame::Control(ClientMsg::GitCredentialGrant {
-        repo: repo(),
-        token: SecretToken::new(TOKEN),
-        expires_at,
-    }))
-    .await
-    .expect("send the grant");
+/// Where the container's helper reads its configuration and the token (#1530: the helper answers
+/// from `[[github.tokens]]`, and the token file is read on every call).
+const CONFIG_FILE: &str = "/tmp/micold-scoped-daemon.toml";
+const TOKEN_FILE: &str = "/tmp/micold-scoped-token";
+
+/// The daemon configuration the helper reads: one token for `REPO` on the loopback git host.
+fn config_toml(base: &str) -> String {
+    format!(
+        "[[github.tokens]]\nname = \"scratch\"\ntoken_file = \"{TOKEN_FILE}\"\n\
+         repos = [\"{REPO}\"]\nhost = \"{base}\"\n"
+    )
 }
 
-async fn revoke(conn: &mut micold_core::connect::DaemonConnection) {
-    conn.send(Frame::Control(ClientMsg::GitCredentialRevoke {
-        repo: repo(),
-    }))
-    .await
-    .expect("send the revoke");
-}
-
-/// Wait until the credential file of the repository exists (or is gone) in the container.
-fn wait_file(user: &str, present: bool) {
-    let path = format!("/run/micold/git/{REPO}");
-    let script = if present {
-        format!("test -s {path}")
-    } else {
-        format!("test ! -e {path}")
-    };
-    for _ in 0..100 {
-        if sh(user, &script).0 == 0 {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    panic!(
-        "/run/micold/git/{REPO} did not become {}",
-        if present { "present" } else { "absent" }
+/// Paste the token: write its file (with its expiry) in the container, as `user`.
+fn grant(user: &str, expires_at: UnixTime) {
+    let (code, out) = sh(
+        user,
+        &format!("umask 077; printf 'token={TOKEN}\\nexpires_at={expires_at}\\n' >{TOKEN_FILE}"),
     );
+    assert_eq!(code, 0, "write the token file: {out}");
+}
+
+/// Remove the token: delete its file in the container.
+fn revoke(user: &str) {
+    let (code, out) = sh(user, &format!("rm -f {TOKEN_FILE}"));
+    assert_eq!(code, 0, "remove the token file: {out}");
 }
 
 #[tokio::test]
@@ -168,7 +156,7 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
             format!("{HOST_NAME}:host-gateway"),
         ],
     });
-    let (mut conn, _) = wait_for_accept(PORT).await;
+    let (_conn, _) = wait_for_accept(PORT).await;
 
     // The daemon's installed binary is the helper; its owner is the user the credential files and
     // the sessions belong to.
@@ -184,7 +172,7 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
     let (_, user) = sh("root", &format!("stat -c %U {daemon}"));
     let user = user.trim().to_string();
     let mut env = git_env_with_helper(&base, &daemon);
-    env.insert("MICOLD_GIT_CREDENTIAL_BASE".into(), base.clone());
+    env.insert(CONFIG_ENV.into(), CONFIG_FILE.into());
     for (k, v) in [
         ("GIT_AUTHOR_NAME", "t"),
         ("GIT_AUTHOR_EMAIL", "t@example.com"),
@@ -199,10 +187,14 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
         .collect();
     let git_in = |script: &str| sh(&user, &format!("{exports}{script}"));
     let url = format!("{base}/{REPO}.git");
+    let (code, out) = sh(
+        &user,
+        &format!("cat >{CONFIG_FILE} <<'EOF'\n{}EOF\n", config_toml(&base)),
+    );
+    assert_eq!(code, 0, "write the daemon configuration: {out}");
 
     // Steps 4 and 5: the credential is granted; a clone, a push and a pull succeed ----------------
-    grant(&mut conn, expiry).await;
-    wait_file(&user, true);
+    grant(&user, expiry);
     let (code, out) = git_in(&format!(
         "rm -rf /tmp/a /tmp/b && git clone -q {url} /tmp/a && cd /tmp/a && echo one >a.txt && \
          git add . && git commit -q -m one && git push -q origin HEAD:main && \
@@ -237,33 +229,29 @@ async fn sandbox_real_scoped_token_container_steps_4_to_8_and_10() {
         "printf 'protocol=http\\nhost={HOST_NAME}:{port}\\npath=you/scratch\\n\\n' | git credential fill"
     ));
     assert!(filled.contains(&format!("password={TOKEN}")), "{filled}");
-    let (_, file) = sh(&user, &format!("cat /run/micold/git/{REPO}"));
+    let (_, file) = sh(&user, &format!("cat {TOKEN_FILE}"));
     assert!(
         file.contains(&format!("token={TOKEN}")),
         "the token file: {file}"
     );
 
     // Step 8: removed, push fails; pasted again, push succeeds, no daemon restart ------------------
-    revoke(&mut conn).await;
-    wait_file(&user, false);
+    revoke(&user);
     let push = "cd /tmp/a && echo three >c.txt && git add . && git commit -q -m three && \
                 git push -q origin HEAD:main";
     let (code, out) = git_in(push);
     assert_ne!(code, 0, "push succeeded without a credential: {out}");
-    grant(&mut conn, expiry).await;
-    wait_file(&user, true);
+    grant(&user, expiry);
     let (code, out) = git_in("cd /tmp/a && git push -q origin HEAD:main");
     assert_eq!(code, 0, "push after the token is pasted again: {out}");
 
     // Step 10: the token expires; push fails until a new one is pasted -----------------------------
-    grant(&mut conn, now() + 6).await;
+    grant(&user, now() + 6);
     std::thread::sleep(Duration::from_secs(8));
     let (code, out) = git_in("cd /tmp/a && echo four >d.txt && git add . && git commit -q -m four && git push -q origin HEAD:main");
     assert_ne!(code, 0, "push succeeded with an expired credential: {out}");
-    revoke(&mut conn).await;
-    wait_file(&user, false);
-    grant(&mut conn, expiry).await;
-    wait_file(&user, true);
+    revoke(&user);
+    grant(&user, expiry);
     let (code, out) = git_in("cd /tmp/a && git push -q origin HEAD:main");
     assert_eq!(code, 0, "push after a new token is pasted: {out}");
 }
