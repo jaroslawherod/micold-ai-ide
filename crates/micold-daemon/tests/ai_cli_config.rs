@@ -185,6 +185,78 @@ fn configured_args_and_env_add_to_the_clis_own_launch_and_the_api_key_never_reac
     }
 }
 
+/// T065a: a configured `token_file`'s content reaches Claude Code as `CLAUDE_CODE_OAUTH_TOKEN` in
+/// the environment, with any trailing `expires_at=` line stripped before it gets there, and never
+/// on the command line (contract row `api_key_file`'s same rule, applied to a sign-in token).
+#[test]
+fn configured_token_file_reaches_claude_code_as_oauth_token_without_the_expiry_line() {
+    let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bin = tempfile::tempdir().unwrap();
+    stand_in(bin.path(), "claude");
+    let previous_path = std::env::var_os("PATH");
+    std::env::set_var(
+        "PATH",
+        std::env::join_paths([
+            bin.path().to_path_buf(),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ])
+        .unwrap(),
+    );
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (catalog, id) =
+        catalog_with_ai_cli_session(project.path(), store.path(), AiCli::ClaudeCode);
+    let state = DaemonState::new(catalog);
+
+    let token_file = project.path().join("claude.token");
+    std::fs::write(&token_file, "sk-ant-oat-test\nexpires_at=1999999999\n").unwrap();
+    let text = format!(
+        "schema = 1\n[daemon]\nname = \"d\"\nkind = \"host\"\n\n[[ai.cli]]\nid = \"claude_code\"\ntoken_file = \"{}\"\n",
+        token_file.display(),
+    );
+    let config = micold_core::daemon_config::parse(&text, "test.toml").expect("a valid config");
+    state.set_config(Arc::new(ConfigRuntime::new(LoadedFile {
+        path: PathBuf::from("test.toml"),
+        config,
+        hash: "x".to_string(),
+        warnings: Vec::new(),
+    })));
+
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("start the ai-cli session");
+    let live = state.live_session(id).expect("registered");
+    assert!(
+        wait_until(Duration::from_secs(5), || bin
+            .path()
+            .join("claude.argv")
+            .exists()),
+        "the stand-in must have run and recorded its launch"
+    );
+    live.kill().expect("kill");
+
+    let argv = std::fs::read_to_string(bin.path().join("claude.argv")).unwrap();
+    assert!(
+        !argv.contains("sk-ant-oat-test"),
+        "the sign-in token must never be on the command line: {argv}"
+    );
+
+    let env = std::fs::read_to_string(bin.path().join("claude.env")).unwrap();
+    assert!(
+        env.lines()
+            .any(|l| l == "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat-test"),
+        "the configured token_file must reach Claude Code as CLAUDE_CODE_OAUTH_TOKEN, with the \
+         expires_at line stripped: {env}"
+    );
+
+    match previous_path {
+        Some(p) => std::env::set_var("PATH", p),
+        None => std::env::remove_var("PATH"),
+    }
+}
+
 /// #1532, contract row `enabled`: a CLI the configuration disables refuses the start with its own
 /// reason, never "not on `PATH`" — the two causes are different and a user and the log must be
 /// told which one actually happened, even when (as here) the binary is installed and would be

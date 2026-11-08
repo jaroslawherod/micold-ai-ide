@@ -34,6 +34,39 @@ pub fn api_key_env_variable(cli: CliId) -> Option<&'static str> {
     }
 }
 
+/// The variable `token_file`'s content (the `token=` line, stripped of any trailing
+/// `expires_at=` line by [`super::matching::parse_token_file`]) is read into at session start, for
+/// the CLIs that take a sign-in token that way. `None` for Pi, Codex and Opencode — `validate.rs`'s
+/// V9 already refuses `token_file` for those, since they have no such variable.
+pub fn token_file_env_variable(cli: CliId) -> Option<&'static str> {
+    match cli {
+        CliId::ClaudeCode => Some("CLAUDE_CODE_OAUTH_TOKEN"),
+        CliId::Copilot => Some("COPILOT_GITHUB_TOKEN"),
+        CliId::Pi | CliId::Codex | CliId::Opencode => None,
+    }
+}
+
+/// How far ahead of a `token_file`'s recorded `expires_at` the daemon starts warning that it will
+/// go stale without a CLI refresh (T065a; FR-040's partial-here piece — the full `expiresAt`
+/// display is M3's own T100).
+pub const TOKEN_FILE_EXPIRY_WARNING_WINDOW: std::time::Duration =
+    std::time::Duration::from_secs(14 * 24 * 60 * 60);
+
+/// Whether a token expiring at `expires_at` (unix seconds) falls within `window` of `now`: `now +
+/// window >= expires_at`. An `expires_at` already in the past also counts (it is already stale,
+/// which is at least as urgent as "about to expire").
+pub fn token_file_expires_within(
+    expires_at: u64,
+    now: std::time::SystemTime,
+    window: std::time::Duration,
+) -> bool {
+    let now_secs = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    now_secs.saturating_add(window.as_secs()) >= expires_at
+}
+
 /// Whether `cli`'s `api_key_file` reaches the session through `apiKeyHelper` in the per-session
 /// settings (contract row `api_key_file`), read on each use rather than once at session start, so
 /// a replaced key file is picked up on the CLI's next call (FR-013, SC-008). Only Claude Code has
@@ -473,5 +506,34 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn token_file_env_variable_is_only_set_for_claude_code_and_copilot() {
+        assert_eq!(
+            token_file_env_variable(CliId::ClaudeCode),
+            Some("CLAUDE_CODE_OAUTH_TOKEN")
+        );
+        assert_eq!(
+            token_file_env_variable(CliId::Copilot),
+            Some("COPILOT_GITHUB_TOKEN")
+        );
+        assert_eq!(token_file_env_variable(CliId::Pi), None);
+        assert_eq!(token_file_env_variable(CliId::Codex), None);
+        assert_eq!(token_file_env_variable(CliId::Opencode), None);
+    }
+
+    #[test]
+    fn token_file_expires_within_flags_a_token_inside_the_window() {
+        let now = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let window = std::time::Duration::from_secs(14 * 24 * 60 * 60);
+        // 13 days out: inside the 14-day window.
+        let soon = 1_000_000 + 13 * 24 * 60 * 60;
+        assert!(token_file_expires_within(soon, now, window));
+        // 20 days out: outside the window.
+        let later = 1_000_000 + 20 * 24 * 60 * 60;
+        assert!(!token_file_expires_within(later, now, window));
+        // Already in the past: still flagged.
+        assert!(token_file_expires_within(1, now, window));
     }
 }

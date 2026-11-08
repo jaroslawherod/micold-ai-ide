@@ -2467,6 +2467,20 @@ pub struct ConfigStatus {
     /// What each GitHub token reaches (#1535, contract §5).
     #[serde(default)]
     pub tokens: Vec<TokenReach>,
+    /// Every configured `[[ai.cli]]` `token_file` whose recorded `expires_at` falls within
+    /// `micold_core::daemon_config::ai_cli::TOKEN_FILE_EXPIRY_WARNING_WINDOW` of now (#1532,
+    /// T065a) — a sign-in that will go stale without the CLI's own refresh.
+    #[serde(default)]
+    pub ai_cli_tokens: Vec<AiCliTokenExpiry>,
+}
+
+/// One configured `[[ai.cli]]` entry whose `token_file` is about to expire (#1532, T065a).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiCliTokenExpiry {
+    /// The CLI's id, as `daemon_config::CliId`'s TOML spelling (e.g. `"claude_code"`).
+    pub cli: String,
+    /// Unix seconds when the token expires, read from `token_file`'s `expires_at=` line.
+    pub expires_at_secs: u64,
 }
 
 /// How a run of the start script ended (#1533).

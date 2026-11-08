@@ -14,8 +14,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use micold_core::daemon_config::ai_cli::{
+    token_file_expires_within, TOKEN_FILE_EXPIRY_WARNING_WINDOW,
+};
+use micold_core::daemon_config::matching::parse_token_file;
 use micold_core::daemon_config::{self, DaemonConfig};
-use micold_core::protocol::messages::{ConfigStatus, TokenReach};
+use micold_core::protocol::messages::{AiCliTokenExpiry, ConfigStatus, TokenReach};
 
 use crate::config_load::{fingerprint, load_file, validate_text, LoadError, LoadedFile};
 
@@ -139,6 +143,25 @@ impl ConfigRuntime {
                 .map(|t| TokenReach {
                     name: t.name.clone(),
                     repos: t.repos.iter().flatten().map(ToString::to_string).collect(),
+                })
+                .collect(),
+            ai_cli_tokens: config
+                .ai
+                .cli
+                .iter()
+                .filter_map(|cli| {
+                    let file = cli.token_file.as_ref()?;
+                    let (_, expires_at) = parse_token_file(file.read().ok()?.expose())?;
+                    let expires_at = expires_at?;
+                    token_file_expires_within(
+                        expires_at,
+                        std::time::SystemTime::now(),
+                        TOKEN_FILE_EXPIRY_WARNING_WINDOW,
+                    )
+                    .then(|| AiCliTokenExpiry {
+                        cli: cli.id.as_str().to_string(),
+                        expires_at_secs: expires_at,
+                    })
                 })
                 .collect(),
         }

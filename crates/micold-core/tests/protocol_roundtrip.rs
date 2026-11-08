@@ -65,6 +65,10 @@ fn config_status() -> micold_core::protocol::messages::ConfigStatus {
             name: "work".into(),
             repos: vec!["acme/*".into()],
         }],
+        ai_cli_tokens: vec![micold_core::protocol::messages::AiCliTokenExpiry {
+            cli: "claude_code".into(),
+            expires_at_secs: 1_700_500_000,
+        }],
     }
 }
 
