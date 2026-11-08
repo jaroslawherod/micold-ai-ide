@@ -19,8 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1705 | Design (spec, plan, tasks) | merged | eb1b62d9967f4d7ad7092c0dc75e6d3a1e7af621 |
 | #1717 | M1 large editor | merged | 509da759cc19a3ca5befaa90815f9475a7b32dcb |
 | #1754 | M2 icon activity indicator and options row | merged | 7183a4cc4a7a859991e3091bd2652fd64c6e3787 |
-| #1770 | M3 one selector style + #1764 row order | merged | 18a4aa800239feca2c6a67502ee804ec70b7ec06 |
-| (close) | Close the spec: quickstart results, TDD remediation, activity alignment | open | |
+| #1770 | M3 one selector style + row order (issue 1764) | merged | 18a4aa800239feca2c6a67502ee804ec70b7ec06 |
+| #1780 | Close the spec: quickstart results, TDD remediation, activity alignment, D8 | merged | 35eb23cd760f8e07213a3f07d99de3d357a1de64 |
 
 ## Milestones
 
