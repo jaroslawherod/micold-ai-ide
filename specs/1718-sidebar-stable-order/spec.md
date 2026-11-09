@@ -155,6 +155,7 @@ row order is identical.
 - **FR-012**: The tint MUST be colour only: it never changes a row's position (FR-003), never
   replaces the glyph (FR-004: state is never colour-only), sits under the hover and selected state
   layers, and keeps row text and glyph legible (4.5:1 text, 3:1 glyph).
+
 ### Key Entities
 
 - **Location row**: one sidebar row (Default entry, worktree or run group) with its stable position

@@ -93,9 +93,9 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
 | FR-004 | `StateIcon` on `CardState` (research R1, R2); `row_second_line` unchanged; icon distinctness test (SC-002) |
 | FR-005 | Rows, hover, selection, menus, tags, run groups untouched; existing tests keep passing |
 | FR-006 | `location_nodes` over `sidebar_entries`; `open_group_of_*` and their calls in `reveal_ready` removed; row heights over entries |
-| FR-010, FR-011, FR-012 | `row_tint` (contract G7-G9, research R7); tint beneath state layers in `tree_view.rs`; contrast tests; Done glyph and "Done (merged)" tooltip line kept |
 | FR-008 | Nothing stored; test that old state files load (no `group_choices` key was ever stored) |
 | FR-009 | Docs, `layout_snapshot` re-record, showcase |
+| FR-010, FR-011, FR-012 | `row_tint` (contract G7-G9, research R7); tint beneath state layers in `tree_view.rs`; contrast tests; Done glyph and "Done (merged)" tooltip line kept |
 
 ## Test strategy
 
@@ -110,7 +110,7 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
   Done); order unchanged when the tint changes (SC-001); contrast of `on_*_container` over each tint
   in both themes (SC-005); a render-free test that hover and selected layers wrap the tint.
 - **Geometry gates**: layout snapshot and `gates/*` re-recorded for the flat list.
-- **Tooltip** (F2): the row tooltip's state line is `CardState::label()`; tested in `tests/features_sidebar.rs`
+- **Tooltip** (F2): the row tooltip's state line is a sidebar-only `state_line(CardState)` = `CardState::label()`, plus " (merged)" for Done (R7; `label()` is shared with the Overview and unchanged); tested in `tests/features_sidebar.rs`
   (`with_state_line` takes a `CardState`).
 - **Quickstart §B**: visual pass of the flat sidebar with all five states, tints in both themes,
   and a tinted row hovered and selected.

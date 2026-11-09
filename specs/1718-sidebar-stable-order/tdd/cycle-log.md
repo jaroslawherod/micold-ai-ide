@@ -17,3 +17,7 @@ compile there: the compile error is the red. The green run is the milestone gate
 | Keyboard and reveal walk the flat list (FR-006) | `navigation_apply::over_the_flat_list` | compile failure on origin/main | gate |
 | One row height per location (G4) | `features_sidebar` | compile failure on origin/main | gate |
 | Old state file loads (FR-008) | `sidebar_state::flat_list` | compile failure on origin/main | gate |
+
+## M2 plan (not yet run)
+
+Tests first, each red before T027: `row_tint` mapping (T023), order unchanged while the tint changes (T024), tint contrast in both themes (T025), state layers over the tint (T026), `state_line` Done "(merged)" (T017). Evidence is recorded here by the M2 unit.
