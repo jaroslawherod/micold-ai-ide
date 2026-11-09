@@ -1156,7 +1156,10 @@ fn group_items(
         )
         .state_icon(StateIcon::new(group_state, r))
         .tags(tags)
-        .row_tooltip(group.name.clone())
+        .row_tooltip(crate::features::sidebar::with_state_line(
+            group.name.clone(),
+            group_state,
+        ))
         .on_right_press({
             let id = group.id;
             move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
