@@ -110,7 +110,7 @@ state together), so they ship as one milestone.
 - [x] T029 [US4] `docs/user-guide/worktrees-and-sessions.md`: describe the row tints (what Needs
   action, Needs attention and Done rows look like, that Done means merged and removable, that a
   closed unmerged PR is not marked) and that colour never replaces the glyph.
-- [ ] T030 Make T015–T017 and T023–T026 green; `mise run gate`; quickstart §B step 3 via `visual-pass`.
+- [x] T030 Make T015–T017 and T023–T026 green; `mise run gate`; quickstart §B step 3 via `visual-pass`.
 
 **Checkpoint**: each of the five states has its own glyph on its row; Needs action, Needs attention and Done rows are tinted.
 
