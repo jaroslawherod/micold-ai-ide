@@ -8,6 +8,7 @@ Removed: `StateGroup`, `Group<T>`, `SidebarGroup`, `GroupHeaderRow`, `ListRow::H
 | Stable order | `Vec<SidebarEntry>` from `State::sidebar_entries()` | Independent of card state; Default first, then worktrees in listing order; tag filter removes, never reorders |
 | `ListRow` | removed; replaced by `SidebarEntry` (R6) | One per location row; run group is one entry |
 | Row indicator | `StateIcon(CardState, Roles)` | Five states, five glyphs; Idle for no session; run group uses `run_group_state` |
+| Row tint | `row_tint(CardState, Roles) -> Option<Rgb>` (R7) | Needs action `error_container`, Needs attention `tertiary_container`, Done `surface_container_high`, else none; colour only, below state layers |
 | `RunCard`, `run_group_state` | unchanged | Worst card state over a run group's runs |
 
 No stored field changes (FR-008).

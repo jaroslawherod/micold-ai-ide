@@ -18,4 +18,5 @@ FR-009 snapshot in `tests/layout_snapshot.rs`.
 
 1. Open the showcase sidebar sections: the five-state rows show five different glyphs; no group header pose.
 2. Run the client on a project with worktrees in each state: rows keep their place while a session goes working, waiting, idle.
-3. Down/Up arrows step over every row; reveal selects a Done row without expanding anything.
+3. Showcase: Needs action, Needs attention and Done rows are tinted (Done quietest), Working and Idle are not; hover and select a tinted row, the state layer shows over the tint; check light and dark.
+4. Down/Up arrows step over every row; reveal selects a Done row without expanding anything.
