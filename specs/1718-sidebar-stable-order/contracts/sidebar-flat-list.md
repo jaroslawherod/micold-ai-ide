@@ -15,4 +15,5 @@
 - **G8** The tint is the row's resting fill; hover and selected state layers are drawn over it and
   selection stays distinguishable. The glyph (G5) and the Done tooltip state line "Done (merged)" are always
   present, so the tint is never the only state cue.
+- **G10** `state_line(CardState) -> String` is `CardState::label()`, with " (merged)" appended for Done; it is the row tooltip's state line and `with_state_line` takes it. `label()` itself is unchanged.
 - **G9** Text and glyph on each tint meet 4.5:1 / 3:1 in the light and dark themes.

@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | #1758 | merged 8b1039d2c123f8e414806ecc75ab0cd6ae5a7c3f |
-| M2 | T015–T029 | full | Five-state row indicator (StateIcon on CardState) plus row tints | | pending |
+| M2 | T015–T030 | full | Five-state row indicator (StateIcon on CardState) plus row tints | | pending |
 
 ## Decisions
 
@@ -60,3 +60,4 @@ None.
 Closed-unmerged PR as a cleanup candidate: own issue, needs a data-safety design (spec Out of Scope, research R7).
 
 - tasks R1 snapshot 09483c9..:83987a3.. (speckit-analyze: 0 CRITICAL/HIGH; I1,I2,C1,F1 fixed; no plan inconsistency found) -> CLEAN, 3 MINOR path fixes applied. Plan.md line 81 cites `tests/layout_snapshot.rs` without the crate prefix (tasks use the full path).
+- amend-design part 2 round 1 snapshot 56bba68..:eaa6b00.. CHANGES (3 MAJOR: tooltip wording source, [P] file overlap, checklist/tdd; fixed, spec-artifact edits only, no behaviour claim) -> no round 2, prose/task-format fixes

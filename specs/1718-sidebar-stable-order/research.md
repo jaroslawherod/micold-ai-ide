@@ -62,7 +62,7 @@ AND no running session; Working outranks it) with its own glyph `CardDone` (e86c
 attention `tertiary_container` (the louder pair), Done `surface_container_high` (quieter, tonal),
 Working and Idle none. Text and glyph on the tint use the matching `on_*_container` role (Done:
 `on_surface`), checked in `composition_contrast.rs`. The tint is the row's resting background and
-the hover and selected state layers draw over it. The glyph and the "Done (merged)" tooltip state line stay, so
+the hover and selected state layers draw over it. The glyph and the "Done (merged)" tooltip state line stay (a sidebar-only `state_line(CardState)` wrapper over `CardState::label()`; `label()` and the Overview are unchanged), so
 colour never carries the state alone (FR-004, FR-012). Position is untouched (FR-003).
 
 **Rejected**: (a) a sixth `CardState::CleanupCandidate` (merged-removable OR closed): edits feature
