@@ -141,12 +141,25 @@ mod tests {
     /// T015 (SC-002, FR-004): five card states, five different glyphs, and the Overview card's.
     #[test]
     fn five_card_states_draw_five_different_glyphs() {
-        let drawn: Vec<char> = CardState::ALL.iter().map(|&s| glyph(s).glyph()).collect();
+        let drawn: Vec<Icon> = CardState::ALL.iter().map(|&s| glyph(s)).collect();
         assert_eq!(
             drawn,
-            ['\u{e645}', '\u{e8f4}', '\u{e037}', '\u{e86c}', '\u{e034}']
+            [
+                Icon::CardNeedsAction,
+                Icon::CardNeedsAttention,
+                Icon::StateRunning,
+                Icon::CardDone,
+                Icon::StateIdle
+            ]
         );
-        assert_eq!(drawn.iter().collect::<HashSet<_>>().len(), 5);
+        assert_eq!(
+            drawn
+                .iter()
+                .map(|i| i.glyph())
+                .collect::<HashSet<_>>()
+                .len(),
+            5
+        );
         for state in CardState::ALL {
             assert_eq!(glyph(state), super::super::card_state_icon(state));
         }
