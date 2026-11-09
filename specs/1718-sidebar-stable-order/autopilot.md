@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
 - **Phase**: M2 reviewed and visual-passed; full gate then PR
-- **Next step**: full gate, PR for M2
+- **Next step**: push (force-with-lease; remote branch holds the squash-merged #1782 commits) and open the M2 PR; full gate is green at HEAD
 
 ## Pull requests
 
@@ -56,7 +56,7 @@ None.
 
 ## Open escalation
 
-None.
+The push was denied by the permission classifier (Git Destructive): `git push --force-with-lease -u origin HEAD` is needed because origin/feat/1718_... still holds pre-squash commits of merged #1782 (077e801e4), not an ancestor of HEAD. PR body is at the unit scratchpad pr-body.md; title `feat(1718): show five-state row indicator and row tints (#1718)`.
 
 ## Follow-ups not done
 
