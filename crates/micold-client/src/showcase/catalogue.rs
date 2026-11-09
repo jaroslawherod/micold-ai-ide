@@ -350,7 +350,7 @@ pub const COMPONENTS: &[Entry] = &[
             "a worktree row with tags carrying it",
         ],
         live: &["hover a tinted row: the hover layer draws over its tint"],
-        interactive: false,
+        interactive: true,
         section: Section::Components,
         layout: Layout::FullWidth,
         render: sections::atoms::state_icon,
