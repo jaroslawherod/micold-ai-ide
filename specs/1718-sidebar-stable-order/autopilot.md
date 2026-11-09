@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: M2 implemented (T015-T029), tests first; gate, reviews and visual pass next
-- **Next step**: scoped gate + review A, then review B + visual pass, full gate, PR for M2
+- **Phase**: M2 reviewed and visual-passed; full gate then PR
+- **Next step**: full gate, PR for M2
 
 ## Pull requests
 
@@ -42,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | c5e140ccc4b8e1b8c17dddadfae8ef5d5f94de53:c695061be43a32a00e41c482221be91d470a34bb | CHANGES: 3 MAJOR (persistence story, open markers, bad FR-017 cite); all fixed; no round 2, fixes remove claims |
 
+- M2 A snapshot cc6798975ec5:e085a674f061 CLEAN (3 MINOR); M2 B snapshot d12228da7462:233ff1237cf7 CLEAN (1 MINOR = A's F3, accepted: selected row keeps tint-ink glyph by design). Scoped gate: ui_glyph_literals red on literals in a state_icon test, fixed (Icon variants). Visual pass: showcase only, both themes, specs/1718-sidebar-stable-order/visual-pass/ (real client needs a live daemon, not driven)
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -50,18 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 code is done and committed (T015-T029 ticked, tests-first commit then prod commit, red evidence in
-tdd/cycle-log.md; layout_snapshot fixture accepted deliberately: the tint container adds a tree level).
-Review A: CLEAN (3 MINORs; F1 group tooltip fixed; F2/F3 accepted: glyph keeps tint ink on a selected row,
-selected row drops its tint by design (R7, T026)). Review snapshot for A: cc6798975ec5:e085a674f061.
-Scoped gate: only failure was layout_snapshot, now fixed; re-run scoped gate not yet done.
-Next: (1) scoped gate; (2) review B (autopilot-reviewer, sonnet, rubrics/conformance.md; Verify:
-`cargo test -p micold-client --lib state_icon`) together with the visual pass (visual-pass via
-autopilot-worker: quickstart Part B steps 1 and 3, drive the real flat sidebar if possible, else the showcase
-StateIcon entry, both themes; save evidence in specs/1718-sidebar-stable-order); (3) tick T030; (4) full
-`mise run gate`; (5) add one line to user guide that a selected row shows the selection instead of its tint
-(optional); (6) PR "feat(1718): show five-state row indicator and row tints (#1718)" per tasks/pr.md.
-No PR open yet for M2. #1782 merged (9d65146d1).
+None.
 
 ## Open escalation
 
