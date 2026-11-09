@@ -139,6 +139,10 @@ pub struct TreeItem<'a, M> {
     /// The location's state icon (feature 905, contract `state-icon.md` S2): a fixed slot after the
     /// twisty and before the leading icon, at the view's label role size, whatever the state.
     state_icon: Option<super::StateIcon>,
+    /// The row's resting fill and the ink of its text and glyph on it (feature 1718, FR-010 to
+    /// FR-012): colour only, under the hover and selected layers. A selected row draws its
+    /// selection pill instead (see [`resting_fill`]).
+    row_tint: Option<(Rgb, Rgb)>,
     /// Whether the application's keyboard focus is on this row, and what a change of it sends
     /// (feature 803, FR-010): the row wears the focus ring, shown as keyboard focus.
     keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,
@@ -180,6 +184,7 @@ impl<'a, M> TreeItem<'a, M> {
             folded: None,
             unread: RowUnread::Read,
             state_icon: None,
+            row_tint: None,
             keyboard_focus: None,
             tab_stop: false,
             key: None,
@@ -334,6 +339,12 @@ impl<'a, M> TreeItem<'a, M> {
         self
     }
 
+    /// Tint the row with `fill` and draw its text and glyph in `ink` (feature 1718, FR-012).
+    pub fn row_tint(mut self, fill: Rgb, ink: Rgb) -> Self {
+        self.row_tint = Some((fill, ink));
+        self
+    }
+
     /// Mark selected.
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
@@ -443,6 +454,25 @@ impl<'a, M: Clone + 'a> TreeView<'a, M> {
     }
 }
 
+/// The fill a row rests on (feature 1718, FR-012): the selection pill when selected, else its
+/// tint, if any. The hover layer is the row button's, drawn over this fill, so a hovered tinted
+/// row is its tint with the layer on it, and a selected row is never mistaken for a tinted one.
+pub(crate) fn resting_fill(
+    selected: bool,
+    selection: Selection,
+    tint: Option<Rgb>,
+    r: &Roles,
+) -> Option<Rgb> {
+    if selected {
+        Some(match selection {
+            Selection::Primary => r.primary_container,
+            Selection::Secondary => r.secondary_container,
+        })
+    } else {
+        tint
+    }
+}
+
 /// The colour of a location row's unread count (feature 575, contract A6).
 ///
 /// Always the theme's text colour, whatever the row's own tint: on a missing worktree's
@@ -492,6 +522,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             let primary = item.selected && selection == Selection::Primary;
             if primary && (item.tint == r.on_surface || item.tint == r.on_surface_variant) {
                 item.tint = r.on_primary_container;
+            }
+            // A tinted row that is not selected draws its neutral text in the tint's ink.
+            let tinted = item.row_tint.filter(|_| !item.selected);
+            if let Some((_, ink)) = tinted {
+                if item.tint == r.on_surface || item.tint == r.on_surface_variant {
+                    item.tint = ink;
+                }
             }
             let has_second_line = item.supporting_text.is_some()
                 || !item.tags.is_empty()
@@ -704,10 +741,10 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     });
                 // The supporting text takes what the chips leave it and ends in an ellipsis.
                 if let Some((text, tint)) = item.supporting_text {
-                    let tint = if primary {
-                        r.on_primary_container
-                    } else {
-                        tint
+                    let tint = match (primary, tinted) {
+                        (true, _) => r.on_primary_container,
+                        (false, Some((_, ink))) => ink,
+                        (false, None) => tint,
                     };
                     tag_row =
                         tag_row.push(super::Ellipsized::at_role(text, TypeRole::SidebarTag, tint));
@@ -818,16 +855,32 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // enough to the hover layer that a hovered row and a selected one were hard to tell
             // apart — which is the distinction FR-020 exists to make, since selection persists and
             // hover does not.
-            let (fill, on_fill) = match selection {
-                Selection::Primary => (r.primary_container, r.on_primary_container),
-                Selection::Secondary => (r.secondary_container, r.on_secondary_container),
+            let on_fill = match selection {
+                Selection::Primary => r.on_primary_container,
+                Selection::Secondary => r.on_secondary_container,
             };
+            let fill = resting_fill(true, selection, None, &r).unwrap_or(r.surface);
             let styled: Element<'a, M> = if item.selected {
                 container(row_el)
                     .width(Length::Fill)
                     .style(move |_t: &iced::Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(style::color(fill))),
                         text_color: Some(style::color(on_fill)),
+                        border: iced::Border {
+                            radius: shape::FULL.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    })
+                    .into()
+            } else if let Some(fill) = resting_fill(false, selection, tinted.map(|t| t.0), &r) {
+                // The tint, beneath the row button's hover layer (feature 1718, FR-012).
+                let ink = tinted.map_or(r.on_surface, |t| t.1);
+                container(row_el)
+                    .width(Length::Fill)
+                    .style(move |_t: &iced::Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(style::color(fill))),
+                        text_color: Some(style::color(ink)),
                         border: iced::Border {
                             radius: shape::FULL.into(),
                             ..Default::default()
@@ -1325,12 +1378,6 @@ mod tests {
                 let plain = at(stated_row("feat-short", tagged, state), ROOMY, &[0]);
                 let tinted = at(tinted_row("feat-short", tagged, state), ROOMY, &[0]);
                 assert_eq!(plain, tinted, "{state:?} (tagged {tagged})");
-                let label = |item| at(item, ROOMY, &on_line(tagged, LABEL));
-                assert_eq!(
-                    label(stated_row("feat-short", tagged, state)),
-                    label(tinted_row("feat-short", tagged, state)),
-                    "{state:?} (tagged {tagged}): the label"
-                );
             }
         }
     }

@@ -18,6 +18,25 @@ compile there: the compile error is the red. The green run is the milestone gate
 | One row height per location (G4) | `features_sidebar` | compile failure on origin/main | gate |
 | Old state file loads (FR-008) | `sidebar_state::flat_list` | compile failure on origin/main | gate |
 
-## M2 plan (not yet run)
+## M2 (T015-T030), tests first
 
-Tests first, each red before T027: `row_tint` mapping (T023), order unchanged while the tint changes (T024), tint contrast in both themes (T025), state layers over the tint (T026), `state_line` Done "(merged)" (T017). Evidence is recorded here by the M2 unit.
+Order kept this time: the tests (T015-T017, T023-T026, T020/T028 completeness) were written and
+committed (`test(1718): five-state row indicator and row tint tests, red`) on top of the unchanged
+production code of M1, then production (T018, T019, T021, T027-T029) followed.
+
+Red run on that test-only tree, `scripts/build-lock.sh cargo check -p micold-client --lib --tests`:
+`could not compile micold-client (lib test) due to 35 previous errors` and `(test "main") due to
+5 previous errors`: `cannot find function row_tint / tint_ink / resting_fill`, `unresolved import
+features::sidebar::state_line`, `ui::row_tint`, `no method row_tint on TreeItem`, `StateIcon::new`
+given a `CardState` (E0308 x23). The failures are the missing M2 API, the right reason.
+
+| Behaviour | Test | Red | Green |
+|---|---|---|---|
+| Five states, five glyphs, one slot width, Idle drawn (SC-002, G5) | `state_icon::tests` | compile failure (E0308, no `glyph().glyph()`) | `--lib state_icon` |
+| Glyph colour is the tint ink (R1, R7) | `state_icon::tests::each_glyph_is_drawn_in_its_role` | compile failure | green |
+| Tint by card state (G7, FR-010, FR-011) | `state_icon::tests::row_tint_by_card_state` | `row_tint` missing | green |
+| Glyph 3:1 and text 4.5:1 on tint, rest and hover, both themes (G9, SC-005) | `composition_contrast` | `tint_ink`, `row_tint` missing | green |
+| Tooltip state line, Done reads "Done (merged)" (G10, FR-011) | `sidebar_state_icon` | `state_line` missing | `--test main` |
+| Order unchanged while the tint changes (SC-001, FR-012) | `sidebar_state::flat_list` | `ui::row_tint` missing | green |
+| Selection distinct from tint, hover over tint (G8, FR-012) | `tree_view::tests` | `resting_fill`, `TreeItem::row_tint` missing | green |
+| Showcase poses the five states and tints (T020, T028) | `showcase_completeness` | old poses (Running, Blocked, Unknown) | green |

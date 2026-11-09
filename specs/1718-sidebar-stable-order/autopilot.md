@@ -9,15 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: design amendment (highlight + cleanup state) PR #1782 open; then M2
-- **Next step**: design PR opened; then milestone M1 (finding: 905 StateIcon has 3 glyphs, so StateIcon is re-keyed on CardState, research R1/R6)
+- **Phase**: M2 implemented (T015-T029), tests first; gate, reviews and visual pass next
+- **Next step**: scoped gate + review A, then review B + visual pass, full gate, PR for M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1750 | Design PR | merged | 01bc227bc6684dbbcc4dc964b53d0290eb704a03 |
-| #1782 | Amend design (tint, cleanup candidate) | open | |
+| #1782 | Amend design (tint, cleanup candidate) | merged | 9d65146d1f8bb4dcb76f62c50ce241d65b91b04e |
 
 ## Milestones
 

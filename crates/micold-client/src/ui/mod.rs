@@ -102,6 +102,8 @@ pub use sidebar::{overview_row_view, start_control_id, SIDEBAR_SCROLL_ID};
 // The application's theme — the only thing the styling layer exposes beyond the component
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
 // exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.
+/// The tint a sidebar row takes from its card state (feature 1718, FR-010 to FR-012).
+pub use material::row_tint;
 pub use material::theme;
 /// The Jira selector's advanced mode (feature 1186): the Basic/Advanced switch and the query field.
 pub(crate) mod github_filter;

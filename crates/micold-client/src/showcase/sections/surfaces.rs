@@ -1616,7 +1616,7 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
             vec![
                 material::TreeItem::new(0, "CI red on main", roles.on_surface)
                     .state_icon(material::StateIcon::new(
-                        micold_core::location_state::LocationState::Running,
+                        micold_core::overview::CardState::Working,
                         roles,
                     ))
                     .supporting_text(

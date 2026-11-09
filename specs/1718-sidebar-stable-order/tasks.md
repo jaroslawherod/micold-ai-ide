@@ -69,45 +69,45 @@ state together), so they ship as one milestone.
 
 **Tests first (red)**
 
-- [ ] T015 [US2] `crates/micold-client/src/ui/material/state_icon.rs` unit tests: the five `CardState`s
+- [x] T015 [US2] `crates/micold-client/src/ui/material/state_icon.rs` unit tests: the five `CardState`s
   give five different `Icon` code points (e037, e645, e8f4, e86c, e034) and the same slot width
   (SC-002, G5); a no-session location is Idle, never blank.
-- [ ] T016 [P] [US2] `crates/micold-client/src/ui/material/composition_contrast.rs`: re-key the
+- [x] T016 [P] [US2] `crates/micold-client/src/ui/material/composition_contrast.rs`: re-key the
   state-icon contrast test on `CardState` and the five roles (4.5:1 / 3:1).
-- [ ] T017 [P] [US2] `crates/micold-client/tests/features_sidebar.rs` and
+- [x] T017 [P] [US2] `crates/micold-client/tests/features_sidebar.rs` and
   `tests/sidebar_state_icon.rs`: `with_state_line` takes a `CardState` and the tooltip state line is
   `state_line(CardState)` (G10: `CardState::label()`, Done reads "Done (merged)", FR-011); `row_second_line` still reads `type/number · session state` (G6, FR-004).
 
-- [ ] T023 [P] [US4] `crates/micold-client/src/ui/material/state_icon.rs` unit tests for `row_tint`
+- [x] T023 [P] [US4] `crates/micold-client/src/ui/material/state_icon.rs` unit tests for `row_tint`
   (G7, FR-010, FR-011): Needs action, Needs attention and Done give `error_container`,
   `tertiary_container` and `surface_container_high`; Working and Idle give `None`.
-- [ ] T024 [P] [US4] `crates/micold-client/tests/sidebar_state.rs`: cycling one location through the
+- [x] T024 [P] [US4] `crates/micold-client/tests/sidebar_state.rs`: cycling one location through the
   five card states leaves the row order identical while its tint changes (SC-001, FR-012).
-- [ ] T025 [US4] `crates/micold-client/src/ui/material/composition_contrast.rs`: text on each
+- [x] T025 [US4] `crates/micold-client/src/ui/material/composition_contrast.rs`: text on each
   tint (`on_error_container`, `on_tertiary_container`, `on_surface`) is 4.5:1 and the state glyph
   3:1, light and dark (G9, SC-005).
-- [ ] T026 [P] [US4] `crates/micold-client/src/ui/material/tree_view.rs` render-free test: a tinted
+- [x] T026 [P] [US4] `crates/micold-client/src/ui/material/tree_view.rs` render-free test: a tinted
   row's hover and selected layers are drawn over the tint and the selected row stays distinct from
   a merely tinted one (G8, FR-012).
 
 **Implementation**
 
-- [ ] T018 [US2] `crates/micold-client/src/ui/material/state_icon.rs`: re-key `StateIcon` on
+- [x] T018 [US2] `crates/micold-client/src/ui/material/state_icon.rs`: re-key `StateIcon` on
   `CardState`, take glyphs from `overview_card::state_icon`, roles per research R1; keep
   `Icon::StateBlocked` in the font; rewrite the `StateIcon` tests in `ui/material/tree_view.rs`
   (~1290-1303).
-- [ ] T019 [US2] `crates/micold-client/src/ui/sidebar.rs`, `features/sidebar.rs`: pass the row's card
+- [x] T019 [US2] `crates/micold-client/src/ui/sidebar.rs`, `features/sidebar.rs`: pass the row's card
   state (`entry_card_state`, run group via `run_group_state`) to `StateIcon` and `with_state_line`.
-- [ ] T020 [P] [US2] `crates/micold-client/src/showcase/sections/atoms.rs` and
+- [x] T020 [P] [US2] `crates/micold-client/src/showcase/sections/atoms.rs` and
   `tests/showcase_completeness.rs`: the Running/Blocked/Idle/Unknown poses become the five card states.
-- [ ] T021 [P] [US2] `docs/user-guide/worktrees-and-sessions.md`: describe the five row state icons.
-- [ ] T027 [US4] `row_tint` in `ui/material/state_icon.rs`; `tree_view.rs` and `ui/sidebar.rs` draw it
+- [x] T021 [P] [US2] `docs/user-guide/worktrees-and-sessions.md`: describe the five row state icons.
+- [x] T027 [US4] `row_tint` in `ui/material/state_icon.rs`; `tree_view.rs` and `ui/sidebar.rs` draw it
   as the row's resting fill, beneath hover and selected layers, with `on_*_container` text and glyph;
   add `state_line(CardState)` (G10) so Done's tooltip state line reads "Done (merged)" (R7, FR-010 to FR-012).
-- [ ] T028 [US4] `crates/micold-client/src/showcase/sections/atoms.rs` and
+- [x] T028 [US4] `crates/micold-client/src/showcase/sections/atoms.rs` and
   `tests/showcase_completeness.rs`: five-state poses show the tints, plus a tinted row hovered and
   selected pose, in both themes.
-- [ ] T029 [US4] `docs/user-guide/worktrees-and-sessions.md`: describe the row tints (what Needs
+- [x] T029 [US4] `docs/user-guide/worktrees-and-sessions.md`: describe the row tints (what Needs
   action, Needs attention and Done rows look like, that Done means merged and removable, that a
   closed unmerged PR is not marked) and that colour never replaces the glyph.
 - [ ] T030 Make T015–T017 and T023–T026 green; `mise run gate`; quickstart §B step 3 via `visual-pass`.

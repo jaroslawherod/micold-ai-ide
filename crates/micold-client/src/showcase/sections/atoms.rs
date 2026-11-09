@@ -547,16 +547,26 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
-/// `StateIcon` — the three states and the empty slot of an unknown one, each on a worktree row as
-/// the sidebar builds it, and one row with tags (feature 905, FR-012). What has to be checked by
-/// eye is that the triangle, octagon and two bars read as three shapes in both themes, and that
-/// the name starts in the same column whatever the state.
+/// `StateIcon` — the five card states, each on a worktree row as the sidebar builds it with its
+/// tint (feature 1718, FR-004, FR-010 to FR-012), a tagged row, and the loud and the quiet tint
+/// selected. What has to be checked by eye, in both themes: the five glyphs read as five shapes, the
+/// tint is colour only (no row moves), Done's tint is quieter than the other two, text and glyph
+/// are legible on each tint, hovering a tinted row layers over its tint, and a selected tinted row
+/// is plainly the selection.
 pub fn state_icon<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    use micold_core::location_state::{BlockedReason, LocationState};
-    let row = |state: LocationState, tagged: bool| -> Element<'a, Message> {
+    use micold_core::overview::CardState;
+    let row = |state: CardState, tagged: bool, selected: bool| -> Element<'a, Message> {
         let mut item = material::TreeItem::new(0, samples::WORKTREES[1].0, roles.on_surface)
             .state_icon(material::StateIcon::new(state, roles))
-            .on_press(Message::NoOp);
+            .selected(selected)
+            .on_press(Message::NoOp)
+            .hover(Message::NoOp, Message::NoOp);
+        if let (Some(fill), Some(ink)) = (
+            material::row_tint(state, &roles),
+            material::tint_ink(state, &roles),
+        ) {
+            item = item.row_tint(fill, ink);
+        }
         if tagged {
             item = item.tags(vec![
                 ("feat".to_string(), roles.primary),
@@ -571,20 +581,28 @@ pub fn state_icon<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
     };
     arrange(
         vec![
-            posed("Running", row(LocationState::Running, false), roles),
             posed(
-                "Blocked",
-                row(
-                    LocationState::Blocked(BlockedReason::NeedsPermission),
-                    false,
-                ),
+                "Needs action",
+                row(CardState::NeedsAction, false, false),
                 roles,
             ),
-            posed("Idle", row(LocationState::Idle, false), roles),
-            posed("Unknown", row(LocationState::Unknown, false), roles),
+            posed(
+                "Needs attention",
+                row(CardState::NeedsAttention, false, false),
+                roles,
+            ),
+            posed("Working", row(CardState::Working, false, false), roles),
+            posed("Done", row(CardState::Done, false, false), roles),
+            posed("Idle", row(CardState::Idle, false, false), roles),
+            posed(
+                "Needs action, selected",
+                row(CardState::NeedsAction, false, true),
+                roles,
+            ),
+            posed("Done, selected", row(CardState::Done, false, true), roles),
             posed(
                 "a worktree row with tags carrying it",
-                row(LocationState::Running, true),
+                row(CardState::NeedsAttention, true, false),
                 roles,
             ),
         ],

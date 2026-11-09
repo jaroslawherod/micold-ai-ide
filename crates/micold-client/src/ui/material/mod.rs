@@ -156,7 +156,7 @@ pub use review_panel_row::{
 pub use select::Select;
 pub use side_sheet::SideSheet;
 pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};
-pub use state_icon::StateIcon;
+pub use state_icon::{row_tint, tint_ink, StateIcon};
 pub use status_chip::StatusChip;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;

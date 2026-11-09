@@ -62,6 +62,7 @@ use crate::overlay::SurfaceId;
 use micold_core::location_state::{location_state, LocationState};
 use micold_core::location_title::LocationTitle;
 use micold_core::naming::{ConventionalType, Tag};
+use micold_core::overview::CardState;
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
@@ -1381,10 +1382,20 @@ pub fn unread_tooltip_line(n: usize) -> Option<String> {
     }
 }
 
+/// The card state's word on a row's tooltip (feature 1718, G10, FR-011): [`CardState::label`],
+/// except Done, which reads "Done (merged)": the row is tinted as a cleanup candidate, and the
+/// words say why. Sidebar only: the Overview card keeps "Done".
+pub fn state_line(state: CardState) -> &'static str {
+    match state {
+        CardState::Done => "Done (merged)",
+        other => other.label(),
+    }
+}
+
 /// `tooltip` with the state's line in words appended on a line of its own (feature 905, FR-009).
 /// Composed inside [`with_unread_line`], so the state line comes before the unread line.
-pub fn with_state_line(tooltip: String, state: LocationState) -> String {
-    format!("{tooltip}\n{}", state.tooltip_line())
+pub fn with_state_line(tooltip: String, state: CardState) -> String {
+    format!("{tooltip}\n{}", state_line(state))
 }
 
 /// `tooltip` with [`unread_tooltip_line`] appended on a line of its own (feature 575, FR-005).
