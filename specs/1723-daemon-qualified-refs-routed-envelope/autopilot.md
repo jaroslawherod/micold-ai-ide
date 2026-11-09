@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: pr (M3)
-- **Next step**: CI and merge of M3 PR, then M4
+- **Phase**: pr (M4)
+- **Next step**: CI and merge of M4 PR, then close
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1746 | design | merged | 3530aeba08a1047f1d73cc2f88bf5d4b85d8253b |
 | #1753 | M1 | merged | 045d2f75cbc3c4098a1a489be95f3cabf2ecdb2d |
 | #1767 | M2 | merged | b7c07fdaff23114f1f42d3f6eace69a63918dc8e |
-| #1789 | M3 | open | |
+| #1789 | M3 | merged | 65af9ee8b8261613467556ca09cdab5a566d0991 |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | #1753 | merged |
 | M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | #1767 | merged |
-| M3 | T023–T029 | full | project identity on project rows | #1789 | in review |
+| M3 | T023–T029 | full | project identity on project rows | #1789 | merged |
 | M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | | pending |
 
 ## Decisions
@@ -52,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (code-review high) | 1 | dff811436e3204a50436d87f225dc4e8f1e7eee4:8bfb8a2d209fab73d84f1a3ecd4c29a4fe4df55e | 8 findings: fixed protocol bump to 80, cache lock held across git, failed reads cached, bare-tag identity accepted; 4 declined (see below), git under state lock noted as follow-up |
 | M2 B (conformance, sonnet) | 1 | same | CLEAN; 3 MINOR: non-JSON routed test added; header list test and cycle-log not added |
 | M3 B (conformance, sonnet) | 1 | same | CLEAN; 1 MINOR fixed (Verify names `--test main protocol_roundtrip`); full gate green |
+| M4 A (autopilot-reviewer, high) | 1 | f12ba8cd128f7e4991b3220575fecbf2e837f027:65af9ee8b8261613467556ca09cdab5a566d0991 | CLEAN; 2 MINOR fixed (errors paragraph check, NestedEnvelope target) |
+| M4 B (conformance, sonnet) | 1 | same | CLEAN; Verify green; 3 MINOR prose fixed |
 
 ## Declined review findings
 

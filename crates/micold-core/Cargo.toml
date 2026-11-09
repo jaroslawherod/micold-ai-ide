@@ -99,6 +99,10 @@ name = "available_in"
 path = "tests/available_in.rs"
 
 [[test]]
+name = "contract_example"
+path = "tests/contract_example.rs"
+
+[[test]]
 name = "copilot_provider"
 path = "tests/copilot_provider.rs"
 

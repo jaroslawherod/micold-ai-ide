@@ -420,6 +420,37 @@ A couple of current limitations worth knowing:
   is always recoverable.
 - The scrollback limit in Settings is applied by the daemon; other Settings are still saved locally.
 
+## Daemon id, qualified refs and the routed envelope (#1723)
+
+A later orchestrator (#1722) talks to several daemons at once, so every object a daemon reports says
+which daemon owns it. The byte-level contract is `specs/orchestrator/contracts/routed-envelope.md`;
+this section is the summary.
+
+- **Daemon id.** Lowercase text, 1 to 63 chars, `[a-z0-9][a-z0-9._-]*`, set with `[daemon] id` in
+  the daemon's configuration (default `local`). An invalid id is rejected where it is decoded.
+- **Qualified refs.** `SessionSummary`, `WorktreeSnapshot` and `ProjectSnapshot` carry `daemon`; a
+  session is named by (`daemon`, session id), a worktree by (`daemon`, project, directory name).
+- **The routed envelope.** A frame of kind `2` wraps one `ClientMsg` as `{target, conn, seq, msg}`:
+  the daemon it is for, a logical connection id, a sequence number (carried as is; ordering and
+  resume are #1730) and the message. The handshake stays plain; a link switches to routed frames
+  after `Welcome`.
+- **Rejection rule.** An envelope with no or an invalid `target`, with an envelope inside `msg`, or
+  that is malformed is rejected before `msg` is read and delivers nothing. A row whose `daemon`
+  differs from the target is refused by the orchestrator (`RoutedEnvelope::owns`). A routed frame
+  on a plain connection, or the reverse, is a codec error (`WrongRouting`).
+- **Protocol number.** Version 78 added the qualified rows and the envelope; project identity moved
+  it to 80 (79 retired the git credential grants). A daemon and a client on different versions
+  refuse each other and the refusal names both.
+- **"Same project".** `ProjectSnapshot.identity` is how daemons declare they serve one project, so
+  the orchestrator never reads a daemon's filesystem. The daemon derives it: the `micold.projectId`
+  git config value if set (`override:<value>`), else the normalised `origin` remote (first remote if
+  none is `origin`; scheme, user and port dropped, `host:o/r` written `host/o/r`, host lowercased,
+  trailing `/` and `.git` removed: `remote:host/o/r`; a remote that is a local path counts as no remote), else `local:<daemon id>:<project path>`.
+  Reason: a remote names the repository the same way from every machine, while a path does not.
+  Failure case: hosts that differ only by port, or two unrelated repositories that share a remote,
+  are merged; set `micold.projectId` to separate them. A repository with no remote is never merged
+  with another.
+
 ## Sessions are supervised even with no window open (User Story 4)
 
 Because a session's process lives in the daemon, the daemon can watch over it whether or not a window

@@ -103,6 +103,9 @@ specs/**      micold-docs
 /specs/006-real-terminal-emulator/contracts/settings-schema.md -micold-docs
 /specs/027-sandboxed-daemon-runtime/contracts/sandbox-settings-schema.md -micold-docs
 
+# Read by a test, so a test input rather than documentation: `crates/micold-core/tests/contract_example.rs` (#1723): its worked example frame must decode.
+/specs/orchestrator/contracts/routed-envelope.md -micold-docs
+
 # Read by a test, so a test input rather than documentation: this page states the macOS version
 # floor, and `crates/micold-core/tests/macos_minimum_version.rs` holds it equal to the
 # `LSMinimumSystemVersion` the operating system enforces. If it stayed documentation, moving the
