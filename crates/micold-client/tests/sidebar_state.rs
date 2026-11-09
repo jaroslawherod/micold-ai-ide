@@ -1014,6 +1014,7 @@ mod flat_list {
     use micold_client::features::sidebar::{
         location_row, row_heights, row_index, RowRef, SidebarEntry, TagFilter,
     };
+    use micold_client::ui::row_tint;
     use micold_core::naming::ConventionalType;
     use micold_core::overview::CardState;
     use micold_core::protocol::messages::ActivitySignal;
@@ -1056,7 +1057,9 @@ mod flat_list {
         use micold_core::pull_request::{CheckStatus, PrState};
         let mut state = five_states();
         let baseline = listed_rows(&state);
+        let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
         let mut seen = vec![card_of(&state, "idle")];
+        let mut tints = vec![row_tint(seen[0], &roles)];
         type Step = Box<dyn Fn(&mut State)>;
         let steps: Vec<Step> = vec![
             Box::new(|s| pr_read(s, "feat/idle", PrState::Merged, true)),
@@ -1094,12 +1097,27 @@ mod flat_list {
         for step in &steps {
             step(&mut state);
             seen.push(card_of(&state, "idle"));
+            tints.push(row_tint(seen[seen.len() - 1], &roles));
             assert_eq!(listed_rows(&state), baseline, "after {:?}", seen.last());
             let entries: Vec<SessionLocation> =
                 state.sidebar_entries().iter().map(location_of).collect();
             let list: Vec<SessionLocation> = state.sidebar_list().iter().map(location_of).collect();
             assert_eq!(list, entries, "the list is the stable order");
         }
+        // T024 (FR-012, SC-001): the row's tint followed its state while its place never changed.
+        let tinted: Vec<_> = seen.iter().zip(&tints).collect();
+        assert!(
+            tinted.iter().any(|(_, t)| t.is_none()) && tinted.iter().any(|(_, t)| t.is_some()),
+            "the tint comes and goes with the state: {tinted:?}"
+        );
+        for (state, tint) in &tinted {
+            let expected = row_tint(**state, &roles);
+            assert_eq!(**tint, expected, "{state:?}");
+        }
+        let mut distinct: Vec<_> = tints.iter().flatten().collect();
+        distinct.sort_by_key(|rgb| format!("{rgb:?}"));
+        distinct.dedup();
+        assert_eq!(distinct.len(), 3, "three tints over five states: {tints:?}");
         seen.sort_by_key(|c| format!("{c:?}"));
         seen.dedup();
         assert_eq!(seen.len(), 5, "all five card states were visited: {seen:?}");

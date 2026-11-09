@@ -151,29 +151,32 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
     );
 }
 
-/// Feature 905 (FR-007, contract A6): each state icon's glyph is non-text, so it needs 3:1 against
-/// the sidebar row at rest, hovered and selected, in both schemes. The colour is the one the row
-/// draws, `state_icon::role`.
+/// Feature 905 (FR-007, contract A6), re-keyed on the card state (feature 1718, T016): each state
+/// icon's glyph is non-text, so it needs 3:1 against the sidebar row at rest, hovered and selected,
+/// in both schemes; a tinted state's glyph also against its tint, at rest and hovered. The colour
+/// is the one the row draws, `state_icon::role`.
 #[test]
 fn every_state_icon_is_legible_on_every_fill_of_a_sidebar_row() {
-    use micold_core::location_state::{BlockedReason, LocationState};
+    use micold_core::overview::CardState;
     let mut violations: Vec<String> = Vec::new();
 
     for scheme in [ColorScheme::Light, ColorScheme::Dark] {
         let r = tokens::roles(scheme);
-        for state in [
-            LocationState::Running,
-            LocationState::Blocked(BlockedReason::NeedsPermission),
-            LocationState::Idle,
-        ] {
-            let glyph = super::state_icon::role(state, &r).expect("a drawn state has a role");
-            for (host, fill) in [
-                ("the sidebar", style::to_rgb(style::sidebar_fill(r))),
-                ("a hovered sidebar row", hovered_sidebar_row(r)),
+        for state in CardState::ALL {
+            let glyph = super::state_icon::role(state, &r);
+            let mut fills = vec![
                 ("a selected row", r.secondary_container),
                 // The sidebar's selected row (feature 1125, R7).
                 ("a primary-selected row", r.primary_container),
-            ] {
+            ];
+            // A tinted row's resting fill is its tint, an untinted one's the sidebar.
+            let resting = match super::state_icon::row_tint(state, &r) {
+                Some(tint) => tint,
+                None => style::to_rgb(style::sidebar_fill(r)),
+            };
+            fills.push(("the row at rest", resting));
+            fills.push(("the row hovered", hovered_over(resting, r)));
+            for (host, fill) in fills {
                 let ratio = contrast(glyph, fill);
                 if ratio < AA_NON_TEXT {
                     violations.push(format!(
@@ -187,6 +190,40 @@ fn every_state_icon_is_legible_on_every_fill_of_a_sidebar_row() {
     assert!(
         violations.is_empty(),
         "a state icon cannot be told from the row it is drawn on:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
+/// Feature 1718 (T025, G9, SC-005, FR-012): the text of a tinted row is 4.5:1 on its tint, at rest
+/// and under the hover layer, in both schemes: `on_error_container`, `on_tertiary_container`,
+/// `on_surface`, as `state_icon::tint_ink` gives them.
+#[test]
+fn a_tinted_rows_text_is_legible_on_its_tint() {
+    use micold_core::overview::CardState;
+    let mut violations: Vec<String> = Vec::new();
+    let mut tinted = 0;
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for state in CardState::ALL {
+            let Some(tint) = super::state_icon::row_tint(state, &r) else {
+                continue;
+            };
+            tinted += 1;
+            let ink = super::state_icon::tint_ink(state, &r).expect("a tinted state has an ink");
+            for (host, fill) in [("at rest", tint), ("hovered", hovered_over(tint, r))] {
+                let ratio = contrast(ink, fill);
+                if ratio < AA_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {state:?} text {host}: {ratio:.2}:1 (needs {AA_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+    assert_eq!(tinted, 6, "three tinted states in two schemes");
+    assert!(
+        violations.is_empty(),
+        "text on a tinted row is not legible:\n  {}",
         violations.join("\n  ")
     );
 }
@@ -254,8 +291,14 @@ fn the_overview_row_and_its_badge_are_legible() {
 /// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
 /// row's content colour over it (feature 575, FR-013).
 fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {
+    hovered_over(style::to_rgb(style::sidebar_fill(r)), r)
+}
+
+/// `fill` with the hover state layer of the row's content colour over it: a row hovered over its
+/// resting fill, the sidebar's or a tint.
+fn hovered_over(fill: Rgb, r: tokens::Roles) -> Rgb {
     style::to_rgb(style::state_layer(
-        style::sidebar_fill(r),
+        style::color(fill),
         style::color(r.on_surface),
         tokens::state::HOVER,
     ))

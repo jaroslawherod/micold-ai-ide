@@ -81,21 +81,15 @@ mod tests {
     use super::super::test_support::roles;
     use super::*;
     use iced::Size;
-    use micold_core::location_state::BlockedReason;
-
-    const STATES: [LocationState; 4] = [
-        LocationState::Running,
-        LocationState::Blocked(BlockedReason::NeedsPermission),
-        LocationState::Idle,
-        LocationState::Unknown,
-    ];
+    use micold_core::overview::CardState;
+    use std::collections::HashSet;
 
     fn size_of(s: StateIcon) -> Size {
         super::super::test_support::size_of::<()>(s.into(), Size::new(400.0, 100.0))
     }
 
-    /// S1, A2: every state, the empty one included, is a slot of the stated width, and no glyph is
-    /// taller than the sidebar name's line, so no state changes a row's height.
+    /// T015 (SC-002, G5): every card state is a slot of the stated width, and no glyph is taller
+    /// than the sidebar name's line, so no state changes a row's height.
     #[test]
     fn every_state_takes_the_same_width() {
         let name_line = super::super::test_support::size_of(
@@ -103,7 +97,7 @@ mod tests {
             Size::new(400.0, 100.0),
         )
         .height;
-        for state in STATES {
+        for state in CardState::ALL {
             let default = size_of(StateIcon::new(state, roles()));
             assert_eq!(
                 default.width,
@@ -117,7 +111,7 @@ mod tests {
             );
             assert_eq!(
                 default.height, default.width,
-                "{state:?}: the slot is square, the Unknown slot included"
+                "{state:?}: the slot is square"
             );
             let px = TypeRole::Title.size();
             assert_eq!(
@@ -128,48 +122,54 @@ mod tests {
         }
     }
 
-    /// FR-007: three shapes, and the Unknown state draws none.
+    /// T015 (SC-002, FR-004): five card states, five different glyphs, and the Overview card's.
     #[test]
-    fn three_states_draw_three_glyphs_and_unknown_draws_none() {
-        let drawn: Vec<_> = STATES.iter().map(|&s| glyph(s)).collect();
+    fn five_card_states_draw_five_different_glyphs() {
+        let drawn: Vec<char> = CardState::ALL.iter().map(|&s| glyph(s).glyph()).collect();
         assert_eq!(
             drawn,
-            [
-                Some(Icon::StateRunning),
-                Some(Icon::StateBlocked),
-                Some(Icon::StateIdle),
-                None
-            ]
+            ['\u{e645}', '\u{e8f4}', '\u{e037}', '\u{e86c}', '\u{e034}']
         );
-        for reason in [
-            BlockedReason::Resumable,
-            BlockedReason::Failed,
-            BlockedReason::NeedsPermission,
-        ] {
-            assert_eq!(
-                glyph(LocationState::Blocked(reason)),
-                Some(Icon::StateBlocked)
-            );
+        assert_eq!(drawn.iter().collect::<HashSet<_>>().len(), 5);
+        for state in CardState::ALL {
+            assert_eq!(glyph(state), super::super::card_state_icon(state));
         }
     }
 
-    /// Data-model *Glyph*: the colour roles.
+    /// T015: a location with no session is Idle, which draws a glyph: the slot is never blank.
+    #[test]
+    fn idle_is_drawn_not_blank() {
+        assert_eq!(glyph(CardState::Idle), Icon::StateIdle);
+    }
+
+    /// Research R1, R7: the glyph's colour is the one its row's tint pairs it with.
     #[test]
     fn each_glyph_is_drawn_in_its_role() {
         let r = roles();
-        assert_eq!(role(LocationState::Running, &r), Some(r.primary));
-        for reason in [
-            BlockedReason::Failed,
-            BlockedReason::NeedsPermission,
-            BlockedReason::Resumable,
-        ] {
-            assert_eq!(
-                role(LocationState::Blocked(reason), &r),
-                Some(r.error),
-                "{reason:?}"
-            );
-        }
-        assert_eq!(role(LocationState::Idle, &r), Some(r.on_surface_variant));
-        assert_eq!(role(LocationState::Unknown, &r), None);
+        assert_eq!(role(CardState::NeedsAction, &r), r.on_error_container);
+        assert_eq!(role(CardState::NeedsAttention, &r), r.on_tertiary_container);
+        assert_eq!(role(CardState::Working, &r), r.primary);
+        assert_eq!(role(CardState::Done, &r), r.on_surface);
+        assert_eq!(role(CardState::Idle, &r), r.on_surface_variant);
+    }
+
+    /// T023 (G7, FR-010, FR-011): the tint by card state.
+    #[test]
+    fn row_tint_by_card_state() {
+        let r = roles();
+        assert_eq!(
+            row_tint(CardState::NeedsAction, &r),
+            Some(r.error_container)
+        );
+        assert_eq!(
+            row_tint(CardState::NeedsAttention, &r),
+            Some(r.tertiary_container)
+        );
+        assert_eq!(
+            row_tint(CardState::Done, &r),
+            Some(r.surface_container_high)
+        );
+        assert_eq!(row_tint(CardState::Working, &r), None);
+        assert_eq!(row_tint(CardState::Idle, &r), None);
     }
 }

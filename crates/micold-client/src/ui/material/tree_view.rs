@@ -1268,20 +1268,71 @@ mod tests {
 
     // --- Feature 905 (contract `state-icon.md` S2, A2-A4): the state slot ---
 
-    use super::super::StateIcon;
-    use micold_core::location_state::{BlockedReason, LocationState};
+    use super::super::{row_tint, tint_ink, StateIcon};
+    use micold_core::overview::CardState;
 
-    /// Every state a row can show, the empty one included.
-    const STATES: [LocationState; 4] = [
-        LocationState::Running,
-        LocationState::Blocked(BlockedReason::Failed),
-        LocationState::Idle,
-        LocationState::Unknown,
-    ];
+    /// Every state a row can show.
+    const STATES: [CardState; 5] = CardState::ALL;
 
     /// A location row carrying the state icon, as the sidebar builds it.
-    fn stated_row(label: &str, tagged: bool, state: LocationState) -> TreeItem<'static, ()> {
+    fn stated_row(label: &str, tagged: bool, state: CardState) -> TreeItem<'static, ()> {
         location_row(label, tagged).state_icon(StateIcon::new(state, roles()))
+    }
+
+    /// A location row tinted as the sidebar tints it for `state`.
+    fn tinted_row(label: &str, tagged: bool, state: CardState) -> TreeItem<'static, ()> {
+        let r = roles();
+        let item = stated_row(label, tagged, state);
+        match (row_tint(state, &r), tint_ink(state, &r)) {
+            (Some(fill), Some(ink)) => item.row_tint(fill, ink),
+            _ => item,
+        }
+    }
+
+    /// Feature 1718 (T026, G8, FR-012): the tint is the row's resting fill, and a selected row
+    /// draws its selection pill instead of it, so the selection is never lost under a tint and
+    /// never looks like a merely tinted row. The hover layer is the row button's, drawn over
+    /// whichever fill this returns.
+    #[test]
+    fn a_selected_row_is_distinct_from_a_merely_tinted_one() {
+        let r = roles();
+        for state in [
+            CardState::NeedsAction,
+            CardState::NeedsAttention,
+            CardState::Done,
+        ] {
+            let tint = row_tint(state, &r).expect("a tinted state");
+            for selection in [Selection::Primary, Selection::Secondary] {
+                let tinted = resting_fill(false, selection, Some(tint), &r);
+                let selected = resting_fill(true, selection, Some(tint), &r);
+                assert_eq!(tinted, Some(tint), "{state:?} at rest shows its tint");
+                assert_ne!(selected, tinted, "{state:?} selected is not just tinted");
+                assert_eq!(
+                    selected,
+                    resting_fill(true, selection, None, &r),
+                    "{state:?} selected shows the selection pill whatever the tint"
+                );
+            }
+        }
+        assert_eq!(resting_fill(false, Selection::Primary, None, &r), None);
+    }
+
+    /// FR-012: the tint is colour only: a tinted row is laid out exactly as an untinted one.
+    #[test]
+    fn a_tint_changes_no_geometry() {
+        for tagged in [false, true] {
+            for state in STATES {
+                let plain = at(stated_row("feat-short", tagged, state), ROOMY, &[0]);
+                let tinted = at(tinted_row("feat-short", tagged, state), ROOMY, &[0]);
+                assert_eq!(plain, tinted, "{state:?} (tagged {tagged})");
+                let label = |item| at(item, ROOMY, &on_line(tagged, LABEL));
+                assert_eq!(
+                    label(stated_row("feat-short", tagged, state)),
+                    label(tinted_row("feat-short", tagged, state)),
+                    "{state:?} (tagged {tagged}): the label"
+                );
+            }
+        }
     }
 
     /// The bounds at `path` of `item` laid out the way [`laid_out`] lays it out.
@@ -1416,7 +1467,7 @@ mod tests {
                 &on_line(tagged, 1),
             );
             let stated = at(
-                stated_row("feat-short", tagged, LocationState::Idle),
+                stated_row("feat-short", tagged, CardState::Idle),
                 ROOMY,
                 &on_line(tagged, LABEL),
             );
@@ -1432,7 +1483,7 @@ mod tests {
             assert_eq!(
                 at(location_row("feat-short", tagged), ROOMY, &[0]).height,
                 at(
-                    stated_row("feat-short", tagged, LocationState::Idle),
+                    stated_row("feat-short", tagged, CardState::Idle),
                     ROOMY,
                     &[0]
                 )
