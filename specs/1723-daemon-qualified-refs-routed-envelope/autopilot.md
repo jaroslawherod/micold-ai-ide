@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: review (M3)
-- **Next step**: M3 scoped gate, review A and B, full gate, PR
+- **Phase**: pr (M3)
+- **Next step**: CI and merge of M3 PR, then M4
 
 ## Pull requests
 
@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A (autopilot-reviewer, correctness) | 1 | fca14197d (committed tree) | CLEAN; 1 MINOR fixed (InvalidTarget names the JSON type, not the value) |
 | M3 A (code-review high) | 1 | dff811436e3204a50436d87f225dc4e8f1e7eee4:8bfb8a2d209fab73d84f1a3ecd4c29a4fe4df55e | 8 findings: fixed protocol bump to 80, cache lock held across git, failed reads cached, bare-tag identity accepted; 4 declined (see below), git under state lock noted as follow-up |
 | M2 B (conformance, sonnet) | 1 | same | CLEAN; 3 MINOR: non-JSON routed test added; header list test and cycle-log not added |
+| M3 B (conformance, sonnet) | 1 | same | CLEAN; 1 MINOR fixed (Verify names `--test main protocol_roundtrip`); full gate green |
 
 ## Declined review findings
 

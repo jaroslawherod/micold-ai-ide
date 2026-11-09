@@ -105,7 +105,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T023–T029
 - **Deliverable**: project rows carry the owning daemon and a derived project identity (normalised remote, `micold.projectId` override, or per-daemon local), the same for `git@host:o/r.git` and `https://host/o/r`.
 - **Satisfies**: US1 acceptance scenario 1 (project row), US4 acceptance scenario 2; FR-003 (project), FR-008
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --lib project_identity`, then `--test protocol_roundtrip`, and the daemon project-row test
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --lib project_identity`, then `--test main protocol_roundtrip`, and the daemon project-row test
 - **Depends on**: M1
 - **Tier**: full
 
