@@ -62,9 +62,9 @@ Format: `- [ ] T### [P?] [US?] description with file path`. `[P]` = disjoint fil
 - [x] T027 [US4] Tests: `ProjectSnapshot` with `daemon` and `identity` round trips on both wires and `qualified()` equals the decoded `ProjectRef` (`micold-core/tests/protocol_roundtrip.rs`); a daemon test in `micold-daemon/tests/` that its project row carries the derived identity and the `micold.projectId` override.
 - [x] T028 [US4] Add `daemon` and `identity: ProjectIdentity` to `ProjectSnapshot` and `ProjectSnapshot::qualified() -> ProjectRef` in `micold-core/src/protocol/messages.rs`; fix every constructor the compiler reports; fill both in `micold-daemon/src/catalog.rs` from `Git::remote_list` and `config_local_get("micold.projectId")`.
 - [x] T029 [US4] Document `micold.projectId` (how to set it on each clone, what happens without a remote) in `docs/user-guide/daemon-configuration.md`.
-- [ ] T030 [US4] Test `contract_example` in `micold-core/tests/` reading `specs/orchestrator/contracts/routed-envelope.md`: its worked-example frame decodes to the stated envelope; every `RoutingError` variant and envelope field is listed.
-- [ ] T031 [US4] Write `specs/orchestrator/contracts/routed-envelope.md` (new file only; do not edit other files in that directory): byte-level fields with type and range, error variants, one worked example frame, sequence-number note (#1730), remote normalisation steps, the project-identity rule and User Story 4 examples.
-- [ ] T032 [P] [US4] Add a section to `docs/daemon.md`: daemon id, qualified refs, the envelope, its rejection rule, protocol number 78, the project-identity rule with its reason and failure case.
+- [x] T030 [US4] Test `contract_example` in `micold-core/tests/` reading `specs/orchestrator/contracts/routed-envelope.md`: its worked-example frame decodes to the stated envelope; every `RoutingError` variant and envelope field is listed.
+- [x] T031 [US4] Write `specs/orchestrator/contracts/routed-envelope.md` (new file only; do not edit other files in that directory): byte-level fields with type and range, error variants, one worked example frame, sequence-number note (#1730), remote normalisation steps, the project-identity rule and User Story 4 examples.
+- [x] T032 [P] [US4] Add a section to `docs/daemon.md`: daemon id, qualified refs, the envelope, its rejection rule, protocol number 78, the project-identity rule with its reason and failure case.
 
 ## Dependencies and order
 
