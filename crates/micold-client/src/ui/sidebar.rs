@@ -19,6 +19,7 @@ use crate::ui::material::{
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::Tag;
+use micold_core::overview::CardState;
 use micold_core::pull_request::{CheckStatus, PrState};
 use micold_core::session::{Session, SessionLifecycle, SessionLocation};
 use micold_core::tokens::{self, spacing, Rgb, Roles};
@@ -945,9 +946,16 @@ fn build_items(
         //
         // The state icon (feature 905, FR-001, FR-009): the worktree's state from all its
         // sessions, in its slot after the twisty, and in words before the unread line.
-        let location_state = node.state();
-        item = item
-            .state_icon(StateIcon::new(location_state, r))
+        //
+        // Feature 1718 (FR-004, FR-010 to FR-012): the card state the Overview card shows, as the
+        // row's glyph, its tooltip word and its colour-only tint.
+        let (card_state, _) = crate::features::overview::location_card_state(
+            state,
+            &node.location(),
+            wt.branch.as_deref(),
+        );
+        item = tinted(item, card_state, r)
+            .state_icon(StateIcon::new(card_state, r))
             .unread_count(unread)
             .row_tooltip(crate::features::sidebar::with_unread_line(
                 crate::features::sidebar::with_state_line(
@@ -962,7 +970,7 @@ fn build_items(
                             row_pr,
                         ),
                     ),
-                    location_state,
+                    card_state,
                 ),
                 unread,
             ));
@@ -1095,6 +1103,17 @@ fn with_keyboard_focus(
     })
 }
 
+/// `item` with the row tint of `state` (feature 1718, FR-010 to FR-012): none for Working and Idle.
+fn tinted<M>(item: TreeItem<'static, M>, state: CardState, r: Roles) -> TreeItem<'static, M> {
+    match (
+        crate::ui::material::row_tint(state, &r),
+        crate::ui::material::tint_ink(state, &r),
+    ) {
+        (Some(fill), Some(ink)) => item.row_tint(fill, ink),
+        _ => item,
+    }
+}
+
 /// A run group's row and, when it is expanded, its runs (feature 483, G1, G1a, G2, G3).
 fn group_items(
     state: &State,
@@ -1113,18 +1132,39 @@ fn group_items(
     if group.failed_count > 0 {
         tags.push((format!("{} failed", group.failed_count), r.error));
     }
-    let mut items = vec![with_keyboard_focus(
-        TreeItem::new(0, group.name.clone(), r.on_surface)
-            .tags(tags)
-            .row_tooltip(group.name.clone())
-            .on_right_press({
-                let id = group.id;
-                move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
-            })
-            .expandable(
-                group.expanded,
-                Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
+    // The group's card state: the worst over its runs (feature 483 G6, feature 1718 FR-004).
+    let group_state = micold_core::sidebar_groups::run_group_state(group.runs.iter().map(|run| {
+        match &run.row {
+            RunRow::Worktree(node) => micold_core::sidebar_groups::RunCard::Worktree(
+                crate::features::overview::location_card_state(
+                    state,
+                    &node.location(),
+                    node.worktree.branch.as_deref(),
+                )
+                .0,
             ),
+            RunRow::NoWorktree => micold_core::sidebar_groups::RunCard::NoWorktree {
+                failed: run.status.is_failed(),
+            },
+        }
+    }));
+    let mut items = vec![with_keyboard_focus(
+        tinted(
+            TreeItem::new(0, group.name.clone(), r.on_surface),
+            group_state,
+            r,
+        )
+        .state_icon(StateIcon::new(group_state, r))
+        .tags(tags)
+        .row_tooltip(group.name.clone())
+        .on_right_press({
+            let id = group.id;
+            move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
+        })
+        .expandable(
+            group.expanded,
+            Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
+        ),
         false,
         RowKey::RunGroup(group.id),
     )];
@@ -1354,32 +1394,37 @@ fn build_default_item(
         r,
     );
 
-    let location_state = node.state();
-    let mut item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
-        // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
-        .with_icon(Icon::ProjectRoot)
-        // "project root · " and its sessions (feature 1125, FR-011).
-        .supporting_text(
-            crate::features::sidebar::default_second_line(node),
-            r.on_surface_variant,
-        )
-        // Feature 482, V1: the Default row's menu, which is the worktree menu under the wire's
-        // name for the project root (`""`).
-        .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))
-        // The project root's state icon (feature 905, FR-002), as on a worktree row.
-        .state_icon(StateIcon::new(location_state, r))
-        // The attention indicator (feature 575, FR-001), as on a worktree row.
-        .unread_count(unread)
-        // Location tooltip (FR-010): fixed, since the Default entry is always the project root,
-        // plus the state's words (feature 905, FR-009) and the indicator's when it shows (feature
-        // 575, FR-005).
-        .row_tooltip(crate::features::sidebar::with_unread_line(
-            crate::features::sidebar::with_state_line(
-                crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
-                location_state,
-            ),
-            unread,
-        ));
+    let (card_state, _) =
+        crate::features::overview::location_card_state(state, &SessionLocation::Default, None);
+    let mut item = tinted(
+        TreeItem::new(0, node.display_name.to_string(), r.on_surface),
+        card_state,
+        r,
+    )
+    // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
+    .with_icon(Icon::ProjectRoot)
+    // "project root · " and its sessions (feature 1125, FR-011).
+    .supporting_text(
+        crate::features::sidebar::default_second_line(node),
+        r.on_surface_variant,
+    )
+    // Feature 482, V1: the Default row's menu, which is the worktree menu under the wire's
+    // name for the project root (`""`).
+    .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))
+    // The project root's state icon (feature 905, FR-002), as on a worktree row.
+    .state_icon(StateIcon::new(card_state, r))
+    // The attention indicator (feature 575, FR-001), as on a worktree row.
+    .unread_count(unread)
+    // Location tooltip (FR-010): fixed, since the Default entry is always the project root,
+    // plus the state's words (feature 905, FR-009) and the indicator's when it shows (feature
+    // 575, FR-005).
+    .row_tooltip(crate::features::sidebar::with_unread_line(
+        crate::features::sidebar::with_state_line(
+            crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
+            card_state,
+        ),
+        unread,
+    ));
     if state.start_offered(&SessionLocation::Default) {
         item = item.trailing_element(start_session);
     }

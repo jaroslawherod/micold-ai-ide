@@ -1,52 +1,71 @@
-//! `StateIcon` — a location's state on its sidebar row (Constitution Principle VIII; feature 905,
-//! contract `state-icon.md` S1).
+//! `StateIcon` — a location's card state on its sidebar row (Constitution Principle VIII; feature
+//! 905, contract `state-icon.md` S1, re-keyed on `CardState` by feature 1718, research R1).
 //!
-//! One glyph per state, each a different shape so the state reads without colour (FR-007): a
-//! triangle for Running, an octagon for Blocked, two bars for Idle / waiting. An Unknown state
-//! draws nothing in a slot of the same width, so the row's name never moves (FR-005, FR-010).
+//! One glyph per card state, the Overview card's own (`overview_card::state_icon`), so the five
+//! states read without colour (FR-004, SC-002): Needs action, Needs attention, Working, Done and
+//! Idle each draw a different shape in a slot of one width, so the row's name never moves. A
+//! location with no session is Idle, so the slot is never blank.
+//!
+//! [`row_tint`] is the row's colour-only fill by the same state (feature 1718, FR-010 to FR-012).
 //!
 //! `Copy`, so a [`TreeItem`](super::TreeItem) can hold it and size it to its own label role.
 
 use crate::icons::Icon;
 use crate::ui::material::glyph::icon;
 use crate::ui::material::TypeRole;
-use iced::widget::{container, Space};
+use iced::widget::container;
 use iced::{Alignment, Element, Length};
-use micold_core::location_state::LocationState;
+use micold_core::overview::CardState;
 use micold_core::tokens::{Rgb, Roles};
 
-/// The glyph a state draws, or `None` for the empty slot of an Unknown state (data-model *Glyph*).
-fn glyph(state: LocationState) -> Option<Icon> {
+/// The glyph a card state draws: the Overview card's.
+fn glyph(state: CardState) -> Icon {
+    super::card_state_icon(state)
+}
+
+/// The colour role a state's glyph is drawn in (research R1, R7): the ink of its row's tint for the
+/// tinted states, so the glyph sits on its tint as the text does. One function, so the contrast
+/// gate (`composition_contrast.rs`) measures the colour that is drawn.
+pub(crate) fn role(state: CardState, r: &Roles) -> Rgb {
+    tint_ink(state, r).unwrap_or(match state {
+        CardState::Working => r.primary,
+        _ => r.on_surface_variant,
+    })
+}
+
+/// A row's resting fill by card state (feature 1718, FR-010, FR-011, research R7): the louder
+/// container pair for Needs action and Needs attention, a quieter tonal one for Done (the cleanup
+/// candidate), none for Working and Idle. Colour only: the position, the glyph and the words stay.
+pub fn row_tint(state: CardState, r: &Roles) -> Option<Rgb> {
     match state {
-        LocationState::Running => Some(Icon::StateRunning),
-        LocationState::Blocked(_) => Some(Icon::StateBlocked),
-        LocationState::Idle => Some(Icon::StateIdle),
-        LocationState::Unknown => None,
+        CardState::NeedsAction => Some(r.error_container),
+        CardState::NeedsAttention => Some(r.tertiary_container),
+        CardState::Done => Some(r.surface_container_high),
+        CardState::Working | CardState::Idle => None,
     }
 }
 
-/// The colour role a state's glyph is drawn in (data-model *Glyph*). One function, so the contrast
-/// gate (`composition_contrast.rs`) measures the colour that is drawn.
-pub(crate) fn role(state: LocationState, r: &Roles) -> Option<Rgb> {
+/// The colour of a tinted row's text and glyph (FR-012): the container's `on_*` role.
+pub fn tint_ink(state: CardState, r: &Roles) -> Option<Rgb> {
     match state {
-        LocationState::Running => Some(r.primary),
-        LocationState::Blocked(_) => Some(r.error),
-        LocationState::Idle => Some(r.on_surface_variant),
-        LocationState::Unknown => None,
+        CardState::NeedsAction => Some(r.on_error_container),
+        CardState::NeedsAttention => Some(r.on_tertiary_container),
+        CardState::Done => Some(r.on_surface),
+        CardState::Working | CardState::Idle => None,
     }
 }
 
 /// A location's state icon. See the module documentation.
 #[derive(Debug, Clone, Copy)]
 pub struct StateIcon {
-    state: LocationState,
+    state: CardState,
     roles: Roles,
     size: f32,
 }
 
 impl StateIcon {
     /// The icon of `state`, themed by `roles`, at the sidebar label's size.
-    pub fn new(state: LocationState, roles: Roles) -> Self {
+    pub fn new(state: CardState, roles: Roles) -> Self {
         Self {
             state,
             roles,
@@ -63,10 +82,7 @@ impl StateIcon {
 
 impl<'a, M: 'a> From<StateIcon> for Element<'a, M> {
     fn from(s: StateIcon) -> Self {
-        let content: Element<'a, M> = match (glyph(s.state), role(s.state, &s.roles)) {
-            (Some(glyph), Some(color)) => icon(glyph, s.size, color),
-            _ => Space::new().into(),
-        };
+        let content: Element<'a, M> = icon(glyph(s.state), s.size, role(s.state, &s.roles));
         container(content)
             .width(Length::Fixed(s.size))
             .height(Length::Fixed(s.size))

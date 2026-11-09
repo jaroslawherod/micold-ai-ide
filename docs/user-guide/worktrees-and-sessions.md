@@ -85,33 +85,38 @@ folder.
 
 <!-- media: worktree-sidebar-light -->
 
-### Worktree state icon
+### Row state icon and tint
 
-Every worktree row, and the **Default** entry, shows an icon for its current state, just after
-the toggle and before the name. You see it without selecting, opening or expanding the row, and
-it changes by itself as soon as the session service reports a change; it never raises a
-notification, plays a sound or moves the selection. Each state has its own shape, so you can tell
-them apart without relying on colour:
+The sidebar lists your worktrees in one steady order and never regroups them by state. Every
+location row — each worktree, the **Default** entry and a run group — shows an icon for its state,
+just after the toggle and before the name, so you can see at a glance which rows need you. It is
+the same state the Overview card shows. You see it without selecting, opening or expanding the
+row, and it changes by itself, in place, as soon as the state changes; it never raises a
+notification, plays a sound, moves the row or moves the selection. Each of the five states has its
+own shape, so you can tell them apart without relying on colour:
 
-| Icon | State | What puts a worktree in it |
-|------|-------|----------------------------|
-| Triangle | **Running** | A session is working on a prompt, or is starting or restarting |
-| Octagon | **Blocked** | A session stopped mid-turn to ask for a permission or an answer, failed (its start failed or its restarts ran out), or is waiting to be resumed after the session service restarted |
-| Two bars | **Idle / waiting** | The session finished its turn and waits for your next prompt, has no process running, or its process ended — or the worktree has no session at all |
+| Icon | State | What puts a row in it |
+|------|-------|-----------------------|
+| Exclamation mark | **Needs action** | A session stopped mid-turn to ask for a permission or an answer, or an agent request is waiting for you |
+| Eye | **Needs attention** | A session failed or waits to be resumed, or the open pull request has failing checks, requested changes or a merge conflict |
+| Play triangle | **Working** | A session is working on a prompt, or is starting or restarting |
+| Check mark in a circle | **Done** | The pull request is merged, the branch is verified removable and no session is running there: the worktree can go |
+| Two bars (pause) | **Idle** | Nothing is happening: the session finished its turn, has no process running, or the row has no session at all (or what it is doing is unknown) |
 
-- **Unknown.** When the app cannot read what a session is doing (for example, a session on a CLI
-  that does not report its activity), the icon's place stays empty, and the row does not claim
-  to be idle or blocked. The name stays where it is.
-- **Asking for a permission.** A session that stops mid-turn to ask for a permission or an
-  answer makes its worktree **Blocked** (*Blocked: needs permission*) until it carries on: the
-  icon turns to the triangle as soon as the session works again. A turn that simply ended stays
-  **Idle / waiting**.
+- **The tint.** Three states also colour the whole row, so they stand out in a long list. **Needs
+  action** has a strong red tint, **Needs attention** a strong amber one, and **Done** a quiet grey
+  one that says "merged, you can remove this". **Working** and **Idle** rows have no tint. The
+  tint is colour only: it never moves a row, and the icon and the words in the tooltip always say
+  the same thing, so colour never carries the state alone. Hovering a tinted row, and selecting it,
+  show over the tint; the selected row stays plainly the selected one.
+- **Done means merged.** Only a *merged* pull request on a removable branch makes a row Done. A
+  pull request that was closed without merging is not marked: its row stays as it was.
 - **Several sessions.** A worktree with a main session and helpers shows one icon for all of
-  them: **Blocked** if any is blocked, else **Running** if any is running, else unknown if any is
-  unknown, else **Idle / waiting**. Closed (archived) sessions do not count.
-- **The tooltip.** Hover a row to read its state in words on a line of its own — *Running*,
-  *Blocked: needs permission*, *Blocked: failed*, *Blocked: resumable*, *Idle* or *State unknown* — above the unread line,
-  if the row has one.
+  them, the worst state that applies. Closed (archived) sessions do not count. A run group shows
+  the worst state over its runs.
+- **The tooltip.** Hover a row to read its state in words on a line of its own — *Needs action*,
+  *Needs attention*, *Working*, *Done (merged)* or *Idle* — above the unread line, if the row has
+  one.
 - **The Default entry** shows the state of the project root's sessions by the same rules; its
   house icon and everything else about it stay the same.
 
