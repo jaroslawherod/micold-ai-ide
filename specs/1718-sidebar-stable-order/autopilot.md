@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: design amendment (highlight + cleanup state) in review; then M2
+- **Phase**: design amendment (highlight + cleanup state) PR #1782 open; then M2
 - **Next step**: design PR opened; then milestone M1 (finding: 905 StateIcon has 3 glyphs, so StateIcon is re-keyed on CardState, research R1/R6)
 
 ## Pull requests
@@ -17,6 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1750 | Design PR | merged | 01bc227bc6684dbbcc4dc964b53d0290eb704a03 |
+| #1782 | Amend design (tint, cleanup candidate) | open | |
 
 ## Milestones
 
