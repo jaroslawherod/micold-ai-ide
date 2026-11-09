@@ -490,22 +490,42 @@ fn v3_the_animation_module_is_where_it_is_expected() {
     );
 }
 
-/// Feature 905 (FR-012, contract S6): the state icon has its entry, posing its three states and
-/// the empty slot. `LocationState` is a core enum, not a library one, so its states are posed
-/// instances rather than `variants` (C4 holds `variants` to the library's own enums).
+/// Feature 905 (FR-012, contract S6), re-keyed on the five card states (feature 1718, T020, T028):
+/// the state icon has its entry, posing each card state with its tint, and a tinted row selected.
+/// `CardState` is a core enum, not a library one, so its states are posed instances rather than
+/// `variants` (C4 holds `variants` to the library's own enums).
 #[test]
-fn the_state_icon_has_an_entry_posing_its_three_states() {
+fn the_state_icon_has_an_entry_posing_its_five_states_and_tints() {
     let entry = COMPONENTS
         .iter()
         .find(|e| e.module == "material/state_icon.rs" && e.component == "StateIcon")
         .expect("the gallery has a `material/state_icon.rs` / `StateIcon` entry");
-    for state in ["Running", "Blocked", "Idle", "Unknown"] {
+    for state in [
+        "Needs action",
+        "Needs attention",
+        "Working",
+        "Done",
+        "Idle",
+        "Needs action, selected",
+        "Done, selected",
+    ] {
         assert!(
             entry.posed.contains(&state),
             "the StateIcon entry poses `{state}`: {:?}",
             entry.posed
         );
     }
+    for gone in ["Running", "Blocked", "Unknown"] {
+        assert!(
+            !entry.posed.contains(&gone),
+            "the old pose `{gone}` is replaced by the card states"
+        );
+    }
+    assert!(
+        entry.live.iter().any(|l| l.contains("hover")),
+        "a tinted row hovered is a live pose: {:?}",
+        entry.live
+    );
 }
 
 /// Feature 968, Principle VIII: the quick-switcher dialog is posed in the gallery, with the rows the

@@ -8,12 +8,13 @@
 use micold_client::app::State;
 use micold_client::catalog_sync::reconcile_catalog;
 use micold_client::features::sidebar::{
-    arrange_groups, with_state_line, with_unread_line, worktree_tooltip, DefaultNode, RunRow,
-    SidebarEntry, TagFilter, WorktreeNode, DEFAULT_LOCATION_LABEL,
+    arrange_groups, state_line, with_state_line, with_unread_line, worktree_tooltip, DefaultNode,
+    RunRow, SidebarEntry, TagFilter, WorktreeNode, DEFAULT_LOCATION_LABEL,
 };
 use micold_core::daemons::DaemonId;
 use micold_core::location_state::{BlockedReason, LocationState};
 use micold_core::naming::{ConventionalType, DerivedNames, WorktreeNaming};
+use micold_core::overview::CardState;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
@@ -470,12 +471,13 @@ fn a_helper_asking_for_a_permission_blocks_beside_an_idle_main_session() {
     );
 }
 
-/// FR-009, A7: the state's words go on a line of their own, before the unread line.
+/// FR-009, A7, re-keyed on the card state (feature 1718, T017, G10): the card state's word goes on
+/// a line of its own, before the unread line, and a Done row reads "Done (merged)" (FR-011).
 #[test]
 fn the_state_line_follows_the_tooltip_and_precedes_the_unread_line() {
     assert_eq!(
-        with_state_line(DEFAULT_LOCATION_LABEL.to_string(), LocationState::Running),
-        format!("{DEFAULT_LOCATION_LABEL}\nRunning")
+        with_state_line(DEFAULT_LOCATION_LABEL.to_string(), CardState::Working),
+        format!("{DEFAULT_LOCATION_LABEL}\nWorking")
     );
     let tooltip = worktree_tooltip(
         Some(Path::new(REPO)),
@@ -484,17 +486,28 @@ fn the_state_line_follows_the_tooltip_and_precedes_the_unread_line() {
         None,
     );
     assert_eq!(
-        with_unread_line(
-            with_state_line(
-                tooltip.clone(),
-                LocationState::Blocked(BlockedReason::Failed)
-            ),
-            2
-        ),
-        format!("{tooltip}\nBlocked: failed\n2 unread sessions")
+        with_unread_line(with_state_line(tooltip.clone(), CardState::NeedsAction), 2),
+        format!("{tooltip}\nNeeds action\n2 unread sessions")
     );
     assert_eq!(
-        with_state_line(tooltip.clone(), LocationState::Unknown),
-        format!("{tooltip}\nState unknown")
+        with_state_line(tooltip.clone(), CardState::Idle),
+        format!("{tooltip}\nIdle")
+    );
+}
+
+/// FR-011, G10: the state line is the card state's word, except Done, which says it is merged.
+#[test]
+fn the_state_line_is_the_card_states_word_and_done_reads_merged() {
+    for state in CardState::ALL {
+        let expected = match state {
+            CardState::Done => "Done (merged)",
+            other => other.label(),
+        };
+        assert_eq!(state_line(state), expected, "{state:?}");
+    }
+    assert_eq!(
+        CardState::Done.label(),
+        "Done",
+        "the Overview's word is unchanged"
     );
 }
