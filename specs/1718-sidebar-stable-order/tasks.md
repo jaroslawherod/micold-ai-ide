@@ -76,7 +76,19 @@ state together), so they ship as one milestone.
   state-icon contrast test on `CardState` and the five roles (4.5:1 / 3:1).
 - [ ] T017 [P] [US2] `crates/micold-client/tests/features_sidebar.rs` and
   `tests/sidebar_state_icon.rs`: `with_state_line` takes a `CardState` and the tooltip state line is
-  `CardState::label()`; `row_second_line` still reads `type/number · session state` (G6, FR-004).
+  `CardState::label()` (Done reads "Done (merged)", FR-011); `row_second_line` still reads `type/number · session state` (G6, FR-004).
+
+- [ ] T023 [P] [US4] `crates/micold-client/src/ui/material/state_icon.rs` unit tests for `row_tint`
+  (G7, FR-010, FR-011): Needs action, Needs attention and Done give `error_container`,
+  `tertiary_container` and `surface_container_high`; Working and Idle give `None`.
+- [ ] T024 [P] [US4] `crates/micold-client/tests/sidebar_state.rs`: cycling one location through the
+  five card states leaves the row order identical while its tint changes (SC-001, FR-012).
+- [ ] T025 [P] [US4] `crates/micold-client/src/ui/material/composition_contrast.rs`: text on each
+  tint (`on_error_container`, `on_tertiary_container`, `on_surface`) is 4.5:1 and the state glyph
+  3:1, light and dark (G9, SC-005).
+- [ ] T026 [P] [US4] `crates/micold-client/src/ui/material/tree_view.rs` render-free test: a tinted
+  row's hover and selected layers are drawn over the tint and the selected row stays distinct from
+  a merely tinted one (G8, FR-012).
 
 **Implementation**
 
@@ -89,21 +101,30 @@ state together), so they ship as one milestone.
 - [ ] T020 [P] [US2] `crates/micold-client/src/showcase/sections/atoms.rs` and
   `tests/showcase_completeness.rs`: the Running/Blocked/Idle/Unknown poses become the five card states.
 - [ ] T021 [P] [US2] `docs/user-guide/worktrees-and-sessions.md`: describe the five row state icons.
-- [ ] T022 Make T015–T017 green; `mise run gate`.
+- [ ] T027 [US4] `row_tint` in `ui/material/state_icon.rs`; `tree_view.rs` and `ui/sidebar.rs` draw it
+  as the row's resting fill, beneath hover and selected layers, with `on_*_container` text and glyph;
+  Done's tooltip state line reads "Done (merged)" (R7, FR-010 to FR-012).
+- [ ] T028 [P] [US4] `crates/micold-client/src/showcase/sections/atoms.rs` and
+  `tests/showcase_completeness.rs`: five-state poses show the tints, plus a tinted row hovered and
+  selected pose, in both themes.
+- [ ] T029 [P] [US4] `docs/user-guide/worktrees-and-sessions.md`: describe the row tints (what Needs
+  action, Needs attention and Done rows look like, that Done means merged and removable, that a
+  closed unmerged PR is not marked) and that colour never replaces the glyph.
+- [ ] T022 Make T015–T017 and T023–T026 green; `mise run gate`; quickstart §B step 3 via `visual-pass`.
 
-**Checkpoint**: each of the five states has its own glyph on its row.
+**Checkpoint**: each of the five states has its own glyph on its row; Needs action, Needs attention and Done rows are tinted.
 
 ## Dependencies and order
 
 - T001 first. Within a phase: tests (red), then implementation, then the gate task.
 - Phase 3 depends on Phase 2 (`ui/sidebar.rs`, `features/sidebar.rs`, showcase and doc files are
   shared).
-- Parallel: T004–T006, T011, T013; T016–T017, T020–T021.
+- Parallel: T004–T006, T011, T013; T016–T017, T020–T021, T023–T026, T028–T029.
 
 ## Implementation Strategy
 
 MVP: Phase 2 alone makes rows stable (the issue's complaint) with the existing 905 icon. Phase 3
-completes the state indicator for all five states. No Polish phase changes code; quickstart §B
+completes the state indicator for all five states and adds the row tints. No Polish phase changes code; quickstart §B
 results and task ticks belong to the close unit.
 
 ## Milestones
@@ -121,9 +142,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M2 — Five-state row indicator
 
-- **Tasks**: T015–T022
-- **Deliverable**: every location row shows a distinct glyph for each of the five card states, and its tooltip names the same state.
-- **Satisfies**: US2 acceptance scenarios 1–2; FR-004; SC-002
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib state_icon`; quickstart §B step 1
+- **Tasks**: T015–T029
+- **Deliverable**: every location row shows a distinct glyph for each of the five card states, and its tooltip names the same state; Needs action, Needs attention and Done rows carry a colour-only tint (Done quieter) under the hover and selected layers.
+- **Satisfies**: US2 acceptance scenarios 1–2; US4 acceptance scenarios 1–4; FR-004, FR-010, FR-011, FR-012; SC-002, SC-005
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib state_icon`; quickstart §B steps 1 and 3
 - **Depends on**: M1
 - **Tier**: full

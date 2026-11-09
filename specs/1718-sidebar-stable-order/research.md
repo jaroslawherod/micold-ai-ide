@@ -49,3 +49,23 @@ Out of scope per spec (issue alternatives 2 to 5: attention count with jump, sta
   catalogue entry are deleted: nothing draws a group header (FR-007). Rejected: keep them unused (dead code).
 - `ListRow` is replaced by `SidebarEntry`: `sidebar_list()` returns `Vec<SidebarEntry>`; `row_heights`
   and `row_index` take `&[SidebarEntry]`. Rejected: a one-variant enum.
+
+## R7 — Row highlight and the cleanup candidate (decision 2026-11-09)
+
+**Finding**: the "merged, nothing running, can be cleaned up" signal already exists as
+`CardState::Done` (`micold_core::overview::card_state` row 9: PR merged AND `pr_status.removable`
+AND no running session; Working outranks it) with its own glyph `CardDone` (e86c). A closed
+(unmerged) PR is `PrState::Closed`, read but deliberately never removable (feature 813 FR-017).
+
+**Decision**: no sixth state; Done is the cleanup candidate. Row tint by card state, from the
+`Roles` already in `micold_core::tokens` (no new token): Needs action `error_container`, Needs
+attention `tertiary_container` (the louder pair), Done `surface_container_high` (quieter, tonal),
+Working and Idle none. Text and glyph on the tint use the matching `on_*_container` role (Done:
+`on_surface`), checked in `composition_contrast.rs`. The tint is the row's resting background and
+the hover and selected state layers draw over it. The glyph and the "Done (merged)" tooltip state line stay, so
+colour never carries the state alone (FR-004, FR-012). Position is untouched (FR-003).
+
+**Rejected**: (a) a sixth `CardState::CleanupCandidate` (merged-removable OR closed): edits feature
+813's table, ordering, Overview and filters, and widens "can be deleted" to unmerged closed work
+(data-loss risk). (b) Highlight only, drop the cleanup request: leaves merged rows unmarked.
+**Follow-up**: closed-unmerged PRs as candidates, own issue (spec Out of Scope).

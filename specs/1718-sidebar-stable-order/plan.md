@@ -13,7 +13,9 @@ state** (five states) through the existing `StateIcon`, which today draws featur
 SC-002 (it has no Done or Needs attention glyph, and Needs action and Needs attention would read
 alike), so `StateIcon` is re-keyed on `CardState` and reuses `overview_card::state_icon`, whose five
 icons have five code points (`StateRunning` e037, `CardNeedsAction` e645, `CardNeedsAttention`
-e8f4, `CardDone` e86c, `StateIdle` e034). Decisions: [research.md](research.md).
+e8f4, `CardDone` e86c, `StateIdle` e034). Rows also get a colour-only tint by card state (R7, FR-010 to FR-012): Needs action and
+Needs attention a louder container, Done (the cleanup candidate; no sixth state) a quieter tonal
+one. Decisions: [research.md](research.md).
 
 ## Technical Context
 
@@ -67,7 +69,8 @@ crates/micold-core/src/lib.rs                 # module line
 crates/micold-client/src/features/sidebar.rs  # drop SidebarGroup, GroupHeaderRow, ListRow::Header, group_choices, GroupToggled, open_group_of_*; sidebar_list = entries
 crates/micold-client/src/features/navigation.rs # location_nodes over sidebar_entries
 crates/micold-client/src/ui/sidebar.rs        # drop group_header, Header row key, SidebarGroup / ListRow uses; pass card state to StateIcon and with_state_line
-crates/micold-client/src/ui/material/state_icon.rs # re-key on CardState
+crates/micold-client/src/ui/material/state_icon.rs # re-key on CardState; add row_tint (R7)
+crates/micold-client/src/ui/material/tree_view.rs, ui/sidebar.rs # row resting tint under hover/selected layers
 crates/micold-client/src/showcase/sections/{surfaces,atoms}.rs # drop group header poses; five-state icon pose
 crates/micold-material/src/text.rs, type_role_mapping.rs  # delete TypeRole::SidebarGroup and test a_sidebar_group_header_is_twelve_px_bold
 crates/micold-client/src/ui/material/tree_view.rs # delete the group-heading builder and its tests (~210, 239, 1494-1503); rewrite StateIcon tests (~1290-1303) on CardState
@@ -90,6 +93,7 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
 | FR-004 | `StateIcon` on `CardState` (research R1, R2); `row_second_line` unchanged; icon distinctness test (SC-002) |
 | FR-005 | Rows, hover, selection, menus, tags, run groups untouched; existing tests keep passing |
 | FR-006 | `location_nodes` over `sidebar_entries`; `open_group_of_*` and their calls in `reveal_ready` removed; row heights over entries |
+| FR-010, FR-011, FR-012 | `row_tint` (contract G7-G9, research R7); tint beneath state layers in `tree_view.rs`; contrast tests; Done glyph and "Done (merged)" tooltip line kept |
 | FR-008 | Nothing stored; test that old state files load (no `group_choices` key was ever stored) |
 | FR-009 | Docs, `layout_snapshot` re-record, showcase |
 
@@ -102,7 +106,11 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
   the flat list (FR-006); `row_heights` has no header row.
 - **Unit in `state_icon.rs`**: five states give five different glyph code points (SC-002) and
   equal-width slots; each state's role colour is in `composition_contrast.rs`.
+- **Tint** (R7): `row_tint` unit tests (three tinted states, two none, Needs action louder than
+  Done); order unchanged when the tint changes (SC-001); contrast of `on_*_container` over each tint
+  in both themes (SC-005); a render-free test that hover and selected layers wrap the tint.
 - **Geometry gates**: layout snapshot and `gates/*` re-recorded for the flat list.
 - **Tooltip** (F2): the row tooltip's state line is `CardState::label()`; tested in `tests/features_sidebar.rs`
   (`with_state_line` takes a `CardState`).
-- **Quickstart §B**: visual pass of the flat sidebar with all five states.
+- **Quickstart §B**: visual pass of the flat sidebar with all five states, tints in both themes,
+  and a tinted row hovered and selected.
