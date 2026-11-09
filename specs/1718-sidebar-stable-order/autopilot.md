@@ -50,7 +50,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 code is done and committed (T015-T029 ticked, tests-first commit then prod commit, red evidence in
+tdd/cycle-log.md; layout_snapshot fixture accepted deliberately: the tint container adds a tree level).
+Review A: CLEAN (3 MINORs; F1 group tooltip fixed; F2/F3 accepted: glyph keeps tint ink on a selected row,
+selected row drops its tint by design (R7, T026)). Review snapshot for A: cc6798975ec5:e085a674f061.
+Scoped gate: only failure was layout_snapshot, now fixed; re-run scoped gate not yet done.
+Next: (1) scoped gate; (2) review B (autopilot-reviewer, sonnet, rubrics/conformance.md; Verify:
+`cargo test -p micold-client --lib state_icon`) together with the visual pass (visual-pass via
+autopilot-worker: quickstart Part B steps 1 and 3, drive the real flat sidebar if possible, else the showcase
+StateIcon entry, both themes; save evidence in specs/1718-sidebar-stable-order); (3) tick T030; (4) full
+`mise run gate`; (5) add one line to user guide that a selected row shows the selection instead of its tint
+(optional); (6) PR "feat(1718): show five-state row indicator and row tints (#1718)" per tasks/pr.md.
+No PR open yet for M2. #1782 merged (9d65146d1).
 
 ## Open escalation
 
