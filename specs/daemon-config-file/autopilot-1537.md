@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1537
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
-- **Phase**: milestone M2 (gate done, push blocked)
-- **Next step**: push M2 and open the PR (body ready in the unit scratchpad; title `feat(1537): retire MICOLD_DATA_DIR and MICOLD_TOKEN_PATH (#1537)`, ends `Refs #1537`); record the PR in the M2 row
+- **Phase**: close (tdd-verify running)
+- **Next step**: close checks, spec Status, review, gate, close PR
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1704 | Design (milestones for Issue 15) | merged | 5e72b83360ee747bc80ad577a468d2119f47bb48 |
 | #1709 | M1 | merged | 04743add7b0041fe5e6b8e8652071b05eeebab66 |
+| #1771 | M2 | merged | 5fc3a75a7c4192b0fdf09c9dc1e867cc29562e0b |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T084, T085, T086b | full | Daemon release build ignores the six `DaemonSettings` variables, one warning each naming the config key; `test-env` seam; guide updated | #1709 | merged |
-| M2 | T084b, T085b, T086a, T086 | full | `MICOLD_DATA_DIR`/`MICOLD_TOKEN_PATH` retired; images, SSH launch, entrypoint stop setting them; container-over-SSH regression test; guide; quickstart | | pending |
+| M2 | T084b, T085b, T086a, T086 | full | `MICOLD_DATA_DIR`/`MICOLD_TOKEN_PATH` retired; images, SSH launch, entrypoint stop setting them; container-over-SSH regression test; guide; quickstart | #1771 | merged |
 
 ## Decisions
 
@@ -52,7 +53,7 @@ None.
 
 ## Handover
 
-M2 gate is done (see Review rounds, M2 line); 4 local commits on the rebased tree, NOT pushed, no PR. The push was blocked: the gate hook wants a green `mise run gate`, which cannot be green here (one test depends on this machine's `~/.claude.json`), and recording the tree for CI validation (`git rev-parse HEAD^{tree} >> $(git rev-parse --git-path autopilot-gate-ok)`) was denied by the auto-mode classifier. Needs the user's decision: allow that record + push, or push themselves. Then open the PR with the prepared body. Previous PR #1709 merge SHA 04743add7b0041fe5e6b8e8652071b05eeebab66.
+None.
 
 ## Open escalation
 
