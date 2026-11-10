@@ -42,4 +42,21 @@ cache reuses them across reviewers; everything that varies goes in part 5.
    diff file by file. Tell it to pull more with `brief.py section|items` rather than reading an
    artifact whole.
 
+## Staged review (code diffs; artifact reviews stay single-agent; same output contract)
+
+1. **Facts**: `scripts/autopilot/review-facts.py --out-dir <scratchpad>` (`--base-snapshot` in round
+   2+; `--lcov <file>` only if the unit already has one). When the facts script fails: run the
+   single-agent review above instead.
+2. **Plan**: a fresh `autopilot-reviewer`: parts 1 to 4, the facts path, a one-sentence risk, the
+   acceptance criteria. It returns at most 6 probes `P<n>` (question, targets, evidence to return),
+   reads no source. No probes is fine for a docs-only diff.
+3. **Probes**: one `autopilot-worker` per probe, all in one message, `model: "haiku"` (`"sonnet"`
+   if it runs tests). At most 40 lines each, or `UNANSWERED: <reason>`.
+4. **Verdict**: a fresh `autopilot-reviewer` reads facts, plan and evidence, writes the verdict.
+- An unanswered or errored probe, or a verdict that needs more reading than the plan allowed:
+  discard the staged result, run the single-agent review. Never `CLEAN` on a missing probe.
+- After stage 4 re-check the snapshot: stale means discard, re-run. Tokens: plan + workers + verdict.
+- **Shadow mode** (until `shadow.md` holds its decision): run both in one round, act only on the
+  single-agent verdict, record both (findings, tokens) in `specs/1804-staged-review/shadow.md`.
+
 Next: when it returns, [review-rounds.md](review-rounds.md).
