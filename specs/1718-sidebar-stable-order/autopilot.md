@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1750 | Design PR | merged | 01bc227bc6684dbbcc4dc964b53d0290eb704a03 |
 | #1782 | Amend design (tint, cleanup candidate) | merged | 9d65146d1f8bb4dcb76f62c50ce241d65b91b04e |
 | #1791 | M2 | merged | 6d3b88f2d4787e6f3c51c97f61762bbca4f979c5 |
-| (close) | Close: tdd-verify fixes, spec Closed | open | |
+| #1800 | Close: tdd-verify fixes, spec Closed | open | |
 
 ## Milestones
 
