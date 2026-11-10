@@ -218,7 +218,11 @@ fn the_previous_protocol_version_is_refused_naming_both_numbers() {
         "daemon-build",
     )
     .expect_err("the previous version must be refused");
-    let text = format!("{err:?}");
-    assert!(text.contains(&(PROTOCOL_VERSION - 1).to_string()), "{text}");
-    assert!(text.contains(&PROTOCOL_VERSION.to_string()), "{text}");
+    match err {
+        RefusalReason::VersionMismatch { client, daemon, .. } => {
+            assert_eq!(client, PROTOCOL_VERSION - 1);
+            assert_eq!(daemon, PROTOCOL_VERSION);
+        }
+        other => panic!("expected VersionMismatch, got {other:?}"),
+    }
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: pr (M4)
-- **Next step**: CI and merge of M4 PR, then close
+- **Phase**: close
+- **Next step**: gate, review, close PR
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1753 | M1 | merged | 045d2f75cbc3c4098a1a489be95f3cabf2ecdb2d |
 | #1767 | M2 | merged | b7c07fdaff23114f1f42d3f6eace69a63918dc8e |
 | #1789 | M3 | merged | 65af9ee8b8261613467556ca09cdab5a566d0991 |
-| #1790 | M4 | open | |
+| #1790 | M4 | merged | a0b47cc32919f4e8497c3b570f3a175257b5df1d |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012, T020–T022 | full | daemon id, qualified session/worktree rows, protocol 78 + hash, refusal names both versions | #1753 | merged |
 | M2 | T013–T019 | full | Kind::Routed envelope frame, rejection rules | #1767 | merged |
 | M3 | T023–T029 | full | project identity on project rows | #1789 | merged |
-| M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | | pending |
+| M4 | T030–T032 | full | contract file, docs/daemon.md, contract_example test | #1790 | merged |
 
 ## Decisions
 
@@ -83,6 +83,7 @@ None.
 
 - specs/orchestrator/ (spec.md, issues.md) exists only on branch docs/orchestrator-and-web-client-plan, not on main; contracts/ under it must be created by this feature's PR.
 - M3: `Catalog::snapshot` reads git config (2 spawns per project, cached 30 s) with the state lock held, against `snapshot_locked`'s no-git-under-lock note. Plan put the read in `catalog.rs`; moving it to a background refresh is a follow-up.
+- Close (tdd-verify, verdict FAIL on test strength, tdd/verification.md): #3 `Catalog` identity cache (TTL, failed read not cached, `set_daemon_id` clears) has no test and needs a seam; #4 handshake test uses Ping not Hello/Welcome; #5 `contract_example.rs` parses routing.rs source and asserts 5 variants; #6 weak `contains("id")` in daemon_config tests; #7 hand-rolled `git()` helper in project_identity_row.rs; #9 SC-004 remote-normalisation prose untested.
 
 ## Review notes (spec, round 1)
 

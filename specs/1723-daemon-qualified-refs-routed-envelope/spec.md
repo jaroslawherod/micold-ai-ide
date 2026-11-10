@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft
+**Status**: Closed 2026-11-11 — shipped in PRs #1746, #1753, #1767, #1789, #1790
 
 **Input**: GitHub issue #1723, part of epic #1722 (plan: `specs/orchestrator/`). "Add to
 `micold_core::protocol` a daemon id, daemon-qualified refs `(daemon id, local ref)` for session,

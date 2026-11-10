@@ -152,3 +152,21 @@ fn a_routed_frame_must_be_json() {
         .unwrap_err();
     assert!(matches!(err, CodecError::ControlNotJson(_)), "{err}");
 }
+
+#[test]
+fn a_non_string_target_is_invalid_naming_its_kind() {
+    for (target, kind) in [
+        ("true", "a boolean"),
+        ("7", "a number"),
+        ("[\"a\"]", "an array"),
+        (r#"{"id":"a"}"#, "an object"),
+    ] {
+        let body = format!(r#"{{"target":{target},"conn":1,"seq":1,"msg":"Ping"}}"#);
+        let err = RoutedEnvelope::<ClientMsg>::from_json_slice(body.as_bytes())
+            .expect_err("a non-string target must be refused");
+        assert_eq!(
+            err,
+            RoutingError::InvalidTarget(format!("expected a string, got {kind}"))
+        );
+    }
+}
