@@ -2290,8 +2290,8 @@ impl DaemonState {
                 env.retain(|(existing, _)| existing != name);
                 env.push((name.to_string(), dir.display().to_string()));
                 // T096/T098: seeded copies beside the sign-in, never links, never copied back.
-                let user_claude_json = directories::UserDirs::new()
-                    .map(|dirs| dirs.home_dir().join(".claude.json"));
+                let user_claude_json =
+                    directories::UserDirs::new().map(|dirs| dirs.home_dir().join(".claude.json"));
                 if let Err(e) =
                     seed_host_config_dir(data_dir, cli, user_claude_json.as_deref(), false)
                 {

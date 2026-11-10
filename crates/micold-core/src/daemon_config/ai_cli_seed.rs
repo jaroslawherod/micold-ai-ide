@@ -234,7 +234,9 @@ mod tests {
 
         // "Seed again from this computer".
         seed_host_config_dir(&data, &claude, Some(&user), true).unwrap();
-        assert!(std::fs::read_to_string(&seeded).unwrap().contains("mcpServers"));
+        assert!(std::fs::read_to_string(&seeded)
+            .unwrap()
+            .contains("mcpServers"));
     }
 
     #[test]
@@ -278,8 +280,11 @@ mod tests {
         );
 
         // Codex records folder trust in its copy; an unchanged source leaves it.
-        std::fs::write(&copy, "model = \"a\"\n[projects.\"/p\"]\ntrust_level = \"trusted\"\n")
-            .unwrap();
+        std::fs::write(
+            &copy,
+            "model = \"a\"\n[projects.\"/p\"]\ntrust_level = \"trusted\"\n",
+        )
+        .unwrap();
         seed_host_config_dir(&data, &codex, None, false).unwrap();
         assert!(std::fs::read_to_string(&copy).unwrap().contains("trusted"));
 
@@ -305,7 +310,10 @@ mod tests {
         let mut claude = cli(CliId::ClaudeCode);
         claude.settings_file = Some(source);
         seed_host_config_dir(&data, &claude, None, false).unwrap();
-        assert_eq!(std::fs::read_to_string(dir.join("settings.json")).unwrap(), "configured");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("settings.json")).unwrap(),
+            "configured"
+        );
         assert_eq!(std::fs::read_to_string(&users).unwrap(), "user");
     }
 
@@ -360,10 +368,16 @@ mod tests {
     #[test]
     fn a_sign_ins_expiry_is_read_per_cli() {
         let claude = r#"{"claudeAiOauth":{"expiresAt":1700000000000}}"#;
-        assert_eq!(sign_in_expires_at_secs(CliId::ClaudeCode, claude), Some(1_700_000_000));
+        assert_eq!(
+            sign_in_expires_at_secs(CliId::ClaudeCode, claude),
+            Some(1_700_000_000)
+        );
         let payload = URL_SAFE_NO_PAD.encode(r#"{"exp":1800000000}"#);
         let codex = format!(r#"{{"tokens":{{"access_token":"h.{payload}.s"}}}}"#);
-        assert_eq!(sign_in_expires_at_secs(CliId::Codex, &codex), Some(1_800_000_000));
+        assert_eq!(
+            sign_in_expires_at_secs(CliId::Codex, &codex),
+            Some(1_800_000_000)
+        );
         assert_eq!(sign_in_expires_at_secs(CliId::Opencode, claude), None);
         assert_eq!(sign_in_expires_at_secs(CliId::ClaudeCode, "{}"), None);
     }
