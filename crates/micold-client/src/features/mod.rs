@@ -364,6 +364,7 @@ pub mod daemons;
 pub mod daemons_kube;
 pub mod daemons_start;
 pub mod effort_picker;
+pub mod header_bar;
 pub mod help;
 pub mod history;
 pub mod jira_status;

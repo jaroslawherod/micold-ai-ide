@@ -41,7 +41,8 @@ pub struct Toolbar<'a, M> {
     leading: Option<Element<'a, M>>,
     leading_fixed: Vec<Element<'a, M>>,
     centre: Option<Element<'a, M>>,
-    actions: Vec<Element<'a, M>>,
+    /// Each action with, when it gives way, its rank and floor width.
+    actions: Vec<(Element<'a, M>, Option<(u8, f32)>)>,
     elevated: bool,
 }
 
@@ -96,16 +97,34 @@ impl<'a, M: 'a> Toolbar<'a, M> {
 
     /// Append a trailing action element.
     pub fn action(mut self, action: impl Into<Element<'a, M>>) -> Self {
-        self.actions.push(action.into());
+        self.actions.push((action.into(), None));
+        self
+    }
+
+    /// Append a trailing action that gives way at `rank` (lower first, before the centre and the
+    /// leading child) down to `floor` dp wide: a cluster whose own `GiveWayRow` hides its parts as
+    /// the room shrinks (feature 1793, the context ring and the Changes button).
+    pub fn action_giving_way(
+        mut self,
+        rank: u8,
+        floor: f32,
+        action: impl Into<Element<'a, M>>,
+    ) -> Self {
+        self.actions.push((action.into(), Some((rank, floor))));
         self
     }
 
     /// Append several trailing action elements.
     pub fn actions(mut self, actions: Vec<Element<'a, M>>) -> Self {
-        self.actions.extend(actions);
+        self.actions.extend(actions.into_iter().map(|a| (a, None)));
         self
     }
 }
+
+/// The leading child and the centre give way after the actions that opted in (feature 1793: the
+/// ring's text, then the Changes label), in the order they always have: centre first.
+const RANK_CENTRE: u8 = 2;
+const RANK_LEADING: u8 = 3;
 
 /// A slot that keeps its width, in `group`.
 fn kept(group: Group) -> Slot {
@@ -136,7 +155,7 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
             lane = lane.push(mark, kept(Group::Leading));
         }
         if let Some(leading) = t.leading {
-            lane = lane.push(leading, shortens(1, Group::Leading));
+            lane = lane.push(leading, shortens(RANK_LEADING, Group::Leading));
         }
         for item in t.leading_fixed {
             lane = lane.push(item, kept(Group::Leading));
@@ -146,12 +165,19 @@ impl<'a, M: 'a> From<Toolbar<'a, M>> for Element<'a, M> {
             // `ICON_TARGET` square, still pressable (FR-010).
             let centre_slot = Slot {
                 floor: Floor::Width(anatomy::app_bar::ICON_TARGET),
-                ..shortens(0, Group::Centre)
+                ..shortens(RANK_CENTRE, Group::Centre)
             };
             lane = lane.push(centre, centre_slot);
         }
-        for action in t.actions {
-            lane = lane.push(action, kept(Group::Trailing));
+        for (action, gives_way) in t.actions {
+            let slot = match gives_way {
+                Some((rank, floor)) => Slot {
+                    floor: Floor::Width(floor),
+                    ..shortens(rank, Group::Trailing)
+                },
+                None => kept(Group::Trailing),
+            };
+            lane = lane.push(action, slot);
         }
 
         let elevated = t.elevated;
