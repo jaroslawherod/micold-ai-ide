@@ -1501,7 +1501,10 @@ impl State {
             | Message::Composer(_)
             | Message::PermissionPrompts(_)
             | Message::NoOp => {}
-            Message::HeaderBar(msg) => self.header_bar.update(msg),
+            Message::HeaderBar(msg) => {
+                let outcomes = crate::features::header_bar::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

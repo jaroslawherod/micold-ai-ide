@@ -86,6 +86,13 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "header_bar",
+        "session_strip",
+        "session_working — the top bar's Working badge reads the same pure question the strip's \
+         status answers (is the attached process running), so the two cannot disagree; nothing of \
+         the strip's state is touched (feature 1793)",
+    ),
+    (
         "setup",
         "structured_transcript",
         "Follow — the setup output view follows its tail by the transcript's own rule (at the end \
