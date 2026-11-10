@@ -51,7 +51,11 @@ fn the_meter_status_and_changes_come_before_settings_and_the_menu() {
         .map(|(_, x)| *x)
         .expect("the app menu is drawn");
     assert!(
-        ring < status && status < changes && changes < worktree_menu && worktree_menu < settings && settings < menu,
+        ring < status
+            && status < changes
+            && changes < worktree_menu
+            && worktree_menu < settings
+            && settings < menu,
         "order: ring {ring}, status {status}, Changes {changes}, Settings {settings}, menu {menu}"
     );
 }

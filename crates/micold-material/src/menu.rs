@@ -505,12 +505,17 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         }
         let mut content = column![items];
         if let Some(controls) = controls {
-            content = content.push(
-                container(controls).padding(iced::Padding::from([spacing::XS, spacing::MD])),
-            );
+            content = content
+                .push(container(controls).padding(iced::Padding::from([spacing::XS, spacing::MD])));
         }
         let panel = super::fade(
-            menu_panel(content, Length::Fixed(PANEL_WIDTH), r, true, panel_padding()),
+            menu_panel(
+                content,
+                Length::Fixed(PANEL_WIDTH),
+                r,
+                true,
+                panel_padding(),
+            ),
             open,
             FADE,
             super::SurfaceKind::Menu.tone(r),
