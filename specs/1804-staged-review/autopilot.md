@@ -44,7 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code M1 B | 1 |  |  | same | CLEAN (2 MINOR: char literals fixed; no tdd cycle-log in this feature) |
 | Code M2 A | 1 |  |  | b4cf939544170bab3a03969ffdb29ac69e6d0736:547ce702ba18af1020797f46d9adcf45462d474e | 3 MINOR: --base-snapshot value named (fixed); NEEDS-MORE token and tighter greps left (wording contract) |
 | Code M2 B | 1 |  |  | same | CLEAN |
-| Code M2 A+B | 2 | post-rebase full diff | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (1 MINOR left: dense lines at ceiling) |
+| Code M2 A | 2 | M2 | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (post-rebase full diff; 1 MINOR left: dense lines at ceiling) |
+| Code M2 B | 2 | M2 | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (post-rebase full diff, conformance) |
 
 ## Declined review findings
 
