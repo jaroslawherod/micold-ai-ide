@@ -13,6 +13,7 @@
 ### Session 2026-11-10
 
 - Q: Does the `+` menu's terminal entry open a new terminal each time or focus an existing one? → A: A new terminal tab each time, like the former add-terminal icon. _(agent-resolved: specs/1793-structured-view-header-one-row/spec.md#User Story 3 — "replaces the two former add icons")_
+- Q: The session bar's background-tasks accordion and mode label have no home in the one-row header; may they stay? → A: Yes, as a conditional slim row inside the transcript body, shown only when there is something to show; it is part of the body, not a header row. _(human, option 1 of the tasks-unit escalation; research R6)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -26,7 +27,7 @@ A user opens a worktree's structured view. Today four rows of header sit above t
 
 **Acceptance Scenarios**:
 
-1. **Given** a selected session, **When** the structured view is shown, **Then** exactly one header row (the tab row) precedes the event list and no title row, `Open in terminal` button, `Show raw events` control, second `+` icon or view toggles appear in the content area.
+1. **Given** a selected session, **When** the structured view is shown, **Then** exactly one header row (the tab row) precedes the event list (a conditional slim row inside the transcript body, holding the background-tasks accordion and mode label only when present, is part of the body, not a header row) and no title row, `Open in terminal` button, `Show raw events` control, second `+` icon or view toggles appear in the content area.
 2. **Given** 3 events are hidden, **When** the view is shown, **Then** a `3 hidden` chip appears at the end of the tab row; **Given** no events are hidden, **Then** the chip is absent.
 3. **Given** a session is working, **When** the tab row is shown, **Then** the session's tab shows a small activity dot and no `running` text appears.
 4. **Given** the user activates the `N hidden` chip, **Then** the hidden events are shown (the former `Show` action).
@@ -114,7 +115,7 @@ At narrow widths the ring's text drops first, then the `Changes` label (the icon
 
 ### Functional Requirements
 
-- **FR-001**: The structured view's content-area header MUST be a single 40 px row containing the session tabs, one `+` control and, only when events are hidden, a `N hidden` chip at the end.
+- **FR-001**: The structured view's content-area header MUST be a single 40 px row (a conditional in-body row for the background-tasks accordion and mode label is not a header row) containing the session tabs, one `+` control and, only when events are hidden, a `N hidden` chip at the end.
 - **FR-002**: The title row MUST be removed; the breadcrumbs MUST remain the only place the title is shown.
 - **FR-003**: The status badge (`Idle`/`Working`), the `Changes` button, the context meter with cost and the worktree `⋮` menu MUST appear in the top bar only when a worktree or session is selected, and MUST be hidden on Overview.
 - **FR-004**: The top bar order MUST be: context meter, status, Changes, worktree `⋮`, then the app's settings and menu.
@@ -140,7 +141,7 @@ At narrow widths the ring's text drops first, then the `Changes` label (the icon
 
 ### Measurable Outcomes
 
-- **SC-001**: Header rows above the first event drop from up to 4 to exactly 1 (40 px) in the structured view.
+- **SC-001**: Header rows above the first event drop from up to 4 to exactly 1 (40 px) in the structured view; the conditional in-body tasks/mode row is not counted.
 - **SC-002**: Every action reachable before (view toggles, raw events, hidden-events toggle, open in terminal, add session) is reachable after, in at most two clicks from the top bar or tab row.
 - **SC-003**: Status, Changes and context meter are visible without scrolling or opening a menu whenever a worktree or session is selected, and absent on Overview.
 - **SC-004**: At a wide and a narrow window width, no top-bar or tab-row item overlaps another, and collapse follows the specified order.
