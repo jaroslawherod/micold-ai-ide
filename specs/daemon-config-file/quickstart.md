@@ -101,3 +101,16 @@ with reach per token; no secret value appears anywhere (SC-005).
 ## 8. Gate
 
 `mise run gate` green; `scripts/check-user-guide-updated.sh` satisfied by the user-guide changes.
+
+## Run results: Issue 15 (#1537, retired `MICOLD_*` start-up variables)
+
+Recorded by the close unit, 2026-11-10.
+
+- Not run end to end: §§2 to 5 need a Podman daemon with the `:dev` image, a test cluster, an SSH
+  host and two GitHub PATs, none of which the autopilot machine has. The §2 container check
+  (`podman inspect` shows no `MICOLD_*` env) is not run; `container_over_ssh_without_data_dir.rs`
+  (T086a) covers the container-over-SSH launch without `MICOLD_DATA_DIR`.
+- Run here: the Issue 15 tests of both milestones, and `mise run gate` (see the close PR body for
+  its result and the one environment-dependent failure).
+- A human with the prerequisites still owes the end-to-end run of §2 for the container and SSH
+  kinds after this lands.
