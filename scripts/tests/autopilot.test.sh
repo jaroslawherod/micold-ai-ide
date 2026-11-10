@@ -636,6 +636,10 @@ check "hook blocks a direct merge of this branch's PR" 2 'use scripts/autopilot/
 check "hook allows wait-merge.sh for this branch's PR" 0 '' hook "scripts/autopilot/wait-merge.sh 12"
 check "hook allows wait-merge.sh --squash for this branch's PR" 0 '' hook "scripts/autopilot/wait-merge.sh 12 --squash"
 check "hook allows gh pr merge --help" 0 '' hook "gh pr merge --help"
+check "hook blocks a merge chained after --help" 2 'use scripts/autopilot/wait-merge.sh' hook "gh pr merge --help; gh pr merge 12"
+check "hook blocks a merge on a later line" 2 'use scripts/autopilot/wait-merge.sh' hook "echo hi
+gh pr merge 12"
+check "hook blocks a merge after then" 2 'use scripts/autopilot/wait-merge.sh' hook "if true; then gh pr merge 12; fi"
 check "hook allows merge text inside echo" 0 '' hook "gh pr view 12 && echo gh pr merge now"
 check "hook allows quoted merge text" 0 '' hook "grep 'gh pr merge' notes.md"
 check "hook blocks another flow's PR" 2 '#13 is not this flow' hook "gh pr comment 13 --body hi"
