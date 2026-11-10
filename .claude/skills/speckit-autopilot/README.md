@@ -130,7 +130,7 @@ flowchart TD
     CI -.->|"red outside this flow"| ESC
     CI -->|"no checks"| DIAG["Conflict? Approval? Outage?"]
     DIAG --> CI
-    CI -->|green| MERGE["gh pr merge --rebase, confirm MERGED"]
+    CI -->|green| MERGE["wait-merge.sh: verdict guard, then merge pinned to the head, confirm MERGED"]
     MERGE --> SHIP(["Milestone shipped on main"])
 
     classDef human fill:#ffe0e0,stroke:#c00,stroke-width:2px,color:#000

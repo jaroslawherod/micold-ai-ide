@@ -5,7 +5,9 @@ context that wrote it. Give it paths, not a summary. It never edits.
 
 Before each round, run `scripts/autopilot/review-snapshot.sh` and record the `<tree>:<head>` it
 prints in the ledger's *Review rounds*. Nothing needs committing: the snapshot holds the working
-tree as is. Use `Agent` with `subagent_type: autopilot-reviewer` (`general-purpose` when your agent
+tree as is. When the round is over and its fixes are committed, record the verdict bound to the
+reviewed head with `scripts/autopilot/record-verdict.sh`, before the ledger commit; the merge is
+refused for any other head ([merge.md](merge.md), *A verdict belongs to one head*). Use `Agent` with `subagent_type: autopilot-reviewer` (`general-purpose` when your agent
 types lack it) and a description that names the review (`Review B M2 042`).
 
 `model`: omit for round 1 of an artifact review in the feature flow. `"sonnet"` for review B in

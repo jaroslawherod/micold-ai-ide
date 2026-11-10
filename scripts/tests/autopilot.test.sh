@@ -215,13 +215,16 @@ check "handoff lists an unmerged commit" 1 '1 commit\(s\) not on origin/main' "$
 # --- wait-merge.sh -----------------------------------------------------------------------------
 export AUTOPILOT_POLL=0 AUTOPILOT_CHECKLESS_AFTER=0
 wm() { d="$(new_repo)"; export GH_FIXTURES="$d/fx" AUTOPILOT_LOG_DIR="$d"; }
+# A merge runs verdict-guard.sh, which needs a real-looking head and a pushed branch (no ledger: unguarded).
+merge_ready() { local f; for f in "$d/fx"/pr-5.json*; do sed 's/"h1"/"1111111111111111111111111111111111111111"/' "$f" > "$f.x" && mv "$f.x" "$f"; done
+  git -C "$d/wt" push -q origin wt; cd "$d/wt"; }
 
 wm; pr_json "$d/fx" 5 MERGED > "$d/fx/pr-5.json"
 check "wait-merge: already merged" 0 '^MERGED 5 abc123' "$S/wait-merge.sh" 5
 
 wm; pr_json "$d/fx" 5 OPEN IN_PROGRESS "" > "$d/fx/pr-5.json"
 pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json.8"
-pr_json "$d/fx" 5 MERGED COMPLETED SUCCESS > "$d/fx/pr-5.merged.json"
+pr_json "$d/fx" 5 MERGED COMPLETED SUCCESS > "$d/fx/pr-5.merged.json"; merge_ready
 check "wait-merge: waits, then merges on green" 0 '^MERGED 5 abc123' "$S/wait-merge.sh" 5
 
 wm; pr_json "$d/fx" 5 OPEN > "$d/fx/pr-5.json"
@@ -248,7 +251,7 @@ wm; pr_json "$d/fx" 5 OPEN > "$d/fx/pr-5.json"; echo '[]' > "$d/fx/runs.json"
 check "wait-merge: checkless with no run" 3 '^CHECKLESS 5 no-run' "$S/wait-merge.sh" 5
 
 wm; pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json"
-echo "This branch can't be rebased" > "$d/fx/merge-5.fail"
+echo "This branch can't be rebased" > "$d/fx/merge-5.fail"; merge_ready
 check "wait-merge: reports a refused merge" 4 "^MERGE-FAILED 5 This branch can't be rebased" "$S/wait-merge.sh" 5
 
 wm; pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json"
@@ -511,11 +514,17 @@ ledger specs/042-x/autopilot.md wt 4-milestones 11; git add -A; git commit -qm l
 echo '{"headRefName":"wt"}' > "$d/fx/pr-12.json"; echo '{"headRefName":"other"}' > "$d/fx/pr-13.json"
 check "hook blocks --delete-branch" 2 'never pass --delete-branch' hook "gh pr merge 11 --rebase --delete-branch"
 check "hook blocks -d" 2 'never pass --delete-branch' hook "gh pr merge 11 -d"
-check "hook reads -d only from the merge's own arguments" 0 '' hook "test -d x && gh pr merge 11 --rebase"
+check "hook reads -d only from the wait-merge call's own arguments" 0 '' hook "wait-merge.sh 11 test -d x"
 check "hook blocks --admin" 2 'never merge with --admin' hook "gh pr merge 11 --admin"
 check "hook blocks removing the worktree" 2 'never remove a worktree' hook "git worktree remove ."
 check "hook allows a PR in the ledger" 0 '' hook "scripts/autopilot/wait-merge.sh 11"
-check "hook allows a PR from this branch" 0 '' hook "gh pr merge 12 --rebase"
+check "hook blocks a direct merge of a PR in the ledger" 2 'use scripts/autopilot/wait-merge.sh' hook "test -d x && gh pr merge 11 --rebase"
+check "hook blocks a direct merge of this branch's PR" 2 'use scripts/autopilot/wait-merge.sh' hook "gh pr merge 12 --rebase"
+check "hook allows wait-merge.sh for this branch's PR" 0 '' hook "scripts/autopilot/wait-merge.sh 12"
+check "hook allows wait-merge.sh --squash for this branch's PR" 0 '' hook "scripts/autopilot/wait-merge.sh 12 --squash"
+check "hook allows gh pr merge --help" 0 '' hook "gh pr merge --help"
+check "hook allows merge text inside echo" 0 '' hook "gh pr view 12 && echo gh pr merge now"
+check "hook allows quoted merge text" 0 '' hook "grep 'gh pr merge' notes.md"
 check "hook blocks another flow's PR" 2 '#13 is not this flow' hook "gh pr comment 13 --body hi"
 check "hook blocks waiting on another flow's PR" 2 '#13 is not this flow' hook "scripts/autopilot/wait-merge.sh 13"
 check "hook blocks a merge through gh api" 2 'do not merge through gh api' hook "gh api -X PUT repos/o/r/pulls/11/merge"

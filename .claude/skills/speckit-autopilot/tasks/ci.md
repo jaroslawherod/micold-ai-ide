@@ -34,7 +34,7 @@ Trust `gh pr view <n> --json state -q .state`, not the exit status of `gh pr mer
 | Problem | Fix |
 |---|---|
 | `This branch can't be rebased` while the PR reads `MERGEABLE` | Commits already on `main`. Run `git rebase origin/main` (git skips them), `git push --force-with-lease`, wait for green. |
-| Branch has a merge commit from `main` | Squash the green head: `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash -f sha=<head>`. |
+| Branch has a merge commit from `main` | Squash the green head: `scripts/autopilot/wait-merge.sh <n> --squash` (it runs the verdict guard and pins the merge to the head it checked). |
 | "base branch policy prohibits the merge" | Usually a missing `workflow` token scope on a PR touching `.github/workflows`. Escalate (category 4) with the user's command: `gh auth refresh -s workflow`. |
 
 Next: run `wait-merge.sh` again ([merge.md](merge.md)).

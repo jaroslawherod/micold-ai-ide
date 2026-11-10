@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Wait for a PR's `ci complete` check on its current head, then rebase-merge it on green.
 #
-# Usage: wait-merge.sh <pr> [--no-merge]
+# Usage: wait-merge.sh <pr> [--no-merge|--squash]
+#   --squash   squash-merge instead of rebase-merge
+#   --no-merge stop at green and merge nothing (the verdict guard is skipped)
+# Before any merge it runs verdict-guard.sh: a head whose approved review covers another head is refused.
 # Runs for as long as CI does, so start it detached and wait on its last line (see SKILL.md).
 #
 # Last line, and exit code:
@@ -12,6 +15,7 @@
 #                                       reason: conflicting | action_required <run-ids> | no-run
 #   MERGE-FAILED <pr> <message>      4  green, but `gh pr merge` refused
 #   CLOSED <pr>                      5  the PR was closed while waiting
+#   VERDICT-REFUSED <pr> ...         7  green, but the review verdict does not cover the head (see verdict-guard.sh)
 #   TIMEOUT <pr> <what>              6  no result within AUTOPILOT_MAX_WAIT seconds (default 6 h; gh failing, CI stuck).
 #                                       Each wake after a timeout re-writes the orchestrator's cache (about 170k cost_eq at 100k of
 #                                       context): a 2 h cap woke it four times in one run while CI sat queued for 2 h 44 min.
@@ -19,8 +23,9 @@
 # Never approves runs, closes, reopens or pushes: those stay with the caller.
 set -uo pipefail
 
-pr="${1:?usage: wait-merge.sh <pr> [--no-merge]}"
-merge=1; [ "${2:-}" = --no-merge ] && merge=0
+pr="${1:?usage: wait-merge.sh <pr> [--no-merge|--squash]}"
+merge=1; method=--rebase
+case "${2:-}" in --no-merge) merge=0 ;; --squash) method=--squash ;; esac
 poll="${AUTOPILOT_POLL:-20}"
 checkless_after="${AUTOPILOT_CHECKLESS_AFTER:-300}"
 max_wait="${AUTOPILOT_MAX_WAIT:-21600}"
@@ -104,7 +109,18 @@ if [ "$conclusion" != SUCCESS ]; then
 fi
 
 [ "$merge" -eq 0 ] && { echo "GREEN $pr"; exit 0; }
-if ! err="$(gh pr merge "$pr" --rebase 2>&1)"; then
+# The guard reads the head fresh; the merge is pinned to that head, so a push in between is refused.
+guard="$("$(dirname "${BASH_SOURCE[0]}")/verdict-guard.sh" "$pr" 2>&1)"; gcode=$?
+glast="$(tail -n 1 <<<"$guard")"
+if [ "$gcode" -ne 0 ]; then
+  case "$glast" in VERDICT-REFUSED*) echo "$glast" ;; *) echo "VERDICT-REFUSED $pr reviewed none current unknown re-review: guard failed: $glast" ;; esac
+  exit 7
+fi
+case "$glast" in
+  ALLOWED*) head="${glast##* }" ;;
+  *) head="$(view headRefOid .headRefOid)" ;;
+esac
+if ! err="$(gh pr merge "$pr" "$method" --match-head-commit "$head" 2>&1)"; then
   [ "$(view state .state)" = MERGED ] && { merged_line; exit 0; }
   echo "MERGE-FAILED $pr $(echo "$err" | grep -v '^\s*$' | head -1)"
   exit 4

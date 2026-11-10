@@ -14,6 +14,10 @@ When: a reviewer returned.
   against the finding and record `fixed, prose only` in the ledger. A fix that adds or changes a
   claim about behaviour, evidence or results is not prose only: re-review it.
 
+After the fixes are committed, record each round's verdict with `scripts/autopilot/record-verdict.sh`
+(head = `git rev-parse HEAD`, before the ledger commit). A fix committed after the record makes the
+verdict stale: review it and record again ([merge.md](merge.md), *A verdict belongs to one head*).
+
 ## Round 2 and later
 
 A re-review checks the fix diff, not the whole artifact again, on `model: "sonnet"`. Its prompt has
