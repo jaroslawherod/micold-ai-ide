@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1804
 - **Worktree branch**: feat/1804_autopilot-staged-review-facts-by-code-plan-by
 - **Started**: 2026-11-10
-- **Phase**: 4-milestone M1
-- **Next step**: M1 PR open, wait CI and merge
+- **Phase**: 4-milestone M2
+- **Next step**: M2 reviews and gate, open PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1809 | Design | merged | e82cc8df6bddd76f87e2d0786098f9d4ceaf8b28 |
+| #1820 | M1 | merged | 547ce702ba18af1020797f46d9adcf45462d474e |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 (incl. T007a) | full | review-facts.py writes the facts file; tests in autopilot.test.sh | #1820 | open |
+| M1 | T001–T010 (incl. T007a) | full | review-facts.py writes the facts file; tests in autopilot.test.sh | #1820 | merged |
 | M2 | T011–T015 | full | three skill files describe the staged flow, fallback, shadow | #… | pending |
 
 ## Decisions

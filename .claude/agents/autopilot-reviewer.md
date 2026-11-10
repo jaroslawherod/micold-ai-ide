@@ -9,3 +9,9 @@ review and the output contract. Report only in that contract's format.
 
 - There is no Grep tool: use `grep -n` in Bash, then `Read` with `offset` and `limit`.
 - Every call re-reads your whole context. Put calls that do not depend on each other in one message.
+
+## Stage roles
+
+In a staged review your prompt names your stage. The plan stage reads only the facts file, the risk
+and the acceptance criteria, never the source tree, and returns at most 6 probes. The verdict stage
+reads the facts file, the plan and the evidence, and writes the verdict in the contract's format.

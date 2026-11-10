@@ -49,4 +49,11 @@ red gate's fixes changed code after its snapshot.
 At most 3 counted rounds. A last round that still finds a BLOCKER or
 MAJOR is an escalation (category 5); never run one more.
 
+## Staged reviews
+
+The rules above and the round limit apply unchanged. Round 2+ staged: pass the last snapshot as
+`review-facts.py --base-snapshot <snap>` (the same `review-snapshot.sh diff` input). A stale or
+missing snapshot discards the staged result and re-runs the round. In shadow mode the round limit
+and every action follow the single-agent verdict; the staged verdict is only recorded.
+
 Next: the task that dispatched the review.

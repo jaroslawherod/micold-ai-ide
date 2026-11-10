@@ -44,14 +44,14 @@ description: "Tasks: staged review for speckit-autopilot"
 
 ### Tests first (must fail before T012-T014)
 
-- [ ] T011 [US2] Add grep assertions to `scripts/tests/autopilot.test.sh` over `.claude/agents/autopilot-reviewer.md`, `.claude/skills/speckit-autopilot/tasks/review.md`, `.claude/skills/speckit-autopilot/tasks/review-rounds.md`: 6-probe and 40-line limits, "never `CLEAN`" on an unanswered probe, fallback to single-agent on script failure, stale-snapshot re-run (unit re-checks the snapshot after stage 4), a verdict that needs more reading falls back, token accounting (staged total = plan + workers + verdict), whether the unit passes `--lcov`, shadow mode and `shadow.md`, round-limit rules count the single-agent verdict, `--base-snapshot` for round 2+ (FR-004, FR-005, FR-007, FR-010, FR-011, FR-013)
+- [x] T011 [US2] Add grep assertions to `scripts/tests/autopilot.test.sh` over `.claude/agents/autopilot-reviewer.md`, `.claude/skills/speckit-autopilot/tasks/review.md`, `.claude/skills/speckit-autopilot/tasks/review-rounds.md`: 6-probe and 40-line limits, "never `CLEAN`" on an unanswered probe, fallback to single-agent on script failure, stale-snapshot re-run (unit re-checks the snapshot after stage 4), a verdict that needs more reading falls back, token accounting (staged total = plan + workers + verdict), whether the unit passes `--lcov`, shadow mode and `shadow.md`, round-limit rules count the single-agent verdict, `--base-snapshot` for round 2+ (FR-004, FR-005, FR-007, FR-010, FR-011, FR-013)
 
 ### Implementation
 
-- [ ] T012 [P] [US2] Add a "Stage roles" paragraph to `.claude/agents/autopilot-reviewer.md` (plan stage reads only facts; verdict stage reads facts, plan, evidence); leave the verdict-format text untouched (FR-007)
-- [ ] T013 [P] [US2] Describe the four-stage flow in `.claude/skills/speckit-autopilot/tasks/review.md` per `contracts/staged-review.md`: stage prompts, one worker per probe on `haiku`/`sonnet` in one message, limits, fallback, shadow mode paragraph; code-diff reviews only (FR-004..007, FR-011)
-- [ ] T014 [P] [US2] Update `.claude/skills/speckit-autopilot/tasks/review-rounds.md`: round 2+ staged reviews use `review-snapshot.sh diff <snap>` via `--base-snapshot`; round-limit and snapshot rules apply unchanged; stale snapshot discards the staged result (FR-006, FR-010)
-- [ ] T015 [US2] Run the quickstart step 4 fixture (unchecked error path) once through the documented flow and record in the PR body that the verdict reports it with probe evidence; also run `brief.py` and `checkpoint.sh` readers on the fixture's verdict; run `mise run gate`
+- [x] T012 [P] [US2] Add a "Stage roles" paragraph to `.claude/agents/autopilot-reviewer.md` (plan stage reads only facts; verdict stage reads facts, plan, evidence); leave the verdict-format text untouched (FR-007)
+- [x] T013 [P] [US2] Describe the four-stage flow in `.claude/skills/speckit-autopilot/tasks/review.md` per `contracts/staged-review.md`: stage prompts, one worker per probe on `haiku`/`sonnet` in one message, limits, fallback, shadow mode paragraph; code-diff reviews only (FR-004..007, FR-011)
+- [x] T014 [P] [US2] Update `.claude/skills/speckit-autopilot/tasks/review-rounds.md`: round 2+ staged reviews use `review-snapshot.sh diff <snap>` via `--base-snapshot`; round-limit and snapshot rules apply unchanged; stale snapshot discards the staged result (FR-006, FR-010)
+- [x] T015 [US2] Run the quickstart step 4 fixture (unchecked error path) once through the documented flow and record in the PR body that the verdict reports it with probe evidence; also run `brief.py` and `checkpoint.sh` readers on the fixture's verdict; run `mise run gate`
 
 ## Post-merge (not a milestone): User Story 3 - Shadow run and decision (P2)
 
