@@ -10,6 +10,15 @@
    and its rows carry `daemon`.
 4. `mise run gate` before the push.
 
+### Results (close unit, 2026-11-10, tree at origin/main after M4)
+
+1. `protocol_roundtrip` (50 passed), `handshake` (10 + 13 passed), `schema_hash`, `routing` and
+   `project_identity` (32 passed with `contract_example`, run as `--test main --test contract_example`).
+2. `contract_example`: 2 passed (in the run above).
+3. `micold-daemon --test unwrapped_client`: 2 passed. The filter form `unwrapped_client` matches no test
+   name: `unwrapped_client` is a test target, so run it as `--test unwrapped_client`.
+4. `mise run gate`: green in each milestone PR (#1753, #1767, #1789, #1790) and in the close PR.
+
 ## B. Visual pass
 
 None: no UI changes.
