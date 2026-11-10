@@ -32,7 +32,7 @@ parsed="$(jq -r '
      elif ($run | length) > 0 then "CI-RUNNING"
      elif .autoMergeRequest != null then "ARMED"
      else "GREEN" end) as $s
-  | "\($s) \($since)"' <<<"$json")" || { echo "PR $pr STATE UNKNOWN unparsable gh output" >&2; exit 2; }
+  | "\($s) \($since)"' <<<"$json" 2>/dev/null)" || { echo "PR $pr STATE UNKNOWN unparsable gh output" >&2; exit 2; }
 read -r state since <<<"$parsed"
 [ -n "${state:-}" ] || { echo "PR $pr STATE UNKNOWN empty state" >&2; exit 2; }
 
