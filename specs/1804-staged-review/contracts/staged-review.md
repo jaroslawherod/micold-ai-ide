@@ -10,3 +10,5 @@ Applies to code-diff reviews (milestone review A and B, chore, bug fix diffs, ro
 Fallback (FR-011): facts failure, any `UNANSWERED`/errored probe, discards the staged result and runs the single-agent review. A stale snapshot discards the result and re-runs the round on a fresh snapshot (staged again, or single-agent if the facts script fails). A staged `CLEAN` with a missing probe is never accepted. Probes are bounded to the plan; a verdict that needs more reading may name it as a finding and the unit falls back.
 
 Shadow mode: the unit dispatches the single-agent review and the staged flow in the same round; actions follow only the single-agent verdict; both verdicts, finding counts and cache-read tokens go to `shadow.md`. Round-limit and snapshot rules (FR-010) count the single-agent verdict. Shadow ends after three code-diff PRs (the next three milestone or chore reviews after this change merges) and the decision is recorded (FR-012, FR-013).
+
+Token accounting: the staged total is the sum of stage 2, every probe worker and stage 4. After stage 4 the unit re-checks the snapshot with `review-snapshot.sh`; a mismatch discards the staged result.
