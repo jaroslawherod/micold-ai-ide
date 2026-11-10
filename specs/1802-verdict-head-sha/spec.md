@@ -103,7 +103,7 @@ snapshot, verdict and head SHA.
 
 A verdict covers the **reviewed head** `H`: the commit `git rev-parse HEAD` names when the unit
 records the verdict, after the review's fixes are committed and before the commit that holds the
-ledger row. The ledger itself (`specs/*/autopilot*.md`) is excluded from every comparison, so the
+ledger row. The ledger itself (the four `ledger-of.sh` patterns, `LEDGER_PATHSPECS` in the plan) is excluded from every comparison, so the
 ledger commit that records a verdict, and any later ledger-only commit, never makes a verdict stale.
 `Snapshot` (`<tree>:<head>`) stays what it is, the dispatch-time input of `review-snapshot.sh diff`;
 `Head` is a separate, later fact (the head at record time) and the only one the guard reads.
