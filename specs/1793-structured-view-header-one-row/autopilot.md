@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M2 (in progress)
-- **Next step**: M2 full gate, push, PR (see Handover)
+- **Phase**: milestone M2 (in review)
+- **Next step**: wait for M2 CI and merge
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1797 | Design | merged | ad2d932dc0b678b50e19e0b3646e8036d62c6e8a |
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
+| #1827 | M2 | in review | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
-| M2 | T013–T016 | full | Worktree menu with raw events and view control | | in review |
+| M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | in review |
 | M3 | T017–T020 | full | Single `+` menu | | pending |
 | M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
 
@@ -53,8 +54,7 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-M2 (T013-T016 ticked) is implemented, rebased on origin/main (as of bc480f9), NOT pushed, no PR yet. Review A (high) CLEAN, Review B (sonnet) CLEAN (both MINORs left; see Review rounds; B's MINOR: no view-level test of outside-click close, optional). drift-M2.md written. First full gate failed on 5 tests (feature_registration_cost, settings_sections stale literal, root_vocabulary NO_OWNER, popover_displacement count); fixes are UNCOMMITTED in the working tree: header_bar.rs open_in is now flag-only, popover_displacement.rs row+opener for `header_worktree_menu`, NO_OWNER emptied, 4 ALLOWED_CROSS_FEATURE_NAMES rows for header_bar, features_header_bar.rs app-menu label assert without the "Session service diagnostics" literal.
-Next: run `scripts/build-lock.sh cargo test -p micold-client --test main --test popover_displacement --test feature_registration_cost --test layout_snapshot -- ` (or just the full gate, detached, hold with sleeps under 170 s; the build lock is contended by other worktrees), fix any red, commit, `mise run gate` green, push (plain, no force), PR `feat(1793): add the worktree ⋮ menu (#1793)`, body per tasks/pr.md ending `Refs #1793`, visual pass not run (no Xvfb). Record PR number in ledger.
+None.
 
 ## Open escalation
 
