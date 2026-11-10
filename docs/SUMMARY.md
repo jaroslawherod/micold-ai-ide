@@ -51,5 +51,6 @@
 - [The documentation site](development/docs-site.md)
 - [Screenshots for the manual visual passes](development/screenshots.md)
 - [Autopilot token usage](development/autopilot-tokens.md)
+- [Autopilot evals](development/autopilot-evals.md)
 - [Overview card redesign](development/overview-redesign.md)
 - [Review UI redesign](development/review-redesign.md)
