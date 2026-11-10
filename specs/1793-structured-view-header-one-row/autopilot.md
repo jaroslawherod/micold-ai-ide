@@ -51,7 +51,8 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-None.
+M1 code, tests, gates, showcase, user guide done and committed locally (branch NOT pushed, no PR yet). Review A (high) CLEAN, review B (sonnet) CLEAN (see Review rounds). Layout snapshot fixture accepted; sibling_parity exempts the ring/status readouts; arch guards classified (state_scan MUTATORS `follow`, NO_OWNER `HeaderBar`, ALLOWED_CROSS_FEATURE_NAMES header_bar->session_strip).
+Last full `mise run gate` was running (previous run's 4 failures were fixed by the last two commits; fmt/clippy of the last fix `segments` made `#[cfg(test)] pub(crate)` unverified). Next: (1) run `mise run gate` detached (hold.sh), fix anything red (watch for dead-code warnings on `Segment::label/is_selected` in micold-material); (2) visual pass could NOT run (no Xvfb/xdotool, no seeded fixture; worker said sway+grim route would need a seeded private XDG_DATA_HOME) -- say so in the PR body or retry with the sway route; (3) commit, `git push --force-with-lease -u origin HEAD`, open the PR per tasks/pr.md (title `feat(1793): show status, Changes and context meter in the top bar (#1793)`, body Milestone M1 of 4, Refs #1793), record PR number in the ledger. Declined/left MINORs of A: changes_button near-copy of session_area::changes_button, CHANGES_ICON_FLOOR magic 70.0.
 
 ## Open escalation
 
