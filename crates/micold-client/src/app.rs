@@ -187,6 +187,8 @@ pub enum Message {
     /// The Help menu and the About dialog it opens (feature 028, FR-001). Three variants moved
     /// behind this one; see [`crate::features::help::Msg`].
     Help(crate::features::help::Msg),
+    /// The header menus (feature 1793): `+` and the worktree `⋮`, at most one open.
+    HeaderBar(crate::features::header_bar::Msg),
     /// An agent's destructive request awaiting the user's answer (feature 034, FR-014); see
     /// [`crate::features::agent_confirm::Msg`].
     AgentConfirm(crate::features::agent_confirm::Msg),
@@ -409,6 +411,8 @@ impl Message {
 pub struct State {
     /// What the help feature remembers -- see [`crate::features::help::State`].
     pub help: crate::features::help::State,
+    /// Which header menu is open -- see [`crate::features::header_bar::State`].
+    pub header_bar: crate::features::header_bar::State,
     /// What the agent_confirm feature remembers -- see [`crate::features::agent_confirm::State`].
     pub agent_confirm: crate::features::agent_confirm::State,
     /// What the attention feature remembers -- see [`crate::features::attention::State`].
@@ -1497,6 +1501,7 @@ impl State {
             | Message::Composer(_)
             | Message::PermissionPrompts(_)
             | Message::NoOp => {}
+            Message::HeaderBar(msg) => self.header_bar.update(msg),
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

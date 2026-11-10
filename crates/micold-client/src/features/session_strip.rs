@@ -63,6 +63,18 @@ pub(crate) fn session_status(state: &State, id: SessionId) -> String {
     }
 }
 
+/// Whether the process attached to the pane of `id` is running: what the top bar's status badge
+/// calls Working. A starting, restarting, failed, exited or stopped process is Idle.
+pub(crate) fn session_working(state: &State, id: SessionId) -> bool {
+    let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
+        return false;
+    };
+    match session.mode {
+        TerminalMode::AiCli => session.lifecycle == SessionLifecycle::Running,
+        TerminalMode::Regular => session.active_shell_lifecycle() == Some(ShellLifecycle::Running),
+    }
+}
+
 /// What the bottom-bar restart control must ask for (`012` FR-010, BUG-004).
 ///
 /// The same question [`attached_process_restartable`] asks to decide *whether* to offer a restart —

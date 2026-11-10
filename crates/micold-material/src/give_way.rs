@@ -195,11 +195,16 @@ impl<'a, M> Lane<'a, M> {
     }
 }
 
-/// Whether a laid-out child of a bar was dropped: a zero-area node. A hugging lane drops nothing,
-/// and keeps a child that happens to be empty as a `row!` would.
+/// Whether a laid-out child was dropped: a zero-area node. A bar drops a child with no width or no
+/// height; a hugging lane only one with neither (what [`GiveWayRow::hide`] leaves), so a child that
+/// happens to be empty stays as a `row!` keeps it.
 fn dropped(hugging: bool, layout: Layout<'_>) -> bool {
     let b = layout.bounds();
-    !hugging && (b.width <= 0.0 || b.height <= 0.0)
+    if hugging {
+        b.width <= 0.0 && b.height <= 0.0
+    } else {
+        b.width <= 0.0 || b.height <= 0.0
+    }
 }
 
 impl<M> Widget<M, iced::Theme, iced::Renderer> for Lane<'_, M> {
@@ -702,6 +707,12 @@ impl<'a, M> GiveWayRow<'a, M> {
     /// A child that gives way at `rank`, lower ranks first.
     pub fn shorten(self, rank: u8, child: impl Into<Element<'a, M>>) -> Self {
         self.slot(child, GiveWay::Shorten(rank))
+    }
+
+    /// A child that vanishes when the row is too narrow, at `rank`, lower ranks first and every
+    /// hidden child before any shortened one.
+    pub fn hide(self, rank: u8, child: impl Into<Element<'a, M>>) -> Self {
+        self.slot(child, GiveWay::Drop(rank))
     }
 
     fn slot(self, child: impl Into<Element<'a, M>>, give_way: GiveWay) -> Self {
