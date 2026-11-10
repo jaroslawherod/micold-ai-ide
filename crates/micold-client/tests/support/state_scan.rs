@@ -43,6 +43,8 @@ pub use source_scan::code_only;
 /// `Workspace` is not in here: its members belong to three different features, so a call on it is
 /// resolved to the members it actually writes rather than treated as one opaque mutation.
 pub const MUTATORS: &[&str] = &[
+    // Feature 1793: `header_bar.follow` closes the open header menu on a selection change.
+    "follow",
     // #1554: `effort_picker.open` opens a session's effort picker.
     "open",
     // Feature 1269: `changes.tabs` — × closes a Review tab, a forgotten project drops its tabs,

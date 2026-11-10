@@ -65,7 +65,7 @@ impl<M> SegmentedControl<M> {
     }
 
     /// The segments, in order.
-    pub fn segments(&self) -> &[Segment<M>] {
+    pub(crate) fn segments(&self) -> &[Segment<M>] {
         &self.segments
     }
 }
