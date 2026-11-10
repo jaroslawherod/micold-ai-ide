@@ -129,7 +129,10 @@ fn ensure_writable_file(path: &std::path::Path) -> std::io::Result<()> {
         std::fs::create_dir_all(parent).map_err(|e| {
             std::io::Error::new(
                 e.kind(),
-                format!("its directory {} could not be created: {e}", parent.display()),
+                format!(
+                    "its directory {} could not be created: {e}",
+                    parent.display()
+                ),
             )
         })?;
     }
