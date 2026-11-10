@@ -14,6 +14,9 @@ and GitHub's state for each recorded PR.
 | 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
 | 4 | `FINAL-PR-PENDING <ledger> <pr\|none>` | The ledger reads `done` but the run's last PR never merged. Wait on and merge `<pr>`, then run the handoff. On `none`, dispatch the flow's last unit (close, or the bugfix's milestone) to open it. |
 
+- **For every PR the ledger records as open**, run `scripts/autopilot/pr-state.sh <pr>`: it says the
+  state and how long the PR has sat in it. `STUCK` runs the action in
+  [waiting.md](../rules/waiting.md), *PR states and dwell limits*, before anything else.
 - **When GitHub and the ledger disagree, GitHub is right.** Have the next unit fix the ledger. A
   milestone marked merged whose PR is open, or whose changes are missing from `origin/main`, goes
   back to a milestone unit. If a commit on `main` reverted it, escalate (category 6).

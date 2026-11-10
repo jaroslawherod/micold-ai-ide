@@ -7,6 +7,10 @@ When: `wait-merge.sh` printed `RED` outside this flow's code, `CHECKLESS` or `ME
 To tell whose code is red, never read a long log yourself: a `"haiku"` helper subagent reads the
 CI log, gate log or report and returns only its failures.
 
+Every state has a dwell limit: `scripts/autopilot/pr-state.sh <pr>` says whether the PR is past
+it and the action ([waiting.md](../rules/waiting.md), *PR states and dwell limits*). Run it when
+`wait-merge.sh` returns `HOLD`/`TIMEOUT`, and before any rerun, close or reopen below.
+
 Rerun once: `gh run rerun <run-id> --failed`. Passes: a flake, carry on. Fails again: check `main`
 (`gh run list --branch main --status completed --limit 3`). Either way, do not fix it. Escalate as
 *blocked by work outside my flow*, with the evidence.
