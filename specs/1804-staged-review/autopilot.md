@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1804
 - **Worktree branch**: feat/1804_autopilot-staged-review-facts-by-code-plan-by
 - **Started**: 2026-11-10
-- **Phase**: clarify
-- **Next step**: plan unit (clarify CLEAN, no markers)
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | e7c0eefe9082f5ab845344855d1e3a448d0f1837:653769a81adcc13e2f9695de8f9ade892d15cf58 | CHANGES: 4 MAJOR (fixed) |
 | Spec | 2 | 5cde486ee9e7e9df34b7a01fbc085ba42eb9247d:3682d99c9b3cdda2488e886dad070dbbc3470657 | CLEAN (1 MINOR fixed) |
+| Plan | 1 | 1a62212de3d302e24a02e30ded3cafd5b57b808e:2cb1d380997d85aa1003d496bb6d0592f93454e8 | CLEAN (3 MINOR fixed, prose only) |
 
 ## Declined review findings
 
