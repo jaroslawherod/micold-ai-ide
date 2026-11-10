@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 1 [NEEDS CLARIFICATION] markers in spec.md
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
