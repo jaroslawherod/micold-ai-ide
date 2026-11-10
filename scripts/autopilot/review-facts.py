@@ -22,6 +22,12 @@ class Fail(Exception):
     pass
 
 
+# paths printed as they are, whatever the user's git config says about quoting or prefixes
+os.environ.update(GIT_CONFIG_COUNT="3", GIT_CONFIG_KEY_0="core.quotepath", GIT_CONFIG_VALUE_0="false",
+                  GIT_CONFIG_KEY_1="diff.noprefix", GIT_CONFIG_VALUE_1="false",
+                  GIT_CONFIG_KEY_2="diff.mnemonicPrefix", GIT_CONFIG_VALUE_2="false")
+
+
 def run(*cmd, ok=(0,)):
     p = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     if p.returncode not in ok:
@@ -36,17 +42,21 @@ def git(*args, ok=(0,)):
 
 def changed_ranges(diff):
     """{path: [(first, last)]} of added or changed lines on the new side; deleted files are left out."""
-    files, path = {}, None
+    files, path, header = {}, None, False
     for line in diff.splitlines():
-        if line.startswith("+++ "):
+        if line.startswith("diff --git"):
+            header = True
+        elif header and line.startswith("+++ "):
             path = None if line == "+++ /dev/null" else line[6:].split("\t")[0]
             if path:
                 files.setdefault(path, [])
         elif line.startswith("@@") and path:
+            header = False
             m = re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", line)
             n = int(m.group(2)) if m.group(2) is not None else 1
-            if n:
-                files[path].append((int(m.group(1)), int(m.group(1)) + n - 1))
+            first = int(m.group(1))
+            # a pure deletion (n == 0) is pinned to the line before it, so its enclosing item is found
+            files[path].append((max(first, 1), first + n - 1) if n else (max(first, 1), max(first, 1)))
     return files
 
 
@@ -90,6 +100,8 @@ def strip_code(line, in_block):
                 i += 2 if line[i] == "\\" else 1
             i += 1
             out.append('""')
+        elif line[i] == "'" and (m := re.match(r"'(?:\\.[^']*|[^\\'])'", line[i:])):
+            i += m.end()  # a char literal such as '{'; a lifetime ('a) does not match
         else:
             out.append(line[i])
             i += 1
@@ -179,8 +191,11 @@ def read_lcov(path, top):
                     p = os.path.relpath(os.path.realpath(p), top)
                 cur = cov.setdefault(os.path.normpath(p), {})
             elif line.startswith("DA:") and cur is not None:
-                n, hits = line[3:].split(",")[:2]
-                cur[int(n)] = cur.get(int(n), 0) + int(hits)
+                try:
+                    n, hits = line[3:].split(",")[:2]
+                    cur[int(n)] = cur.get(int(n), 0) + int(hits)
+                except ValueError:
+                    continue  # a malformed DA line carries no data
     return cov
 
 
@@ -234,19 +249,24 @@ def build(args):
     out += ["", "## Callers", ""]
     if not rust:
         out.append("skipped: no Rust files")
-    budget, seen = CALLERS_LINES, set()
+    budget, seen, omitted = CALLERS_LINES, set(), 0
     for p, syms in symbols.items():
         for name, _kind, a, _b in syms:
             bare = name.split("::")[-1]
             if (p, name) in seen or bare == "?":
                 continue
             seen.add((p, name))
+            if budget <= CALLERS_SHOWN:
+                omitted += 1
+                continue
             hits = callers_of(bare, p, a)
-            shown = hits[:CALLERS_SHOWN] if budget > CALLERS_SHOWN else []
+            shown = hits[:CALLERS_SHOWN]
             trunc = len(shown) < len(hits)
             out.append(f"- {name}: {len(hits)} callers{' (truncated)' if trunc else ''}")
             out += [f"  - {h}" for h in shown]
             budget -= len(shown) + 1
+    if omitted:
+        out.append(f"- {omitted} more symbols: callers not looked up (line budget spent)")
 
     out += ["", "## Coverage", ""]
     for p, ranges in sorted(files.items()):
