@@ -53,6 +53,14 @@ const BREADCRUMB: usize = 1;
 /// the Overview button has left the bar (FR-016).
 const JUMP_FIELD: usize = 2;
 
+/// The lane's context meter and status badge when a session is shown (feature 1793, FR-004):
+/// readouts, exempt from the action shapes.
+const METER: usize = 3;
+const STATUS: usize = 4;
+
+/// How many children the lane holds when it carries the meter and the status badge.
+const WITH_READOUTS: usize = 8;
+
 /// The bar's controls, in order: every child of the lane after the app mark.
 ///
 /// Structural rather than a list of paths: anything the bar is given past its mark is a control
@@ -60,13 +68,25 @@ const JUMP_FIELD: usize = 2;
 /// anyone remembering to add it here. Feature 1127 removed the title and the `Length::Fill` spacer
 /// this used to skip.
 fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
+    let in_lane = |r: &&LayoutRecord| {
+        r.layer == lay::Layer::Base
+            && r.path.len() == APP_BAR_LANE.len() + 1
+            && r.path.starts_with(APP_BAR_LANE)
+    };
+    // With a worktree or session shown the lane holds the context meter and the status badge
+    // after the field (feature 1793): readouts, not actions, so no shape applies to them. They
+    // are told by the lane's width: eight children where it holds both, five where it does not.
+    let readouts = if records.iter().filter(in_lane).count() == WITH_READOUTS {
+        METER..=STATUS
+    } else {
+        usize::MAX..=0
+    };
     records
         .iter()
+        .filter(in_lane)
         .filter(|r| {
-            r.layer == lay::Layer::Base
-                && r.path.len() == APP_BAR_LANE.len() + 1
-                && r.path.starts_with(APP_BAR_LANE)
-                && r.path[APP_BAR_LANE.len()] >= 1
+            let index = r.path[APP_BAR_LANE.len()];
+            index >= 1 && !readouts.contains(&index)
         })
         .collect()
 }

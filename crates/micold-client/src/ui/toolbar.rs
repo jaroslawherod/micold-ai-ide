@@ -273,7 +273,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
 const RING_FLOOR: f32 = micold_material::context_ring::SIDE;
 
 /// The Changes button's narrowest: the icon and the button's own padding, the label hidden.
-const CHANGES_ICON_FLOOR: f32 = 56.0;
+const CHANGES_ICON_FLOOR: f32 = 70.0;
 
 /// The context meter's ring, its text hiding first (FR-005, FR-011); the tooltip carries the tokens,
 /// cost and turns, so the cost survives the text hiding.
@@ -317,7 +317,6 @@ fn changes_button<'a>(
             r,
         )
         .leading(Icon::Git)
-        .density(micold_core::tokens::density::DENSE)
         .selected(button.selected)
         .on_press(press),
         tooltip,
