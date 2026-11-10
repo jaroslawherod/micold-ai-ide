@@ -151,7 +151,14 @@ impl ConfigRuntime {
                 .iter()
                 .filter_map(|cli| {
                     let file = cli.token_file.as_ref()?;
-                    let (_, expires_at) = parse_token_file(file.read().ok()?.expose())?;
+                    let contents = match file.read() {
+                        Ok(contents) => contents,
+                        Err(e) => {
+                            tracing::warn!(error = %e, cli = ?cli.id, "token_file could not be read");
+                            return None;
+                        }
+                    };
+                    let (_, expires_at) = parse_token_file(contents.expose())?;
                     let expires_at = expires_at?;
                     token_file_expires_within(
                         expires_at,
