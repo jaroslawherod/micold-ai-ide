@@ -2,20 +2,24 @@
 
 ## R1 Where status, Changes, meter and `⋮` render
 Decision: `toolbar::view` adds `.action(...)` items before settings/menu, driven by a
-`HeaderBarModel` from `micold-core::header_bar` (None on Overview). Rejected: a second bar under the
+`HeaderBarModel` from the client's render-free `features/header_bar.rs` (None on Overview). Rejected: a second bar under the
 title bar (re-adds a row); drawing in `session_area` (not the top bar).
 
 ## R2 Collapse order
-Decision: `GiveWayRow` ranks (already used in `status_cluster`): ring text rank 0, `Changes` label
-rank 1, others `keep`. Model exposes `Collapse` flags so the order is unit-tested without iced.
-Rejected: width thresholds hard-coded in `view` (untestable, drifts per platform).
+Decision: `GiveWayRow` ranks alone, the mechanism `status_cluster` uses today (that fn is removed, the
+pattern kept): ring text rank 0, `Changes` label rank 1, others `keep`. The model only assigns the
+ranks (unit-tested); layout does the collapsing, so there is one source of truth. Task 1 confirms
+`Toolbar::action` accepts a `GiveWayRow` (it takes any `Element`). Rejected: width thresholds in the
+model (second source of truth, drifts per platform).
 
 ## R3 Ring component
 Decision: new `micold-material::ContextRing` (builder: `.ratio().text().warning().tooltip()`),
-reusing `ProgressBar` colour roles. Rejected: feature-local canvas in `ui/` (Principle VIII).
+coloured from the `Roles` tokens (`primary`, `secondary_container`, `error` for warning); the
+client's `ProgressBar` (`ui/material/progress_bar.rs`) stays in the client and is not imported.
+Exported from `micold-material/src/lib.rs` and given a showcase entry. Rejected: feature-local canvas in `ui/` (Principle VIII).
 
 ## R4 Segmented control
-Decision: add `SegmentedControl` to `micold-material`; two segments, selected state, `on_select`.
+Decision: add `SegmentedControl` to `micold-material` (exported in `lib.rs`, showcase entry); two segments, selected state, `on_select`.
 Rejected: two `ToggleChip`s (no group semantics, no single-selection accessibility name); keeping
 today's single switch button (spec FR-009 names a segmented control).
 
