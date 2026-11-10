@@ -1,103 +1,13 @@
 #!/usr/bin/env bash
 # Drives the autopilot helper scripts in scripts/autopilot/ against throwaway repositories.
 #
-# Each case builds a bare `origin` and a clone in a temp dir. `gh` is a stub on PATH that answers
-# from JSON fixtures, so no case touches GitHub:
-#   pr-<n>.json          what `gh pr view <n>` sees; pr-<n>.json.<k> replaces it from the k-th view on
-#   pr-<n>.merged.json   becomes pr-<n>.json when `gh pr merge <n>` succeeds
-#   merge-<n>.fail       `gh pr merge <n>` prints it and fails
-#   runs.json            what `gh run list` sees
+# Each case builds a bare `origin` and a clone in a temp dir; the fixtures and the `gh` stub are in
+# lib/autopilot-fixtures.sh.
 
 set -uo pipefail
 
-ROOT="$(git rev-parse --show-toplevel)"
-S="$ROOT/scripts/autopilot"
-failures=0
-cases=0
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-
-mkdir -p "$tmp/bin"
-cat > "$tmp/bin/gh" <<'STUB'
-#!/usr/bin/env bash
-F="$GH_FIXTURES"
-q() { local next=0; while [ $# -gt 0 ]; do [ "$1" = -q ] && { shift; echo "$1"; return; }; shift; done; echo .; }
-case "$1 $2" in
-  "pr view")
-    n="$3"; c=$(( $(cat "$F/count-$n" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$F/count-$n"
-    f="$F/pr-$n.json"
-    for k in $(seq 1 "$c"); do [ -f "$F/pr-$n.json.$k" ] && f="$F/pr-$n.json.$k"; done
-    [ -f "$f" ] || { echo "no pull requests found" >&2; exit 1; }
-    jq -r "$(q "$@")" "$f" ;;
-  "pr merge")
-    n="$3"
-    if [ -f "$F/merge-$n.fail" ]; then cat "$F/merge-$n.fail" >&2; exit 1; fi
-    for k in "$F/pr-$n.json".*; do [ -f "$k" ] && rm -f "$k"; done
-    cp "$F/pr-$n.merged.json" "$F/pr-$n.json" ;;
-  "pr list") [ -f "$F/pr-list.json" ] && jq -r "$(q "$@")" "$F/pr-list.json" || echo "" ;;
-  "run list") jq -r "$(q "$@")" "$F/runs.json" ;;
-  "run view") echo "error[E0308]: mismatched types" ;;
-  "api user") echo me ;;
-  "issue view") jq -r "$(q "$@")" "$F/issue-$3.json" ;;
-  "issue create") echo "$*" >> "$F/gh.log"; echo "https://github.com/o/r/issues/42" ;;
-  "issue "*|"label create") echo "$*" >> "$F/gh.log" ;;
-  *) echo "gh stub: unhandled: $*" >&2; exit 2 ;;
-esac
-STUB
-chmod +x "$tmp/bin/gh"
-export PATH="$tmp/bin:$PATH"
-unset CLAUDE_PROJECT_DIR  # the hooks fall back to it; a run inside an autopilot session would leak in
-
-# Fresh origin + clone on branch `wt`; echoes the clone path. GH_FIXTURES is per case.
-new_repo() {
-  local d; d="$(mktemp -d "$tmp/case.XXXX")"
-  git init -q --bare -b main "$d/origin.git"
-  git clone -q "$d/origin.git" "$d/wt" 2>/dev/null
-  (
-    cd "$d/wt"
-    git config user.email t@example.com; git config user.name t; git config commit.gpgsign false
-    git switch -q -c main 2>/dev/null || true
-    echo seed > seed.txt; git add -A; git commit -qm seed; git push -q origin main
-    git switch -q -c wt
-  )
-  mkdir -p "$d/fx"
-  echo "$d"
-}
-
-ledger() {  # ledger <file> <branch> <phase> <pr...>
-  local f="$1" b="$2" ph="$3"; shift 3
-  mkdir -p "$(dirname "$f")"
-  {
-    echo "# Autopilot ledger"
-    echo "- **Worktree branch**: $b"
-    echo "- **Phase**: $ph"
-    echo "- **Next step**: open PR 2"
-    echo; echo "## Pull requests"; echo "| PR | Purpose |"
-    for p in "$@"; do echo "| #$p | x |"; done
-    echo; echo "## Decisions"; echo "| D1 | see #999 |"
-    echo; echo "## Open escalation"; echo; echo "None."
-  } > "$f"
-}
-
-pr_json() { # pr_json <fx> <n> <state> [ci-status ci-conclusion] [mergeable]
-  local fx="$1" n="$2" st="$3" s="${4:-}" c="${5:-}" m="${6:-MERGEABLE}" roll='[]'
-  [ -n "$s" ] && roll="[{\"name\":\"ci complete\",\"status\":\"$s\",\"conclusion\":\"$c\",\"detailsUrl\":\"https://x/actions/runs/77/job/1\"}]"
-  [ "$c" = FAILURE ] && roll="[{\"name\":\"build + test\",\"status\":\"COMPLETED\",\"conclusion\":\"FAILURE\",\"detailsUrl\":\"https://x/actions/runs/77/job/2\"},${roll#[}"
-  printf '{"state":"%s","mergeable":"%s","headRefName":"wt","headRefOid":"h1","mergeCommit":{"oid":"abc123"},"statusCheckRollup":%s}\n' \
-    "$st" "$m" "$roll"
-}
-
-# check <name> <want-exit> <want-output-regex> <cmd...>   (runs in $PWD)
-check() {
-  local name="$1" want="$2" re="$3"; shift 3
-  cases=$((cases + 1))
-  local out code
-  out="$("$@" 2>&1)"; code=$?
-  if [ "$code" != "$want" ] || ! grep -qE -- "$re" <<<"$out"; then
-    failures=$((failures + 1))
-    echo "FAIL $name: exit $code (want $want), output:"; sed 's/^/    /' <<<"$out"
-  fi
-}
+# shellcheck source=lib/autopilot-fixtures.sh
+. "$(dirname "$0")/lib/autopilot-fixtures.sh"
 
 # --- branch-start.sh ---------------------------------------------------------------------------
 d="$(new_repo)"; cd "$d/wt"
@@ -183,6 +93,28 @@ check "resume finds a quick run's local ledger" 0 '^LEDGER specs/quick/2026-09-3
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 ledger specs/quick/2026-09-30-flaky.autopilot.md wt done; echo fix > fix.txt; git add -A; git commit -qm fix
 check "resume expects no final PR for a quick run" 2 '^NONE' "$S/resume.sh"
+
+# --- ledger-of.sh helpers ------------------------------------------------------------------------
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
+ledger specs/042-x/autopilot.md wt 3-design 10 11
+ledger specs/043-y/bugs/BUG-1.autopilot.md wt done 12
+ledger specs/044-z/autopilot.md other 2-clarify
+loh() { ( . "$S/ledger-of.sh"; "$@" ); }
+check "ledgers_of lists every ledger of the branch, relative" 0 '^specs/042-x/autopilot.md
+specs/043-y/bugs/BUG-1.autopilot.md$' loh ledgers_of .
+check "ledger_of keeps its absolute prefix" 0 "^$PWD/specs/042-x/autopilot.md\$" loh ledger_of .
+check "ledger_prs lists the PR numbers" 0 '^10
+11$' loh ledger_prs specs/042-x/autopilot.md
+check "phase_of reads the phase" 0 '^3-design$' loh phase_of specs/042-x/autopilot.md
+pr_json "$d/fx" 10 MERGED > "$d/fx/pr-10.json"
+check "pr_state_of asks GitHub" 0 '^MERGED$' loh pr_state_of 10
+check "pr_state_of is UNKNOWN when gh fails" 0 '^UNKNOWN$' loh pr_state_of 99
+check "final_pr_open is empty without an open PR" 0 '^$' loh final_pr_open wt
+echo '[{"number":470}]' > "$d/fx/pr-list.json"
+check "final_pr_open names the open PR" 0 '^470$' loh final_pr_open wt
+check "ledger_on_main finds nothing before a push" 1 '^$' loh ledger_on_main wt
+git add -A; git commit -qm "ledgers"; git push -q origin HEAD:main
+check "ledger_on_main finds an open ledger on origin/main" 0 '^specs/042-x/autopilot.md \(phase 3-design\)$' loh ledger_on_main wt
 
 # --- scoped-gate.sh: picks the crates the branch changed, against the merge base -----------------
 d="$(new_repo)"; cd "$d/wt"; G="$S/scoped-gate.sh"

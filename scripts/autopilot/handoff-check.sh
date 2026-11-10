@@ -4,6 +4,7 @@
 # Usage: handoff-check.sh <ledger> [extra-pr...]
 # Prints OK, or NOT DONE and one line per thing that remains. Exit 0 or 1.
 set -uo pipefail
+. "$(dirname "$0")/ledger-of.sh"
 ledger="${1:?usage: handoff-check.sh <ledger> [extra-pr...]}"; shift
 left=()
 [ -f "$ledger" ] || { echo "NOT DONE"; echo "- ledger $ledger not found"; exit 1; }
@@ -20,9 +21,9 @@ else
   [ "$unmerged" -gt 0 ] && left+=("$unmerged commit(s) not on origin/main")
 fi
 
-prs="$(sed -n '/^## Pull requests/,/^## Decisions/p' "$ledger" | grep -oE '#[0-9]+' | tr -d '#' | sort -un)"
+prs="$(ledger_prs "$ledger")"
 for pr in $prs "$@"; do
-  st="$(gh pr view "$pr" --json state -q .state 2>/dev/null || echo UNKNOWN)"
+  st="$(pr_state_of "$pr")"
   [ "$st" = MERGED ] || left+=("PR #$pr is $st")
 done
 

@@ -11,12 +11,8 @@ set -uo pipefail
 
 b="$(git branch --show-current)"
 line="- **Worktree branch**: $b"
-ledgers() { grep -lxF -- "$line" specs/*/autopilot.md specs/*/autopilot-*.md specs/*/bugs/*.autopilot.md specs/quick/*.autopilot.md 2>/dev/null; }
-# PR numbers from the ledger's "Pull requests" and "Milestones" tables only.
-ledger_prs() {
-  sed -n '/^## Pull requests/,/^## Decisions/p' "$1" | grep -oE '#[0-9]+' | tr -d '#' | sort -un
-}
-phase_of() { sed -n 's/^- \*\*Phase\*\*: //p' "$1" | head -1; }
+. "$(dirname "$0")/ledger-of.sh"
+ledgers() { ledgers_of .; }
 
 report() {
   local f="$1"
@@ -28,7 +24,7 @@ report() {
   sed -n '/^## Handover/,/^## /p' "$f" | grep -v '^## ' | grep -vE '^\s*$|^None\.' \
     | sed 's/^/HANDOVER /' | head -5
   for pr in $(ledger_prs "$f"); do
-    echo "PR #$pr $(gh pr view "$pr" --json state -q .state 2>/dev/null || echo UNKNOWN)"
+    echo "PR #$pr $(pr_state_of "$pr")"
   done
 }
 
@@ -44,19 +40,13 @@ git fetch -q origin
 if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
   done_ledger="$(ledgers | grep -v '^specs/quick/' | head -1)"  # a quick run commits no ledger
   if [ -n "$done_ledger" ]; then
-    pr="$(gh pr list --head "$b" --state open --json number -q '.[0].number // empty' 2>/dev/null)"
+    pr="$(final_pr_open "$b")"
     echo "FINAL-PR-PENDING $done_ledger ${pr:-none}"
     exit 4
   fi
 fi
 
-# git grep has no -x: take substring hits, then keep only files with the exact line.
-found="$(git grep -lF -- "$line" origin/main -- 'specs/' 2>/dev/null | sed 's/^origin\/main://' \
-  | while read -r f; do
-      git show "origin/main:$f" | grep -qxF -- "$line" || continue
-      ph="$(git show "origin/main:$f" | sed -n 's/^- \*\*Phase\*\*: //p' | head -1)"
-      [ "$ph" != done ] && echo "$f (phase $ph)"
-    done | head -1)"
+found="$(ledger_on_main "$b")"
 if [ -n "$found" ]; then
   echo "LEDGER-ON-MAIN $found: run scripts/autopilot/branch-start.sh, then resume.sh again"
   exit 0

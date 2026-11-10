@@ -13,13 +13,13 @@ description: "Task list for autopilot supervisor M1: machine-readable run status
 
 ## Phase 1: Setup
 
-- [ ] T001 Extract the `gh` stub, `new_repo`, `ledger` and `check` helpers from `scripts/tests/autopilot.test.sh` into `scripts/tests/lib/autopilot-fixtures.sh` and source it from there; no case changes, the existing suite stays green (`scripts/tests/autopilot.test.sh`)
+- [x] T001 Extract the `gh` stub, `new_repo`, `ledger` and `check` helpers from `scripts/tests/autopilot.test.sh` into `scripts/tests/lib/autopilot-fixtures.sh` and source it from there; no case changes, the existing suite stays green (`scripts/tests/autopilot.test.sh`)
 
 ## Phase 2: Foundational (blocks US1 and US2)
 
-- [ ] T002 Add failing cases for the new `ledger-of.sh` helpers (`ledgers_of`, `ledger_prs`, `phase_of`, `ledger_on_main <branch>`, `final_pr_open <branch>`, `pr_state_of <n>` with `UNKNOWN` on `gh` failure) in `scripts/tests/autopilot.test.sh`
-- [ ] T003 Extend `scripts/autopilot/ledger-of.sh` with those helpers (`ledger_of` keeps its absolute prefix; `ledgers_of` prints paths relative to the toplevel); T002 goes green
-- [ ] T004 Refactor `scripts/autopilot/resume.sh` to source the helpers from `scripts/autopilot/ledger-of.sh`; its report output stays byte-identical (existing resume cases in `scripts/tests/autopilot.test.sh` unchanged and green)
+- [x] T002 Add failing cases for the new `ledger-of.sh` helpers (`ledgers_of`, `ledger_prs`, `phase_of`, `ledger_on_main <branch>`, `final_pr_open <branch>`, `pr_state_of <n>` with `UNKNOWN` on `gh` failure) in `scripts/tests/autopilot.test.sh`
+- [x] T003 Extend `scripts/autopilot/ledger-of.sh` with those helpers (`ledger_of` keeps its absolute prefix; `ledgers_of` prints paths relative to the toplevel); T002 goes green
+- [x] T004 Refactor `scripts/autopilot/resume.sh` to source the helpers from `scripts/autopilot/ledger-of.sh`; its report output stays byte-identical (existing resume cases in `scripts/tests/autopilot.test.sh` unchanged and green)
 
 **Checkpoint**: shared helpers exist, resume behaviour unchanged.
 
@@ -32,18 +32,18 @@ description: "Task list for autopilot supervisor M1: machine-readable run status
 
 ### Tests for US1 (write first, watch them fail)
 
-- [ ] T005 [US1] Create `scripts/tests/run-status.test.sh` (sources `scripts/tests/lib/autopilot-fixtures.sh`; stub `pr-state.sh` through `AUTOPILOT_PR_STATE`; `AUTOPILOT_NOW`) with usage cases: exit 2 for a non-worktree path, exit 3 listing each ledger when two open ledgers name the branch, one `done` plus one open ledger resolves to the open one
-- [ ] T006 [US1] In `scripts/tests/run-status.test.sh` add cases for `dead-no-ledger` (no ledger; ledger only on `origin/main`), `done` (handoff-check passes; refused when it fails, with the handoff lines in `notes`; `resume.sh` exit-4 mapping per data-model *State transitions*) and `running` (FR-001, FR-001b, FR-005)
-- [ ] T007 [US1] In `scripts/tests/run-status.test.sh` add cases for `waiting-ci` (open PR listed with its GitHub state), GitHub winning over the ledger (ledger says merged, `gh` stub says OPEN: PR reported OPEN, FR-004), `asking` and `blocked` (`blocked by work outside my flow`) with `escalation.questions[]` fields `number, question, options[{label,description}], recommendation, evidence` separate and partial escalations giving `""`/`[]`, never dropped (FR-002, FR-003)
-- [ ] T008 [US1] In `scripts/tests/run-status.test.sh` add cases for `stuck` (stub `pr-state.sh` prints a `STUCK` line, `underlying_state` `waiting-ci`, `since = now - DWELL`), the ledger-commit/mtime fallback when no `pr-state.sh` exists (`dwell_source` `ledger`), a run with no open PR never `stuck`, and precedence when several states match (FR-006, FR-006a, FR-001a)
-- [ ] T009 [US1] In `scripts/tests/run-status.test.sh` add cases for output shape and safety: `--json` is one line parsed with `jq -e` and every assertion reads only that JSON (SC-002); text form (`STATE <state>` first line, `key: value`, `PR #<n> <state>`, `question N:`, `option N.k:`, `recommended N:`, `evidence N:`); `gh` unavailable gives PR `UNKNOWN` and never `done`; ledger bytes, `git rev-parse HEAD` and `git status --porcelain` unchanged after a call (FR-008); concurrent runs (two ledgers, ask about one)
+- [x] T005 [US1] Create `scripts/tests/run-status.test.sh` (sources `scripts/tests/lib/autopilot-fixtures.sh`; stub `pr-state.sh` through `AUTOPILOT_PR_STATE`; `AUTOPILOT_NOW`) with usage cases: exit 2 for a non-worktree path, exit 3 listing each ledger when two open ledgers name the branch, one `done` plus one open ledger resolves to the open one
+- [x] T006 [US1] In `scripts/tests/run-status.test.sh` add cases for `dead-no-ledger` (no ledger; ledger only on `origin/main`), `done` (handoff-check passes; refused when it fails, with the handoff lines in `notes`; `resume.sh` exit-4 mapping per data-model *State transitions*) and `running` (FR-001, FR-001b, FR-005)
+- [x] T007 [US1] In `scripts/tests/run-status.test.sh` add cases for `waiting-ci` (open PR listed with its GitHub state), GitHub winning over the ledger (ledger says merged, `gh` stub says OPEN: PR reported OPEN, FR-004), `asking` and `blocked` (`blocked by work outside my flow`) with `escalation.questions[]` fields `number, question, options[{label,description}], recommendation, evidence` separate and partial escalations giving `""`/`[]`, never dropped (FR-002, FR-003)
+- [x] T008 [US1] In `scripts/tests/run-status.test.sh` add cases for `stuck` (stub `pr-state.sh` prints a `STUCK` line, `underlying_state` `waiting-ci`, `since = now - DWELL`), the ledger-commit/mtime fallback when no `pr-state.sh` exists (`dwell_source` `ledger`), a run with no open PR never `stuck`, and precedence when several states match (FR-006, FR-006a, FR-001a)
+- [x] T009 [US1] In `scripts/tests/run-status.test.sh` add cases for output shape and safety: `--json` is one line parsed with `jq -e` and every assertion reads only that JSON (SC-002); text form (`STATE <state>` first line, `key: value`, `PR #<n> <state>`, `question N:`, `option N.k:`, `recommended N:`, `evidence N:`); `gh` unavailable gives PR `UNKNOWN` and never `done`; ledger bytes, `git rev-parse HEAD` and `git status --porcelain` unchanged after a call (FR-008); concurrent runs (two ledgers, ask about one)
 
 ### Implementation for US1
 
-- [ ] T010 [US1] Create `scripts/autopilot/run-status.sh`: argument parsing (`--json`, `<worktree-dir>`), exit codes 0/2/3, ledger resolution through `ledger-of.sh`, `dead-no-ledger`; T005 and the `dead-no-ledger` case of T006 go green
-- [ ] T011 [US1] In `scripts/autopilot/run-status.sh` add the resolver for `done` (calls `handoff-check.sh` inside the target worktree), `blocked`, `asking`, `waiting-ci`, `running`, with PR state only from `pr_state_of` (GitHub wins); T006 and T007 state cases go green
-- [ ] T012 [US1] In `scripts/autopilot/run-status.sh` add dwell and `stuck`: `pr-state.sh` called for open PRs only through `AUTOPILOT_PR_STATE`, `since`/`seconds_in_state`/`dwell_source`, ledger commit time (or mtime when uncommitted, via `python3`) fallback, `AUTOPILOT_NOW`; T008 goes green
-- [ ] T013 [US1] In `scripts/autopilot/run-status.sh` add the text and JSON printers and the parser of the structured *Open escalation* (single and `### Q<n>` batch, per `contracts/supervised-escalation.md`); T007 field cases and T009 go green
+- [x] T010 [US1] Create `scripts/autopilot/run-status.sh`: argument parsing (`--json`, `<worktree-dir>`), exit codes 0/2/3, ledger resolution through `ledger-of.sh`, `dead-no-ledger`; T005 and the `dead-no-ledger` case of T006 go green
+- [x] T011 [US1] In `scripts/autopilot/run-status.sh` add the resolver for `done` (calls `handoff-check.sh` inside the target worktree), `blocked`, `asking`, `waiting-ci`, `running`, with PR state only from `pr_state_of` (GitHub wins); T006 and T007 state cases go green
+- [x] T012 [US1] In `scripts/autopilot/run-status.sh` add dwell and `stuck`: `pr-state.sh` called for open PRs only through `AUTOPILOT_PR_STATE`, `since`/`seconds_in_state`/`dwell_source`, ledger commit time (or mtime when uncommitted, via `python3`) fallback, `AUTOPILOT_NOW`; T008 goes green
+- [x] T013 [US1] In `scripts/autopilot/run-status.sh` add the text and JSON printers and the parser of the structured *Open escalation* (single and `### Q<n>` batch, per `contracts/supervised-escalation.md`); T007 field cases and T009 go green
 
 **Checkpoint**: `scripts/tests/run-status.test.sh` and `scripts/tests/autopilot.test.sh` green; US1 works on its own.
 
@@ -52,7 +52,7 @@ description: "Task list for autopilot supervisor M1: machine-readable run status
 **Goal**: a maintainer sees each of the seven states covered by a fixture, in text and JSON. Ships with M1: the cases themselves are written in Phase 3, because tests travel with the code (milestones rule 7).
 **Independent Test**: `scripts/tests/run-status.test.sh`.
 
-- [ ] T014 [US3] In `scripts/tests/run-status.test.sh` add a closing coverage check that iterates the seven state names and fails when any has no passing text case or no passing JSON case, and asserts `state` is one of the seven in every JSON result (SC-001, FR-014)
+- [x] T014 [US3] In `scripts/tests/run-status.test.sh` add a closing coverage check that iterates the seven state names and fails when any has no passing text case or no passing JSON case, and asserts `state` is one of the seven in every JSON result (SC-001, FR-014)
 
 ## Phase 5: User Story 2 - Supervised escalation ends the turn instead of blocking (Priority: P1)
 
@@ -68,7 +68,7 @@ description: "Task list for autopilot supervisor M1: machine-readable run status
 
 - [ ] T017 [US2] Create `scripts/autopilot/supervised.sh [<ledger>]` per `contracts/supervised-escalation.md` *Marker*; T015 goes green
 - [ ] T018 [US2] Create `scripts/autopilot/answer.sh` (the only writer of the answer rows; batch versus single set by the number of `### Q<n>` subsections); T016 goes green
-- [ ] T019 [P] [US2] (ships in M1) Edit `.claude/skills/speckit-autopilot/templates/autopilot-ledger.md`: add the `- **Supervised**:` header line after **Effort** and the structured *Open escalation* format (Category, Question, Options, Recommended, Evidence, Banner; `### Q<n>` batch)
+- [x] T019 [P] [US2] (ships in M1) Edit `.claude/skills/speckit-autopilot/templates/autopilot-ledger.md`: add the `- **Supervised**:` header line after **Effort** and the structured *Open escalation* format (Category, Question, Options, Recommended, Evidence, Banner; `### Q<n>` batch)
 - [ ] T020 [P] [US2] Edit `.claude/skills/speckit-autopilot/tasks/ask.md`: supervised branch (print banner and notification, no `AskUserQuestion`, end the turn; no ledger yet keeps the interactive question, FR-011c), the `resume <answer>` message format and *After the answer* (FR-010, FR-011, FR-011a; unsupervised path untouched, FR-013)
 - [ ] T021 [P] [US2] Edit `.claude/skills/speckit-autopilot/tasks/resume.md`: `resume <answer>` calls `answer.sh` then continues from *Next step*; `resume` alone with a non-empty escalation re-prints the banner and ends the turn, supervised only (FR-011b); pointer to `run-status.sh`
 - [ ] T022 [P] [US2] Edit `.claude/skills/speckit-autopilot/rules/unit.md` and `.claude/skills/speckit-autopilot/rules/escalation.md`: a unit writes the structured *Open escalation* (FR-010, FR-011c)
