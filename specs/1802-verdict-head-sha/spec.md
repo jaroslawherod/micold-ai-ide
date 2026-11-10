@@ -128,21 +128,20 @@ the milestone ID and the guard maps it through the *Milestones* table's PR colum
   required review's latest row is approved for that head or validly carried (FR-005).
 - **FR-004**: Every merge goes through `wait-merge.sh`, which calls the guard before merging:
   `wait-merge.sh <pr>` rebases as today, and a new `--squash` mode (replacing the hand-run API call
-  in `tasks/ci.md` *Merge problems*) guards, then squash-merges the same head SHA. `gate-hook.sh`
-  keeps denying every direct `gh pr merge` and merge API call (it cannot see inside the scripts),
+  in `tasks/ci.md` *Merge problems*) guards, then squash-merges the same head SHA; both modes pass `--match-head-commit <P>`. `gate-hook.sh`
+  denies every direct `gh pr merge` (new: today it denies only the admin and branch-delete flags and merge API calls) and keeps denying merge API calls (it cannot see inside the scripts),
   so no unguarded path remains (`--no-merge` merges nothing and skips the guard); the hook test is part of FR-010.
 - **FR-005**: Carry-forward rule. When the current head `P` differs from `H`, an **approved** verdict
   carries to `P` only when, with ledger files excluded: neither range contains a merge commit or is
   empty; the ordered list of `git patch-id --stable` values of the non-empty commits in
-  `merge-base(P,base)..P` equals that of `merge-base(H,base)..H`; and the touched-file sets (with
-  renames) are equal. Anything else MUST NOT carry. `CHANGES` and `pending` never carry. Whitespace
+  `merge-base(P,base)..P` equals that of `merge-base(H,base)..H`; and the touched-file sets (`git diff --name-status -M`, rename = old and new path) are equal. Anything else MUST NOT carry. `CHANGES` and `pending` never carry. Whitespace
   or line-number-only drift is invisible to patch-id and carries; this is the accepted limit.
 - **FR-006**: A difference limited to ledger files (`H` and `P` have equal ledger-excluded
   patches) is the same head: allowed, nothing recorded. A real carry MUST NOT touch the branch (a
   push would move the head and restart CI): the guard records it as a PR comment `verdict carried
   <original H> -> P` and prints it. Later carries compare against the original `H` found in the
   ledger, so chains do not drift (the ledger row is never rewritten).
-- **FR-007**: The refusal MUST be a distinct last line and exit code naming the reviewed SHA, the
+- **FR-007**: The refusal MUST be a distinct last line and exit code (7, see contracts/cli.md) naming the reviewed SHA, the
   current SHA and the action (`re-review`), covering: stale, no row, `CHANGES`/`pending`, unreadable
   PR head, and a ledger of the flow with no `Head` column (legacy; in-flight runs re-review once).
   `tasks/merge.md` MUST map it in its table.
@@ -155,7 +154,7 @@ the milestone ID and the guard maps it through the *Milestones* table's PR colum
   pattern of `autopilot.test.sh`, real throw-away git repos) MUST cover: stale refused, current
   allowed, ledger-only commit allowed, clean replay carried, changed patch refused, merge commit and
   empty range refused, legacy ledger refused, `CHANGES` not carried, chained carry, no-ledger PR
-  unguarded, `gh` failure refused, `design` scope mapped to the design PR, header upgrade of a legacy table, `--squash` guarded, and `gate-hook.sh` still denying direct merge commands.
+  unguarded, `gh` failure refused, `design` scope mapped to the design PR, bugs-ledger exclusion, ledger unreadable (fetch fails) refused, carry comment posted once per (H,P), header upgrade of a legacy table, `--squash` guarded, and `gate-hook.sh` still denying direct merge commands.
 
 ### Key Entities
 
