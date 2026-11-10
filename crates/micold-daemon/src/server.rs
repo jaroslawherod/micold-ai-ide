@@ -496,7 +496,7 @@ pub fn spawn_conversation_reports(state: Arc<DaemonState>) {
     if let Some(mut reports) = state.conversation_reports().take_receiver() {
         tokio::spawn(async move {
             while let Some((session, handle)) = reports.recv().await {
-                state.follow_reported_conversation(session, handle);
+                let _ = state.follow_reported_conversation(session, handle);
             }
         });
     }
