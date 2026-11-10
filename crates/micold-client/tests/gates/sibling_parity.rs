@@ -76,17 +76,13 @@ fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
     // With a worktree or session shown the lane holds the context meter and the status badge
     // after the field (feature 1793): readouts, not actions, so no shape applies to them. They
     // are told by the lane's width: eight children where it holds both, five where it does not.
-    let readouts = if records.iter().filter(in_lane).count() == WITH_READOUTS {
-        METER..=STATUS
-    } else {
-        usize::MAX..=0
-    };
+    let with_readouts = records.iter().filter(in_lane).count() == WITH_READOUTS;
     records
         .iter()
         .filter(in_lane)
         .filter(|r| {
             let index = r.path[APP_BAR_LANE.len()];
-            index >= 1 && !readouts.contains(&index)
+            index >= 1 && !(with_readouts && (METER..=STATUS).contains(&index))
         })
         .collect()
 }
