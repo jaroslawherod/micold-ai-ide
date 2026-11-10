@@ -55,7 +55,7 @@ US3 (tests only) is folded into M1 (rule 7, tests travel with code); US2 is M2 (
 
 ## Handover
 
-None.
+M2 implemented, reviewed (A and B clean) and committed locally (2 commits, tree recorded in autopilot-gate-ok). `git push --force-with-lease` was denied by the permission classifier (remote branch still holds the merged M1 commits). Next: push the branch, open the M2 PR (title `feat(1812): supervised escalation, supervised.sh and answer.sh (#1812)`), replace `#PR` in this ledger. PR body: scoped only, full gate left to CI; test-scripts green.
 
 ## Open escalation
 
