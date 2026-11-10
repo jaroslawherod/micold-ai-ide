@@ -13,7 +13,7 @@ header is assembled from: the title row (`ui/session_area.rs::header`), the tab 
 and the `Open in terminal` switch slot), the session bar (`ui/transcript/session_bar.rs`: meter,
 totals, running, tasks) plus the raw-events toggle row (`ui/transcript/mod.rs::view_full`), and the
 hidden-events notice (`ui/transcript/entries.rs::hidden_notice`). Approach: render-free models in
-`micold-core`/render-free client modules decide what shows (selection, collapse rank, menu content,
+render-free `micold-client` modules (`features/header_bar.rs`; the insights state, `meter_view` and `session_status` are client-side) decide what shows (selection, collapse rank, menu content,
 chip text); thin `ui/` glue draws them; two reusable components (ring meter, segmented control) are
 added to `micold-material` (Principle VIII); `+` becomes one `MenuTrigger`-style anchored menu.
 
@@ -41,7 +41,7 @@ added to `micold-material` (Principle VIII); `+` becomes one `MenuTrigger`-style
 
 *GATE: passed before Phase 0; re-checked after Phase 1 (unchanged).*
 
-- [x] **I. Test-First**: Decision logic lands in tested render-free modules first (`micold-core::header_bar` model, `features/session_strip.rs` model, menu item builders), each with a failing test before code. Only draw glue in `ui/` uses the Principle I exception, covered by geometry gates and quickstart Part B.
+- [x] **I. Test-First**: Decision logic lands in tested render-free modules first (`features/header_bar.rs` model, `features/session_strip.rs` model, menu item builders), each with a failing test before code. Only draw glue in `ui/` uses the Principle I exception, covered by geometry gates and quickstart Part B.
 - [x] **II. Multi-Session Support**: Status, meter and dot are read per session id from existing per-session state (`structured_insights`, `session_status`); the model takes a `SessionId`; a test pins that one session's state never reaches another's tab or the bar.
 - [x] **III. Worktree Integration**: The `+` menu acts on the selected worktree through the existing `AdditionalRequested(SessionLocation)` and `ShellInstanceOpenRequested`; no git operation added.
 - [x] **IV. Local-First Storage**: No storage or network; all inputs are in-memory state.
@@ -56,14 +56,29 @@ added to `micold-material` (Principle VIII); `+` becomes one `MenuTrigger`-style
 |---|---|
 | FR-001, FR-006 | `session_area::strip` + `session_strip.rs` model: one row, `+`, chip, per-tab activity dot (`Member::Session` leading slot) |
 | FR-002 | delete `session_area::header` title row; breadcrumbs untouched (`toolbar.rs`) |
-| FR-003, FR-004 | new `micold-core::header_bar` (`HeaderBarModel`) and `toolbar::view` actions order |
-| FR-005, FR-011 | `ContextRing` (`micold-material`), `HeaderBarModel::meter` with `text`/`tooltip`/`accessible`; collapse via `GiveWayRow` ranks |
+| FR-003, FR-004 | new `features/header_bar.rs` (`HeaderBarModel`) and `toolbar::view` actions order |
+| FR-005, FR-011 | `ContextRing` (`micold-material`), `HeaderBarModel::meter` with `text`/`tooltip`/`accessible`; collapse by `GiveWayRow` ranks (single mechanism, R2) |
 | FR-007, FR-008 | `PlusMenu` items in `features/session_strip.rs`; overlay in `ui/mod.rs` beside `overflow_menu` |
 | FR-009 | `WorktreeMenu` content (raw-events toggle row, `SegmentedControl` for view kind); `toolbar::overflow_items` unchanged |
 | FR-010 | hidden chip from `shown::hidden_text` via `ToggleChip`; emits `TranscriptMsg::ShowRawEvents(true)` |
 | FR-012 | contract table in [contracts/ui-contract.md](contracts/ui-contract.md) maps every former control to its new place |
 | FR-013 | focus/labels in the contract; Escape/outside-click are `MenuOverlay`'s existing `on_dismiss` |
 | FR-014 | [quickstart.md](quickstart.md) Part B |
+
+## Test strategy (layer per requirement; each test written failing first)
+
+| FR / edge case | Layer | Test |
+|---|---|---|
+| FR-003, FR-004, Overview hides the four | client unit (`tests/features_header_bar.rs`) | model is `None` on Overview; item order |
+| FR-005, empty context state | client unit | `MeterText` text/tooltip/accessible; no cost invented when unavailable |
+| FR-006, FR-001, no cross-session leak (Principle II) | client unit (`features_session_strip.rs`) | tab dot per session; two sessions never share status |
+| FR-007, FR-008 | client unit | `PlusMenuModel` items and messages; terminal entry sends `ShellInstanceOpenRequested` |
+| FR-009 | client unit | worktree menu content; app `overflow_items` unchanged |
+| FR-010, chip at 0 and 1000+ | client unit + gate `header_row_fits` | chip absent at 0; fits at 1000+ |
+| FR-011 | client unit (rank assignment) + gate `top_bar_collapse` | text hides, then label, at wide and narrow widths |
+| FR-013, menu closes on selection change | client unit (`HeaderMenu` reducer) + Part B | Escape/outside click via `MenuOverlay` `on_dismiss`; accessible names in the model |
+| FR-001, FR-002, FR-012 | gate `header_row_fits` | one 40 px row, no title row |
+| FR-014, look and feel | quickstart Part B | visual pass |
 
 ## Project Structure
 
@@ -82,7 +97,7 @@ specs/1793-structured-view-header-one-row/
 ### Source Code (repository root)
 
 ```text
-crates/micold-core/src/header_bar.rs          # new: HeaderBarModel, Collapse, MeterText (render-free)
+crates/micold-client/src/features/header_bar.rs # new: HeaderBarModel, MeterText, Status (render-free, fed by structured_insights and session_strip)
 crates/micold-material/src/context_ring.rs    # new: ContextRing builder
 crates/micold-material/src/segmented.rs       # new: SegmentedControl builder
 crates/micold-client/src/ui/toolbar.rs        # actions: ring, status, Changes, worktree ⋮
