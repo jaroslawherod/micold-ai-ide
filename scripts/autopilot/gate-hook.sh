@@ -5,6 +5,7 @@
 # (specs/*/autopilot.md, specs/*/autopilot-*.md, specs/*/bugs/*.autopilot.md or specs/quick/*.autopilot.md). There it blocks, with exit 2 and the
 # reason on stderr (Claude Code shows it to the agent):
 #   gh pr merge --delete-branch or --admin     the IDE owns cleanup; --admin bypasses the gate
+#   any other gh pr merge at command position  use wait-merge.sh: it checks the review verdict's head
 #   git worktree remove                        the user removes the worktree
 #   gh pr merge|close|review|comment|edit|ready|reopen <n>, wait-merge.sh <n>
 #                                              when #<n> is not this flow's: not in the ledger and
@@ -52,6 +53,9 @@ if [[ $cmd =~ gh[[:space:]]+pr[[:space:]]+merge([^\;\&\|]*) ]]; then
     deny "never pass --delete-branch: the user removes the worktree in micold IDE, which cleans up the branch."
   [[ $args =~ --admin ]] && deny "never merge with --admin: merge on green through scripts/autopilot/wait-merge.sh."
 fi
+# A direct merge skips the review-verdict guard; only a command-position `gh pr merge` (not --help or quoted text).
+re_merge='(^|[;&|(][[:space:]]*)gh[[:space:]]+pr[[:space:]]+merge'
+[[ $cmd =~ $re_merge && ! $cmd =~ gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+(--help|-h)([[:space:]]|$) ]] && deny "do not run gh pr merge: use scripts/autopilot/wait-merge.sh <pr> [--squash], which refuses a merge whose review verdict is for another head."
 [[ $cmd =~ git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+worktree[[:space:]]+remove ]] &&
   deny "never remove a worktree: the user removes it in micold IDE."
 if [[ $cmd =~ gh[[:space:]]+api ]]; then
