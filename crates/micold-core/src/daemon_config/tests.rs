@@ -1070,9 +1070,13 @@ fn orchestrator_a_complete_table_parses_and_the_view_shows_paths_and_states() {
         text.contains("orchestrator.url: https://orch.example:8443"),
         "{text}"
     );
-    for key in ["ca_file", "cert_file", "key_file"] {
+    for (key, path) in [
+        ("ca_file", "/s/ca.pem"),
+        ("cert_file", "/s/c.pem"),
+        ("key_file", "/s/k.pem"),
+    ] {
         assert!(
-            text.contains(&format!("orchestrator.{key}: /s/")) && text.contains(".pem (missing)"),
+            text.contains(&format!("orchestrator.{key}: {path} (missing)")),
             "{key}: {text}"
         );
     }
@@ -1168,6 +1172,37 @@ fn o2_a_url_that_is_not_https_is_reported_at_its_value() {
 }
 
 #[test]
+fn o2_a_url_with_credentials_a_fragment_or_no_host_is_reported_at_its_value() {
+    for url in [
+        "https://u:p@h",
+        "https://u@h",
+        "https://h/#f",
+        "https://h#f",
+        "https://:8443",
+        "",
+    ] {
+        let text = host(&format!(
+            "[orchestrator]\nurl = \"{url}\"\nenrollment_token_file = \"/s/t\"\n"
+        ));
+        let error = expect(&text, "O2", "valid URL", "orchestrator.url", 8, 7);
+        assert!(!error.message.contains('@'), "{error}");
+    }
+    ok(&host(
+        "[orchestrator]\nurl = \"https://h:8443/p?q=1\"\nenrollment_token_file = \"/s/t\"\n",
+    ));
+}
+
+#[test]
+fn orchestrator_a_second_table_is_refused() {
+    let text = host(&format!("{ORCH_PAIR}[orchestrator]\nurl = \"https://o\"\n"));
+    let all = errors(&text);
+    assert!(
+        all.iter().any(|e| e.message.contains("duplicate")),
+        "{all:#?}"
+    );
+}
+
+#[test]
 fn o3_a_certificate_without_a_key_and_the_reverse_name_the_present_key() {
     let text = host("[orchestrator]\nurl = \"https://o\"\ncert_file = \"/s/c\"\n");
     let error = expect(&text, "O3", "key_file", "orchestrator.cert_file", 9, 1);
@@ -1188,6 +1223,36 @@ fn o4_a_token_and_a_certificate_pair_are_reported_at_the_token_key() {
         1,
     );
     assert!(error.message.contains("remove one"), "{error}");
+}
+
+#[test]
+fn o4_a_token_and_a_key_without_a_certificate_are_reported_at_the_token_key() {
+    let text = host(
+        "[orchestrator]\nurl = \"https://o\"\nkey_file = \"/s/k\"\nenrollment_token_file = \"/s/t\"\n",
+    );
+    expect(
+        &text,
+        "O4",
+        "not both",
+        "orchestrator.enrollment_token_file",
+        10,
+        1,
+    );
+}
+
+#[test]
+fn o4_a_token_and_a_certificate_without_a_key_are_reported_at_the_token_key() {
+    let text = host(
+        "[orchestrator]\nurl = \"https://o\"\ncert_file = \"/s/c\"\nenrollment_token_file = \"/s/t\"\n",
+    );
+    expect(
+        &text,
+        "O4",
+        "not both",
+        "orchestrator.enrollment_token_file",
+        10,
+        1,
+    );
 }
 
 #[test]

@@ -188,7 +188,9 @@ on a host or SSH daemon and an error in a container or pod (V14). A live reload 
 Rules, each reported as `file:line:column: message` with exit status 2:
 
 - **O1**: `url` is required. Reported at the `[orchestrator]` header.
-- **O2**: `url` must be a valid `https` URL. Reported at the `url` value.
+- **O2**: `url` must be a valid `https` URL with a host. A `url` with a user name or password
+  (`https://user:pass@host`) or a `#fragment` is refused as an invalid URL, so the file never holds a
+  password. Reported at the `url` value.
 - **O3**: `cert_file` and `key_file` come together; one without the other is refused at the key that
   is present.
 - **O4**: give `enrollment_token_file` or the `cert_file`/`key_file` pair, not both: the token

@@ -265,3 +265,64 @@ fn a_valid_orchestrator_table_exits_zero_and_an_invalid_one_exits_two_with_a_pos
     assert!(stderr.contains("daemon.toml:6:7:"), "{stderr}");
     assert!(stderr.contains("https"), "{stderr}");
 }
+
+#[cfg(unix)]
+#[test]
+fn orchestrator_files_missing_file_exits_two_and_no_secret_is_printed() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let token = dir.path().join("tok");
+    std::fs::write(&token, "s3cr3t-orch-token\n").unwrap();
+    std::fs::set_permissions(&token, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let file = dir.path().join("daemon.toml");
+    let body = |ca: &str| {
+        format!(
+            "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n\
+             [orchestrator]\nurl = \"https://o\"\nca_file = \"{ca}\"\n\
+             enrollment_token_file = \"{}\"\n",
+            token.display()
+        )
+    };
+    std::fs::write(&file, body("/nonexistent/ca.pem")).unwrap();
+    let output = check(&[file.to_str().unwrap(), "--files"]);
+    assert_eq!(output.status.code(), Some(2));
+    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+    assert!(stderr.contains("/nonexistent/ca.pem"), "{stderr}");
+    assert!(!stdout.contains("s3cr3t-orch-token") && !stderr.contains("s3cr3t-orch-token"));
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, "ca-content").unwrap();
+    std::fs::write(&file, body(ca.to_str().unwrap())).unwrap();
+    let output = check(&[file.to_str().unwrap(), "--files"]);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains(&format!("{} (readable, 0600)", token.display())),
+        "{stdout}"
+    );
+    assert!(
+        !stdout.contains("s3cr3t-orch-token")
+            && !text(&output.stderr).contains("s3cr3t-orch-token")
+    );
+}
+
+#[test]
+fn an_orchestrator_certificate_without_a_key_exits_two_at_the_certificate() {
+    let output = check_text("[orchestrator]\nurl = \"https://o\"\ncert_file = \"/s/c\"\n");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = text(&output.stderr);
+    assert!(
+        stderr.contains("daemon.toml:7:1:") && stderr.contains("key_file"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn an_orchestrator_url_with_credentials_exits_two_without_echoing_the_password() {
+    let output = check_text(
+        "[orchestrator]\nurl = \"https://u:hunter2@h\"\nenrollment_token_file = \"/s/t\"\n",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+    assert!(stderr.contains("daemon.toml:6:7:"), "{stderr}");
+    assert!(!stdout.contains("hunter2") && !stderr.contains("hunter2"));
+}
