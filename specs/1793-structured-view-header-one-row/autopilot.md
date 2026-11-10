@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
 - **Phase**: milestone M2 (in progress)
-- **Next step**: M2 gate, reviews A and B, PR
+- **Next step**: M2 full gate, push, PR (see Handover)
 
 ## Pull requests
 
@@ -53,7 +53,8 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-None.
+M2 (T013-T016 ticked) is implemented, rebased on origin/main (as of bc480f9), NOT pushed, no PR yet. Review A (high) CLEAN, Review B (sonnet) CLEAN (both MINORs left; see Review rounds; B's MINOR: no view-level test of outside-click close, optional). drift-M2.md written. First full gate failed on 5 tests (feature_registration_cost, settings_sections stale literal, root_vocabulary NO_OWNER, popover_displacement count); fixes are UNCOMMITTED in the working tree: header_bar.rs open_in is now flag-only, popover_displacement.rs row+opener for `header_worktree_menu`, NO_OWNER emptied, 4 ALLOWED_CROSS_FEATURE_NAMES rows for header_bar, features_header_bar.rs app-menu label assert without the "Session service diagnostics" literal.
+Next: run `scripts/build-lock.sh cargo test -p micold-client --test main --test popover_displacement --test feature_registration_cost --test layout_snapshot -- ` (or just the full gate, detached, hold with sleeps under 170 s; the build lock is contended by other worktrees), fix any red, commit, `mise run gate` green, push (plain, no force), PR `feat(1793): add the worktree ⋮ menu (#1793)`, body per tasks/pr.md ending `Refs #1793`, visual pass not run (no Xvfb). Record PR number in ledger.
 
 ## Open escalation
 

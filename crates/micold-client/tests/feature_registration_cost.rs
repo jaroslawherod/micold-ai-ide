@@ -95,6 +95,30 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     ),
     (
         "header_bar",
+        "composer",
+        "Msg::SwitchRequested — the worktree menu's Structured / Terminal control sends the one \
+         message the composer's own switch sends, so the two cannot differ (feature 1793)",
+    ),
+    (
+        "header_bar",
+        "session",
+        "switch_entries and Msg — which kinds offer a view switch is the session feature's to say; \
+         the menu reads it rather than deriving a second answer (feature 1793)",
+    ),
+    (
+        "header_bar",
+        "structured_transcript",
+        "TranscriptMsg — the raw-events toggle sends the message the transcript's own toggle sends \
+         (feature 1793)",
+    ),
+    (
+        "header_bar",
+        "transcript_selection",
+        "SHOW_RAW_EVENTS — the menu row carries the same label as the transcript's toggle \
+         (feature 1793)",
+    ),
+    (
+        "header_bar",
         "session_strip",
         "session_working — the top bar's Working badge reads the same pure question the strip's \
          status answers (is the attached process running), so the two cannot disagree; nothing of \

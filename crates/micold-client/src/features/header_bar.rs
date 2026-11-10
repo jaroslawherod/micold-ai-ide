@@ -278,8 +278,9 @@ crate::floating_surface!(
 
 impl crate::overlay::registry::Registered for WorktreeMenu {
     fn open_in(state: &App) -> Option<Self> {
-        (state.header_bar.menu == HeaderMenu::Worktree && HeaderBarModel::of(state).is_some())
-            .then_some(WorktreeMenu)
+        // The flag alone: the bar draws the menu only where a top-bar model exists, and a
+        // selection change closes it (`follow`), so a stale flag is never drawn.
+        (state.header_bar.menu == HeaderMenu::Worktree).then_some(WorktreeMenu)
     }
 }
 

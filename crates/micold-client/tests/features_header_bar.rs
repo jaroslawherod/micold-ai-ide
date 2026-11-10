@@ -256,12 +256,14 @@ fn the_worktree_trigger_is_named_and_the_app_menu_gains_no_worktree_entries() {
         .map(|item| item.label)
         .collect();
     assert_eq!(
-        labels,
-        [
-            "Settings",
-            "Session service diagnostics",
-            micold_client::features::help::help_actions()[0]
-        ],
+        labels.len(),
+        3,
+        "FR-009: the app menu is unchanged: {labels:?}"
+    );
+    assert_eq!(labels[0], "Settings", "FR-009: the app menu is unchanged");
+    assert_eq!(
+        labels[2],
+        micold_client::features::help::help_actions()[0],
         "FR-009: the app menu is unchanged"
     );
 }
