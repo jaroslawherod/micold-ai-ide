@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M3
-- **Next step**: implement M3 (T096–T100), reviews A and B, gate, PR.
+- **Next step**: wait for the M3 PR CI and merge; then M4 (T066, T067).
 
 ## Pull requests
 
