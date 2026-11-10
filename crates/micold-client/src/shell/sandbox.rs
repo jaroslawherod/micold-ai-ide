@@ -1452,6 +1452,42 @@ mod tests {
         assert_eq!(sanitized_git_config(&facts), None);
     }
 
+    /// #1530, I9-5: the copy the sandbox delivers has lost `commit.gpgsign` and `tag.gpgsign`.
+    #[test]
+    fn the_delivered_git_config_copy_loses_the_signing_switches() {
+        use micold_core::sandbox::{DeliveryMount, SandboxProfile};
+        let dir = tempfile::tempdir().expect("tempdir");
+        let home = dir.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            home.join(".gitconfig"),
+            "[user]\n\tname = Ada\n[commit]\n\tgpgsign = true\n[tag]\n\tgpgsign = true\n",
+        )
+        .unwrap();
+        let mut facts = HostFacts::gather(dir.path().join("state"));
+        facts.home = home.clone();
+        facts.layout = micold_core::sandbox::CredentialLayout::conventional(&home, None);
+        let text = sanitized_git_config(&facts).expect("a copy");
+        let delivery = DeliveryMount::beside(&dir.path().join("delivery"));
+        micold_client::daemon_config_delivery::deliver_container(
+            "box",
+            &SandboxProfile::default(),
+            &home,
+            &delivery,
+            Some(&text),
+            None,
+        )
+        .unwrap();
+        let copy = std::fs::read_to_string(
+            delivery
+                .secrets
+                .join(micold_core::sandbox::SANDBOX_GITCONFIG_FILE),
+        )
+        .unwrap();
+        assert!(copy.contains("name = \"Ada\""), "{copy}");
+        assert!(!copy.to_lowercase().contains("gpgsign"), "{copy}");
+    }
+
     /// SC-004c at its source: every stage a bring-up enters has to leave the worker, in order, and
     /// before the outcome — not be handed to a callback that drops it.
     #[tokio::test]

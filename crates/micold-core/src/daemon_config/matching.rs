@@ -139,7 +139,10 @@ mod tests {
         let tokens = [token("a", &one, None), token("b", &two, None)];
         let chosen = choose(&tokens, &repo("acme/app"));
         assert_eq!((chosen.used, chosen.shadowed), (Some(0), vec![1]));
+    }
 
+    #[test]
+    fn equally_unfiltered_tokens_go_to_the_first_in_the_file() {
         let seen = reach(&["acme/app"]);
         let tokens = [token("a", &[], Some(&seen)), token("b", &[], Some(&seen))];
         assert_eq!(choose(&tokens, &repo("acme/app")).used, Some(0));

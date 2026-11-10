@@ -223,6 +223,22 @@ mod tests {
         }
     }
 
+    /// #1530, I9-5: both delivery callers (sandbox, pod) share `shared_copy`, which passes no signing
+    /// key, so the delivered copy loses the signing switches whatever the host has.
+    #[test]
+    fn the_shared_copy_loses_the_signing_switches() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(".gitconfig");
+        std::fs::write(
+            &file,
+            "[user]\n\tname = Ada\n[commit]\n\tgpgsign = true\n[tag]\n\tgpgsign = true\n",
+        )
+        .unwrap();
+        let text = shared_copy(&file).unwrap().unwrap();
+        assert!(text.contains("name = \"Ada\""), "{text}");
+        assert!(!text.to_lowercase().contains("gpgsign"), "{text}");
+    }
+
     /// The sanitizer keeps `filter.lfs.*` (`required = true`), so a basic image without `git-lfs`
     /// fails every checkout of an LFS-tracked file in the sandbox.
     #[test]
@@ -324,10 +340,7 @@ mod tests {
     #[test]
     fn a_value_with_quotes_and_newlines_survives_a_round_trip_through_git() {
         let text = "[user]\n\tname = \"A \\\"B\\\" \\\\ C\"\n[credential]\n\thelper = store\n[core]\n\tbare\n";
-        let Ok(out) = sanitize_gitconfig_text(text, true) else {
-            eprintln!("skipped: no git on this host");
-            return;
-        };
+        let out = sanitize_gitconfig_text(text, true).expect("git is required for this test");
         assert!(!out.contains("helper"), "{out}");
         let again = sanitize_gitconfig_text(&out, true).expect("the output re-parses");
         assert_eq!(again, out);

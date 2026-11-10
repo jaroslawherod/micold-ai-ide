@@ -19,7 +19,6 @@ mod merged_branch_check;
 mod ops_extraction;
 mod remote_list;
 mod review_edit;
-mod scoped_git_credential;
 mod setup_run;
 mod worktree_guard_sessions;
 mod worktree_guard_setting;
