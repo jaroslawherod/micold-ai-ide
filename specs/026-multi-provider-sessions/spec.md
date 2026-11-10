@@ -346,8 +346,11 @@ The missing CLI is either absent or clearly marked unavailable, and cannot be ch
   exposes a lock or a liveness marker to test against, and a false "in use" would block a resume the
   user is entitled to.
 - **A Copilot session whose store entry was removed.** Resuming a conversation the CLI no longer has
-  must report that, by the same route a missing CLI is reported (FR-010), and must start nothing —
-  not a silent empty terminal, and not a fresh conversation under the old session's identity.
+  must start nothing — not a silent empty terminal, and not a fresh conversation under the old
+  session's identity — and the application MUST remove that session itself (FR-008a) rather than
+  leave a row that is neither running nor startable.
+  **Bugfix**: 2026-11-10 — [BUG-1795](./bugs/BUG-1795.md), decided by user. Was: "report that, by the
+  same route a missing CLI is reported (FR-010)", which left the dead row behind.
 - **An in-flight upgrade.** A user upgrades with sessions already open; the persisted records carry
   no CLI. They are Claude Code sessions, and nothing about them is re-derived from disk in a way
   that could change that.
@@ -394,7 +397,15 @@ The missing CLI is either absent or clearly marked unavailable, and cannot be ch
   and MUST NOT start a fresh conversation when a recorded one exists. When the CLI refuses the resume
   or exits immediately — including because another process is already attached to that conversation —
   the application MUST report that by the same route FR-010 uses and start nothing. It MUST NOT
-  attempt to detect, on its own, whether a conversation is in use elsewhere.
+  attempt to detect, on its own, whether a conversation is in use elsewhere. A conversation that no
+  longer exists is not this case: see FR-008a.
+- **FR-008a**: A session whose recorded conversation no longer exists in its CLI's store (the CLI
+  or the user deleted it) MUST be removed by the daemon on its own: at daemon start, and at the
+  start-time check that refuses to resume it. The removal MUST be persisted, so the session stays
+  gone across daemon and application restarts and is not rediscovered (FR-015). The reason is
+  logged only: there is no warning row, no notice message and no manual "Remove" action. After a
+  restart no listed session is neither running nor startable.
+  **Bugfix**: 2026-11-10 — [BUG-1795](./bugs/BUG-1795.md), decided by user.
 - **FR-009**: Sessions backed by different CLIs MUST run concurrently and remain fully isolated from
   one another — no shared conversation, configuration, working directory, or terminal state.
 - **FR-010**: When a session's CLI cannot be found at launch, the application MUST report which CLI
