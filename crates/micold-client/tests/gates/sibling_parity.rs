@@ -59,7 +59,7 @@ const METER: usize = 3;
 const STATUS: usize = 4;
 
 /// How many children the lane holds when it carries the meter and the status badge.
-const WITH_READOUTS: usize = 8;
+const WITH_READOUTS: usize = 9;
 
 /// The bar's controls, in order: every child of the lane after the app mark.
 ///
@@ -75,7 +75,7 @@ fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
     };
     // With a worktree or session shown the lane holds the context meter and the status badge
     // after the field (feature 1793): readouts, not actions, so no shape applies to them. They
-    // are told by the lane's width: eight children where it holds both, five where it does not.
+    // are told by the lane's width: nine children where it holds both (and the worktree menu trigger), five where it does not.
     let with_readouts = records.iter().filter(in_lane).count() == WITH_READOUTS;
     records
         .iter()

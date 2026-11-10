@@ -41,9 +41,17 @@ fn the_meter_status_and_changes_come_before_settings_and_the_menu() {
     let settings = Icon::Settings.glyph().to_string();
     let menu = Icon::Menu.glyph().to_string();
     let settings = at(&|c| c.contains(settings.as_str()), "Settings");
-    let menu = at(&|c| c.contains(menu.as_str()), "the app menu");
+    // Two `⋮` triggers (feature 1793): the worktree menu's sits before Settings, the app menu's is
+    // the bar's last control.
+    let worktree_menu = at(&|c| c.contains(menu.as_str()), "the worktree menu");
+    let menu = drawn
+        .iter()
+        .rev()
+        .find(|(c, _)| c.contains(menu.as_str()))
+        .map(|(_, x)| *x)
+        .expect("the app menu is drawn");
     assert!(
-        ring < status && status < changes && changes < settings && settings < menu,
+        ring < status && status < changes && changes < worktree_menu && worktree_menu < settings && settings < menu,
         "order: ring {ring}, status {status}, Changes {changes}, Settings {settings}, menu {menu}"
     );
 }
