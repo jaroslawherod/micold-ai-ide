@@ -22,6 +22,28 @@ context, which costs as much as 12 calls. The orchestrator's lasts 60 minutes (2
   `hold.sh` call before you start it: a unit that ended its turn waiting 21 minutes on a handback
   re-wrote its whole context.
 
+## PR states and dwell limits
+
+A PR sits in one state at a time. `scripts/autopilot/pr-state.sh <pr>` prints
+`PR <n> STATE <state> DWELL <s> LIMIT <s> OK|STUCK ACTION <action>` and exits 1 when stuck. Dwell
+counts from the later of the head commit and the latest finished check (an upper bound). Override a
+limit with `AUTOPILOT_LIMIT_<STATE>` (`-` as `_`), in seconds.
+
+| State | Max dwell | Owner | Action once past it |
+|---|---|---|---|
+| `DRAFT` | 30 min | unit that opened it | `gh pr ready`; still draft: escalate *blocked* |
+| `CHECKLESS` | 5 min | orchestrator | [ci.md](../tasks/ci.md), *A PR with no checks* |
+| `CI-RUNNING` | 60 min | orchestrator | `gh run cancel <run>` then `gh run rerun <run>` once; stuck again: escalate *blocked* |
+| `CI-RED` | 30 min | unit that opened it | [red-ci.md](../tasks/red-ci.md); outside this flow's code: [ci.md](../tasks/ci.md) |
+| `CONFLICTING` | 15 min | unit that opened it | `git fetch origin && git rebase origin/main`, gate, `git push --force-with-lease` |
+| `ARMED` (auto-merge on, not merged) | 30 min | orchestrator | `wait-merge.sh`; still open: disarm and escalate *blocked* |
+| `GREEN` (not merged) | 10 min | orchestrator | `wait-merge.sh` |
+
+`MERGED` and `CLOSED` are terminal. A failed check wins over a running one (`CI-RED`), and mergeable `UNKNOWN` counts as not conflicting. A state's second action that fails is escalated as *blocked*
+(category 4, with the `pr-state.sh` line as evidence); never loop on one action. Waiting for any
+state stays a background `until` loop, `hold.sh` or Monitor, never polling; run `pr-state.sh` when
+a hold returns `HOLD`, not on a timer.
+
 ## The orchestrator
 
 After you dispatch a unit, run `scripts/autopilot/hold.sh --long "$SCRATCHPAD/unit-<description>"`
