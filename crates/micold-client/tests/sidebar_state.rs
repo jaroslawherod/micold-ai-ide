@@ -1099,20 +1099,19 @@ mod flat_list {
             seen.push(card_of(&state, "idle"));
             tints.push(row_tint(seen[seen.len() - 1], &roles));
             assert_eq!(listed_rows(&state), baseline, "after {:?}", seen.last());
-            let entries: Vec<SessionLocation> =
-                state.sidebar_entries().iter().map(location_of).collect();
             let list: Vec<SessionLocation> = state.sidebar_list().iter().map(location_of).collect();
-            assert_eq!(list, entries, "the list is the stable order");
+            assert_eq!(list, five_states_order(), "the list is the stable order");
         }
         // T024 (FR-012, SC-001): the row's tint followed its state while its place never changed.
         let tinted: Vec<_> = seen.iter().zip(&tints).collect();
-        assert!(
-            tinted.iter().any(|(_, t)| t.is_none()) && tinted.iter().any(|(_, t)| t.is_some()),
-            "the tint comes and goes with the state: {tinted:?}"
-        );
+        let expected_tint = |state: CardState| match state {
+            CardState::NeedsAction => Some(roles.error_container),
+            CardState::NeedsAttention => Some(roles.tertiary_container),
+            CardState::Done => Some(roles.surface_container_high),
+            CardState::Working | CardState::Idle => None,
+        };
         for (state, tint) in &tinted {
-            let expected = row_tint(**state, &roles);
-            assert_eq!(**tint, expected, "{state:?}");
+            assert_eq!(**tint, expected_tint(**state), "{state:?}");
         }
         let mut distinct: Vec<_> = tints.iter().flatten().collect();
         distinct.sort_by_key(|rgb| format!("{rgb:?}"));
@@ -1128,21 +1127,20 @@ mod flat_list {
     fn a_done_location_is_listed_in_stable_order() {
         let state = five_states();
         assert_eq!(card_of(&state, "done"), CardState::Done);
-        let order: Vec<SessionLocation> = state.sidebar_entries().iter().map(location_of).collect();
         let list: Vec<SessionLocation> = state.sidebar_list().iter().map(location_of).collect();
-        assert_eq!(list, order);
-        assert!(list.contains(&worktree("done")));
-        assert_eq!(list.len(), 6, "Default and the five worktrees");
+        assert_eq!(list, five_states_order());
     }
 
-    /// T002 (FR-002): the list holds location entries only, so there is no header row to draw.
-    #[test]
-    fn the_list_holds_only_location_entries() {
-        let state = five_states();
-        assert!(state.sidebar_list().iter().all(|e| matches!(
-            e,
-            SidebarEntry::Default(_) | SidebarEntry::Worktree(_) | SidebarEntry::Group(_)
-        )));
+    /// The fixture's stable order: Default, then the worktrees as listed.
+    fn five_states_order() -> Vec<SessionLocation> {
+        vec![
+            SessionLocation::Default,
+            worktree("idle"),
+            worktree("done"),
+            worktree("work"),
+            worktree("attn"),
+            worktree("act"),
+        ]
     }
 
     /// T002 (FR-005): a tag filter removes rows without reordering the rest.

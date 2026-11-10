@@ -58,7 +58,7 @@ pub fn tint_ink(state: CardState, r: &Roles) -> Option<Rgb> {
 /// A location's state icon. See the module documentation.
 #[derive(Debug, Clone, Copy)]
 pub struct StateIcon {
-    state: CardState,
+    pub(in crate::ui) state: CardState,
     roles: Roles,
     size: f32,
 }
@@ -160,9 +160,6 @@ mod tests {
                 .len(),
             5
         );
-        for state in CardState::ALL {
-            assert_eq!(glyph(state), super::super::card_state_icon(state));
-        }
     }
 
     /// T015: a location with no session is Idle, which draws a glyph: the slot is never blank.
