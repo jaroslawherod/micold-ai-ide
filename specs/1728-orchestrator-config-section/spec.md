@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft
+**Status**: Closed 2026-11-11 — shipped in PRs #1745, #1752, #1759, #1826
 
 **Input**: Issue #1728 (part of #1722): extend `micold_core::daemon_config` (#1523) with an
 `[orchestrator]` table (`url`, `ca_file`, `cert_file`, `key_file`, `enrollment_token_file`; secrets by

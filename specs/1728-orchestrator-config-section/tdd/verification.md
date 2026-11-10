@@ -88,3 +88,7 @@ Acceptance criteria (1)-(3) are built. One spec edge case (url with credentials 
 - Client rendering (`micold-client` `daemon_config_render.rs`, `daemon_config_validate.rs`) and non-orchestrator content in the range (#1532, #1536, #1723 commits).
 - Windows behavior; docs accuracy beyond presence of rule ids.
 - Flakiness under repeated runs; Debug/Display of types outside `Orchestrator`/`SecretPath`.
+
+## Re-verification after M3 (2026-11-11, against main 9bc969097)
+
+Findings 2, 3, 4, 5, 6 are closed by PR #1826: `check_https_url` refuses userinfo, a fragment and an empty host (`validate.rs:329-344`, test `o2_a_url_with_credentials_a_fragment_or_no_host_is_reported_at_its_value`); O4 has tests for a token with a certificate pair, a key alone and a certificate alone; `crates/micold-daemon/tests/config_check.rs` covers `--files` and the no-leak case, including a url password never echoed. Finding 1 is waived (see the ledger, T016). Findings 7-10 are LOW/MED test style and stay as follow-ups. No unbuilt behaviour remains.

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: milestone M3 (implemented, in review)
-- **Next step**: merge M3, then a new close unit
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
 | #1752 | M1 | merged | fa3664a38bde19508f8ad4215fc28ccc8a6d3a7f |
 | #1759 | M2 | merged | c63bfc7c625e9cac5e814565ff80e2d20296bb2c |
-| #1826 | M3 | open | |
+| #1826 | M3 | merged | 9bc969097f431c906b2dcf3fc2c03de4316d8137 |
+| (this PR) | Close | open | |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | merged |
 | M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #1759 | merged |
-| M3 | T014–T020 | full | refuse url credentials/fragment, close test gaps from tdd/verification.md (close unit found unbuilt behaviour) | | open |
+| M3 | T014–T020 | full | refuse url credentials/fragment, close test gaps from tdd/verification.md (close unit found unbuilt behaviour) | #1826 | merged |
 
 ## Decisions
 
