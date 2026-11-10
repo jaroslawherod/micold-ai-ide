@@ -2560,9 +2560,14 @@ impl DaemonState {
     /// The conversation `session`'s CLI reported in an `init` line (#943 FR-005a, provisional:
     /// ledger decision 2): kept, so every later launch resumes it, when it differs from the
     /// recorded one. Not on the wire.
-    pub fn follow_reported_conversation(&self, session: SessionId, handle: uuid::Uuid) {
-        if let Err(err) = self.lock().catalog.set_conversation(session, handle) {
-            tracing::warn!(session = %session.0, %err, "the conversation the CLI reported was not kept");
+    /// `true` when the recorded conversation changed.
+    pub fn follow_reported_conversation(&self, session: SessionId, handle: uuid::Uuid) -> bool {
+        match self.lock().catalog.set_conversation(session, handle) {
+            Ok(changed) => changed,
+            Err(err) => {
+                tracing::warn!(session = %session.0, %err, "the conversation the CLI reported was not kept");
+                false
+            }
         }
     }
 

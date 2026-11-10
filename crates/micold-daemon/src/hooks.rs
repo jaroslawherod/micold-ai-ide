@@ -377,7 +377,10 @@ enum HookClass {
     /// A sub-agent run started or stopped (feature 552, contract C2): recorded against the origin
     /// session, never applied to its activity (FR-007).
     Agent(AgentSignal),
-    /// A well-formed hook that carries no FSM transition (e.g. `SessionStart`) — accept, do nothing.
+    /// A `SessionStart` naming the conversation the CLI now runs (`session_id`): after `/clear` or
+    /// a resume it is a new one, which the session's later launches must resume (#1794).
+    Conversation(Uuid),
+    /// A well-formed hook that carries no FSM transition (e.g. an unknown event) — accept, do nothing.
     Ignored,
     /// The body was not valid JSON or lacked a usable `hook_event_name` — reject with `400`.
     Invalid,
@@ -483,6 +486,12 @@ async fn handle_connection(
             }
             respond(&mut stream, 200, "OK").await
         }
+        HookClass::Conversation(conversation) => {
+            if state.follow_reported_conversation(session, conversation) {
+                state.broadcast_catalog();
+            }
+            respond(&mut stream, 200, "OK").await
+        }
         HookClass::Ignored => respond(&mut stream, 200, "OK").await,
         HookClass::Invalid => respond(&mut stream, 400, "Bad Request").await,
     }
@@ -551,8 +560,13 @@ fn classify_hook(body: &str) -> HookClass {
         "PostToolUse" => HookClass::Event(HookKind::PostToolUse, value),
         "Stop" => HookClass::Event(HookKind::Stop, value),
         "Notification" => HookClass::Event(HookKind::Notification, value),
-        // SessionStart is well-formed but carries no FSM transition (the session starts Unknown).
-        "SessionStart" => HookClass::Ignored,
+        // SessionStart carries no FSM transition (the session starts Unknown), but its
+        // `session_id` is the conversation the CLI runs: `/clear` starts a new one (#1794).
+        "SessionStart" => value
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .and_then(|v| Uuid::parse_str(v).ok())
+            .map_or(HookClass::Ignored, HookClass::Conversation),
         // A helper agent starting or finishing inside a turn neither ends nor pauses it (feature
         // 613, FR-024, C17; feature 552, FR-007): it is recorded as an agent run, and the origin's
         // activity is not touched. A payload with no usable `agent_id` records nothing (FR-008).
@@ -781,6 +795,18 @@ mod tests {
         assert_eq!(ev("SubagentStart"), HookClass::Ignored);
         // SessionStart and unknown-but-valid hooks are accepted without a transition.
         assert_eq!(ev("SessionStart"), HookClass::Ignored);
+        // ... unless it names the conversation the CLI runs (#1794).
+        let id = Uuid::from_u128(7);
+        assert_eq!(
+            classify_hook(&format!(
+                r#"{{"hook_event_name":"SessionStart","source":"clear","session_id":"{id}"}}"#
+            )),
+            HookClass::Conversation(id)
+        );
+        assert_eq!(
+            classify_hook(r#"{"hook_event_name":"SessionStart","session_id":"nope"}"#),
+            HookClass::Ignored
+        );
         assert_eq!(ev("SomethingNew"), HookClass::Ignored);
     }
 

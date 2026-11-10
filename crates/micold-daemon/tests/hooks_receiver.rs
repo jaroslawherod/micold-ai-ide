@@ -385,6 +385,48 @@ async fn session_start_is_accepted_without_a_transition() {
     cat.kill().expect("kill");
 }
 
+/// #1794: a terminal session's `/clear` starts a new conversation, which the CLI announces in a
+/// `SessionStart` hook (`source: "clear"`); the catalog keeps it, so a restart resumes it rather
+/// than the conversation from before the clear.
+#[tokio::test]
+async fn a_cleared_conversation_is_kept_for_the_next_launch() {
+    let Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
+    let resume = || {
+        let snapshot = state.catalog_snapshot();
+        assert!(snapshot
+            .projects
+            .iter()
+            .any(|p| p.sessions.iter().any(|s| s.id == id)));
+        let store = _dirs.1.path();
+        Catalog::load(
+            Box::new(JsonFileStore::at(store.join("projects.json"))),
+            Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+        )
+        .workspace()
+        .find_session(id)
+        .map(|(_, s)| s.resume_handle())
+        .expect("saved")
+    };
+    assert_eq!(resume(), id.0, "before a clear it resumes its own id");
+
+    let cleared = Uuid::from_u128(0xC1EA);
+    let body = format!(
+        r#"{{"hook_event_name":"SessionStart","source":"clear","session_id":"{cleared}"}}"#
+    );
+    assert_eq!(post_hook(&addr, id.0, Some(&token), &body).await, 200);
+    assert_eq!(resume(), cleared, "after a clear it resumes the new one");
+    assert_eq!(activity(&state, id), ActivitySignal::Unknown);
+
+    cat.kill().expect("kill");
+}
+
 // ---- Feature 490: the status-line relay in the settings file (contract S1; FR-002, FR-020) ----
 
 mod status_line_block {
