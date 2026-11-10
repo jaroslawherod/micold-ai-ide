@@ -7,6 +7,9 @@ When: every milestone in the ledger is merged.
    holds a `CLEAN` review B for every milestone in the ledger: B already checked each milestone's
    tasks and scenarios against its diff. Do not run `speckit-docguard-guard`: its findings here
    were always repo conventions this repo never adopted.
+   Also run `scripts/autopilot/plan-drift.sh <feature-dir> M<K>` for each merged milestone, with
+   the commit before its PR and its merge commit as the base and end arguments, and treat unrecorded drift as unbuilt or unplanned
+   work: record it in `drift-M<K>.md` with a reason, or update tasks.md.
 2. **Unbuilt behaviour** found by either: cut it into a new milestone per
    [milestones.md](milestones.md), add it to the ledger, commit, and return `DONE` with
    `NEW MILESTONES: M<n>…` (do not push; they ship in the first new milestone's PR). The
