@@ -3,11 +3,14 @@
 //! Render-free: the model decides *what* shows and the collapse ranks; `ui/toolbar.rs` draws it and
 //! the layout does the collapsing, so there is one source of truth for the order.
 
-use crate::app::State as App;
+use crate::app::{Message, State as App};
+use crate::features::composer::Msg as ComposerMsg;
+use crate::features::session::{switch_entries, Msg as SessionMsg};
+use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::session_strip::session_working;
 use micold_core::context_header::changes_label;
 use micold_core::format::group_digits;
-use micold_core::session::SessionId;
+use micold_core::session::{SessionId, SessionKind};
 use micold_core::structured::insights::ContextState;
 use micold_core::structured::transcript::{format_cost, format_turns};
 
@@ -22,6 +25,12 @@ pub const NO_USAGE_TEXT: &str = "\u{2013}";
 
 /// What the meter's tooltip says with no usage yet.
 pub const NO_USAGE_TOOLTIP: &str = "No usage yet";
+
+/// The worktree menu trigger's accessible name (FR-013).
+pub const WORKTREE_MENU_NAME: &str = "Worktree actions";
+
+/// The raw-events toggle's label, in the worktree menu.
+pub const SHOW_RAW_EVENTS: &str = crate::features::transcript_selection::shown::SHOW_RAW_EVENTS;
 
 /// Whether the shown session is working, as the status badge says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +135,70 @@ impl MeterText {
     }
 }
 
+/// One segment of the worktree menu's view control.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ViewSegment {
+    /// The segment's words, also its accessible name.
+    pub label: &'static str,
+    /// Whether this is the session's current view.
+    pub selected: bool,
+    /// What pressing it sends: nothing for the current view.
+    pub press: Option<Message>,
+}
+
+/// The session's kind and what switching it needs (data-model.md *WorktreeMenuModel*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ViewSwitch {
+    /// The session the control switches.
+    pub session: SessionId,
+    /// Its current view.
+    pub current: SessionKind,
+}
+
+/// What the worktree `⋮` menu holds (data-model.md *WorktreeMenuModel*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeMenuModel {
+    /// Whether the structured view shows raw events (`settings.show_raw_events`).
+    pub show_raw: bool,
+    /// The view control: `None` for a session that is not Claude Code's, which has one view.
+    pub view: Option<ViewSwitch>,
+}
+
+impl WorktreeMenuModel {
+    /// What the raw-events toggle sends: the opposite of what shows now.
+    pub fn raw_events_message(&self) -> Message {
+        Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(
+            !self.show_raw,
+        )))
+    }
+
+    /// The view control's two segments, Structured then Terminal; none without a view control. A
+    /// press asks for the existing switch ([`ComposerMsg::SwitchRequested`]), which keeps its own
+    /// confirmation while work is in progress.
+    pub fn view_segments(&self) -> Vec<ViewSegment> {
+        let Some(view) = self.view else {
+            return Vec::new();
+        };
+        [
+            ("Structured", SessionKind::Structured),
+            ("Terminal", SessionKind::Terminal),
+        ]
+        .into_iter()
+        .map(|(label, kind)| {
+            let selected = view.current == kind;
+            ViewSegment {
+                label,
+                selected,
+                press: (!selected).then_some(Message::Composer(ComposerMsg::SwitchRequested {
+                    session: view.session,
+                    to: kind,
+                })),
+            }
+        })
+        .collect()
+    }
+}
+
 /// What the top bar shows for the selected worktree or session (data-model.md *HeaderBarModel*).
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeaderBarModel {
@@ -137,6 +210,8 @@ pub struct HeaderBarModel {
     pub changes: String,
     /// The location the Changes button opens.
     pub location: micold_core::session::SessionLocation,
+    /// The worktree `⋮` menu's content.
+    pub worktree_menu: WorktreeMenuModel,
 }
 
 impl HeaderBarModel {
@@ -162,6 +237,16 @@ impl HeaderBarModel {
                 Status::Idle
             },
             changes: changes_label(crate::ui::session_area::counts_of(state, &location)),
+            worktree_menu: WorktreeMenuModel {
+                show_raw: state.settings.show_raw_events,
+                view: session.and_then(|id| {
+                    let current = state.workspace.find_session(id)?.1.kind;
+                    (!switch_entries(state, id).is_empty()).then_some(ViewSwitch {
+                        session: id,
+                        current,
+                    })
+                }),
+            },
             location,
         })
     }
@@ -177,6 +262,25 @@ pub enum HeaderMenu {
     Plus,
     /// The worktree `⋮` menu of the top bar.
     Worktree,
+}
+
+/// The worktree `⋮` menu as a floating surface: a popover, so Escape or an outside click closes it
+/// before anything under it (FR-013).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorktreeMenu;
+
+crate::floating_surface!(
+    WorktreeMenu,
+    id: crate::overlay::SurfaceId::new("header_worktree_menu"),
+    layer: Popover,
+    cancelled_by: Message::HeaderBar(Msg::Dismissed),
+);
+
+impl crate::overlay::registry::Registered for WorktreeMenu {
+    fn open_in(state: &App) -> Option<Self> {
+        (state.header_bar.menu == HeaderMenu::Worktree && HeaderBarModel::of(state).is_some())
+            .then_some(WorktreeMenu)
+    }
 }
 
 /// What the header menus' state is told.

@@ -45,7 +45,8 @@ its detail.
 
 By default the transcript leaves out the session start, the unrecognised or unreadable entries, a
 tool result without its call, and the footer of a turn that succeeded. Turn **Show raw events** on
-in the bar above the transcript to see them as the summary lines described above.
+in the bar above the transcript, or in the worktree **⋮** menu in the top bar (see
+*The worktree menu* below), to see them as the summary lines described above.
 
 - The switch is off by default and applies to every structured session in the window at once.
 - Errors stay visible with the switch off: a failed turn and an error result are always drawn.
@@ -53,6 +54,18 @@ in the bar above the transcript to see them as the summary lines described above
   time the app starts; if the settings file cannot be written, the app says so and the choice
   still applies until you quit.
 - Changing the switch clears any text you had selected in a transcript, because the rows changed.
+
+## The worktree menu
+
+The **⋮** button named *Worktree actions*, in the top bar beside the settings button, opens a menu
+of actions for the selected worktree or session. The app menu (the other **⋮**) holds none of them.
+
+- **Show raw events** is the switch described above. The row says **On** or **Off**, pressing it
+  flips it, and the menu stays open so you see the new state.
+- **Structured / Terminal** appears for a Claude Code session and shows which view the session is
+  in. Press the other one to switch, as **Open in terminal** and **Open in structured view** do.
+  Other CLIs have one view, so the control is not shown.
+- Escape, or a press outside the menu, closes it; so does selecting another worktree or session.
 
 ## Status, Changes and context in the top bar
 
