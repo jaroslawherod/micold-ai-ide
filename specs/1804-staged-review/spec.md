@@ -126,6 +126,8 @@ exist in the feature directory.
   only from the current review's verdict, and record both results.
 - **FR-009**: The shadow comparison MUST record, per PR, findings of each review and cache-read
   tokens of each, and the switch decision MUST be recorded with the numbers.
+- **FR-010**: Round-limit and snapshot rules in `review-rounds.md` MUST apply unchanged to the
+  staged review.
 - **FR-011**: When the facts script fails (non-zero exit, no `origin/main`, detached HEAD), or any
   probe is unanswered or errors, the unit MUST run the single-agent review instead and MUST NOT
   report the staged result as `CLEAN`.
@@ -137,8 +139,6 @@ exist in the feature directory.
 - **FR-013**: The switch decision MUST state what changes: when switching, the three files make the
   staged flow the default and drop shadow mode; when not, shadow mode is removed and the finding
   recorded.
-- **FR-010**: Round-limit and snapshot rules in `review-rounds.md` MUST apply unchanged to the
-  staged review.
 
 ### Key Entities
 

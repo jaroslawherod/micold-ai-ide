@@ -34,12 +34,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | e7c0eefe9082f5ab845344855d1e3a448d0f1837:653769a81adcc13e2f9695de8f9ade892d15cf58 | pending |
+| Spec | 1 | e7c0eefe9082f5ab845344855d1e3a448d0f1837:653769a81adcc13e2f9695de8f9ade892d15cf58 | CHANGES: 4 MAJOR (fixed) |
+| Spec | 2 | 5cde486ee9e7e9df34b7a01fbc085ba42eb9247d:3682d99c9b3cdda2488e886dad070dbbc3470657 | CLEAN (1 MINOR fixed) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| spec | Spec 1 | F2 implementation names in FRs | Feature changes autopilot's own tooling files; naming them is scope. SC-004 reworded. |
 
 ## Handover
 
