@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1802
 - **Worktree branch**: feat/1802_autopilot-bind-review-verdicts-to-the-pr-head-sha
 - **Started**: 2026-11-10
-- **Phase**: clarify
-- **Next step**: plan (clarify round 1: CLEAN, no questions)
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -37,6 +37,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 17711061d98b76cdd180592ea1476e81d74cdd20:653769a81adcc13e2f9695de8f9ade892d15cf58 | CHANGES: 1 BLOCKER 3 MAJOR (F1-F4 fixed: ledger-excluded binding model, guard helper on all merge paths, verdict vocabulary and Scope column, Head vs Snapshot reconciled; F5-F7 fixed) |
 | Spec | 2 | 389ee48108da761a86aff384ee6d48665552c109:653769a81adcc13e2f9695de8f9ade892d15cf58 | CHANGES: 4 MAJOR (squash/hook mechanism, carry persistence without moving head, assumption contradiction, design scope mapping; all fixed) |
 | Spec | 3 | 7a3a1bccf9922b772e9dd6e4dc666ac7d828b9e1:653769a81adcc13e2f9695de8f9ade892d15cf58 | CLEAN (2 MINOR fixed, prose only) |
+| Plan | 1 | c7eba65c50f3b3082937ba9e8b1a6326843f84d0:a01912112b04ada1ab01aed1ecd4869197834b0d | CHANGES: 3 MAJOR (ledger pathspecs, unreadable ledger not unguarded, hook test change; all fixed) |
+| Plan | 2 | 7eb9ad18b06bf39a7c7de16ef2ec64e8420ded4b:a01912112b04ada1ab01aed1ecd4869197834b0d | CHANGES: 1 MAJOR (hook test at line 514 also changes; fixed), 1 MINOR (:(glob) magic; fixed) |
+| Plan | 3 | dad4eb34edb2f746a9a8d808e13ddcf0e60fc424:a01912112b04ada1ab01aed1ecd4869197834b0d | CLEAN |
 
 ## Declined review findings
 
