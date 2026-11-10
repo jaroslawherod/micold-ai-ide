@@ -220,6 +220,11 @@ fn base() -> State {
             entry: SessionLocation::Default,
         },
     );
+    // Any message settles the header menus' remembered selection, as in the running app, so the
+    // first opener below is not read as a selection change (feature 1793).
+    st.update(Message::HeaderBar(
+        micold_client::features::header_bar::Msg::Dismissed,
+    ));
     st
 }
 
