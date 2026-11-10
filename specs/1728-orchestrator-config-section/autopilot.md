@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: milestone M2
-- **Next step**: M2 PR open (see Pull requests); wait for CI and merge, then close
+- **Phase**: milestone M3
+- **Next step**: implement M3 (T014–T020), then a new close unit
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1745 | Design | merged | eaaca02fd7fa5893f63520699c9ccd12f28e494d |
 | #1752 | M1 | merged | fa3664a38bde19508f8ad4215fc28ccc8a6d3a7f |
-| #1759 | M2 | open | |
+| #1759 | M2 | merged | c63bfc7c625e9cac5e814565ff80e2d20296bb2c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | merged |
-| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #1759 | in review |
+| M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #1759 | merged |
+| M3 | T014–T020 | full | refuse url credentials/fragment, close test gaps from tdd/verification.md (close unit found unbuilt behaviour) | | pending |
 
 ## Decisions
 
@@ -53,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Rebased onto origin/main 8470f7464 (one trivial conflict in daemon_config/tests.rs: both new tests kept; HEAD c0ce24a3f, local only, NOT pushed). Full `mise run gate` is red on this machine on one test outside this diff: `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` (from #1532 on main; fails identically twice, passes with a different `$HOME`, so it depends on the real `~/.local/share/micold-ai-ide/daemons` data; origin/main CI is red too, on another test). Next: get a green gate (clean HOME for that test, or fix #1532's test), then `git push --force-with-lease -u origin HEAD`.
+None. M1 #1752 and M2 #1759 merged (M2 CI had one flake, `structured_permission::two_sessions_waiting_are_marked_separately`, green on rerun; the local-gate failure of `ai_cli_config a_configured_model_is_claude_codes_default_launch_model` was a HOME-dependent test outside this diff). Close unit ran converge (no unbuilt tasks) and tdd-verify (FAIL: url credentials/fragment unbuilt, O4 mutant survived, no TDD evidence recorded); cut M3 from `tdd/verification.md`. T016 (no test-list/cycle-log for M1/M2): record a waiver in this ledger rather than fabricate evidence.
 
 ## Open escalation
 
