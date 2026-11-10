@@ -19,6 +19,7 @@ use micold_core::daemon_config::ai_cli::{
 };
 use micold_core::daemon_config::matching::parse_token_file;
 use micold_core::daemon_config::{self, DaemonConfig};
+use micold_core::daemon_config::ai_cli_seed::sign_in_expires_at_secs;
 use micold_core::protocol::messages::{AiCliTokenExpiry, ConfigStatus, TokenReach};
 
 use crate::config_load::{fingerprint, load_file, validate_text, LoadError, LoadedFile};
@@ -168,6 +169,27 @@ impl ConfigRuntime {
                     .then(|| AiCliTokenExpiry {
                         cli: cli.id.as_str().to_string(),
                         expires_at_secs: expires_at,
+                    })
+                })
+                .collect(),
+            ai_cli_sign_ins: config
+                .ai
+                .cli
+                .iter()
+                .filter_map(|cli| {
+                    let file = cli.sign_in_file.as_ref()?;
+                    let contents = match file.read() {
+                        Ok(contents) => contents,
+                        Err(e) => {
+                            tracing::warn!(error = %e, cli = ?cli.id, "sign_in_file could not be read");
+                            return None;
+                        }
+                    };
+                    let expires_at_secs =
+                        sign_in_expires_at_secs(cli.id, contents.expose())?;
+                    Some(AiCliTokenExpiry {
+                        cli: cli.id.as_str().to_string(),
+                        expires_at_secs,
                     })
                 })
                 .collect(),

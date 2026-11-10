@@ -2472,6 +2472,11 @@ pub struct ConfigStatus {
     /// T065a) — a sign-in that will go stale without the CLI's own refresh.
     #[serde(default)]
     pub ai_cli_tokens: Vec<AiCliTokenExpiry>,
+    /// Every configured `[[ai.cli]]` `sign_in_file` whose access-token expiry (`expiresAt`) could
+    /// be read, soonest or not (#1532, T100, FR-040): the diagnostic shows each delivered sign-in's
+    /// expiry, so a sign-in that was relayed stale is visible.
+    #[serde(default)]
+    pub ai_cli_sign_ins: Vec<AiCliTokenExpiry>,
 }
 
 /// One configured `[[ai.cli]]` entry whose `token_file` is about to expire (#1532, T065a).
