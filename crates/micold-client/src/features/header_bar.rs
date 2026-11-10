@@ -190,6 +190,12 @@ pub enum Msg {
     Chosen,
 }
 
+/// Apply `msg` to the header menus (shape A): pure, and nothing for the root to run.
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
+    state.header_bar.update(msg);
+    Vec::new()
+}
+
 /// What the header menus remember.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
