@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 (incl. T007a) | full | review-facts.py writes the facts file; tests in autopilot.test.sh | #1820 | merged |
-| M2 | T011–T015 | full | three skill files describe the staged flow, fallback, shadow | #… | pending |
+| M2 | T011–T015 | full | three skill files describe the staged flow, fallback, shadow | #… | open |
 
 ## Decisions
 
@@ -42,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 556972415e82386de902014ef228fc9a6f47699e:69e09ead864f03119471a114f103cb65c96a9ce3 | CLEAN (2 MINOR, noted) |
 | Code M1 A | 1 | 7a69cc9c5b80df71c7dabc6a2ece54b92a6f37da:27245460b828b59289090067c3903b7231e2f3f0 | 10 findings, none BLOCKER/MAJOR by rubric; fixed: char literals, deletions, git-config prefixes, lcov errors, callers budget (tests added); left: raw/multiline strings, attribute lines, bare-name callers (approximate by contract) |
 | Code M1 B | 1 | same | CLEAN (2 MINOR: char literals fixed; no tdd cycle-log in this feature) |
+| Code M2 A | 1 | b4cf939544170bab3a03969ffdb29ac69e6d0736:547ce702ba18af1020797f46d9adcf45462d474e | 3 MINOR: --base-snapshot value named (fixed); NEEDS-MORE token and tighter greps left (wording contract) |
+| Code M2 B | 1 | same | CLEAN |
 
 ## Declined review findings
 

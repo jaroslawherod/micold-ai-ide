@@ -44,7 +44,7 @@ cache reuses them across reviewers; everything that varies goes in part 5.
 
 ## Staged review (code diffs; artifact reviews stay single-agent; same output contract)
 
-1. **Facts**: `scripts/autopilot/review-facts.py --out-dir <scratchpad>` (`--base-snapshot` in round
+1. **Facts**: `scripts/autopilot/review-facts.py --out-dir <scratchpad>` (`--base-snapshot <last snapshot>` in round
    2+; `--lcov <file>` only if the unit already has one). When the facts script fails: run the
    single-agent review above instead.
 2. **Plan**: a fresh `autopilot-reviewer`: parts 1 to 4, the facts path, a one-sentence risk, the
