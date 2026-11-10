@@ -110,7 +110,11 @@ mod tests {
     #[test]
     fn only_the_other_segment_sends_a_message() {
         let c = control(0);
-        assert_eq!(c.segments()[0].press(), None, "the selected one sends nothing");
+        assert_eq!(
+            c.segments()[0].press(),
+            None,
+            "the selected one sends nothing"
+        );
         assert_eq!(c.segments()[1].press(), Some(&"terminal"));
         let c = control(1);
         assert_eq!(c.segments()[0].press(), Some(&"structured"));

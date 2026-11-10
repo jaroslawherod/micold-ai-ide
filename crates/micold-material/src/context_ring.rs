@@ -204,12 +204,24 @@ mod tests {
     #[test]
     fn the_text_gives_way_and_the_ring_stays() {
         let r = roles();
-        let full = size(ContextRing::new(r).ratio(Some(0.5)).text("8% · $1.28"), 400.0);
+        let full = size(
+            ContextRing::new(r).ratio(Some(0.5)).text("8% · $1.28"),
+            400.0,
+        );
         let none = size(ContextRing::new(r).ratio(Some(0.5)), 400.0);
-        let squeezed = size(ContextRing::new(r).ratio(Some(0.5)).text("8% · $1.28"), SIDE);
+        let squeezed = size(
+            ContextRing::new(r).ratio(Some(0.5)).text("8% · $1.28"),
+            SIDE,
+        );
         assert_eq!(none.width, SIDE);
-        assert!(full.width > SIDE + GAP, "the text is beside the ring: {full:?}");
-        assert_eq!(squeezed.width, SIDE, "room for the ring only: the ring alone");
+        assert!(
+            full.width > SIDE + GAP,
+            "the text is beside the ring: {full:?}"
+        );
+        assert_eq!(
+            squeezed.width, SIDE,
+            "room for the ring only: the ring alone"
+        );
         let tipped = size(
             ContextRing::new(r)
                 .ratio(Some(0.5))

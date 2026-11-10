@@ -148,15 +148,12 @@ impl HeaderBarModel {
             return None;
         }
         let location = state.shown_location()?;
-        let session = state
-            .session
-            .active
-            .filter(|id| {
-                state
-                    .active_sessions()
-                    .iter()
-                    .any(|s| s.id == *id && s.location == location)
-            });
+        let session = state.session.active.filter(|id| {
+            state
+                .active_sessions()
+                .iter()
+                .any(|s| s.id == *id && s.location == location)
+        });
         Some(Self {
             meter: MeterText::of(state, session),
             status: if session.is_some_and(|id| session_working(state, id)) {
@@ -219,7 +216,10 @@ impl State {
 
     /// Close the menu once the selection is not the one it was opened under (a selection change
     /// closes it); remember the selection otherwise.
-    pub fn follow(&mut self, selection: Option<(micold_core::session::SessionLocation, Option<SessionId>)>) {
+    pub fn follow(
+        &mut self,
+        selection: Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+    ) {
         if self.under != selection {
             self.menu = HeaderMenu::None;
             self.under = selection;

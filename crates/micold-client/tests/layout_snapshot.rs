@@ -263,6 +263,10 @@ mod status_bar_fits;
 // Builds its own state and reads no cache; it shares this binary for the `support::layout` passes.
 #[path = "gates/title_bar_fits.rs"]
 mod title_bar_fits;
+#[path = "gates/top_bar_collapse.rs"]
+mod top_bar_collapse;
+#[path = "gates/top_bar_items.rs"]
+mod top_bar_items;
 
 // --- The whole window's regions fit against each other (feature 1128, T025: gate W) -------------
 

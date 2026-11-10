@@ -1614,6 +1614,9 @@ impl State {
             crate::ui::overview::settle_card_menu(self);
             crate::features::agent_confirm::release(self);
             self.follow_header();
+            // A selection change closes an open header menu (feature 1793, data-model.md).
+            let selection = self.shown_location().map(|l| (l, self.session.active));
+            self.header_bar.follow(selection);
         }
     }
 

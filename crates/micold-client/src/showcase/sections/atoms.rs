@@ -408,6 +408,51 @@ pub fn count_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
+/// `ContextRing` — the top bar's context meter (feature 1793): empty, with its text, the ring
+/// alone, and the warning colour near compaction.
+pub fn context_ring<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let ring = || material::ContextRing::new(roles);
+    arrange(
+        vec![
+            posed("empty", ring().ratio(None).text("\u{2013}"), roles),
+            posed(
+                "8% with text",
+                ring()
+                    .ratio(Some(0.08))
+                    .text("8% \u{b7} $1.28")
+                    .tooltip("Tokens: 84,671 of 1,000,000 (8%)\nCost: $1.28"),
+                roles,
+            ),
+            posed("ring only", ring().ratio(Some(0.5)), roles),
+            posed(
+                "warning",
+                ring()
+                    .ratio(Some(0.92))
+                    .text("92% \u{b7} $4.10")
+                    .warning(true),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
+/// `SegmentedControl` — two mutually exclusive segments, each selected in turn (feature 1793).
+pub fn segmented_control<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    let control = |first: bool| {
+        material::segmented::SegmentedControl::new(roles)
+            .segment("Structured", first, Message::NoOp)
+            .segment("Terminal", !first, Message::NoOp)
+    };
+    arrange(
+        vec![
+            posed("first selected", control(true), roles),
+            posed("second selected", control(false), roles),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `UnreadMark` — on a session row, beside the same row without it, and on the switcher's button
 /// (feature 039, FR-030). The switcher's rows with their unread counts are `MenuOverlay`'s second
 /// opener, because a menu's rows exist only inside its panel.

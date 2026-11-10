@@ -54,6 +54,25 @@ in the bar above the transcript to see them as the summary lines described above
   still applies until you quit.
 - Changing the switch clears any text you had selected in a transcript, because the rows changed.
 
+## Status, Changes and context in the top bar
+
+With a worktree or session selected, the top bar shows, before the settings button and the app
+menu and in this order:
+
+1. **Context meter**: a small ring with the share of the context window used and the session's cost,
+   for example `8% · $1.28`. Hover the ring for the tokens used out of the window, the cost and the
+   number of turns. The ring turns to the warning colour near compaction. A session with no usage
+   yet shows an empty ring and no cost.
+2. **Status**: `Working` while the session's process is running, `Idle` otherwise (starting,
+   stopped, failed or exited).
+3. **Changes**: opens the changes view of the shown worktree, as the Changes button did before; it
+   reads `Changes · no changes`, or the number of files and lines changed.
+
+None of these show on the Overview.
+
+When the window is narrow the bar gives way in order: the ring's text hides first (the ring and the
+tooltip, which still carries the cost, stay), then the **Changes** label hides and its icon stays.
+
 ## The hidden-events notice
 
 When the switch is off and some entries are hidden, a line at the start of the transcript says how

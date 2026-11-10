@@ -18,6 +18,9 @@
 
 use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
+use crate::features::header_bar::{
+    HeaderBarModel, MeterText, Status, CHANGES_LABEL_RANK, RING_TEXT_RANK,
+};
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::project::Msg as ProjectMsg;
@@ -26,9 +29,10 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
-    unread_total_tooltip, AppMark, Breadcrumb, FieldButton, IconButton, MenuItem, MenuTrigger,
-    Toolbar, Tooltip,
+    unread_total_tooltip, AppMark, Breadcrumb, Button, ButtonVariant, ContextRing, Ellipsized,
+    FieldButton, GiveWayRow, IconButton, MenuItem, MenuTrigger, Tag, Toolbar, Tooltip, TypeRole,
 };
+use crate::ui::session_area::changes_press;
 use iced::widget::image;
 use iced::Element;
 use micold_core::metadata::APP_NAME;
@@ -240,16 +244,86 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .max_width(anatomy::app_bar::FIELD_MAX_WIDTH)
         .on_press_maybe(model.jump);
 
-    Toolbar::new(r)
+    let mut bar = Toolbar::new(r)
         .mark(AppMark::new(app_mark_handle(), APP_NAME, r))
         .leading(switcher)
-        .centre(Tooltip::new(jump, jump_tooltip(), r))
-        .action(Tooltip::new(settings, "Settings", r))
+        .centre(Tooltip::new(jump, jump_tooltip(), r));
+    // The shown location's context meter, status and Changes button, before Settings (feature
+    // 1793, FR-003, FR-004); none on the Overview. The ring's text goes first as the bar narrows,
+    // then the Changes label, its icon staying (FR-011).
+    if let Some(header) = HeaderBarModel::of(state) {
+        bar = bar
+            .action_giving_way(RING_TEXT_RANK, RING_FLOOR, meter_ring(&header.meter, r))
+            .action(status_badge(header.status, r))
+            .action_giving_way(
+                CHANGES_LABEL_RANK,
+                CHANGES_ICON_FLOOR,
+                changes_button(state, &header, r),
+            );
+    }
+    bar.action(Tooltip::new(settings, "Settings", r))
         .action(menu)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
         // the sidebar's offset rather than stored, so nothing else can set it.
         .elevated(state.app_bar_elevated())
         .into()
+}
+
+/// The ring's narrowest: the ring alone.
+const RING_FLOOR: f32 = micold_material::context_ring::SIDE;
+
+/// The Changes button's narrowest: the icon and the button's own padding, the label hidden.
+const CHANGES_ICON_FLOOR: f32 = 56.0;
+
+/// The context meter's ring, its text hiding first (FR-005, FR-011); the tooltip carries the tokens,
+/// cost and turns, so the cost survives the text hiding.
+fn meter_ring<'a>(meter: &MeterText, r: tokens::Roles) -> Element<'a, Message> {
+    ContextRing::new(r)
+        .ratio(meter.ratio)
+        .text(meter.text.clone())
+        .warning(meter.warning)
+        .tooltip(meter.accessible.clone())
+        .into()
+}
+
+/// The Idle/Working badge: a quiet container tone while idle, the primary fill while working.
+fn status_badge<'a>(status: Status, r: tokens::Roles) -> Element<'a, Message> {
+    let tag = match status {
+        Status::Idle => {
+            Tag::new(status.label(), r.secondary_container).solid(r.on_secondary_container)
+        }
+        Status::Working => Tag::new(status.label(), r.primary).solid(r.on_primary),
+    };
+    tag.one_line().into()
+}
+
+/// The Changes button: the Git icon always, the label hiding when the bar is narrow (FR-011). A
+/// press does what the header's Changes button does ([`changes_press`]).
+fn changes_button<'a>(
+    state: &State,
+    header: &HeaderBarModel,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
+    let (press, button) = changes_press(state, &header.location);
+    let tooltip = format!("{}\n{}", button.tooltip, header.changes);
+    let tint = ButtonVariant::Outlined.content(r, None);
+    let label =
+        Ellipsized::<Message>::at_role_spaced(header.changes.clone(), TypeRole::Action, tint)
+            .shrink();
+    Tooltip::new(
+        Button::with_content(
+            GiveWayRow::new(0.0).hide(0, label),
+            ButtonVariant::Outlined,
+            r,
+        )
+        .leading(Icon::Git)
+        .density(micold_core::tokens::density::DENSE)
+        .selected(button.selected)
+        .on_press(press),
+        tooltip,
+        r,
+    )
+    .into()
 }
 
 /// What the Settings button sends (FR-011, R10): `Opened` while Settings is closed, nothing while
