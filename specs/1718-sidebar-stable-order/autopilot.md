@@ -60,7 +60,7 @@ None.
 
 ## Open escalation
 
-None.
+Close commit is local (full gate green, review CLEAN, ledger done) but not pushed: `git push --force-with-lease` was denied by the permission classifier (the remote branch holds pre-squash commits, so a plain push is rejected). Needs the user to allow the force-with-lease push (or push it), then `gh pr create` per pr.md (title `docs(1718): close the spec (#1718)`, body ends `Refs #1718`), then record the PR number in the ledger.
 
 ## Follow-ups not done
 
