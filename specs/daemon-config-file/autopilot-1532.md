@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
 - **Phase**: milestone M2b
-- **Next step**: implement T065a–T065c (keeping a delivered sign-in valid without a CLI refresh), then gate, reviews A and B, and open the M2b PR.
+- **Next step**: run the full gate, review B, then push and open the M2b PR.
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|
 | M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 (merged, `8470f7464ec548474530511495dd9ded211e5ba4`) |
 | M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | #1772 (merged, `f585c83c829a751556ded4115f3c3275e7834221`) |
-| M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | — |
+| M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | (PR number recorded below once opened) |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | — |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
 
@@ -82,6 +82,8 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 
 ## Review rounds
 
+Milestone M2b review A (autopilot-reviewer, code-review high): CHANGES round 1 - F1 MAJOR derived copy world-readable/non-atomic: fixed (owner_only::write, 0600/0700, tested); F2 MAJOR dest==source/symlink could overwrite the user's own sign-in: fixed (same_file check, InvalidInput, tested); F3 MAJOR panicking SystemTime add on huge exp: fixed (checked_add, tested); F4 MINOR unexpected JSON shape relayed with refresh token: fixed (RelayError::UnexpectedShape, tested); F5 MINOR status path dropped a token_file read failure silently: fixed (tracing::warn). Uncommitted validate.rs diff (key_variables reuses token_file_env_variable) was a behaviour-neutral refactor belonging to T065a; committed. Review B: see below / PR body.
+
 Tasks review A round 1 (snapshot `08da6558cfb79253faee3b170a8c04b4666d9efa:0144800f6c91e1ce455e0ed636ba5c517d601826`): CHANGES. F1 [MAJOR] T096/T097/T099/T100 named no failing test — fixed, each now leads with "Failing test in `<file>`". F2 [MAJOR] M3's Verify line missed a command for T100's pod-Secret re-delivery — fixed, added `cargo test -p micold-daemon --test config_reload` and `cargo test -p micold-core kube::credentials`. F3 [MINOR] FR-040 looked fully satisfied in M2's Satisfies line — fixed, M2's Deliverable and Satisfies note it is only partial there (T065a's expiry warning), full `expiresAt` display is M3's T100. All three fixed, no new round needed if the fix diff holds (review-rounds.md round 2).
 
 Tasks review A round 2 (sonnet, fix diff only; snapshot `a0459e0031fc4415dd96b496c1c308ca07e11886:c8d8ea65b9e5a5d8c25228f0383c1c912b0538a7`): CLEAN. All three round 1 fixes confirmed to hold; both new Verify targets (`config_reload.rs`, `kube::credentials`) confirmed to exist. (Earlier snapshot `3ad4fced4370a500be17fe9f2d2a4553dfbaba24:93bc2a7f9a0a8723aa5ec8061cfe36c235c9f6f3` went stale when the branch rebased onto `origin/main` past 11 new commits, one of which touched `tasks.md`'s milestones heading line; resolved with no content loss, see note below.)
@@ -95,6 +97,8 @@ Milestone M2a review A round 1 (code-review skill, high effort, origin/main...HE
 Milestone M2a review B (conformance, sonnet, background dispatch): CHANGES on round 1 - F1 [MAJOR] specs/daemon-config-file/tdd/cycle-log.md had no Issue 11 M2a (T065) entry - fixed, prose only: appended a TEST_AFTER entry (baseline, what was removed, each delivery path's green tests, the full-gate result) to specs/daemon-config-file/tdd/cycle-log.md. No new round (review-rounds.md's prose-only exception): the fix adds no code, test or behaviour claim, only documents tests and results review B itself already ran and reported. F2 [MINOR, informational] noted the Verify commands were still compiling at report time; on its second pass review B ran both to completion itself: cargo test -p micold-core sandbox::mod -- credential (103 passed) and cargo test -p micold-core kube::credentials (7 passed, including the_pod_relink_targets_claudes_own_sign_in_directory). Scope, ownership and task-content checks all passed: CredentialShare::writable fully removed, all three sandbox kinds (container, pod, host/SSH) covered, user guide updated, no leftovers, no M2b work leaked in.
 
 ## Gate
+
+M2b: full gate pending (an earlier run went red only on this diff's own new test, an over-strict Claude `u64::MAX` ms assertion, fixed).
 
 Rebased onto `origin/main` (8005e00e9 on top), clean (no conflicts). `mise run check` and `cargo clippy --workspace --all-targets -- -D warnings` both clean at `8005e00e9`. The full `mise run gate` was run twice; both runs failed only on tests outside this diff's files (`exclusivity::a_displaced_client_is_not_terminated`, `history_damaged::*`, `history_stop_request::*`, `mcp::worktree_refresh::*`, `micold-material::ellipsized::*`, and once `micold-core::streaming_child::*`) — none of them touch `daemon_config`, `provider`, `terminal`, `provision`, `state.rs`'s AI-CLI code, `hooks.rs`, or `ai_key.rs`, and the set and content changed between the two runs (classic load-timing flakiness; the machine was building several other worktrees concurrently throughout, per the repeated `build-lock.sh: another build holds the lock` lines). `a_displaced_client_is_not_terminated` was separately reproduced on a clean `git stash`'d checkout of this branch's pre-M1 tip (`98aa6edcc`), confirming it predates this diff. The scoped gate (`scripts/autopilot/scoped-gate.sh`, fmt + clippy + the changed crates' tests) is green except that same pre-existing flake. Per `gate.md`'s fallback, recorded the scoped-gate-passing tree and pushed with "Local gate: scoped only, full gate left to CI" — CI's full-workspace run, on a quieter machine, is the tie-breaker; a red CI finding for one of these six tests is this gate failing (`red-ci.md`), any other red is not.
 
@@ -281,81 +285,7 @@ verdict; attempt 3 is this scope's last before an escalation.
 
 ## Handover
 
-Milestone M2b (T065a–T065c): design and exploration are done (ledger D9), **no code written yet** —
-this unit hit the 150k context cap during research, before the first edit. The next unit should
-implement directly from the plan below; do not re-derive it.
-
-**T065a** (token_file wiring + 14-day expiry warning, backend only — D9):
-1. `crates/micold-core/src/daemon_config/ai_cli.rs` (after `api_key_env_variable`, ~line 35): add
-   `pub fn token_file_env_variable(cli: CliId) -> Option<&'static str>` — `ClaudeCode` →
-   `"CLAUDE_CODE_OAUTH_TOKEN"`, `Copilot` → `"COPILOT_GITHUB_TOKEN"`, `Pi`/`Codex`/`Opencode` →
-   `None` (V9 already refuses `token_file` for those). Add
-   `pub const TOKEN_FILE_EXPIRY_WARNING_WINDOW: std::time::Duration` (14 days) and
-   `pub fn token_file_expires_within(expires_at: u64, now: std::time::SystemTime, window:
-   std::time::Duration) -> bool`. Tests next to the existing `mod tests` (pattern at line 261+;
-   `cli()` fixture already there).
-2. `crates/micold-daemon/src/state.rs` `with_configured_env` (~line 748-786): mirror the
-   `api_key_file` block — read `cli.token_file`, parse with
-   `micold_core::daemon_config::matching::parse_token_file` (matching.rs:75, already used for
-   `[[github.tokens]]`) to strip any trailing `expires_at=` line before it reaches the env value,
-   inject via `token_file_env_variable`, replacing any existing value of that name; never put it in
-   argv. A read failure logs and contributes nothing (FR-019, same as `api_key_file`).
-3. `crates/micold-core/src/protocol/messages.rs`: add `AiCliTokenExpiry { pub cli: String, pub
-   expires_at_secs: u64 }` near `TokenReach` (~line 2500), and `#[serde(default)] pub ai_cli_tokens:
-   Vec<AiCliTokenExpiry>` on `ConfigStatus` (~line 2433-2456).
-4. `crates/micold-daemon/src/config_watch.rs` `status_of` (~line 123-143): populate
-   `ai_cli_tokens` from `config.ai.cli` — for each entry with a `token_file`, read + `parse_token_file`
-   it, keep only those whose `expires_at` is `Some` and within `token_file_expires_within(..,
-   SystemTime::now(), TOKEN_FILE_EXPIRY_WARNING_WINDOW)`.
-5. `crates/micold-client/src/ui/daemon_details_dialog.rs` `configuration_lines` (~line 60-85):
-   add a loop over `status.ai_cli_tokens` pushing a `Note` line, right beside the existing
-   `for token in &status.tokens` loop.
-- Verify: `cargo test -p micold-core daemon_config::ai_cli`; `cargo test -p micold-daemon --test
-  ai_cli_config --test ai_cli_availability`; `cargo test -p micold-core provision::ai_cli`.
-
-**T065b** (sign-in relay, pure logic only — D9): new file `crates/micold-client/src/ai_cli_relay.rs`
-(register it beside `daemon_config_delivery`'s own module declaration — check how that one is
-wired into `lib.rs`/`main.rs` and follow it):
-- `derive_relay_copy(cli: micold_core::session::AiCli, source: &[u8], now: SystemTime) ->
-  Result<Vec<u8>, RelayError>`: parse `source` as `serde_json::Value`, drop the refresh token
-  research D14 names (Claude `claudeAiOauth.refreshToken`; Codex `tokens.refresh_token`, and set
-  `last_refresh` to `now` as ISO-8601; OpenCode: for every top-level provider object, its `refresh`
-  field) and re-serialize. `RelayError::NotJson | Unsupported(cli)` (Copilot/Pi have no sign-in
-  file).
-- `access_token_expiry(cli, derived: &[u8]) -> Option<SystemTime>`: Claude Code —
-  `claudeAiOauth.expiresAt` (ms epoch); Codex — decode `tokens.access_token`'s JWT `exp` claim
-  (base64url middle segment, no signature check needed, just the expiry hint); OpenCode — `None`
-  (research D14 itself: format "not installed here", don't invent one).
-- `schedule_refresh_at(delivered_at, expires_at) -> Option<SystemTime>` = `delivered_at + 0.75 *
-  (expires_at - delivered_at)`; `enum RefreshUrgency { ScheduledAt(SystemTime), WarnNow }` +
-  `refresh_urgency(now, expires_at, scheduled_at)` → `WarnNow` when under 1h remains, else
-  `ScheduledAt`.
-- `apply_relay(source: &Path, dest: &Path, cli, now) -> io::Result<bool>`: read `source`, derive,
-  write to `dest` only if different (reuse/mirror `write_if_changed` already in
-  `crates/micold-client/src/daemon_config_delivery.rs`), **never writes `source`**.
-- Tests (bottom `#[cfg(test)] mod tests`, per the task's own two named requirements): fixtures
-  proving the derived copy has no refresh token (one per CLI) and that `apply_relay` never writes
-  the source (bytes + mtime unchanged); plus Codex's `last_refresh`, and the schedule/urgency math.
-- Explicitly out of scope here (D9): the live `notify`-based watcher (follow
-  `crates/micold-client/src/shell/changes_watch.rs`'s `Subscription` pattern), the per-daemon
-  destination-path lookup, and the actual delivery channel (local write / `scp` / `kubectl apply`
-  per research D5) — no client→daemon secret-push message exists, the client has no structured
-  `[[ai.cli]]` read yet (M4's), and pod re-delivery on change is M3's own stated Deliverable. Say so
-  in the PR body.
-
-**T065c**: doc-only — write the per-CLI measurement table into
-`docs/user-guide/sandboxed-daemon.md`, using research.md D14's "What each CLI does with a read-only
-credential file" table (research.md ~line 469-477) verbatim in substance; mark rows "not yet
-observed"/"not installed here" exactly as research does, since this unit has no container runtime
-and no CLIs installed to measure anything new.
-
-**Process notes for the next unit**: no `tdd/test-list.md` heading exists yet for Issue 11/M2b;
-write failing tests first against current `origin/main` and record cycle-log entries, or add a
-"Test list: Issue 11 (#1532), milestone M2b" section and drive it through `/speckit.tdd.run` — either
-is fine, the design above does not need re-deriving either way. Tick T065a/T065b/T065c `[X]` in
-`tasks.md` only once each actually lands with tests. No escalation needed — this is pure
-implementation; D9's scope choices are agent-resolved like D4/D5. No PR opened yet. Full disk
-headroom (271G free); no sandbox/kube changes here, so no image rebuild or `test-sandbox` needed.
+None. (M2b code is committed and reviewed; the previous unit's plan is spent. Next: wait for the M2b PR's CI and merge, then M3.)
 
 ## Open escalation
 

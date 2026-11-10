@@ -25,12 +25,17 @@ pub enum RelayError {
     NotJson,
     /// `cli` has no sign-in file to relay (Copilot, Pi — research D14).
     Unsupported(AiCli),
+    /// The JSON lacks the object the refresh token lives in, so it cannot be stripped safely.
+    UnexpectedShape,
 }
 
 impl std::fmt::Display for RelayError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RelayError::NotJson => write!(f, "sign-in file is not valid JSON"),
+            RelayError::UnexpectedShape => {
+                write!(f, "sign-in file does not have the shape the relay strips")
+            }
             RelayError::Unsupported(cli) => {
                 write!(f, "{cli:?} has no sign-in file to relay")
             }
@@ -59,17 +64,18 @@ pub fn derive_relay_copy(
         serde_json::from_slice(source).map_err(|_| RelayError::NotJson)?;
     match cli {
         AiCli::ClaudeCode => {
-            if let Some(oauth) = value
+            let oauth = value
                 .get_mut("claudeAiOauth")
                 .and_then(|v| v.as_object_mut())
-            {
-                oauth.remove("refreshToken");
-            }
+                .ok_or(RelayError::UnexpectedShape)?;
+            oauth.remove("refreshToken");
         }
         AiCli::Codex => {
-            if let Some(tokens) = value.get_mut("tokens").and_then(|v| v.as_object_mut()) {
-                tokens.remove("refresh_token");
-            }
+            let tokens = value
+                .get_mut("tokens")
+                .and_then(|v| v.as_object_mut())
+                .ok_or(RelayError::UnexpectedShape)?;
+            tokens.remove("refresh_token");
             if let Some(object) = value.as_object_mut() {
                 object.insert(
                     "last_refresh".to_string(),
@@ -78,11 +84,10 @@ pub fn derive_relay_copy(
             }
         }
         AiCli::OpenCode => {
-            if let Some(object) = value.as_object_mut() {
-                for provider in object.values_mut() {
-                    if let Some(provider) = provider.as_object_mut() {
-                        provider.remove("refresh");
-                    }
+            let object = value.as_object_mut().ok_or(RelayError::UnexpectedShape)?;
+            for provider in object.values_mut() {
+                if let Some(provider) = provider.as_object_mut() {
+                    provider.remove("refresh");
                 }
             }
         }
@@ -132,7 +137,7 @@ pub fn access_token_expiry(cli: AiCli, derived: &[u8]) -> Option<SystemTime> {
     match cli {
         AiCli::ClaudeCode => {
             let ms = value.get("claudeAiOauth")?.get("expiresAt")?.as_u64()?;
-            Some(SystemTime::UNIX_EPOCH + Duration::from_millis(ms))
+            SystemTime::UNIX_EPOCH.checked_add(Duration::from_millis(ms))
         }
         AiCli::Codex => {
             let token = value.get("tokens")?.get("access_token")?.as_str()?;
@@ -140,7 +145,7 @@ pub fn access_token_expiry(cli: AiCli, derived: &[u8]) -> Option<SystemTime> {
             let bytes = URL_SAFE_NO_PAD.decode(payload).ok()?;
             let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
             let exp = claims.get("exp")?.as_u64()?;
-            Some(SystemTime::UNIX_EPOCH + Duration::from_secs(exp))
+            SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(exp))
         }
         AiCli::OpenCode | AiCli::Copilot | AiCli::Pi => None,
     }
@@ -195,16 +200,42 @@ pub fn apply_relay(source: &Path, dest: &Path, cli: AiCli, now: SystemTime) -> i
     let bytes = std::fs::read(source)?;
     let derived = derive_relay_copy(cli, &bytes, now)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+    if same_file(source, dest) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the relay destination is the sign-in source itself",
+        ));
+    }
     if let Ok(existing) = std::fs::read(dest) {
         if existing == derived {
             return Ok(false);
         }
     }
-    if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(dest, &derived)?;
+    let (Some(dir), Some(name)) = (dest.parent(), dest.file_name().and_then(|n| n.to_str())) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the relay destination has no directory or file name",
+        ));
+    };
+    // Owner-only, written to a temporary file and renamed over `dest`: the copy holds a live access
+    // token, is never readable under a wider mode, and a reader sees the old file or the new one.
+    // A rename also replaces a symlink or hard link at `dest` rather than writing through it.
+    micold_core::owner_only::write(dir, name, &derived)?;
     Ok(true)
+}
+
+/// Whether `a` and `b` name the same file once resolved (a symlink or the same path); `b` need not
+/// exist yet, so its directory is resolved and its name kept.
+fn same_file(a: &Path, b: &Path) -> bool {
+    let Ok(a) = std::fs::canonicalize(a) else {
+        return false;
+    };
+    let resolved = std::fs::canonicalize(b).or_else(|_| {
+        let dir = b.parent().filter(|d| !d.as_os_str().is_empty());
+        let dir = std::fs::canonicalize(dir.unwrap_or(Path::new(".")))?;
+        Ok::<_, io::Error>(dir.join(b.file_name().unwrap_or_default()))
+    });
+    resolved.is_ok_and(|b| a == b)
 }
 
 #[cfg(test)]
@@ -361,5 +392,64 @@ mod tests {
 
         // A second call with unchanged source content writes nothing new.
         assert!(!apply_relay(&source, &dest, AiCli::ClaudeCode, now).unwrap());
+    }
+
+    #[test]
+    fn an_unexpected_shape_is_refused_rather_than_relayed_with_its_refresh_token() {
+        let now = SystemTime::UNIX_EPOCH;
+        assert_eq!(
+            derive_relay_copy(AiCli::ClaudeCode, br#"{"refreshToken":"r"}"#, now),
+            Err(RelayError::UnexpectedShape)
+        );
+        assert_eq!(
+            derive_relay_copy(AiCli::Codex, b"[]", now),
+            Err(RelayError::UnexpectedShape)
+        );
+        assert_eq!(
+            derive_relay_copy(AiCli::OpenCode, b"[]", now),
+            Err(RelayError::UnexpectedShape)
+        );
+    }
+
+    #[test]
+    fn a_huge_expiry_is_none_rather_than_a_panic() {
+        let claude = format!(r#"{{"claudeAiOauth":{{"expiresAt":{}}}}}"#, u64::MAX);
+        // Milliseconds of u64::MAX still fit a SystemTime; the call must simply not panic.
+        let _ = access_token_expiry(AiCli::ClaudeCode, claude.as_bytes());
+        let payload = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{}}}"#, u64::MAX));
+        let codex = format!(r#"{{"tokens":{{"access_token":"h.{payload}.s"}}}}"#);
+        assert_eq!(access_token_expiry(AiCli::Codex, codex.as_bytes()), None);
+    }
+
+    #[test]
+    fn apply_relay_refuses_a_destination_that_is_the_source() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source.json");
+        std::fs::write(&source, CLAUDE_SIGN_IN).unwrap();
+        let link = tmp.path().join("link.json");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&source, &link).unwrap();
+        #[cfg(not(unix))]
+        let link = source.clone();
+        let now = SystemTime::UNIX_EPOCH;
+        for dest in [&source, &link] {
+            let err = apply_relay(&source, dest, AiCli::ClaudeCode, now).unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        }
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), CLAUDE_SIGN_IN);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_relayed_copy_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source.json");
+        let dest = tmp.path().join("relayed").join("dest.json");
+        std::fs::write(&source, CLAUDE_SIGN_IN).unwrap();
+        apply_relay(&source, &dest, AiCli::ClaudeCode, SystemTime::UNIX_EPOCH).unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dest), 0o600);
+        assert_eq!(mode(dest.parent().unwrap()), 0o700);
     }
 }
