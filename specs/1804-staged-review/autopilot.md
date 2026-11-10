@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1804
 - **Worktree branch**: feat/1804_autopilot-staged-review-facts-by-code-plan-by
 - **Started**: 2026-11-10
-- **Phase**: 3-design
-- **Next step**: design PR merge, then M1
+- **Phase**: 4-milestone M1
+- **Next step**: M1 review A/B, gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open / merged | … |
+| #1809 | Design | merged | e82cc8df6bddd76f87e2d0786098f9d4ceaf8b28 |
 
 ## Milestones
 

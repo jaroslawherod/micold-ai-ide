@@ -16,7 +16,7 @@ description: "Tasks: staged review for speckit-autopilot"
 
 ## Phase 1: Setup
 
-- [ ] T001 Read `scripts/autopilot/review-snapshot.sh` and `scripts/tests/autopilot.test.sh` helpers (`check`, throwaway-repo builder) and note the reuse points for the new script and tests in a comment block at the top of the new test section in `scripts/tests/autopilot.test.sh`
+- [x] T001 Read `scripts/autopilot/review-snapshot.sh` and `scripts/tests/autopilot.test.sh` helpers (`check`, throwaway-repo builder) and note the reuse points for the new script and tests in a comment block at the top of the new test section in `scripts/tests/autopilot.test.sh`
 
 ## Phase 2: User Story 1 - Facts file produced by code (P1) 🎯 MVP
 
@@ -24,19 +24,19 @@ description: "Tasks: staged review for speckit-autopilot"
 
 ### Tests first (must fail before T008)
 
-- [ ] T002 [US1] Add a `review-facts.py` block to `scripts/tests/autopilot.test.sh`: two changed Rust files give each file with its changed line ranges and each changed fn/type/const by name, including an impl method nested in an `impl` block (US1 sc. 1, FR-001)
-- [ ] T003 [US1] Same file: a changed symbol called elsewhere lists callers as `file:line` with count and truncated flag (US1 sc. 2, FR-001)
-- [ ] T004 [US1] Same file: with an `--lcov` file (relative and absolute paths both match repo paths), uncovered changed lines are marked `uncovered`; without it coverage reads `unknown (no coverage data)` and exit is 0, never `covered` (US1 sc. 3-4, FR-003)
-- [ ] T005 [US1] Same file: docs-only and empty diffs exit 0 with `skipped: no Rust files` for Symbols and Callers; no `origin/main`, detached HEAD and a stale `--base-snapshot` exit 1 with a one-line stderr reason (FR-011 script side)
-- [ ] T006 [US1] Same file: file name is `review-facts-<tree>-<head>.md` in `--out-dir`, a rerun overwrites it, two different snapshots do not collide, stdout prints the path, the tracked tree/index/HEAD are untouched (FR-002)
-- [ ] T007 [US1] Same file: a 50-file diff finishes in under 60 s (SC-003), and the script imports no network module and calls no model (grep of its imports)
-- [ ] T007a [US1] Same file: feed a staged-format verdict (`VERDICT:` and `F<n>` lines) to `brief.py` and the `checkpoint.sh` ledger readers; they accept it unchanged (SC-004)
+- [x] T002 [US1] Add a `review-facts.py` block to `scripts/tests/autopilot.test.sh`: two changed Rust files give each file with its changed line ranges and each changed fn/type/const by name, including an impl method nested in an `impl` block (US1 sc. 1, FR-001)
+- [x] T003 [US1] Same file: a changed symbol called elsewhere lists callers as `file:line` with count and truncated flag (US1 sc. 2, FR-001)
+- [x] T004 [US1] Same file: with an `--lcov` file (relative and absolute paths both match repo paths), uncovered changed lines are marked `uncovered`; without it coverage reads `unknown (no coverage data)` and exit is 0, never `covered` (US1 sc. 3-4, FR-003)
+- [x] T005 [US1] Same file: docs-only and empty diffs exit 0 with `skipped: no Rust files` for Symbols and Callers; no `origin/main`, detached HEAD and a stale `--base-snapshot` exit 1 with a one-line stderr reason (FR-011 script side)
+- [x] T006 [US1] Same file: file name is `review-facts-<tree>-<head>.md` in `--out-dir`, a rerun overwrites it, two different snapshots do not collide, stdout prints the path, the tracked tree/index/HEAD are untouched (FR-002)
+- [x] T007 [US1] Same file: a 50-file diff finishes in under 60 s (SC-003), and the script imports no network module and calls no model (grep of its imports)
+- [x] T007a [US1] Same file: feed a staged-format verdict (`VERDICT:` and `F<n>` lines) to `brief.py` and the `checkpoint.sh` ledger readers; they accept it unchanged (SC-004)
 
 ### Implementation
 
-- [ ] T008 [US1] Create `scripts/autopilot/review-facts.py` per `contracts/facts-file.md`: CLI (`--out-dir`, `--base`, `--base-snapshot`, `--lcov`), diff ranges via `git diff -U0` plus working tree as `review-snapshot.sh` reads it, Files section, exit codes and stderr reasons
-- [ ] T009 [US1] Extend `scripts/autopilot/review-facts.py`: Rust symbol extraction from changed ranges, `git grep -nw` callers with truncation (<400 lines total), `skipped:` markers for non-Rust
-- [ ] T010 [US1] Extend `scripts/autopilot/review-facts.py`: lcov parsing for the Coverage section, `unknown` default, make it executable; run the T002-T007a block green with `bash scripts/tests/autopilot.test.sh`
+- [x] T008 [US1] Create `scripts/autopilot/review-facts.py` per `contracts/facts-file.md`: CLI (`--out-dir`, `--base`, `--base-snapshot`, `--lcov`), diff ranges via `git diff -U0` plus working tree as `review-snapshot.sh` reads it, Files section, exit codes and stderr reasons
+- [x] T009 [US1] Extend `scripts/autopilot/review-facts.py`: Rust symbol extraction from changed ranges, `git grep -nw` callers with truncation (<400 lines total), `skipped:` markers for non-Rust
+- [x] T010 [US1] Extend `scripts/autopilot/review-facts.py`: lcov parsing for the Coverage section, `unknown` default, make it executable; run the T002-T007a block green with `bash scripts/tests/autopilot.test.sh`
 
 ## Phase 3: User Story 2 - Planned, parallel-probed review (P1)
 

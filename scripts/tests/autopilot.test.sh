@@ -388,6 +388,111 @@ git add -A; git commit -qm wip; git reset -q --hard HEAD~2; echo rebased > seed.
 check "review-snapshot refuses a snapshot a rebase made stale" 2 'STALE-SNAPSHOT' bash -c "'$R' diff '$snap' 2>&1"
 cd "$d/wt"
 
+# review-facts.py: facts of a diff by code alone. Reuse points: new_repo builds the origin + clone,
+# `check` runs a command and matches exit and output, review-snapshot.sh is the snapshot it keys on.
+F="$S/review-facts.py"
+d="$(new_repo)"; cd "$d/wt"; git switch -q main
+mkdir -p src
+cat > src/a.rs <<'RS'
+pub struct Foo { x: i32 }
+impl Foo {
+    pub fn bump(&self) -> i32 {
+        self.x + 1
+    }
+    pub fn other(&self) {}
+}
+pub fn helper() -> i32 {
+    1
+}
+const LIMIT: u32 = 3;
+RS
+printf 'pub fn run() {\n    helper();\n}\n' > src/b.rs
+printf 'fn user() {\n    helper();\n    helper();\n}\n' > src/c.rs
+echo "docs" > README.md
+git add -A; git commit -qm rust; git push -q origin main; git switch -q wt; git reset -q --hard main
+sed -i 's/self.x + 1/self.x + 2/; s/^    1$/    2/; s/= 3;/= 4;/' src/a.rs
+sed -i 's|helper();|helper(); // changed|' src/b.rs
+out="$d/out"
+facts="$("$F" --out-dir "$out" 2>&1)"
+check "facts: lists each changed file with its changed ranges" 0 'src/a\.rs: 4, 9, 11' cat "$facts"
+check "facts: lists the other changed file" 0 'src/b\.rs: 2$' cat "$facts"
+check "facts: names the nested impl method, the fn and the const" 0 'Foo::bump \(fn.*helper \(fn.*LIMIT \(const' bash -c "tr '\n' ' ' < '$facts'"
+check "facts: leaves out the impl method nobody changed" 0 '^ok$' bash -c "! grep -q 'Foo::other' '$facts' && echo ok"
+check "facts: lists callers by file and line with a count" 0 'helper: 3 callers' cat "$facts"
+check "facts: a caller is file:line" 0 'src/c\.rs:2' cat "$facts"
+check "facts: calls the callers approximate" 0 'approximate textual matches' cat "$facts"
+check "facts: caps the callers shown and flags truncation" 0 'truncated' bash -c "
+  cd '$d/wt'; for i in 1 2 3 4 5 6 7 8 9 10; do echo \"fn t\$i() { bump(); }\" >> src/c.rs; done
+  '$F' --out-dir '$d/out2' | xargs cat"
+git checkout -q src/c.rs
+check "facts: coverage is unknown without data, never covered" 0 'src/a\.rs: unknown \(no coverage data\)' cat "$facts"
+check "facts: without data the word covered does not appear" 0 '^ok$' bash -c "! grep -i 'covered' '$facts' | grep -qv 'uncovered\|coverage' && echo ok"
+cat > "$d/rel.lcov" <<'L'
+SF:src/a.rs
+DA:4,5
+DA:9,0
+end_of_record
+L
+sed "s|SF:src|SF:$(pwd -P)/src|" "$d/rel.lcov" > "$d/abs.lcov"
+check "facts: lcov marks uncovered changed lines (relative path)" 0 'src/a\.rs: covered 4; uncovered 9' bash -c "'$F' --out-dir '$d/o3' --lcov '$d/rel.lcov' | xargs cat"
+check "facts: lcov marks uncovered changed lines (absolute path)" 0 'src/a\.rs: covered 4; uncovered 9' bash -c "'$F' --out-dir '$d/o4' --lcov '$d/abs.lcov' | xargs cat"
+check "facts: a file the lcov data lacks stays unknown" 0 'src/b\.rs: unknown \(not in coverage data\)' bash -c "'$F' --out-dir '$d/o5' --lcov '$d/rel.lcov' | xargs cat"
+# file name, overwrite, no collision, tree untouched
+snap1="$("$S/review-snapshot.sh")"; tr1="${snap1%%:*}"; hd1="${snap1#*:}"
+check "facts: file is review-facts-<tree>-<head>.md in --out-dir, path on stdout" 0 "^$out/review-facts-$tr1-$hd1\.md\$" "$F" --out-dir "$out"
+check "facts: a rerun overwrites the same file" 0 '^1$' bash -c "'$F' --out-dir '$out' >/dev/null; ls '$out' | grep -c '$tr1'"
+echo "// more" >> src/a.rs
+check "facts: a different snapshot gets its own file" 0 '^2$' bash -c "'$F' --out-dir '$out' >/dev/null; ls '$out' | grep -c '^review-facts-'"
+check "facts: the tracked tree, index and stash are untouched" 0 '^ok$' bash -c \
+  "[ -z \"\$(git diff --cached --name-only)\" ] && [ -z \"\$(git stash list)\" ] && [ \"\$(git rev-parse HEAD)\" = '$hd1' ] && echo ok"
+git checkout -q src/a.rs; git checkout -q src/b.rs
+# docs-only and empty diffs
+echo more >> README.md
+check "facts: docs-only diff skips Symbols and Callers and succeeds" 0 'skipped: no Rust files' bash -c "'$F' --out-dir '$d/o6' | xargs cat"
+git checkout -q README.md
+check "facts: an empty diff succeeds with no files" 0 '^none$' bash -c "'$F' --out-dir '$d/o7' | xargs cat"
+# failures: one-line reason on stderr, exit 1
+check "facts: a stale --base-snapshot exits 1 with a reason" 1 'STALE-SNAPSHOT' bash -c "
+  cd '$d/wt'; echo k > k.txt; git add -A; git commit -qm k; s=\$('$S/review-snapshot.sh'); git reset -q --hard HEAD~1; echo r > r.txt; git add -A; git commit -qm r
+  '$F' --out-dir '$d/o8' --base-snapshot \"\$s\" 2>&1 >/dev/null | wc -l | grep -q '^1\$' && '$F' --out-dir '$d/o8' --base-snapshot \"\$s\" 2>&1"
+check "facts: a missing origin/main exits 1 with a reason" 1 'no nope/main ref' "$F" --out-dir "$d/o9" --base nope/main
+check "facts: a detached HEAD exits 1 with a reason" 1 'detached HEAD' bash -c "git checkout -q --detach; '$F' --out-dir '$d/o9' 2>&1; r=\$?; git switch -q wt; exit \$r"
+# SC-003: 50 files in under a minute, and no network or model
+git switch -q main; mkdir -p many
+for i in $(seq 1 50); do printf 'pub fn f%s() {\n    1;\n}\n' "$i" > "many/m$i.rs"; done
+git add -A; git commit -qm many; git push -q origin main; git switch -q -c wide
+for i in $(seq 1 50); do sed -i 's/1;/2;/' "many/m$i.rs"; done
+t0=$SECONDS
+check "facts: a 50-file diff lists every file" 0 '^50$' bash -c "'$F' --out-dir '$d/o10' | xargs grep -c '^- many/m[0-9]*\.rs: 2\$'"
+check "facts: a 50-file diff finishes in under 60 s" 0 '^ok$' bash -c "[ $((SECONDS - t0)) -lt 60 ] && echo ok"
+check "facts: imports no network module and calls no model" 1 '^$' grep -nE '^\s*(import|from)\s+(socket|urllib|http|requests|ssl|ftplib|smtplib|anthropic|openai)' "$F"
+check "facts: calls only git" 1 '^$' grep -nE 'claude|curl|wget' "$F"
+# SC-004: a staged verdict is read by the ledger readers unchanged
+cat > "$d/autopilot.md" <<'MD'
+- **Worktree branch**: wide
+- **Phase**: 4-milestone M1
+- **Next step**: review
+
+## Review rounds
+
+- A round 1 staged: VERDICT: CHANGES
+  F1 [MAJOR] src/a.rs:4 — wrong
+     Evidence: x
+     Fix: y
+
+## Handover
+
+None.
+
+## Open escalation
+
+None.
+MD
+check "staged verdict: brief.py reads the ledger unchanged" 0 '^## Review rounds$' "$S/brief.py" ledger "$d/autopilot.md" M1
+check "staged verdict: brief.py shows the verdict and finding lines" 0 'F1 \[MAJOR\] src/a\.rs:4' "$S/brief.py" section "$d/autopilot.md" "Review rounds"
+check "staged verdict: checkpoint.sh reads the ledger unchanged" 2 '^PHASE 4-milestone M1$' env HOME="$d/home" "$S/checkpoint.sh" "Milestone M1 042" "$d/autopilot.md"
+cd "$d/wt"
+
 # autopilot-tokens.py: a request that re-writes most of a large context counts as a rebuild; the
 # first request, a cached one and a small one do not.
 d="$(new_repo)"
