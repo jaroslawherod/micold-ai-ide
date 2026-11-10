@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1818 | Design | merged | 4b2a22c130a6087fb3b38e3edf22505025cb9f00 |
 | #1821 | Milestone M1 | merged | 653cd72150666522b51b58028f01b3e72cbfe726 |
+| #1825 | Milestone M2 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | record verdicts, guard refuses stale merges, hook denies bare merge | #1821 | merged |
-| M2 | T016–T019 | full | carry verdict over clean replay | - | in review |
+| M2 | T016–T019 | full | carry verdict over clean replay | #1825 | in review |
 
 ## Decisions
 
