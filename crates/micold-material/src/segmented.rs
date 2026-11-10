@@ -63,12 +63,6 @@ impl<M> SegmentedControl<M> {
         });
         self
     }
-
-    /// The segments, in order.
-    #[cfg(test)]
-    pub(crate) fn segments(&self) -> &[Segment<M>] {
-        &self.segments
-    }
 }
 
 impl<'a, M: Clone + 'a> From<SegmentedControl<M>> for Element<'a, M> {
@@ -100,9 +94,9 @@ mod tests {
     fn there_are_two_segments_one_selected_and_each_is_named() {
         for selected in [0, 1] {
             let c = control(selected);
-            let names: Vec<_> = c.segments().iter().map(Segment::label).collect();
+            let names: Vec<_> = c.segments.iter().map(Segment::label).collect();
             assert_eq!(names, ["Structured", "Terminal"]);
-            let chosen: Vec<_> = c.segments().iter().map(Segment::is_selected).collect();
+            let chosen: Vec<_> = c.segments.iter().map(Segment::is_selected).collect();
             assert_eq!(chosen, [selected == 0, selected == 1]);
         }
     }
@@ -112,14 +106,14 @@ mod tests {
     fn only_the_other_segment_sends_a_message() {
         let c = control(0);
         assert_eq!(
-            c.segments()[0].press(),
+            c.segments[0].press(),
             None,
             "the selected one sends nothing"
         );
-        assert_eq!(c.segments()[1].press(), Some(&"terminal"));
+        assert_eq!(c.segments[1].press(), Some(&"terminal"));
         let c = control(1);
-        assert_eq!(c.segments()[0].press(), Some(&"structured"));
-        assert_eq!(c.segments()[1].press(), None);
+        assert_eq!(c.segments[0].press(), Some(&"structured"));
+        assert_eq!(c.segments[1].press(), None);
     }
 
     /// T002: the control builds into an element that lays out with both segments.

@@ -576,8 +576,8 @@ fn the_scan_finds_the_vocabulary_it_is_meant_to_read() {
     let scan = scan();
     assert_eq!(
         scan.variants.len(),
-        31,
-        "the root vocabulary is 25 feature wrappers (feature 1703 added `LargeEditor`, feature 813 added `Overview`, feature 803 \
+        32,
+        "the root vocabulary is 26 feature wrappers (feature 1793 added `HeaderBar`, feature 1703 added `LargeEditor`, feature 813 added `Overview`, feature 803 \
          `Navigation`, feature 968 `QuickSwitch`, feature 941 `Composer`, #942 \
          `PermissionPrompts`, 1289 `Setup`, 1465 `History`) and 6 \
          cross-cutting variants (feature 1101 added `JiraStatusesRead`, SC-002); the \
