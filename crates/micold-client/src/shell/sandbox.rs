@@ -124,6 +124,21 @@ fn drop_absent_sign_in(mut layout: CredentialLayout) -> CredentialLayout {
 /// created or replaced. The new file is 0600: it is a sign-in token, and the container runs as
 /// this same uid.
 fn ensure_writable_file(path: &std::path::Path) -> std::io::Result<()> {
+    // The parent first: an earlier version's home, or one cleaned by hand, may lack it (#1799).
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("its directory {} could not be created: {e}", parent.display()),
+            )
+        })?;
+    }
+    // A link is never what is wanted here: the sandbox's own relink leaves the sign-in as a link to
+    // a path that exists only inside the container, dangling on the host, where opening it fails
+    // with "No such file or directory" (#1799). Removed, it is replaced by a file below.
+    if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        std::fs::remove_file(path)?;
+    }
     if std::fs::OpenOptions::new().write(true).open(path).is_ok() {
         return Ok(());
     }
@@ -2295,6 +2310,35 @@ mod tests {
         let state_dir = tempfile::tempdir().expect("tempdir");
         bring_up_sharing(state_dir.path(), std::collections::BTreeSet::new());
         assert!(!sandbox_claude_json(state_dir.path()).exists());
+    }
+
+    /// #1799: the sandbox's own relink leaves `.claude/.credentials.json` as a link to a path that
+    /// exists only inside the container. On the host it dangles, so opening it fails with ENOENT
+    /// and the next bring-up refused the sandbox. The link is replaced by a writable file.
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_link_left_by_the_sandbox_relink_is_replaced_by_a_file() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let file = home.path().join(".claude").join(".credentials.json");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink("/run/micold/does-not-exist-on-the-host", &file).unwrap();
+
+        ensure_writable_file(&file).expect("a dangling link must not refuse the sandbox");
+
+        let meta = std::fs::symlink_metadata(&file).unwrap();
+        assert!(meta.file_type().is_file(), "not replaced by a regular file");
+    }
+
+    /// #1799: a sandbox home without its `.claude/` directory still gets the file; the parent is
+    /// created, and the error names the step when it cannot be.
+    #[test]
+    fn a_missing_parent_directory_is_created_before_the_file() {
+        let home = tempfile::tempdir().expect("tempdir");
+        let file = home.path().join(".claude").join(".credentials.json");
+
+        ensure_writable_file(&file).expect("parent created");
+
+        assert!(file.is_file());
     }
 
     /// Review A: the sandbox home is writable from inside the sandbox, so its `.claude.json` can be a
