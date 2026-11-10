@@ -279,7 +279,13 @@ pub fn prepare_host_config_dir(
     if let Some(live) = live_config.filter(|live| !same_file(live, &dir)) {
         for extra in host_linked_extras(cli) {
             let source = live.join(extra);
-            if source.exists() {
+            // A real file or directory already there is a seeded copy (T098) the CLI may have
+            // edited: relinking would replace it with the user's own file.
+            let kept = dir
+                .join(extra)
+                .symlink_metadata()
+                .is_ok_and(|m| !m.file_type().is_symlink());
+            if source.exists() && !kept {
                 #[cfg(not(unix))]
                 if source.is_dir() {
                     continue;
