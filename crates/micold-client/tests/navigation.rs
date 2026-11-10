@@ -476,3 +476,23 @@ fn a_session_chord_with_the_review_shown_shows_the_session_and_keeps_the_review(
         assert_eq!(state.changes.tabs.len(), 1, "{chord:?}: and kept");
     }
 }
+
+/// Feature 1718 (FR-006): an expanded run group's runs are visited by the chords, in run order,
+/// after Default; a collapsed group's are not.
+#[test]
+fn the_chords_visit_the_runs_of_an_expanded_group_and_not_a_collapsed_ones() {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("g-1"), listed("g-2")]);
+    state.update(Message::Runs(
+        micold_client::features::runs::Msg::GroupsChanged(vec![run_group(1, "g", &["g-1", "g-2"])]),
+    ));
+    assert_eq!(
+        location_order(&state),
+        vec![SessionLocation::Default, worktree("g-1"), worktree("g-2")]
+    );
+    let id = state.runs.groups[0].id;
+    state.update(Message::Runs(
+        micold_client::features::runs::Msg::GroupToggled(id),
+    ));
+    assert_eq!(location_order(&state), vec![SessionLocation::Default]);
+}

@@ -40,3 +40,4 @@ given a `CardState` (E0308 x23). The failures are the missing M2 API, the right 
 | Order unchanged while the tint changes (SC-001, FR-012) | `sidebar_state::flat_list` | `ui::row_tint` missing | green |
 | Selection distinct from tint, hover over tint (G8, FR-012) | `tree_view::tests` | `resting_fill`, `TreeItem::row_tint` missing | green |
 | Showcase poses the five states and tints (T020, T028) | `showcase_completeness` | old poses (Running, Blocked, Unknown) | green |
+| Group row tooltip names its state (906166c10, closed late) | `sidebar::tests::a_run_group_row_wears_the_worst_state_of_its_runs` | missing test: the production change in 906166c10 shipped with only the regenerated layout snapshot | added at close, green |

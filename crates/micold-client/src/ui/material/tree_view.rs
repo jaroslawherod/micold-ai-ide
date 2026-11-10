@@ -138,11 +138,11 @@ pub struct TreeItem<'a, M> {
     unread: RowUnread,
     /// The location's state icon (feature 905, contract `state-icon.md` S2): a fixed slot after the
     /// twisty and before the leading icon, at the view's label role size, whatever the state.
-    state_icon: Option<super::StateIcon>,
+    pub(in crate::ui) state_icon: Option<super::StateIcon>,
     /// The row's resting fill and the ink of its text and glyph on it (feature 1718, FR-010 to
     /// FR-012): colour only, under the hover and selected layers. A selected row draws its
     /// selection pill instead (see [`resting_fill`]).
-    row_tint: Option<(Rgb, Rgb)>,
+    pub(in crate::ui) row_tint: Option<(Rgb, Rgb)>,
     /// Whether the application's keyboard focus is on this row, and what a change of it sends
     /// (feature 803, FR-010): the row wears the focus ring, shown as keyboard focus.
     keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,

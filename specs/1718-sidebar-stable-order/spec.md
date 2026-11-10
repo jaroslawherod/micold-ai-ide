@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Draft
+**Status**: Closed 2026-11-10 — shipped in PRs #1750, #1782, #1758, #1791 and the close PR
 
 **Input**: GitHub issue #1718 "Sidebar: stop grouping worktrees/sessions by state — rows jump between
 groups and are hard to track". Labels: enhancement. Reverses the grouping of feature 1125

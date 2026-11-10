@@ -1825,9 +1825,194 @@ mod tests {
             tokens::roles(ColorScheme::Dark),
         );
         let keys: Vec<Option<u64>> = items.iter().map(|item| item.key).collect();
-        assert!(keys.len() >= 5, "locations and session rows: {keys:?}");
+        // Default, two worktrees, and the expanded one's two sessions: exactly five rows.
+        assert_eq!(keys.len(), 5, "locations and session rows: {keys:?}");
         assert!(keys.iter().all(Option::is_some), "{keys:?}");
         let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
         assert_eq!(distinct.len(), keys.len(), "{keys:?}");
+    }
+
+    /// One worktree per card state, `idle` (none), `done`, `work`, `attn`, `act`, and Default
+    /// working: the sidebar's rows are built from this.
+    fn five_state_project() -> State {
+        use micold_core::pull_request::{PullRequestStatus, ReviewState};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut state = with_project();
+        state.worktree.worktrees = ["idle", "done", "work", "attn", "act"]
+            .into_iter()
+            .map(|dir| Worktree {
+                dir_name: dir.to_string(),
+                path: std::path::PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
+                branch: Some(format!("feat/{dir}")),
+                status: WorktreeStatus::Valid,
+                included: false,
+            })
+            .collect();
+        state.pr_status.enabled = true;
+        state.pr_status.read_at = Some(100);
+        for (branch, pr) in [
+            ("feat/done", PrState::Merged),
+            (
+                "feat/attn",
+                PrState::Open {
+                    checks: CheckStatus::Failing,
+                },
+            ),
+        ] {
+            state.pr_status.statuses.insert(
+                branch.to_string(),
+                PullRequestStatus {
+                    number: 7,
+                    title: "t".to_string(),
+                    url: "https://github.com/o/r/pull/7".to_string(),
+                    state: pr,
+                    review: ReviewState::None,
+                    head: "abc".to_string(),
+                    conflict: false,
+                },
+            );
+        }
+        state.pr_status.removable.insert("feat/done".to_string());
+        let mut sessions = Vec::new();
+        for (location, activity, paused) in [
+            (SessionLocation::Default, ActivitySignal::Working, false),
+            (
+                SessionLocation::Worktree("work".to_string()),
+                ActivitySignal::Working,
+                false,
+            ),
+            (
+                SessionLocation::Worktree("act".to_string()),
+                ActivitySignal::AwaitingInput,
+                true,
+            ),
+        ] {
+            let mut s = Session::start_new(location, AiCli::ClaudeCode);
+            s.lifecycle = SessionLifecycle::Running;
+            s.activity = activity;
+            s.paused_on_user = paused;
+            sessions.push(s);
+        }
+        state
+            .workspace
+            .sessions
+            .insert(std::path::PathBuf::from("/repo"), sessions);
+        state
+    }
+
+    fn rows(state: &State, r: Roles) -> Vec<TreeItem<'static, Message>> {
+        build_items(state, state.sidebar_list(), 0, None, 0, r)
+    }
+
+    fn row_labelled<'a>(
+        items: &'a [TreeItem<'static, Message>],
+        label: &str,
+    ) -> &'a TreeItem<'static, Message> {
+        items.iter().find(|i| i.label == label).unwrap_or_else(|| {
+            panic!(
+                "no row {label:?} in {:?}",
+                items.iter().map(|i| &i.label).collect::<Vec<_>>()
+            )
+        })
+    }
+
+    /// Feature 1718 (FR-004, FR-010 to FR-012): each sidebar row draws its own card state's glyph
+    /// state, tint and tooltip word, for worktree rows and the Default row.
+    #[test]
+    fn each_sidebar_row_wears_its_card_states_icon_tint_and_tooltip_word() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let state = five_state_project();
+        let items = rows(&state, r);
+        type Case = (&'static str, CardState, Option<(Rgb, Rgb)>, &'static str);
+        let cases: [Case; 5] = [
+            ("feat/idle", CardState::Idle, None, "Idle"),
+            (
+                "feat/done",
+                CardState::Done,
+                Some((r.surface_container_high, r.on_surface)),
+                "Done (merged)",
+            ),
+            ("feat/work", CardState::Working, None, "Working"),
+            (
+                // An open pull request's title is the row's label.
+                "t",
+                CardState::NeedsAttention,
+                Some((r.tertiary_container, r.on_tertiary_container)),
+                "Needs attention",
+            ),
+            (
+                "feat/act",
+                CardState::NeedsAction,
+                Some((r.error_container, r.on_error_container)),
+                "Needs action",
+            ),
+        ];
+        for (dir, card, tint, word) in cases {
+            let item = row_labelled(&items, dir);
+            assert_eq!(
+                item.state_icon.map(|icon| icon.state),
+                Some(card),
+                "{dir}: state icon"
+            );
+            assert_eq!(item.row_tint, tint, "{dir}: tint");
+            let tooltip = item.row_tooltip.as_deref().expect("a tooltip");
+            assert_eq!(tooltip.lines().last(), Some(word), "{dir}: {tooltip:?}");
+        }
+        let default = items
+            .iter()
+            .find(|i| i.icon == Some(Icon::ProjectRoot))
+            .expect("the Default row");
+        assert_eq!(
+            default.state_icon.map(|icon| icon.state),
+            Some(CardState::Working)
+        );
+        assert_eq!(default.row_tint, None);
+        let tooltip = default.row_tooltip.as_deref().expect("a tooltip");
+        assert_eq!(tooltip.lines().last(), Some("Working"), "{tooltip:?}");
+    }
+
+    /// Feature 1718 (FR-004, G6): a run group's row shows the worst state over its runs, as icon,
+    /// tint and the last line of its tooltip.
+    #[test]
+    fn a_run_group_row_wears_the_worst_state_of_its_runs() {
+        use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        let run = |number: u8, dir: &str| Run {
+            number,
+            provider: AiCli::ClaudeCode,
+            names: micold_core::naming::DerivedNames {
+                dir_name: dir.to_string(),
+                branch: format!("feat/{dir}"),
+            },
+            session: None,
+            status: RunStatus::Creating,
+        };
+        state.runs.groups = vec![RunGroup::new(NewGroup {
+            id: GroupId(uuid::Uuid::from_u128(1)),
+            name: "grp".into(),
+            naming: micold_core::naming::WorktreeNaming {
+                type_: None,
+                ticket: None,
+                name: "grp".into(),
+            },
+            prompt: "p".into(),
+            base_branch: "main".into(),
+            base_commit: "abc".into(),
+            created: std::time::SystemTime::UNIX_EPOCH,
+            runs: vec![run(1, "work"), run(2, "act")],
+        })
+        .expect("valid group")];
+        let items = rows(&state, r);
+        let group = row_labelled(&items, "grp");
+        assert_eq!(
+            group.state_icon.map(|icon| icon.state),
+            Some(CardState::NeedsAction)
+        );
+        assert_eq!(
+            group.row_tint,
+            Some((r.error_container, r.on_error_container))
+        );
+        assert_eq!(group.row_tooltip.as_deref(), Some("grp\nNeeds action"));
     }
 }

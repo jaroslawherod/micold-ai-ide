@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: close: tdd-verify
-- **Next step**: run speckit-tdd-verify, then close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1750 | Design PR | merged | 01bc227bc6684dbbcc4dc964b53d0290eb704a03 |
 | #1782 | Amend design (tint, cleanup candidate) | merged | 9d65146d1f8bb4dcb76f62c50ce241d65b91b04e |
 | #1791 | M2 | merged | 6d3b88f2d4787e6f3c51c97f61762bbca4f979c5 |
+| (close) | Close: tdd-verify fixes, spec Closed | open | |
 
 ## Milestones
 
@@ -44,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | c5e140ccc4b8e1b8c17dddadfae8ef5d5f94de53:c695061be43a32a00e41c482221be91d470a34bb | CHANGES: 3 MAJOR (persistence story, open markers, bad FR-017 cite); all fixed; no round 2, fixes remove claims |
 
 - M2 A snapshot cc6798975ec5:e085a674f061 CLEAN (3 MINOR); M2 B snapshot d12228da7462:233ff1237cf7 CLEAN (1 MINOR = A's F3, accepted: selected row keeps tint-ink glyph by design). Scoped gate: ui_glyph_literals red on literals in a state_icon test, fixed (Icon variants). Visual pass: showcase only, both themes, specs/1718-sidebar-stable-order/visual-pass/ (real client needs a live daemon, not driven)
+
+- close: tdd-verify FAIL (M1 TEST_AFTER, row wiring untested, 4 tautologies); fixed in tests, findings 8-13 accepted; review snapshot b899b3b..:16d873e.. CLEAN (1 MINOR fixed). Full gate green on the 3rd run (1st: clippy type_complexity; 2nd: cfg(test) seams broke anatomy_call_sites, replaced by pub(in crate::ui) fields; daemon structured_resume flaked once, green on rerun). converge skipped: every milestone has a CLEAN review B.
 
 ## Declined review findings
 
