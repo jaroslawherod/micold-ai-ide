@@ -6,8 +6,8 @@
 use crate::app::{Message, State as App};
 use crate::features::composer::Msg as ComposerMsg;
 use crate::features::session::{switch_entries, Msg as SessionMsg};
-use crate::features::structured_transcript::TranscriptMsg;
 use crate::features::session_strip::session_working;
+use crate::features::structured_transcript::TranscriptMsg;
 use micold_core::context_header::changes_label;
 use micold_core::format::group_digits;
 use micold_core::session::{SessionId, SessionKind};

@@ -5,8 +5,8 @@
 //! worktree menu's content (T013; FR-009, FR-013).
 
 use crate::support::covered_states::{title_bar_crowded, transcript_pane_insights};
-use micold_client::app::State;
 use micold_client::app::Message;
+use micold_client::app::State;
 use micold_client::features::composer::Msg as ComposerMsg;
 use micold_client::features::header_bar::{
     HeaderBarModel, HeaderMenu, Msg, State as Menus, Status, CHANGES_LABEL_RANK, NO_USAGE_TEXT,
