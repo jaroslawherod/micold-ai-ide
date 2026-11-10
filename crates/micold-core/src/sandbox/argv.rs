@@ -556,7 +556,7 @@ mod tests {
                 .any(|m| m.ends_with("/run/micold/ssh/authorized_keys:ro")));
             assert!(mounted
                 .iter()
-                .any(|m| m.contains(".credentials.json") && m.ends_with(":rw")));
+                .any(|m| m.contains(".credentials.json") && m.ends_with(":ro")));
         }
     }
 

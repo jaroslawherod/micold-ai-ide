@@ -233,30 +233,25 @@ fn the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory() {
 /// own live path — it is delivered under the read-only secrets directory instead, and the live
 /// path (`container`, unchanged) is relinked to it at session start.
 #[test]
-fn the_ai_cli_sign_in_is_delivered_under_the_secrets_directory_git_config_is_not() {
+fn the_ai_cli_sign_in_is_delivered_under_the_secrets_directory() {
     let profile = SandboxProfile {
         credentials: BTreeSet::from(CredentialShare::ALL),
         ..SandboxProfile::default()
     };
     let mounts = build(&profile);
     for c in &mounts.credentials {
-        match c.share {
-            CredentialShare::GitConfig => assert_eq!(c.delivered, None, "{c:?}"),
-            CredentialShare::AiCliAuth => {
-                let delivered = c
-                    .delivered
-                    .as_ref()
-                    .unwrap_or_else(|| panic!("{c:?} has no delivered path"));
-                let prefix = format!(
-                    "{}/ai-cli-auth/",
-                    micold_core::sandbox::CONTAINER_SECRETS_DIR
-                );
-                assert!(
-                    delivered.to_string_lossy().starts_with(&prefix),
-                    "{delivered:?} is not under {prefix}"
-                );
-            }
-        }
+        let delivered = c
+            .delivered
+            .as_ref()
+            .unwrap_or_else(|| panic!("{c:?} has no delivered path"));
+        let prefix = format!(
+            "{}/ai-cli-auth/",
+            micold_core::sandbox::CONTAINER_SECRETS_DIR
+        );
+        assert!(
+            delivered.to_string_lossy().starts_with(&prefix),
+            "{delivered:?} is not under {prefix}"
+        );
     }
 }
 
