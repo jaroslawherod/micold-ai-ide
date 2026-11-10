@@ -7,6 +7,10 @@ covers everything A does not:
   cannot be observed is a BLOCKER.
 - **Scope.** The diff implements exactly the milestone's tasks. Work from a later milestone is
   MAJOR. A task ticked but not implemented is a BLOCKER.
+- **Plan drift.** Run `scripts/autopilot/plan-drift.sh <feature-dir> M<K>` and report its output.
+  A file changed that no task of the milestone names (`UNPLANNED`) or a planned path the diff does
+  not touch (`MISSING`) is MAJOR unless `<feature-dir>/drift-M<K>.md` records the path with a
+  reason, or the task line in tasks.md was updated to name it. Silent acceptance is not allowed.
 - **Regression (a bugfix milestone, when B is run).** Run the regression test against `origin/main`. It must fail for
   the reason the BUG record gives, then pass on the branch.
 - **Acceptance.** Each listed acceptance scenario has a test that fails without the change.

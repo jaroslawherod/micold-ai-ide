@@ -770,5 +770,27 @@ check "SKILL.md routes to every flow" 0 '^4$' bash -c "grep -o 'flows/\(bug\|bug
 check "SKILL.md holds no rubric and no gate command" 0 '^ok$' bash -c "! grep -q 'mise run gate\|rubrics/\|BLOCKER' $k/SKILL.md && echo ok"
 check "the labels table names every flow and effort label" 0 '^6$' bash -c "grep -o 'flow:bug\b\|flow:bugfix\|flow:feature\|flow:chore\|effort:high\|effort:low' $k/flows/choose.md | sort -u | wc -l"
 
+# plan-drift.sh: the milestone's diff against the paths its tasks name.
+d="$(new_repo)"; cd "$d/wt"
+mkdir -p specs/001-x src; echo "# Spec" > specs/001-x/spec.md
+cat > specs/001-x/tasks.md <<'MD'
+# Tasks
+- [ ] T001 Add the icon in src/icons.rs
+- [ ] T002 Test it in tests/icons.rs
+## Milestones
+### M1 — Icon
+- **Tasks**: T001–T002
+MD
+git add -A; git commit -qm plan; git push -q origin HEAD:main 2>/dev/null; git fetch -q origin
+mkdir -p tests; echo a > src/icons.rs; echo b > src/stray.rs; git add -A; git commit -qm work
+P="$S/plan-drift.sh"
+check "plan-drift: a changed file no task names" 0 '^UNPLANNED src/stray.rs$' bash -c "'$P' specs/001-x M1 origin/main; true"
+check "plan-drift: a planned file the diff lacks" 0 '^MISSING tests/icons.rs$' bash -c "'$P' specs/001-x M1 origin/main; true"
+check "plan-drift: exits 1 on drift" 1 'UNPLANNED' "$P" specs/001-x M1 origin/main
+check "plan-drift: an unknown milestone fails" 2 'no plan for M9' "$P" specs/001-x M9 origin/main
+check "plan-drift: a note naming a longer path does not record" 1 'UNPLANNED src/stray.rs' bash -c "printf 'src/stray.rs.bak x\\ntests/icons.rs y\\n' > specs/001-x/drift-M1.md; '$P' specs/001-x M1 origin/main"
+printf 'src/stray.rs — needed by the icon\ntests/icons.rs — covered in src/icons.rs\n' > specs/001-x/drift-M1.md
+check "plan-drift: recorded reasons are accepted" 0 '^no plan drift for M1$' "$P" specs/001-x M1 origin/main
+
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
