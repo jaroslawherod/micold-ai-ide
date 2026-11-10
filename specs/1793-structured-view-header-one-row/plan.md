@@ -35,7 +35,7 @@ added to `micold-material` (Principle VIII); `+` becomes one `MenuTrigger`-style
 
 **Constraints**: offline; 40 px tab row; collapse order ring text, then `Changes` label, then tabs shrink/scroll; no overlap at wide and narrow widths.
 
-**Scale/Scope**: one window layout; about 8 files touched in `micold-client`, 2 new components in `micold-material`, 1 new model module in `micold-core`.
+**Scale/Scope**: one window layout; about 8 files touched in `micold-client`, 2 new components in `micold-material`, 1 new model module in `micold-client`.
 
 ## Constitution Check
 
