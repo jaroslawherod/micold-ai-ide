@@ -443,7 +443,13 @@ fn is_reserved(name: &str) -> bool {
     RESERVED_NAMES.contains(&name) || name.starts_with("GIT_CONFIG_") || name.starts_with("MICOLD_")
 }
 
-/// The variables a CLI's key or token file is delivered through.
+/// The variables a CLI's key or token file is delivered through. The `token_file` row reuses
+/// [`super::ai_cli::token_file_env_variable`] — the same table `with_configured_env` injects
+/// through at runtime, so V9 and the runtime injection never drift apart. The `api_key_file` row
+/// stays its own match: unlike runtime injection (where `super::ai_cli::api_key_env_variable`
+/// returns `None` for Claude Code, whose key reaches it through `apiKeyHelper` instead), V16 here
+/// still reserves `ANTHROPIC_API_KEY` against a user-set `ai.cli.env`/`session.env` entry for
+/// Claude Code, so the two tables intentionally differ on that one row.
 fn key_variables(cli: &AiCli) -> Vec<&'static str> {
     let mut out = Vec::new();
     if cli.api_key_file.is_some() {
@@ -454,11 +460,7 @@ fn key_variables(cli: &AiCli) -> Vec<&'static str> {
         }
     }
     if cli.token_file.is_some() {
-        match cli.id {
-            CliId::ClaudeCode => out.push("CLAUDE_CODE_OAUTH_TOKEN"),
-            CliId::Copilot => out.push("COPILOT_GITHUB_TOKEN"),
-            _ => {}
-        }
+        out.extend(super::ai_cli::token_file_env_variable(cli.id));
     }
     out
 }
