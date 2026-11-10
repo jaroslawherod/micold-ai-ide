@@ -240,3 +240,40 @@ against the rule each covers and run green together once the sequence compiled.
   Compile failure is their red; no behavioural red run was made (`TEST_AFTER` stands).
 - Green: `micold-core --lib kube` 153 passed; `micold-client --test main -- daemon_config_delivery_host` 14 passed;
   `micold-daemon --lib supervisor` (with the legacy state-dir fallback removed, review A F1) passed.
+
+## Issue 11 (#1532) M2b: keeping a delivered sign-in valid without a CLI refresh (T065a-c)
+
+`TEST_AFTER`: implemented directly from the handover plan the prior unit left in the ledger (two
+units before this one had exhausted their context on design with no code); each file's tests were
+written alongside its implementation rather than proven red first, but every test below is green at
+this unit's final HEAD and each failure mode (a missing `token_file_env_variable` arm, a dropped
+`expires_at` line, a refresh token surviving the relay) was checked by temporarily reverting the
+fix and re-running the test, which failed for the stated reason each time.
+
+- T065a: `token_file_env_variable`/`TOKEN_FILE_EXPIRY_WARNING_WINDOW`/`token_file_expires_within`
+  (`crates/micold-core/src/daemon_config/ai_cli.rs`); `with_configured_env`'s new `token_file`
+  branch (`crates/micold-daemon/src/state.rs`); `ConfigStatus.ai_cli_tokens`/`AiCliTokenExpiry`
+  (`crates/micold-core/src/protocol/messages.rs`), populated in `status_of`
+  (`crates/micold-daemon/src/config_watch.rs`); a new diagnostic line in `configuration_lines`
+  (`crates/micold-client/src/ui/daemon_details_dialog.rs`). Green: `cargo test -p micold-core
+  daemon_config::ai_cli` (new `token_file_env_variable_is_only_set_for_claude_code_and_copilot`,
+  `token_file_expires_within_flags_a_token_inside_the_window`); `cargo test -p micold-daemon --test
+  ai_cli_config` (new `configured_token_file_reaches_claude_code_as_oauth_token_without_the_expiry_line`,
+  asserting the token reaches `CLAUDE_CODE_OAUTH_TOKEN` and never argv, 4 passed); `cargo test -p
+  micold-core --test main protocol_roundtrip` (49 passed, `AiCliTokenExpiry` round-trips); `cargo
+  test -p micold-client --lib daemon_details_dialog` (new
+  `a_soon_to_expire_ai_cli_token_surfaces_its_own_line`, 10 passed); `cargo test -p micold-client
+  --test main daemon_dialog_buttons daemons_feature` (8 + 89 passed, the new `ConfigStatus` field
+  threaded through both fixtures).
+- T065b: new `crates/micold-client/src/ai_cli_relay.rs` (registered in `lib.rs`), pure logic only
+  per D9 — `derive_relay_copy`, `access_token_expiry`, `schedule_refresh_at`/`refresh_urgency`,
+  `apply_relay`. Green: `cargo test -p micold-client --lib ai_cli_relay`, 13 passed — one per CLI
+  that the derived copy drops its refresh token (Claude `claudeAiOauth.refreshToken`, Codex
+  `tokens.refresh_token` plus a fresh `last_refresh`, OpenCode's per-provider `refresh`), Copilot
+  and Pi reported `Unsupported` rather than silently producing a copy, the JWT-`exp`/`expiresAt`
+  expiry readers, the 75%-of-life schedule math (and its `None` edge when `expires_at` is not after
+  `delivered_at` — caught by this unit's own first test run, fixed by an explicit `is_zero` check),
+  the under-1h `WarnNow` urgency, and `apply_relay` leaving the source's bytes and mtime unchanged
+  while writing the derived copy to a separate destination, idempotently.
+- T065c: no test — a documentation-only task (`docs/user-guide/sandboxed-daemon.md`'s per-CLI
+  table), per the task's own wording.
