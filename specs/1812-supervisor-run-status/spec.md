@@ -35,7 +35,7 @@ for each state; each returns the expected state and fields.
    is `dead-no-ledger`.
 5. **Given** a ledger marking a PR merged while GitHub reports it open, **When** status is asked,
    **Then** the PR is reported open (GitHub wins).
-6. **Given** a run in one state for longer than the dwell limit, **When** status is asked, **Then**
+6. **Given** a run with an open PR past its `pr-state.sh` dwell limit, **When** status is asked, **Then**
    the state is `stuck`.
 7. **Given** a run blocked by work outside its flow, **When** status is asked, **Then** the state
    is `blocked`.
