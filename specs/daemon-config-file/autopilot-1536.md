@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1536
 - **Worktree branch**: feat/1536_ssh-key-signing-key-ca-file-and-session-files-for
 - **Started**: 2026-11-06
-- **Phase**: implement M1 (PR open)
-- **Next step**: after design PR merges: milestone M1 (T101–T106)
+- **Phase**: close (tdd-verify pending)
+- **Next step**: close unit: tdd-verify (worker), record follow-ups, spec Status, close PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1748 | design: M1 milestone cut | merged | 3dafe3fdeff78991721162255acdeb460c724f98 |
-| #1756 | M1 | open | - |
+| #1756 | M1 | merged | f6c8a1c6604e7ed460df121db260504a7c161a7c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | see PR table | in review |
+| M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | see PR table | merged |
 
 ## Decisions
 
@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Close unit started: branch reset to origin/main, #1756 recorded merged. Acceptance criteria of #1536 all shipped by M1 (T101-T106). tdd-verify worker (autopilot-worker, sonnet) stalled behind the shared build lock with no output after ~12 min; re-dispatch it (Issue 16 section, I16-n, in tdd/verification.md). Follow-ups to record or fix as test-strength: no reducer test for ExtraPathEdited into FileSettings.extras; [[session.files]] has no Settings row (not a new milestone: delivery works, UI only). Review B was CLEAN for M1, so skip speckit-converge. Then set spec Status for the Issue 16 group, finish ledger, open close PR `docs(daemon-config-file): close the spec (#1536)`.
 
 ## Open escalation
 
