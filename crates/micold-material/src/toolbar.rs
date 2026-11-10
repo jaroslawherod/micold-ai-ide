@@ -42,7 +42,7 @@ pub struct Toolbar<'a, M> {
     leading_fixed: Vec<Element<'a, M>>,
     centre: Option<Element<'a, M>>,
     /// Each action with, when it gives way, its rank and floor width.
-    actions: Vec<(Element<'a, M>, Option<(u8, f32)>)>,
+    actions: Vec<(Element<'a, M>, GivesWay)>,
     elevated: bool,
 }
 
@@ -120,6 +120,9 @@ impl<'a, M: 'a> Toolbar<'a, M> {
         self
     }
 }
+
+/// How a trailing action gives way: its rank and floor width in dp, or `None` to keep its width.
+type GivesWay = Option<(u8, f32)>;
 
 /// The leading child and the centre give way after the actions that opted in (feature 1793: the
 /// ring's text, then the Changes label), in the order they always have: centre first.
