@@ -17,9 +17,9 @@ use std::time::{Duration, Instant};
 use micold_core::daemon_config::ai_cli::{
     token_file_expires_within, TOKEN_FILE_EXPIRY_WARNING_WINDOW,
 };
+use micold_core::daemon_config::ai_cli_seed::sign_in_expires_at_secs;
 use micold_core::daemon_config::matching::parse_token_file;
 use micold_core::daemon_config::{self, DaemonConfig};
-use micold_core::daemon_config::ai_cli_seed::sign_in_expires_at_secs;
 use micold_core::protocol::messages::{AiCliTokenExpiry, ConfigStatus, TokenReach};
 
 use crate::config_load::{fingerprint, load_file, validate_text, LoadError, LoadedFile};
