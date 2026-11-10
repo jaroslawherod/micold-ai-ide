@@ -10,20 +10,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1812_autopilot-supervisor-m1-machine-readable-run
 - **Started**: 2026-11-10
 - **Phase**: milestones
-- **Next step**: M1 PR merges, then M2
+- **Next step**: M2 PR merges, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1819 | design (spec, plan, tasks) | merged | 5e90aef10191fe1b8f8801e63355c8a244a5eef0 |
+| #1823 | M1 | merged | acc28c34cd44b5d3eafac49cec605878b4007433 |
+| #PR | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #1823 | in-review |
-| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | | pending |
+| M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #1823 | merged |
+| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #PR | in-review |
 
 ## Decisions
 
@@ -61,6 +63,6 @@ None.
 
 ## Follow-ups not done
 
-M2: `run-status.sh` computes `supervised` inline (env or ledger field); switch it to `supervised.sh` (T015) when that lands.
+Full gate not run locally in M2 (queued behind another build); only scripts, tests and skill prose changed, `mise run test-scripts` green, CI validates. Review A: 3 MINOR (2 fixed; blank-answer/usage exit code left). Review B: clean (drift-M2.md added).
 
 None yet.

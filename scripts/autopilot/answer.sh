@@ -69,6 +69,6 @@ awk -v rf="$rowsf" '
   skip { next }
   dec { buf[++nb] = $0; next }
   { print }
-  END { if (dec) flush() }' "$ledger" > "$tmp" && mv "$tmp" "$ledger"
+  END { if (dec) flush() }' "$ledger" > "$tmp" && chmod --reference="$ledger" "$tmp" && mv "$tmp" "$ledger"
 rm -f "$rowsf" "$tmp"
 printf '%s' "$rows"

@@ -6,7 +6,7 @@ phone notification, hours later, with no scrollback. What may be asked:
 [../rules/escalation.md](../rules/escalation.md).
 
 0. **Supervised?** `scripts/autopilot/supervised.sh <ledger>` exits 0 and the ledger exists: send the
-   banner and notification (steps 2–3), no `AskUserQuestion`, end the turn. No ledger yet or not
+   banner below and the step 3 notification, no `AskUserQuestion`, end the turn. No ledger yet or not
    supervised: ask as below. The answer returns as `resume <answer>` (label or free text; a batch:
    a line `<n>. <answer>` per question).
 1. **Batch.** Finish the current round, checklist or review first. Send what is left in one
