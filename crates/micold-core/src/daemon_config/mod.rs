@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub mod ai_cli;
+pub mod ai_cli_seed;
 mod files;
 pub mod matching;
 mod resolved;

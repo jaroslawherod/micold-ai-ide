@@ -806,3 +806,15 @@ fn files_under(path: &std::path::Path) -> Vec<std::path::PathBuf> {
         .flat_map(|e| files_under(&e.path()))
         .collect()
 }
+
+/// T097 (#1532): a configured Claude Code credential marks onboarding done on a profile with no
+/// writable share, and never when none is configured.
+#[test]
+fn a_configured_credential_names_the_onboarding_record_without_a_writable_share() {
+    let mounts = build(&SandboxProfile::default());
+    assert_eq!(mounts.onboarding_record_for(false), None);
+    assert_eq!(
+        mounts.onboarding_record_for(true),
+        Some(mounts.home.host.join(".claude.json"))
+    );
+}

@@ -127,6 +127,19 @@ impl KubeCredential {
             Self::RegistryPull { auths } => Ok(one(".dockerconfigjson", source(auths)?)),
         }
     }
+
+    /// The secret's new data when this machine's source no longer matches what the pod was last
+    /// given (`delivered`), else `None` (#1532, T100): the host sign-in changed — the user's own
+    /// CLI refreshed it — so the client re-delivers the pod Secret. The source is only read.
+    pub fn redelivery(
+        &self,
+        home: &Path,
+        read: ReadFile<'_>,
+        delivered: &BTreeMap<String, String>,
+    ) -> Result<Option<BTreeMap<String, String>>, KubeFailure> {
+        let now = self.secret_data(home, read)?;
+        Ok((&now != delivered).then_some(now))
+    }
 }
 
 /// One of each kind of credential, to find the secrets a withdrawn one left behind (the names do
@@ -276,6 +289,29 @@ mod tests {
             data(KubeCredential::RegistryPull { auths: "/a".into() }),
             one(".dockerconfigjson", "{\"auths\":{}}")
         );
+    }
+
+    /// T100: the pod Secret is re-delivered only when the host sign-in changed.
+    #[test]
+    fn the_pod_secret_is_redelivered_when_the_host_sign_in_changes() {
+        let credential = KubeCredential::SignIn {
+            cli: AiCli::ClaudeCode,
+        };
+        let home = Path::new("/h");
+        let old = reader(&[("/h/.claude/.credentials.json", "old")]);
+        let delivered = credential.secret_data(home, &old).unwrap();
+        assert_eq!(credential.redelivery(home, &old, &delivered).unwrap(), None);
+        let new = reader(&[("/h/.claude/.credentials.json", "refreshed")]);
+        assert_eq!(
+            credential.redelivery(home, &new, &delivered).unwrap(),
+            Some(BTreeMap::from([(
+                ".credentials.json".to_string(),
+                "refreshed".to_string()
+            )]))
+        );
+        assert!(credential
+            .redelivery(home, &reader(&[]), &delivered)
+            .is_err());
     }
 
     #[test]

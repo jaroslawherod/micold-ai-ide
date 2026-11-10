@@ -69,6 +69,10 @@ fn config_status() -> micold_core::protocol::messages::ConfigStatus {
             cli: "claude_code".into(),
             expires_at_secs: 1_700_500_000,
         }],
+        ai_cli_sign_ins: vec![micold_core::protocol::messages::AiCliTokenExpiry {
+            cli: "codex".into(),
+            expires_at_secs: 1_800_000_000,
+        }],
     }
 }
 

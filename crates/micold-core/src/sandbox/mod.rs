@@ -1141,6 +1141,17 @@ impl MountSet {
             .then(|| self.home.host.join(ONBOARDING_RECORD))
     }
 
+    /// [`Self::onboarding_record`], also named when the daemon's `[[ai.cli]]` entry for Claude Code
+    /// has a `sign_in_file`, `token_file` or `api_key_file` (`configured_credential`, #1532 T097):
+    /// the container and pod get that credential without a writable share, and Claude's setup would
+    /// otherwise still ask for a login method over it. Always under [`HomeMount::host`].
+    pub fn onboarding_record_for(&self, configured_credential: bool) -> Option<PathBuf> {
+        if configured_credential {
+            return Some(self.home.host.join(ONBOARDING_RECORD));
+        }
+        self.onboarding_record()
+    }
+
     /// The locations this sandbox shares with the host, most specific container path first
     /// (feature 031, FR-018; research R10 decision 2).
     ///

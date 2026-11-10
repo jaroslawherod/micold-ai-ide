@@ -2264,7 +2264,15 @@ impl DaemonState {
         which: AiCli,
         cli: &micold_core::daemon_config::AiCli,
     ) -> Vec<(String, String)> {
-        use micold_core::daemon_config::{ai_cli::prepare_host_config_dir, Kind};
+        use micold_core::daemon_config::{
+            ai_cli::prepare_host_config_dir,
+            ai_cli_seed::{seed_host_config_dir, uses_machine_sign_in},
+            Kind,
+        };
+        // `use_machine_sign_in` (T099): the CLI keeps the machine's own sign-in and config dir.
+        if uses_machine_sign_in(cli) {
+            return env;
+        }
         let (Some(sign_in), Some(data_dir)) = (&cli.sign_in_file, self.pasted_data_dir.get())
         else {
             return env;
@@ -2281,6 +2289,14 @@ impl DaemonState {
             Ok(Some((name, dir))) => {
                 env.retain(|(existing, _)| existing != name);
                 env.push((name.to_string(), dir.display().to_string()));
+                // T096/T098: seeded copies beside the sign-in, never links, never copied back.
+                let user_claude_json = directories::UserDirs::new()
+                    .map(|dirs| dirs.home_dir().join(".claude.json"));
+                if let Err(e) =
+                    seed_host_config_dir(data_dir, cli, user_claude_json.as_deref(), false)
+                {
+                    tracing::warn!(error = %e, cli = ?cli.id, "could not seed the config dir");
+                }
             }
             Ok(None) => {}
             Err(e) => {

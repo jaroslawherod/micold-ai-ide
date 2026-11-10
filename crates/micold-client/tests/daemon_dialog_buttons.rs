@@ -127,6 +127,7 @@ fn reported_details(restart_needed: bool) -> (State, DaemonId) {
         last_error: None,
         tokens: Vec::new(),
         ai_cli_tokens: Vec::new(),
+        ai_cli_sign_ins: Vec::new(),
         startup: None,
     };
     state.update(daemons(DaemonsMsg::ConfigReported(host, Some(status))));
