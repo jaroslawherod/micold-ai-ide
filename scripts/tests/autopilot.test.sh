@@ -457,6 +457,14 @@ check "facts: a stale --base-snapshot exits 1 with a reason" 1 'STALE-SNAPSHOT' 
   '$F' --out-dir '$d/o8' --base-snapshot \"\$s\" 2>&1 >/dev/null | wc -l | grep -q '^1\$' && '$F' --out-dir '$d/o8' --base-snapshot \"\$s\" 2>&1"
 check "facts: a missing origin/main exits 1 with a reason" 1 'no nope/main ref' "$F" --out-dir "$d/o9" --base nope/main
 check "facts: a detached HEAD exits 1 with a reason" 1 'detached HEAD' bash -c "git checkout -q --detach; '$F' --out-dir '$d/o9' 2>&1; r=\$?; git switch -q wt; exit \$r"
+# a brace in a char literal, and a pure deletion, still find the enclosing fn
+git switch -q main; printf 'fn q() {\n    let c = %s;\n    go();\n    stop();\n}\n' "'{'" > src/q.rs
+git add -A; git commit -qm q; git push -q origin main; git switch -q -c quirks
+sed -i 's/go();/go2();/' src/q.rs
+check "facts: a brace in a char literal does not hide the fn" 0 'q \(fn' bash -c "'$F' --out-dir '$d/o11' | xargs cat"
+git checkout -q src/q.rs; sed -i '/stop();/d' src/q.rs
+check "facts: a pure deletion still names its fn" 0 'q \(fn' bash -c "'$F' --out-dir '$d/o12' | xargs cat"
+git checkout -q src/q.rs; git switch -q wt
 # SC-003: 50 files in under a minute, and no network or model
 git switch -q main; mkdir -p many
 for i in $(seq 1 50); do printf 'pub fn f%s() {\n    1;\n}\n' "$i" > "many/m$i.rs"; done

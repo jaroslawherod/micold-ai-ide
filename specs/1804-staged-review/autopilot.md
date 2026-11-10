@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1804_autopilot-staged-review-facts-by-code-plan-by
 - **Started**: 2026-11-10
 - **Phase**: 4-milestone M1
-- **Next step**: M1 review A/B, gate, PR
+- **Next step**: M1 PR open, wait CI and merge
 
 ## Pull requests
 
@@ -39,7 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 5cde486ee9e7e9df34b7a01fbc085ba42eb9247d:3682d99c9b3cdda2488e886dad070dbbc3470657 | CLEAN (1 MINOR fixed) |
 | Plan | 1 | 1a62212de3d302e24a02e30ded3cafd5b57b808e:2cb1d380997d85aa1003d496bb6d0592f93454e8 | CLEAN (3 MINOR fixed, prose only) |
 | Tasks | 1 | 556972415e82386de902014ef228fc9a6f47699e:69e09ead864f03119471a114f103cb65c96a9ce3 | CLEAN (2 MINOR, noted) |
-| Code M1 A+B | 1 | 7a69cc9c5b80df71c7dabc6a2ece54b92a6f37da:27245460b828b59289090067c3903b7231e2f3f0 | pending |
+| Code M1 A | 1 | 7a69cc9c5b80df71c7dabc6a2ece54b92a6f37da:27245460b828b59289090067c3903b7231e2f3f0 | 10 findings, none BLOCKER/MAJOR by rubric; fixed: char literals, deletions, git-config prefixes, lcov errors, callers budget (tests added); left: raw/multiline strings, attribute lines, bare-name callers (approximate by contract) |
+| Code M1 B | 1 | same | CLEAN (2 MINOR: char literals fixed; no tdd cycle-log in this feature) |
 
 ## Declined review findings
 
