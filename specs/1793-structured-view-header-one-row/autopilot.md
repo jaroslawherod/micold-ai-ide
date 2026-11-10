@@ -39,6 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | a2463a39:901c3164 | CHANGES (4 MAJOR, fixed) |
 | Tasks | 2 (sonnet) | fix diff | CLEAN (2 MINOR, fixed) |
 | Spec | 1 | bb128d1c688f3a42eaea356845c2b2497ccfa4d1:c63bfc7c625e9cac5e814565ff80e2d20296bb2c | CLEAN (3 MINOR, fixed prose only) |
+| M1 Review A (high) | 1 | 5ff40e78:ca940bff | CLEAN (2 MINOR: changes_button near-copy and floor constant, left) |
+| M1 Review B (sonnet) | 1 | 14aea717:34cfb594 | CLEAN |
 
 ## Declined review findings
 
