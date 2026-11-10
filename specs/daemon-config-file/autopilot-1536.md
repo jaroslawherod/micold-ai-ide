@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1536
 - **Worktree branch**: feat/1536_ssh-key-signing-key-ca-file-and-session-files-for
 - **Started**: 2026-11-06
-- **Phase**: close (tdd-verify pending)
-- **Next step**: close unit: tdd-verify (worker), record follow-ups, spec Status, close PR
+- **Phase**: milestone (M2)
+- **Next step**: milestone unit M2, then a new close unit (re-run tdd-verify, spec Status, follow-ups, close PR)
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | see PR table | merged |
+| M2 | T148–T156 | full | The extras are delivered to container, pod and SSH daemons (M1 rendered client-local paths; `deliver_container`, pod and `ssh_delivery` did not deliver them); tdd-verify I16-1..I16-8 tests | — | pending |
 
 ## Decisions
 
@@ -48,7 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit started: branch reset to origin/main, #1756 recorded merged. Acceptance criteria of #1536 all shipped by M1 (T101-T106). tdd-verify worker (autopilot-worker, sonnet) stalled behind the shared build lock with no output after ~12 min; re-dispatch it (Issue 16 section, I16-n, in tdd/verification.md). Follow-ups to record or fix as test-strength: no reducer test for ExtraPathEdited into FileSettings.extras; [[session.files]] has no Settings row (not a new milestone: delivery works, UI only). Review B was CLEAN for M1, so skip speckit-converge. Then set spec Status for the Issue 16 group, finish ledger, open close PR `docs(daemon-config-file): close the spec (#1536)`.
+Close unit 2 found unbuilt behaviour (claim verified): `deliver_container`, the pod delivery and `ssh_delivery` do not deliver `ssh_key_file`, `known_hosts_file`, `signing_key_file`, `ca_file` or `[[session.files]]` sources, so only a host daemon gets them; on SSH the rendered key path is client-local. #1536 acceptance criteria 1 to 4 do not hold for C, K and S. Cut M2 (T148-T156, in tasks.md) including tdd-verify findings I16-1..I16-8 (verification.md section Issue 16 is committed). Run M2, then a new close unit: re-run tdd-verify, add #1536 rows to test-list (T156 does), record follow-up (no Settings row for `[[session.files]]`), spec Status for the Issue 16 group, close PR `docs(daemon-config-file): close the spec (#1536)`. Review B for M1 was CLEAN, so skip speckit-converge.
 
 ## Open escalation
 
