@@ -117,7 +117,6 @@ fn another_sessions_figures_never_show_for_the_shown_one() {
 
 #[test]
 fn the_ring_text_hides_before_the_changes_label() {
-    assert!(RING_TEXT_RANK < CHANGES_LABEL_RANK);
     assert_eq!(RING_TEXT_RANK, 0);
     assert_eq!(CHANGES_LABEL_RANK, 1);
 }
