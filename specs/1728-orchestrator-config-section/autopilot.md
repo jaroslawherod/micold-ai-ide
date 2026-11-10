@@ -38,19 +38,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
-| Review | Round | Snapshot | Verdict |
-|---|---|---|---|
-| Spec | 1 | 71e2ac6249f9a3555746e2f8d1ccc0246b4c2dc3:11174021f72bbe06aa2470e521894b2accad8a6e | CHANGES: 4 MAJOR, all fixed (spec prose; fixed, prose only) |
-| Spec | 2 (full; snapshot stale after rebase) | 76ef2a27113bda2c7a5166c38d5f2f7cc42ea2ee:656b78ae3b753338ce5149e495d91ced3919b6f7 | CHANGES: 1 MAJOR (anchor wording, aligned to the table; fixed, prose only), 2 MINOR fixed. Numbering FR-010/FR-011 reordered, plan ref relabelled |
+| Review | Round | Scope | Head | Snapshot | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Spec | 1 |  |  | 71e2ac6249f9a3555746e2f8d1ccc0246b4c2dc3:11174021f72bbe06aa2470e521894b2accad8a6e | CHANGES: 4 MAJOR, all fixed (spec prose; fixed, prose only) |
+| Spec | 2 (full; snapshot stale after rebase) |  |  | 76ef2a27113bda2c7a5166c38d5f2f7cc42ea2ee:656b78ae3b753338ce5149e495d91ced3919b6f7 | CHANGES: 1 MAJOR (anchor wording, aligned to the table; fixed, prose only), 2 MINOR fixed. Numbering FR-010/FR-011 reordered, plan ref relabelled |
 
-| Plan | 1 | 573f45826c468a2ca44df1bab5ec62c891f3fc8b:26fcb3b039574a30aac4878ca1a31ac18a4a7c6e | CLEAN; 3 MINOR fixed (prose only: header anchor D7, Windows wording, config_watch.rs) |
-| Tasks | 1 | 4e2263b78b027e73b33b7aac1b5c4db3c8625e09:78ed34c3419f7495841225d1ca695c4749d5e46c | CHANGES: 1 MAJOR (T008 test order), 3 MINOR; all fixed (T003a moved before code, view-state test, Verify, T012 note) |
-| Tasks | 2 | 04bb849807d5e2d3fc5e5f3ee44a5c3faa90e833:78ed34c3419f7495841225d1ca695c4749d5e46c | CLEAN; 1 MINOR fixed |
-| Code (B, conformance) | 1 | da433e0dc2af8da78132ac6135c7a4d3ac6744d6:3ef4115e85dfffe4d64ebe53a3d39dd4058d0900 | CLEAN |
-| Code (A, high) M3 | 1 | c17aefc80d5d7b52b4d655fb88689f5681c69eda:6560c1e1b27779bf08ad4b5521bf8e66d24c34b5 | 2 MINOR test assertions fixed (no `@` in message, duplicate message); port validation declined (pre-existing follow-up, out of M3 scope); O3+O4 double report declined (follow-up) |
-| Code (B, sonnet) M3 | 1 | same | CLEAN; 1 MINOR fixed |
-| (unused) | - | c17aefc80d5d7b52b4d655fb88689f5681c69eda:6560c1e1b27779bf08ad4b5521bf8e66d24c34b5 | - |
-| Code (A, high) | 1 | 4b87210200a365755cfba4d6984e645872b543eb:eaaca02fd7fa5893f63520699c9ccd12f28e494d | CLEAN; 3 MINOR (port not validated, userinfo echoed (fixed in M3), O3+O4 both fire) left as follow-ups |
+| Plan | 1 |  |  | 573f45826c468a2ca44df1bab5ec62c891f3fc8b:26fcb3b039574a30aac4878ca1a31ac18a4a7c6e | CLEAN; 3 MINOR fixed (prose only: header anchor D7, Windows wording, config_watch.rs) |
+| Tasks | 1 |  |  | 4e2263b78b027e73b33b7aac1b5c4db3c8625e09:78ed34c3419f7495841225d1ca695c4749d5e46c | CHANGES: 1 MAJOR (T008 test order), 3 MINOR; all fixed (T003a moved before code, view-state test, Verify, T012 note) |
+| Tasks | 2 |  |  | 04bb849807d5e2d3fc5e5f3ee44a5c3faa90e833:78ed34c3419f7495841225d1ca695c4749d5e46c | CLEAN; 1 MINOR fixed |
+| Code (B, conformance) | 1 |  |  | da433e0dc2af8da78132ac6135c7a4d3ac6744d6:3ef4115e85dfffe4d64ebe53a3d39dd4058d0900 | CLEAN |
+| Code (A, high) M3 | 1 |  |  | c17aefc80d5d7b52b4d655fb88689f5681c69eda:6560c1e1b27779bf08ad4b5521bf8e66d24c34b5 | 2 MINOR test assertions fixed (no `@` in message, duplicate message); port validation declined (pre-existing follow-up, out of M3 scope); O3+O4 double report declined (follow-up) |
+| Code (B, sonnet) M3 | 1 |  |  | same | CLEAN; 1 MINOR fixed |
+| (unused) | - |  |  | c17aefc80d5d7b52b4d655fb88689f5681c69eda:6560c1e1b27779bf08ad4b5521bf8e66d24c34b5 | - |
+| Code (A, high) | 1 |  |  | 4b87210200a365755cfba4d6984e645872b543eb:eaaca02fd7fa5893f63520699c9ccd12f28e494d | CLEAN; 3 MINOR (port not validated, userinfo echoed (fixed in M3), O3+O4 both fire) left as follow-ups |
+| Close (docs, sonnet) | 1 | 1829 | ac971f810cf61e96763fd3aaad2bedb379883c7b | 1ded4aa3a2ef4b16bd8c03812b4c749bf635768b:1340f7e042cd09b5c43d6f01ac790f5fa39a5c6d | CLEAN 3 MINOR fixed (prose only) |
 
 ## Declined review findings
 
