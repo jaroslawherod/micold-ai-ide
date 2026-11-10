@@ -5,7 +5,7 @@
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -29,6 +29,43 @@ fn forge(reach: &'static [(&'static str, &'static [&'static str])]) -> Forge {
                 head.push(byte[0]);
             }
             let head = String::from_utf8_lossy(&head).into_owned();
+            let request_line = head.lines().next().unwrap_or("");
+            if let Some(repo) = git_advertisement_repo(request_line) {
+                let basic = head
+                    .lines()
+                    .find_map(|l| {
+                        l.strip_prefix("authorization: Basic ")
+                            .or_else(|| l.strip_prefix("Authorization: Basic "))
+                    })
+                    .unwrap_or("")
+                    .trim();
+                let authorised = reach.iter().any(|(token, repos)| {
+                    let user = if *token == "from-keychain" {
+                        "me"
+                    } else {
+                        "x-access-token"
+                    };
+                    base64(&format!("{user}:{token}")) == basic
+                        && repos.iter().any(|r| r.eq_ignore_ascii_case(&repo))
+                });
+                let reply = if authorised {
+                    let refs = format!("{SHA} refs/heads/main\0multi_ack\n");
+                    let service = "# service=git-upload-pack\n";
+                    let body = format!(
+                        "{:04x}{service}0000{:04x}{refs}0000",
+                        service.len() + 4,
+                        refs.len() + 4
+                    );
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/x-git-upload-pack-advertisement\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                } else {
+                    "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"forge\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                };
+                let _ = stream.write_all(reply.as_bytes());
+                continue;
+            }
             counted.fetch_add(1, Ordering::SeqCst);
             let bearer = head
                 .lines()
@@ -60,6 +97,35 @@ fn forge(reach: &'static [(&'static str, &'static [&'static str])]) -> Forge {
         }
     });
     Forge { base, requests }
+}
+
+/// The commit every authorised `git ls-remote` of the fake forge lists.
+const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// `owner/repo` of a git smart-HTTP `info/refs` request line, `None` for any other request.
+fn git_advertisement_repo(request_line: &str) -> Option<String> {
+    let target = request_line.split(' ').nth(1)?;
+    let repo = target.split_once(".git/info/refs")?.0;
+    Some(repo.trim_start_matches('/').to_string())
+}
+
+fn base64(text: &str) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in text.as_bytes().chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |acc, (i, b)| acc | (u32::from(*b) << (16 - 8 * i)));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 struct Setup {
@@ -104,6 +170,54 @@ impl Setup {
         std::fs::create_dir_all(self.path("data")).unwrap();
         std::fs::write(&path, text).unwrap();
         path
+    }
+
+    /// A host git configuration with a helper that records that it ran in `helper-ran` and
+    /// answers `from-keychain`; returns the helper as git names it.
+    fn plant_host_helper(&self) -> String {
+        self.token(
+            "planted.sh",
+            &format!(
+                "cat >/dev/null\ntouch '{}'\nprintf 'username=me\\npassword=from-keychain\\n'\n",
+                self.path("helper-ran").display()
+            ),
+        );
+        let helper = format!("!sh {}", self.path("planted.sh").display());
+        std::fs::write(
+            self.path("gitconfig"),
+            format!("[credential]\n\thelper = {helper}\n"),
+        )
+        .unwrap();
+        helper
+    }
+
+    /// `git ls-remote` of `path` on the fake forge under the environment `session_git_env` builds
+    /// for `config`, over the planted host configuration.
+    fn ls_remote(&self, config: &Path, path: &str, isolate: bool, helper: &str) -> Output {
+        use micold_core::scoped_credential::git_env::{session_git_env, SessionGit};
+        let config_text = config.to_string_lossy();
+        let fallback = [helper.to_string()];
+        let env = session_git_env(&SessionGit {
+            bases: std::slice::from_ref(&self.base),
+            daemon: env!("CARGO_BIN_EXE_micold-daemon"),
+            config: &config_text,
+            isolate,
+            ssh_to_https: false,
+            fallback: &fallback,
+        });
+        Command::new("git")
+            .args(["ls-remote", &format!("{}/{path}.git", self.base)])
+            .envs(env)
+            .env("HOME", self.path("data"))
+            .env("GIT_CONFIG_GLOBAL", self.path("gitconfig"))
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .unwrap()
+    }
+
+    fn helper_ran(&self) -> bool {
+        self.path("helper-ran").exists()
     }
 
     /// `git-credential get` for `path` on the fake forge.
@@ -228,4 +342,69 @@ fn with_no_matching_token_the_sessions_own_helpers_answer() {
         Some("tok")
     );
     assert_eq!(s.get(&config, "other/app", None), "");
+}
+
+/// What `git ls-remote` printed, for the assertions below.
+fn listing(out: &Output) -> String {
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn git_with_the_session_environment_authenticates_with_the_chosen_token() {
+    let forge = forge(&[("tok", &["acme/app"])]);
+    let s = Setup::new(&forge);
+    let helper = s.plant_host_helper();
+    s.token("any.tok", "tok\n");
+    let config = s.config(&[("any", &[])]);
+    let out = s.ls_remote(&config, "acme/app", false, &helper);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(listing(&out), format!("{SHA}\trefs/heads/main\n"));
+    assert!(
+        !s.helper_ran(),
+        "the host helper is not asked when a token applies"
+    );
+}
+
+#[test]
+fn git_falls_back_to_the_host_helper_for_a_repository_no_token_reaches() {
+    let forge = forge(&[("tok", &["acme/app"]), ("from-keychain", &["other/app"])]);
+    let s = Setup::new(&forge);
+    let helper = s.plant_host_helper();
+    s.token("any.tok", "tok\n");
+    let config = s.config(&[("any", &[])]);
+    let out = s.ls_remote(&config, "other/app", false, &helper);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(listing(&out), format!("{SHA}\trefs/heads/main\n"));
+    assert!(s.helper_ran(), "the host helper answered");
+}
+
+#[test]
+fn a_sandbox_session_never_runs_the_planted_host_helper() {
+    let forge = forge(&[("tok", &["acme/app"]), ("from-keychain", &["other/app"])]);
+    let s = Setup::new(&forge);
+    let helper = s.plant_host_helper();
+    s.token("any.tok", "tok\n");
+    let config = s.config(&[("any", &[])]);
+    let refused = s.ls_remote(&config, "other/app", true, &helper);
+    assert!(
+        !refused.status.success(),
+        "no token reaches it and no host helper may answer"
+    );
+    assert_eq!(listing(&refused), "");
+    let served = s.ls_remote(&config, "acme/app", true, &helper);
+    assert!(
+        served.status.success(),
+        "{}",
+        String::from_utf8_lossy(&served.stderr)
+    );
+    assert_eq!(listing(&served), format!("{SHA}\trefs/heads/main\n"));
+    assert!(!s.helper_ran(), "a sandbox clears the inherited helper");
 }

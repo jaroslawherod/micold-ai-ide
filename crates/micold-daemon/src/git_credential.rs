@@ -2,9 +2,8 @@
 //! runs (#1002, FR-006, FR-007, contracts/git-in-container.md §2).
 //!
 //! With `MICOLD_DAEMON_CONFIG` set (a session of a daemon that has a configuration file, #1530) it
-//! answers `get` from the configuration: [`crate::credential_config`]. Without it, it answers from the
-//! in-memory file of the one repository the container holds a credential for (the grant path, retired
-//! with the grant messages), and nothing for any other repository or host. `store` and `erase` read and discard their
+//! answers `get` from the configuration: [`crate::credential_config`]. Without it, it answers nothing
+//! (the in-memory credential files of the retired grant path are no longer read). `store` and `erase` read and discard their
 //! input: a token is never kept anywhere git could write it. Every path exits 0, so git falls
 //! through to "no credential" rather than to an error.
 
@@ -14,20 +13,11 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use micold_core::scoped_credential::git_env::{CONFIG_ENV, FALLBACK_ENV};
-use micold_core::scoped_credential::helper::{answer, parse_request, GIT_CREDENTIAL_ROOT};
-use micold_core::scoped_credential::{UnixTime, GITHUB_BASE};
+use micold_core::scoped_credential::helper::{parse_request, GIT_CREDENTIAL_ROOT};
+use micold_core::scoped_credential::UnixTime;
 
-/// Test override of the credential root, as `repo_clone::ROOT_ENV` is for the clone root.
+/// Test override of the sandbox root [`credential_root`] reports, as `repo_clone::ROOT_ENV` is for the clone root.
 pub const ROOT_ENV: &str = "MICOLD_GIT_CREDENTIAL_ROOT";
-/// Test override of the forge base the helper answers for (a loopback server in the tests).
-pub const BASE_ENV: &str = "MICOLD_GIT_CREDENTIAL_BASE";
-
-fn env_or(name: &str, default: &str) -> String {
-    std::env::var(name)
-        .ok()
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
 
 /// Where this daemon keeps credential files, or `None` when it is not sandboxed (#1002): the test
 /// override [`ROOT_ENV`], else the default root in a container, in a pod (`POD_ENV`) or when the
@@ -68,11 +58,8 @@ pub fn run(args: &[OsString], input: &mut impl Read, output: &mut impl Write) ->
         let config = std::env::var_os(CONFIG_ENV).filter(|v| !v.is_empty());
         let reply = match config {
             Some(file) => answer_from_config(Path::new(&file), &text, now),
-            None => {
-                let root = PathBuf::from(env_or(ROOT_ENV, GIT_CREDENTIAL_ROOT));
-                let base = env_or(BASE_ENV, GITHUB_BASE);
-                answer(&root, &base, &parse_request(&text), now)
-            }
+            // No file, no token to choose from: git moves on to "no credential".
+            None => String::new(),
         };
         let _ = output.write_all(reply.as_bytes());
     }

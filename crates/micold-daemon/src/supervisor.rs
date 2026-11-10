@@ -301,7 +301,7 @@ pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
         lang_inherited,
     );
     let config = config_git_edits(&settings, exe.as_deref());
-    config_extra_edits(combine_git_edits(edits, config), &settings)
+    config_extra_edits(edits.into_iter().chain(config).collect(), &settings)
 }
 
 /// `edits` with what `[git]`, `[network]` and `[[session.files]]` add (#1536, FR-036..038); the
@@ -329,45 +329,6 @@ fn config_extra_edits(
         }
     }
     crate::session_extras::add_extras(edits, crate::session_extras::extras(config))
-}
-
-/// Whether `key` belongs to the `GIT_CONFIG_COUNT` / `_KEY_n` / `_VALUE_n` block.
-fn is_git_config_block(key: &std::ffi::OsStr) -> bool {
-    let key = key.to_string_lossy();
-    key == "GIT_CONFIG_COUNT"
-        || key.starts_with("GIT_CONFIG_KEY_")
-        || key.starts_with("GIT_CONFIG_VALUE_")
-}
-
-/// Whether `edits` set a `GIT_CONFIG_*` block, and how many entries its `GIT_CONFIG_COUNT` names.
-fn git_block_count(edits: &[EnvEdit]) -> Option<usize> {
-    edits.iter().find_map(|edit| match edit {
-        EnvEdit::Set(key, value) if key == "GIT_CONFIG_COUNT" => value.to_str()?.parse().ok(),
-        _ => None,
-    })
-}
-
-/// Join the container's git edits with the configuration's (#1744). Each layer sets a whole
-/// `GIT_CONFIG_COUNT` / `_KEY_n` / `_VALUE_n` block, and git reads `COUNT` entries from whichever
-/// keys are set, so two blocks merged key by key leave the later `COUNT` over the earlier keys: a
-/// configuration block of one reset entry beside the container's five cleared every helper and
-/// dropped the daemon's own. The block with more entries replaces the other wholesale (the
-/// configuration's on a tie, as it is the later and newer); the rest of the later layer
-/// (`MICOLD_DAEMON_CONFIG`, `GIT_TERMINAL_PROMPT`) always applies.
-fn combine_git_edits(legacy: Vec<EnvEdit>, config: Vec<EnvEdit>) -> Vec<EnvEdit> {
-    let (Some(old), Some(new)) = (git_block_count(&legacy), git_block_count(&config)) else {
-        return legacy.into_iter().chain(config).collect();
-    };
-    let keep_block = old > new;
-    let in_block =
-        |edit: &EnvEdit| matches!(edit, EnvEdit::Set(key, _) if is_git_config_block(key));
-    let mut edits: Vec<EnvEdit> = if keep_block {
-        legacy
-    } else {
-        legacy.into_iter().filter(|e| !in_block(e)).collect()
-    };
-    edits.extend(config.into_iter().filter(|e| !keep_block || !in_block(e)));
-    edits
 }
 
 /// The git environment the configuration asks for (#1530, FR-010, research D7): the daemon's
@@ -1081,35 +1042,6 @@ mod container_git_tests {
     }
 
     #[test]
-    fn a_configuration_block_with_tokens_replaces_the_container_block() {
-        let block = |n: usize| -> Vec<EnvEdit> {
-            let mut v = vec![EnvEdit::Set(
-                "GIT_CONFIG_COUNT".into(),
-                n.to_string().into(),
-            )];
-            for i in 0..n {
-                v.push(EnvEdit::Set(
-                    format!("GIT_CONFIG_KEY_{i}").into(),
-                    "k".into(),
-                ));
-                v.push(EnvEdit::Set(
-                    format!("GIT_CONFIG_VALUE_{i}").into(),
-                    "v".into(),
-                ));
-            }
-            v
-        };
-        let env = set(&combine_git_edits(block(5), block(7)));
-        assert_eq!(env["GIT_CONFIG_COUNT"], "7");
-        assert_eq!(
-            env.keys()
-                .filter(|k| k.starts_with("GIT_CONFIG_KEY_"))
-                .count(),
-            7
-        );
-    }
-
-    #[test]
     fn a_container_or_pod_session_reads_the_configured_git_file() {
         for kind in [Kind::Container, Kind::Kubernetes] {
             let git = facts(Some(kind), Some(SHARED));
@@ -1167,49 +1099,29 @@ mod container_git_tests {
         assert_eq!(lang(Some("/x"), false), None);
     }
 
-    /// #1527, FR-039: `env_hygiene` takes the container signal from the installed settings (the
-    /// configuration file's `data_dir`), not from a variable the SSH-started daemon is never passed;
-    /// `session.env` is applied after it and beats the default `LANG`; `TZ` is left alone.
+    /// #1527, FR-039: the container signal is the configuration file's `data_dir`; `session.env` is
+    /// applied after the hygiene edits and beats the default `LANG`; `TZ` is left alone. Driven with
+    /// explicit facts, so neither the test process's `LANG` nor the installed settings matter.
     #[test]
-    fn env_hygiene_reads_the_installed_data_dir_and_leaves_tz_and_session_env_to_win() {
-        // The file must exist: a missing one is left out rather than named.
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("gitconfig");
-        std::fs::write(&shared, "[user]\n").unwrap();
-        crate::settings::install(crate::settings::DaemonSettings {
-            kind: Some(Kind::Container),
-            data_dir: Some(DATA.into()),
-            git_config_file: Some(shared.clone()),
-            ..Default::default()
-        });
-        assert_eq!(
-            crate::settings::current().data_dir.as_deref(),
-            Some(Path::new(DATA)),
-            "another test installed settings first"
-        );
-        let inherited = std::env::var_os("LANG").is_some_and(|v| !v.is_empty());
-
+    fn a_container_data_dir_sets_lang_and_leaves_tz_and_session_env_to_win() {
         let mut cmd = CommandBuilder::new("true");
         cmd.env("TZ", "Europe/Berlin");
-        let edits = env_hygiene(&cmd);
+        let edits = env_hygiene_with(&cmd, Some(DATA), GitFacts::default(), false);
         assert!(
             !edits
                 .iter()
                 .any(|e| matches!(e, EnvEdit::Remove(k) if k == "TZ")),
             "TZ is removed from a session"
         );
-        // Whatever LANG the test process inherited, the git file is the container signal.
-        assert_eq!(
-            set(&edits).get("GIT_CONFIG_GLOBAL").map(String::as_str),
-            shared.to_str(),
-            "the installed kind was not read"
-        );
-        if !inherited {
-            assert_eq!(set(&edits).get("LANG").map(String::as_str), Some("C.UTF-8"));
-        }
+        assert_eq!(set(&edits).get("LANG").map(String::as_str), Some("C.UTF-8"));
 
         // The session's own variables follow the hygiene edits, as in `spawn_shell`/`spawn_ai_cli`.
-        apply_env_hygiene(&mut cmd);
+        for edit in edits {
+            match edit {
+                EnvEdit::Set(key, value) => cmd.env(key, value),
+                EnvEdit::Remove(key) => cmd.env_remove(key),
+            }
+        }
         cmd.env("LANG", "de_DE.UTF-8");
         assert_eq!(
             cmd.get_env("LANG").and_then(|v| v.to_str()),

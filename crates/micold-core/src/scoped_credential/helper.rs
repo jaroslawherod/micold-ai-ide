@@ -1,13 +1,7 @@
 //! What `micold-daemon git-credential get` answers (contracts/git-in-container.md §2, FR-006/007).
 //!
-//! The credential of the one repository lives in an in-memory file under [`GIT_CREDENTIAL_ROOT`],
-//! `<root>/<owner>/<repo>` (lower case), holding `expires_at=<unix seconds>` and `token=<token>`.
-//! Git asks with `useHttpPath` on, so the request names the repository; every other host, repository
-//! or expired file gets no answer and git moves on (and, with no prompt, fails at once).
-
-use std::path::{Path, PathBuf};
-
-use super::UnixTime;
+//! The request git sends it, and the repository path it names. The credential itself comes from the
+//! daemon's configuration file (#1530): the grant-written files this helper once read are gone.
 
 /// Where the container keeps its credential files: a memory-backed mount no host path shares
 /// (FR-006).
@@ -44,24 +38,6 @@ pub fn parse_request(input: &str) -> CredentialRequest {
     request
 }
 
-/// The file's text for a credential: the format [`parse_credential_file`] reads.
-pub fn render_credential_file(expires_at: UnixTime, token: &str) -> String {
-    format!("expires_at={expires_at}\ntoken={token}\n")
-}
-
-/// `(expires_at, token)` from a credential file, or `None` when either is missing or malformed.
-pub fn parse_credential_file(text: &str) -> Option<(UnixTime, String)> {
-    let (mut expires_at, mut token) = (None, None);
-    for line in text.lines() {
-        match line.split_once('=') {
-            Some(("expires_at", v)) => expires_at = v.trim().parse().ok(),
-            Some(("token", v)) => token = Some(v.trim().to_string()).filter(|t| !t.is_empty()),
-            _ => {}
-        }
-    }
-    Some((expires_at?, token?))
-}
-
 /// `(scheme, host[:port])` of a base such as `https://github.com`.
 pub fn split_base(base: &str) -> Option<(&str, &str)> {
     let (scheme, rest) = base.split_once("://")?;
@@ -85,38 +61,9 @@ pub fn repo_key(path: &str) -> Option<(String, String)> {
     (plain(owner) && plain(repo)).then(|| (owner.to_ascii_lowercase(), repo.to_ascii_lowercase()))
 }
 
-/// The credential file for the repository a request names, when the request is for `base`.
-pub fn credential_file(root: &Path, base: &str, request: &CredentialRequest) -> Option<PathBuf> {
-    let (scheme, host) = split_base(base)?;
-    if request.protocol.as_deref() != Some(scheme) || request.host.as_deref() != Some(host) {
-        return None;
-    }
-    let (owner, repo) = repo_key(request.path.as_deref()?)?;
-    Some(root.join(owner).join(repo))
-}
-
-/// The answer git gets: `username=`/`password=` lines, or nothing.
-pub fn answer(root: &Path, base: &str, request: &CredentialRequest, now: UnixTime) -> String {
-    let Some(file) = credential_file(root, base, request) else {
-        return String::new();
-    };
-    let Ok(text) = std::fs::read_to_string(file) else {
-        return String::new();
-    };
-    match parse_credential_file(&text) {
-        Some((expires_at, token)) if expires_at > now => {
-            format!("username={CREDENTIAL_USERNAME}\npassword={token}\n")
-        }
-        _ => String::new(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scoped_credential::GITHUB_BASE;
-
-    const NOW: UnixTime = 1_000;
 
     fn request(host: &str, path: Option<&str>) -> CredentialRequest {
         CredentialRequest {
@@ -124,18 +71,6 @@ mod tests {
             host: Some(host.into()),
             path: path.map(str::to_string),
         }
-    }
-
-    fn root_with(file: &str, content: &str) -> tempfile::TempDir {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(file);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, content).unwrap();
-        dir
-    }
-
-    fn live() -> String {
-        render_credential_file(NOW + 60, "tok-1")
     }
 
     #[test]
@@ -150,71 +85,18 @@ mod tests {
     }
 
     #[test]
-    fn the_file_format_round_trips() {
-        assert_eq!(
-            parse_credential_file(&render_credential_file(42, "abc")),
-            Some((42, "abc".into()))
-        );
-        assert_eq!(parse_credential_file("token=abc\n"), None);
-        assert_eq!(parse_credential_file("expires_at=x\ntoken=abc\n"), None);
-        assert_eq!(parse_credential_file("expires_at=4\ntoken=\n"), None);
-    }
-
-    #[test]
-    fn the_repository_in_any_path_form_gets_the_token() {
-        let root = root_with("o/r", &live());
+    fn the_repository_in_any_path_form_is_the_same_lower_case_key() {
         for path in ["o/r", "o/r.git", "o/r/", "O/R.git"] {
-            let got = answer(
-                root.path(),
-                GITHUB_BASE,
-                &request("github.com", Some(path)),
-                NOW,
-            );
-            assert_eq!(got, "username=x-access-token\npassword=tok-1\n", "{path}");
+            assert_eq!(repo_key(path), Some(("o".into(), "r".into())), "{path}");
         }
     }
 
     #[test]
-    fn another_repository_host_scheme_or_no_path_gets_nothing() {
-        let root = root_with("o/r", &live());
-        let ask = |req: &CredentialRequest| answer(root.path(), GITHUB_BASE, req, NOW);
-        assert_eq!(ask(&request("github.com", Some("o/other"))), "");
-        assert_eq!(ask(&request("github.com", Some("p/r"))), "");
-        assert_eq!(ask(&request("gitlab.com", Some("o/r"))), "");
-        assert_eq!(ask(&request("github.com", None)), "");
-        let mut http = request("github.com", Some("o/r"));
-        http.protocol = Some("http".into());
-        assert_eq!(ask(&http), "");
-        assert_eq!(ask(&request("github.com", Some("../o/r"))), "");
-        assert_eq!(ask(&request("github.com", Some("o/r/x"))), "");
-    }
-
-    #[test]
-    fn a_dot_or_dot_dot_segment_names_no_file() {
-        let root = tempfile::tempdir().unwrap();
-        for path in ["../r", "o/..", "./r", "o/.", "../r.git", "o/../"] {
-            let req = request("github.com", Some(path));
-            assert_eq!(
-                credential_file(root.path(), GITHUB_BASE, &req),
-                None,
-                "{path}"
-            );
+    fn a_path_that_is_not_two_plain_names_has_no_key() {
+        for path in [
+            "../r", "o/..", "./r", "o/.", "../r.git", "o/../", "o/r/x", "o",
+        ] {
+            assert_eq!(repo_key(path), None, "{path}");
         }
-    }
-
-    #[test]
-    fn an_expired_missing_or_unreadable_file_gets_nothing() {
-        let root = root_with("o/r", &render_credential_file(NOW, "tok-1"));
-        let req = request("github.com", Some("o/r"));
-        assert_eq!(answer(root.path(), GITHUB_BASE, &req, NOW), "");
-        assert_eq!(
-            answer(tempfile::tempdir().unwrap().path(), GITHUB_BASE, &req, NOW),
-            ""
-        );
-        let garbled = root_with("o/r", "not a credential file");
-        assert_eq!(answer(garbled.path(), GITHUB_BASE, &req, NOW), "");
-        // A directory where the file should be cannot be read as one.
-        let dir = root_with("o/r/inner", "x");
-        assert_eq!(answer(dir.path(), GITHUB_BASE, &req, NOW), "");
     }
 }

@@ -565,7 +565,8 @@ mod tests {
             "an unanswered stop ends the process; got {stopped:?}"
         );
         assert!(
-            // The OS wait and `Instant` use different clocks, so a 5 s wait can read a hair short.
+            // Rule: the 4900 ms tolerance is intended. The OS wait and `Instant` use different
+            // clocks, so a 5 s wait can read a hair short; the bound still pins to 2% of 5 s.
             waited >= std::time::Duration::from_millis(4900),
             "the process is asked for 5 s before it is ended; took {waited:?}"
         );

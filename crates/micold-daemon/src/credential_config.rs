@@ -284,4 +284,146 @@ mod tests {
         assert_eq!(run_fallback(&helpers, request), "username=u\npassword=p\n");
         assert_eq!(run_fallback(&helpers[..1], request), "");
     }
+
+    use micold_core::scoped_credential::reach::REFRESH_SECS;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    /// A forge that answers `/user/repos` from a script (`Err`: unreachable) and counts the asks.
+    struct Forge(Mutex<VecDeque<Result<Vec<&'static str>, String>>>);
+
+    impl Forge {
+        fn new(answers: Vec<Result<Vec<&'static str>, String>>) -> Self {
+            Self(Mutex::new(answers.into()))
+        }
+        fn left(&self) -> usize {
+            self.0.lock().unwrap().len()
+        }
+    }
+
+    impl Transport for Forge {
+        fn get(&self, _: &str, _: &SecretToken) -> Result<Reply, String> {
+            let repos = self
+                .0
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("an unscripted ask")?;
+            let items: Vec<String> = repos
+                .iter()
+                .map(|r| format!(r#"{{"full_name":"{r}"}}"#))
+                .collect();
+            Ok(Reply {
+                status: 200,
+                headers: Vec::new(),
+                body: format!("[{}]", items.join(",")),
+            })
+        }
+    }
+
+    /// One unfiltered token on `http://forge.test`, read from `any.tok`.
+    struct Host {
+        dir: tempfile::TempDir,
+        config: DaemonConfig,
+    }
+
+    impl Host {
+        fn new(token: &str) -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join("any.tok"), token).unwrap();
+            std::fs::write(
+                dir.path().join("daemon.toml"),
+                format!(
+                    "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = \"{d}\"\n\n[[github.tokens]]\nname = \"any\"\ntoken_file = \"{d}/any.tok\"\nhost = \"http://forge.test\"\n",
+                    d = dir.path().display()
+                ),
+            )
+            .unwrap();
+            let config = crate::config_load::load_file(&dir.path().join("daemon.toml"))
+                .unwrap()
+                .config;
+            Self { dir, config }
+        }
+
+        fn replace_token(&self, token: &str) {
+            std::fs::write(self.dir.path().join("any.tok"), token).unwrap();
+        }
+
+        fn cache_file(&self) -> std::path::PathBuf {
+            self.dir.path().join(REACH_FILE)
+        }
+
+        fn cache(&self) -> ReachCache {
+            ReachCache::load(&self.cache_file())
+        }
+
+        /// The password `answer` gives for `repo` at `now`.
+        fn password(&self, repo: &str, now: UnixTime, forge: &Forge) -> Option<String> {
+            let request = CredentialRequest {
+                protocol: Some("http".into()),
+                host: Some("forge.test".into()),
+                path: Some(repo.into()),
+            };
+            answer(&self.config, Some(&self.cache_file()), &request, now, forge).and_then(|a| {
+                a.lines()
+                    .find_map(|l| l.strip_prefix("password=").map(String::from))
+            })
+        }
+    }
+
+    #[test]
+    fn an_entry_older_than_15_minutes_is_asked_for_again_through_answer() {
+        let host = Host::new("tok\n");
+        let forge = Forge::new(vec![Ok(vec!["acme/app"]), Ok(vec!["acme/app", "acme/new"])]);
+        assert_eq!(
+            host.password("acme/app", 1000, &forge).as_deref(),
+            Some("tok")
+        );
+        assert_eq!(forge.left(), 1);
+
+        host.password("acme/app", 1000 + REFRESH_SECS - 1, &forge);
+        assert_eq!(forge.left(), 1, "a fresh entry is not asked for again");
+
+        host.password("acme/app", 1000 + REFRESH_SECS, &forge);
+        assert_eq!(forge.left(), 0, "a stale entry is refreshed");
+        let entry = host.cache().entries.remove(0);
+        assert_eq!(entry.repos, ["acme/app", "acme/new"]);
+        assert_eq!(entry.fetched_at, 1000 + REFRESH_SECS);
+    }
+
+    #[test]
+    fn a_failed_request_keeps_the_last_answer_and_counts_as_an_attempt() {
+        let host = Host::new("tok\n");
+        let forge = Forge::new(vec![Ok(vec!["acme/app"]), Err("offline".into())]);
+        host.password("acme/app", 1000, &forge);
+        let later = 1000 + REFRESH_SECS;
+        assert_eq!(
+            host.password("acme/app", later, &forge).as_deref(),
+            Some("tok"),
+            "offline, the cached reach still serves the token"
+        );
+        let entry = host.cache().entries.remove(0);
+        assert_eq!(entry.repos, ["acme/app"]);
+        assert_eq!(entry.fetched_at, 1000, "a failure is not a refresh");
+        assert_eq!(entry.last_miss_fetch_at, later, "but it is an attempt");
+    }
+
+    #[test]
+    fn a_replaced_unfiltered_token_gets_its_own_entry_and_the_old_one_is_pruned() {
+        let host = Host::new("tok-1\n");
+        let forge = Forge::new(vec![Ok(vec!["acme/app"]), Ok(vec!["acme/other"])]);
+        host.password("acme/app", 1000, &forge);
+        let old = fingerprint("tok-1");
+        assert_eq!(host.cache().entries[0].fingerprint, old);
+
+        host.replace_token("tok-2\n");
+        assert_eq!(
+            host.password("acme/other", 1001, &forge).as_deref(),
+            Some("tok-2")
+        );
+        let entries = host.cache().entries;
+        assert_eq!(entries.len(), 1, "the replaced token's entry is pruned");
+        assert_eq!(entries[0].fingerprint, fingerprint("tok-2"));
+        assert_eq!(entries[0].repos, ["acme/other"]);
+    }
 }

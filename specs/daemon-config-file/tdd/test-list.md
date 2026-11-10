@@ -97,3 +97,23 @@ TDD verification (`tdd/verification.md`, Finding 2) found this milestone missing
 | T056 | The `gh` shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set from the chosen token, leaving an existing `GH_TOKEN` alone | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
 | T056 (PATH) | `<data_dir>/bin` is first on the session `PATH`, for every configured daemon kind | US2, FR-011, FR-035, SC-003 | TEST_AFTER (T148 adds the "prefix present" unit test; T149 adds the kind-agnostic one — see `tdd/verification.md` Finding 1 and 4) |
 | T095 | The `gh` shim also sets `GH_HOST` from the chosen token's host (D15 row 7), left alone with no token chosen, same rule as `GH_TOKEN` (T056) | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
+
+## Test list: Issue 9 (#1530), milestones M1 to M3 and the close remediation
+
+Baseline: `micold-core --lib` `daemon_config::matching` and `scoped_credential::` 81 green at `86468d87c`, before the close unit's tests below. Traces: US2, US3, FR-008, FR-010, FR-016, SC-004. Rows B1-B10 were derived from the tasks by `tdd/verification.md` (Issue 9): they landed with their code (`TEST_AFTER`, no red recorded). The T141-T146 rows are the tests the close unit added; their red state is in `cycle-log.md`.
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| B1 | `TokenChoice` order: most specific wins, ties go to the first in the file, expiry and reach respected | US2, FR-008 | DONE (TEST_AFTER) |
+| B2 | Reach discovery and cache by token fingerprint | FR-008 | DONE (TEST_AFTER) |
+| B3 | The helper is stateless: reads `MICOLD_DAEMON_CONFIG`, a replaced token is used by the next call | US2, SC-004 | DONE (TEST_AFTER) |
+| B4 | Fallback helpers: untouched git when no token matches | US2, FR-010 | DONE (TEST_AFTER) |
+| B5 | A sandbox clears inherited helpers | US3, FR-010 | DONE (T141 runs it through real git) |
+| B6 | Session git env per `daemon.kind` | US3, FR-010 | DONE (TEST_AFTER; T141 runs it through real git) |
+| B7 | Per-host rewrite and token `host` | FR-010 | DONE (TEST_AFTER) |
+| B8 | `container_git_edits` by `daemon.kind` on both start paths | US3, FR-010 | DONE (TEST_AFTER; T142 removes the order dependence) |
+| B9 | `[git] config_file` delivered, `commit.gpgsign` and `tag.gpgsign` stripped | US3, FR-010 | DONE (T143 asserts the delivered copy) |
+| B10 | Grant messages retired, protocol bump | FR-016 | DONE (TEST_AFTER, compile-time) |
+| T141 | `session_git_env` applied to real `git ls-remote`: chosen token authenticates, an unreached repo falls back, a sandbox never runs the planted helper | US3, FR-010 | DONE |
+| T143 | The delivered gitconfig copy loses `commit.gpgsign` and `tag.gpgsign` on the sandbox and pod paths | US3, FR-010 | DONE |
+| T144 | `credential_config::answer`: stale entry refreshed after 15 min, failed request keeps the last answer, replaced unfiltered token gets its own entry and the old one is pruned | US2, FR-008 | DONE |

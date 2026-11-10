@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1530
 - **Worktree branch**: feat/1530_the-daemon-s-credential-helper-chooses-the-token
 - **Started**: 2026-11-04
-- **Phase**: M3 (cut by Close)
-- **Next step**: M3 PR open; then a new Close unit does T140-T147 from tdd/verification.md (Issue 9)
+- **Phase**: close
+- **Next step**: T140-T147 (Issue 9 remediation), review, gate, close PR
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1686 | Design (milestones for Issue 9) | MERGED | 826681cfb63664b82f65026abfd61abb190956c5 |
 | #1700 | M1 | MERGED | 3ffb138fbe2f1fbacfb8cbad179ad4a99202e95f |
 | #1713 | M2 | MERGED | 86468d87ced75974d0aeca37c7d7675976d1a934 |
-| #1775 | M3 | open | |
+| #1775 | M3 | MERGED | 658807d3515cd47a7979c9c5de36d32bf5304528 |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T046–T052, T093, T054 | full | helper chooses token from config (most specific, ties first), reach cached by fingerprint, per-kind session git env with fallback/clear, per-host rewrite | #1700 | merged |
 | M2 | T092, T094, T053 | full | git setup from daemon.kind on every start path, GIT_CONFIG_GLOBAL, gpgsign stripped, grant messages retired + protocol bump | #1713 | merged |
-| M3 | T139 | full | container and pod git config only from `[git] config_file`: remove `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount (T094 remainder, I9-2) | #1775 | PR open; a Close unit (T140-T147 from tdd/verification.md) follows |
+| M3 | T139 | full | container and pod git config only from `[git] config_file`: remove `CredentialShare::GitConfig` and the kube `gitconfig` Secret mount (T094 remainder, I9-2) | #1775 | merged |
 
 ## Decisions
 
