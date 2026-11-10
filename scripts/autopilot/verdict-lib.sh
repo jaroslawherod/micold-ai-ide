@@ -64,8 +64,9 @@ vl_required() {
   local scopes; scopes="$(vl_scopes "$1" "$2" | tr '\n' ' ')"
   vl_rounds "$1" | awk -F '\t' -v scopes=" $scopes" '
     index(scopes, " " $3 " ") && $3 != "" {
-      if (!($1 in round) || $2 + 0 >= round[$1] + 0) { round[$1] = $2; row[$1] = $0 }
-      if (!($1 in seen)) { seen[$1] = 1; order[++k] = $1 }
+      key = $1 SUBSEP $3
+      if (!(key in round) || $2 + 0 >= round[key] + 0) { round[key] = $2; row[key] = $0 }
+      if (!(key in seen)) { seen[key] = 1; order[++k] = key }
     }
     END { for (i = 1; i <= k; i++) print row[order[i]] }'
 }

@@ -54,8 +54,14 @@ if [[ $cmd =~ gh[[:space:]]+pr[[:space:]]+merge([^\;\&\|]*) ]]; then
   [[ $args =~ --admin ]] && deny "never merge with --admin: merge on green through scripts/autopilot/wait-merge.sh."
 fi
 # A direct merge skips the review-verdict guard; only a command-position `gh pr merge` (not --help or quoted text).
-re_merge='(^|[;&|(][[:space:]]*)gh[[:space:]]+pr[[:space:]]+merge'
-[[ $cmd =~ $re_merge && ! $cmd =~ gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+(--help|-h)([[:space:]]|$) ]] && deny "do not run gh pr merge: use scripts/autopilot/wait-merge.sh <pr> [--squash], which refuses a merge whose review verdict is for another head."
+nl=$'\n'
+re_merge="(^|[;&|(${nl}{!]|[[:space:]](then|do|else|xargs|exec|command|time))[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge(([[:space:]]+(--help|-h))?([[:space:]]|\$))"
+rest=$cmd
+while [[ $rest =~ $re_merge ]]; do
+  [ -n "${BASH_REMATCH[4]}" ] ||
+    deny "do not run gh pr merge: use scripts/autopilot/wait-merge.sh <pr> [--squash], which refuses a merge whose review verdict is for another head."
+  rest=${rest#*"${BASH_REMATCH[0]}"}
+done
 [[ $cmd =~ git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+worktree[[:space:]]+remove ]] &&
   deny "never remove a worktree: the user removes it in micold IDE."
 if [[ $cmd =~ gh[[:space:]]+api ]]; then

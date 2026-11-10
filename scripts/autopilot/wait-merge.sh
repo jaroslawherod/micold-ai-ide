@@ -118,8 +118,11 @@ if [ "$gcode" -ne 0 ]; then
 fi
 case "$glast" in
   ALLOWED*) head="${glast##* }" ;;
-  *) head="$(view headRefOid .headRefOid)" ;;
+  UNGUARDED*|CARRIED*) head="$(view headRefOid .headRefOid)" ;;
 esac
+if [ -z "${head:-}" ]; then
+  echo "VERDICT-REFUSED $pr reviewed none current unknown re-review: guard gave no head ($glast)"; exit 7
+fi
 if ! err="$(gh pr merge "$pr" "$method" --match-head-commit "$head" 2>&1)"; then
   [ "$(view state .state)" = MERGED ] && { merged_line; exit 0; }
   echo "MERGE-FAILED $pr $(echo "$err" | grep -v '^\s*$' | head -1)"

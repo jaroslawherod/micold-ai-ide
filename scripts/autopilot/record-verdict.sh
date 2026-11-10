@@ -13,6 +13,9 @@ set -uo pipefail
 die() { echo "record-verdict: $*" >&2; exit 2; }
 [ $# -eq 7 ] || die "usage: record-verdict.sh <ledger> <review> <round> <scope> <snapshot> <head> <verdict>"
 ledger="$1" review="$2" round="$3" scope="$4" snapshot="$5" head="$6" verdict="$7"
+# A cell holds one line without `|`.
+cell() { local v="${1//|//}"; v="${v//$'\n'/ }"; printf '%s' "${v//$'\r'/ }"; }
+review="$(cell "$review")" scope="$(cell "$scope")" snapshot="$(cell "$snapshot")" verdict="$(cell "$verdict")"
 
 vl_is_sha "$head" || die "head must be 40 hex characters, got '$head'"
 vl_vocab_ok "$verdict" || die "verdict must start with CLEAN, MINOR-ONLY, CHANGES or pending, got '$verdict'"
@@ -24,7 +27,7 @@ grep -qxF '## Review rounds' "$ledger" || die "$ledger has no '## Review rounds'
 tmp="$(mktemp "$ledger.XXXXXX")" || die "cannot write beside $ledger"
 trap 'rm -f "$tmp"' EXIT
 RV_Review="$review" RV_Round="$round" RV_Scope="$scope" RV_Snapshot="$snapshot" RV_Head="$head" \
-RV_Verdict="${verdict//|//}" awk '
+RV_Verdict="$verdict" awk '
 function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
 function cells(line,   n) { sub(/^\|/, "", line); sub(/\|[ \t]*$/, "", line); return split(line, c, "|") }
 function emit(   i, s) { s = "|"; for (i = 1; i <= m; i++) s = s " " v[i] " |"; print s }
