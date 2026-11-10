@@ -77,6 +77,26 @@ fn remove_link(path: &Path) -> std::io::Result<()> {
     }
 }
 
+/// Replaces every link between `config_dir` and `dir` with a real directory, so a copy made below
+/// it never lands in the user's own files a read-through link (`agents`, `commands`) names.
+fn unlink_ancestors(config_dir: &Path, dir: &Path) -> std::io::Result<()> {
+    let Ok(relative) = dir.strip_prefix(config_dir) else {
+        return Ok(());
+    };
+    let mut current = config_dir.to_path_buf();
+    for part in relative.components() {
+        current.push(part);
+        if current
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink())
+        {
+            std::fs::remove_file(&current)?;
+            std::fs::create_dir(&current)?;
+        }
+    }
+    Ok(())
+}
+
 /// What identifies one version of `source`: its length and modification time.
 fn stamp_of(source: &Path) -> std::io::Result<String> {
     let meta = std::fs::metadata(source)?;
@@ -108,6 +128,7 @@ fn seed_copy(config_dir: &Path, source: &Path, target: &Path) -> std::io::Result
         return Ok(());
     }
     if let Some(parent) = target.parent() {
+        unlink_ancestors(config_dir, parent)?;
         std::fs::create_dir_all(parent)?;
     }
     remove_link(target)?;
@@ -292,6 +313,64 @@ mod tests {
         std::fs::write(&source, "model = \"bb\"\n").unwrap();
         seed_host_config_dir(&data, &codex, None, false).unwrap();
         assert_eq!(std::fs::read_to_string(&copy).unwrap(), "model = \"bb\"\n");
+    }
+
+    /// Review A F1: a `place` below a linked directory never writes into the user's directory.
+    #[cfg(unix)]
+    #[test]
+    fn a_place_below_a_linked_directory_leaves_the_users_directory_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let users = tmp.path().join("users-agents");
+        std::fs::create_dir_all(&users).unwrap();
+        let file = tmp.path().join("f");
+        std::fs::write(&file, "x").unwrap();
+        let data = tmp.path().join("data");
+        let dir = data.join("ai/claude_code");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::os::unix::fs::symlink(&users, dir.join("agents")).unwrap();
+        let mut claude = cli(CliId::ClaudeCode);
+        claude.place = vec![Place {
+            file,
+            as_path: PathBuf::from("agents/review.md"),
+        }];
+        seed_host_config_dir(&data, &claude, None, false).unwrap();
+        assert!(dir.join("agents/review.md").exists());
+        assert_eq!(std::fs::read_dir(&users).unwrap().count(), 0);
+    }
+
+    /// Review A F2: prepare (which relinks the user's settings) then seed, twice: the CLI's own
+    /// edit of the copy survives the second session.
+    #[cfg(unix)]
+    #[test]
+    fn the_clis_edit_of_a_settings_copy_survives_the_next_prepare() {
+        use crate::daemon_config::ai_cli::prepare_host_config_dir;
+        let tmp = tempfile::tempdir().unwrap();
+        let live = tmp.path().join("live");
+        std::fs::create_dir_all(&live).unwrap();
+        std::fs::write(live.join("config.toml"), "users").unwrap();
+        let sign_in = tmp.path().join("auth.json");
+        std::fs::write(&sign_in, "{}").unwrap();
+        let source = tmp.path().join("cfg.toml");
+        std::fs::write(&source, "configured").unwrap();
+        let mut codex = cli(CliId::Codex);
+        codex.settings_file = Some(source);
+        let data = tmp.path().join("data");
+        let copy = data.join("ai/codex/config.toml");
+        for session in 0..2 {
+            prepare_host_config_dir(&data, CliId::Codex, &sign_in, Some(&live)).unwrap();
+            seed_host_config_dir(&data, &codex, None, false).unwrap();
+            if session == 0 {
+                std::fs::write(&copy, "configured\ntrusted").unwrap();
+            }
+        }
+        assert_eq!(
+            std::fs::read_to_string(&copy).unwrap(),
+            "configured\ntrusted"
+        );
+        assert_eq!(
+            std::fs::read_to_string(live.join("config.toml")).unwrap(),
+            "users"
+        );
     }
 
     /// A settings copy replaces a read-through link; it never writes through it.
