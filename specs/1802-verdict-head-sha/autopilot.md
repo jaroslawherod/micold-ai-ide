@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1802
 - **Worktree branch**: feat/1802_autopilot-bind-review-verdicts-to-the-pr-head-sha
 - **Started**: 2026-11-10
-- **Phase**: spec
-- **Next step**: clarify (no open markers; may be skipped), then plan
+- **Phase**: clarify
+- **Next step**: plan (clarify round 1: CLEAN, no questions)
 
 ## Pull requests
 
