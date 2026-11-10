@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #PR | in-review |
+| M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #1823 | in-review |
 | M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | | pending |
 
 ## Decisions
