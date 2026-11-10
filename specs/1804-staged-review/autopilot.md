@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 (incl. T007a) | full | review-facts.py writes the facts file; tests in autopilot.test.sh | #… | pending |
+| M1 | T001–T010 (incl. T007a) | full | review-facts.py writes the facts file; tests in autopilot.test.sh | #1820 | open |
 | M2 | T011–T015 | full | three skill files describe the staged flow, fallback, shadow | #… | pending |
 
 ## Decisions
