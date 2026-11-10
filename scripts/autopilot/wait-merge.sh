@@ -117,8 +117,8 @@ if [ "$gcode" -ne 0 ]; then
   exit 7
 fi
 case "$glast" in
-  ALLOWED*) head="${glast##* }" ;;
-  UNGUARDED*|CARRIED*) head="$(view headRefOid .headRefOid)" ;;
+  ALLOWED*|CARRIED*) head="${glast##* }" ;;
+  UNGUARDED*) head="$(view headRefOid .headRefOid)" ;;
 esac
 if [ -z "${head:-}" ]; then
   echo "VERDICT-REFUSED $pr reviewed none current unknown re-review: guard gave no head ($glast)"; exit 7

@@ -51,8 +51,8 @@ carry() { # carry <H>
   if [ -z "$B" ]; then
     git fetch -q origin "$base" 2>/dev/null && B="$(git rev-parse -q --verify FETCH_HEAD 2>/dev/null)" || { WHY="base unreadable"; return 1; }
   fi
-  ih="$(vl_identity "$1" "$B")" || { WHY="reviewed head has a merge commit or no change"; return 1; }
-  ip="$(vl_identity "$P" "$B")" || { WHY="current head has a merge commit or no change"; return 1; }
+  ih="$(vl_identity "$1" "$B")"; case $? in 0) ;; 1) WHY="reviewed head has a merge commit or no change"; return 1 ;; *) WHY="heads cannot be compared"; return 1 ;; esac
+  ip="$(vl_identity "$P" "$B")"; case $? in 0) ;; 1) WHY="current head has a merge commit or no change"; return 1 ;; *) WHY="heads cannot be compared"; return 1 ;; esac
   [ "$ih" = "$ip" ] || { WHY="head changed since the review"; return 1; }
   case " $carried " in *" $1 "*) return 0 ;; esac
   body="$(gh pr view "$pr" --json comments -q '.comments[].body' 2>/dev/null)" || { WHY="comments unreadable (gh failed)"; return 1; }

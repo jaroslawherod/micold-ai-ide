@@ -39,17 +39,13 @@ the review, no row, `CHANGES` or `pending`, an unreadable PR head or ledger, or 
 
 ### Carrying a verdict over a clean replay
 
-A rebase onto a newer base or an amended message leaves the code under review unchanged, so an
-**approved** verdict carries to the new head `P` without a new review when, with ledger files
-excluded: neither `merge-base(X,base)..X` range (X = `H` or `P`) contains a merge commit or is
-empty; the ordered `git patch-id --stable` values of the non-empty commits are equal; and the
-`git diff --name-status -M` touched-path sets are equal. Any other change, a conflict resolution
-included, does not carry; `CHANGES` and `pending` never carry. Whitespace-only drift is invisible to
-patch-id and carries (the accepted limit). A carry never touches the branch: the guard posts the PR
-comment `verdict carried <H> -> <P>` once per pair, prints `CARRIED <n> <H> <P>` (exit 0) and
-`wait-merge.sh` merges pinned to `P`. `H` is always the original reviewed SHA from the ledger, whose
-row is never rewritten, so a chain of rebases compares to the original. `H` unreachable from the
-clone is refused.
+A rebase or an amended message leaves the code unchanged, so an **approved** verdict carries from
+`H` to the new head `P` when, ledger files excluded, neither `merge-base(X,base)..X` range has a
+merge commit or is empty, the ordered `git patch-id --stable` lists are equal and the
+`git diff --name-status -M` path sets are equal. Anything else, a conflict resolution included,
+does not carry; `CHANGES` and `pending` never do. The guard posts the PR comment
+`verdict carried <H> -> <P>` once per pair and prints `CARRIED <n> <H> <P>` (the last carried `H`);
+the branch is untouched. `H` is the original SHA in the ledger, so chains do not drift.
 
 | Last line | Do |
 |---|---|
