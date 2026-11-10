@@ -4,7 +4,7 @@
 ring `8% · $1.28` -> status `Idle`/`Working` -> `Changes · no changes` -> worktree `⋮` -> Settings -> app `⋮`. None of the first four on Overview.
 
 ## Tab row (40 px)
-session tabs (activity dot when working) + shell tabs -> `+` (menu: Another session / Terminal) -> `N hidden` chip (`ToggleChip`, only when >0). Nothing else above the first event.
+session tabs (activity dot when working) + shell tabs -> `+` (menu: Another session / Terminal) -> `N hidden` chip (`ToggleChip`, only when >0). No other header row above the first event (a conditional slim row inside the transcript body may hold the tasks accordion and mode label, research R6).
 
 ## Preservation table (FR-012)
 | Before | After |

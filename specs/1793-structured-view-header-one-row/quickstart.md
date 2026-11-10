@@ -1,7 +1,7 @@
 # Quickstart: feature 1793
 
 ## Part A: automated
-`scripts/build-lock.sh cargo test -p micold-core header_bar`; `-p micold-client features_header_bar`; gates `header_row_fits`, `top_bar_collapse`; then `mise run gate`.
+`scripts/build-lock.sh cargo test -p micold-client features_header_bar`; gates `header_row_fits`, `top_bar_collapse`; then `mise run gate`.
 
 ## Part B: visual pass (`visual-pass` skill)
 1. Wide window, session selected with 3 hidden events: one 40 px row, `3 hidden` chip, no title row; top bar order ring, status, Changes, `⋮`, settings, menu.
