@@ -108,6 +108,7 @@ crates/micold-client/src/features/session_strip.rs     # drop Member::Plus split
 crates/micold-client/src/ui/mod.rs            # overlays for the two menus
 crates/micold-client/tests/                   # features_header_bar.rs, gates/header_row_fits.rs, gates/top_bar_collapse.rs
 docs/user-guide/structured-transcript.md, worktrees-and-sessions.md
+crates/micold-client/tests/session_area_stability.rs  # pins `status_cluster` by name: update with its removal
 ```
 
 **Structure Decision**: existing three-layer split (core logic, client features/reducers, `ui/` glue, material components).

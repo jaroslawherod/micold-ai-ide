@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: clarify
-- **Next step**: plan unit
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -34,6 +34,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | bb128d1c688f3a42eaea356845c2b2497ccfa4d1:c63bfc7c625e9cac5e814565ff80e2d20296bb2c | CLEAN (3 MINOR, fixed prose only) |
 
 ## Declined review findings
+
+None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; snapshot 082794ab:53c2cfac. Open for tasks unit: session-bar leftovers placement (research R6) is a recommended default the spec does not state.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
