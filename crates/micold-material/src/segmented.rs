@@ -65,6 +65,7 @@ impl<M> SegmentedControl<M> {
     }
 
     /// The segments, in order.
+    #[cfg(test)]
     pub(crate) fn segments(&self) -> &[Segment<M>] {
         &self.segments
     }
