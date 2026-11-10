@@ -116,9 +116,11 @@ text and JSON form.
   recommendation as separate fields.
 - **FR-004**: GitHub MUST win over the ledger for every PR state.
 - **FR-005**: `done` MUST be reported only when the existing handoff check passes.
-- **FR-006**: `stuck` MUST be reported when the run has stayed in one state longer than the dwell
-  limit [NEEDS CLARIFICATION: dwell limit per state; the PR state machine of #1806 defines dwell
-  times and may supply it]. `stuck` replaces the underlying state in `state` and the underlying
+- **FR-006**: `stuck` MUST be reported when the run's open PR is past its dwell limit, as
+  `scripts/autopilot/pr-state.sh` of #1806 reports it (`STUCK`, with its per-state limits and
+  `AUTOPILOT_LIMIT_*` overrides); the command takes the limit from that helper and defines none of
+  its own. A run with no open PR (`running`, `asking`) has no dwell limit and is never `stuck`:
+  `asking` waits on a human by design. `stuck` replaces the underlying state in `state` and the underlying
   state stays available in a separate field.
 - **FR-006a**: Time in state MUST be measured from a "since" time taken from the #1806 state
   machine when present, otherwise from the time of the last ledger commit or change; the source
@@ -140,9 +142,9 @@ text and JSON form.
 - **FR-010**: In a supervised run an escalation MUST write the complete *Open escalation* (question,
   options, recommendation, evidence), print the banner, and end the turn without an interactive
   question.
-- **FR-011**: The way an answer comes back MUST be defined and documented in `tasks/ask.md`:
-  [NEEDS CLARIFICATION: exact message shape of the answer, for example `resume` followed by the
-  chosen option or free text].
+- **FR-011**: The way an answer comes back MUST be defined and documented in `tasks/ask.md`: a
+  message to the session that starts with the word `resume`, followed by the answer: the chosen
+  option's label or free text (for batched questions, see FR-011a).
 - **FR-011a**: A supervised escalation holding several batched questions MUST take one answer per
   question, in one message, matched by question number.
 - **FR-011b**: A supervised `resume` that finds a non-empty *Open escalation* and no answer MUST
@@ -186,3 +188,14 @@ text and JSON form.
   `blocked by work outside my flow`).
 - Out of scope: the supervisor itself, notifying humans, restarting stuck or dead runs, any
   change to how unsupervised runs are driven.
+
+## Clarifications
+
+### Session 2026-11-10
+
+- Q: What is the dwell limit per state for `stuck`? → A: none of its own; the limit is
+  `pr-state.sh`'s per-state limit for the open PR (waiting-ci), and states without an open PR are
+  never `stuck`. _(agent-resolved: specs/1812-supervisor-run-status/spec.md#Assumptions, PR #1810
+  `rules/waiting.md` *PR states and dwell limits*)_
+- Q: What is the message shape of the answer? → A: `resume` followed by the option label or free
+  text. _(agent-resolved: issue #1812 body, *Supervised mode*)_

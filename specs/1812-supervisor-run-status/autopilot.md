@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1812
 - **Worktree branch**: feat/1812_autopilot-supervisor-m1-machine-readable-run
 - **Started**: 2026-11-10
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve FR-006 and FR-011 markers in spec.md
+- **Phase**: plan
+- **Next step**: plan unit
 
 ## Pull requests
 
