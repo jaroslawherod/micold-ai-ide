@@ -334,9 +334,10 @@ model choice and the permission mode are as before.
 6. **Given** a switched session, **When** the application or the daemon restarts, **Then** the
    session is restored in the kind it last had, resuming the same conversation.
 7. **Given** the conversation can no longer be resumed (Claude Code's stored conversation is gone),
-   **When** a switch starts the session, **Then** the failure is reported as a failed resume is
-   today (feature 938, User Story 3 scenario 4), and the session keeps the new kind so the user
-   can switch back.
+   **When** a switch starts the session, **Then** nothing starts and the daemon removes the session itself,
+   persistently, logging the reason only (feature 026 FR-008a, [BUG-1795](../026-multi-provider-sessions/bugs/BUG-1795.md),
+   decided by user). ~~the failure is reported as a failed resume is today (feature 938, User Story 3
+   scenario 4), and the session keeps the new kind so the user can switch back.~~
 
 ---
 

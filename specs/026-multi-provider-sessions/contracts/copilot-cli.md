@@ -74,8 +74,9 @@ copilot --resume=<uuid> --no-remote
 
 - `--continue` (most recent in cwd) and bare `--resume` (interactive picker) are **not** used — the
   application always targets a specific id, for the same reason feature 005 rejected `--continue`.
-- An id Copilot no longer has must be surfaced and offered as a fresh session, not left as a blank
-  terminal (spec edge case).
+- An id Copilot no longer has must not be left as a blank terminal, and the session is removed by
+  the daemon itself (FR-008a, BUG-1795, decided by user; was: surfaced and offered as a fresh
+  session).
 
 ## Sessions recorded for a working directory (FR-014)
 

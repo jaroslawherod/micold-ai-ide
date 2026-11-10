@@ -1823,8 +1823,8 @@ have no such entry.
   you had in the terminal are not shown in the transcript: they are in the terminal's own
   scrollback, which the marker says.
 - **Across restarts.** The session comes back in the kind it last had, resuming the same
-  conversation. If Claude Code no longer has the conversation, the start fails as a failed resume
-  does, and the session keeps its new kind so you can switch back.
+  conversation. If Claude Code no longer has the conversation, nothing starts and the app removes
+  that session from the list by itself; it stays removed after a restart.
 - **In a sandbox.** A sandboxed session switches inside its sandbox: both kinds run there.
 
 ##### Commands that need the terminal
@@ -1941,9 +1941,9 @@ A few things about a Pi session are worth knowing:
   yourself, your value is used.
 - **Nothing in your Pi configuration is changed** — not your settings, not your models, not your
   extensions.
-- **If the conversation was deleted from Pi's store**, resuming the session does not quietly start a
-  new one: the terminal says Pi no longer has this conversation, and you can close the session or
-  start a new one.
+- **If the conversation was deleted from Pi's store**, the app does not quietly start a new one
+  under the old session: it removes that session from the list by itself, and it stays removed after
+  a restart. You do not need to close it.
 
 #### When a conversation is already in use
 
