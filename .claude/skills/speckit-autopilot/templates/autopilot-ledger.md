@@ -6,6 +6,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Input**: <the user's original prompt, verbatim; then `labels: <those read at entry>`>
 - **Kind**: bug | bugfix | feature | chore
 - **Effort**: high | low | default
+- **Supervised**: yes | no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #<n>
 - **Worktree branch**: <exactly `git branch --show-current`>
 - **Started**: <YYYY-MM-DD>
@@ -48,7 +49,21 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+None. <or, one question:>
+
+```
+- **Category**: <number and name from rules/escalation.md>
+- **Question**: <one sentence>
+- **Options**:
+  1. <label> (Recommended) — <description>
+  2. <label> — <description>
+- **Recommended**: <label> — <reason>
+- **Evidence**: <paths, commands, results>
+- **Banner**: sent <date>
+```
+
+<A batch: `### Q1`, `### Q2`... each holding Question, Options, Recommended and Evidence; Category and
+Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
 
