@@ -8,6 +8,12 @@
 
 **Input**: User description: "GitHub issue #1793: feat: structured view: header in one row, status and actions move to the top bar" (labels: enhancement, flow:feature)
 
+## Clarifications
+
+### Session 2026-11-10
+
+- Q: Does the `+` menu's terminal entry open a new terminal each time or focus an existing one? → A: A new terminal tab each time, like the former add-terminal icon. _(agent-resolved: specs/1793-structured-view-header-one-row/spec.md#User Story 3 — "replaces the two former add icons")_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - One-row header in the structured view (Priority: P1)
@@ -56,7 +62,7 @@ One `+` icon at the end of the tabs replaces the two former add icons and the `O
 
 1. **Given** a selected worktree, **When** the user presses `+`, **Then** a menu anchored to the icon lists "another session" and "terminal".
 2. **Given** the menu is open, **When** the user chooses a session, **Then** the existing add-session choice (AI CLI and kind) is offered and the session is created as today.
-3. **Given** the menu is open, **When** the user chooses terminal, **Then** a terminal opens in the worktree, as `Open in terminal` did.
+3. **Given** the menu is open, **When** the user chooses terminal, **Then** a new terminal tab opens in the worktree each time, as the former add-terminal icon did.
 4. **Given** the menu is open, **When** the user presses Escape or clicks elsewhere, **Then** it closes and nothing opens.
 
 ---
@@ -149,4 +155,4 @@ At narrow widths the ring's text drops first, then the `Changes` label (the icon
 - Out of scope: changing what the status, Changes, meter or raw events show; new view kinds; Overview layout; mobile layouts.
 - The `N hidden` chip uses the wording `N hidden`; the ring tooltip's exact format follows the existing meter text.
 - Every working session's tab shows its own activity dot, not only the selected one.
-- [NEEDS CLARIFICATION: Does the `+` menu's "terminal" entry open one terminal tab in the worktree each time, or focus an existing one? Default if unanswered: same as `Open in terminal` does today.]
+- The `+` menu's terminal entry opens a new terminal tab in the worktree each time (it never focuses an existing one), like the former add-terminal icon it replaces.
