@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1718
 - **Worktree branch**: feat/1718_sidebar-stop-grouping-worktrees-sessions-by-state
 - **Started**: 2026-11-06
-- **Phase**: M2 reviewed and visual-passed; full gate then PR
-- **Next step**: push (force-with-lease; remote branch holds the squash-merged #1782 commits) and open the M2 PR; full gate is green at HEAD
+- **Phase**: close: tdd-verify
+- **Next step**: run speckit-tdd-verify, then close PR
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1750 | Design PR | merged | 01bc227bc6684dbbcc4dc964b53d0290eb704a03 |
 | #1782 | Amend design (tint, cleanup candidate) | merged | 9d65146d1f8bb4dcb76f62c50ce241d65b91b04e |
+| #1791 | M2 | merged | 6d3b88f2d4787e6f3c51c97f61762bbca4f979c5 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014 | full | Flat stable sidebar list, no group residue (US1+US3 are one change) | #1758 | merged 8b1039d2c123f8e414806ecc75ab0cd6ae5a7c3f |
-| M2 | T015–T030 | full | Five-state row indicator (StateIcon on CardState) plus row tints | | pending |
+| M2 | T015–T030 | full | Five-state row indicator (StateIcon on CardState) plus row tints | #1791 | merged 6d3b88f2d4787e6f3c51c97f61762bbca4f979c5 |
 
 ## Decisions
 
@@ -56,7 +57,7 @@ None.
 
 ## Open escalation
 
-The push was denied by the permission classifier (Git Destructive): `git push --force-with-lease -u origin HEAD` is needed because origin/feat/1718_... still holds pre-squash commits of merged #1782 (077e801e4), not an ancestor of HEAD. PR body is at the unit scratchpad pr-body.md; title `feat(1718): show five-state row indicator and row tints (#1718)`.
+None.
 
 ## Follow-ups not done
 
