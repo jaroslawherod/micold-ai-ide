@@ -65,9 +65,9 @@ None. M1 #1752 and M2 #1759 merged (M2 CI had one flake, `structured_permission:
 
 ## Open escalation
 
-None. <or: the banner as sent, and when>
+None.
 
 ## Follow-ups not done
 
-- M1 review A MINORs: `url` port not parsed; `user:pass@` userinfo would be echoed in the view and O2 message; O3 and O4 both fire for a lone cert/key plus token.
+- M1 review A MINORs: `url` port not parsed; (userinfo echo fixed in M3, PR #1826); O3 and O4 both fire for a lone cert/key plus token.
 - Gate: `refused_mutations_are_logged` and `structured_permission::two_sessions_waiting_are_marked_separately` each failed once under load, unrelated to this diff (the latter passes alone and in the second full gate).
