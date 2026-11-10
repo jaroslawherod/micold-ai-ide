@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1804
 - **Worktree branch**: feat/1804_autopilot-staged-review-facts-by-code-plan-by
 - **Started**: 2026-11-10
-- **Phase**: spec
-- **Next step**: clarify unit (no open markers; skip if none), then plan
+- **Phase**: clarify
+- **Next step**: plan unit (clarify CLEAN, no markers)
 
 ## Pull requests
 
