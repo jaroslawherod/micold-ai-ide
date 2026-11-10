@@ -58,12 +58,13 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 .collect();
             assert_eq!(
                 children.len(),
-                5,
-                "{at}: mark, breadcrumb, field, Settings, overflow: {children:?}"
+                8,
+                "{at}: mark, breadcrumb, field, ring, status, Changes, Settings, overflow: \
+                 {children:?}"
             );
-            let (switcher, field, settings) = (children[1], children[2], children[3]);
+            let (switcher, field, ring) = (children[1], children[2], children[3]);
             let before = field.x - (switcher.x + switcher.width);
-            let after = settings.x - (field.x + field.width);
+            let after = ring.x - (field.x + field.width);
             assert!(
                 (before - after).abs() <= TOLERANCE + 0.5,
                 "{at}: the field is not centred in the free space: {before} before, {after} after"

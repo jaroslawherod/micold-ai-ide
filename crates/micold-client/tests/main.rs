@@ -94,6 +94,7 @@ mod features_daemons;
 mod features_daemons_kube;
 mod features_daemons_start;
 mod features_effort_picker;
+mod features_header_bar;
 mod features_help;
 mod features_history;
 mod features_jira_status;

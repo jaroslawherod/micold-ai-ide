@@ -10,21 +10,21 @@ Paths are relative to the repo root. `client` = `crates/micold-client`, `materia
 
 ## Phase 1: Setup and Foundational
 
-- [ ] T001 [P] Test first: ContextRing builder tests (ratio to arc, empty state when ratio is None, warning role colour, text and tooltip set) in `crates/micold-material/src/context_ring.rs` (`#[cfg(test)]`)
-- [ ] T002 [P] Test first: SegmentedControl builder tests (two segments, selected state, `on_select` message per segment, accessible name per segment) in `crates/micold-material/src/segmented.rs` (`#[cfg(test)]`)
-- [ ] T003 [P] Test first: `crates/micold-client/tests/features_header_bar.rs` for `HeaderBarModel`: `None` on Overview, item order (FR-003, FR-004), `MeterText` text, tooltip and accessible label (tokens used/total, cost, turns; cost still present when text hides), empty state with no invented cost (FR-005, FR-011), `Status` Idle/Working mapped from per-session state (a failed or exited session maps to Idle, not Working), no cross-session leak with two sessions (Principle II), collapse rank constants (ring text 0, Changes label 1)
-- [ ] T004 Implement `ContextRing` in `crates/micold-material/src/context_ring.rs` (chainable `.ratio().text().warning().tooltip()`, `Roles` tokens, `.into()`); export in `crates/micold-material/src/lib.rs`; add a showcase entry
-- [ ] T005 Implement `SegmentedControl` in `crates/micold-material/src/segmented.rs`; export in `crates/micold-material/src/lib.rs`; add a showcase entry
-- [ ] T006 Implement `HeaderBarModel`, `MeterText`, `Status` and rank constants in new `crates/micold-client/src/features/header_bar.rs` (registered in `crates/micold-client/src/features/mod.rs`); add the `Status` mapping beside `session_status` in `crates/micold-client/src/features/structured_insights.rs` (depends on T003)
-- [ ] T007 [P] Test first: `HeaderMenu` reducer tests (`None | Plus | Worktree`, at most one open, closes on selection change and on dismiss) in `crates/micold-client/tests/features_header_bar.rs`
-- [ ] T008 Implement the `HeaderMenu` state and reducer in `crates/micold-client/src/features/header_bar.rs`, wired into the client state (depends on T007)
+- [x] T001 [P] Test first: ContextRing builder tests (ratio to arc, empty state when ratio is None, warning role colour, text and tooltip set) in `crates/micold-material/src/context_ring.rs` (`#[cfg(test)]`)
+- [x] T002 [P] Test first: SegmentedControl builder tests (two segments, selected state, `on_select` message per segment, accessible name per segment) in `crates/micold-material/src/segmented.rs` (`#[cfg(test)]`)
+- [x] T003 [P] Test first: `crates/micold-client/tests/features_header_bar.rs` for `HeaderBarModel`: `None` on Overview, item order (FR-003, FR-004), `MeterText` text, tooltip and accessible label (tokens used/total, cost, turns; cost still present when text hides), empty state with no invented cost (FR-005, FR-011), `Status` Idle/Working mapped from per-session state (a failed or exited session maps to Idle, not Working), no cross-session leak with two sessions (Principle II), collapse rank constants (ring text 0, Changes label 1)
+- [x] T004 Implement `ContextRing` in `crates/micold-material/src/context_ring.rs` (chainable `.ratio().text().warning().tooltip()`, `Roles` tokens, `.into()`); export in `crates/micold-material/src/lib.rs`; add a showcase entry
+- [x] T005 Implement `SegmentedControl` in `crates/micold-material/src/segmented.rs`; export in `crates/micold-material/src/lib.rs`; add a showcase entry
+- [x] T006 Implement `HeaderBarModel`, `MeterText`, `Status` and rank constants in new `crates/micold-client/src/features/header_bar.rs` (registered in `crates/micold-client/src/features/mod.rs`); add the `Status` mapping beside `session_status` in `crates/micold-client/src/features/structured_insights.rs` (depends on T003)
+- [x] T007 [P] Test first: `HeaderMenu` reducer tests (`None | Plus | Worktree`, at most one open, closes on selection change and on dismiss) in `crates/micold-client/tests/features_header_bar.rs`
+- [x] T008 Implement the `HeaderMenu` state and reducer in `crates/micold-client/src/features/header_bar.rs`, wired into the client state (depends on T007)
 
 ## Phase 2: User Story 2 - Status, Changes and context meter in the top bar (P1) 🎯 MVP
 
-- [ ] T009 [US2] Gate test first: `crates/micold-client/tests/gates/top_bar_items.rs`, registered with a `#[path]` entry in `crates/micold-client/tests/layout_snapshot.rs`, pins the top-bar order ring, status, Changes, then settings and app menu, none on Overview, no overlap at a wide width (pattern: `status_bar_fits.rs`)
-- [ ] T010 [US2] Add the ring (with tooltip and accessible label), status badge and Changes button to `toolbar::view` actions in `crates/micold-client/src/ui/toolbar.rs`, ring text and Changes label inside `GiveWayRow` ranks per R2, hidden when `HeaderBarModel` is `None` (depends on T004, T006, T009, T028)
-- [ ] T011 [US2] Route Changes activation to the existing changes view and verify the ring is focusable and named, in `crates/micold-client/src/ui/toolbar.rs` and `crates/micold-client/src/ui/mod.rs`
-- [ ] T012 [US2] User guide: top-bar status, Changes, context meter and their narrow-width collapse in `docs/user-guide/structured-transcript.md`
+- [x] T009 [US2] Gate test first: `crates/micold-client/tests/gates/top_bar_items.rs`, registered with a `#[path]` entry in `crates/micold-client/tests/layout_snapshot.rs`, pins the top-bar order ring, status, Changes, then settings and app menu, none on Overview, no overlap at a wide width (pattern: `status_bar_fits.rs`)
+- [x] T010 [US2] Add the ring (with tooltip and accessible label), status badge and Changes button to `toolbar::view` actions in `crates/micold-client/src/ui/toolbar.rs`, ring text and Changes label inside `GiveWayRow` ranks per R2, hidden when `HeaderBarModel` is `None` (depends on T004, T006, T009, T028)
+- [x] T011 [US2] Route Changes activation to the existing changes view and verify the ring is focusable and named, in `crates/micold-client/src/ui/toolbar.rs` and `crates/micold-client/src/ui/mod.rs`
+- [x] T012 [US2] User guide: top-bar status, Changes, context meter and their narrow-width collapse in `docs/user-guide/structured-transcript.md`
 
 ## Phase 3: User Story 4 - Worktree `⋮` menu (P2)
 
@@ -56,7 +56,7 @@ Paths are relative to the repo root. `client` = `crates/micold-client`, `materia
 
 Delivered inside M1 and M4 (tests travel with the code): no separate milestone.
 
-- [ ] T028 [US5] Gate test first (runs in M1, before T010): `crates/micold-client/tests/gates/top_bar_collapse.rs`, registered in `crates/micold-client/tests/layout_snapshot.rs`; ring text hides, then Changes label with icon kept, no overlap at wide (1280 px) and narrow (800 px) widths (pattern: `strip_controls_hold_their_size.rs`)
+- [x] T028 [US5] Gate test first (runs in M1, before T010): `crates/micold-client/tests/gates/top_bar_collapse.rs`, registered in `crates/micold-client/tests/layout_snapshot.rs`; ring text hides, then Changes label with icon kept, no overlap at wide (1280 px) and narrow (800 px) widths (pattern: `strip_controls_hold_their_size.rs`)
 - [ ] T029 [US5] Gate test first (runs in M4, before T024): tabs shrink then scroll, `+` and chip stay reachable with many tabs, in `crates/micold-client/tests/gates/header_row_fits.rs`
 - [ ] T030 Removed (folded into T010 and T024, which must make T028 and T029 green)
 - [ ] T031 [US5] User guide: tab shrink and scroll in narrow windows in `docs/user-guide/structured-transcript.md`
