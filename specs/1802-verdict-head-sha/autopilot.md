@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1802_autopilot-bind-review-verdicts-to-the-pr-head-sha
 - **Started**: 2026-11-10
 - **Phase**: milestone M2
-- **Next step**: M2 implemented; gate, reviews, PR
+- **Next step**: wait-merge M2 PR, then close
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | record verdicts, guard refuses stale merges, hook denies bare merge | #1821 | merged |
-| M2 | T016–T019 | full | carry verdict over clean replay | - | in progress |
+| M2 | T016–T019 | full | carry verdict over clean replay | - | in review |
 
 ## Decisions
 
@@ -47,6 +47,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 | 1 | M1 | dc7cfd142ac29c7302e810435155b3472b59a84b | 7add53fedf32f84607640e1a326baa5a07c4b007:1e6c3dcca1460b5617f00b4eaba7eedee8cb1847 | CHANGES: 2 MAJOR 3 MINOR (F1 hook help exemption, F2 hook command positions, F3-F5 fixed) |
 | Review A M1 | 2 | M1 | dc7cfd142ac29c7302e810435155b3472b59a84b | 22ae9ff370a0701dbaffe1b7a820af180448b97f:dc7cfd142ac29c7302e810435155b3472b59a84b | CLEAN (1 MINOR declined: backtick/bash -c hardening out of scope) |
 | Review B M1 | 1 | M1 | dc7cfd142ac29c7302e810435155b3472b59a84b | 7add53fedf32f84607640e1a326baa5a07c4b007:1e6c3dcca1460b5617f00b4eaba7eedee8cb1847 | CLEAN (1 MINOR prose wording, left) |
+| Review A M2 | 1 | M2 | 9e340c7c66a804c1e6b4e7eeeb8f0435cfe1da64 | 9e1162fc01454cb33a2355b5d587b5d6b740bd03:c1e951ba852b1ba9da59fc3550ee2ef47b149aab | CHANGES: 1 MAJOR 1 MINOR (F1 CARRIED head pinned to guarded P, F2 git errors vs no-change; both fixed) |
+| Review B M2 | 1 | M2 | 9e340c7c66a804c1e6b4e7eeeb8f0435cfe1da64 | 9e1162fc01454cb33a2355b5d587b5d6b740bd03:c1e951ba852b1ba9da59fc3550ee2ef47b149aab | CLEAN (1 MINOR: CARRIED names last H, documented in merge.md) |
+| Review A M2 | 2 | M2 | 9e340c7c66a804c1e6b4e7eeeb8f0435cfe1da64 | fix-diff | CLEAN |
 
 ## Declined review findings
 
