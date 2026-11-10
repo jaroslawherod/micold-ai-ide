@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M1 (in progress)
-- **Next step**: wait for M1 CI and merge
+- **Phase**: milestone M2 (in progress)
+- **Next step**: M2 gate, reviews A and B, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1797 | Design | merged | ad2d932dc0b678b50e19e0b3646e8036d62c6e8a |
-| #1798 | M1 | open | |
+| #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | in review |
-| M2 | T013–T016 | full | Worktree menu with raw events and view control | | pending |
+| M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
+| M2 | T013–T016 | full | Worktree menu with raw events and view control | | in review |
 | M3 | T017–T020 | full | Single `+` menu | | pending |
 | M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
 
@@ -42,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | bb128d1c688f3a42eaea356845c2b2497ccfa4d1:c63bfc7c625e9cac5e814565ff80e2d20296bb2c | CLEAN (3 MINOR, fixed prose only) |
 | M1 Review A (high) | 1 | 5ff40e78:ca940bff | CLEAN (2 MINOR: changes_button near-copy and floor constant, left) |
 | M1 Review B (sonnet) | 1 | 14aea717:34cfb594 | CLEAN |
+| M2 Review A (high) | 1 | 1b71d9df:4b30f70c | CLEAN (1 MINOR: Chosen doc, left) |
 
 ## Declined review findings
 

@@ -28,10 +28,10 @@ Paths are relative to the repo root. `client` = `crates/micold-client`, `materia
 
 ## Phase 3: User Story 4 - Worktree `⋮` menu (P2)
 
-- [ ] T013 [US4] Test first: worktree menu content tests with accessible names and Escape close (raw-events toggle reflects `settings.show_raw_events`, view segments Structured/Terminal for Claude Code only, none for other CLIs, switch sends the existing `Composer::Msg::SwitchRequested`, app `toolbar::overflow_items` unchanged) in `crates/micold-client/tests/features_header_bar.rs`
-- [ ] T014 [US4] Add `WorktreeMenuModel` and build the worktree menu items in `crates/micold-client/src/features/header_bar.rs` (depends on T013)
-- [ ] T015 [US4] Add the worktree `⋮` trigger to the top bar in `crates/micold-client/src/ui/toolbar.rs` and its `MenuOverlay` (raw-events toggle row, `SegmentedControl`) in `crates/micold-client/src/ui/mod.rs` beside `overflow_menu`; Escape and outside click close it
-- [ ] T016 [US4] User guide: worktree `⋮` menu in `docs/user-guide/structured-transcript.md` and `docs/user-guide/worktrees-and-sessions.md`
+- [x] T013 [US4] Test first: worktree menu content tests with accessible names and Escape close (raw-events toggle reflects `settings.show_raw_events`, view segments Structured/Terminal for Claude Code only, none for other CLIs, switch sends the existing `Composer::Msg::SwitchRequested`, app `toolbar::overflow_items` unchanged) in `crates/micold-client/tests/features_header_bar.rs`
+- [x] T014 [US4] Add `WorktreeMenuModel` and build the worktree menu items in `crates/micold-client/src/features/header_bar.rs` (depends on T013)
+- [x] T015 [US4] Add the worktree `⋮` trigger to the top bar in `crates/micold-client/src/ui/toolbar.rs` and its `MenuOverlay` (raw-events toggle row, `SegmentedControl`) in `crates/micold-client/src/ui/mod.rs` beside `overflow_menu`; Escape and outside click close it
+- [x] T016 [US4] User guide: worktree `⋮` menu in `docs/user-guide/structured-transcript.md` and `docs/user-guide/worktrees-and-sessions.md`
 
 ## Phase 4: User Story 3 - Single `+` for a session or a terminal (P1)
 

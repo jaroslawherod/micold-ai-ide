@@ -58,8 +58,8 @@ fn the_fullest_title_bar_fits_at_640_and_1280_in_both_schemes() {
                 .collect();
             assert_eq!(
                 children.len(),
-                8,
-                "{at}: mark, breadcrumb, field, ring, status, Changes, Settings, overflow: \
+                9,
+                "{at}: mark, breadcrumb, field, ring, status, Changes, worktree menu, Settings, overflow: \
                  {children:?}"
             );
             let (switcher, field, ring) = (children[1], children[2], children[3]);

@@ -386,7 +386,7 @@ const ADD_WORKTREE_ANCHORS: &[Anchor] = &[
     },
     Anchor {
         name: "dialog.actions",
-        path: &[8, 0, 0, 1],
+        path: &[10, 0, 0, 1],
     },
 ];
 
@@ -1034,7 +1034,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // than to the number.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[8, 0, 0, 1],
+                    path: &[10, 0, 0, 1],
                 },
             ],
         },
@@ -1058,7 +1058,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // free-standing `Type` label inside the control's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[8, 0, 0, 1],
+                    path: &[10, 0, 0, 1],
                 },
             ],
         },
@@ -1113,7 +1113,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.actions",
-                    path: &[8, 0, 0, 1],
+                    path: &[10, 0, 0, 1],
                 },
             ],
         },
@@ -1707,7 +1707,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // own, and it pushes the actions down.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[8, 0, 0, 1],
+                    path: &[10, 0, 0, 1],
                 },
             ],
         },
@@ -1788,7 +1788,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Index 4: the heading, the source switch, then the caption under it (feature 034),
                 // the `* required` legend (feature 937), then the Type row, whose first child is
                 // the select (feature 776: the AI CLI select shares the row).
-                StateUnderTest::new(state).pressing(&[8, 0, 0, 0, 4, 0])
+                StateUnderTest::new(state).pressing(&[10, 0, 0, 0, 4, 0])
             },
             anchors: &[
                 Anchor {
@@ -1797,13 +1797,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[8, 0, 0, 0, 4, 0],
+                    path: &[10, 0, 0, 0, 4, 0],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[8, 0, 0, 1],
+                    path: &[10, 0, 0, 1],
                 },
             ],
         },
@@ -3004,11 +3004,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "app_bar.switcher_trigger",
                     path: APP_BAR_SWITCHER_TRIGGER,
                 },
-                // Layer 3, not 2: the closed overflow menu is still a surface (layer 1), and an open
-                // surface's dismissal backdrop takes a layer of its own before the panel.
+                // Layer 5, not 2: the closed overflow menu and the closed worktree menu (feature 1793)
+                // are still surfaces (layers 1 and 3), and an open surface's dismissal backdrop
+                // takes a layer of its own before the panel.
                 Anchor {
                     name: "switcher.panel",
-                    path: &[4, 0],
+                    path: &[6, 0],
                 },
             ],
         },
@@ -3289,7 +3290,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.actions",
-                    path: &[8, 0, 0, 1],
+                    path: &[10, 0, 0, 1],
                 },
             ],
         },
