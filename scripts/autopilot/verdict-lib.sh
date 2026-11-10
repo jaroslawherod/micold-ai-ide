@@ -12,6 +12,9 @@
 #   vl_find_ledger <branch>      sets VL_LEDGER (readable file) and VL_TMP; returns 0 found,
 #                                1 no ledger names the branch, 2 unreadable
 #   vl_ledger_diff <a> <b>       0 when the heads differ only in ledger files, 1 when not, 2 error
+#   vl_identity <x> <base>       prints the patch identity of merge-base(x,base)..x (ordered stable
+#                                patch-ids, then the touched paths), ledger files excluded; returns
+#                                1 (undefined) for a merge commit, an empty (ledger-only) range or a git error
 
 # The four ledger patterns of ledger-of.sh, as git pathspecs (`*` must not cross `/`).
 LEDGER_PATHSPECS=(
@@ -106,4 +109,21 @@ vl_ledger_diff() {
   for p in "${LEDGER_PATHSPECS[@]}"; do ex+=(":(exclude,glob)${p#:(glob)}"); done
   git diff --quiet "$1" "$2" -- . "${ex[@]}" 2>/dev/null
   case $? in 0) return 0 ;; 1) return 1 ;; *) return 2 ;; esac
+}
+
+# The patch identity of the work on <x> over <base>: what a clean replay (rebase, amended message)
+# leaves unchanged. Ledger files are excluded.
+vl_identity() {
+  local x="$1" base="$2" mb ex=() p c id ids=""
+  for p in "${LEDGER_PATHSPECS[@]}"; do ex+=(":(exclude,glob)${p#:(glob)}"); done
+  mb="$(git merge-base "$x" "$base" 2>/dev/null)" || return 1
+  [ -z "$(git rev-list --merges "$mb..$x" 2>/dev/null)" ] || return 1
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    id="$(git diff-tree -p --root --no-commit-id "$c" -- . "${ex[@]}" 2>/dev/null | git patch-id --stable | cut -d' ' -f1)"
+    [ -z "$id" ] || ids="$ids$id"$'\n'
+  done < <(git rev-list --reverse "$mb..$x" 2>/dev/null)
+  [ -n "$ids" ] || return 1
+  printf '%s--\n' "$ids"
+  git diff --name-status -M "$mb" "$x" -- . "${ex[@]}" 2>/dev/null | sed -E 's/^([A-Z])[0-9]*/\1/' | sort
 }

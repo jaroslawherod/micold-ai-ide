@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1802
 - **Worktree branch**: feat/1802_autopilot-bind-review-verdicts-to-the-pr-head-sha
 - **Started**: 2026-11-10
-- **Phase**: milestone M1
-- **Next step**: wait-merge #1821, then M2
+- **Phase**: milestone M2
+- **Next step**: M2 implemented; gate, reviews, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1818 | Design | merged | 4b2a22c130a6087fb3b38e3edf22505025cb9f00 |
-| #1821 | Milestone M1 | open | - |
+| #1821 | Milestone M1 | merged | 653cd72150666522b51b58028f01b3e72cbfe726 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | record verdicts, guard refuses stale merges, hook denies bare merge | #1821 | in review |
-| M2 | T016–T019 | full | carry verdict over clean replay | - | pending |
+| M1 | T001–T015 | full | record verdicts, guard refuses stale merges, hook denies bare merge | #1821 | merged |
+| M2 | T016–T019 | full | carry verdict over clean replay | - | in progress |
 
 ## Decisions
 

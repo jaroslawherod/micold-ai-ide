@@ -6,6 +6,8 @@
 #   pr-<n>.json          what `gh pr view <n>` sees; a missing file makes `gh pr view` fail
 #   pr-<n>.merged.json   becomes pr-<n>.json when `gh pr merge <n>` succeeds
 #   merge.log            the arguments of every `gh pr merge`
+#   comments.log         the body of every `gh pr comment` (it also lands in pr-<n>.json)
+#   comment-fail         when present, `gh pr comment` fails
 
 set -uo pipefail
 
@@ -29,6 +31,11 @@ case "$1 $2" in
   "pr merge")
     echo "$*" >> "$F/merge.log"
     cp "$F/pr-$3.merged.json" "$F/pr-$3.json" ;;
+  "pr comment")
+    [ -f "$F/comment-fail" ] && exit 1
+    b="$(while [ $# -gt 0 ]; do [ "$1" = --body ] && { echo "$2"; break; }; shift; done)"
+    echo "$b" >> "$F/comments.log"
+    f="$F/pr-$3.json"; jq --arg b "$b" '.comments += [{body:$b}]' "$f" > "$f.new" && mv "$f.new" "$f" ;;
   "run list") echo "" ;;
   *) echo "gh stub: unhandled: $*" >&2; exit 2 ;;
 esac
@@ -89,7 +96,7 @@ write_ledger() { # write_ledger <file> <branch> [legacy]
 }
 
 pr_json() { # pr_json <fx> <n> <head-sha> [branch] [state]
-  printf '{"state":"%s","mergeable":"MERGEABLE","headRefName":"%s","headRefOid":"%s","mergeCommit":{"oid":"abc123"},"statusCheckRollup":[{"name":"ci complete","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://x/runs/7"}]}\n' \
+  printf '{"state":"%s","mergeable":"MERGEABLE","headRefName":"%s","baseRefName":"main","comments":[],"headRefOid":"%s","mergeCommit":{"oid":"abc123"},"statusCheckRollup":[{"name":"ci complete","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://x/runs/7"}]}\n' \
     "${5:-OPEN}" "${4:-wt}" "$3" > "$1/pr-$2.json"
 }
 head_of() { git rev-parse HEAD; }
@@ -177,6 +184,55 @@ check "guard maps a milestone ID through the Milestones table" 0 '^ALLOWED 8 ' g
 pr_json "$d/fx" 7 "$(head_of)"
 check "guard does not take a milestone verdict for another PR" 7 'no verdict recorded' guard 7
 
+# --- carry-forward -------------------------------------------------------------------------------
+# replay <fx-head-var> : advance main by a commit on `origin`, rebase wt onto it, force-push.
+move_base() {
+  git switch -q main; echo "base$RANDOM" > "base$RANDOM.txt"; git add -A; git commit -qm base; git push -q origin main
+  git switch -q wt; git rebase -q main >/dev/null 2>&1; git push -q -f origin wt
+}
+comments() { [ -f "$d/fx/comments.log" ] && wc -l < "$d/fx/comments.log" || echo 0; }
+
+setup_pr; move_base; P1="$(head_of)"; pr_json_at "$P1"
+check "carry: clean replay onto a moved base is carried" 0 "^CARRIED 8 $H $P1$" guard 8
+check "carry: posts one PR comment naming H and P" 0 "^verdict carried $H -> $P1$" cat "$d/fx/comments.log"
+check "carry: second run does not post the comment again" 0 "^CARRIED 8 $H $P1$" guard 8
+check "carry: one comment after two runs" 0 '^1$' comments
+echo extra > extra.txt; commit_all extra; P2="$(head_of)"; pr_json_at "$P2"
+check "carry: a changed patch after a carry is refused" 7 "^VERDICT-REFUSED 8 reviewed $H current $P2 re-review: .*head changed" guard 8
+
+setup_pr; move_base; move_base; P1="$(head_of)"; pr_json_at "$P1"
+check "carry: chained replay carries from the original H" 0 "^CARRIED 8 $H $P1$" guard 8
+
+setup_pr; git commit -q --amend -m "reworded"; git push -q -f origin wt; pr_json_at "$(head_of)"
+check "carry: amended message only is allowed" 0 '^(ALLOWED|CARRIED) 8 ' guard 8
+
+setup_pr; git commit -q --allow-empty -m "empty"; git push -q origin wt; move_base; pr_json_at "$(head_of)"
+check "carry: an empty commit in the replay is invisible" 0 '^CARRIED 8 ' guard 8
+
+setup_pr; move_base; echo "code" > code.txt; echo changed >> code.txt; commit_all "alter"; pr_json_at "$(head_of)"
+check "carry: a changed hunk is refused" 7 're-review: .*head changed' guard 8
+check "carry: a changed hunk posts no comment" 0 '^0$' comments
+
+setup_pr; git switch -q main; echo other > code.txt; git add -A; git commit -qm "main code"; git push -q origin main; git switch -q wt
+git rebase main >/dev/null 2>&1; echo merged > code.txt; git add code.txt; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; git push -q -f origin wt; pr_json_at "$(head_of)"
+check "carry: a conflict resolution is refused" 7 're-review: .*head changed' guard 8
+
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"; H="$(head_of)"; record "Review B M1" 1 8 "$H" CHANGES >/dev/null; commit_all ledger; move_base; pr_json_at "$(head_of)"
+check "carry: a CHANGES verdict is not carried" 7 're-review: Review B M1 round 1 is not approved \(CHANGES\)' guard 8
+
+setup_pr; git switch -q main; echo b > b.txt; git add -A; git commit -qm base; git push -q origin main; git switch -q wt
+git merge -q --no-ff main -m "merge main" >/dev/null 2>&1; git push -q origin wt; pr_json_at "$(head_of)"
+check "carry: a merge commit in the range is refused" 7 're-review: .*merge commit' guard 8
+
+setup_pr; cp specs/042-x/autopilot.md "$d/led.md"; git reset -q --hard main; mkdir -p specs/042-x; cp "$d/led.md" specs/042-x/autopilot.md; git add -A; git commit -qm "ledger only"; git push -q -f origin wt; pr_json_at "$(head_of)"
+check "carry: an empty (ledger-only) range is refused" 7 're-review: .*no change' guard 8
+
+d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"; record "Review B M1" 1 8 "$(printf '%040d' 1)" CLEAN >/dev/null; commit_all ledger; pr_json_at "$(head_of)"
+check "carry: an unreachable reviewed head is refused" 7 're-review: .*unreachable' guard 8
+
+setup_pr; move_base; pr_json_at "$(head_of)"; touch "$d/fx/comment-fail"
+check "carry: refuses when the comment cannot be posted" 7 're-review: .*comment not posted' guard 8
+
 # --- wait-merge.sh -----------------------------------------------------------------------------
 wm() { "$S/wait-merge.sh" "$@"; }
 merged_json() { sed 's/"state":"OPEN"/"state":"MERGED"/' "$d/fx/pr-8.json" > "$d/fx/pr-8.merged.json"; }
@@ -194,6 +250,10 @@ check "wait-merge --squash passes --squash and the head" 0 "pr merge 8 --squash 
 setup_pr; pr_json_at "$P0"; merged_json
 check "wait-merge rebases a verified head" 0 '^MERGED 8 abc123$' wm 8
 check "wait-merge rebase passes --match-head-commit" 0 "pr merge 8 --rebase --match-head-commit $P0\$" cat "$d/fx/merge.log"
+
+setup_pr; move_base; pr_json_at "$(head_of)"; merged_json
+check "wait-merge merges a carried verdict pinned to the new head" 0 '^MERGED 8 abc123$' wm 8
+check "wait-merge pins a carried merge to the new head" 0 "--match-head-commit $(head_of)\$" cat "$d/fx/merge.log"
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"; git push -q origin wt:other; pr_json_at "$(head_of)" other; merged_json
 check "wait-merge merges an unguarded PR pinned to its head" 0 '^MERGED 8 abc123$' wm 8

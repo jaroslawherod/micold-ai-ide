@@ -42,10 +42,10 @@
 **Goal**: a rebase or amended message with an identical patch merges without a new review round.
 **Independent test**: approve at A, rebase to B with the same patch, run the guard: `CARRIED`, PR comment `verdict carried A -> B`.
 
-- [ ] T016 [US2] Add carry cases to `scripts/tests/verdict-guard.test.sh`, red first: clean replay onto a moved base carried with one PR comment (US2-1, SC-002); amended message only carried; changed hunk or conflict resolution refused (US2-2, SC-003); `CHANGES` at A with a clean replay refused (US2-3); chained carry compares to the original `H` (US2-4); merge commit in range and empty range refused; unreachable `H` refused with `re-review`; the comment is not posted twice for the same (H,P).
-- [ ] T017 [US2] Add patch identity to `scripts/autopilot/verdict-lib.sh`: ordered `git patch-id --stable` list of non-empty commits in `merge-base(X,base)..X` plus the touched-path set (`git diff --name-status -M`), ledger files excluded via `:(exclude)`; a merge commit or empty range makes it undefined.
-- [ ] T018 [US2] Add the carry path to `scripts/autopilot/verdict-guard.sh`: equal identities of `H` and `P` carry an approved verdict, post a `verdict carried H -> P` PR comment once per (H,P) (skip when an existing comment has it), print `CARRIED <pr> <H> <P>`; anything else refuses (FR-005, FR-006, R1, R4, R6).
-- [ ] T019 [P] [US2] Add the carry rule and the `CARRIED` outcome to `.claude/skills/speckit-autopilot/tasks/merge.md` (FR-009).
+- [x] T016 [US2] Add carry cases to `scripts/tests/verdict-guard.test.sh`, red first: clean replay onto a moved base carried with one PR comment (US2-1, SC-002); amended message only carried; changed hunk or conflict resolution refused (US2-2, SC-003); `CHANGES` at A with a clean replay refused (US2-3); chained carry compares to the original `H` (US2-4); merge commit in range and empty range refused; unreachable `H` refused with `re-review`; the comment is not posted twice for the same (H,P).
+- [x] T017 [US2] Add patch identity to `scripts/autopilot/verdict-lib.sh`: ordered `git patch-id --stable` list of non-empty commits in `merge-base(X,base)..X` plus the touched-path set (`git diff --name-status -M`), ledger files excluded via `:(exclude)`; a merge commit or empty range makes it undefined.
+- [x] T018 [US2] Add the carry path to `scripts/autopilot/verdict-guard.sh`: equal identities of `H` and `P` carry an approved verdict, post a `verdict carried H -> P` PR comment once per (H,P) (skip when an existing comment has it), print `CARRIED <pr> <H> <P>`; anything else refuses (FR-005, FR-006, R1, R4, R6).
+- [x] T019 [P] [US2] Add the carry rule and the `CARRIED` outcome to `.claude/skills/speckit-autopilot/tasks/merge.md` (FR-009).
 
 ## Phase 6: Polish
 

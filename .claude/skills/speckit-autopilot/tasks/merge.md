@@ -37,9 +37,24 @@ branch no ledger names is not guarded (`UNGUARDED`). Anything else is refused: a
 the review, no row, `CHANGES` or `pending`, an unreadable PR head or ledger, or a ledger with no
 `Head` column (a run started before this rule re-reviews once). `gh` failing is a refusal.
 
+### Carrying a verdict over a clean replay
+
+A rebase onto a newer base or an amended message leaves the code under review unchanged, so an
+**approved** verdict carries to the new head `P` without a new review when, with ledger files
+excluded: neither `merge-base(X,base)..X` range (X = `H` or `P`) contains a merge commit or is
+empty; the ordered `git patch-id --stable` values of the non-empty commits are equal; and the
+`git diff --name-status -M` touched-path sets are equal. Any other change, a conflict resolution
+included, does not carry; `CHANGES` and `pending` never carry. Whitespace-only drift is invisible to
+patch-id and carries (the accepted limit). A carry never touches the branch: the guard posts the PR
+comment `verdict carried <H> -> <P>` once per pair, prints `CARRIED <n> <H> <P>` (exit 0) and
+`wait-merge.sh` merges pinned to `P`. `H` is always the original reviewed SHA from the ledger, whose
+row is never rewritten, so a chain of rebases compares to the original. `H` unreachable from the
+clone is refused.
+
 | Last line | Do |
 |---|---|
 | `MERGED <n> <sha>` | Run `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`; on `OVER`, tell the user in one line that `/clear` then `/speckit-autopilot resume` would restart you small, and carry on. Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. After the run's last PR: [handoff.md](handoff.md). |
+| `CARRIED <n> <H> <P>` | The merge proceeds on its own (`wait-merge.sh` merges next); nothing to do. |
 | `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR ([dispatch.md](dispatch.md), *Continuing a unit*) with the log path and `tasks/red-ci.md` to read, at most 3 attempts. Outside it: [ci.md](ci.md). |
 | `CHECKLESS <n> <reason>` | [ci.md](ci.md), *A PR with no checks*, then run the script again. |
 | `VERDICT-REFUSED <n> reviewed <H\|none> current <P> re-review: <why>` | Do not merge. Continue the unit that opened the PR ([dispatch.md](dispatch.md), *Continuing a unit*): review the current head (the fix diff since `H`), fix, record the new round with `record-verdict.sh`, push, and run the script again. |
