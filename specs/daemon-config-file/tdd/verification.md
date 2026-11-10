@@ -1172,3 +1172,127 @@ Untested criteria: none outright; the release-build behaviour lacks an end-to-en
 ## Remediation result (Issue 15, close unit)
 
 T156 to T163 done in the close PR. Mutants A, B (T156), G (T160) and "`|| raw.is_none()` dropped" (T162) each fail their test and were restored. T157 (`scripts/tests/retired-env-release.test.sh`, a daemon built without `test-env`) asserts the file's values win and one warning per variable; the `TEST_ENV = true` mutant (`settings.rs:62`) was run by the close unit: the three warning assertions fail (found 0), then it was restored. I15-4 is closed in part: a container's delivered `daemon.toml` carries no `auth.client_token_file`, so the test accepts none or `CONTAINER_TOKEN_PATH`; `daemon_config_render::from_entry_delivering` defaults the token file to `SANDBOX_TOKEN` (`/run/micold/secrets/client-token`), which differs from `CONTAINER_TOKEN_PATH` (`/run/micold/token`): recorded as follow-up #1838, not fixed here (it adds behaviour).
+
+---
+
+# Issue 16 (#1536) M1: SSH key, signing key, CA file and session files reach sandbox sessions
+
+```yaml
+scope: Issue 16 (#1536), tasks T101-T106; PR #1756, merge f6c8a1c66; code in a549e3cb6 (wip, source + tests + docs in one commit), 6c8a81500 (Settings inputs), 99211e4ac and 2568f946e (test-spawn fixes)
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: e82cc8df6
+independent: true # auditor did not write these tests; no subagent smell pass (read by the auditor)
+verdict: FAIL
+behaviors: 0 listed in tdd/test-list.md (no #1536 rows); 9 task-derived behaviors audited
+proven: 0
+likely: 0
+test_after: 9
+no_test: 0 # B8 and B9 have partial tests only, see I16-3 and I16-4
+high_findings: 4 # I16-1, I16-2, I16-3, I16-4
+mutants_tried: 0
+mutation_score: unmeasured # no tool; deliberate mutants not run (build queue), reasoned survivors listed instead
+suite: micold-daemon --lib session_extras 9 passed, 0 failed, 0.06 s (run by this audit); client daemon_config_render not finished when the report was written
+```
+
+**Verdict: FAIL.** No red was recorded for any behavior (`cycle-log.md` and `test-list.md` carry no #1536 rows; `a549e3cb6` lands source and tests together), and
+the daemon's HTTPS trust and proxy (T103), the supervisor wiring (T101, T102, T104) and the Settings reducer and secret delivery (T105) have no test that fails
+when they are removed.
+
+## Test-first evidence (Issue 16)
+
+| Behavior (task) | Tests | Class |
+|---|---|---|
+| B1 `GIT_SSH_COMMAND` from key + known_hosts, sandbox kinds only (T101) | `session_extras/tests.rs:55`, `:68` | TEST_AFTER |
+| B2 `user.signingkey` / signing off without a key (T102) | `:75`, `:162` | TEST_AFTER |
+| B3 CA variables to sessions (T103) | `:199` | TEST_AFTER |
+| B4 daemon HTTPS trusts the CA, honours `HTTPS_PROXY`/`NO_PROXY` (T103) | `:216` (proxy parse and bypass only) | TEST_AFTER, partial |
+| B5 session files copied with mode, V18 refusals (T104) | `:249`, `:276` | TEST_AFTER |
+| B6 extras join `GIT_CONFIG_COUNT` block (T101/T102) | `:94` | TEST_AFTER |
+| B7 render extras to `daemon.toml` (T105) | `tests/daemon_config_render.rs:152` | TEST_AFTER |
+| B8 Settings form fields edit and persist the four paths (T105) | none | TEST_AFTER (no test) |
+| B9 key files delivered with the secrets per kind (T105) | `daemon.rs:2616` covers only `client-token` | TEST_AFTER (no test for the new names) |
+
+History agrees with the log: `a549e3cb6` is one `wip` commit with `session_extras/mod.rs` (+234) and `session_extras/tests.rs` (+289) together; `6c8a81500` adds
+the Settings fields with no test file. T101-T106 are all `[x]` in `tasks.md:231-236`, with no behavior id `DONE` behind them.
+
+## Changes to tests that already existed (Issue 16)
+
+None weakened. The only edits to existing tests are `extras: Default::default()` added to struct literals (`daemon_config_render.rs:53`, `daemon_config_validate.rs:232`)
+and import fixes in the new tests (`99211e4ac`, `2568f946e`). No skips, exclusions or thresholds touched. The V18 check in
+`core/daemon_config/validate.rs` was refactored into `session_file_refusal`; the existing V18 tests were not edited.
+
+## Findings (Issue 16)
+
+- **I16-1 HIGH.** No red for any behavior; `test-list.md` has no #1536 rows or baseline; `cycle-log.md` has no #1536 entry; T101-T106 ticked without evidence.
+  Add the rows (traces FR-036, FR-037, FR-038, V18) and write the tests for I16-2 to I16-4 red first.
+- **I16-2 HIGH (no test fails when the daemon-side HTTPS trust is removed).** `Egress::agent` (`session_extras/mod.rs:202-230`: CA `parse_pem` and `root_certs`, proxy
+  selection with the `NO_PROXY` bypass) and `UreqTransport::default`/`agent_for` (`credential_config.rs:31-55`) are never executed by any test
+  (`grep` finds no caller in `crates/micold-daemon/tests` or any `#[cfg(test)]`). Test `:216` only checks that `Egress::of` parses values. The T103 claim "trust it in
+  the daemon's own HTTPS (reach discovery, `ureq`)" has no test. Should assert, against a local TLS or plain HTTP listener, that a request through an `Egress` with a
+  proxy goes through it and that a host in `no_proxy` does not, and that an `Egress` with `ca_file` builds a TLS config that trusts a cert signed by that CA.
+- **I16-3 HIGH (supervisor wiring untested).** `config_extra_edits` (`supervisor.rs:310-331`) is the only caller of `deliver_files` and `add_extras`. No test drives
+  `env_hygiene` with a configuration file, so dropping the `deliver_files` call, the `home` fallback, or the `add_extras` call leaves all 9 tests green. The tests call
+  `extras`, `add_extras` and `deliver_files` directly. Should assert, through `env_hygiene` (or a `config_path` fixture), that a container daemon's session environment carries
+  `GIT_SSH_COMMAND`, the CA variables and the GIT_CONFIG entries, and that the session file exists under the home afterwards. Pod coverage: T101 says "container and pod
+  sessions"; every test uses `kind = "container"`, none `kubernetes`.
+- **I16-4 HIGH (T105 Settings and delivery: the stated gap).** There is no reducer test for `Msg::ExtraPathEdited` into `FileSettings.extras` (`features/daemons.rs:2116`,
+  `:2458`). Nothing tests either the `Draft::to_file` mapping (`:208-217`) or the `begin_edit` mapping (`:1119-1124`). The array is indexed by `which as usize`, so
+  reordering `ExtraPath` or one of the two arrays swaps (for example) the SSH key and the CA file silently; `render` then passes because it takes `SessionExtras` directly
+  (`tests/daemon_config_render.rs:152`). `named_secrets` (`daemon.rs:303-312`) gained `ssh-key` and `signing-key` but its only test (`daemon.rs:2616`) checks `client-token`,
+  and `known_hosts_file`, `ca_file` and the `session.files` sources are not delivered at all. `ssh_delivery` (`daemon.rs:1388`) renders `ssh_key_file` from the client's local
+  path and relocates only the start script (`relocated_startup`), so on an SSH host the rendered path may not be the delivered `secrets/ssh-key`; no test pins either way.
+  Should have: a reducer test that each `ExtraPath` variant lands in its own `extras` field and survives `begin_edit` to `to_file`; a `named_secrets` test for the two new names;
+  a test on `ssh_delivery` that the rendered key path is one the delivered files provide.
+- **I16-5 HIGH (conditional logic, silent pass).** `a_signed_commit_succeeds_with_the_key_and_an_unsigned_one_without` (`tests.rs:162-196`) returns early at `:166-168` without `ssh-keygen`
+  and at `:173-175` without git (`commit_with` returns `None` on any spawn failure too). A host lacking either runs zero assertions and reports green, and this is the only
+  test of the T102 acceptance ("a signed commit succeeds"). Should fail, or be `#[ignore]`d with a reason, when the tool is missing (as the `sandbox_real_*` tests are
+  feature-gated), not return. It is also an eager test (signed, unsigned-with-extras, and signing-on-without-extras in one body, `:162-195`; MED).
+- **I16-6 MED.** Missing behavior cases in the tests that exist: `GIT_SSH_COMMAND` when only one of key and known_hosts is set (`mod.rs:35` emits nothing; no test); quoting of
+  a path with a space (`shell_word` use at `:40-41`; the test path is a tempdir with only safe characters); `session.files` with a missing source, a non-octal `mode`, an
+  existing read-only target and a collision (`mod.rs:126-136`; `:276` covers refusals only); `Egress` with lowercase `https_proxy`, an empty value, and an unreadable
+  `secret_env` file.
+- **I16-7 MED (Windows).** `tests.rs:261` uses `std::os::unix::fs::PermissionsExt` inside `a_session_file_lands_in_the_home_with_its_mode` with no `#[cfg(unix)]`, so the module does not compile
+  for Windows although `set_mode` has a `cfg(not(unix))` arm and `99211e4ac`/`2568f946e` exist to fix Windows spawns. `commit_with` sets `GIT_CONFIG_SYSTEM` to `/dev/null` (`:136`).
+  Gate the test with `#[cfg(unix)]` and use `NUL`/a real empty file.
+- **I16-8 LOW.** `tests.rs:55-65` builds the expected SSH command from the same format as the code (literal copy, MED-adjacent re-implemented expectation, pins argument order only).
+  `config`/`write` helpers (`:11-31`) are local; no helper for building a validated `DaemonConfig` exists under `crates/micold-daemon/tests/support/mod.rs` to reuse (checked), so this is
+  not a bypass, but `mise run duplication` may see them next to `config_load` tests.
+
+## Mutation results (Issue 16)
+
+No mutation tool (profile `mutation: null`). Deliberate mutants were not run: the shared build lock was held by another worktree for the whole audit and the client link did not finish
+in the time allowed. Fail closed: score unmeasured. Mutants reasoned from the code that no existing test would catch (not run, so not proven):
+
+| Mutant | Behavior | Would be caught |
+|---|---|---|
+| delete `deliver_files(...)` call, `supervisor.rs:326` | B5 wiring | No (I16-3) |
+| delete `add_extras(...)` in `config_extra_edits`, `supervisor.rs:330` | B1, B2, B3 wiring | No (I16-3) |
+| drop `.tls_config(...)` or `.proxy(...)`, `session_extras/mod.rs:217,229` | B4 | No (I16-2) |
+| swap `ExtraPath::SshKey` and `ExtraPath::CaFile` | B8 | No (I16-4) |
+| remove `("ssh-key", ...)` from `named_secrets`, `daemon.rs:307` | B9 | No (I16-4) |
+| `Kind::Container \| Kind::Kubernetes` to `Kind::Container`, `mod.rs:33` | B1, B2 (pod) | No (I16-3) |
+| `from_str_radix(.., 8)` to radix 10, `mod.rs:126` | B5 | Yes (`:249` pins 0640 and 0600) |
+| `IdentitiesOnly=yes` dropped, `mod.rs:39` | B1 | Yes (`:55`) |
+
+## Traceability (Issue 16)
+
+The spec's own criteria were not re-derived here; the task wording is the criterion.
+
+| Criterion | Tests | End to end |
+|---|---|---|
+| T101 SSH command in container and pod sessions | `tests.rs:55`, `:68` | No: unit on `extras`, container only, no session or `env_hygiene` path |
+| T102 signing on/off; signed commit succeeds | `tests.rs:75`, `:162` | Partly: real `git`, but through a hand-built environment and with a silent skip (I16-5) |
+| T103 CA variables to sessions | `tests.rs:199` | No (unit); daemon HTTPS trust: none (I16-2) |
+| T104 session files and V18 | `tests.rs:249`, `:276` | No: `deliver_files` direct; V18 refusals use the shared function, validate.rs V18 tests are older |
+| T105 render and deliver | `daemon_config_render.rs:152` | Render only; form, reducer and delivery untested (I16-4) |
+| T106 docs | n/a | `docs/user-guide/daemon-configuration.md` +17 lines, not a test |
+
+Untested criteria: daemon-HTTPS trust and proxy (T103), form and delivery (T105). Tests tracing to nothing: none.
+
+## What was not audited (Issue 16)
+
+- No deliberate mutants and no mutation tool (see above); coverage unavailable (`coverage: null`).
+- The full workspace suite and the `sandbox_real_*` acceptance tests were not run; `scripts/tests/*.test.sh` and the visual pass of the new Settings fields were not run.
+- Whether `spec.md` FR-036..038 and V18 say more than the task text; docs content (T106) was not read for accuracy.
+- Performance and flakiness over repeated runs; the `session_extras` tests ran once (0.06 s).
+- The client `daemon_config_render` run was started but had not completed when this section was written (the build queue held the lock); its result is not recorded.
