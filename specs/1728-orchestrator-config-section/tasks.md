@@ -70,10 +70,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 The feature is not done until the HIGH findings (T014–T016) are cleared. Source: `tdd/verification.md`.
 
-- [ ] T014 [Finding 2] Add a core test for O4 with `key_file` plus `enrollment_token_file` and no cert (error at `orchestrator.enrollment_token_file`), `crates/micold-core/src/daemon_config/tests.rs` near line 1180. Prove: `scripts/build-lock.sh cargo test -p micold-core --lib daemon_config::tests::o4`; mutant `token && cert` at `validate.rs:1041` must fail it.
-- [ ] T015 [Finding 3] Refuse (FR-002, spec edge case) a `url` with userinfo or a fragment as an invalid URL in `check_https_url` (`validate.rs:330`), with tests asserting `file:line:column` at the url value for `https://u:p@h` and `https://h/#f`. Prove: `scripts/build-lock.sh cargo test -p micold-core --lib daemon_config`.
-- [ ] T016 [Finding 1] Record the TDD evidence gap: add `tdd/test-list.md` and `tdd/cycle-log.md` for M1/M2 (or note the waiver in `autopilot.md`); future milestones start with a recorded red.
-- [ ] T017 [Finding 4] Test `https://:8443` as an invalid URL at the url value. Prove: mutant dropping `host.starts_with(':')` fails.
-- [ ] T018 [Findings 5, 6] Extend `crates/micold-daemon/tests/config_check.rs` with an `[orchestrator]` O3 case and a `--files` case (missing file error exit 2, sentinel absent from stdout/stderr). Prove: `scripts/build-lock.sh cargo test -p micold-daemon --test main config_check`.
-- [ ] T019 [Findings 7, 10] Assert each key's own path in `tests.rs:1073-1078`; add empty-string url and duplicate-table cases.
-- [ ] T020 Update `docs/user-guide/daemon-configuration.md`: `url` with userinfo or a fragment is refused as an invalid URL (CI user-guide gate fires on this feat PR).
+- [x] T014 [Finding 2] Add a core test for O4 with `key_file` plus `enrollment_token_file` and no cert (error at `orchestrator.enrollment_token_file`), `crates/micold-core/src/daemon_config/tests.rs` near line 1180. Prove: `scripts/build-lock.sh cargo test -p micold-core --lib daemon_config::tests::o4`; mutant `token && cert` at `validate.rs:1041` must fail it.
+- [x] T015 [Finding 3] Refuse (FR-002, spec edge case) a `url` with userinfo or a fragment as an invalid URL in `check_https_url` (`validate.rs:330`), with tests asserting `file:line:column` at the url value for `https://u:p@h` and `https://h/#f`. Prove: `scripts/build-lock.sh cargo test -p micold-core --lib daemon_config`.
+- [x] T016 [Finding 1] Record the TDD evidence gap: add `tdd/test-list.md` and `tdd/cycle-log.md` for M1/M2 (or note the waiver in `autopilot.md`); future milestones start with a recorded red.
+- [x] T017 [Finding 4] Test `https://:8443` as an invalid URL at the url value. Prove: mutant dropping `host.starts_with(':')` fails.
+- [x] T018 [Findings 5, 6] Extend `crates/micold-daemon/tests/config_check.rs` with an `[orchestrator]` O3 case and a `--files` case (missing file error exit 2, sentinel absent from stdout/stderr). Prove: `scripts/build-lock.sh cargo test -p micold-daemon --test main config_check`.
+- [x] T019 [Findings 7, 10] Assert each key's own path in `tests.rs:1073-1078`; add empty-string url and duplicate-table cases.
+- [x] T020 Update `docs/user-guide/daemon-configuration.md`: `url` with userinfo or a fragment is refused as an invalid URL (CI user-guide gate fires on this feat PR).

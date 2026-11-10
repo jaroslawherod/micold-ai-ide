@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1728
 - **Worktree branch**: feat/1728_feat-orchestrator-config-section-and-config-check
 - **Started**: 2026-11-05
-- **Phase**: milestone M3
-- **Next step**: implement M3 (T014–T020), then a new close unit
+- **Phase**: milestone M3 (implemented, in review)
+- **Next step**: merge M3, then a new close unit
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T007, T003a | full | `[orchestrator]` table parses, rules O1–O5/V4 with positions, user guide | #1752 | merged |
 | M2 | T009–T013 | full | `--files` checks, no-leak tests, reload keeps last config | #1759 | merged |
-| M3 | T014–T020 | full | refuse url credentials/fragment, close test gaps from tdd/verification.md (close unit found unbuilt behaviour) | | pending |
+| M3 | T014–T020 | full | refuse url credentials/fragment, close test gaps from tdd/verification.md (close unit found unbuilt behaviour) | | open |
 
 ## Decisions
 
@@ -45,9 +45,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 4e2263b78b027e73b33b7aac1b5c4db3c8625e09:78ed34c3419f7495841225d1ca695c4749d5e46c | CHANGES: 1 MAJOR (T008 test order), 3 MINOR; all fixed (T003a moved before code, view-state test, Verify, T012 note) |
 | Tasks | 2 | 04bb849807d5e2d3fc5e5f3ee44a5c3faa90e833:78ed34c3419f7495841225d1ca695c4749d5e46c | CLEAN; 1 MINOR fixed |
 | Code (B, conformance) | 1 | da433e0dc2af8da78132ac6135c7a4d3ac6744d6:3ef4115e85dfffe4d64ebe53a3d39dd4058d0900 | CLEAN |
-| Code (A, high) | 1 | 4b87210200a365755cfba4d6984e645872b543eb:eaaca02fd7fa5893f63520699c9ccd12f28e494d | CLEAN; 3 MINOR (port not validated, userinfo echoed, O3+O4 both fire) left as follow-ups |
+| Code (A, high) M3 | 1 | c17aefc80d5d7b52b4d655fb88689f5681c69eda:6560c1e1b27779bf08ad4b5521bf8e66d24c34b5 | 2 MINOR test assertions fixed (no `@` in message, duplicate message); port validation declined (pre-existing follow-up, out of M3 scope); O3+O4 double report declined (follow-up) |
+| Code (B, sonnet) M3 | 1 | same | CLEAN; 1 MINOR fixed |
+| (unused) | - | c17aefc80d5d7b52b4d655fb88689f5681c69eda:6560c1e1b27779bf08ad4b5521bf8e66d24c34b5 | - |
+| Code (A, high) | 1 | 4b87210200a365755cfba4d6984e645872b543eb:eaaca02fd7fa5893f63520699c9ccd12f28e494d | CLEAN; 3 MINOR (port not validated, userinfo echoed (fixed in M3), O3+O4 both fire) left as follow-ups |
 
 ## Declined review findings
+
+T016 waiver (M3): no `tdd/test-list.md` or `tdd/cycle-log.md` was written for M1/M2 and none is invented now. M3 itself was test-first: the new `o2_a_url_with_credentials_a_fragment_or_no_host…` test failed on the old `check_https_url` (red recorded in the M3 run, 109 passed / 1 failed) before the fix; the O4 and `config_check` tests pin existing behaviour and passed at once. Mutants were not re-run with cargo-mutants.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
