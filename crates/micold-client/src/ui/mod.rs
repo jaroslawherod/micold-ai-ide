@@ -116,7 +116,7 @@ pub mod terminal;
 mod toolbar;
 pub(crate) use toolbar::app_mark_handle;
 /// What the title bar's jump-to field reads and sends (feature 1127, FR-008, FR-009).
-pub use toolbar::{jump_press, jump_tooltip, JUMP_TO};
+pub use toolbar::{jump_press, jump_tooltip, overflow_items, JUMP_TO};
 /// The application's icon as raw RGBA, read by the window's icon and the title bar's app mark
 /// (feature 1127, R9).
 pub use toolbar::{APP_ICON_RGBA, APP_ICON_SIDE};
@@ -555,6 +555,9 @@ pub fn view_with<'a>(
     .open(state.help.help_menu_open)
     .into();
 
+    // The top bar's worktree `⋮` menu (feature 1793, FR-009), beside the app menu.
+    let header_worktree_menu = toolbar::worktree_menu(state, roles);
+
     // The project switcher panel — the same `MenuOverlay` the ⋮ menu is, carrying different items
     // (018 FR-029c). Rows are built purely from the workspace: active marker,
     // running-background-session count, and unavailable badge. Mutually exclusive with the
@@ -935,6 +938,7 @@ pub fn view_with<'a>(
 
     cdk::overlay::Overlay::new(base)
         .push(overflow_menu)
+        .push(header_worktree_menu)
         .push(switcher)
         .push(more_menu)
         .push_maybe(review_overflow)

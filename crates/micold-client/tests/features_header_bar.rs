@@ -1,15 +1,20 @@
 //! The top bar's model and the header menus' state, from outside the crate (feature 1793, T003 and
 //! T007; FR-003, FR-004, FR-005, FR-011; Principle II): what shows for the selected worktree or
 //! session, the order the bar draws it in, the meter's text, tooltip and accessible label, the
-//! Idle/Working mapping, and at most one open menu that a selection change closes.
+//! Idle/Working mapping, and at most one open menu that a selection change closes; and the
+//! worktree menu's content (T013; FR-009, FR-013).
 
 use crate::support::covered_states::{title_bar_crowded, transcript_pane_insights};
 use micold_client::app::State;
+use micold_client::app::Message;
+use micold_client::features::composer::Msg as ComposerMsg;
 use micold_client::features::header_bar::{
     HeaderBarModel, HeaderMenu, Msg, State as Menus, Status, CHANGES_LABEL_RANK, NO_USAGE_TEXT,
-    NO_USAGE_TOOLTIP, RING_TEXT_RANK,
+    NO_USAGE_TOOLTIP, RING_TEXT_RANK, SHOW_RAW_EVENTS, WORKTREE_MENU_NAME,
 };
-use micold_core::session::{AiCli, Session, SessionLifecycle, SessionLocation};
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::structured_transcript::TranscriptMsg;
+use micold_core::session::{AiCli, Session, SessionKind, SessionLifecycle, SessionLocation};
 
 /// The first session's lifecycle set to `lifecycle`.
 fn with_lifecycle(mut state: State, lifecycle: SessionLifecycle) -> State {
@@ -158,4 +163,118 @@ fn a_selection_change_closes_the_open_menu() {
     );
     menus.follow(there);
     assert_eq!(menus.menu, HeaderMenu::None, "another selection closes it");
+}
+
+/// The kind of the shown session, and the state with its provider set to `provider`.
+fn with_provider(mut state: State, provider: AiCli) -> State {
+    let id = state.session.active.expect("a session is shown");
+    for session in state.workspace.sessions.values_mut().flatten() {
+        if session.id == id {
+            session.provider = provider;
+        }
+    }
+    state
+}
+
+#[test]
+fn the_raw_events_toggle_reflects_the_setting_and_sends_the_opposite() {
+    for on in [false, true] {
+        let mut state = transcript_pane_insights();
+        state.settings.show_raw_events = on;
+        let menu = HeaderBarModel::of(&state).expect("shown").worktree_menu;
+        assert_eq!(menu.show_raw, on);
+        assert_eq!(
+            menu.raw_events_message(),
+            Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(!on)))
+        );
+    }
+    assert_eq!(SHOW_RAW_EVENTS, "Show raw events");
+}
+
+#[test]
+fn the_view_control_offers_structured_and_terminal_for_claude_code_with_the_current_one_selected() {
+    let state = transcript_pane_insights();
+    let id = state.session.active.expect("a session");
+    let menu = HeaderBarModel::of(&state).expect("shown").worktree_menu;
+    let segments = menu.view_segments();
+    let labels: Vec<_> = segments.iter().map(|s| s.label).collect();
+    assert_eq!(labels, ["Structured", "Terminal"]);
+    assert_eq!(
+        segments.iter().map(|s| s.selected).collect::<Vec<_>>(),
+        [true, false],
+        "the fixture is a structured session"
+    );
+    assert_eq!(segments[0].press, None, "the current view sends nothing");
+    assert_eq!(
+        segments[1].press,
+        Some(Message::Composer(ComposerMsg::SwitchRequested {
+            session: id,
+            to: SessionKind::Terminal,
+        })),
+        "the other one asks for the existing switch"
+    );
+}
+
+#[test]
+fn a_terminal_session_selects_the_terminal_segment_and_offers_the_structured_one() {
+    let mut state = transcript_pane_insights();
+    let id = state.session.active.expect("a session");
+    for session in state.workspace.sessions.values_mut().flatten() {
+        if session.id == id {
+            session.kind = SessionKind::Terminal;
+        }
+    }
+    let segments = HeaderBarModel::of(&state)
+        .expect("shown")
+        .worktree_menu
+        .view_segments();
+    assert_eq!(
+        segments.iter().map(|s| s.selected).collect::<Vec<_>>(),
+        [false, true]
+    );
+    assert_eq!(
+        segments[0].press,
+        Some(Message::Composer(ComposerMsg::SwitchRequested {
+            session: id,
+            to: SessionKind::Structured,
+        }))
+    );
+}
+
+#[test]
+fn another_cli_has_no_view_control() {
+    let state = with_provider(transcript_pane_insights(), AiCli::Copilot);
+    let menu = HeaderBarModel::of(&state).expect("shown").worktree_menu;
+    assert!(menu.view_segments().is_empty(), "Claude Code only (R5)");
+}
+
+#[test]
+fn the_worktree_trigger_is_named_and_the_app_menu_gains_no_worktree_entries() {
+    assert_eq!(WORKTREE_MENU_NAME, "Worktree actions");
+    let labels: Vec<_> = micold_client::ui::overflow_items(&transcript_pane_insights())
+        .into_iter()
+        .map(|item| item.label)
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "Settings",
+            "Session service diagnostics",
+            micold_client::features::help::help_actions()[0]
+        ],
+        "FR-009: the app menu is unchanged"
+    );
+}
+
+#[test]
+fn escape_closes_the_open_worktree_menu() {
+    let mut state = transcript_pane_insights();
+    assert_eq!(
+        micold_client::overlay::registry::escape(&state),
+        None,
+        "nothing is open"
+    );
+    state.header_bar.update(Msg::Toggled(HeaderMenu::Worktree));
+    let escape = micold_client::overlay::registry::escape(&state);
+    assert_eq!(escape, Some(Message::HeaderBar(Msg::Dismissed)));
 }

@@ -19,7 +19,8 @@
 use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::header_bar::{
-    HeaderBarModel, MeterText, Status, CHANGES_LABEL_RANK, RING_TEXT_RANK,
+    HeaderBarModel, HeaderMenu, MeterText, Msg as HeaderMsg, Status, CHANGES_LABEL_RANK,
+    RING_TEXT_RANK, SHOW_RAW_EVENTS, WORKTREE_MENU_NAME,
 };
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
@@ -82,6 +83,43 @@ pub fn overflow_items(_state: &State) -> Vec<MenuItem<Message>> {
             Message::Help(HelpMsg::AboutOpened),
         ),
     ]
+}
+
+/// The worktree `⋮` menu as a floating overlay (feature 1793, FR-009): the raw-events toggle row,
+/// and the Structured / Terminal control for a Claude Code session. Pushed whether or not it is
+/// open, as [`overflow_items`]'s menu is, so it can fade out; it holds nothing while there is no
+/// top-bar model (the Overview).
+pub fn worktree_menu<'a>(
+    state: &State,
+    roles: tokens::Roles,
+) -> crate::ui::cdk::overlay::Surface<'a, Message> {
+    let model = HeaderBarModel::of(state).map(|header| header.worktree_menu);
+    let items = model.as_ref().map_or_else(Vec::new, |menu| {
+        let mut raw = MenuItem::new(Icon::Filter, SHOW_RAW_EVENTS, menu.raw_events_message());
+        raw.trailing_text = Some(if menu.show_raw { "On" } else { "Off" }.to_string());
+        vec![raw]
+    });
+    let mut overlay = crate::ui::material::MenuOverlay::new(
+        items,
+        Message::HeaderBar(HeaderMsg::Dismissed),
+        roles,
+    )
+    .open(state.header_bar.menu == HeaderMenu::Worktree && model.is_some());
+    let segments = model.map(|menu| menu.view_segments()).unwrap_or_default();
+    if !segments.is_empty() {
+        let control = segments.into_iter().fold(
+            crate::ui::material::segmented::SegmentedControl::new(roles),
+            |control, segment| {
+                control.segment(
+                    segment.label,
+                    segment.selected,
+                    segment.press.unwrap_or(Message::NoOp),
+                )
+            },
+        );
+        overlay = overlay.controls(control);
+    }
+    overlay.into()
 }
 
 /// The app mark's picture: the one handle every caller shares (the bar and the showcase).
@@ -261,6 +299,18 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
                 changes_button(state, &header, r),
             );
     }
+    bar = if HeaderBarModel::of(state).is_some() {
+        bar.action(
+            MenuTrigger::new(
+                Icon::Menu,
+                Message::HeaderBar(HeaderMsg::Toggled(HeaderMenu::Worktree)),
+                r,
+            )
+            .tooltip(WORKTREE_MENU_NAME),
+        )
+    } else {
+        bar
+    };
     bar.action(Tooltip::new(settings, "Settings", r))
         .action(menu)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from

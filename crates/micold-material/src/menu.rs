@@ -391,6 +391,7 @@ pub struct MenuOverlay<'a, M> {
     short_of_bottom: bool,
     on_scroll: Option<M>,
     highlighted: Option<usize>,
+    controls: Option<Element<'a, M>>,
     lifetime: std::marker::PhantomData<&'a ()>,
 }
 
@@ -408,8 +409,16 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             short_of_bottom: false,
             on_scroll: None,
             highlighted: None,
+            controls: None,
             lifetime: std::marker::PhantomData,
         }
+    }
+
+    /// A control under the items, padded to the panel's item edge: the worktree menu's
+    /// Structured / Terminal segmented control (feature 1793). It does not scroll with the items.
+    pub fn controls(mut self, controls: impl Into<Element<'a, M>>) -> Self {
+        self.controls = Some(controls.into());
+        self
     }
 
     /// Draw the keyboard focus on item `index` (feature 972, FR-010): the focus state layer and
@@ -477,6 +486,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             short_of_bottom,
             on_scroll,
             highlighted,
+            controls,
             ..
         } = m;
 
@@ -493,8 +503,14 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         if let Some(message) = on_scroll {
             items = items.on_scroll(message);
         }
+        let mut content = column![items];
+        if let Some(controls) = controls {
+            content = content.push(
+                container(controls).padding(iced::Padding::from([spacing::XS, spacing::MD])),
+            );
+        }
         let panel = super::fade(
-            menu_panel(items, Length::Fixed(PANEL_WIDTH), r, true, panel_padding()),
+            menu_panel(content, Length::Fixed(PANEL_WIDTH), r, true, panel_padding()),
             open,
             FADE,
             super::SurfaceKind::Menu.tone(r),

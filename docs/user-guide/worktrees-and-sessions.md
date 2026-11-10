@@ -1788,8 +1788,9 @@ A Claude Code session can switch between the structured view and Claude Code's o
 at any time, in the same conversation. Sessions on the other CLIs (Copilot, Pi, Codex, OpenCode)
 have no such entry.
 
-- **Open in terminal.** In a structured session, press **Open in terminal** at the top of its
-  transcript, or pick it from the session's menu in the sidebar. The structured process ends and
+- **Open in terminal.** In a structured session, press **Terminal** in the worktree **⋮** menu in
+  the top bar (see [the worktree menu](structured-transcript.md#the-worktree-menu)), press **Open
+  in terminal** at the top of its transcript, or pick it from the session's menu in the sidebar. The structured process ends and
   the session starts again as a terminal session, resuming the same conversation: Claude Code's
   screen continues where the transcript left off. The session's row and every window show it as a
   terminal session.
@@ -1802,7 +1803,8 @@ have no such entry.
   in, or the sign-in expired) shows its error in the transcript and a card offering **Open in
   terminal** with `/login`, which switches the same way.
 - **Open in structured view.** A Claude Code terminal session, whether it started as one or was
-  switched, has **Open in structured view** in the tab strip above its terminal and in its menu. The terminal's
+  switched, has **Structured** in the worktree **⋮** menu in the top bar, and **Open in structured
+  view** in the tab strip above its terminal and in its menu. The terminal's
   Claude Code process ends and the session starts again as a structured session, resuming the same
   conversation.
 - **Work in progress is asked about.** Switching while a turn is running, a permission request
