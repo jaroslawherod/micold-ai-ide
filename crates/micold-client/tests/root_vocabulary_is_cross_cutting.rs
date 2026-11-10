@@ -76,11 +76,7 @@ const ALLOWED: &[(&str, &str)] = &[];
 /// `SidebarScrolled` and `TabStripScrolled` — route to the same `close_on_scroll_beneath`, and
 /// asked `tests/overlay_dismissal_delta.rs` through those instead. With the assertions moved onto
 /// a message the user can actually send, the unreachable variant had nothing left to record.
-const NO_OWNER: &[(&str, &str)] = &[(
-    "HeaderBar",
-    "feature 1793 M1 builds the header menus' vocabulary and reducer; the worktree menu (M2) and \
-     the `+` menu (M3) are the triggers that send it, and delete this entry",
-)];
+const NO_OWNER: &[(&str, &str)] = &[];
 
 // ---- Reading the source ------------------------------------------------------------------------
 
