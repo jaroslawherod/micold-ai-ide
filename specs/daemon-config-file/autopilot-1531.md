@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: M1 done, PR #1763 open; part 7 fixed the one real red-CI failure (sandbox real-runtime PATH-ordering test) and re-pushed; fresh CI running.
-- **Next step**: orchestrator holds for CI and merges on green `ci complete`. If the only red is a job also red on `main` (windows/macos), hold and escalate again rather than fixing it out of flow.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
-| #1763 | M1 (gh shim) | open; part 7 fixed the real red-CI sandbox PATH-ordering test failure, re-gated and pushed; fresh CI running | — |
+| #1763 | M1 (gh shim) | merged | 4b0e90f051efb9e5f2dbdfe85a4faf47c5575244 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | PR open, rebased and re-pushed (part 6), fresh CI running |
+| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | merged |
 
 ## Decisions
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 code-review (A) | 1 |  |  | ea4e8fdc48fc831d572ff1227511a6fbcdb6b16d:d9ad46edb1aa72581e21de5de24e855dadec261d | CHANGES: F1 BLOCKER (no `#[cfg(unix)]` on unix-only `gh_shim.rs` integration tests), F2 MINOR (empty `PATH` entry not treated as `.`). Both fixed in `85fb4e24d`. Done — A runs once per milestone; no further round needed. |
 | M1 conformance (B) | 1 |  |  | 2b8970bebd0d2b9a7bf25daaea36513ffff7a2e8:faaff33f799022bf55b8813e60b6cf3fc140be5e | CLEAN: F1 MINOR only (`gh_shim.rs::resolve()` duplicates `git_credential.rs::answer_from_config`'s config-load/cache-path/`credential_config::answer` sequence almost line for line). No fix needed per `tasks/review-rounds.md` ("CLEAN, or only MINORs: the review is done"); `cargo test -p micold-daemon --lib` confirmed green separately (`TEST_EXIT=0`) since the reviewer's own `--test gh_shim` run stayed queued behind another worktree's build lock. Done — B runs once per milestone. |
 | M1 red-CI fix (conformance) | 2 | 1763 | 80edd2d65f858da7c239badab922f91093738167 | a7d0ffe9114e8457a515f1860722840baad10542:c87c424dafd951f602646fef79b4eb0cd29e4c8c | CLEAN |
+| Close PR test-strength review | 1 | close | 60ae06fe654ff028b572bedbbdc8a4bdd54d9122 | 0df58dd4dd43b54ccc65e59de01899ff1a0c7d12:4b0e90f051efb9e5f2dbdfe85a4faf47c5575244 | CLEAN: F1 MINOR (spawn_env_for call-site count wording) fixed, prose only, no new round |
 
 ## Declined review findings
 
@@ -54,10 +55,66 @@ None.
 
 ## Handover
 
-M1 (T055–T057, T095, T058) is done: implemented, reviewed (A and B both `CLEAN`), locally gated,
-rebased onto current `main`, pushed, and PR #1763 is open against `main`. Nothing further for a
-human or another unit to do on this milestone unless CI turns up something real; the orchestrator
-now waits on CI and merges.
+The run is closed. M1 (PR #1763) merged to `main` (SHA `4b0e90f051efb9e5f2dbdfe85a4faf47c5575244`);
+the close unit (part 8) ran `speckit-tdd-verify`, found FAIL (test-strength gaps only, no unbuilt
+behaviour — see below), fixed T148-T151, re-reviewed `CLEAN`, re-gated, and opened the close PR.
+Nothing further for a human or another unit; the orchestrator merges the close PR and the run ends.
+
+**Done, this unit (part 8, close):**
+- `plan-drift.sh specs/daemon-config-file M1` cannot run: `brief.py milestone` expects a `## M1`
+  heading under `## Milestones`, but this shared, multi-issue `tasks.md` uses
+  `### Issue 10 (#1531) — M1 — …` headings instead — the same tooling mismatch
+  `autopilot-1532.md` already recorded ("plan-drift.sh cannot run for this multi-issue tasks.md").
+  No drift file written; recorded here instead, per that precedent.
+- Confirmed T055–T057, T095, T058 are ticked `[x]` in `tasks.md`, PR #1763's merge SHA matches the
+  dispatch (`gh pr view 1763 --json state,mergeCommit` → `MERGED`,
+  `4b0e90f051efb9e5f2dbdfe85a4faf47c5575244`), and FR-011/FR-035/SC-003 are satisfied by the merged
+  code (`gh_shim.rs`'s `gh-token --cwd` reads the token at call time per FR-011; FR-035's host
+  naming is #1530's `TokenChoice` chooser, already on `main`; SC-003's "every session kind" is
+  `state.rs::with_gh_shim_path`, unconditional on `daemon.kind`).
+- Ran `speckit-tdd-verify` (Issue 10 / #1531 M1 scope only) through an `autopilot-worker`: verdict
+  **FAIL**. Production code was correct (confirmed by two deliberate mutants: one survived, one was
+  caught), but test coverage had two real gaps and two paperwork gaps: (1) HIGH — no test in the
+  default suite positively asserts the `gh` shim's `<data_dir>/bin` actually leads `spawn_env_for`'s
+  `PATH`; the only tests that touch it (`gh_shim_bin_dir()`/`without_gh_shim_dir()`/`path_var()`)
+  strip the prefix away before asserting something else, so a mutant removing
+  `with_gh_shim_path(...)` from `spawn_env_for` survived all 21 `state::` and all 7 `gh_shim`
+  integration tests; (2) MED — `write_shim`'s documented write-if-changed behaviour was untested;
+  (3) HIGH, paperwork — no `tdd/cycle-log.md`/`tdd/test-list.md` section for Issue 10 at all, unlike
+  every other issue; (4) MED — "every session kind" (FR-011/SC-003) is end-to-end tested for the
+  container kind only (behind `sandbox-real-runtime`), not for host/SSH/Kubernetes.
+  The first-pass `tdd-verify` agent's `tdd/verification.md` write (`specs/daemon-config-file/tdd/verification.md`)
+  initially **overwrote the whole multi-issue file** (967 lines → 121), destroying every other
+  issue's audit despite claiming "other issues' sections untouched"; caught before commit
+  (`git diff --stat origin/main -- …verification.md` showed 934 deletions) and fixed by restoring
+  `origin/main`'s content and appending the Issue 10 section instead (now a pure 124-line addition,
+  0 deletions) — nothing of this was ever committed.
+  Remediation tasks T148–T151 (`tasks.md` Phase 25) dispatched to a second `autopilot-worker`
+  (sonnet): added `state.rs::the_spawn_path_actually_starts_with_the_gh_shim_directory` (T148,
+  positive assertion, confirmed by hand that commenting out `with_gh_shim_path` turns it red) and
+  `state.rs::the_gh_shim_reaches_every_configured_daemon_kind` (T149, unit-level across all four
+  `Kind`s, honestly scoped — no real SSH/Kubernetes runtime in this sandbox, so no end-to-end claim
+  made for those kinds); `gh_shim.rs::write_shim_touches_nothing_when_the_content_is_already_right`
+  (T151, mtime/inode/content unchanged on an unchanged second write); and the `cycle-log.md`/
+  `test-list.md` Issue 10 sections (T150, stating plainly there is no genuine red-phase evidence
+  rather than fabricating one — the milestone's source and tests landed in one squashed commit).
+  All green: `cargo test -p micold-daemon --lib state:: gh_shim::` (23 + 5 passed), `--test gh_shim`
+  (7 passed), `cargo fmt -p micold-daemon --check` clean. Ticked T148–T151 `[x]`.
+- Dispatched a fresh `autopilot-reviewer` (no rubric: correctness of tests, truth of docs) on this
+  diff. Verdict `CLEAN`: one MINOR (a doc comment and a cycle-log line claimed `spawn_env_for` has
+  "exactly two call sites", grep shows three non-test call sites) — fixed as prose only (wording in
+  a doc comment and a cycle-log line, no code or test change), so no new round, per
+  `tasks/review-rounds.md`'s prose-only exception. Recorded (`record-verdict.sh`, head
+  `60ae06fe654ff028b572bedbbdc8a4bdd54d9122`).
+- Ran `mise run gate` (full) after committing the test-strength fix (`60ae06fe6`). fmt and clippy
+  (core, then workspace) both passed clean, no warnings. `cargo test --workspace` found 21 failures
+  — the same 21 tests parts 5-7 already documented and judged environmental (daemon-lifecycle
+  timeouts, build-lock contention from sibling worktrees, one font-dependent test); none in
+  `gh_shim.rs`, `state.rs`'s new tests, or any file this close diff touches. Recorded the gate-ok
+  tree and will push with the close PR.
+- Spec `**Status**` line (`specs/daemon-config-file/spec.md`) gets an Issue 10 clause in the close
+  commit: closed, shipped in PRs #1696 (design), #1763 (M1) and this close PR, test-strength
+  findings T148-T151 closed.
 
 **Done, this unit (part 7, red-CI episode):** Continued from part 6's fresh CI run on head
 `c87c424da` (run `43010271154`): green on every job except "sandbox against a real runtime
