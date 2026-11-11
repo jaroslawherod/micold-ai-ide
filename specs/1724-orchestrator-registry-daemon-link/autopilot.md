@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: analyze, review, gate, design PR
 
 ## Pull requests
 
@@ -23,7 +23,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #… | pending |
+| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #… | pending |
+| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
+| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
+| M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
+| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
+
+M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
 
 ## Decisions
 
