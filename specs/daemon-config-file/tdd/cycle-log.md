@@ -277,3 +277,38 @@ fix and re-running the test, which failed for the stated reason each time.
   while writing the derived copy to a separate destination, idempotently.
 - T065c: no test — a documentation-only task (`docs/user-guide/sandboxed-daemon.md`'s per-CLI
   table), per the task's own wording.
+
+## Issue 10 (#1531) M1: gh token for every session kind
+
+No red-phase evidence exists for this milestone: the feature landed as one squashed commit to
+main (PR #1763), discovered only at close-unit TDD verification (`tdd/verification.md`), by which
+point the history that would show a red run no longer does. This is stated plainly rather than
+reconstructed — no fabricated red narrative is recorded for T055, T056 or T095 (see the matching
+`TEST_AFTER` rows added to `test-list.md`).
+
+Remediated in the same close-unit pass with tests written directly against the merged code
+(T148, T149, T151 — Findings 1 and 3 of `tdd/verification.md`):
+
+- T148: `crates/micold-daemon/src/state.rs`, `the_spawn_path_actually_starts_with_the_gh_shim_directory` —
+  the first test to assert `DaemonState::spawn_env_for`'s `PATH` positively starts with
+  `gh_shim_bin_dir()`, rather than stripping that prefix away first as every pre-existing test did.
+  Proven to catch the Finding-1 mutant by hand: commenting out `with_gh_shim_path(...)` in
+  `spawn_env_for` turned this test red (`assert!` panic — the PATH had no shim prefix at all);
+  restoring the call turned it green again, with no diff left from the experiment.
+- T149: `crates/micold-daemon/src/state.rs`, `the_gh_shim_reaches_every_configured_daemon_kind` —
+  loads each of `Kind::Host`/`Kind::Ssh`/`Kind::Container`/`Kind::Kubernetes` into
+  `DaemonState::set_config` from a real `ConfigRuntime`, and confirms the shim directory still
+  leads `spawn_env_for`'s `PATH` for every one. This is a unit-level guarantee, not an end-to-end
+  one: this sandbox has no real SSH host or Kubernetes cluster to spawn an actual remote or pod
+  session through, so no claim is made of exercising those kinds' real spawn path — only that the
+  one function every session kind's spawn goes through is not kind-gated, confirmed both by this
+  test and by grep (`spawn_env_for` has exactly three non-test call sites in `state.rs`, none
+  inside a kind-conditional branch).
+- T151: `crates/micold-daemon/src/gh_shim.rs`, `write_shim_touches_nothing_when_the_content_is_already_right` —
+  calls `write_shim` twice with identical `bin_dir`/`daemon` arguments and asserts the file's
+  content, mtime and inode are unchanged after the second call, mirroring the write-if-changed
+  pattern `config_reload.rs`'s `a_reload_never_writes_the_config_or_a_secret` (Issue 5's U21)
+  already uses for `daemon.toml` delivery.
+
+Green: `cargo test -p micold-daemon --lib state::` (23 passed), `cargo test -p micold-daemon --lib
+gh_shim::` (5 passed).

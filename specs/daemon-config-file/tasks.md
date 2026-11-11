@@ -737,3 +737,12 @@ Verdict FAIL: Issue 9 is not done until T139 and T140 are cleared.
 - [ ] T145 [US3] I9-7, I9-9: remove `combine_git_edits` and its test (dead since `86468d87c`) and decide the legacy file path (`git_credential.rs:71-75`, `mcp/scoped_git_credential.rs`): delete it with its tests or give it a producer; `mise run check`
 - [ ] T146 [US2] I9-8, I9-10: record the `spawn.rs:568` 4900 ms tolerance as intended in the test comment's rule, make `gitconfig.rs:289` fail rather than skip without git, split `git_credential_config.rs:174` into one test per rule; `cargo test -p micold-core --lib scoped_credential::gitconfig`
 - [ ] T147 [US2] Run the deliberate mutants listed under "Mutation results (Issue 9)" one at a time, restore each, and record caught or survived in `tdd/verification.md`
+
+## Phase 25: TDD remediation (Issue 10 / #1531, from `tdd/verification.md`, section "Issue 10")
+
+Verdict FAIL: Issue 10 is not done until T148 and T149 are cleared.
+
+- [x] T148 [US2] Finding 1 (HIGH): add a `state.rs` test that asserts `DaemonState::spawn_env_for`'s `PATH` actually starts with `<data_dir>/bin` (not one that strips the prefix away before asserting, like `without_gh_shim_dir`/`path_var` do today); confirm it fails against the Finding-1 mutant (`spawn_env_for` without the `with_gh_shim_path(...)` call) and passes restored; `cargo test -p micold-daemon --lib state::`
+- [x] T149 [US2] Finding 1 (HIGH), continued: add or extend an SSH- and a Kubernetes-flavoured session-spawn test (real or `sandbox-real-runtime`-gated) asserting the `gh` shim reaches those session kinds' `PATH` too, not only the container kind `sandbox_real_toolchain_path.rs` already covers; `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_`
+- [x] T150 [MED] Finding 2: add `tdd/test-list.md` rows (behavior ids, `traces` US2/FR-011/FR-035/SC-003) for T055, T056, T095 with the cycle-log red for each, so the milestone has the per-behavior evidence its tasks already claim; `grep -c "Issue 10" specs/daemon-config-file/tdd/test-list.md`
+- [x] T151 [MED] Finding 3: add a test that calls `gh_shim::write_shim` twice with unchanged inputs and asserts the file's mtime (or a sentinel written alongside it) is untouched on the second call, matching the write-if-changed rule already tested for `daemon.toml` delivery (Issue 5's U21); `cargo test -p micold-daemon --lib gh_shim::`
