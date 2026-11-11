@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use super::daemons::{AllowedKind, Draft, DraftRuntime, ImageKind};
+use super::daemons::{AiCliDraft, AllowedKind, Draft, DraftRuntime, ImageKind};
 use super::window::FieldId;
 use micold_core::daemons::CredentialLine;
 use micold_core::local_time::utc_date;
@@ -38,6 +38,10 @@ pub enum Section {
     Sessions,
     /// The start script and how it runs (#1533); offered only for a kind that delivers it.
     StartScript,
+    /// Per-CLI `[[ai.cli]]` overrides: enabled, version, args, model, base URL, sign-in, API key
+    /// and settings file (#1532, FR-013d). Shown for every kind: the file it configures is read
+    /// by host, SSH, container and pod daemons alike.
+    AiCli,
 }
 
 const CONTAINER: &[Section] = &[
@@ -47,6 +51,7 @@ const CONTAINER: &[Section] = &[
     Section::Network,
     Section::Resources,
     Section::Sessions,
+    Section::AiCli,
 ];
 const KUBERNETES: &[Section] = &[
     Section::Connection,
@@ -54,9 +59,10 @@ const KUBERNETES: &[Section] = &[
     Section::Credentials,
     Section::Resources,
     Section::Placement,
+    Section::AiCli,
 ];
-const SSH: &[Section] = &[Section::Connection];
-const HOST: &[Section] = &[Section::Connection, Section::Sessions];
+const SSH: &[Section] = &[Section::Connection, Section::AiCli];
+const HOST: &[Section] = &[Section::Connection, Section::Sessions, Section::AiCli];
 const CONTAINER_START: &[Section] = &[
     Section::Connection,
     Section::Container,
@@ -64,6 +70,7 @@ const CONTAINER_START: &[Section] = &[
     Section::Network,
     Section::Resources,
     Section::Sessions,
+    Section::AiCli,
     Section::StartScript,
 ];
 const KUBERNETES_START: &[Section] = &[
@@ -72,10 +79,16 @@ const KUBERNETES_START: &[Section] = &[
     Section::Credentials,
     Section::Resources,
     Section::Placement,
+    Section::AiCli,
     Section::StartScript,
 ];
-const SSH_START: &[Section] = &[Section::Connection, Section::StartScript];
-const HOST_START: &[Section] = &[Section::Connection, Section::Sessions, Section::StartScript];
+const SSH_START: &[Section] = &[Section::Connection, Section::AiCli, Section::StartScript];
+const HOST_START: &[Section] = &[
+    Section::Connection,
+    Section::Sessions,
+    Section::AiCli,
+    Section::StartScript,
+];
 
 impl Section {
     /// The sections of a daemon of `runtime`, in the order the form lists them (FR-002).
@@ -111,6 +124,7 @@ impl Section {
             Section::Placement => "Placement and storage",
             Section::Sessions => "Sessions",
             Section::StartScript => "Start script",
+            Section::AiCli => "AI CLI configuration",
         }
     }
 
@@ -189,6 +203,9 @@ pub fn summary(draft: &Draft, section: Section) -> Option<String> {
     if section == Section::StartScript {
         return Some(start_script_summary(draft));
     }
+    if section == Section::AiCli {
+        return Some(ai_cli_summary(draft));
+    }
     if !Section::of(draft.runtime).contains(&section) {
         return None;
     }
@@ -210,6 +227,23 @@ pub fn marked(draft: &Draft, section: Section) -> bool {
     draft.required_fields().into_iter().any(|(id, req)| {
         req.required && req.empty && Section::holding(draft.runtime, id) == Some(section)
     })
+}
+
+/// How many `[[ai.cli]]` overrides the form holds (#1532, FR-013d); empty when none does.
+fn ai_cli_summary(draft: &Draft) -> String {
+    let configured = draft
+        .ai_cli
+        .iter()
+        .filter(|d| **d != AiCliDraft::default())
+        .count();
+    if configured == 0 {
+        String::new()
+    } else {
+        format!(
+            "{configured} CLI{} configured",
+            if configured == 1 { "" } else { "s" }
+        )
+    }
 }
 
 fn start_script_summary(draft: &Draft) -> String {
@@ -315,7 +349,7 @@ fn container_parts(d: &Draft, section: Section) -> Vec<String> {
         } else {
             "Stops when signed out or idle".into()
         }],
-        Section::Image | Section::Placement | Section::StartScript => Vec::new(),
+        Section::Image | Section::Placement | Section::StartScript | Section::AiCli => Vec::new(),
     }
 }
 
@@ -375,9 +409,11 @@ fn kube_parts(d: &Draft, section: Section) -> Vec<String> {
                 String::new()
             },
         ],
-        Section::Container | Section::Network | Section::Sessions | Section::StartScript => {
-            Vec::new()
-        }
+        Section::Container
+        | Section::Network
+        | Section::Sessions
+        | Section::StartScript
+        | Section::AiCli => Vec::new(),
     }
 }
 

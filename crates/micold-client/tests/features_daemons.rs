@@ -1697,3 +1697,55 @@ mod default_container_name {
         assert_eq!(w.registry.get(host).unwrap().name.as_str(), "h");
     }
 }
+
+/// #1532, FR-013d: one `[[ai.cli]]` form entry writes no `AiCliSetting` while every field is at
+/// its default (`enabled` offered, nothing else set), and keeps the entry once anything differs.
+mod ai_cli_draft {
+    use micold_client::daemon_config_render::AiCliSetting;
+    use micold_client::features::daemons::AiCliDraft;
+    use micold_core::daemon_config::CliId;
+
+    #[test]
+    fn an_all_default_draft_writes_no_setting() {
+        let draft = AiCliDraft::default();
+        assert_eq!(draft.to_setting(CliId::ClaudeCode), None);
+    }
+
+    #[test]
+    fn unchecking_enabled_alone_writes_only_that() {
+        let mut draft = AiCliDraft::default();
+        draft.enabled = false;
+        let setting = draft.to_setting(CliId::Copilot).expect("an override");
+        assert_eq!(
+            setting,
+            AiCliSetting {
+                id: CliId::Copilot,
+                enabled: Some(false),
+                version: None,
+                args: vec![],
+                model: None,
+                api_base_url: None,
+                sign_in_file: None,
+                api_key_file: None,
+                settings_file: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_stored_setting_round_trips_through_the_draft() {
+        let stored = AiCliSetting {
+            id: CliId::Codex,
+            enabled: Some(false),
+            version: Some("2.0.0".into()),
+            args: vec!["--a".into(), "--b".into()],
+            model: Some("gpt".into()),
+            api_base_url: Some("https://example.test".into()),
+            sign_in_file: Some("/run/micold/secrets/codex-sign-in".into()),
+            api_key_file: Some("/run/micold/secrets/codex-api-key".into()),
+            settings_file: Some("/home/me/.codex/settings.json".into()),
+        };
+        let draft = AiCliDraft::from_setting(&stored);
+        assert_eq!(draft.to_setting(CliId::Codex), Some(stored));
+    }
+}

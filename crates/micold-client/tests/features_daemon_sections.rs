@@ -20,6 +20,7 @@ fn each_kind_lists_its_sections_in_order() {
             Network,
             Resources,
             Sessions,
+            Section::AiCli,
             Section::StartScript
         ]
     );
@@ -31,14 +32,19 @@ fn each_kind_lists_its_sections_in_order() {
             Credentials,
             Resources,
             Placement,
+            Section::AiCli,
             Section::StartScript
         ]
     );
-    // Every kind delivers a start script (#1533), so its group follows the rest.
-    assert_eq!(Section::of(Ssh), [Connection, Section::StartScript]);
+    // Every kind delivers a start script (#1533), so its group follows the rest; the AI CLI
+    // group is shown for every kind (#1532: the file it configures is read by every daemon).
+    assert_eq!(
+        Section::of(Ssh),
+        [Connection, Section::AiCli, Section::StartScript]
+    );
     assert_eq!(
         Section::of(Host),
-        [Connection, Sessions, Section::StartScript]
+        [Connection, Sessions, Section::AiCli, Section::StartScript]
     );
 }
 
@@ -53,6 +59,7 @@ fn one_concept_has_one_title_and_limits_is_gone() {
         Resources,
         Placement,
         Sessions,
+        Section::AiCli,
     ]
     .iter()
     .map(|s| s.title())
@@ -67,7 +74,8 @@ fn one_concept_has_one_title_and_limits_is_gone() {
             "Network",
             "Resources",
             "Placement and storage",
-            "Sessions"
+            "Sessions",
+            "AI CLI configuration"
         ]
     );
 }
@@ -453,6 +461,22 @@ mod summaries {
         s.ssh_host = "h".into();
         assert!(!marked(&s, Section::Connection));
         assert!(!marked(&fresh(DraftRuntime::Host), Section::Connection));
+    }
+
+    #[test]
+    fn ai_cli_summary_counts_overridden_clis() {
+        let mut d = fresh(DraftRuntime::Container);
+        assert_eq!(said(&d, Section::AiCli).as_deref(), Some(""));
+        d.ai_cli[0].enabled = false;
+        assert_eq!(
+            said(&d, Section::AiCli).as_deref(),
+            Some("1 CLI configured")
+        );
+        d.ai_cli[1].model = "gpt".into();
+        assert_eq!(
+            said(&d, Section::AiCli).as_deref(),
+            Some("2 CLIs configured")
+        );
     }
 
     #[test]

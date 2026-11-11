@@ -367,7 +367,7 @@ pub struct Ai {
 }
 
 /// An AI CLI as the file names it (snake_case); mapped to `session::AiCli` by [`CliId::ai_cli`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CliId {
     ClaudeCode,
@@ -378,6 +378,16 @@ pub enum CliId {
 }
 
 impl CliId {
+    /// Every id, in the order [`crate::session::AiCli::ALL`] offers them (Settings → Daemons
+    /// lists the AI CLI section in this order, #1532).
+    pub const ALL: [CliId; 5] = [
+        CliId::ClaudeCode,
+        CliId::Copilot,
+        CliId::Pi,
+        CliId::Codex,
+        CliId::Opencode,
+    ];
+
     /// The name the file uses.
     pub fn as_str(self) -> &'static str {
         self.ai_cli().tool_name()
@@ -392,6 +402,19 @@ impl CliId {
             CliId::Pi => AiCli::Pi,
             CliId::Codex => AiCli::Codex,
             CliId::Opencode => AiCli::OpenCode,
+        }
+    }
+
+    /// The id a domain [`crate::session::AiCli`] has in the file; the inverse of
+    /// [`CliId::ai_cli`] (#1532).
+    pub fn from_ai_cli(cli: crate::session::AiCli) -> Self {
+        use crate::session::AiCli;
+        match cli {
+            AiCli::ClaudeCode => CliId::ClaudeCode,
+            AiCli::Copilot => CliId::Copilot,
+            AiCli::Pi => CliId::Pi,
+            AiCli::Codex => CliId::Codex,
+            AiCli::OpenCode => CliId::Opencode,
         }
     }
 }

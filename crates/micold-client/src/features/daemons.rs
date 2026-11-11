@@ -12,8 +12,9 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 
+use micold_core::daemon_config::CliId;
 use micold_core::daemons::{
-    container_name_long_enough, default_container_name, Binding, ConnectionError,
+    container_name_long_enough, default_container_name, AiCliSetting, Binding, ConnectionError,
     DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry, DaemonRuntime,
     DaemonState, DaemonView, FileSettings, RegistryError, SessionExtras, StateChange, WorktreeRef,
     CONTAINER_NAME_MIN,
@@ -160,6 +161,10 @@ pub struct Draft {
     pub client_token_file: String,
     /// The session extras' file paths as typed (#1536); empty means unset.
     pub extra_paths: [String; 4],
+    /// The `[[ai.cli]]` entries as typed, indexed by `id as usize` (#1532, FR-013d); an entry at
+    /// its [`AiCliDraft::default`] writes no override, so the daemon keeps the pinned table's
+    /// default for that CLI.
+    pub ai_cli: [AiCliDraft; 5],
     /// The Start script group (#1533); shown only for a kind whose script is delivered.
     pub start: super::daemons_start::StartDraft,
     /// The host or `Host` alias (SSH runtime only, feature 489).
@@ -195,6 +200,122 @@ fn path_text(path: &Option<PathBuf>) -> String {
         .unwrap_or_default()
 }
 
+/// Which text field of one `[[ai.cli]]` entry a form field holds (#1532, FR-013d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AiCliField {
+    Version,
+    Args,
+    Model,
+    ApiBaseUrl,
+    SignInFile,
+    ApiKeyFile,
+    SettingsFile,
+}
+
+/// One `[[ai.cli]]` entry as the form shows it (#1532, FR-013d): `enabled` defaults to `true`
+/// (offered, the pinned table's own default), so only an explicit, unchecked box writes
+/// `enabled = false`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiCliDraft {
+    pub enabled: bool,
+    pub version: String,
+    /// Space-separated launch arguments, appended after the CLI's own.
+    pub args: String,
+    pub model: String,
+    pub api_base_url: String,
+    pub sign_in_file: String,
+    pub api_key_file: String,
+    pub settings_file: String,
+}
+
+impl Default for AiCliDraft {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            version: String::new(),
+            args: String::new(),
+            model: String::new(),
+            api_base_url: String::new(),
+            sign_in_file: String::new(),
+            api_key_file: String::new(),
+            settings_file: String::new(),
+        }
+    }
+}
+
+impl AiCliDraft {
+    /// The draft the stored `setting` shows.
+    pub fn from_setting(setting: &AiCliSetting) -> Self {
+        Self {
+            enabled: setting.enabled.unwrap_or(true),
+            version: setting.version.clone().unwrap_or_default(),
+            args: setting.args.join(" "),
+            model: setting.model.clone().unwrap_or_default(),
+            api_base_url: setting.api_base_url.clone().unwrap_or_default(),
+            sign_in_file: path_text(&setting.sign_in_file),
+            api_key_file: path_text(&setting.api_key_file),
+            settings_file: path_text(&setting.settings_file),
+        }
+    }
+
+    /// The `[[ai.cli]]` entry Save stores for `id`, or `None` when nothing here overrides the
+    /// pinned table's default (so no entry is written at all).
+    pub fn to_setting(&self, id: CliId) -> Option<AiCliSetting> {
+        let text = |s: &str| Some(s.trim()).filter(|t| !t.is_empty()).map(str::to_string);
+        let path = |s: &str| Some(s.trim()).filter(|t| !t.is_empty()).map(PathBuf::from);
+        let enabled = (!self.enabled).then_some(false);
+        let version = text(&self.version);
+        let args: Vec<String> = self.args.split_whitespace().map(str::to_string).collect();
+        let model = text(&self.model);
+        let api_base_url = text(&self.api_base_url);
+        let sign_in_file = path(&self.sign_in_file);
+        let api_key_file = path(&self.api_key_file);
+        let settings_file = path(&self.settings_file);
+        if enabled.is_none()
+            && version.is_none()
+            && args.is_empty()
+            && model.is_none()
+            && api_base_url.is_none()
+            && sign_in_file.is_none()
+            && api_key_file.is_none()
+            && settings_file.is_none()
+        {
+            return None;
+        }
+        Some(AiCliSetting {
+            id,
+            enabled,
+            version,
+            args,
+            model,
+            api_base_url,
+            sign_in_file,
+            api_key_file,
+            settings_file,
+        })
+    }
+}
+
+/// The `[[ai.cli]]` entries built from `drafts`, indexed by `id as usize`, dropping an entry that
+/// overrides nothing.
+fn ai_cli_settings(drafts: &[AiCliDraft; 5]) -> Vec<AiCliSetting> {
+    drafts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, draft)| draft.to_setting(CliId::ALL[index]))
+        .collect()
+}
+
+/// The `[[ai.cli]]` drafts loaded from `entries` (#1532, FR-013d); every CLI starts at its
+/// [`AiCliDraft::default`] and is overwritten by its own stored entry, if any.
+fn ai_cli_drafts(entries: &[AiCliSetting]) -> [AiCliDraft; 5] {
+    let mut drafts: [AiCliDraft; 5] = Default::default();
+    for entry in entries {
+        drafts[entry.id as usize] = AiCliDraft::from_setting(entry);
+    }
+    drafts
+}
+
 impl Draft {
     /// The file settings Save stores: the three typed paths over `stored`, which keeps what the
     /// form has no field for (idle stop, projects).
@@ -215,6 +336,7 @@ impl Draft {
                 ca_file: path(&self.extra_paths[ExtraPath::CaFile as usize]),
                 files: stored.extras.files.clone(),
             },
+            ai_cli: ai_cli_settings(&self.ai_cli),
             ..stored.clone()
         }
     }
@@ -1028,6 +1150,7 @@ pub fn begin_add(state: &mut State) {
         clone_root: String::new(),
         client_token_file: String::new(),
         extra_paths: Default::default(),
+        ai_cli: Default::default(),
         start: Default::default(),
         kube: KubeDraft::new(&state.default_providers),
         kube_edited: false,
@@ -1122,6 +1245,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
             path_text(&entry.file.extras.signing_key_file),
             path_text(&entry.file.extras.ca_file),
         ],
+        ai_cli: ai_cli_drafts(&entry.file.ai_cli),
         start: super::daemons_start::StartDraft::new(
             entry.file.startup.as_ref(),
             crate::daemon_config_render::load_inline_script(
@@ -2115,6 +2239,10 @@ pub enum Msg {
     ClientTokenFileEdited(String),
     /// A session extras file path was typed in the form (#1536).
     ExtraPathEdited(ExtraPath, String),
+    /// One `[[ai.cli]]` entry's **Enabled** box was toggled (#1532, FR-013d).
+    AiCliEnabledToggled(CliId, bool),
+    /// One `[[ai.cli]]` entry's text field was typed (#1532, FR-013d).
+    AiCliFieldEdited(CliId, AiCliField, String),
     /// The Start script's source was chosen (#1533).
     StartSourceChosen(super::daemons_start::StartSource),
     /// The Start script's file path was typed.
@@ -2458,6 +2586,19 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::ExtraPathEdited(which, v) => {
             edit(state, &|d| d.extra_paths[which as usize] = v.clone())
         }
+        Msg::AiCliEnabledToggled(id, v) => edit(state, &|d| d.ai_cli[id as usize].enabled = v),
+        Msg::AiCliFieldEdited(id, field, v) => edit(state, &|d| {
+            let entry = &mut d.ai_cli[id as usize];
+            match field {
+                AiCliField::Version => entry.version = v.clone(),
+                AiCliField::Args => entry.args = v.clone(),
+                AiCliField::Model => entry.model = v.clone(),
+                AiCliField::ApiBaseUrl => entry.api_base_url = v.clone(),
+                AiCliField::SignInFile => entry.sign_in_file = v.clone(),
+                AiCliField::ApiKeyFile => entry.api_key_file = v.clone(),
+                AiCliField::SettingsFile => entry.settings_file = v.clone(),
+            }
+        }),
         Msg::StartSourceChosen(v) => edit(state, &|d| d.start.source = v),
         Msg::StartFileEdited(v) => edit(state, &|d| d.start.file = v.clone()),
         Msg::StartTextAction(action) => edit(state, &|d| {
