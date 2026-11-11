@@ -42,10 +42,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 M1: review A (code-review high) snapshot cd610b30:2c612ac0 round 1: F1 MAJOR fixed (capture scene waits on an info-level line; the app overwrites the host daemon.toml), F2 declined (DATA_DIR/TOKEN_PATH stay live until M2 by design), F3-F5 MINOR left. Review B (sonnet): CLEAN, 3 MINOR (F2 fixed). The gate caught the basic image content hash; pin updated.
 
-| Review | Round | Snapshot | Verdict |
-|---|---|---|---|
-| Close 1537 | 1 | 74c0062f37bc014c7f1a95208eff01db01e768a6:c84209f6efdb6fdb9d18d144f35e3ff30dcb20b0 | CHANGES: F1 MAJOR mutant TEST_ENV=true not run (now run, fails the test, restored), F2-F3 MINOR T155 marked partial; prose/record fixes, no new round |
-| Tasks 1537 | 1 | 72c2d2e1:3ffb138f | CHANGES: F1 capture lib.sh producer, F2 retired_env module uncreated, F3 entrypoint wording; all fixed (task text), F4-F6 MINOR fixed |
+| Review | Round | Scope | Head | Snapshot | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Close 1537 | 1 |  |  | 74c0062f37bc014c7f1a95208eff01db01e768a6:c84209f6efdb6fdb9d18d144f35e3ff30dcb20b0 | CHANGES: F1 MAJOR mutant TEST_ENV=true not run (now run, fails the test, restored), F2-F3 MINOR T155 marked partial; prose/record fixes, no new round |
+| Tasks 1537 | 1 |  |  | 72c2d2e1:3ffb138f | CHANGES: F1 capture lib.sh producer, F2 retired_env module uncreated, F3 entrypoint wording; all fixed (task text), F4-F6 MINOR fixed |
+| Close 1537 diff | 2 | close | 7b385025813cc24f3224a7b02ffce12e299fcb8e | 0525cce6c899d315c7a1f41bdcedaa3bae9d61a4:e751a68607f108be83495634c31add8aff4e9fc2 | CLEAN 3 MINOR (F1 fixed prose only) |
 
 M2: review A (code-review high) 8 findings fixed or accepted; review B (sonnet) CLEAN. Local gate on the rebased tree: 12650/12651, the one failure `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` fails here every time and passes with `HOME` pointed at an empty directory, so it depends on this machine's real `~/.claude.json` (many live Claude sessions), not on the diff. `mise run image` built; `mise run test-sandbox` cannot run here: the runtime rejects `--tmpfs ... uid=1000` (19 targets fail at container create), and `sandbox_real_scoped_token.rs` on main still uses the retired `GitCredentialGrant` (does not compile with the feature on); CI's sandbox job decides. quickstart.md not run (cluster, SSH host, PATs): the close unit notes it.
 
