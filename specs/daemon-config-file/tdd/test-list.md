@@ -114,6 +114,6 @@ Baseline: `micold-core --lib` `daemon_config::matching` and `scoped_credential::
 | B8 | `container_git_edits` by `daemon.kind` on both start paths | US3, FR-010 | DONE (TEST_AFTER; T142 removes the order dependence) |
 | B9 | `[git] config_file` delivered, `commit.gpgsign` and `tag.gpgsign` stripped | US3, FR-010 | DONE (T143 asserts the delivered copy) |
 | B10 | Grant messages retired, protocol bump | FR-016 | DONE (TEST_AFTER, compile-time) |
-| T141 | `session_git_env` applied to real `git ls-remote`: chosen token authenticates, an unreached repo falls back, a sandbox never runs the planted helper | US3, FR-010 | DONE |
-| T143 | The delivered gitconfig copy loses `commit.gpgsign` and `tag.gpgsign` on the sandbox and pod paths | US3, FR-010 | DONE |
+| T141 | `session_git_env` applied to real `git ls-remote` (a read; intended scope: credential choice is the same for `git-receive-pack`, which needs a different forge reply): chosen token authenticates, an unreached repo falls back, a sandbox is refused and served without the planted helper (two tests) | US3, FR-010 | DONE |
+| T143 | The delivered gitconfig copy loses `commit.gpgsign` and `tag.gpgsign`: sandbox delivery (`sandbox.rs`), `shared_copy` itself (`gitconfig.rs`), and `shared_copy` into the pod's startup secret (`kube/start_tests.rs`; the pod caller in `daemon.rs` only calls `shared_copy`) | US3, FR-010 | DONE |
 | T144 | `credential_config::answer`: stale entry refreshed after 15 min, failed request keeps the last answer, replaced unfiltered token gets its own entry and the old one is pruned | US2, FR-008 | DONE |

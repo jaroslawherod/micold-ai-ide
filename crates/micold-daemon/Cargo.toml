@@ -75,6 +75,8 @@ micold-daemon = { path = ".", features = ["test-env"] }
 # `sandbox_real_no_user_credentials.rs` builds its host with `sandbox::hostile_host` (#1002).
 micold-core = { workspace = true, features = ["kube-fake"] }
 tempfile = { workspace = true }
+# `git_credential_config.rs` decodes the basic-auth header its fake forge receives (#1530).
+base64 = { workspace = true }
 # `mcp_confirmations.rs` runs the 60 s confirmation wait on tokio's paused clock.
 tokio = { workspace = true, features = ["test-util"] }
 uuid = { workspace = true }

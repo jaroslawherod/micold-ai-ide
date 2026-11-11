@@ -1088,6 +1088,35 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
     assert!(want.iter().all(|w| mounted.contains(&w.as_str())));
 }
 
+/// #1530 (I9-13): the copy a pod receives is `shared_copy`'s, so it has lost the signing switches.
+#[tokio::test(start_paused = true)]
+async fn the_pods_git_config_has_no_signing_switches() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join(".gitconfig");
+    std::fs::write(
+        &source,
+        "[user]\n\tname = Ada\n[commit]\n\tgpgsign = true\n[tag]\n\tgpgsign = true\n",
+    )
+    .unwrap();
+    let copy = crate::scoped_credential::shared_copy(&source)
+        .unwrap()
+        .expect("a copy");
+    let fake = cluster();
+    let (keys, client) = (FakeKeyGen::default(), client("c1"));
+    let read = |p: &Path| std::fs::read_to_string(p);
+    let (s, n) = (settings(), names());
+    let mut request = start_request(&fake, &s, &n, &keys, &client, DriftChoice::Ask, &read);
+    request.git_config = Some(&copy);
+    ready(start(&request, &mut |_| {}).await);
+
+    let secret = fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .expect("the startup secret exists");
+    let text = secret["stringData"]["gitconfig"].as_str().unwrap();
+    assert!(text.contains("name = \"Ada\""), "{text}");
+    assert!(!text.to_lowercase().contains("gpgsign"), "{text}");
+}
+
 /// #1530 (T139): the git configuration is no allowed credential with a secret and a mount of its
 /// own. The app hands the sanitized copy over and it is one more key of the startup secret, which
 /// the pod mounts as a directory (no `subPath`) where `[git] config_file` names it.
