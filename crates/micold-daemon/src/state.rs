@@ -9782,7 +9782,7 @@ mod offered_tests {
         );
     }
 
-    /// T149 (#1531, Finding 1, HIGH, continued): `spawn_env_for` (and the `with_gh_shim_path` it
+    /// T149 (#1531, Finding 4, MED, continued): `spawn_env_for` (and the `with_gh_shim_path` it
     /// calls) takes no `daemon.kind` of any sort — unlike, say, `ai_cli_secrets_base` or
     /// `with_host_config_dir` just above, which branch on `Kind::Container`/`Kind::Kubernetes`/
     /// `Kind::Host`/`Kind::Ssh` explicitly, `with_gh_shim_path`'s only inputs are the settings'
