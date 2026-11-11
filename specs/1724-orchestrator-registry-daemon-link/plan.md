@@ -145,7 +145,7 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
   preamble path (FR-006). A rival claim against a *reserved* link is refused `AlreadyLinked` while the
   reservation lasts; a reservation lasts at most `LIVENESS_DEADLINE`: the `Hello` read has that timeout,
   and its expiry or a closed connection calls `claim_failed(Dropped)`, which releases it (no record
-  change). Decision table for `claim`: Decision table over (existing record state, version match):
+  change). Decision table for `claim`, over (existing record state, version match):
 
   | Existing id state | Version matches | Result |
   |---|---|---|
@@ -153,6 +153,7 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
   | same, no live link | no | refuse `VersionMismatch`, record `needs-update` (a silent-link claim closes the silent link too) |
   | live link (open and `online`) | yes | refuse `AlreadyLinked`, record untouched |
   | live link | no | refuse `VersionMismatch`, record and link untouched, no overwrite |
+  | reserved link (`Hello` pending, at most `LIVENESS_DEADLINE`) | either | refuse `AlreadyLinked` (a reservation is treated as live; this extends spec FR-007 for the pending window, recorded here), record untouched |
 
   Calls with a stale or unreserved `LinkToken` (`confirm`, `answered`, `tick`, `closed`) return
   `LinkAction::Stale` and change nothing, so a late frame on a replaced silent link cannot move the
