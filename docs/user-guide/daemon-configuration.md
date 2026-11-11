@@ -188,8 +188,9 @@ it, so a daemon that never mentioned it keeps working exactly as before.
 `api_key_file` and `settings_file`, one group per CLI, without hand-writing the file. A field left
 empty, with the CLI's own **Enabled** checkbox left checked, writes no `[[ai.cli]]` entry for that
 CLI at all: the daemon keeps the pinned table's own default for every key. `env`, `token_file`,
-`place` and `use_machine_sign_in` have no field in this group yet; set them by hand in the file
-until a later release adds one.
+`place` and `use_machine_sign_in` have no field in this group yet: they apply only to a
+hand-written file for a daemon this app does not manage, because the app rewrites the file it
+manages from the form.
 
 These are the only `[[ai.cli]]` keys this app ever writes for you — everything else about an AI
 CLI that this app remembers is kept in **this app's own `settings.json`**, never in a daemon's

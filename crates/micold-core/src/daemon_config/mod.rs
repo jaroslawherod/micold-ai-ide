@@ -404,19 +404,6 @@ impl CliId {
             CliId::Opencode => AiCli::OpenCode,
         }
     }
-
-    /// The id a domain [`crate::session::AiCli`] has in the file; the inverse of
-    /// [`CliId::ai_cli`] (#1532).
-    pub fn from_ai_cli(cli: crate::session::AiCli) -> Self {
-        use crate::session::AiCli;
-        match cli {
-            AiCli::ClaudeCode => CliId::ClaudeCode,
-            AiCli::Copilot => CliId::Copilot,
-            AiCli::Pi => CliId::Pi,
-            AiCli::Codex => CliId::Codex,
-            AiCli::OpenCode => CliId::Opencode,
-        }
-    }
 }
 
 /// `[[ai.cli]]`.
