@@ -36,14 +36,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
-| Review | Round | Snapshot | Verdict |
-|---|---|---|---|
-| Tasks | 1 | a2463a39:901c3164 | CHANGES (4 MAJOR, fixed) |
-| Tasks | 2 (sonnet) | fix diff | CLEAN (2 MINOR, fixed) |
-| Spec | 1 | bb128d1c688f3a42eaea356845c2b2497ccfa4d1:c63bfc7c625e9cac5e814565ff80e2d20296bb2c | CLEAN (3 MINOR, fixed prose only) |
-| M1 Review A (high) | 1 | 5ff40e78:ca940bff | CLEAN (2 MINOR: changes_button near-copy and floor constant, left) |
-| M1 Review B (sonnet) | 1 | 14aea717:34cfb594 | CLEAN |
-| M2 Review A (high) | 1 | 1b71d9df:4b30f70c | CLEAN (1 MINOR: Chosen doc, left) |
+| Review | Round | Scope | Head | Snapshot | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Tasks | 1 |  |  | a2463a39:901c3164 | CHANGES (4 MAJOR, fixed) |
+| Tasks | 2 (sonnet) |  |  | fix diff | CLEAN (2 MINOR, fixed) |
+| Spec | 1 |  |  | bb128d1c688f3a42eaea356845c2b2497ccfa4d1:c63bfc7c625e9cac5e814565ff80e2d20296bb2c | CLEAN (3 MINOR, fixed prose only) |
+| M1 Review A (high) | 1 |  |  | 5ff40e78:ca940bff | CLEAN (2 MINOR: changes_button near-copy and floor constant, left) |
+| M1 Review B (sonnet) | 1 |  |  | 14aea717:34cfb594 | CLEAN |
+| M2 Review A (high) | 1 |  |  | 1b71d9df:4b30f70c | CLEAN (1 MINOR: Chosen doc, left) |
+| M2 Review A+B (sonnet) | 2 | M2 | bc9262d05a01f8146f898a15d2a0896dc2e19b29 | d28d938bd831dae098ca3fd7dcb6453d3054c43f:bc9262d05a01f8146f898a15d2a0896dc2e19b29 | CLEAN (2 MINOR: worktree menu keyboard highlight to confirm in M4; no tdd dir, left) |
 
 ## Declined review findings
 
