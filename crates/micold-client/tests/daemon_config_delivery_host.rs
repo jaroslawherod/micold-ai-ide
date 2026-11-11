@@ -194,7 +194,16 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
 
-        assert!(deliver_container("box", &profile(true), home, &delivery, None, None).unwrap());
+        assert!(deliver_container(
+            "box",
+            &profile(true),
+            home,
+            &delivery,
+            None,
+            None,
+            &Default::default()
+        )
+        .unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
         assert!(errors.is_empty(), "{errors:?}\n{text}");
@@ -280,11 +289,38 @@ mod container {
         let delivery = DeliveryMount::beside(&dir.path().join("state"));
         let home = Path::new("/home/jaro");
 
-        assert!(deliver_container("box", &profile(false), home, &delivery, None, None).unwrap());
+        assert!(deliver_container(
+            "box",
+            &profile(false),
+            home,
+            &delivery,
+            None,
+            None,
+            &Default::default()
+        )
+        .unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         assert!(!text.contains("idle_stop"), "{text}");
-        assert!(!deliver_container("box", &profile(false), home, &delivery, None, None).unwrap());
-        assert!(deliver_container("box", &profile(true), home, &delivery, None, None).unwrap());
+        assert!(!deliver_container(
+            "box",
+            &profile(false),
+            home,
+            &delivery,
+            None,
+            None,
+            &Default::default()
+        )
+        .unwrap());
+        assert!(deliver_container(
+            "box",
+            &profile(true),
+            home,
+            &delivery,
+            None,
+            None,
+            &Default::default()
+        )
+        .unwrap());
     }
 
     fn startup_in(app: &Path, with_env: bool) -> micold_client::daemon_config_render::StartupTable {
@@ -319,6 +355,7 @@ mod container {
             &delivery,
             None,
             Some(&startup),
+            &Default::default(),
         )
         .unwrap();
 
@@ -361,10 +398,20 @@ mod container {
             &delivery,
             None,
             Some(&startup),
+            &Default::default(),
         )
         .unwrap();
 
-        deliver_container("box", &profile(false), home, &delivery, None, None).unwrap();
+        deliver_container(
+            "box",
+            &profile(false),
+            home,
+            &delivery,
+            None,
+            None,
+            &Default::default(),
+        )
+        .unwrap();
 
         assert!(!delivery.config.join("startup.sh").exists());
         assert!(!delivery.secrets.join("startup.env").exists());
@@ -386,6 +433,7 @@ mod container {
             &delivery,
             Some("[user]\n\tname = \"Ada\"\n"),
             None,
+            &Default::default(),
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -395,10 +443,91 @@ mod container {
         );
         assert!(std::fs::read_to_string(&copy).unwrap().contains("Ada"));
 
-        deliver_container("box", &profile(false), home, &delivery, None, None).unwrap();
+        deliver_container(
+            "box",
+            &profile(false),
+            home,
+            &delivery,
+            None,
+            None,
+            &Default::default(),
+        )
+        .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
         assert!(!text.contains("config_file"), "{text}");
         assert!(!copy.exists());
+    }
+
+    /// #1536 (I16-1): the extras' sources are copied into the secrets folder, the file names the
+    /// copies, and a copy the extras no longer name is removed at the next start.
+    #[test]
+    fn the_extras_are_delivered_as_files_and_the_rendered_paths_name_them() {
+        use micold_core::daemons::{SessionExtras, SessionFileSetting};
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let source = |name: &str, text: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        let extras = SessionExtras {
+            ssh_key_file: Some(source("id", "KEY")),
+            known_hosts_file: Some(source("kh", "HOSTS")),
+            signing_key_file: Some(source("sign", "SIGN")),
+            ca_file: Some(source("ca", "CA")),
+            files: vec![SessionFileSetting {
+                file: source("cfg", "CFG"),
+                target: ".config/x".into(),
+                mode: None,
+            }],
+        };
+        let deliver = |extras: &SessionExtras| {
+            deliver_container(
+                "box",
+                &profile(false),
+                Path::new("/home/jaro"),
+                &delivery,
+                None,
+                None,
+                extras,
+            )
+            .unwrap();
+            std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap()
+        };
+
+        let text = deliver(&extras);
+        for (file, body) in [
+            ("ssh-key", "KEY"),
+            ("known-hosts", "HOSTS"),
+            ("signing-key", "SIGN"),
+            ("ca.pem", "CA"),
+            ("session-file-0", "CFG"),
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(delivery.secrets.join(file)).unwrap(),
+                body
+            );
+            assert!(
+                text.contains(&format!("\"/run/micold/secrets/{file}\"")),
+                "{file} not named:\n{text}"
+            );
+        }
+        assert!(
+            !text.contains(dir.path().to_str().unwrap()),
+            "a client path leaked:\n{text}"
+        );
+
+        let text = deliver(&SessionExtras::default());
+        for file in [
+            "ssh-key",
+            "known-hosts",
+            "signing-key",
+            "ca.pem",
+            "session-file-0",
+        ] {
+            assert!(!delivery.secrets.join(file).exists(), "{file} is stale");
+            assert!(!text.contains(file), "{file} still named:\n{text}");
+        }
     }
 
     #[test]
@@ -417,6 +546,7 @@ mod container {
             &delivery,
             None,
             Some(&startup),
+            &Default::default(),
         )
         .unwrap_err();
         assert!(err.to_string().contains("gone.sh"), "{err}");
@@ -468,4 +598,48 @@ fn a_pods_script_and_env_file_become_texts_and_the_file_names_their_mounts() {
     large.startup.as_mut().unwrap().script_file = big;
     let err = pod_startup(&large).unwrap_err();
     assert!(err.to_string().contains("big.sh"), "{err}");
+}
+
+/// #1536 (I16-2): a pod's extras become keys of the startup secret and the rendered paths name
+/// their mount; a source that is not text stops the start naming it.
+#[test]
+fn a_pods_extras_become_secret_items_and_the_rendered_paths_name_them() {
+    use micold_client::daemon_config_delivery::pod_startup;
+    use micold_client::daemon_config_render::prepare;
+    use micold_core::daemon_config::Kind;
+    let app = tempfile::tempdir().unwrap();
+    let ca = app.path().join("ca");
+    let key = app.path().join("id");
+    std::fs::write(&ca, "CA-TEXT").unwrap();
+    std::fs::write(&key, "KEY-TEXT").unwrap();
+    let mut settings = DaemonSettings::for_pod("Pod", "img:1", None, false);
+    settings.extras.ca_file = Some(ca);
+    settings.extras.ssh_key_file = Some(key.clone());
+    let hosts = app.path().join("kh");
+    std::fs::write(&hosts, "HOSTS-TEXT").unwrap();
+    settings.extras.known_hosts_file = Some(hosts);
+
+    let delivered = pod_startup(&settings).unwrap();
+    assert_eq!(
+        delivered.files,
+        vec![
+            ("ssh-key".to_string(), "KEY-TEXT".to_string()),
+            ("known-hosts".to_string(), "HOSTS-TEXT".to_string()),
+            ("ca.pem".to_string(), "CA-TEXT".to_string()),
+        ]
+    );
+    let config = prepare(&delivered.settings, Kind::Kubernetes).unwrap();
+    assert!(
+        config.contains("/run/micold/secrets/startup/ssh-key"),
+        "{config}"
+    );
+    assert!(
+        config.contains("/run/micold/secrets/startup/ca.pem"),
+        "{config}"
+    );
+    assert!(!config.contains("TEXT"));
+
+    std::fs::write(&key, [0xff, 0xfe]).unwrap();
+    let err = pod_startup(&settings).unwrap_err();
+    assert!(err.to_string().contains("ssh-key"), "{err}");
 }

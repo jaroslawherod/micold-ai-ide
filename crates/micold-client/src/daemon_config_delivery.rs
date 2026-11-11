@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use crate::daemon_config_render::{self, DaemonSettings, StartupTable};
 use micold_core::daemon_config::Kind;
+use micold_core::daemons::SessionExtras;
 
 /// The script's file name beside the delivered configuration (host data dir; SSH `secrets/`).
 pub const SCRIPT_NAME: &str = "startup.sh";
@@ -72,6 +73,88 @@ pub fn relocated_startup(
     moved
 }
 
+/// The file names the extras' sources are delivered under, beside the configuration (#1536).
+pub const SSH_KEY_NAME: &str = "ssh-key";
+pub const KNOWN_HOSTS_NAME: &str = "known-hosts";
+pub const SIGNING_KEY_NAME: &str = "signing-key";
+pub const CA_NAME: &str = "ca.pem";
+/// A session file's delivered name is this prefix and its position in `[[session.files]]`.
+pub const SESSION_FILE_PREFIX: &str = "session-file-";
+
+/// The extras with their sources read for delivery: `extras` names the delivered copies, and
+/// `files` is each copy's name and bytes (#1536, FR-036..038).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedExtras {
+    pub extras: SessionExtras,
+    pub files: Vec<(String, Vec<u8>)>,
+}
+
+/// Reads the sources `extras` names and points them at `<dir>/<name>`, the POSIX directory where
+/// the daemon finds its delivered files. `keys` says whether the SSH key, `known_hosts` file and
+/// signing key are delivered (container and pod) or left out (an SSH host, contract: C and K
+/// only); the CA file and the session files go everywhere. An unreadable source is an error naming
+/// it, so the daemon does not start without a file the user chose.
+pub fn stage_extras(extras: &SessionExtras, dir: &str, keys: bool) -> io::Result<StagedExtras> {
+    let mut staged = StagedExtras {
+        extras: SessionExtras::default(),
+        files: Vec::new(),
+    };
+    let mut take = |source: &Option<PathBuf>, name: String| -> io::Result<Option<PathBuf>> {
+        let Some(source) = source else {
+            return Ok(None);
+        };
+        let bytes = std::fs::read(source).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("{} could not be read: {e}", source.display()),
+            )
+        })?;
+        let at = PathBuf::from(format!("{dir}/{name}"));
+        staged.files.push((name, bytes));
+        Ok(Some(at))
+    };
+    if keys {
+        staged.extras.ssh_key_file = take(&extras.ssh_key_file, SSH_KEY_NAME.into())?;
+        staged.extras.known_hosts_file = take(&extras.known_hosts_file, KNOWN_HOSTS_NAME.into())?;
+        staged.extras.signing_key_file = take(&extras.signing_key_file, SIGNING_KEY_NAME.into())?;
+    }
+    staged.extras.ca_file = take(&extras.ca_file, CA_NAME.into())?;
+    for (n, file) in extras.files.iter().enumerate() {
+        let at = take(
+            &Some(file.file.clone()),
+            format!("{SESSION_FILE_PREFIX}{n}"),
+        )?;
+        staged
+            .extras
+            .files
+            .push(micold_core::daemons::SessionFileSetting {
+                file: at.expect("a source was given"),
+                ..file.clone()
+            });
+    }
+    Ok(staged)
+}
+
+/// Makes `dir` hold exactly the staged files among the names delivery owns: each is written (only
+/// when changed, owner-only), and a copy of an earlier start that the extras no longer name is
+/// removed. Other files (`startup.env`, `gitconfig`) are left alone. Whether anything changed.
+fn sync_extras(dir: &Path, files: &[(String, Vec<u8>)]) -> io::Result<bool> {
+    let mut changed = false;
+    for (name, bytes) in files {
+        changed |= write_if_changed(&dir.join(name), bytes)?;
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let owned = [SSH_KEY_NAME, KNOWN_HOSTS_NAME, SIGNING_KEY_NAME, CA_NAME].contains(&&*name)
+            || name.starts_with(SESSION_FILE_PREFIX);
+        if owned && !files.iter().any(|(wanted, _)| *wanted == name) {
+            changed |= remove_if_present(&entry.path())?;
+        }
+    }
+    Ok(changed)
+}
+
 /// Renders `settings` for [`Kind::Host`] and writes it to `<data_dir>/daemon.toml`, skipping the
 /// write (but not the mode fix) when the file already holds the same bytes. Returns whether it wrote.
 ///
@@ -116,6 +199,10 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 /// file names them at `/run/micold/config/startup.sh` and `/run/micold/secrets/startup.env`
 /// (#1533, FR-011). Without a script, a copy left by an earlier one is removed.
 ///
+/// `extras` are the SSH key, `known_hosts`, signing key, CA file and session files (#1536): their
+/// sources are copied into `delivery.secrets` (owner-only; a copy the extras no longer name is
+/// removed) and the file names them at `/run/micold/secrets/<name>`.
+///
 /// `git_config` is the sanitized git configuration ([`micold_core::scoped_credential::shared_copy`]):
 /// it goes into `delivery.secrets` and the file names it as `[git] config_file` at
 /// `/run/micold/secrets/gitconfig` (#1530); `None` removes a copy left by an earlier start.
@@ -126,11 +213,13 @@ pub fn deliver_container(
     delivery: &micold_core::sandbox::DeliveryMount,
     git_config: Option<&str>,
     startup: Option<&StartupTable>,
+    extras: &SessionExtras,
 ) -> io::Result<bool> {
     use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
     use micold_core::sandbox::argv::CONTAINER_SSH_DIR;
     use micold_core::sandbox::{CONTAINER_CONFIG_DIR, CONTAINER_SECRETS_DIR};
     use micold_core::ssh::argv::CONTAINER_DATA_DIR;
+    let staged = stage_extras(extras, CONTAINER_SECRETS_DIR, true)?;
     let settings = DaemonSettings {
         data_dir: Some(CONTAINER_DATA_DIR.into()),
         home: Some(home.to_path_buf()),
@@ -138,6 +227,7 @@ pub fn deliver_container(
         idle_stop: profile.survive_logout.then_some(IdleStopSetting::Off),
         ssh_dir: Some(CONTAINER_SSH_DIR.into()),
         startup: startup.cloned(),
+        extras: staged.extras,
         // The sanitized copy of the user's `.gitconfig`, delivered in the secrets folder (read-only)
         // whenever the host has one (#1530, D15 row 1).
         git_config_file: git_config.map(|_| {
@@ -173,6 +263,7 @@ pub fn deliver_container(
         Some(text) => write_if_changed(&git_config_copy, text.as_bytes())?,
         None => remove_if_present(&git_config_copy)?,
     };
+    wrote |= sync_extras(&delivery.secrets, &staged.files)?;
     match &files {
         Some(files) => {
             wrote |= write_if_changed(&script, &files.script)?;
@@ -200,6 +291,9 @@ pub struct PodStartup {
     pub settings: DaemonSettings,
     pub script: Option<String>,
     pub env: Option<String>,
+    /// The extras' delivered copies as secret keys and text (#1536), named at the startup secret's
+    /// mount by `settings.extras`.
+    pub files: Vec<(String, String)>,
 }
 
 /// A config map or secret holds 1 MiB in all; half of it for one file leaves room for the rest.
@@ -210,16 +304,41 @@ const POD_FILE_LIMIT: usize = 512 * 1024;
 /// names them at their mounts. A file that cannot be read, or is not text, stops the start naming
 /// it, so the pod does not start without the script the user chose.
 pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
-    use micold_core::kube::manifest::{
-        CONFIG_MOUNT, STARTUP_ENV_FILE, STARTUP_ENV_MOUNT, STARTUP_SCRIPT_FILE,
-    };
+    use micold_core::kube::manifest::STARTUP_ENV_MOUNT;
+    // The extras go into the startup secret too (#1536): a secret holds 1 MiB in all, so each
+    // file is held to the same limit as the script, and all of them must be text.
+    let staged = stage_extras(&settings.extras, STARTUP_ENV_MOUNT, true)?;
+    let mut settings = settings.clone();
+    settings.extras = staged.extras;
+    let mut extras = Vec::new();
+    for (name, bytes) in staged.files {
+        if bytes.len() > POD_FILE_LIMIT {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{name} is {} bytes, over the {POD_FILE_LIMIT} a pod can hold",
+                    bytes.len()
+                ),
+            ));
+        }
+        let text = String::from_utf8(bytes).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{name} is not text, so it cannot be delivered to a pod"),
+            )
+        })?;
+        extras.push((name, text));
+    }
+    let settings = &settings;
     let Some(files) = read_startup_files(settings)? else {
         return Ok(PodStartup {
             settings: settings.clone(),
             script: None,
             env: None,
+            files: extras,
         });
     };
+    use micold_core::kube::manifest::{CONFIG_MOUNT, STARTUP_ENV_FILE, STARTUP_SCRIPT_FILE};
     let table = settings.startup.as_ref().expect("files were read");
     let text = |what: &str, path: &Path, bytes: Vec<u8>| {
         if bytes.len() > POD_FILE_LIMIT {
@@ -255,6 +374,7 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
                 text("env_file", path, bytes)
             })
             .transpose()?,
+        files: extras,
     })
 }
 

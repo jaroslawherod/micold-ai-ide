@@ -376,6 +376,10 @@ fn boot() -> (App, Task<Message>) {
                 &core.settings.daemons,
                 core.settings.legacy_default_daemon,
             ),
+            extras: crate::shell::sandbox::BootPlan::extras_of(
+                &core.settings.daemons,
+                core.settings.legacy_default_daemon,
+            ),
         }
     });
 

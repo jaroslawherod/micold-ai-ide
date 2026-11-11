@@ -115,6 +115,7 @@ async fn a_pods_start_delivers_the_script_and_env_file_and_refuses_an_unreadable
         NAME,
         &settings(),
         Some(&startup),
+        &Default::default(),
         DriftChoice::Ask,
         &sink,
     )
@@ -140,6 +141,7 @@ async fn a_pods_start_delivers_the_script_and_env_file_and_refuses_an_unreadable
         NAME,
         &settings(),
         Some(&gone),
+        &Default::default(),
         DriftChoice::Ask,
         &sink,
     )
@@ -208,12 +210,30 @@ async fn a_drifted_pod_is_reported_typed_and_the_choice_continues_the_start() {
         Some(micold_core::sandbox::image::ImageRef::parse("ghcr.io/acme/ssh:2").unwrap());
     let again = client(&cluster, welcoming());
     let (sink, _) = sink();
-    let ask = kube_attempt(&again.env, NAME, &changed, None, DriftChoice::Ask, &sink).await;
+    let ask = kube_attempt(
+        &again.env,
+        NAME,
+        &changed,
+        None,
+        &Default::default(),
+        DriftChoice::Ask,
+        &sink,
+    )
+    .await;
     match ask.err().expect("the start stops at the drift") {
         KubeAttemptError::Drift { fields } => assert!(!fields.is_empty()),
         other => panic!("{other}"),
     }
-    let keep = kube_attempt(&again.env, NAME, &changed, None, DriftChoice::Keep, &sink).await;
+    let keep = kube_attempt(
+        &again.env,
+        NAME,
+        &changed,
+        None,
+        &Default::default(),
+        DriftChoice::Keep,
+        &sink,
+    )
+    .await;
     assert!(keep.is_ok(), "Keep continues with the running pod");
 }
 
@@ -304,8 +324,17 @@ mod install {
             }
             assert!(cancel_kube_start(&client.env, NAME), "a start to cancel");
         };
+        let extras = micold_core::daemons::SessionExtras::default();
         let (result, ()) = tokio::join!(
-            kube_attempt(&client.env, NAME, &settings, None, DriftChoice::Ask, &sink),
+            kube_attempt(
+                &client.env,
+                NAME,
+                &settings,
+                None,
+                &extras,
+                DriftChoice::Ask,
+                &sink
+            ),
             canceller
         );
         assert_eq!(result.err().unwrap().to_string(), "start cancelled");

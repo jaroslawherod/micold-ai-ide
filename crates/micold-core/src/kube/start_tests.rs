@@ -95,6 +95,7 @@ fn start_request<'a>(
         startup_script: None,
         startup_env: None,
         git_config: None,
+        secret_files: &[],
         time_zone: Some("Europe/Berlin"),
     }
 }
@@ -1156,6 +1157,44 @@ async fn the_git_config_is_a_key_of_the_startup_secret_and_no_secret_of_its_own(
 
     // Without a copy to share the secret goes again.
     request.git_config = None;
+    ready(start(&request, &mut |_| {}).await);
+    assert!(fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .is_none());
+}
+
+/// #1536 (T149): the SSH key, signing key, CA file and session-file sources are keys of the startup
+/// secret beside the git configuration, mounted read-only as a directory; with none of them and
+/// no other file the secret goes again.
+#[tokio::test(start_paused = true)]
+async fn the_extras_are_keys_of_the_startup_secret() {
+    let fake = cluster();
+    let (keys, client) = (FakeKeyGen::default(), client("c1"));
+    let read = |p: &Path| std::fs::read_to_string(p);
+    let (s, n) = (settings(), names());
+    let files = [
+        ("ssh-key".to_string(), "KEY".to_string()),
+        ("ca.pem".to_string(), "CA".to_string()),
+        ("session-file-0".to_string(), "FILE".to_string()),
+    ];
+    let mut request = start_request(&fake, &s, &n, &keys, &client, DriftChoice::Ask, &read);
+    request.secret_files = &files;
+    ready(start(&request, &mut |_| {}).await);
+
+    let secret = fake
+        .manifest(NS, ObjectKind::Secret, &n.startup_secret())
+        .expect("the startup secret exists for the extras alone");
+    let data = &secret["stringData"];
+    assert_eq!(data["ssh-key"], "KEY");
+    assert_eq!(data["ca.pem"], "CA");
+    assert_eq!(data["session-file-0"], "FILE");
+    let pod = fake.manifest(NS, ObjectKind::Pod, &n.pod()).unwrap();
+    let mounts = pod["spec"]["containers"][0]["volumeMounts"]
+        .as_array()
+        .unwrap();
+    assert!(mounts.iter().all(|m| m.get("subPath").is_none()));
+
+    request.secret_files = &[];
     ready(start(&request, &mut |_| {}).await);
     assert!(fake
         .manifest(NS, ObjectKind::Secret, &n.startup_secret())

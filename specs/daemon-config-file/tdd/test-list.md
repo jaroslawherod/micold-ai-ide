@@ -129,3 +129,12 @@ Written at close from the merged tests (`TEST_AFTER`: no red run was recorded wh
 | I15-U3 | A container session over SSH with no `MICOLD_DATA_DIR` still gets the credential helper, the HTTPS rewrite and `GIT_CONFIG_GLOBAL` (T086a) | FR-012 | DONE |
 | I15-U4 | No image, entrypoint, SSH launch command or capture scene sets a retired name (T085, T085b) | SC-001 | DONE (script test) |
 | I15-U5 | The user guide names each replaced variable's config key (T086, T086b) | FR-012 | DONE (docs) |
+
+## Test list: Issue 16 (#1536), milestone M2
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| I16-1 | The #1536 behaviours are listed and logged (this table, the cycle log) | FR-036, FR-037, FR-038, V18 | DONE (docs) |
+| I16-1a | A container daemon is delivered the SSH key, `known_hosts`, signing key, CA file and session files as owner-only copies in the secrets folder; the rendered paths name the copies; a copy the extras no longer name is removed | FR-036, FR-037, FR-038 | DONE |
+| I16-2a | A pod daemon's extras are keys of the startup secret and the rendered paths name its mount; a non-text source stops the start naming it | FR-036, FR-037, FR-038 | DONE |
+| I16-3a | An SSH host is sent the CA file and session files only; every extras path its file renders is one of the files sent | FR-037, FR-038 | DONE |

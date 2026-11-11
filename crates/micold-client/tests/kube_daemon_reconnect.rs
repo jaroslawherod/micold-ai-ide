@@ -47,7 +47,15 @@ async fn reconnect(
 ) -> Result<(Connected, micold_client::kube::relay::Relay), KubeReconnectError> {
     let (sink, _) = sink();
     let client = client(cluster, welcoming());
-    kube_reconnect(&client.env, NAME, &settings(), None, &sink).await
+    kube_reconnect(
+        &client.env,
+        NAME,
+        &settings(),
+        None,
+        &Default::default(),
+        &sink,
+    )
+    .await
 }
 
 async fn delete_pod(cluster: &Arc<FakeCluster>) {

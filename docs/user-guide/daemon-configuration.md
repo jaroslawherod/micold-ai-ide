@@ -260,13 +260,19 @@ These names are reserved and refused in `session.env`, `session.secret_env` and 
 
 #### SSH remotes, signing and registry files in a container or pod
 
+Micold copies the files these keys name to where the daemon runs: into the container's secrets
+folder, into the pod's startup secret (text only, 512 KiB each), and, for an SSH host, to its
+`~/.micold/remote/secrets/`. A source it cannot read stops the start and names the file. An SSH host
+gets only the CA file and the session files: the SSH key, `known_hosts` and signing key are for
+containers and pods, and a host's sessions use that machine's own keys.
+
 - **SSH remotes.** With `ssh_key_file` and `known_hosts_file`, a container or pod session's git
   runs `ssh -i <key> -o UserKnownHostsFile=<hosts> -o IdentitiesOnly=yes`. GitHub still uses a
   token; this is for other SSH remotes.
 - **Signing.** With `signing_key_file`, `user.signingkey` points at the delivered key; `gpg.format`
   stays as in your git configuration (use `ssh` for an SSH key). Without it, signing is switched
   off (`commit.gpgsign` and `tag.gpgsign` are `false`), so a commit does not fail for a key the
-  sandbox lacks. A host or SSH daemon uses your own git configuration and keys.
+  sandbox lacks. A host or SSH daemon uses its own git configuration and keys.
 - **Corporate CA and proxy.** `network.ca_file` is exported to sessions as `SSL_CERT_FILE`,
   `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO` and `REQUESTS_CA_BUNDLE`, and the daemon trusts it for
   its own HTTPS (the token reach check). The daemon also uses `HTTPS_PROXY` and `NO_PROXY` from

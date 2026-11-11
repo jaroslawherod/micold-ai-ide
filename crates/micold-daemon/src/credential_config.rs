@@ -427,3 +427,6 @@ mod tests {
         assert_eq!(entries[0].repos, ["acme/other"]);
     }
 }
+
+#[cfg(test)]
+mod egress_tests;
