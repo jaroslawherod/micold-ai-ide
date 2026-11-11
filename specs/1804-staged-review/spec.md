@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-10
 
-**Status**: Draft
+**Status**: Closed 2026-11-11 — shipped in PRs #1809, #1820, #1824 (US3 shadow run tracked by #1808)
 
 **Input**: User description: "autopilot: staged review (facts by code, plan by strong model, probes by cheap workers). Adapted from ai-sdlc RFC-0052. autopilot-reviewer spends most of its tokens reading files, not judging; cache reads dominate cost. Stage 1 (code, no model): diff facts, changed symbols, callers, coverage of changed lines, written to a facts file. Stage 2: strong model writes a short review plan from the facts, risk and acceptance criteria. Stage 3: cheaper-model workers run the plan's probes in parallel and return evidence. Stage 4: strong model reads the evidence and writes the verdict in the existing format. Update autopilot-reviewer.md, tasks/review.md, tasks/review-rounds.md. Keep the verdict format and the ledger unchanged. Run it as a shadow beside the current review on a few PRs and compare findings and tokens before replacing it."
 
