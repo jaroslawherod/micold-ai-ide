@@ -1209,6 +1209,7 @@ fn self_delete_request(f: &Fixture) -> String {
     )
 }
 
+#[cfg(unix)]
 async fn raw_self_delete(f: &Fixture) -> (tokio::net::TcpStream, String) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     f.start(IDLE).await;
