@@ -325,12 +325,12 @@ the file, re-run green. Every mutant was caught by a test failure (not a compile
 | T144 | `credential_config.rs` delete `entry.fetched_at = now` | `-p micold-daemon --lib credential_config` | `an_entry_older_than_15_minutes_is_asked_for_again_through_answer`, `a_failed_request_keeps_the_last_answer_and_counts_as_an_attempt` |
 | T144 | `credential_config.rs` delete `store.retain(..)` | same | `a_replaced_unfiltered_token_gets_its_own_entry_and_the_old_one_is_pruned` |
 | T144 | `credential_config.rs` delete `entry.last_miss_fetch_at = now` | same | `a_failed_request_keeps_the_last_answer_and_counts_as_an_attempt` |
-| T143, T154 | `gitconfig.rs` drop the `tag.gpgsign` arm | `-p micold-core --lib scoped_credential::gitconfig` | `the_shared_copy_loses_the_signing_switches`, `the_text_form_strips_signing_only_when_no_key_is_delivered`, `without_a_signing_key_both_signing_switches_go_and_the_rest_stays` |
+| T143, T154 | `gitconfig.rs` drop the `tag.gpgsign` arm | `-p micold-core --lib scoped_credential::gitconfig` (the T154 kube test was not run under this mutant) | `the_shared_copy_loses_the_signing_switches`, `the_text_form_strips_signing_only_when_no_key_is_delivered`, `without_a_signing_key_both_signing_switches_go_and_the_rest_stays` |
 | T142 | `supervisor.rs` accept `Kind::Host` in `container_git_edits` | `-p micold-daemon --lib container_git_tests` | `host_ssh_and_a_daemon_with_no_file_get_nothing_whatever_the_data_dir`, `env_hygiene_wires_the_git_file_into_every_spawn_whatever_the_data_dir` |
 | T146 | `matching.rs` drop `Reverse` | `-p micold-core --lib daemon_config::matching` | `exact_beats_owner_beats_unfiltered` |
 
 Green after restoring each: `credential_config` 6, `container_git_tests` 7, `git_credential_config` 12,
 `scoped_credential::gitconfig` 12, `micold-core --lib kube` 155. T153 split the one eager test into
-four (answer, asked once, fingerprint-keyed secret-free cache, miss limited to once a minute); T155
+four (answer, asked once, secret-free cache, miss limited to once a minute); T155
 split the sandbox test into a refused and a served one (the table's two `git_credential_config`
 rows); T154 added `the_pods_git_config_has_no_signing_switches` in `kube/start_tests.rs`.
