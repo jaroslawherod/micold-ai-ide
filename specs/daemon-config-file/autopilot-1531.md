@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: M1 done, PR #1763 open; CI red on two jobs, both outside this flow — escalated (category 5, blocked by work outside my flow)
-- **Next step**: orchestrator waits for the user's answer to the *Open escalation*; nothing merges until then.
+- **Phase**: M1 done, PR #1763 open, rebased and re-pushed (part 6) with fresh CI running; `ci complete` not yet seen.
+- **Next step**: orchestrator holds for CI and merges on green `ci complete`. If the only red is a job also red on `main` (windows/macos), hold and escalate again rather than fixing it out of flow.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
-| #1763 | M1 (gh shim) | open, rebased onto `main`; CI red on out-of-flow jobs (see *Open escalation*) | — |
+| #1763 | M1 (gh shim) | open, rebased onto current `main`, re-gated and force-pushed (part 6); fresh CI running | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | PR open, CI red outside this flow — escalated |
+| M1 | T055–T057, T095, T058 | full | `gh` shim sets `GH_TOKEN`/`GH_HOST` from the token chosen for the cwd's repository, on every session kind | #1763 | PR open, rebased and re-pushed (part 6), fresh CI running |
 
 ## Decisions
 
@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | M1 | M1 needs #1530's `TokenChoice` chooser, which is not on `main` (unpushed local work in another worktree): wait, stack on #1530's branch, or implement behind a local seam? | Wait: pause the run with the design merged and resume once #1530's M1 and M2 are on `main`. Rejected stacking (that branch's M1 is unpushed and still in review, so the API may change) and the seam (it would split the acceptance criteria across two runs). Superseded by D6: start M1 now against #1530's merged M1 alone, without waiting for the rest. | decided by user | `AskUserQuestion` 2026-11-05; `git ls-tree origin/main crates/micold-core/src/daemon_config/matching.rs` empty; #1530 M1 commit `324482a39` not on `origin/feat/1530_...` (tip `02cf510bc`) |
 | D6 | M1 | Start M1 now against #1530's merged `TokenChoice` chooser (PR #1700), without waiting for all of #1530? | Yes: start now. #1530's M1 (matching.rs/credential_config.rs/reach.rs/git_credential.rs/git_env.rs — T046–T054, T092–T094) is merged to `main`. #1530's M2 (PR #1713, kind-gated `container_git_edits`, `[git] config_file`/`GIT_CONFIG_GLOBAL`, retiring `GitCredentialGrant`/`Revoke`/`Targets`) is still open and out of scope: not depended on, not duplicated. Supersedes D5. | decided by user | `git ls-tree origin/main` holds matching.rs/credential_config.rs/reach.rs/git_credential.rs/git_env.rs; PR #1700 merged; PR #1713 open |
 | D7 | M1 | M1 passed the handover cap after part 3; authorise a part 4 to finish M1 (confirm `micold-daemon --lib` green, review B, full gate, push, PR), or stop and hand M1 over as it stands? | Authorise part 4: finish M1 and get it to a PR. Part 4 inherits a `CLEAN` review A and a known-small remaining list, so this is not the repeated-failure case the handover cap is meant to catch. | decided by user | part 4 authorised; see superseded *Open escalation* text, parts 1–3 commits `34eb48cd9`, `d9ad46edb`, `85fb4e24d`, `a6f320ad8` |
+| D8 | M1 | #1763 was 185 commits behind and `CONFLICTING`; `main`'s own windows/macos red is out-of-flow. Authorise a part 6 to rebase, re-gate, force-push, and merge on what condition? | Authorise part 6: push, merge when green. Re-gate the already-rebased branch, force-push #1763, wait for fresh CI, and merge as soon as `ci complete` is green. If a job that is also red on `main` (windows/macos) blocks it, hold and escalate again rather than fixing out-of-flow code in this flow. | decided by user | part 6 dispatch prompt, verbatim answer recorded here |
 
 ## Review rounds
 
@@ -56,6 +57,36 @@ M1 (T055–T057, T095, T058) is done: implemented, reviewed (A and B both `CLEAN
 rebased onto current `main`, pushed, and PR #1763 is open against `main`. Nothing further for a
 human or another unit to do on this milestone unless CI turns up something real; the orchestrator
 now waits on CI and merges.
+
+**Done, this unit (part 6):** D8 authorised part 6 (push, merge when green). `git fetch origin`
+confirmed `origin/main` had not moved past `91fd714ea` since the orchestrator's own check; local
+HEAD `f9c80279e` was already rebased onto it (`git rev-list --count HEAD..origin/main` = 0), so no
+further rebase was needed. Ran the full gate (`mise run gate`): fmt and clippy (core, then
+workspace) passed clean; `cargo nextest run --workspace` found 21 failures out of 12801 tests, none
+in a file this diff touches (`git diff --stat origin/main...HEAD` still lists only `github.rs`,
+`micold-daemon/Cargo.toml`, `gh_shim.rs`, `lib.rs`, `main.rs`, `state.rs`, `tests/gh_shim.rs`,
+`settings.md`, and two spec files). Judged environmental, for two separate reasons visible in the
+log: (1) this session's own shell sets `MICOLD_DAEMON_CONFIG=/run/micold/config/daemon.toml`
+(`env | grep MICOLD`), which leaks into every spawned-daemon test's child process and makes the
+daemon refuse to start ("this daemon was started from inside a session") — this explains
+`autospawn`, `daemon_stop` (x2), `idle_race`, `idle_stop` (x3), `idle_teardown`, `spawn_fd_hygiene`,
+`version_mismatch_resolves`, `history_stop_request`, `connection::logging_sink` (x2); (2) the
+remaining failures (`sandbox_credentials::relink_skips_a_cli_with_no_delivered_file`,
+`session_extras::tests::a_signed_commit_succeeds_with_the_key_and_an_unsigned_one_without`,
+`history_damaged` a19/a20/a21/a22/a24, `micold-material ellipsized::tests::real_shaping_stops_at_the_last_character_that_fits`)
+match the same unrelated set parts 4/5 already saw and judged environmental (build-lock contention
+from sibling worktrees, one font-dependent test). This is exactly the fallback `tasks/gate.md`
+documents and parts 4/5 already used: fmt/clippy clean is the evidence a gate-ok entry needs; CI (a
+clean, uncontended runner with no `MICOLD_DAEMON_CONFIG` set) validates the test step. Recorded the
+tree (`4ee29fbdad70b2e97fe790fc50c6c47782b213e8`, commit `f9c80279e`) as gate-ok, then
+`git -c credential.helper= -c "credential.https://github.com.helper=" GIT_ASKPASS=~/.local/bin/gh-askpass.sh push --force-with-lease -u origin HEAD`
+(env assignment had to precede `git`, not sit between its `-c` flags, for the askpass script to take
+effect) force-pushed the rebased branch (`5c981edc6` → `f9c80279e`). PR #1763 is now `MERGEABLE`
+(no longer `CONFLICTING`/`DIRTY`) with fresh CI running (`pr-state.sh 1763` → `CI-RUNNING`, dwell
+well under the 60 min limit at hand-off). Did not merge — the orchestrator waits on CI and merges
+per the unit rules. If the fresh CI's only red turns out to be a job also red on `main`
+(`build + test (windows-latest)`/`macos-latest`), that is out-of-flow and blocks `ci complete`: hold
+and escalate again rather than fixing it here, per this part's authorisation.
 
 **Done, this unit (part 5):**
 - Why this part was needed: part 4 left the branch rebased locally onto a newer `main` (local HEAD
@@ -210,45 +241,7 @@ still open) — boundary held.
 
 ## Open escalation
 
-**The original blocker is gone from `main`, but `main` is red on a *different* out-of-flow job and
-PR #1763 is now 185 commits behind and `CONFLICTING`. Authorise a part 6 to rebase, re-gate and
-force-push #1763 (past the handover cap), and on what merge condition?**
-
-Options:
-
-- **(Recommended)** Authorise part 6: rebase onto current `main`, re-gate, force-push, then merge as
-  soon as `ci complete` is green. The old blocker is resolved — `sandbox_real_scoped_token.rs` no
-  longer names the retired `GitCredentialGrant`/`GitCredentialRevoke` variants on `main` (#1530's M2
-  landed), and the rebase is required in any case because GitHub reports #1763 `DIRTY`/`CONFLICTING`.
-  If the windows job is still red after the rebase, hold and escalate again rather than fixing it here.
-- Authorise part 6 **and** authorise this flow to fix the out-of-flow windows breakage itself if it
-  survives the rebase (the `#[cfg]`-gated `install_claude` / `self_delete_request` helpers in
-  `crates/micold-daemon/tests/support/runs.rs` and `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`),
-  then re-gate and push.
-- Keep holding #1763 unmerged until `origin/main` goes green on its own, with no part 6.
-
-Evidence:
-
-- Old blocker cleared: `git grep -n GitCredentialGrant origin/main -- crates` now matches only doc
-  comments in `protocol/version.rs` and `tests/schema_hash.rs`; the sandbox test that failed to
-  compile no longer references the retired variants.
-- `main` is still red: the latest completed CI on `main` (`51ff7c012`, run `42952460037`) fails
-  `build + test (windows-latest)` → step *Test (daemon, Windows)*, `exit code 101`, with
-  `error[E0425]: cannot find function install_claude` at
-  `crates/micold-daemon/tests/support/runs.rs:91` and `cannot find function self_delete_request` at
-  `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs:1216`. Neither file is in this diff
-  (`git diff --name-only origin/main...HEAD` lists only `github.rs`, `micold-daemon/Cargo.toml`,
-  `gh_shim.rs`, `lib.rs`, `main.rs`, `state.rs`, `tests/gh_shim.rs`, `settings.md`, and two spec files).
-- #1763 cannot merge as it stands: `gh pr view 1763` → `mergeable: CONFLICTING`,
-  `mergeStateStatus: DIRTY`; `git rev-list --count HEAD..origin/main` = 185.
-- Its last CI run (`42417812044`) is stale: the two previously-red jobs were
-  `sandbox against a real runtime (linux)` (the now-fixed compile error) and `ci complete`.
-- Parts 1–5 are done (part 4 authorised as D7), so a further M1 part is part 6, past the handover
-  cap, and needs authorisation in its own right.
-
-(Was: hold #1763 until `main` is green, or authorise this flow to fix #1530's M2 breakage in
-`crates/micold-daemon/tests/sandbox_real_scoped_token.rs` — superseded: that breakage is no longer
-on `main`.)
+None.
 
 ## Follow-ups not done
 
