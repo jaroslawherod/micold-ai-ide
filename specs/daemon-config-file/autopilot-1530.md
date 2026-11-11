@@ -61,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Close work done and committed locally (HEAD 29c835c93 plus this note), rebased on origin/main, full `mise run gate` green, review CLEAN. NOT pushed, no PR: `git push` fails because the repo's `core.askpass` (`/home/jaro/.local/bin/gh-askpass.sh`, set in the main checkout's .git/config) does not exist; `gh` itself is logged in. Need: the script restored (or the push done by someone with credentials), then `git push --force-with-lease -u origin HEAD` and `gh pr create --base main --title "docs(1530): close the spec (#1530)"` with body ending `Refs #1530`; record the PR in the table row `(close)`.
 
 ## Open escalation
 
