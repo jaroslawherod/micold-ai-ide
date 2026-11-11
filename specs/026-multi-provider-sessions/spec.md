@@ -400,12 +400,17 @@ The missing CLI is either absent or clearly marked unavailable, and cannot be ch
   attempt to detect, on its own, whether a conversation is in use elsewhere. A conversation that no
   longer exists is not this case: see FR-008a.
 - **FR-008a**: A session whose recorded conversation no longer exists in its CLI's store (the CLI
-  or the user deleted it) MUST be removed by the daemon on its own: at daemon start, and at the
-  start-time check that refuses to resume it. The removal MUST be persisted, so the session stays
-  gone across daemon and application restarts and is not rediscovered (FR-015). The reason is
-  logged only: there is no warning row, no notice message and no manual "Remove" action. After a
-  restart no listed session is neither running nor startable.
-  **Bugfix**: 2026-11-10 — [BUG-1795](./bugs/BUG-1795.md), decided by user.
+  or the user deleted it) MUST be removed by the daemon on its own at the start-time check that
+  refuses to resume it, and on the crash-restart path (#1459) that would otherwise record the same
+  refusal. The removal MUST be persisted, so the session stays gone across daemon and application
+  restarts and is not rediscovered (FR-015). The reason is logged only: there is no warning row, no
+  notice message and no manual "Remove" action. The daemon does NOT remove a `Named` or `Derived`
+  session at startup merely because its conversation is gone (029 FR-008, 032 invariant 4 stand);
+  such a row is removed when a start resumes it and its CLI then exits for the missing conversation
+  (the crash-restart path above). After a restart every listed session is running, startable, or
+  removed by its next start attempt.
+  **Bugfix**: 2026-11-10 — [BUG-1795](./bugs/BUG-1795.md), decided by user; startup removal of named
+  sessions dropped by orchestrator default D3 (user unanswered).
 - **FR-009**: Sessions backed by different CLIs MUST run concurrently and remain fully isolated from
   one another — no shared conversation, configuration, working directory, or terminal state.
 - **FR-010**: When a session's CLI cannot be found at launch, the application MUST report which CLI

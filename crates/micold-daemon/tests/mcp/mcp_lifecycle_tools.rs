@@ -281,10 +281,11 @@ async fn start_session_on_a_starting_or_restarting_session_succeeds_unchanged() 
     }
 }
 
-/// A start that fails ends `Starting`: the call fails with the reason (FR-013), and every window
-/// shows the failure.
+/// A start that fails ends `Starting`. Here it fails because the session's conversation is gone
+/// (the fixture has no transcript for it), so the daemon removes the session (026 FR-008a,
+/// BUG-1795): the call reports it unknown and every window sees the row go.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_start_that_fails_is_reported_failed_not_left_starting() {
+async fn a_start_whose_conversation_is_gone_removes_the_session() {
     let f = Fixture::new().await;
     let mut window = fake_window(&f.state);
     let error = f
@@ -294,24 +295,14 @@ async fn a_start_that_fails_is_reported_failed_not_left_starting() {
             json!({"session": sid(UNRESUMABLE).0.to_string(), "allow_additional_session": true}),
         )
         .await;
-    assert_eq!(error["category"], "service_error", "{error}");
-    let message = error["message"].as_str().unwrap();
-    assert!(message.contains("did not start"), "{message}");
-    assert!(
-        !message.ends_with("its process could not be started"),
-        "the recorded reason is given: {message}"
-    );
+    assert_eq!(error["category"], "not_found", "{error}");
     assert!(
         window_sees(&mut window, WINDOW_BOUND, |c| {
-            matches!(
-                lifecycle_in(c, sid(UNRESUMABLE)),
-                Some(WireLifecycle::Failed { .. })
-            )
+            lifecycle_in(c, sid(UNRESUMABLE)).is_none()
         })
         .await,
-        "every window sees the failure"
+        "every window sees the session removed"
     );
-    assert_eq!(f.lifecycle_of(UNRESUMABLE).await, "failed");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

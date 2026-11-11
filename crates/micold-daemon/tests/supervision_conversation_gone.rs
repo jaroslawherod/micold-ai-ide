@@ -14,7 +14,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -89,21 +88,13 @@ fn a_crash_of_a_session_whose_conversation_is_gone_is_reported_not_retried() {
 
     state.supervise_exited_sessions();
 
-    // The wire view, which is where a start failure's reason is laid over the record.
-    let lifecycle = state
+    // FR-008a (BUG-1795): the session is removed, not left `Failed`, and nothing counted a crash.
+    let listed = state
         .catalog_snapshot()
         .projects
         .into_iter()
         .flat_map(|p| p.sessions)
-        .find(|s| s.id == id)
-        .map(|s| s.lifecycle);
-    let Some(WireLifecycle::Failed { reason, attempts }) = lifecycle else {
-        panic!("expected Failed at once, got {lifecycle:?}");
-    };
-    assert!(
-        reason.contains("no longer has this conversation"),
-        "got {reason:?}"
-    );
-    assert_eq!(attempts, 0, "a missing transcript is not a crash loop");
+        .any(|s| s.id == id);
+    assert!(!listed, "the session is removed from the catalog");
     assert!(state.live_session(id).is_none(), "nothing is respawned");
 }

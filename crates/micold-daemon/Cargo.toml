@@ -167,6 +167,10 @@ name = "unwrapped_client"
 path = "tests/unwrapped_client.rs"
 
 [[test]]
+name = "dead_session_removed"
+path = "tests/dead_session_removed.rs"
+
+[[test]]
 name = "daemon_stop"
 path = "tests/daemon_stop.rs"
 
