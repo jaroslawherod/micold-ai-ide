@@ -360,6 +360,9 @@ check "facts: caps the callers shown and flags truncation" 0 'truncated' bash -c
   cd '$d/wt'; for i in 1 2 3 4 5 6 7 8 9 10; do echo \"fn t\$i() { bump(); }\" >> src/c.rs; done
   '$F' --out-dir '$d/out2' | xargs cat"
 git checkout -q src/c.rs
+check "facts: callers output stays within the line budget however many symbols change" 0 '^ok$' bash -c "
+  cd '$d/wt'; cp src/a.rs '$d/a.bak'; cp src/c.rs '$d/c.bak'; for i in \$(seq 1 60); do echo \"pub fn many\$i() {}\" >> src/a.rs; done; echo \"fn callers() {\" >> src/c.rs; for i in \$(seq 1 60); do for j in \$(seq 1 9); do echo \"    many\$i();\" >> src/c.rs; done; done; echo \"}\" >> src/c.rs
+  n=\$(wc -l < \$('$F' --out-dir '$d/o9')); cp '$d/a.bak' src/a.rs; cp '$d/c.bak' src/c.rs; [ \$n -le 400 ] && echo ok"
 check "facts: coverage is unknown without data, never covered" 0 'src/a\.rs: unknown \(no coverage data\)' cat "$facts"
 check "facts: without data the word covered does not appear" 0 '^ok$' bash -c "! grep -i 'covered' '$facts' | grep -qv 'uncovered\|coverage' && echo ok"
 cat > "$d/rel.lcov" <<'L'
@@ -923,7 +926,7 @@ RR="$ROOT/.claude/skills/speckit-autopilot/tasks/review-rounds.md"
 check "staged: review.md limits the plan to 6 probes" 0 '^ok$' bash -c "grep -qi 'at most 6 probes' '$RV' && echo ok"
 check "staged: review.md limits a probe's evidence to 40 lines" 0 '^ok$' bash -c "grep -qi 'at most 40 lines' '$RV' && echo ok"
 check "staged: review.md runs one worker per probe in one message on haiku" 0 '^ok$' bash -c "grep -qi 'one .autopilot-worker. per probe' '$RV' && grep -q 'haiku' '$RV' && echo ok"
-check "staged: an unanswered probe is never CLEAN" 0 '^ok$' bash -c "grep -qi 'UNANSWERED' '$RV' && grep -qi 'never .CLEAN.' '$RV' && echo ok"
+check "staged: an unanswered probe is never CLEAN" 0 '^ok$' bash -c "grep -qF 'UNANSWERED: <reason>' '$RV' && grep -qi 'never .CLEAN.' '$RV' && echo ok"
 check "staged: facts script failure falls back to the single-agent review" 0 '^ok$' bash -c "grep -qi 'facts script fails' '$RV' && grep -qi 'single-agent review' '$RV' && echo ok"
 check "staged: a verdict that needs more reading falls back" 0 '^ok$' bash -c "grep -qi 'needs more reading' '$RV' && echo ok"
 check "staged: the unit re-checks the snapshot after stage 4" 0 '^ok$' bash -c "grep -qi 'after stage 4' '$RV' && grep -qi 'stale' '$RV' && echo ok"
