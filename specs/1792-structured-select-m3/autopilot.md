@@ -18,12 +18,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
+| #1842 | M1 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Material 3 trigger on the three structured selects | — | pending |
+| M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | open |
 | M2 | T011–T012 | light | menu parity pinned (test-only if green) | — | pending |
 | M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | pending |
 
