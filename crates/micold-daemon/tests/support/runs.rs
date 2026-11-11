@@ -88,6 +88,7 @@ impl Sandbox {
         let home = tempfile::tempdir().unwrap();
         let repo = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
         install_claude(bin.path());
         git(repo.path(), &["init", "-q", "-b", "main"]);
         git(repo.path(), &["config", "user.email", "t@t.test"]);
