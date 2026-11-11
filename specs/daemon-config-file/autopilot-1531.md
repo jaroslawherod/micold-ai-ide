@@ -374,9 +374,15 @@ no code/test/behaviour change — `3377a182d`); fixed F2 myself by running the t
 lock freed (passed, see above), so no new round needed. Recorded (`record-verdict.sh`, head
 `3377a182dcc80bd0e839efdb62726a038ce5e051`, scope `1832`).
 
-No gate needed: this fix changes only `specs/` prose and one doc comment, no code behaviour, test
-assertions or config (`tasks/gate.md`'s specs-only/docs path; the one Rust file touched is a
-comment-only diff).
+The `state.rs` doc-comment line counts as code to the merge-gate hook (it checks file extension,
+not content), so ran `scripts/autopilot/scoped-gate.sh` (fmt + clippy + `cargo test` for
+`micold-daemon`). fmt and clippy clean, 272/273 `micold-daemon --lib` tests passed; the one failure
+(`session_extras::tests::a_signed_commit_succeeds_with_the_key_and_an_unsigned_one_without`,
+`left: Some(true) right: Some(false)`) is in a file no commit of this flow has ever touched
+(`git diff --stat 9019aef2a..HEAD -- crates/micold-daemon/src/session_extras/` is empty) and failed
+identically run alone (`--exact`, 0 passed/1 failed) — an environmental dependency on this
+sandbox's GPG/signing setup, not a regression from this fix. Recorded the pushed tree
+(`40ab2f8149220a77cf204c5c2091bdb9f2dfacab`) as gate-ok per `tasks/gate.md`'s scoped-gate fallback.
 
 Pushed both commits onto PR #1832's branch (the merge-gate hook required the #1744 git-credential
 workaround: `git -c credential.helper= -c "credential.https://github.com.helper=" push
