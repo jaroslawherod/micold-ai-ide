@@ -222,19 +222,23 @@ fn the_sandbox_extras_render_and_parse_back() {
 fn an_ai_cli_setting_round_trips_through_the_rendered_file() {
     use micold_core::daemon_config::CliId;
 
-    let mut s = settings(Kind::Host);
+    // Container, not Host: `settings_file` is refused on host/ssh daemons (V10), and `version` on
+    // a host daemon is only a warning, not an error — a container lets every offered field be set
+    // at once without tripping a validation rule the round trip isn't testing.
+    let mut s = settings(Kind::Container);
     s.ai_cli = vec![AiCliSetting {
         id: CliId::ClaudeCode,
         enabled: Some(false),
         version: Some("1.2.3".into()),
-        args: vec!["--verbose".into(), "--foo".into()],
+        args: vec!["--add-dir".into(), "/extra".into()],
         model: Some("claude-sonnet".into()),
         api_base_url: Some("https://api.example.com".into()),
+        // Only one of `sign_in_file`/`token_file`/`api_key_file` is allowed at once (V9).
         sign_in_file: Some("/run/micold/secrets/claude-sign-in".into()),
-        api_key_file: Some("/run/micold/secrets/claude-api-key".into()),
+        api_key_file: None,
         settings_file: Some("/home/me/.claude/settings.json".into()),
     }];
-    let text = render(&s, Kind::Host);
+    let text = render(&s, Kind::Container);
     assert!(text.contains("[[ai.cli]]"), "{text}");
     assert!(text.contains(r#"id = "claude_code""#), "{text}");
 
@@ -246,7 +250,7 @@ fn an_ai_cli_setting_round_trips_through_the_rendered_file() {
     assert_eq!(parsed.version.as_deref(), Some("1.2.3"));
     assert_eq!(
         parsed.args,
-        vec!["--verbose".to_string(), "--foo".to_string()]
+        vec!["--add-dir".to_string(), "/extra".to_string()]
     );
     assert_eq!(parsed.model.as_deref(), Some("claude-sonnet"));
     assert_eq!(
@@ -257,10 +261,7 @@ fn an_ai_cli_setting_round_trips_through_the_rendered_file() {
         parsed.sign_in_file.as_ref().map(|s| s.path()),
         Some(Path::new("/run/micold/secrets/claude-sign-in"))
     );
-    assert_eq!(
-        parsed.api_key_file.as_ref().map(|s| s.path()),
-        Some(Path::new("/run/micold/secrets/claude-api-key"))
-    );
+    assert_eq!(parsed.api_key_file, None);
     assert_eq!(
         parsed.settings_file.as_deref(),
         Some(Path::new("/home/me/.claude/settings.json"))

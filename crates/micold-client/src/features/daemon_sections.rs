@@ -237,7 +237,10 @@ fn ai_cli_summary(draft: &Draft) -> String {
         .filter(|d| **d != AiCliDraft::default())
         .count();
     if configured == 0 {
-        String::new()
+        // Never empty, like every other closed header's summary (`Nothing shared`, `No start
+        // script`): an absent line would give this header a different height than the others
+        // (#1532, FR-013d).
+        "Using the pinned defaults".into()
     } else {
         format!(
             "{configured} CLI{} configured",

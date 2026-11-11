@@ -661,7 +661,7 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     };
     assert_eq!(
         open(&state),
-        vec![true, false, false, false, false, false, false]
+        vec![true, false, false, false, false, false, false, false]
     );
 
     let draft = state.draft.clone();
@@ -672,15 +672,15 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     toggle(&mut state, &mut w, Section::Network);
     assert_eq!(
         open(&state),
-        vec![false, false, false, true, false, false, false]
+        vec![false, false, false, true, false, false, false, false]
     );
     toggle(&mut state, &mut w, Section::Connection);
     assert_eq!(
         open(&state),
-        vec![true, false, false, false, false, false, false]
+        vec![true, false, false, false, false, false, false, false]
     );
     toggle(&mut state, &mut w, Section::Connection);
-    assert_eq!(open(&state), vec![false; 7]);
+    assert_eq!(open(&state), vec![false; 8]);
     assert_eq!(state.draft, draft, "toggling must not edit the draft");
     assert_eq!(w.registry, saved, "toggling must not touch saved settings");
 
@@ -689,7 +689,7 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     assert_eq!(state.form_error.as_ref().map(|e| e.field), Some("cpus"));
     assert_eq!(
         open(&state),
-        vec![false, false, false, false, true, false, false],
+        vec![false, false, false, false, true, false, false, false],
         "the section holding the error is open"
     );
 
@@ -698,7 +698,7 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     send(&mut state, &mut w, daemons::Msg::AddOpened);
     assert_eq!(
         open(&state),
-        vec![true, false, false, false, false, false, false],
+        vec![true, false, false, false, false, false, false, false],
         "a reopened form is back to Connection only"
     );
 }

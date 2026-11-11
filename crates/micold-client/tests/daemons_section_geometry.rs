@@ -229,9 +229,9 @@ fn the_add_form_shows_a_refusal_beside_its_field() {
     assert_no_text_overflows(&state, "add form with a refusal");
 }
 
-/// Feature 890, US1 AS1-AS2 / FR-002: the container form paints its six titles, Connection open
-/// and the other five closed (their bodies absent), each header with the chevron for its state;
-/// opening one by its header paints its body.
+/// Feature 890, US1 AS1-AS2 / FR-002: the container form paints its seven titles (#1532 added
+/// `AI CLI configuration`), Connection open and the other six closed (their bodies absent), each
+/// header with the chevron for its state; opening one by its header paints its body.
 #[test]
 fn the_container_form_paints_six_titles_with_only_connection_open() {
     use micold_client::features::daemons::Section;
@@ -246,6 +246,7 @@ fn the_container_form_paints_six_titles_with_only_connection_open() {
         "Network",
         "Resources",
         "Sessions",
+        "AI CLI configuration",
     ] {
         assert!(
             shown.iter().any(|c| c == title),
@@ -274,7 +275,7 @@ fn the_container_form_paints_six_titles_with_only_connection_open() {
             .count()
     };
     assert_eq!(count(Icon::MoveUp, &shown), 1, "one open header");
-    assert_eq!(count(Icon::MoveDown, &shown), 6, "six closed headers");
+    assert_eq!(count(Icon::MoveDown, &shown), 7, "seven closed headers");
 
     state.update(Message::Daemons(DaemonsMsg::SectionToggled(
         Section::Network,
@@ -843,9 +844,20 @@ fn explanations_sit_where_the_contract_puts_them() {
     // no-outbound caution.
     assert!(y("Names still resolve").unwrap() > y("Network*").or(y("Network")).unwrap());
     assert!(y("Names still resolve").unwrap() < y("The AI agent reaches its provider").unwrap());
-    // The AI CLI note is the group's, under its label and above its first checkbox.
+    // The AI CLI note is the group's, under its label and above its first checkbox. "Claude Code"
+    // is ambiguous since #1532 added its own `[[ai.cli]]` group of that name: take the first one
+    // after the note, the "AI tools in this daemon" group's own checkbox, not the later section's.
     assert!(y("AI tools in this daemon").unwrap() < y("Changes apply at the next start").unwrap());
-    assert!(y("Changes apply at the next start").unwrap() < y("Claude Code").unwrap());
+    let note_at = shown
+        .iter()
+        .position(|(c, ..)| c.contains("Changes apply at the next start"))
+        .unwrap();
+    let first_claude_code_after_note = shown[note_at..]
+        .iter()
+        .find(|(c, ..)| c == "Claude Code")
+        .map(|(_, _, y)| *y)
+        .expect("Claude Code checkbox after the note");
+    assert!(shown[note_at].2 < first_claude_code_after_note);
 }
 
 /// FR-009, US2 AS4: found contexts are chosen from a select above *Context*, not a column of

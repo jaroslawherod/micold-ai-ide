@@ -466,7 +466,10 @@ mod summaries {
     #[test]
     fn ai_cli_summary_counts_overridden_clis() {
         let mut d = fresh(DraftRuntime::Container);
-        assert_eq!(said(&d, Section::AiCli).as_deref(), Some(""));
+        assert_eq!(
+            said(&d, Section::AiCli).as_deref(),
+            Some("Using the pinned defaults")
+        );
         d.ai_cli[0].enabled = false;
         assert_eq!(
             said(&d, Section::AiCli).as_deref(),

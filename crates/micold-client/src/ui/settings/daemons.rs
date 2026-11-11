@@ -498,15 +498,6 @@ pub(crate) fn form<'a>(
         }
     }
     let open = |section| state.section_open(section);
-    if draft.editing.is_some() {
-        fields = fields.push(container_fields::accordion(
-            Section::AiCli,
-            section_body(None, ai_cli_controls(draft, roles), roles),
-            open(Section::AiCli),
-            draft,
-            roles,
-        ));
-    }
     let sections: Vec<Element<'a, Message>> = match draft.runtime {
         DraftRuntime::Container => {
             let connection = vec![
@@ -646,6 +637,16 @@ pub(crate) fn form<'a>(
     for control in sections {
         fields = fields.push(control);
     }
+    // Its own accordion, closed by default, so this paints only its header on an add form or an
+    // existing daemon alike (#1532, FR-013d; `Section::of` lists it last, before Start script,
+    // for every kind).
+    fields = fields.push(container_fields::accordion(
+        Section::AiCli,
+        section_body(None, ai_cli_controls(draft, focused, roles), roles),
+        open(Section::AiCli),
+        draft,
+        roles,
+    ));
     let kind = crate::features::daemons_start::kind_of(draft.runtime);
     if facts
         .start_script
@@ -671,7 +672,11 @@ pub(crate) fn form<'a>(
 /// sign-in file, API key file and settings file. `model` and `api_base_url` are Claude Code's and
 /// Codex's own fields (FR-013d); left visible but unused for the others costs nothing a mutant
 /// would catch, so they stay off rather than branch per CLI here.
-fn ai_cli_controls<'a>(draft: &'a Draft, roles: Roles) -> Vec<Element<'a, Message>> {
+fn ai_cli_controls<'a>(
+    draft: &'a Draft,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Vec<Element<'a, Message>> {
     let mut controls = Vec::with_capacity(micold_core::daemon_config::CliId::ALL.len() * 2);
     for id in micold_core::daemon_config::CliId::ALL {
         let index = id as usize;
@@ -679,6 +684,7 @@ fn ai_cli_controls<'a>(draft: &'a Draft, roles: Roles) -> Vec<Element<'a, Messag
         controls.push(group(id.ai_cli().provider().display_name(), roles));
         controls.push(
             Checkbox::new("Enabled", entry.enabled, roles)
+                .track_focus(FieldId::DaemonAiCliEnabled(id), focused)
                 .on_toggle(move |v| Message::Daemons(DaemonsMsg::AiCliEnabledToggled(id, v)))
                 .into(),
         );
@@ -722,6 +728,7 @@ fn ai_cli_controls<'a>(draft: &'a Draft, roles: Roles) -> Vec<Element<'a, Messag
             controls.push(
                 TextField::new("Not set", value, roles)
                     .label(label)
+                    .track_focus(FieldId::DaemonAiCliField(id, field), focused)
                     .on_input(move |v| Message::Daemons(DaemonsMsg::AiCliFieldEdited(id, field, v)))
                     .into(),
             );
