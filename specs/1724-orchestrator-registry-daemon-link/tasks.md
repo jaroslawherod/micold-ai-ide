@@ -50,13 +50,13 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 
 - [ ] T010 [P] [US1] Create the test harness `crates/micold-daemon/tests/orchestrator/main.rs` plus `support.rs`: temp state dir, `run_with` start on a real local socket in that dir, controllable test clock, fake daemon that sends the announcement, reads the verdict, sends `Hello`, reads `Welcome`, and a listing client. Then in `link_and_list.rs` the US1 scenarios 1 and 3 (SC-001): every field listed `online`; no tenant announced lists `default`
 - [ ] T011 [P] [US1] `crates/micold-daemon/tests/orchestrator/not_hosted.rs`: session start and session list from a link get the refusal `not hosted by the orchestrator` and an empty list; no child process or PTY is spawned (US1 scenario 2, FR-001)
-- [ ] T012 [P] [US1] Test in `crates/micold-daemon/tests/orchestrator/dispatch.rs`: argument parsing selects orchestrator mode only when `args[0] == "orchestrator"`; no argument and any other argument keep the existing path (FR-010)
+- [ ] T012 [P] [US1] Test in `crates/micold-daemon/tests/orchestrator/dispatch.rs` of the pure `parse_mode(args)` (in `crates/micold-daemon/src/orchestrator/mod.rs`): `Mode::Orchestrator` only when `args[0] == "orchestrator"`; no argument and any other argument give `Mode::Daemon` (FR-010)
 
 **Implementation (green):**
 
 - [ ] T013 [US1] `crates/micold-daemon/src/orchestrator/link.rs`: per-link task: read the preamble (cap 64 KiB, `LIVENESS_DEADLINE` timeout), `Registry::claim`, write the `LinkVerdict`, switch to `WireCodec<ClientMsg, DaemonMsg>`, read `Hello`, `protocol::handshake::evaluate`, `confirm`, send `Welcome` with an empty catalog (contracts/link.md steps 1 to 3). Invalid id or malformed JSON closes the link. Needs T009
-- [ ] T014 [US1] `crates/micold-daemon/src/orchestrator/query.rs` and `mod.rs`: `run` / `run_with(socket path, clock)` binds the local socket via `interprocess` and the platform path helpers, builds no `DaemonState`, accepts links into a shared `Mutex<Registry>` (lock never held across `.await`), serves the listing and answers session start/list with the not-hosted refusal. Choose the smallest listing frame and record it in `contracts/link.md`. Needs T013
-- [ ] T015 [US1] `crates/micold-daemon/src/main.rs`: one-line dispatch `args[0] == "orchestrator"` calling `orchestrator::run`; no decision logic here. Needs T014
+- [ ] T014 [US1] `crates/micold-daemon/src/orchestrator/query.rs` and `mod.rs`: `run` / `run_with(socket path, clock)` binds the local socket via `interprocess` and the platform path helpers, builds no `DaemonState`, accepts links into a shared `Mutex<Registry>` (lock never held across `.await`), serves the listing and answers session start/list with the not-hosted refusal. The listing is the stable-JSON `LinkQuery::List` frame of contracts/link.md (no new wire variant, so no protocol change before M2). Add a pure `parse_mode(args) -> Mode` in `mod.rs`. Needs T013
+- [ ] T015 [US1] `crates/micold-daemon/src/main.rs`: one-line `match parse_mode(..)` calling `orchestrator::run`; no decision logic here. Needs T014
 - [ ] T016 [US1] Docs: create the "Orchestrator mode" section in `docs/daemon.md`, a page `docs/user-guide/orchestrator-mode.md` linked from `docs/SUMMARY.md` (what it is, how to start, that it hosts no session, the listing fields)
 
 **Checkpoint**: M1 deliverable works; `T010` to `T012` green.
@@ -185,7 +185,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Deliverable**: a daemon on another protocol version is refused naming both versions and listed `needs-update`; a live record is never overwritten; a current-version relink turns it `online`.
 - **Satisfies**: US3 acceptance scenarios 1–5; FR-006; SC-003
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator version_mismatch`; quickstart Part B step 4
-- **Depends on**: M1
+- **Depends on**: M2
 - **Tier**: full
 
 ### M4 — One live link per daemon id

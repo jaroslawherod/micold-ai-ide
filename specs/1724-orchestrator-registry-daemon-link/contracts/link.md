@@ -38,8 +38,10 @@ A session start or list sent to the orchestrator (any link or client) gets a ref
 
 ## Listing
 
-`Registry::list()` returns `Vec<DaemonRecord>` sorted by id; the daemon exposes it through the
-orchestrator's query frame (`query.rs`) to a test client. The user-facing surfaces are #1725 onward.
+`Registry::list()` returns `Vec<DaemonRecord>` sorted by id; the orchestrator serves it on the same socket: a connection whose first frame is the stable JSON
+`LinkQuery::List` (`{ "query": "list" }`, outside the schema hash, no new wire variant) is answered with one JSON frame
+`{ "daemons": [DaemonRecord...], "orchestrator_version": <PROTOCOL_VERSION> }` and closed (`query.rs`); a first frame that is
+neither a valid announcement nor a query closes the link. The user-facing surfaces are #1725 onward.
 
 ## Registry file
 
