@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1818 | Design | merged | 4b2a22c130a6087fb3b38e3edf22505025cb9f00 |
 | #1821 | Milestone M1 | merged | 653cd72150666522b51b58028f01b3e72cbfe726 |
 | #1825 | Milestone M2 | merged | c6817744c2a75a82237d389f344a9419f94dedeb |
-| #CLOSE | Close | open | - |
+| #1831 | Close | open | - |
 
 ## Milestones
 
