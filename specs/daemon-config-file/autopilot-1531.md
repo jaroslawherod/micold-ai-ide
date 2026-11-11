@@ -210,46 +210,45 @@ still open) — boundary held.
 
 ## Open escalation
 
-**PR #1763's CI is red, and both failures are outside this flow's code. How should M1 proceed —
-escalated as category 5, *blocked by work outside my flow*?**
+**The original blocker is gone from `main`, but `main` is red on a *different* out-of-flow job and
+PR #1763 is now 185 commits behind and `CONFLICTING`. Authorise a part 6 to rebase, re-gate and
+force-push #1763 (past the handover cap), and on what merge condition?**
 
 Options:
 
-- **(Recommended)** Hold #1763 unmerged until `origin/main` is green again: the `sandbox against a
-  real runtime (linux)` job cannot pass on any branch while `main` carries the broken test, so no
-  amount of work on this flow can turn `ci complete` green.
-- Authorise this flow to fix the out-of-flow breakage itself (one-line edit/removal in
-  `crates/micold-daemon/tests/sandbox_real_scoped_token.rs`, which belongs to #1530's M2), then
-  re-gate and push.
+- **(Recommended)** Authorise part 6: rebase onto current `main`, re-gate, force-push, then merge as
+  soon as `ci complete` is green. The old blocker is resolved — `sandbox_real_scoped_token.rs` no
+  longer names the retired `GitCredentialGrant`/`GitCredentialRevoke` variants on `main` (#1530's M2
+  landed), and the rebase is required in any case because GitHub reports #1763 `DIRTY`/`CONFLICTING`.
+  If the windows job is still red after the rebase, hold and escalate again rather than fixing it here.
+- Authorise part 6 **and** authorise this flow to fix the out-of-flow windows breakage itself if it
+  survives the rebase (the `#[cfg]`-gated `install_claude` / `self_delete_request` helpers in
+  `crates/micold-daemon/tests/support/runs.rs` and `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs`),
+  then re-gate and push.
+- Keep holding #1763 unmerged until `origin/main` goes green on its own, with no part 6.
 
 Evidence:
 
-- `wait-merge.sh 1763` returned `RED 1763 42365707879`. Failed checks: `sandbox against a real
-  runtime (linux)` and `build + test (ubuntu-latest)`; every other job passed.
-- `sandbox against a real runtime (linux)`: compile error, not a test failure — `error[E0599]: no
-  variant named GitCredentialGrant found for enum ClientMsg` at
-  `crates/micold-daemon/tests/sandbox_real_scoped_token.rs:75`, and the same for
-  `GitCredentialRevoke` at `:85`. Those variants were retired by #1530's M2. The file is **not** in
-  this diff (`git diff --name-only origin/main...HEAD` lists no sandbox file) and `origin/main`
-  still contains it (`git grep -n GitCredentialGrant origin/main -- crates` →
-  `origin/main:crates/micold-daemon/tests/sandbox_real_scoped_token.rs:75`). `main`'s own CI run
-  `42359504296` fails the same job. `mise run gate` never builds it: it is behind
-  `--features sandbox-real-runtime`, which is why the local gate was green.
-- `build + test (ubuntu-latest)`: one test,
-  `micold-daemon::attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice`,
-  panicked at `crates/micold-daemon/tests/attention_error_notice.rs:452` with `assertion left ==
-  right failed; left: []; right: [SessionErrorNotice { … }]` (12646 of 12647 tests passed). A
-  multi-thread notice-ordering test, last touched on `main` in `865f03af3`/`d71b8fa25`, untouched
-  by this diff; this diff's `state.rs` change only adds `with_gh_shim_path` plus two test helpers,
-  nothing in the attention/notice path. Reads as a flake.
-- The `tasks/ci.md` rerun-once step was started (`gh run rerun 42365707879 --failed`) and then
-  abandoned on the user's instruction ("skip the rerun, escalate now"); no rerun verdict was
-  collected.
-- A further M1 part would be part 6, past the handover cap (parts 1–5 done; part 4 was authorised
-  as D7), so it needs authorisation in its own right.
+- Old blocker cleared: `git grep -n GitCredentialGrant origin/main -- crates` now matches only doc
+  comments in `protocol/version.rs` and `tests/schema_hash.rs`; the sandbox test that failed to
+  compile no longer references the retired variants.
+- `main` is still red: the latest completed CI on `main` (`51ff7c012`, run `42952460037`) fails
+  `build + test (windows-latest)` → step *Test (daemon, Windows)*, `exit code 101`, with
+  `error[E0425]: cannot find function install_claude` at
+  `crates/micold-daemon/tests/support/runs.rs:91` and `cannot find function self_delete_request` at
+  `crates/micold-daemon/tests/mcp/mcp_lifecycle_tools.rs:1216`. Neither file is in this diff
+  (`git diff --name-only origin/main...HEAD` lists only `github.rs`, `micold-daemon/Cargo.toml`,
+  `gh_shim.rs`, `lib.rs`, `main.rs`, `state.rs`, `tests/gh_shim.rs`, `settings.md`, and two spec files).
+- #1763 cannot merge as it stands: `gh pr view 1763` → `mergeable: CONFLICTING`,
+  `mergeStateStatus: DIRTY`; `git rev-list --count HEAD..origin/main` = 185.
+- Its last CI run (`42417812044`) is stale: the two previously-red jobs were
+  `sandbox against a real runtime (linux)` (the now-fixed compile error) and `ci complete`.
+- Parts 1–5 are done (part 4 authorised as D7), so a further M1 part is part 6, past the handover
+  cap, and needs authorisation in its own right.
 
-(Was: authorise a part 4 to finish M1 — resolved as D7 in *Decisions*: the user authorised part 4
-to finish M1 and get it to a PR.)
+(Was: hold #1763 until `main` is green, or authorise this flow to fix #1530's M2 breakage in
+`crates/micold-daemon/tests/sandbox_real_scoped_token.rs` — superseded: that breakage is no longer
+on `main`.)
 
 ## Follow-ups not done
 
