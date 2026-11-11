@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1723
 - **Worktree branch**: feat/1723_contract-daemon-qualified-refs-and-routed-envelope
 - **Started**: 2026-11-05
-- **Phase**: close
-- **Next step**: gate, review, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1767 | M2 | merged | b7c07fdaff23114f1f42d3f6eace69a63918dc8e |
 | #1789 | M3 | merged | 65af9ee8b8261613467556ca09cdab5a566d0991 |
 | #1790 | M4 | merged | a0b47cc32919f4e8497c3b570f3a175257b5df1d |
+| (close) | close | open | |
 
 ## Milestones
 
@@ -55,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 B (conformance, sonnet) | 1 | same | CLEAN; 1 MINOR fixed (Verify names `--test main protocol_roundtrip`); full gate green |
 | M4 A (autopilot-reviewer, high) | 1 | f12ba8cd128f7e4991b3220575fecbf2e837f027:65af9ee8b8261613467556ca09cdab5a566d0991 | CLEAN; 2 MINOR fixed (errors paragraph check, NestedEnvelope target) |
 | M4 B (conformance, sonnet) | 1 | same | CLEAN; Verify green; 3 MINOR prose fixed |
+| Close (autopilot-reviewer, sonnet) | 1 | 3b418c94523c185c28f51f67587ff55a24b36e5b:f5c42e6cf5bdbd138b51ec9bfa32857ed075d3c2 | CLEAN; 3 MINOR (quickstart gate claim, #2 wording fixed prose only; counts are from the runs recorded in this unit) |
 
 ## Declined review findings
 
