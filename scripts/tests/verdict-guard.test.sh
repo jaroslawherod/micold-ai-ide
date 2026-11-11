@@ -11,14 +11,9 @@
 
 set -uo pipefail
 
-ROOT="$(git rev-parse --show-toplevel)"
-S="$ROOT/scripts/autopilot"
-failures=0
-cases=0
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-
-mkdir -p "$tmp/bin"
+. "$(git rev-parse --show-toplevel)/scripts/tests/lib/autopilot-fixtures.sh"  # ROOT, S, tmp, check, PATH
+# This suite needs more of `gh` (comments, a merge log) and a ledger-bearing repo: its own `gh` stub,
+# `new_repo` and `pr_json` below replace the shared ones.
 cat > "$tmp/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 F="$GH_FIXTURES"
@@ -41,20 +36,8 @@ case "$1 $2" in
 esac
 STUB
 chmod +x "$tmp/bin/gh"
-export PATH="$tmp/bin:$PATH"
-unset CLAUDE_PROJECT_DIR AUTOPILOT_MAX_WAIT
+unset AUTOPILOT_MAX_WAIT
 export AUTOPILOT_POLL=0 AUTOPILOT_LOG_DIR="$tmp"
-
-check() { # check <name> <want-exit> <want-output-regex> <cmd...>   (runs in $PWD)
-  local name="$1" want="$2" re="$3"; shift 3
-  cases=$((cases + 1))
-  local out code
-  out="$("$@" 2>&1)"; code=$?
-  if [ "$code" != "$want" ] || ! grep -qE -- "$re" <<<"$out"; then
-    failures=$((failures + 1))
-    echo "FAIL $name: exit $code (want $want), output:"; sed 's/^/    /' <<<"$out"
-  fi
-}
 
 # Fresh origin + clone on branch `wt` holding a code commit and a ledger; echoes the clone path.
 # The ledger has the new Scope/Head columns, a Pull requests table and a Milestones table.
@@ -166,6 +149,9 @@ check "guard leaves a PR whose branch no ledger names unguarded" 0 '^UNGUARDED 8
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"
 check "guard refuses when gh fails" 7 'reviewed none current unknown re-review: PR head unreadable' guard 99
 
+setup_pr; pr_json_at "not-a-sha"
+check "guard refuses a head that is not a SHA" 7 '^VERDICT-REFUSED 8 reviewed none current unknown re-review: PR head unreadable$' guard 8
+
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"; record >/dev/null; commit_all ledger; pr_json_at "$(head_of)"
 git switch -q main; git remote set-url origin "$d/missing.git"
 check "guard refuses when the ledger cannot be fetched" 7 're-review: ledger unreadable' guard 8
@@ -204,7 +190,27 @@ setup_pr; move_base; move_base; P1="$(head_of)"; pr_json_at "$P1"
 check "carry: chained replay carries from the original H" 0 "^CARRIED 8 $H $P1$" guard 8
 
 setup_pr; git commit -q --amend -m "reworded"; git push -q -f origin wt; pr_json_at "$(head_of)"
-check "carry: amended message only is allowed" 0 '^(ALLOWED|CARRIED) 8 ' guard 8
+check "carry: amended message only is allowed (same tree, no carry)" 0 "^ALLOWED 8 $(head_of)$" guard 8
+check "carry: an amended message posts no comment" 0 '^0$' comments
+
+# A rename is one change of two paths; the replay must keep it (F3).
+setup_pr; seq 1 40 > old.txt; commit_all "add old"; git mv old.txt new.txt; commit_all "rename"; H="$(head_of)"
+record "Review B M1" 2 8 "$H" CLEAN >/dev/null; commit_all ledger2; move_base; pr_json_at "$(head_of)"
+check "carry: a pure rename replayed onto a moved base is carried" 0 '^CARRIED 8 ' guard 8
+
+# vl_identity itself: a rename is one status line (old and new path, no score) and the patch-ids are
+# git's stable ones (F3). Each case
+# prints the identity of the work on `wt` over `main`.
+identity() { ( . "$S/verdict-lib.sh"; vl_identity "$1" "$2" ); }
+export -f identity; export S
+d="$(new_repo)"; cd "$d/wt"; git config diff.renames false  # so only an explicit -M detects the rename
+seq 1 40 > old.txt; printf 'a\n' > a.txt; printf 'b\n' > b.txt; git add -A; git commit -qm base2; git push -q origin wt; git branch -f main wt
+git mv old.txt new.txt; sed -i '5s/.*/five/' new.txt; echo a2 >> a.txt; echo b2 >> b.txt; git add -A; git commit -qm "rename with an edit, touch a and b"
+check "identity lists a rename as one status line with its two paths, score stripped" 0 '^R'$'\t''old\.txt'$'\t''new\.txt$' identity wt main
+check "identity has no delete/add pair for a rename" 0 '^none$' bash -c '! identity wt main | grep -qE "^(D|A)\s(old|new)\.txt$" && echo none'
+stable_id="$(git diff-tree -p --root --no-commit-id wt | git patch-id --stable | cut -d' ' -f1)"
+check "identity's patch-id is git's stable patch-id" 0 "^$stable_id\$" identity wt main
+cd "$ROOT"
 
 setup_pr; git commit -q --allow-empty -m "empty"; git push -q origin wt; move_base; pr_json_at "$(head_of)"
 check "carry: an empty commit in the replay is invisible" 0 '^CARRIED 8 ' guard 8
@@ -229,6 +235,9 @@ check "carry: an empty (ledger-only) range is refused" 7 're-review: .*no change
 
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"; record "Review B M1" 1 8 "$(printf '%040d' 1)" CLEAN >/dev/null; commit_all ledger; pr_json_at "$(head_of)"
 check "carry: an unreachable reviewed head is refused" 7 're-review: .*unreachable' guard 8
+
+setup_pr; move_base; pr_json_at "$(head_of)"; sed -i 's/"baseRefName":"main"/"baseRefName":"no-such-base"/' "$d/fx/pr-8.json"
+check "carry: refuses when the base cannot be fetched" 7 're-review: .*base unreadable' guard 8
 
 setup_pr; move_base; pr_json_at "$(head_of)"; touch "$d/fx/comment-fail"
 check "carry: refuses when the comment cannot be posted" 7 're-review: .*comment not posted' guard 8
@@ -258,6 +267,14 @@ check "wait-merge pins a carried merge to the new head" 0 "--match-head-commit $
 d="$(new_repo)"; cd "$d/wt"; export GH_FIXTURES="$d/fx"; git push -q origin wt:other; pr_json_at "$(head_of)" other; merged_json
 check "wait-merge merges an unguarded PR pinned to its head" 0 '^MERGED 8 abc123$' wm 8
 check "wait-merge pins an unguarded merge to the head" 0 "--match-head-commit $(head_of)\$" cat "$d/fx/merge.log"
+
+# A guard that dies, or answers with no head, must refuse the merge: run wait-merge beside a stub guard.
+setup_pr; pr_json_at "$P0"; merged_json; cp -R "$S" "$d/s2"
+printf '#!/usr/bin/env bash\necho boom\nexit 3\n' > "$d/s2/verdict-guard.sh"
+check "wait-merge refuses with 'guard failed' when the guard dies" 7 '^VERDICT-REFUSED 8 reviewed none current unknown re-review: guard failed: boom$' "$d/s2/wait-merge.sh" 8
+printf '#!/usr/bin/env bash\necho WEIRD\n' > "$d/s2/verdict-guard.sh"
+check "wait-merge refuses when the guard names no head" 7 'guard gave no head \(WEIRD\)$' "$d/s2/wait-merge.sh" 8
+check "wait-merge issued no merge when the guard failed" 1 '' test -f "$d/fx/merge.log"
 
 echo "verdict-guard.test.sh: $cases cases, $failures failed"
 [ "$failures" -eq 0 ]
