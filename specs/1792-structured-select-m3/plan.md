@@ -17,8 +17,8 @@ chevron), not the filled-field Material 3 trigger the showcase's `Select` has. T
    parity test pins it.
 2. **Expand animation (US3, FR-005..008, FR-013)**: wrap the options row in the existing
    self-animating `material::expand` (`micold-material/src/animation.rs`), over a motion token
-   duration (standard set) and its standard easing; `instant` (zero duration) when
-   `settings.reduce_motion`. The row is always built (no longer `if options_open`), so the wrapper
+   duration and its standard easing; `MEDIUM_2`, zero duration when
+   `settings.reduce_motion`, read in `composer::view`. The row is always built (no longer `if options_open`), so the wrapper
    keeps its track in widget-tree state; per-session independence follows from the track living in
    each composer's tree (see research R3).
 
@@ -79,7 +79,6 @@ crates/micold-client/src/ui/material/select_anatomy.rs # trigger anatomy reused 
 crates/micold-client/src/ui/material/menu_select.rs    # MenuSelect trigger adopts the shared trigger; list unchanged
 crates/micold-client/src/ui/material/picker.rs         # list (existing, unchanged)
 crates/micold-client/src/ui/composer.rs                # options_row wrapped in material::expand; instant from reduce_motion
-crates/micold-client/src/ui/mod.rs                     # pass reduce_motion to the composer view (as drawer_flags does)
 crates/micold-material/src/animation.rs                # expand (existing, unchanged)
 crates/micold-client/src/showcase/                     # MenuSelect and options-row entries show the new look
 crates/micold-client/tests/gates/                      # geometry: trigger equals Select's per state

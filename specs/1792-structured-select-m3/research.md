@@ -11,13 +11,14 @@
 - **Rejected**: new menu widget (duplicate); `MenuOverlay` (no keyboard highlight over disabled entries, per menu_select.rs R6).
 
 ## R3. Expand and collapse animation
-- **Decision**: wrap the options row in `micold_material::animation::expand(row, options_open, over)`, `over` = a `tokens::motion::duration` standard-set constant (MEDIUM_1 or the value contract §6.3 assigns to expand; the tasks unit picks from §6.3, not a literal). Easing: `expand`'s default standard pair. The row is always built so the track persists; closed state is zero height. Reversal from the current height is the wrapper's track behaviour (`Progress`); a test pins it.
+- **Decision**: wrap the options row in `micold_material::animation::expand(row, options_open, over)`, `over` = `tokens::motion::duration::MEDIUM_2` (300 ms, the standard-set duration §6.3 gives the sidebar-sized expand and the ripple's expand), easing `expand`'s default `STANDARD_DECELERATE` in and `STANDARD_ACCELERATE` out. §6.3 has no accordion row, and its "no fifth animation" cap is feature 018's own count of animations it introduced (FR-035a/SC-010); this feature adds one use of the existing `Expand` wrapper with existing tokens and no new token, so no §6.3 amendment is made. Sidebar filter accordion is the precedent. The row is always built so the track persists; closed state is zero height. Reversal from the current height is the wrapper's track behaviour (`Progress`); a test pins it.
 - **Per-session independence (FR-008)**: `options_open` is one app-wide flag today (`composers.options_open`), and the composer view is built per session, so each session's wrapper holds its own track in its own widget tree; nothing is shared. Tested with two sessions.
 - **Rejected**: a per-session animation state in `features::composer` ticked by a subscription (duplicates `Progress`, adds persistence-adjacent state); `Fade` (spec asks for height growth); max-height tween in core (re-implements the wrapper).
-- **Risk**: a zero-height `expand` must not keep the controls focusable or in the tab order, and must not keep the model picker's text-input focus target alive. Confirm in the first test; if it does, build the row only when open or animating, using `on_hidden` to drop it.
+- **Hidden controls**: the wrapper already skips `operate`, `update`, `mouse_interaction` and `draw` for its child at zero height (animation.rs), so a collapsed row is not tabbable or clickable; one test pins it. No `on_hidden` fallback needed.
+- **Open picker on collapse**: `Expand::overlay` has no hidden guard, so an open model picker would outlive a collapse. Decision: toggling the row closed also closes any open model/effort/permission picker (existing `*Closed` messages); a test pins it.
 
 ## R4. Reduce motion
-- **Decision**: pass `settings.reduce_motion` into the composer view as `DrawerFlags.instant` is, and use `Duration::ZERO` for `over` (`expand_clipping.rs` already uses `expand(.., Duration::ZERO)`). OS preference not read (spec Out of Scope).
+- **Decision**: read `state.settings.reduce_motion` inside `composer::view` (it takes the app `State`, as `drawer_flags` does) and use `Duration::ZERO` for `over` (`expand_clipping.rs` already uses `expand(.., Duration::ZERO)`). OS preference not read (spec Out of Scope).
 - **Rejected**: reading the OS preference (spec); skipping the wrapper (changes tree shape, state loss on toggling the setting).
 
 ## R5. Small window (FR-011)

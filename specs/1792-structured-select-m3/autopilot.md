@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
 - **Started**: 2026-11-11
-- **Phase**: clarify
-- **Next step**: Run the plan unit (clarify done: reduced motion resolved, FR-013).
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -32,6 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 
 ## Review rounds
+
+- plan review round 1: snapshot 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 — CHANGES (F1 MAJOR duration undecided: fixed MEDIUM_2; F2-F4 MINOR fixed). Fixes are research/contract decisions, checked against the finding; no new round.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
