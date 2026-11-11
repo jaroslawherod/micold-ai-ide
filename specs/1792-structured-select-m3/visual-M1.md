@@ -10,6 +10,7 @@ Images: `visual-M1-compare.png` (top to bottom: Select closed, MenuSelect closed
 - Text `Model: claude-opus-4 · Default` fully visible in the 280 px trigger, not clipped. PASS
 - Trailing chevron same glyph/size/position as Select; it points down in the open pose (no flip). PASS
 - Disabled: container, text and chevron dimmed. PASS
+- Observation, not a defect: the MenuSelect text sits in the lower half (label-and-value layout); the unset Select "Theme" is vertically centred.
 
 Not covered: dark scheme, narrow window, Select open list (the click did not visibly open it in this capture), animation, the dense "closed" poses (not filled by design).
 Verdict: PASS.

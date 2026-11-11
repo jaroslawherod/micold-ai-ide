@@ -10,7 +10,7 @@ Images: `visual-pass-M1-states.png` (rows: Select, MenuSelect for rest, hover, p
 |---|---|---|
 | Rest | PASS | Same filled tone (230,225,230), same height, rounded top corners, 1 px bottom indicator, same chevron glyph/size at the right edge. |
 | Hover | PASS | Both go to (214,209,214), identical. |
-| Pressed | PASS | Both (214,209,214), same as hover (the press layer is not distinguishable here; same on both). |
+| Pressed | NOT CHECKED | Both read (214,209,214), same as hover; the press layer was not distinguishable, so the press was probably not captured. |
 | Disabled | PASS (MenuSelect only) | Container, text and chevron dimmed. `Select` has no disabled pose in the showcase, so no side-by-side. |
 | Open | PARTIAL | MenuSelect open pose: accent bottom indicator, list below, no collisions. `Select` live open list never rendered in this capture (clicks only produced the hover tone, with and without a pointer move), so no side-by-side. |
 | Focus | NOT CHECKED | Headless sway has no keyboard device (`wtype`/Tab did nothing). |
@@ -27,4 +27,4 @@ Images: `visual-pass-M1-composer-closed.png` (options row), `visual-pass-M1-comp
 
 Dark scheme only; the sandbox daemon had no model reported, hence the placeholder text.
 
-Verdict: PASS for the checked states; focus and the Select open list are unverified (tooling).
+Verdict: PASS for the checked states; focus, the pressed layer and the Select open list are unverified (tooling).
