@@ -68,13 +68,18 @@ static PENDING_WARNINGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Reads the process environment, as the daemon does. A retired start-up variable reads as unset
 /// (release builds) and is recorded for one warning naming the configuration key that replaces it.
 pub fn process_env(name: &str) -> Option<OsString> {
+    read_env(name, TEST_ENV, &PENDING_WARNINGS)
+}
+
+/// [`process_env`] with the `test-env` flag and the warning queue as parameters.
+fn read_env(name: &str, test_env: bool, queue: &Mutex<Vec<String>>) -> Option<OsString> {
     let raw = std::env::var_os(name);
     if retired_env::config_key(name).is_none() {
         return raw;
     }
-    let resolved = retired_env::resolve(name, raw, TEST_ENV);
+    let resolved = retired_env::resolve(name, raw, test_env);
     if let Some(warning) = resolved.warning {
-        let mut pending = PENDING_WARNINGS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut pending = queue.lock().unwrap_or_else(|e| e.into_inner());
         if !pending.contains(&warning) {
             pending.push(warning);
         }
@@ -84,7 +89,11 @@ pub fn process_env(name: &str) -> Option<OsString> {
 
 /// Logs, once, each retired variable [`process_env`] found set and ignored.
 pub fn log_retired_warnings() {
-    let pending = std::mem::take(&mut *PENDING_WARNINGS.lock().unwrap_or_else(|e| e.into_inner()));
+    log_queued(&PENDING_WARNINGS);
+}
+
+fn log_queued(queue: &Mutex<Vec<String>>) {
+    let pending = std::mem::take(&mut *queue.lock().unwrap_or_else(|e| e.into_inner()));
     for warning in pending {
         tracing::warn!("{warning}");
     }
@@ -196,4 +205,75 @@ pub fn current() -> Arc<DaemonSettings> {
         .get()
         .cloned()
         .unwrap_or_else(|| Arc::new(DaemonSettings::resolve(None, &process_env)))
+}
+
+#[cfg(test)]
+mod retired_warning_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Capture {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Runs `body` under a subscriber that captures its log lines.
+    fn captured(body: impl FnOnce()) -> String {
+        let cap = Capture::default();
+        let writer = cap.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, body);
+        let bytes = cap.0.lock().unwrap().clone();
+        String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn each_set_retired_variable_warns_once_naming_its_key_however_often_it_is_read() {
+        // Names no other test in this binary reads.
+        let vars = [
+            ("MICOLD_REPOS_ROOT", "`storage.clone_root`"),
+            ("MICOLD_LISTEN_ADDR", "`listen.tcp`"),
+        ];
+        for (name, _) in vars {
+            unsafe { std::env::set_var(name, "/x") };
+        }
+        let queue = Mutex::new(Vec::new());
+        let log = captured(|| {
+            for _ in 0..2 {
+                for (name, _) in vars {
+                    assert_eq!(read_env(name, false, &queue), None);
+                }
+            }
+            log_queued(&queue);
+        });
+        for (name, _) in vars {
+            unsafe { std::env::remove_var(name) };
+        }
+        assert_eq!(log.lines().count(), 2, "{log}");
+        for (name, key) in vars {
+            let line = log.lines().find(|l| l.contains(name)).expect(name);
+            assert!(line.contains(key), "{line}");
+        }
+    }
+
+    #[test]
+    fn an_unset_retired_variable_logs_nothing() {
+        unsafe { std::env::remove_var("MICOLD_IDLE_STOP") };
+        let queue = Mutex::new(Vec::new());
+        let log = captured(|| {
+            assert_eq!(read_env("MICOLD_IDLE_STOP", false, &queue), None);
+            log_queued(&queue);
+        });
+        assert_eq!(log, "");
+    }
 }

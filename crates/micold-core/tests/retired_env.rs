@@ -1,26 +1,59 @@
 //! `MICOLD_DATA_DIR` and `MICOLD_TOKEN_PATH` are retired (#1537, T084b): a release build ignores
 //! them and names the configuration key that replaces each; the plumbing variables stay.
+//!
+//! `MICOLD_LOG` is in `RETIRED` as the *daemon's* filter. The client has its own filter read from
+//! the same name (`crates/micold-client/src/shell/startup.rs`, `init_tracing`); that is not retired
+//! and is not read through [`resolve`].
 
 use std::ffi::OsString;
 
-use micold_core::paths::{data_dir_from_env, DATA_DIR_ENV};
-use micold_core::protocol::auth::TOKEN_PATH_ENV;
-use micold_core::retired_env::{config_key, resolve};
+use micold_core::paths::data_dir_from_env;
+use micold_core::retired_env::{config_key, resolve, RETIRED};
 
-const CORE_SIDE: &[(&str, &str)] = &[
-    (DATA_DIR_ENV, "daemon.data_dir"),
-    (TOKEN_PATH_ENV, "auth.client_token_file"),
+const EIGHT: [&str; 8] = [
+    "MICOLD_HOME",
+    "MICOLD_IMAGE_REFERENCE",
+    "MICOLD_LISTEN_ADDR",
+    "MICOLD_IDLE_STOP",
+    "MICOLD_LOG",
+    "MICOLD_REPOS_ROOT",
+    "MICOLD_DATA_DIR",
+    "MICOLD_TOKEN_PATH",
 ];
 
 #[test]
-fn a_release_build_ignores_the_core_side_variables_and_names_their_keys() {
-    for (name, key) in CORE_SIDE {
+fn retired_names_exactly_the_eight_variables_once() {
+    let mut names: Vec<&str> = RETIRED.iter().map(|r| r.name).collect();
+    names.sort_unstable();
+    let mut want = EIGHT;
+    want.sort_unstable();
+    assert_eq!(names, want);
+}
+
+#[test]
+fn a_release_build_ignores_every_retired_variable_and_names_its_key() {
+    for r in RETIRED {
+        let (name, key) = (r.name, r.key);
         let got = resolve(name, Some(OsString::from("/x")), false);
         assert_eq!(got.value, None, "{name} must have no effect");
         let warning = got.warning.unwrap_or_else(|| panic!("{name} must warn"));
         assert!(warning.contains(name), "{warning}");
         assert!(warning.contains(&format!("`{key}`")), "{warning}");
-        assert_eq!(config_key(name), Some(*key));
+        assert_eq!(config_key(name), Some(key));
+    }
+}
+
+#[test]
+fn a_test_env_build_honours_a_retired_variable_and_an_unset_one_is_silent() {
+    for r in RETIRED {
+        let set = resolve(r.name, Some(OsString::from("/x")), true);
+        assert_eq!(set.value, Some(OsString::from("/x")), "{}", r.name);
+        assert_eq!(set.warning, None, "{}", r.name);
+        for enabled in [false, true] {
+            let unset = resolve(r.name, None, enabled);
+            assert_eq!(unset.value, None, "{}", r.name);
+            assert_eq!(unset.warning, None, "{} must not warn when unset", r.name);
+        }
     }
 }
 

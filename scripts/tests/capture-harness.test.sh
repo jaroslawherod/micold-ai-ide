@@ -216,7 +216,10 @@ fi
 # variable nor depends on a debug line, and that the daemon logs that line at `info`.
 if grep -q '^  MICOLD_LOG=' site/capture/scenes/lib.sh; then
   fail "the scene needs no log filter" "lib.sh still assigns the retired MICOLD_LOG"
-elif grep -B6 'AI CLI availability reported' crates/micold-daemon/src/server.rs | grep -q 'tracing::info!'; then
+# The whole statement, whitespace collapsed so rustfmt's line breaks do not matter: the line must be
+# the `tracing::info!` call itself, not a `warn!` or `debug!` that happens to sit near the text.
+elif tr -s ' \n' ' ' <crates/micold-daemon/src/server.rs | grep -qF \
+  'tracing::info!( client = id, ?available, ?env, "AI CLI availability reported" );'; then
   pass "the scene needs no log filter"
 else
   fail "the scene needs no log filter" \
