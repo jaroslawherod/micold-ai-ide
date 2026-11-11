@@ -7,6 +7,11 @@
 //! session, and a `mise` the user put in `~/.local/bin` wins over the image's `/usr/local/bin/mise`.
 //! The daemon also writes the agent's guide and its block in `~/.claude/CLAUDE.md` (FR-019).
 //!
+//! And #1531 (T056): `<data_dir>/bin`, where the `gh` shim lives, is first on the `PATH` ahead of
+//! everything this feature puts there — including the offered CLI bins — because the shim must
+//! win the race against any real `gh` on the rest of the `PATH`, and task T056 says "first on the
+//! session `PATH`" without carving out an exception for the offered bins.
+//!
 //! Behind `sandbox-real-runtime` (Principle VI: the default suite needs nothing installed).
 //!
 //! ```text
@@ -19,6 +24,7 @@ mod sandbox_real_support;
 
 use sandbox_real_support::{
     input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
+    CONTAINER_STATE,
 };
 
 const CONTAINER: &str = "micold-toolchain-path-probe";
@@ -92,13 +98,15 @@ async fn sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bin
     let local_bin = format!("{sandbox_home}/.local/bin");
 
     let path = entries(&mut term, "PATH").await;
-    let mut want: Vec<String> = bins.clone();
+    let gh_shim_bin = format!("{CONTAINER_STATE}/bin");
+    let mut want: Vec<String> = vec![gh_shim_bin.clone()];
+    want.extend(bins.clone());
     want.push(local_bin.clone());
     want.push(shims.clone());
     assert_eq!(
         &path[..want.len().min(path.len())],
         &want[..],
-        "the sandbox PATH does not start with the offered bins, {local_bin}, then {shims}: {path:?}"
+        "the sandbox PATH does not start with the gh shim's {gh_shim_bin}, then the offered bins, {local_bin}, then {shims}: {path:?}"
     );
     let image_rest = &path[want.len()..];
     assert!(
