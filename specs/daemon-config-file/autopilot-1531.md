@@ -49,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 conformance (B) | 1 |  |  | 2b8970bebd0d2b9a7bf25daaea36513ffff7a2e8:faaff33f799022bf55b8813e60b6cf3fc140be5e | CLEAN: F1 MINOR only (`gh_shim.rs::resolve()` duplicates `git_credential.rs::answer_from_config`'s config-load/cache-path/`credential_config::answer` sequence almost line for line). No fix needed per `tasks/review-rounds.md` ("CLEAN, or only MINORs: the review is done"); `cargo test -p micold-daemon --lib` confirmed green separately (`TEST_EXIT=0`) since the reviewer's own `--test gh_shim` run stayed queued behind another worktree's build lock. Done — B runs once per milestone. |
 | M1 red-CI fix (conformance) | 2 | 1763 | 80edd2d65f858da7c239badab922f91093738167 | a7d0ffe9114e8457a515f1860722840baad10542:c87c424dafd951f602646fef79b4eb0cd29e4c8c | CLEAN |
 | Close PR test-strength review | 1 | close | 60ae06fe654ff028b572bedbbdc8a4bdd54d9122 | 0df58dd4dd43b54ccc65e59de01899ff1a0c7d12:4b0e90f051efb9e5f2dbdfe85a4faf47c5575244 | CLEAN: F1 MINOR (spawn_env_for call-site count wording) fixed, prose only, no new round |
+| docs-fix (T149/test-list.md correction) | 1 | 1832 | 3377a182dcc80bd0e839efdb62726a038ce5e051 | b2a928ee5a32d8de09c5211ce835dbcafc193777:09c478963a819d34080efe111116283bf8521ff8 | CLEAN F1 (MAJOR, doc-comment Finding attribution mismatch) fixed prose-only; F2 (test unverified under build-lock contention) verified directly: state::offered_tests::the_gh_shim_reaches_every_configured_daemon_kind passes |
 
 ## Declined review findings
 
@@ -352,6 +353,38 @@ the unrelated shared-cache build-script panic described above, so the gate-ok tr
 under `tasks/gate.md`'s documented fallback instead), and PR #1763 is open. Nothing left for this
 milestone except the orchestrator's CI wait and merge. Part 4 touched nothing in #1713 (#1530 M2,
 still open) — boundary held.
+
+**Done, this unit (close part 2 — PR #1832 never merged):** The close unit (part 8) left two edits
+uncommitted on its last run: `tasks.md`'s T149 row and `tdd/test-list.md`'s T056 split. Verified
+both against what actually shipped (the test at `crates/micold-daemon/src/state.rs:9802`,
+`state::offered_tests::the_gh_shim_reaches_every_configured_daemon_kind`, confirmed green —
+`cargo test -p micold-daemon --lib the_gh_shim_reaches_every_configured_daemon_kind` → 1 passed;
+T149's own verify command `cargo test -p micold-daemon --lib state::` matches it by substring)
+and against `tdd/verification.md`'s Finding 4 (MED) text, which is what T149's corrected wording
+cites. Committed both (`09c478963`).
+
+Ran the required review round on this fix diff (`tasks/review.md`, no rubric: correctness of
+tests, truth of docs; `autopilot-reviewer`, snapshot
+`b2a928ee5a32d8de09c5211ce835dbcafc193777:09c478963a819d34080efe111116283bf8521ff8`). Verdict
+`CHANGES`: F1 MAJOR — `state.rs:9785`'s doc comment on the test still read "Finding 1, HIGH,
+continued" after `tasks.md` was corrected to Finding 4 (MED), contradicting the fix it was meant to
+record; F2 MINOR — the reviewer's own build was stuck behind another worktree's lock the whole
+round and could not confirm the test runs. Fixed F1 as prose only (one word in a Rust doc comment,
+no code/test/behaviour change — `3377a182d`); fixed F2 myself by running the test directly once the
+lock freed (passed, see above), so no new round needed. Recorded (`record-verdict.sh`, head
+`3377a182dcc80bd0e839efdb62726a038ce5e051`, scope `1832`).
+
+No gate needed: this fix changes only `specs/` prose and one doc comment, no code behaviour, test
+assertions or config (`tasks/gate.md`'s specs-only/docs path; the one Rust file touched is a
+comment-only diff).
+
+Pushed both commits onto PR #1832's branch (the merge-gate hook required the #1744 git-credential
+workaround: `git -c credential.helper= -c "credential.https://github.com.helper=" push
+--force-with-lease -u origin HEAD`). PR #1832 is still open; CI on its current head is red only in
+code this flow does not own (runner apt DNS flake on `build + test (ubuntu-latest)`; a
+`streaming_child.rs` timing flake on `build + test (macos-latest)`, in `micold-core`, a crate this
+flow never touches) — this push is the flow's one rerun of both. Nothing further for this unit;
+the orchestrator waits on CI and merges.
 
 ## Open escalation
 
