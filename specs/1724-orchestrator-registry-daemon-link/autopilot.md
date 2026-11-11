@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
 - **Phase**: tasks
-- **Next step**: analyze, review, gate, design PR
+- **Next step**: push (force-with-lease needed: origin holds 4 pre-rebase twins of local commits), open design PR, then M1 after merge
 
 ## Pull requests
 
@@ -56,6 +56,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | Spec review 1 | F3: three open markers block testability | Template allows three; clarify unit resolves them |
+| tasks | analyze | F10 split T014/T010; F14 move T041 to M1; F16 dup note | Each task is one coherent file pair; the no-outbound proof needs the whole feature; T018/T021 mention is harmless |
 
 ## Handover
 
