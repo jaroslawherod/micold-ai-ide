@@ -358,5 +358,13 @@ Reds are the mutants named in `tdd/verification.md`, "Remediation result (Issue 
   `ssh_delivery_sends_the_ca_and_session_files_and_names_exactly_those` (SSH),
   `the_extras_are_keys_of_the_startup_secret` (kube start_tests).
 - Red: the tests were written with the code (`TEST_AFTER`): `deliver_container`, `PodStartup.files` and
-  `StartRequest.secret_files` did not exist on `origin/main`, so they do not compile there. Mutation proof
-  below.
+  `StartRequest.secret_files` did not exist on `origin/main`, so they do not compile there. No mutation was
+  recorded by the interrupted unit (its one leftover mutant, in `deliver_file`'s mode parse, was found and
+  restored in review A); the mutation run is left to the close unit's tdd-verify re-run (Issue 16).
+- T151-T155 (I16-2..I16-8), all `TEST_AFTER`, green in the scoped gate: `a_typed_extra_path_lands_in_its_own_field_only`,
+  `each_stored_extra_survives_opening_and_saving_the_form` (T151); `a_container_and_a_pod_session_carry_the_ssh_command_ca_and_git_config_and_the_session_file`
+  (T152); `session_extras/egress_tests.rs` proxy, `no_proxy`, lowercase `https_proxy` and CA tests (T153);
+  `a_signed_commit_succeeds_with_the_delivered_key`, `an_unsigned_commit_succeeds_with_the_extras_when_no_key_arrived` (T154);
+  `a_key_path_with_a_space_stays_one_argument`, `the_ssh_command_needs_both_the_key_and_the_known_hosts`,
+  `a_session_file_with_a_missing_source_or_a_bad_mode_is_reported`, `a_read_only_copy_already_there_is_replaced`,
+  `a_secret_env_file_that_cannot_be_read_gives_no_proxy` (T155).
