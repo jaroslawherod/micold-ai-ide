@@ -138,3 +138,4 @@ Written at close from the merged tests (`TEST_AFTER`: no red run was recorded wh
 | I16-1a | A container daemon is delivered the SSH key, `known_hosts`, signing key, CA file and session files as owner-only copies in the secrets folder; the rendered paths name the copies; a copy the extras no longer name is removed | FR-036, FR-037, FR-038 | DONE |
 | I16-2a | A pod daemon's extras are keys of the startup secret and the rendered paths name its mount; a non-text source stops the start naming it | FR-036, FR-037, FR-038 | DONE |
 | I16-3a | An SSH host is sent the CA file and session files only; every extras path its file renders is one of the files sent | FR-037, FR-038 | DONE |
+| I16-2..I16-8 | The tdd-verify findings: the Settings mapping, session environment of C and K, the proxy and CA trust, the signed commit, the SSH command edges, the session-file edges (T151-T155) | FR-036, FR-037, FR-038 | DONE |

@@ -39,6 +39,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | A | 1 | 4d1bf96f235f6da809d05e60b6aa11fd789669c2:5337e2a4cfb10b235ded086dcc01df9bf0c5d775 | CLEAN (3 MINOR) |
 | B | 1 | same | CLEAN (2 MINOR; Verify green) |
+| A (M2) | 1 | 8ef42345b2ed20d23f979180bd088090087a30c4:60bb9f0a1a831f79d23699d806880f89a2de258c | CHANGES: F1 a leftover mutant in `deliver_file` (fixed, restored); F2 pod key mode (follow-up) |
+| B (M2) | 1 | same | CHANGES: F1/F2 cycle-log entries missing (fixed in the log; mutation run left to close unit's tdd-verify); F3/F4 MINOR to follow-ups; scoped gate green stood in for Verify |
 
 ## Declined review findings
 
@@ -58,3 +60,4 @@ None.
 ## Follow-ups not done
 
 - Settings -> Daemons has inputs for the four path extras (ssh key, known hosts, signing key, CA file); `[[session.files]]` entries have no UI row yet (kept from the daemon file on save, render and delivery work). Add a list editor later.
+- Pod: the startup secret mounts at `defaultMode` 0440, so OpenSSH may refuse the delivered SSH key (group-readable); check in the real-cluster test or give the key items mode 0400. The pod size limit is per file, not a total of the Secret's 1 MiB (review A F2, B F3/F4, M2).
