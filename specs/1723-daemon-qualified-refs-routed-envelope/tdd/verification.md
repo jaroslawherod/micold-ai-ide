@@ -142,7 +142,7 @@ the mapping above is by name and plan row.
 
 ## Close-unit disposition (2026-11-11)
 
-- #2, #8: fixed in the close PR (core tests).
+- #2: fixed (the test matches `VersionMismatch` fields and asserts both numbers; the rendered refusal text is not asserted). #8: fixed. Both in the close PR (core tests).
 - #1 (no red evidence; test and source landed in one commit per milestone): waived. The merged milestones are history and cannot be reshuffled.
 - #3 (identity cache has no test; needs a seam in `catalog.rs`), #4, #5, #6, #7, #9: not done in this PR; listed in the ledger's *Follow-ups not done*. #3 would add behaviour code (a seam), so it is outside a close unit.
 - Mutation run covered 6 mutants in `routing.rs` and `project_identity.rs`: 5 killed, 1 (empty-target guard) inconclusive, none survived.

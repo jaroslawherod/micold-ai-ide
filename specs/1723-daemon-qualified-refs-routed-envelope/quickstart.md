@@ -17,7 +17,7 @@
 2. `contract_example`: 2 passed (in the run above).
 3. `micold-daemon --test unwrapped_client`: 2 passed. The filter form `unwrapped_client` matches no test
    name: `unwrapped_client` is a test target, so run it as `--test unwrapped_client`.
-4. `mise run gate`: green in each milestone PR (#1753, #1767, #1789, #1790) and in the close PR.
+4. `mise run gate`: green in each milestone PR (#1753, #1767, #1789, #1790); the close PR's own gate result is in its body.
 
 ## B. Visual pass
 
