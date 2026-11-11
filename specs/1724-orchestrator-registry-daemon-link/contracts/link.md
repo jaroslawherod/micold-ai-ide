@@ -27,6 +27,8 @@ is shown within 10 s of the last frame; online within one frame of return.
 | current version, id has a live link | `Refused{AlreadyLinked}` | unchanged |
 | `Hello` refused after `Accepted`: `VersionMismatch` (same number, other hash), id has no live link | `DaemonMsg::Refused` | `needs-update` |
 | `Hello` refused: `BuildMismatch`, `AuthRejected`, or `VersionMismatch` with a live link | `DaemonMsg::Refused` | unchanged; reservation released |
+| no `Hello` within `LIVENESS_DEADLINE` after `Accepted`, or connection closed | connection closed | unchanged; reservation released |
+| rival claim while an id's link is only reserved | `Refused{AlreadyLinked}` | unchanged |
 | invalid id / malformed announcement | connection closed | unchanged |
 
 ## Not hosted

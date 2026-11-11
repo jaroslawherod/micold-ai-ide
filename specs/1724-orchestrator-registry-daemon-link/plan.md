@@ -141,7 +141,11 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
   `Hello`) upserts the record `online` and closes the replaced link. `claim_failed(link, reason)`
   (a `Hello` refusal) releases the reservation: `VersionMismatch` records `needs-update` (same rule as a
   preamble mismatch, never over a live record); `BuildMismatch`, `AuthRejected` and a dropped link
-  change no record. Decision table for `claim`: Decision table over (existing record state, version match):
+  change no record. A silent old link is closed by `claim_failed(VersionMismatch)` exactly as on the
+  preamble path (FR-006). A rival claim against a *reserved* link is refused `AlreadyLinked` while the
+  reservation lasts; a reservation lasts at most `LIVENESS_DEADLINE`: the `Hello` read has that timeout,
+  and its expiry or a closed connection calls `claim_failed(Dropped)`, which releases it (no record
+  change). Decision table for `claim`: Decision table over (existing record state, version match):
 
   | Existing id state | Version matches | Result |
   |---|---|---|
@@ -172,7 +176,7 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
    close. Valid: `Registry::claim`.
 2. Write a `LinkVerdict`: `Accepted` or `Refused { reason, orchestrator_version, daemon_version, message }`
    (`VersionMismatch` message names both numbers, `AlreadyLinked` is distinct).
-3. On `Accepted` (a reservation), switch to `WireCodec<ClientMsg, DaemonMsg>`; first frame must be `Hello`, evaluated
+3. On `Accepted` (a reservation), read `Hello` with a `LIVENESS_DEADLINE` timeout, switching to `WireCodec<ClientMsg, DaemonMsg>`; first frame must be `Hello`, evaluated
    against this build with `handshake::evaluate`; a `VersionMismatch` there (same number, other schema
    hash) calls `claim_failed` and is recorded `needs-update` like a number mismatch; `BuildMismatch` and
    `AuthRejected` call `claim_failed` and leave the registry unchanged; success calls `confirm`, then sends
@@ -210,6 +214,7 @@ the test double. Contrast with `JsonFileStore`, which recovers silently.
 | wire variants round-trip, version bump | core unit: `protocol/messages.rs`, `version.rs` (existing schema tests) |
 | FR-001, FR-002, US1-US5 end to end, SC-001, SC-003, SC-005 | daemon integration `tests/orchestrator/` (fake daemon over a real local socket, temp state dir, controllable `Instant` via a test clock passed into `run_with`) |
 | FR-008 | source-level test (no `connect(` / `Stream::connect` / `open_pipe(` in the two orchestrator dirs) and the link suite under `unshare -rn` on Linux (the spec's "outbound connections blocked" wording) |
+| reservation expiry | daemon integration: a link that never sends `Hello` is released after the deadline (controllable clock) and a rival is then accepted; core unit for `claim_failed(Dropped)` |
 | SC-004 on the wire | daemon integration: two fake daemons dial one id concurrently, repeated 50 times, exactly one `Accepted` each time |
 | FR-009 | daemon integration: restart the orchestrator while a fake daemon holds a session fixture |
 | FR-010, SC-006 | existing daemon suites unchanged apart from the protocol version constant (80 to 81) they already read; one test that no-arg start does not parse `orchestrator` |

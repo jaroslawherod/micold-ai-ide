@@ -34,6 +34,15 @@ A live link's record is never moved to `needs-update` by a rival claim.
 `LinkToken(u64)` per accepted link; `Registry` keeps, per id: `Option<(LinkToken, Keepalive, open: bool)>`.
 Never persisted.
 
+## Link states and claim types
+
+Per id, in memory: `Reserved` (preamble accepted, `Hello` pending, at most `LIVENESS_DEADLINE`) then
+`Live` (confirmed, `online`) then `Silent` (open, past deadline, record `offline`) then `Closed`.
+`Reserved` and `Live` refuse rivals (`AlreadyLinked`); `Silent`, `Closed` and none accept them.
+`Claim = Reserved{ link } | Refused(RefuseReason)`. `LinkAction = SendPing | Idle | Expired | Stale`;
+`Stale` is returned for a token that is replaced, released or unknown and changes nothing.
+`claim_failed` reasons: `VersionMismatch`, `BuildMismatch`, `AuthRejected`, `Dropped`.
+
 ## Stored file `orchestrator/registry.json`
 
 ```json
