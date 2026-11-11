@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1819 | design (spec, plan, tasks) | merged | 5e90aef10191fe1b8f8801e63355c8a244a5eef0 |
 | #1823 | M1 | merged | acc28c34cd44b5d3eafac49cec605878b4007433 |
-| #PR | M2 | open | |
+| #1830 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #1823 | merged |
-| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #PR | in-review |
+| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #1830 | in-review |
 
 ## Decisions
 
@@ -55,7 +55,7 @@ US3 (tests only) is folded into M1 (rule 7, tests travel with code); US2 is M2 (
 
 ## Handover
 
-M2 implemented, reviewed (A and B clean) and committed locally (2 commits, tree recorded in autopilot-gate-ok). `git push --force-with-lease` was denied by the permission classifier (remote branch still holds the merged M1 commits). Next: push the branch, open the M2 PR (title `feat(1812): supervised escalation, supervised.sh and answer.sh (#1812)`), replace `#PR` in this ledger. PR body: scoped only, full gate left to CI; test-scripts green.
+M2 implemented, reviewed (A and B clean) and committed locally (2 commits, tree recorded in autopilot-gate-ok). `git push --force-with-lease` was denied by the permission classifier (remote branch still holds the merged M1 commits). Next: push the branch, open the M2 PR (title `feat(1812): supervised escalation, supervised.sh and answer.sh (#1812)`), replace `#1830` in this ledger. PR body: scoped only, full gate left to CI; test-scripts green.
 
 ## Open escalation
 
