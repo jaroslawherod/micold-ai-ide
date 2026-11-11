@@ -155,7 +155,7 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
   | live link | no | refuse `VersionMismatch`, record and link untouched, no overwrite |
   | reserved link (`Hello` pending, at most `LIVENESS_DEADLINE`) | either | refuse `AlreadyLinked` (a reservation is treated as live; this extends spec FR-007 for the pending window, recorded here), record untouched |
 
-  `confirm` re-checks the replaced link: if a silent old link answered during the reservation (back to live), `confirm` returns `Refused(AlreadyLinked)`, releases the reservation and changes nothing (a live link is never replaced). The old token stays valid during a reservation.
+  `confirm` re-checks the replaced link: if a silent old link answered during the reservation (back to live), `confirm` returns `Err(ConfirmRefused::AlreadyLinked)`, releases the reservation and changes nothing (a live link is never replaced). The old token stays valid during a reservation.
 
   Calls with a stale or unreserved `LinkToken` (`confirm`, `answered`, `tick`, `closed`) return
   `LinkAction::Stale` and change nothing, so a late frame on a replaced silent link cannot move the
