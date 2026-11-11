@@ -12,7 +12,7 @@ Paths are under `crates/micold-client/` unless they start with `docs/` or `specs
 
 ## Phase 1: Setup
 
-- [ ] T001 Read `src/ui/material/select.rs` and `menu_select.rs`; confirm in `specs/1792-structured-select-m3/research.md` R1 how the shared trigger takes `open` as an input (resolves R1 "to confirm") and list the draw pieces to extract.
+- [x] T001 Read `src/ui/material/select.rs` and `menu_select.rs`; confirm in `specs/1792-structured-select-m3/research.md` R1 how the shared trigger takes `open` as an input (resolves R1 "to confirm") and list the draw pieces to extract.
 
 ## Phase 2: Foundational
 
@@ -26,18 +26,18 @@ None beyond T001: the trigger extraction is the P1 story's own work.
 
 ### Tests (write first, see them fail)
 
-- [ ] T002 [US1] Red geometry test in `src/ui/material/menu_select_anatomy.rs`: `MenuSelect` trigger geometry, shape, fill/outline, label, value and arrow equal `Select`'s per state rest, hover, focus, pressed, open (FR-001, FR-002, FR-009).
-- [ ] T003 [US1] Red test in `src/ui/material/menu_select_anatomy.rs`: a disabled trigger shows the disabled look and does not react to hover, focus or press (FR-002, US1 scenario 3).
-- [ ] T004 [US1] Red tests in `src/ui/material/menu_select_anatomy.rs`: long value ellipsized with the arrow visible; value absent from the options renders its text; empty option list opens no menu (FR-011).
-- [ ] T005 [P] [US1] Test in `src/ui/composer.rs` tests: Model, Effort and Permission controls are all `MenuSelect` with the same trigger and keep `MIN_TRIGGER_WIDTH` and `MODEL_PICKER_WIDTH` (FR-003); `ModelPicked`, effort and permission picks and `*Closed`/`*Moved` messages unchanged (FR-010, SC-004).
+- [x] T002 [US1] Red geometry test in `src/ui/material/menu_select_anatomy.rs`: `MenuSelect` trigger geometry, shape, fill/outline, label, value and arrow equal `Select`'s per state rest, hover, focus, pressed, open (FR-001, FR-002, FR-009).
+- [x] T003 [US1] Red test in `src/ui/material/menu_select_anatomy.rs`: a disabled trigger shows the disabled look and does not react to hover, focus or press (FR-002, US1 scenario 3).
+- [x] T004 [US1] Red tests in `src/ui/material/menu_select_anatomy.rs`: long value ellipsized with the arrow visible; value absent from the options renders its text; empty option list opens no menu (FR-011).
+- [x] T005 [P] [US1] Test in `src/ui/composer.rs` tests: Model, Effort and Permission controls are all `MenuSelect` with the same trigger and keep `MIN_TRIGGER_WIDTH` and `MODEL_PICKER_WIDTH` (FR-003); `ModelPicked`, effort and permission picks and `*Closed`/`*Moved` messages unchanged (FR-010, SC-004).
 
 ### Implementation
 
-- [ ] T006 [US1] Extract the `Select` trigger (container shape, fill or outline, label, value, arrow, state layers, ripple) into a shared piece in `src/ui/material/` (new `select_trigger.rs`, exported through `ui/material/mod.rs`); tokens and `Roles` only, no literals; takes `open` as an input.
-- [ ] T007 [US1] `src/ui/material/select.rs`: `Select` draws its trigger through the shared piece; behaviour unchanged; its existing tests stay green.
-- [ ] T008 [US1] `src/ui/material/menu_select.rs`: `MenuSelect` trigger uses the shared piece in place of the text `Button`; builder API kept, ends in `.into()`; filter, chips and keyboard highlight untouched. Makes T002 to T005 green.
-- [ ] T009 [P] [US1] `src/showcase/`: the `MenuSelect` and options-row entries show the new trigger beside `Select`.
-- [ ] T010 [P] [US1] Docs: `docs/user-guide/structured-input.md` (session options row look) and the component catalogue docs for the shared trigger.
+- [x] T006 [US1] Extract the `Select` trigger (container shape, fill or outline, label, value, arrow, state layers, ripple) into a shared piece in `src/ui/material/` (new `select_trigger.rs`, exported through `ui/material/mod.rs`); tokens and `Roles` only, no literals; takes `open` as an input.
+- [x] T007 [US1] `src/ui/material/select.rs`: `Select` draws its trigger through the shared piece; behaviour unchanged; its existing tests stay green.
+- [x] T008 [US1] `src/ui/material/menu_select.rs`: `MenuSelect` trigger uses the shared piece in place of the text `Button`; builder API kept, ends in `.into()`; filter, chips and keyboard highlight untouched. Makes T002 to T005 green.
+- [x] T009 [P] [US1] `src/showcase/`: the `MenuSelect` and options-row entries show the new trigger beside `Select`.
+- [x] T010 [P] [US1] Docs: `docs/user-guide/structured-input.md` (session options row look) and the component catalogue docs for the shared trigger.
 
 ## Phase 4: User Story 2 - Material 3 menu for the select options (P2)
 

@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
 - **Started**: 2026-11-11
-- **Phase**: tasks
-- **Next step**: design PR merge, then milestone M1
+- **Phase**: implement M1
+- **Next step**: M1 reviews, gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1836 | Design | open | — |
+| #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
 
 ## Milestones
 

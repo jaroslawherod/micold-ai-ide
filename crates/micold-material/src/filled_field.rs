@@ -35,7 +35,7 @@
 use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
-use micold_core::tokens::{anatomy, density, Roles};
+use micold_core::tokens::{anatomy, density, state, Roles};
 
 use super::style;
 use crate::cdk::focus::FocusOp;
@@ -70,6 +70,9 @@ pub struct State {
     /// The strongest layer the *control* reports — focus for a text input, open for the select.
     /// Hover is not in here; the container reads that off the cursor itself.
     pub layer: Layer,
+    /// Disabled: the container and indicator take the disabled opacities and the cursor adds no
+    /// hover layer (feature 1792, FR-002).
+    pub disabled: bool,
 }
 
 /// What this last told its caller about the control's focus, and what the caller last said back.
@@ -313,15 +316,23 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         // square beneath, which is what lets the indicator read as the box's own edge rather than a
         // line drawn under it.
         let container = style::field_container(r)(theme);
+        let background = if self.state.disabled {
+            iced::Background::Color(iced::Color {
+                a: state::DISABLED_CONTAINER,
+                ..style::color(r.on_surface)
+            })
+        } else {
+            container
+                .background
+                .unwrap_or(iced::Background::Color(iced::Color::TRANSPARENT))
+        };
         renderer.fill_quad(
             renderer::Quad {
                 bounds,
                 border: container.border,
                 ..Default::default()
             },
-            container
-                .background
-                .unwrap_or(iced::Background::Color(iced::Color::TRANSPARENT)),
+            background,
         );
 
         // The state layer, over the container's **own bounds** (FR-034, BUG-002).
@@ -336,7 +347,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         // that tracked its own hover would be a second opinion about a fact this widget can see,
         // and the two disagreeing is exactly what the bug was. `Select` used to hold a `hovered`
         // flag for this; it does not need to any more.
-        let hovered = cursor.is_over(bounds);
+        let hovered = cursor.is_over(bounds) && !self.state.disabled;
         let layer = self
             .state
             .layer
@@ -359,6 +370,14 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         // shape. Thickening it is the whole of a filled field's focus affordance — there is no
         // border left to recolour.
         let (colour, thickness) = style::field_indicator(r, self.state.active, self.state.error);
+        let colour = if self.state.disabled {
+            iced::Color {
+                a: state::DISABLED_CONTENT,
+                ..style::color(r.on_surface)
+            }
+        } else {
+            colour
+        };
         renderer.fill_quad(
             renderer::Quad {
                 bounds: Rectangle {

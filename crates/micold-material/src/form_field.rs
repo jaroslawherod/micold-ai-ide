@@ -194,6 +194,7 @@ pub struct FormField<'a, M> {
     trailing: Option<Element<'a, M>>,
     layer: Layer,
     pressable: bool,
+    disabled: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
 
@@ -210,6 +211,7 @@ impl<'a, M: 'a> FormField<'a, M> {
             trailing: None,
             layer: Layer::None,
             pressable: false,
+            disabled: false,
             on_focus_change: None,
         }
     }
@@ -270,6 +272,13 @@ impl<'a, M: 'a> FormField<'a, M> {
         self
     }
 
+    /// Draw the container disabled: the disabled opacities, no hover layer and no ripple, whatever
+    /// else is set (feature 1792, FR-002). The caller dims the control it passes in.
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     /// An adornment before the control, inside the container.
     pub fn leading(mut self, element: impl Into<Element<'a, M>>) -> Self {
         self.leading = Some(element.into());
@@ -308,21 +317,27 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // it, in its role and tint, and survives being read as text (feature 937, FR-001, FR-003).
         let marked = f.text.required != FieldRequirement::Optional;
         let label: Element<'a, M> = match f.text.label {
-            Some(text) => Text::new(
-                if marked {
-                    format!("{text}{}", micold_core::required::MARKER)
+            Some(text) => {
+                let label = Text::new(
+                    if marked {
+                        format!("{text}{}", micold_core::required::MARKER)
+                    } else {
+                        text
+                    },
+                    if floating {
+                        TypeRole::Caption
+                    } else {
+                        TypeRole::Body
+                    },
+                    r,
+                )
+                .tint(style::field_label(r, f.active, invalid));
+                if f.disabled {
+                    label.disabled_tint(r.on_surface_variant).into()
                 } else {
-                    text
-                },
-                if floating {
-                    TypeRole::Caption
-                } else {
-                    TypeRole::Body
-                },
-                r,
-            )
-            .tint(style::field_label(r, f.active, invalid))
-            .into(),
+                    label.into()
+                }
+            }
             None => Space::new().into(),
         };
 
@@ -340,6 +355,7 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
                 error: invalid,
                 floating,
                 layer: f.layer,
+                disabled: f.disabled,
             },
         );
         let field: Element<'a, M> = match f.on_focus_change {
@@ -350,7 +366,7 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // the control is what BUG-002 found: a press in the 16dp padding opened the select and
         // rippled nothing, because the two were reading different rectangles. `Ripple` is
         // layout-transparent, so this adds no node and moves nothing.
-        let field = if f.pressable {
+        let field = if f.pressable && !f.disabled {
             super::Ripple::new(field, r.on_surface, shape::EXTRA_SMALL).into()
         } else {
             field
