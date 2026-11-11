@@ -711,18 +711,34 @@ seeding rule).
 - **Depends on**: Issue 11 (#1532) M2b
 - **Tier**: full
 
-### Issue 11 (#1532) — M4 — Settings → Daemons renders `[[ai.cli]]`, and the user guide
+### Issue 11 (#1532) — M4a — Settings → Daemons renders `[[ai.cli]]`
 
 The UI (T066) is held back to its own milestone (rule 6: no half-wired UI on `main`) until the
-behaviour it configures (M1–M3) is in place; the user-guide task (T067) documents the whole story
-including the file-vs-`settings.json` rule and ships with the UI that completes it (rule 4).
+behaviour it configures (M1–M3) is in place. Split from the user guide (M4b) by D11: M4's own
+handover limit was passed (three parts, each spending its full context) before either T066's
+verification or T067's docs were pushed.
 
-- **Tasks**: T066, T067
-- **Deliverable**: Settings → Daemons has a per-CLI section (enabled, version, args, model, base URL, sign-in, API key, settings file) that renders into `[[ai.cli]]`; `default_ai_cli` and other live settings stay in `settings.json`; `docs/user-guide/settings.md` and `daemon-configuration.md` document every `[[ai.cli]]` field and the file-vs-`settings.json` rule.
+- **Tasks**: T066
+- **Deliverable**: Settings → Daemons has a per-CLI section (enabled, version, args, model, base URL, sign-in, API key, settings file) that renders into `[[ai.cli]]`; `default_ai_cli` and other live settings stay in `settings.json`.
 - **Satisfies**: US4; FR-013d, FR-013f
 - **Verify**: `cargo test -p micold-client --test main daemon_config_render`; `cargo test -p micold-client settings::daemons`
 - **Depends on**: Issue 11 (#1532) M3
 - **Tier**: full
+
+### Issue 11 (#1532) — M4b — The user guide documents `[[ai.cli]]`
+
+The user-guide task (T067) documents the whole story including the file-vs-`settings.json` rule
+and ships with the UI that completes it (rule 4). Docs-only: every changed file is under `docs/`.
+T067's prose already landed in M4a's branch (commit `18bd664ca`, ahead of this split) because the
+two tasks were implemented together before D9 split the milestone; M4b's own PR therefore carries
+only the `visual-pass` check of the new accordion and whatever the docs review asks for.
+
+- **Tasks**: T067
+- **Deliverable**: `docs/user-guide/settings.md` and `daemon-configuration.md` document every `[[ai.cli]]` field and the file-vs-`settings.json` rule; the Settings → Daemons AI CLI accordion (M4a) passes a visual pass.
+- **Satisfies**: US4; FR-013d, FR-013f
+- **Verify**: `visual-pass` skill against Settings → Daemons → AI CLI configuration (add form and edit form)
+- **Depends on**: Issue 11 (#1532) M4a
+- **Tier**: docs
 
 ## Phase 24: TDD remediation (Issue 9 / #1530, from `tdd/verification.md`, section "Issue 9")
 
