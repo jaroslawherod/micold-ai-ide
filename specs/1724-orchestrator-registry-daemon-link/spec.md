@@ -29,9 +29,9 @@ onward / issue 3 of the plan).
 
 ### Session 2026-11-11
 
-- Q: Over what transport does a daemon link reach the orchestrator in this issue? → A: [NEEDS CLARIFICATION: a local socket / loopback TCP using the existing handshake and framing (M1 has no mTLS), or only an in-process link for tests with the transport left to issue 3?]
-- Q: Where does the persistent registry live and in what format? → A: [NEEDS CLARIFICATION: a file under the orchestrator's state directory (single JSON/postcard document, atomically replaced) or an embedded database?]
-- Q: How long may a link be silent before the daemon shows offline? → A: [NEEDS CLARIFICATION: reuse the keepalive defaults (ping 3 s, deadline 9 s) or make it a setting?]
+- Q: Over what transport does a daemon link reach the orchestrator in this issue? → A: The orchestrator listens on a local socket (Unix socket, named pipe on Windows; path from the platform helpers) and speaks the existing postcard framing and versioned handshake. No mTLS (M2). The `ssh -R` and TLS WebSocket links are issue 3 (#1730); daemon-side dialling stays out of scope, so tests dial from a fake daemon. _(agent-resolved: specs/orchestrator/spec.md#Background, Clarifications "Who connects to whom?")_
+- Q: Where does the persistent registry live and in what format? → A: One JSON document in the orchestrator's state directory, replaced atomically (write a temp file, then rename), written through a store trait so tests use a temporary directory; the same approach as `JsonFileStore` (`serde_json`). No embedded database. Unlike that store, a corrupt file fails start (FR-004). _(agent-resolved: crates/micold-core/src/store.rs module doc)_
+- Q: How long may a link be silent before the daemon shows offline? → A: The keepalive constants: ping every 3 s, deadline 9 s, check every 1 s (`PING_INTERVAL`, `LIVENESS_DEADLINE`, `CHECK_INTERVAL`). Not a setting. _(agent-resolved: crates/micold-core/src/protocol/keepalive.rs; Assumptions "Heartbeat reuses the keepalive state machine")_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -206,7 +206,7 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 
 - **SC-001**: A test starts the orchestrator, links a daemon and reads back every record field.
 - **SC-002**: A silent link shows `offline` within the deadline plus one check interval, and `online`
-  within one heartbeat of its return, under a controllable clock; "the deadline" is the keepalive deadline unless clarify changes it.
+  within one heartbeat of its return, under a controllable clock; "the deadline" is `LIVENESS_DEADLINE` (9 s).
 - **SC-003**: An older-protocol link is refused with both version numbers in the message, and the
   registry lists it `needs-update` while other daemons keep their health.
 - **SC-004**: Of two simultaneous links claiming one id, exactly one is accepted, over repeated runs.
@@ -219,7 +219,8 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 - Local orchestrator, app and host daemon come from one build (orchestrator Assumptions).
 - M1 has no mTLS: the daemon id is what the link announces; taking it from a certificate is M2.
 - Tenant id has a single documented default until multi-user work (later issue) assigns real ones.
-- Heartbeat reuses the keepalive state machine of `protocol/keepalive.rs`.
+- Heartbeat reuses the keepalive state machine and constants of `protocol/keepalive.rs`; the deadline is not configurable.
+- The orchestrator accepts links on a local socket; the registry is one atomically replaced JSON file.
 
 ## Out of Scope
 

@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 3 [NEEDS CLARIFICATION] markers in spec.md
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -30,6 +30,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+
+## Clarify
+
+Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file atomically replaced, keepalive constants); no escalation, no new requirement.
 
 ## Review rounds
 
