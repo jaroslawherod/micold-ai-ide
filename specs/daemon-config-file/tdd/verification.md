@@ -965,3 +965,127 @@ Untested criteria: none outright; the "No" rows lack an end-to-end test. Tests t
 - `mise run gate`, `test-sandbox`, Windows and macOS legs, real git/forge runs.
 - `docs/user-guide/sandboxed-daemon.md` and `settings.md` content beyond grep for `config_file`; the one-day expiry warning's fate; `#1531` (`gh` token) tests.
 - Earlier sections untouched.
+
+---
+
+---
+feature: daemon-config-file
+scope: Issue 10 (#1531) M1 only, tasks T055-T057, T095, T058; code merged in PR #1763 (merge SHA 4b0e90f051efb9e5f2dbdfe85a4faf47c5575244)
+verdict: FAIL — no test-first evidence at all (no cycle-log entry, source+test squashed into one commit) and a deliberate mutant that disables the PATH wiring for every non-container session kind survives the whole default suite
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 4b0e90f05
+independent: true # auditor did not write these tests
+behaviors: 5 # test-list.md has no Issue 10 section; derived from the milestone's own tasks
+proven: 0
+likely: 0
+test_after: 3
+no_test: 1
+not_applicable: 1
+high_smells: 0
+criteria_total: 4 # US2 scenario 4, FR-011, FR-035, SC-003
+criteria_covered: 2 # FR-035 (host matching) and the shim's own exec/env logic end to end; FR-011/SC-003's "every session kind" clause is not
+mutants_tried: 2
+mutants_caught: 1
+mutants_survived: 1 # inside the T057 behavior marked DONE, see Mutation results
+suite: gh_shim (integration) 7 passed 0.18s; micold-daemon --lib gh_shim:: 4 passed; micold-daemon --lib state:: 21 passed 1.5s; workspace suite not re-run (profile baseline 5071 passed, 343s)
+---
+
+# TDD verification: daemon-config-file, Issue 10 (#1531) M1 — `GH_TOKEN` for `gh` in sessions of every kind
+
+## Verdict
+
+**FAIL: a deliberate mutant that removes the `gh` shim's PATH injection from session spawn
+(`DaemonState::with_gh_shim_path`, T057's own deliverable) survives the entire default `micold-daemon`
+suite — no test anywhere in the default suite would catch the shim silently stopping being wired into
+a host, SSH or Kubernetes session.** Only a `sandbox-real-runtime`-gated acceptance test (not run by
+`mise run test`/`mise run gate` without a container runtime) exercises the wiring, and only for the
+container kind. Question 1 (test-first) also fails outright: `tdd/cycle-log.md` has no section for
+Issue 10 at all, and the one feature commit (`2ea7342ed`) adds `crates/micold-daemon/src/gh_shim.rs`,
+its PATH wiring in `state.rs`, and `crates/micold-daemon/tests/gh_shim.rs` together, so git history
+cannot show order either. Question 2 (assert behavior) is clean: every test in `tests/gh_shim.rs`
+asserts a specific, non-tautological outcome. Suite state: the scoped test files are green (see
+`suite:` above); the full workspace suite was not re-run.
+
+## Test-first evidence
+
+`tdd/test-list.md` plans Issues 2, 4, 5 and 14 only; its own text says "Issues 3-15 add their own
+behaviors under their own headings", but Issue 10 (#1531) never got one. `tdd/cycle-log.md` likewise
+has a `##` section for every other issue in this feature except Issue 10 — `grep -n "Issue 10\|#1531"
+specs/daemon-config-file/tdd/cycle-log.md` returns nothing. The behaviors below are derived from the
+milestone's five tasks (`tasks.md` lines 159-163), each already ticked `[x]`.
+
+Git history for the milestone (`3ee28ccc1^..4b0e90f05`, the Issue 10 commit range) is one feature
+commit plus docs/fix/gate commits on top:
+
+| Commit | Touches |
+|---|---|
+| `2ea7342ed` | `gh_shim.rs` (new, 255 lines) + `state.rs` PATH wiring (37 lines) + `tests/gh_shim.rs` (new, 242 lines) + docs, all in one commit |
+| `f3113aae0` | fixes `gh_shim.rs`'s real-`gh` lookup (walk `PATH` instead of stripping a prefix) — a source-only fix after the fact |
+| `b8d8743b5`, `b4f49718f` | gate/fmt fallout, no behavior change |
+| `8005a9cca` | extends the **pre-existing** `sandbox_real_toolchain_path.rs` acceptance test to also assert the gh shim leads the sandbox `PATH` |
+
+No commit touches only test files before a source commit; there is one squashed commit for the whole
+milestone's source and tests. Per the rubric, a commit that adds a source file and its test together
+is "normal... It is `PROVEN` only when the cycle log has the red for it" — and the cycle log has
+nothing, so none of these behaviors reach `PROVEN` or even `LIKELY` (which needs a recorded red,
+just not a corroborated order). They are `TEST_AFTER` by Hard Rule 3: "No red recorded means
+test-after."
+
+| Behavior (task) | Test | Class | Why |
+|---|---|---|---|
+| T055: `gh-token --cwd <dir>` prints the chosen token, exits 1 silently with none | `gh_token_prints_the_token_the_chooser_picks_for_the_cwds_origin`, `gh_token_exits_1_silently_with_no_token_chosen`, `gh_token_exits_1_silently_with_no_configuration` (`tests/gh_shim.rs`) | TEST_AFTER | No cycle-log section for Issue 10; source and test landed in the same commit |
+| T056a: the unix/Windows shim execs/calls the real `gh` with `GH_TOKEN`/`GH_HOST` set, and leaves either alone if already set | `the_shim_execs_the_real_gh_...`, `the_shim_leaves_an_existing_gh_token_and_gh_host_alone`, `the_shim_leaves_gh_token_and_gh_host_unset_with_no_token_chosen` (`tests/gh_shim.rs`); `the_windows_shim_forwards_the_real_ghs_exit_code` (`gh_shim.rs` unit, string-only, cannot execute on this host) | TEST_AFTER | Same commit, no red recorded |
+| T056b/T057: `<data_dir>/bin` is put **first on every session's `PATH` at spawn**, for every daemon kind | none that can fail on this alone — see Mutation results | NO_TEST | No unit test in `state.rs` asserts `with_gh_shim_path`'s effect; the only test that would is `sandbox_real_toolchain_path.rs`, gated behind `sandbox-real-runtime` and not part of the default suite |
+| T095: `GH_HOST` set from the chosen token's `host`, same rules as `GH_TOKEN` | Covered by the same `tests/gh_shim.rs` tests listed for T055/T056a (each asserts both vars) | TEST_AFTER | Same commit, no red recorded |
+| T058: document `gh` support in `docs/user-guide/settings.md` | N/A (doc task) | NOT_APPLICABLE | Docs exist (`docs/user-guide/settings.md:806-816`); no test expected |
+
+## Findings
+
+| # | Severity | Finding | Evidence |
+|---|---|---|---|
+| 1 | HIGH | The core deliverable of T057 — "first on every session's `PATH`... host, SSH, container, Kubernetes alike" — has no test in the default suite that can fail if it regresses. The only tests that touch the gh-shim `PATH` prefix at the `state.rs` level (`gh_shim_bin_dir()`, `without_gh_shim_dir()`, `path_var()`) are written to **strip the prefix away before asserting**, for pre-existing, unrelated tests (CLI-bin-leads-path, env-include ordering). None of them assert the prefix is actually there. Confirmed by deliberate mutant (see below): removing `with_gh_shim_path` from `spawn_env_for` leaves all 21 `state::` tests and all 7 `gh_shim` integration tests green. | `crates/micold-daemon/src/state.rs:2157-2159` (`spawn_env_for`), `:9604-9624` (`gh_shim_bin_dir`, `without_gh_shim_dir`), `:9697-9714` (`path_var`) |
+| 2 | HIGH | No red-phase evidence exists for any of the five tasks: `tdd/cycle-log.md` has no section for Issue 10/#1531 at all (every other issue in this feature has one), and `tdd/test-list.md` plans no behaviors for it either, despite its own text promising "Issues 3-15 add their own behaviors under their own headings." All five tasks are ticked `[x]` with zero recorded evidence behind the tick. | `specs/daemon-config-file/tdd/cycle-log.md` (no `## ... Issue 10` or `#1531` heading); `specs/daemon-config-file/tdd/test-list.md:14` |
+| 3 | MED | `write_shim`'s documented write-if-changed behaviour ("a session spawn that finds the content already right touches nothing") has no test: nothing writes the shim twice and asserts the file's mtime, or content, is untouched on the second call. Contrast with the equivalent, tested behaviour for `daemon.toml` delivery (Issue 5's U21: "a second call with unchanged settings is a no-op, file untouched"). | `crates/micold-daemon/src/gh_shim.rs:176-194` (`write_shim`) |
+| 4 | MED | End-to-end coverage of "every session kind" (FR-011, SC-003) exists only for the container kind, and only behind `sandbox-real-runtime` (`sandbox_real_toolchain_path.rs`, not run by `mise run test`/`mise run gate` without a container runtime). Host, SSH and Kubernetes session spawn have no test — real or unit — confirming the shim actually reaches a spawned session's `PATH`. | `crates/micold-daemon/tests/sandbox_real_toolchain_path.rs:10-13,100-110` |
+
+## Mutation results
+
+No mutation tool in the stack profile (`mutation: null`); deliberate mutants on the milestone's two
+highest-risk behaviors (T057's PATH wiring, which every other behavior depends on to matter at all;
+and T056's "leave an existing `GH_TOKEN` alone", a credential-handling guard).
+
+| Mutant | File | Behavior | Suite run | Survived | Judgment |
+|---|---|---|---|---|---|
+| `spawn_env_for` drops the `with_gh_shim_path(...)` call entirely (shim never reaches a session's `PATH`) | `crates/micold-daemon/src/state.rs:2158` | T056b/T057 | `cargo test -p micold-daemon --lib state::` (21 tests) and `--test gh_shim` (7 tests) | **Yes** | Real finding, not equivalent: this is exactly the regression FR-011/SC-003 depend on not happening, in a behavior marked `DONE`. Restored exactly (`git diff` empty) and reconfirmed green. |
+| Unix shim's `: "${GH_TOKEN:=$token}"` / `: "${GH_HOST:=$host}"` (set-if-unset) changed to unconditional `GH_TOKEN="$token"` / `GH_HOST="$host"` | `crates/micold-daemon/src/gh_shim.rs:113-114` | T056a | `cargo test -p micold-daemon --test gh_shim` | No | Caught: `the_shim_leaves_an_existing_gh_token_and_gh_host_alone` failed with `GH_TOKEN=ghp_abc`/`GH_HOST=github.com` instead of the preset values. Restored exactly (`git diff` empty) and reconfirmed green. |
+
+Both mutants sampled 2 of this milestone's 5 behaviors (T056a/T095's shared assertion, and T057's
+PATH wiring); T055's CLI printing and T058's docs were not mutated.
+
+## Traceability
+
+| Criterion | Tests | End to end |
+|---|---|---|
+| US2 scenario 4 ("gh is authenticated with that token") | `the_shim_execs_the_real_gh_with_gh_token_and_gh_host_set_from_the_chosen_token` runs the real shim script and a fake `gh` through `exec` | Yes, for the shim itself; **no** for "in a session" — the test never goes through `DaemonState::spawn_env_for`/session spawn, only through `write_shim` + a direct `Command::new` |
+| FR-011 ("every session MUST get `GH_TOKEN`... read at the moment `gh` runs") | Same tests as above, plus `sandbox_real_toolchain_path.rs` for the container kind only | Partial: container kind only, and only behind `sandbox-real-runtime` |
+| FR-035 ("each token MUST name its forge host... GitHub Enterprise") | `gh_token_matches_a_non_default_host_for_a_github_enterprise_token` | Yes — real `git`-backed `origin_repo` parse, real chooser |
+| SC-003 ("`gh` works in a session of every daemon kind") | `sandbox_real_toolchain_path.rs` (container only, gated) | No for host, SSH, Kubernetes |
+
+Untested criteria: FR-011/SC-003's "every session kind" clause, for host, SSH and Kubernetes. Tests
+tracing to nothing: none — `test-list.md` has no `traces` column for this milestone to check against,
+since it has no entries for it at all (Finding 2).
+
+## What was not audited
+
+- The Windows `gh.cmd` shim's actual execution (forwarding the real `gh`'s exit code) cannot run on
+  this Linux host; `the_windows_shim_forwards_the_real_ghs_exit_code` only asserts on the generated
+  batch-file text, not its execution. Per the stack profile, this needs a Windows CI leg's log as its
+  evidence, which was not checked here.
+- The SSH and Kubernetes session kinds specifically: no SSH- or Kubernetes-flavoured acceptance test
+  exists for the gh shim at all (not even gated), so nothing beyond the generic `state.rs` code path
+  argument was examined for them.
+- Mutation was two deliberate mutants on two of five behaviors, not a tool-driven score; T055's CLI
+  argument parsing and T058's documentation were not mutated.
+- The full workspace suite (`mise run gate`) was not re-run; only the files this milestone touched.
+- `micold-daemon`'s release build and the `sandbox-real-runtime` acceptance suite itself were not run
+  (no container runtime invoked in this audit).

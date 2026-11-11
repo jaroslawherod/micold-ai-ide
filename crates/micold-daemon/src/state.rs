@@ -9750,6 +9750,100 @@ mod offered_tests {
         );
     }
 
+    /// T148 (#1531, Finding 1, HIGH): the positive assertion the pre-existing tests above never
+    /// make — they all go through `path_var`/`without_gh_shim_dir`, which strip
+    /// `gh_shim_bin_dir()` away before asserting the rest of the ordering, so none of them would
+    /// notice `with_gh_shim_path(...)` being dropped from `spawn_env_for`. Verified against that
+    /// mutant by hand: commenting out the `with_gh_shim_path` call in `spawn_env_for` and running
+    /// just this test turns it red (`assert!` on `starts_with` fails because the shim directory is
+    /// simply absent from `PATH`); restoring the call turns it green again, with no diff left
+    /// from that experiment.
+    #[test]
+    fn the_spawn_path_actually_starts_with_the_gh_shim_directory() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, _dir) = daemon(store.path());
+        let cwd = tempfile::tempdir().unwrap();
+        let shim_dir = gh_shim_bin_dir().expect("a data directory to put the shim in");
+        let resolved = state.spawn_env_for(cwd.path());
+        let path = resolved
+            .vars
+            .iter()
+            .find(|(k, _)| k == "PATH")
+            .map(|(_, v)| v.clone())
+            .expect("a PATH in the spawn environment");
+        let prefix = format!(
+            "{}{}",
+            shim_dir.display(),
+            if cfg!(windows) { ';' } else { ':' }
+        );
+        assert!(
+            path.starts_with(&prefix),
+            "PATH {path:?} does not start with the gh shim directory {shim_dir:?}"
+        );
+    }
+
+    /// T149 (#1531, Finding 1, HIGH, continued): `spawn_env_for` (and the `with_gh_shim_path` it
+    /// calls) takes no `daemon.kind` of any sort — unlike, say, `ai_cli_secrets_base` or
+    /// `with_host_config_dir` just above, which branch on `Kind::Container`/`Kind::Kubernetes`/
+    /// `Kind::Host`/`Kind::Ssh` explicitly, `with_gh_shim_path`'s only inputs are the settings'
+    /// `data_dir` and this process's own executable path. This test exercises that directly: a
+    /// `DaemonState` with each one of the four kinds loaded into `self.config` (the same
+    /// `ConfigRuntime` a real daemon installs at startup) still gets the shim directory first on
+    /// `spawn_env_for`'s `PATH`, proving the wiring does not depend on which kind is configured.
+    ///
+    /// This is the honest ceiling of what this sandbox can exercise: there is no real SSH host or
+    /// Kubernetes cluster here to spawn an actual remote or pod session through, so this does not
+    /// claim an end-to-end spawn for those kinds — only that the one function every session kind's
+    /// spawn goes through (`spawn_env_for`, called from exactly three non-test sites in this
+    /// file — `env_include_vars_for`, and two session-spawn call sites — none of them inside a
+    /// kind-conditional branch, confirmed by grep, not merely asserted here) is not
+    /// kind-gated at the unit level, for all four kinds the configuration can name.
+    #[test]
+    fn the_gh_shim_reaches_every_configured_daemon_kind() {
+        use micold_core::daemon_config::Kind;
+
+        for kind in ["host", "ssh", "container", "kubernetes"] {
+            let store = tempfile::tempdir().unwrap();
+            let (state, _dir) = daemon(store.path());
+            let config_dir = tempfile::tempdir().unwrap();
+            let file = config_dir.path().join("daemon.toml");
+            std::fs::write(
+                &file,
+                format!("schema = 1\n[daemon]\nname = \"t\"\nkind = \"{kind}\"\n"),
+            )
+            .unwrap();
+            let runtime =
+                std::sync::Arc::new(crate::config_watch::ConfigRuntime::open(&file).unwrap());
+            assert!(
+                matches!(
+                    runtime.current().daemon.kind,
+                    Kind::Host | Kind::Ssh | Kind::Container | Kind::Kubernetes
+                ),
+                "{kind} parsed to a real Kind"
+            );
+            state.set_config(runtime);
+
+            let cwd = tempfile::tempdir().unwrap();
+            let shim_dir = gh_shim_bin_dir().expect("a data directory to put the shim in");
+            let resolved = state.spawn_env_for(cwd.path());
+            let path = resolved
+                .vars
+                .iter()
+                .find(|(k, _)| k == "PATH")
+                .map(|(_, v)| v.clone())
+                .expect("a PATH in the spawn environment");
+            let prefix = format!(
+                "{}{}",
+                shim_dir.display(),
+                if cfg!(windows) { ';' } else { ':' }
+            );
+            assert!(
+                path.starts_with(&prefix),
+                "kind {kind}: PATH {path:?} does not start with the gh shim directory {shim_dir:?}"
+            );
+        }
+    }
+
     /// 1439 setup-turn S1: a daemon in its container with an `offered.json` of its own (an
     /// app-owned sandbox) has one setup turn; without one (host and remote daemons) it has none.
     #[test]

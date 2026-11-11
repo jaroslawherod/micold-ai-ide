@@ -86,3 +86,13 @@ Baseline: `micold-client` `ui::daemon_details_dialog` 6 unit tests, `daemon_dial
 | I14-3 | The start script's output tail appears in no rendered line or row | US6, FR-029 | DONE |
 | I14-4 | The start-script line is exact for every outcome and reason (`Ok`, `Skipped`, `Warned`, `Failed`; `Exit`, `Signal`, `Timeout`, `Spawn`, `FileMissing`) | US6, FR-029 | DONE |
 | I14-6 | The user guide and the code comment say what ships: outcome, reason and time, no variable names | US6, FR-029 | DONE (docs) |
+
+## Test list: Issue 10 (#1531), milestone M1
+
+TDD verification (`tdd/verification.md`, Finding 2) found this milestone missing from this file entirely; added after the fact, at close-unit audit — see the matching note in `cycle-log.md`, there is no genuine red-phase evidence for these rows.
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| T055 | `micold-daemon gh-token --cwd <dir>` prints the token chosen for the cwd's `origin` (token line, then host line); exits 1 silently with none | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
+| T056 | The `gh` shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set from the chosen token, leaving an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH` | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
+| T095 | The `gh` shim also sets `GH_HOST` from the chosen token's host (D15 row 7), left alone with no token chosen, same rule as `GH_TOKEN` (T056) | US2, FR-011, FR-035, SC-003 | TEST_AFTER |

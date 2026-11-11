@@ -285,4 +285,41 @@ mod tests {
         assert!(script.contains("if not defined GH_TOKEN"));
         assert!(script.contains("if not defined GH_HOST"));
     }
+
+    /// T151 (#1531, Finding 3): `write_shim`'s doc comment promises write-if-changed — "a session
+    /// spawn that finds the content already right touches nothing" — matching the write-if-
+    /// changed rule `config_reload.rs`'s `a_reload_never_writes_the_config_or_a_secret` (Issue 5's
+    /// U21) already tests for `daemon.toml` delivery. A second call with the same `bin_dir`/
+    /// `daemon` args must leave the shim file's content, mtime and inode exactly as the first call
+    /// left them.
+    #[cfg(unix)]
+    #[test]
+    fn write_shim_touches_nothing_when_the_content_is_already_right() {
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let bin_dir = dir.path().join("bin");
+        let daemon = Path::new("/opt/micold-daemon");
+
+        write_shim(&bin_dir, daemon).unwrap();
+        let file = bin_dir.join("gh");
+        let stamp = |p: &Path| {
+            let m = std::fs::metadata(p).unwrap();
+            (
+                std::fs::read(p).unwrap(),
+                m.mtime(),
+                m.mtime_nsec(),
+                m.ino(),
+            )
+        };
+        let before = stamp(&file);
+
+        write_shim(&bin_dir, daemon).unwrap();
+
+        assert_eq!(
+            before,
+            stamp(&file),
+            "a second write_shim call with the same content must not touch the file"
+        );
+    }
 }
