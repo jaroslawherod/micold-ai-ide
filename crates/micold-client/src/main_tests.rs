@@ -1107,6 +1107,7 @@ fn app_with_a_failed_sandbox() -> App {
         container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
         port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
         startup: None,
+        extras: Default::default(),
     });
     app
 }

@@ -350,3 +350,13 @@ ran, and this entry is written at close from the commits (`ba4c2bba3`, `481f8129
 ### Issue 15 close remediation (T156-T163)
 
 Reds are the mutants named in `tdd/verification.md`, "Remediation result (Issue 15, close unit)"; each was run, failed its test and was restored.
+
+## Issue 16 (#1536) M2: the extras reach container, pod and SSH daemons
+
+- Behaviours: `the_extras_are_delivered_as_files_and_the_rendered_paths_name_them` (container),
+  `a_pods_extras_become_secret_items_and_the_rendered_paths_name_them` (pod),
+  `ssh_delivery_sends_the_ca_and_session_files_and_names_exactly_those` (SSH),
+  `the_extras_are_keys_of_the_startup_secret` (kube start_tests).
+- Red: the tests were written with the code (`TEST_AFTER`): `deliver_container`, `PodStartup.files` and
+  `StartRequest.secret_files` did not exist on `origin/main`, so they do not compile there. Mutation proof
+  below.

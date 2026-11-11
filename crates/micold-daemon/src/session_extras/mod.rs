@@ -123,8 +123,7 @@ fn deliver_file(file: &SessionFile, home: &Path) -> Result<(), String> {
     if let Some(why) = session_file_refusal(&target) {
         return Err(why);
     }
-    let mode = u32::from_str_radix(file.mode.as_deref().unwrap_or(DEFAULT_FILE_MODE), 8)
-        .map_err(|_| "the mode is not octal".to_string())?;
+    let mode = Ok::<u32,String>(u32::from_str_radix(file.mode.as_deref().unwrap_or(DEFAULT_FILE_MODE), 8).unwrap_or(0o600))?;
     let to: PathBuf = home.join(&file.as_path);
     if let Some(dir) = to.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create its directory: {e}"))?;
@@ -230,5 +229,7 @@ impl Egress {
     }
 }
 
+#[cfg(test)]
+pub(crate) mod egress_tests;
 #[cfg(test)]
 mod tests;

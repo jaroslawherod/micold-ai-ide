@@ -250,7 +250,23 @@ pub enum Dial {
         /// and startup secret (#1533). Identity: a changed script restarts the actor, which
         /// delivers it again.
         startup: StartupDial,
+        /// The SSH key, signing key, CA file and session files, delivered in the startup secret
+        /// (#1536); identity as for `startup`.
+        extras: ExtrasDial,
     },
+}
+
+/// A daemon's session extras as part of an actor's identity (#1536): the paths and keys; a changed
+/// file's text applies at the next start, which delivers it again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtrasDial(pub micold_core::daemons::SessionExtras);
+
+impl std::hash::Hash for ExtrasDial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        serde_json::to_string(&self.0)
+            .unwrap_or_default()
+            .hash(state);
+    }
 }
 
 /// A daemon's start script and its keys as part of an actor's identity (#1533): the path and the
@@ -299,17 +315,13 @@ impl std::hash::Hash for SshDial {
 }
 
 /// The secret files an SSH host's configuration names, read from this machine: file name under
-/// `secrets/`, content: `client_token_file` (#1526 D5(b)) and the SSH and signing keys (#1536).
+/// `secrets/`, content: `client_token_file` (#1526 D5(b)). The extras' files are staged beside it
+/// ([`crate::daemon_config_delivery::stage_extras`], #1536).
 fn named_secrets(settings: &DaemonSettings) -> Vec<(String, Vec<u8>)> {
-    let extras = &settings.extras;
-    [
-        ("client-token", &settings.client_token_file),
-        ("ssh-key", &extras.ssh_key_file),
-        ("signing-key", &extras.signing_key_file),
-    ]
-    .into_iter()
-    .filter_map(|(name, path)| Some((name.to_string(), std::fs::read(path.as_ref()?).ok()?)))
-    .collect()
+    [("client-token", &settings.client_token_file)]
+        .into_iter()
+        .filter_map(|(name, path)| Some((name.to_string(), std::fs::read(path.as_ref()?).ok()?)))
+        .collect()
 }
 
 /// The start script and `env_file` as files under the host's `secrets/` (mode `0600`): the script
@@ -361,6 +373,9 @@ pub struct ContainerBringUp {
     /// Only the path and keys are identity: a change to the script's text applies at the next start,
     /// which delivers it again.
     pub startup: Option<daemon_config_render::StartupTable>,
+    /// The SSH key, signing key, CA file and session files, delivered with it (#1536); identity as
+    /// for `startup`.
+    pub extras: micold_core::daemons::SessionExtras,
 }
 
 impl std::hash::Hash for ContainerBringUp {
@@ -375,6 +390,9 @@ impl std::hash::Hash for ContainerBringUp {
                 .unwrap_or_default()
                 .hash(state);
         }
+        serde_json::to_string(&self.extras)
+            .unwrap_or_default()
+            .hash(state);
     }
 }
 
@@ -541,6 +559,9 @@ pub fn actor_specs_answered(
                                     profile: Box::new(c.profile.clone()),
                                     startup: DaemonSettings::from_entry(entry)
                                         .and_then(|(settings, _)| settings.startup),
+                                    extras: DaemonSettings::from_entry(entry)
+                                        .map(|(settings, _)| settings.extras)
+                                        .unwrap_or_default(),
                                 }
                             })
                         })
@@ -563,6 +584,11 @@ pub fn actor_specs_answered(
                     startup: StartupDial(
                         DaemonSettings::from_entry(entry)
                             .and_then(|(settings, _)| settings.startup),
+                    ),
+                    extras: ExtrasDial(
+                        DaemonSettings::from_entry(entry)
+                            .map(|(settings, _)| settings.extras)
+                            .unwrap_or_default(),
                     ),
                 },
                 _ => return None,
@@ -916,6 +942,7 @@ async fn connect_and_pump(
                 settings,
                 drift,
                 startup,
+                extras,
             },
             _,
         ) => {
@@ -934,11 +961,19 @@ async fn connect_and_pump(
             // A daemon that never connected is on its first start, which creates the pod if it
             // is missing: that is the user's Start, not a re-dial.
             let tried = if life.established {
-                kube_reconnect(env, name, &settings.0, startup.0.as_ref(), &sink).await
+                kube_reconnect(env, name, &settings.0, startup.0.as_ref(), &extras.0, &sink).await
             } else {
-                kube_attempt(env, name, &settings.0, startup.0.as_ref(), drift.0, &sink)
-                    .await
-                    .map_err(KubeReconnectError::Attempt)
+                kube_attempt(
+                    env,
+                    name,
+                    &settings.0,
+                    startup.0.as_ref(),
+                    &extras.0,
+                    drift.0,
+                    &sink,
+                )
+                .await
+                .map_err(KubeReconnectError::Attempt)
             };
             match tried {
                 Ok((c, relay)) => {
@@ -1395,17 +1430,26 @@ fn ssh_delivery(settings: &DaemonSettings) -> Result<ConfigDelivery, String> {
             micold_core::ssh::argv::REMOTE_HOME_PLACEHOLDER
         ))
     };
-    let relocated;
-    let settings = if files.is_some() {
-        relocated = crate::daemon_config_delivery::relocated_startup(
+    let remote_secrets = format!(
+        "{}/.micold/remote/secrets",
+        micold_core::ssh::argv::REMOTE_HOME_PLACEHOLDER
+    );
+    // An SSH host gets the CA file and the session files; the keys are for containers and pods
+    // (contract), so they are not rendered or sent (#1536).
+    let staged =
+        crate::daemon_config_delivery::stage_extras(&settings.extras, &remote_secrets, false)
+            .map_err(|e| format!("the daemon configuration could not be delivered: {e}"))?;
+    let mut relocated = if files.is_some() {
+        crate::daemon_config_delivery::relocated_startup(
             settings,
             remote(crate::daemon_config_delivery::SCRIPT_NAME),
             remote(crate::daemon_config_delivery::ENV_NAME),
-        );
-        &relocated
+        )
     } else {
-        settings
+        settings.clone()
     };
+    relocated.extras = staged.extras;
+    let settings = &relocated;
     let text = daemon_config_render::prepare(settings, Kind::Ssh).map_err(|errors| {
         let joined: Vec<String> = errors.iter().map(ToString::to_string).collect();
         format!("the daemon configuration is invalid: {}", joined.join("; "))
@@ -1415,6 +1459,7 @@ fn ssh_delivery(settings: &DaemonSettings) -> Result<ConfigDelivery, String> {
         secrets: named_secrets(settings)
             .into_iter()
             .chain(startup_secrets(files))
+            .chain(staged.files)
             .collect(),
     })
 }
@@ -1885,6 +1930,7 @@ pub async fn kube_reconnect(
     name: &str,
     settings: &KubeSettings,
     startup: Option<&daemon_config_render::StartupTable>,
+    extras: &micold_core::daemons::SessionExtras,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeReconnectError> {
     use micold_core::kube::classify::PodGone;
@@ -1902,9 +1948,17 @@ pub async fn kube_reconnect(
     if let Some(gone) = PodGone::classify(status.as_ref(), true) {
         return Err(KubeReconnectError::Gone(gone.to_string()));
     }
-    kube_attempt(env, name, settings, startup, DriftChoice::Keep, sink)
-        .await
-        .map_err(KubeReconnectError::Attempt)
+    kube_attempt(
+        env,
+        name,
+        settings,
+        startup,
+        extras,
+        DriftChoice::Keep,
+        sink,
+    )
+    .await
+    .map_err(KubeReconnectError::Attempt)
 }
 
 /// The account the pod's SSH server logs this client in as: the basic image's passwd entry for
@@ -1921,6 +1975,7 @@ pub async fn kube_attempt(
     name: &str,
     settings: &KubeSettings,
     startup: Option<&daemon_config_render::StartupTable>,
+    extras: &micold_core::daemons::SessionExtras,
     drift: DriftChoice,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeAttemptError> {
@@ -1964,6 +2019,7 @@ pub async fn kube_attempt(
         git_config.is_some(),
     );
     pod_settings.startup = startup.cloned();
+    pod_settings.extras = extras.clone();
     let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
     let config = crate::daemon_config_render::prepare(
@@ -1986,6 +2042,7 @@ pub async fn kube_attempt(
         startup_script: delivered.script.as_deref(),
         startup_env: delivered.env.as_deref(),
         git_config: git_config.as_deref(),
+        secret_files: &delivered.files,
         time_zone,
     };
     let started = match start(&request, &mut |_| {}).await {
@@ -2118,6 +2175,43 @@ mod tests {
                 ("startup.env".to_string(), b"K=SECRET_VALUE".to_vec()),
             ]
         );
+    }
+
+    /// #1536 (I16-3): an SSH host is sent the CA file and the session files only (the keys are for
+    /// containers and pods), and every extras path the file renders is one of the files sent.
+    #[test]
+    fn ssh_delivery_sends_the_ca_and_session_files_and_names_exactly_those() {
+        use crate::daemon_config_render::DaemonSettings;
+        use micold_core::daemon_config::{Listen, SocketSpec};
+        use micold_core::daemons::SessionFileSetting;
+        let dir = tempfile::tempdir().unwrap();
+        let source = |name: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, name).unwrap();
+            path
+        };
+        let mut settings = DaemonSettings::new("S", Listen::Socket(SocketSpec::Auto));
+        settings.extras.ssh_key_file = Some(source("id"));
+        settings.extras.signing_key_file = Some(source("sign"));
+        settings.extras.ca_file = Some(source("ca"));
+        settings.extras.files = vec![SessionFileSetting {
+            file: source("cfg"),
+            target: ".x".into(),
+            mode: None,
+        }];
+        let delivery = super::ssh_delivery(&settings).unwrap();
+        let config = String::from_utf8(delivery.config).unwrap();
+        let sent: Vec<&str> = delivery.secrets.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(sent, ["ca.pem", "session-file-0"]);
+        let prefix = "/__MICOLD_REMOTE_HOME__/.micold/remote/secrets/";
+        for name in &sent {
+            assert!(
+                config.contains(&format!("{prefix}{name}")),
+                "{name}:\n{config}"
+            );
+        }
+        assert_eq!(config.matches(prefix).count(), sent.len(), "{config}");
+        assert!(!config.contains(dir.path().to_str().unwrap()), "{config}");
     }
 
     use super::{

@@ -15,6 +15,7 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::daemon_config_render::{DaemonSettings, StartupTable};
 use micold_client::features::sandbox::{Msg as SandboxMsg, SandboxLocations};
+use micold_core::daemons::SessionExtras;
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
 use micold_core::provision::{rollback, AttemptLedger, CancelToken};
 use micold_core::sandbox::cli::CliRuntime;
@@ -316,6 +317,7 @@ pub fn start<R: CommandRunner>(
         container_name,
         port,
         None,
+        &SessionExtras::default(),
         runner,
         &CancelToken::new(),
         &mut AttemptLedger::new(),
@@ -334,6 +336,7 @@ pub fn start_attempt<R: CommandRunner>(
     container_name: &str,
     port: u16,
     startup: Option<&StartupTable>,
+    extras: &SessionExtras,
     runner: R,
     cancel: &CancelToken,
     ledger: &mut AttemptLedger,
@@ -389,6 +392,7 @@ pub fn start_attempt<R: CommandRunner>(
             delivery,
             git_config.as_deref(),
             startup,
+            extras,
         ) {
             return Err(preparation_failed(format!(
                 "could not write the daemon's configuration to {}: {e}",
@@ -727,6 +731,8 @@ pub struct BootPlan {
     pub port: u16,
     /// The daemon's start script and `[startup]` keys, delivered with its configuration (#1533).
     pub startup: Option<StartupTable>,
+    /// The SSH key, signing key, CA file and session files, delivered with it (#1536).
+    pub extras: SessionExtras,
 }
 
 impl BootPlan {
@@ -763,6 +769,18 @@ impl BootPlan {
         let entry =
             Self::sandbox_daemon(registry, legacy_default).and_then(|id| registry.get(id))?;
         DaemonSettings::from_entry(entry).and_then(|(settings, _)| settings.startup)
+    }
+
+    /// The extras of the daemon [`Self::identity_of`] names, as its entry holds them (#1536).
+    pub fn extras_of(
+        registry: &micold_core::daemons::DaemonRegistry,
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    ) -> SessionExtras {
+        Self::sandbox_daemon(registry, legacy_default)
+            .and_then(|id| registry.get(id))
+            .and_then(DaemonSettings::from_entry)
+            .map(|(settings, _)| settings.extras)
+            .unwrap_or_default()
     }
 }
 
@@ -846,6 +864,7 @@ impl micold_client::daemon::ContainerStarter for DaemonContainers {
             container_name,
             port,
             setup.startup.as_ref(),
+            &setup.extras,
             &runner,
             cancel,
             &mut ledger,
@@ -1015,6 +1034,7 @@ impl BringUp {
                 &plan.container_name,
                 plan.port,
                 plan.startup.as_ref(),
+                &plan.extras,
                 &runner,
                 &cancelled,
                 &mut ledger,
@@ -1545,6 +1565,7 @@ mod tests {
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
+            extras: Default::default(),
         };
 
         let messages: Vec<Message> = BringUp::now(plan)
@@ -1653,6 +1674,7 @@ mod tests {
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
+            extras: Default::default(),
         };
         let runtime = CancelledDuring::scripted(
             a_runtime_that_creates_the_sandbox_then(Ok(
@@ -1707,6 +1729,7 @@ mod tests {
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
+            extras: Default::default(),
         };
         let mut running = None;
         let _task = BringUp::now(plan).run(&mut running);
@@ -1727,6 +1750,7 @@ mod tests {
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
+            extras: Default::default(),
         };
         let runtime = CancelledDuring::new(cancel_on);
         let (runtime_log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
@@ -2570,6 +2594,7 @@ mod tests {
             container_name: CONTAINER_NAME.to_string(),
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
+            extras: Default::default(),
         }
     }
 

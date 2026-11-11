@@ -54,10 +54,17 @@ async fn kube_real_sessions_survive_the_client_and_a_deleted_pod_is_reported() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(60);
     tokio::time::sleep(std::time::Duration::from_secs(away)).await;
-    let (connected, _relay) = kube_reconnect(&client.env, NAME, &settings, None, &events.sink())
-        .await
-        .map_err(|e| e.to_string())
-        .expect("the reconnect reaches the same pod");
+    let (connected, _relay) = kube_reconnect(
+        &client.env,
+        NAME,
+        &settings,
+        None,
+        &Default::default(),
+        &events.sink(),
+    )
+    .await
+    .map_err(|e| e.to_string())
+    .expect("the reconnect reaches the same pod");
     let micold_core::connect::Connected::Ready(mut conn, _welcome) = connected else {
         panic!("refused")
     };
@@ -81,7 +88,16 @@ async fn kube_real_sessions_survive_the_client_and_a_deleted_pod_is_reported() {
         None,
     )
     .expect("delete the pod");
-    match kube_reconnect(&client.env, NAME, &settings, None, &events.sink()).await {
+    match kube_reconnect(
+        &client.env,
+        NAME,
+        &settings,
+        None,
+        &Default::default(),
+        &events.sink(),
+    )
+    .await
+    {
         Err(KubeReconnectError::Gone(reason)) => {
             assert!(reason.to_lowercase().contains("deleted"), "{reason}");
         }

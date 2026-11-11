@@ -209,6 +209,7 @@ mod tests {
             container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
             port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
             startup: None,
+            extras: Default::default(),
         });
 
         let _ = on_restart_service_requested(&mut app);
@@ -339,6 +340,7 @@ mod tests {
             container_name: "Box-ctr".to_string(),
             port: 7001,
             startup: None,
+            extras: Default::default(),
         });
         assert_eq!(
             app.sandbox_daemon(),
@@ -374,6 +376,7 @@ mod tests {
             container_name: "Box-ctr".to_string(),
             port: 7001,
             startup: None,
+            extras: Default::default(),
         });
         let mut registry = app.core.settings.daemons.clone();
         registry

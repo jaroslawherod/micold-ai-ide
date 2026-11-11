@@ -2867,3 +2867,100 @@ mod runtime_project_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod extra_path_tests {
+    use super::{begin_edit, update, ExtraPath, Model, Msg, State};
+    use crate::links::DaemonLinks;
+    use micold_core::daemons::{DaemonRegistry, DaemonRuntime, FileSettings, SessionExtras};
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+
+    const ALL: [ExtraPath; 4] = [
+        ExtraPath::SshKey,
+        ExtraPath::KnownHosts,
+        ExtraPath::SigningKey,
+        ExtraPath::CaFile,
+    ];
+
+    fn field(extras: &SessionExtras, which: ExtraPath) -> &Option<PathBuf> {
+        match which {
+            ExtraPath::SshKey => &extras.ssh_key_file,
+            ExtraPath::KnownHosts => &extras.known_hosts_file,
+            ExtraPath::SigningKey => &extras.signing_key_file,
+            ExtraPath::CaFile => &extras.ca_file,
+        }
+    }
+
+    /// Runs `f` with a model over a registry holding one host daemon whose stored file settings
+    /// are `stored`, and the daemon's id.
+    fn with_daemon<R>(
+        stored: FileSettings,
+        f: impl FnOnce(&mut State, &mut Model<'_>, micold_core::daemons::DaemonId) -> R,
+    ) -> R {
+        let mut registry = DaemonRegistry::default();
+        let id = registry.add("Local", DaemonRuntime::Host, true).unwrap();
+        registry.set_file(id, stored).unwrap();
+        let mut links = DaemonLinks::default();
+        let mut bindings = BTreeMap::new();
+        let sessions = BTreeMap::new();
+        let mut model = Model {
+            registry: &mut registry,
+            links: &mut links,
+            bindings: &mut bindings,
+            legacy_default: None,
+            legacy_container: None,
+            locations: &[],
+            sessions: &sessions,
+            taken_elsewhere: Vec::new(),
+            next_port: &|| Ok(1),
+        };
+        f(&mut State::default(), &mut model, id)
+    }
+
+    /// T151 (#1536, I16-4): a path typed for one extra lands in that extra's own field and in no
+    /// other.
+    #[test]
+    fn a_typed_extra_path_lands_in_its_own_field_only() {
+        for which in ALL {
+            let saved = with_daemon(FileSettings::default(), |state, model, id| {
+                begin_edit(state, model, id).unwrap();
+                update(state, model, Msg::ExtraPathEdited(which, "/typed".into()));
+                state
+                    .draft
+                    .as_ref()
+                    .unwrap()
+                    .file_settings(&FileSettings::default())
+            });
+            for other in ALL {
+                let expected = (other == which).then(|| PathBuf::from("/typed"));
+                assert_eq!(
+                    field(&saved.extras, other),
+                    &expected,
+                    "typed {which:?}, checked {other:?}"
+                );
+            }
+        }
+    }
+
+    /// T151 (#1536, I16-4): the four stored extras are shown in their own form fields, so saving
+    /// the form unedited keeps each where it was.
+    #[test]
+    fn each_stored_extra_survives_opening_and_saving_the_form() {
+        let stored = FileSettings {
+            extras: SessionExtras {
+                ssh_key_file: Some("/k/ssh".into()),
+                known_hosts_file: Some("/k/hosts".into()),
+                signing_key_file: Some("/k/sign".into()),
+                ca_file: Some("/k/ca".into()),
+                files: Vec::new(),
+            },
+            ..FileSettings::default()
+        };
+        let saved = with_daemon(stored.clone(), |state, model, id| {
+            begin_edit(state, model, id).unwrap();
+            state.draft.as_ref().unwrap().file_settings(&stored)
+        });
+        assert_eq!(saved.extras, stored.extras);
+    }
+}

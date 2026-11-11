@@ -186,6 +186,9 @@ pub struct StartRequest<'a> {
     /// The sanitized git configuration, a key of the startup secret that `[git] config_file`
     /// names (#1530); `None` when the host has none to share.
     pub git_config: Option<&'a str>,
+    /// The other files of the startup secret (#1536): the SSH key, `known_hosts`, signing key, CA
+    /// file and session-file sources, by key; `daemon.toml` names them under the secret's mount.
+    pub secret_files: &'a [(String, String)],
     /// The daemon's `daemon.time_zone`, the pod's `TZ`.
     pub time_zone: Option<&'a str>,
 }
@@ -401,7 +404,7 @@ async fn secrets(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), Kube
 /// one in the cluster is ours (#1533, #1530).
 async fn startup_secret(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
     let name = r.names.startup_secret();
-    if r.startup_env.is_none() && r.git_config.is_none() {
+    if r.startup_env.is_none() && r.git_config.is_none() && r.secret_files.is_empty() {
         if let Some(view) = r
             .cluster
             .get(namespace(r), ObjectKind::Secret, &name)
@@ -419,6 +422,7 @@ async fn startup_secret(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(
     ]
     .into_iter()
     .filter_map(|(key, text)| Some((key.to_string(), text?.to_string())))
+    .chain(r.secret_files.iter().cloned())
     .collect();
     let manifest = manifest::secret(r.names, &name, &data);
     if let Ensured::Adopted(view) = ensure(r, ObjectKind::Secret, manifest.clone(), attempt).await?
@@ -622,7 +626,7 @@ async fn pod(
         // keeping it would keep them, so it is recreated whatever the user chose about drift.
         let retired = manifest::holds_retired_credential(on_pod)
             || manifest::lacks_config_map(on_pod)
-            || ((r.startup_env.is_some() || r.git_config.is_some())
+            || ((r.startup_env.is_some() || r.git_config.is_some() || !r.secret_files.is_empty())
                 && manifest::lacks_startup_secret(on_pod));
         match r.drift {
             _ if retired => delete_and_wait(r, ObjectKind::Pod, &r.names.pod(), &view.uid).await?,

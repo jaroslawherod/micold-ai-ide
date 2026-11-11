@@ -1509,6 +1509,69 @@ mod config_git_tests {
         (dir, edits)
     }
 
+    /// #1536, I16-3: `config_extra_edits` with a configuration file of `kind` carrying an SSH key, a
+    /// CA file and a session file; returns the dir (the home is `home` in it) and the edits.
+    fn extra_edits(kind: &str) -> (tempfile::TempDir, Vec<EnvEdit>) {
+        let dir = tempfile::tempdir().unwrap();
+        let p = |name: &str, mode: u32| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, "x").unwrap();
+            #[cfg(unix)]
+            std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(mode))
+                .unwrap();
+            path.display().to_string()
+        };
+        let (key, hosts, ca, src, client) = (
+            p("id", 0o600),
+            p("known", 0o644),
+            p("ca.pem", 0o644),
+            p("npmrc", 0o600),
+            p("client", 0o600),
+        );
+        let text = format!(
+            "schema = 1\n[daemon]\nname = \"t\"\nkind = \"{kind}\"\nimage = \"img\"\n\
+             [listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = \"{client}\"\n\
+             [git]\nssh_key_file = \"{key}\"\nknown_hosts_file = \"{hosts}\"\n\
+             [network]\nca_file = \"{ca}\"\n\
+             [[session.files]]\nfile = \"{src}\"\nas = \".npmrc\"\n"
+        );
+        let file = dir.path().join("daemon.toml");
+        std::fs::write(&file, text).unwrap();
+        let settings = crate::settings::DaemonSettings {
+            config_path: Some(file),
+            home: Some(dir.path().join("home")),
+            ..Default::default()
+        };
+        let edits = config_extra_edits(Vec::new(), &settings);
+        (dir, edits)
+    }
+
+    #[test]
+    fn a_container_and_a_pod_session_carry_the_ssh_command_ca_and_git_config_and_the_session_file()
+    {
+        for kind in ["container", "kubernetes"] {
+            let (dir, edits) = extra_edits(kind);
+            let env = set(&edits);
+            assert!(
+                env["GIT_SSH_COMMAND"].contains("IdentitiesOnly=yes"),
+                "{kind}"
+            );
+            let ca = dir.path().join("ca.pem");
+            for name in crate::session_extras::CA_VARIABLES {
+                assert_eq!(env[name], ca.to_string_lossy(), "{kind} {name}");
+            }
+            // No signing key: signing is switched off through the GIT_CONFIG block.
+            assert_eq!(env["GIT_CONFIG_COUNT"], "2", "{kind}");
+            assert_eq!(env["GIT_CONFIG_KEY_0"], "commit.gpgsign", "{kind}");
+            assert_eq!(env["GIT_CONFIG_VALUE_1"], "false", "{kind}");
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("home/.npmrc")).unwrap(),
+                "x",
+                "{kind}: the session file was not delivered"
+            );
+        }
+    }
+
     #[test]
     fn a_host_daemon_with_no_token_leaves_the_sessions_git_untouched() {
         assert!(edits("host", 0, "").1.is_empty());
