@@ -201,7 +201,7 @@ any group or in the ungrouped list, changes position or group.
 - Tag filter hides worktrees: hidden rows are not drop targets; group assignment and order of the hidden rows is kept.
 - A worktree added by another window or on disk: it appears in the ungrouped list; a removed one leaves its group.
 - Two windows change groups at once (Principle II): the last saved layout wins as a whole, and on
-  load a worktree named by two groups is kept in one only; no worktree is lost or in two groups.
+  load a worktree named by two groups is kept in the first of them, in group order; no worktree is lost or in two groups.
 - Group state file unreadable or corrupt: the sidebar falls back to the ungrouped stable order and keeps the file's content for inspection; no crash.
 - Platform differences: drag works with a mouse or trackpad on Linux, macOS and Windows; the "Move to group" menu is the path where drag is unavailable (Principle VI).
 - Escape with no drag in progress keeps its existing meaning.
@@ -210,8 +210,8 @@ any group or in the ungrouped list, changes position or group.
 
 ### Functional Requirements
 
-- **FR-001**: Users MUST be able to create a user group from the sidebar and give it a name.
-- **FR-002**: Users MUST be able to rename and to delete a user group from the sidebar.
+- **FR-001**: Users MUST be able to create a user group from the sidebar, by pointer and by keyboard, and give it a name.
+- **FR-002**: Users MUST be able to rename and to delete a user group from the sidebar, by pointer and by keyboard (group header menu: Rename, Delete, Move up, Move down).
 - **FR-003**: Deleting a group MUST NOT delete or stop any worktree or session; its worktrees MUST return to the ungrouped list.
 - **FR-004**: A group name MUST NOT be empty or blank; duplicate names MUST be refused with a visible message.
 - **FR-005**: A worktree MUST belong to at most one group; a worktree with none MUST be in the ungrouped list.
@@ -220,7 +220,6 @@ any group or in the ungrouped list, changes position or group.
 - **FR-008**: While a drag is in progress the sidebar MUST highlight the valid drop target under the pointer and draw an insertion marker where the worktree will land; over an invalid place it MUST show neither.
 - **FR-009**: A drop outside a valid target, and the Escape key, MUST cancel the drag and leave every worktree where it was.
 - **FR-010**: A worktree's context menu MUST offer "Move to group", listing every group, "Ungrouped" and "New group…", so assignment works without dragging and is reachable by keyboard (feature 803). A worktree's and a group's menu MUST also offer "Move up" and "Move down".
-- **FR-020**: Users MUST be able to reorder groups by dragging a group header (with the same highlight, marker and cancel rules as FR-008 and FR-009) and by the menu of FR-010.
 - **FR-011**: Groups MUST be collapsible and expandable, by pointer and by keyboard.
 - **FR-012**: Groups, their names, their order, each worktree's assignment, the order of worktrees within each list and each group's collapsed state MUST persist across restarts.
 - **FR-013**: User groups MUST be the only grouping in the sidebar: no group, order or row position depends on a session's or card's state; a row's state indicator stays (feature 1718 FR-001 to FR-004).
@@ -228,7 +227,8 @@ any group or in the ungrouped list, changes position or group.
 - **FR-015**: The Default entry MUST stay first and MUST NOT be assignable to a group.
 - **FR-016**: Run groups (feature 483) MUST [NEEDS CLARIFICATION: may a run group row be dragged into a user group (its runs follow), or does it always stay in the ungrouped list?].
 - **FR-017**: Hover, selection, ripple, context menu, tag filtering, keyboard navigation and reveal-current-session MUST keep working over the grouped list; reveal MUST expand a collapsed group that holds the target row.
-- **FR-018**: A corrupt, missing or older stored layout MUST load without error as "no groups".
+- **FR-018**: A corrupt, missing or older stored layout MUST load without error as "no groups"; an assignment to a worktree that no longer exists MUST be ignored; an empty group MUST stay a valid drop target; a drop on a collapsed group MUST expand it; a drag whose worktree disappears MUST end with no change.
+- **FR-019**: Users MUST be able to reorder groups by dragging a group header (with the same highlight, marker and cancel rules as FR-008 and FR-009) and by the menu of FR-010.
 
 ### Key Entities
 
