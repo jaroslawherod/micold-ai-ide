@@ -82,3 +82,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot). 
 - **Verify**: `bash scripts/tests/verdict-guard.test.sh`; quickstart step 2
 - **Depends on**: M1
 - **Tier**: full
+
+## Phase 7: TDD remediation
+
+The TDD verification (`tdd/verification.md`, verdict FAIL) found process gaps (F1, F2: no test list or cycle log; T001-T019 were built without red-phase records) and test-strength gaps (F3-F7). The test-strength tasks T023-T026 were done in the close unit. T021 and T022 are not done: a red-phase record cannot be rebuilt after the fact for behavior already shipped, so the gap stays recorded in `tdd/verification.md` and the ledger's follow-ups.
+
+- [ ] T021 (not done, see above) Create `specs/1802-verdict-head-sha/tdd/test-list.md` and `tdd/cycle-log.md`: one behavior per row for the record, guard, wait-merge, hook and carry cases, each tracing to a spec criterion, with the red command and output recorded by re-running each case against its source reverted (F1). Done when `/speckit.tdd.verify` no longer reports F1.
+- [ ] T022 (not done, see above) Reconcile the ticks of T001-T019 with the test list: every ticked behavioral task has its behavior DONE there (F2). Done when each `[X]` task id appears against a DONE behavior in `tdd/test-list.md`.
+- [x] T023 [P] Add rename and whitespace/order cases to `scripts/tests/verdict-guard.test.sh`, so dropping `-M` or `--stable` in `vl_identity` (`scripts/autopilot/verdict-lib.sh`) fails a test (F3). Done when `bash scripts/tests/verdict-guard.test.sh` is green and those two mutants fail it.
+- [x] T024 [P] Replace `scripts/tests/autopilot.test.sh:562` with a case that reaches the hook's merge `-d` parsing (a direct merge command preceded by `test -d x`, asserting the wait-merge message, not `--delete-branch`) (F4). Done when `bash scripts/tests/autopilot.test.sh` is green.
+- [x] T025 (partial: sources `check`, `ROOT`, `tmp` from the shared fixtures; `gh` stub, `new_repo`, `pr_json` stay, their shapes differ) [P] Make `scripts/tests/verdict-guard.test.sh` source `scripts/tests/lib/autopilot-fixtures.sh` for `q`, `new_repo`, `check` where the shapes match (F5). Done when `bash scripts/tests/verdict-guard.test.sh` is green and the duplicated definitions are gone.
+- [x] T026 [P] Tighten `scripts/tests/verdict-guard.test.sh:207` to one outcome, and add cases for a non-SHA `headRefOid`, an unreadable base, and wait-merge's `guard failed`/`guard gave no head` lines (F6, F7). Done when `bash scripts/tests/verdict-guard.test.sh` is green.
+- [x] T027 Run `mise run gate` and `quickstart.md` steps 1-4 and record the results (F8, SC-004). Done when `mise run gate` exits 0.

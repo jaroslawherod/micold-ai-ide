@@ -559,7 +559,7 @@ ledger specs/042-x/autopilot.md wt 4-milestones 11; git add -A; git commit -qm l
 echo '{"headRefName":"wt"}' > "$d/fx/pr-12.json"; echo '{"headRefName":"other"}' > "$d/fx/pr-13.json"
 check "hook blocks --delete-branch" 2 'never pass --delete-branch' hook "gh pr merge 11 --rebase --delete-branch"
 check "hook blocks -d" 2 'never pass --delete-branch' hook "gh pr merge 11 -d"
-check "hook reads -d only from the wait-merge call's own arguments" 0 '' hook "wait-merge.sh 11 test -d x"
+check "hook reads -d only from the merge call's own arguments" 2 'use scripts/autopilot/wait-merge.sh' hook "test -d x; gh pr merge 11 --rebase"
 check "hook blocks --admin" 2 'never merge with --admin' hook "gh pr merge 11 --admin"
 check "hook blocks removing the worktree" 2 'never remove a worktree' hook "git worktree remove ."
 check "hook allows a PR in the ledger" 0 '' hook "scripts/autopilot/wait-merge.sh 11"
