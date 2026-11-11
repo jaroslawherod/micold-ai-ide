@@ -758,16 +758,7 @@ Verdict FAIL: Issue 9 is not done until T139 and T140 are cleared.
 
 Verdict FAIL: Issue 10 is not done until T148 and T149 are cleared.
 
-- [x] T148 [US2] Finding 1 (HIGH): add a `state.rs` test that asserts `DaemonState::spawn_env_for`'s `PATH` actually starts with `<data_dir>/bin` (not one that strips the prefix away before asserting, like `without_gh_shim_dir`/`path_var` do today); confirm it fails against the Finding-1 mutant (`spawn_env_for` without the `with_gh_shim_path(...)` call) and passes restored; `cargo test -p micold-daemon --lib state::`
-- [x] T149 [US2] Finding 4 (MED), continued: add a kind-agnostic `state.rs` unit test (`the_gh_shim_reaches_every_configured_daemon_kind`) asserting `spawn_env_for`'s PATH injection does not depend on which of host/SSH/container/Kubernetes `daemon.kind` is configured — the honest ceiling without a real SSH host or Kubernetes cluster to spawn an actual session through; `cargo test -p micold-daemon --lib state::`
-- [x] T150 [MED] Finding 2: add `tdd/test-list.md` rows (behavior ids, `traces` US2/FR-011/FR-035/SC-003) for T055, T056, T095 with the cycle-log red for each, so the milestone has the per-behavior evidence its tasks already claim; `grep -c "Issue 10" specs/daemon-config-file/tdd/test-list.md`
-- [x] T151 [MED] Finding 3: add a test that calls `gh_shim::write_shim` twice with unchanged inputs and asserts the file's mtime (or a sentinel written alongside it) is untouched on the second call, matching the write-if-changed rule already tested for `daemon.toml` delivery (Issue 5's U21); `cargo test -p micold-daemon --lib gh_shim::`
-
-## Phase 26: TDD remediation (Issue 9 / #1530 close re-audit, from `tdd/verification.md`, section "close unit re-audit")
-
-Verdict FAIL: the close unit is not done until T152 and T153 are cleared.
-
 - [x] T152 [US2] I9-11: run the T147 mutants one at a time (restore, re-run green), write the cycle-log entry for T140-T146 with caught/survived per mutant as the red evidence, and run each new test (`cargo test -p micold-daemon --lib credential_config container_git_tests`, `--test git_credential_config`, `cargo test -p micold-core --lib scoped_credential::gitconfig`, `cargo test -p micold-client the_delivered_git_config`) and `mise run check`; `grep -n "T14[1-6]" specs/daemon-config-file/tdd/cycle-log.md`
 - [x] T153 [US2] I9-12: split `git_credential_config.rs:287` into one test per rule (answer and replaced file, cached once, secret-free cache file, miss limited to once a minute); `cargo test -p micold-daemon --test git_credential_config`
-- [x] T154 [US3] I9-13: test that the pod's startup git config carries no `gpgsign` (through the pod caller, not `shared_copy`) and correct `tdd/test-list.md` T143 to say what is covered; `cargo test -p micold-core --lib kube`
+- [x] T154 [US3] I9-13: test that `shared_copy`'s output in the pod's startup secret carries no `gpgsign` (the pod caller in `daemon.rs` only calls `shared_copy`) and correct `tdd/test-list.md` T143 to say what is covered; `cargo test -p micold-core --lib kube`
 - [x] T155 [US3] I9-14, I9-15: either extend T141 to a `push` (`git-receive-pack`) or record `ls-remote` as the intended scope in the test-list row; split the two scenarios of `a_sandbox_session_never_runs_the_planted_host_helper`; `cargo test -p micold-daemon --test git_credential_config`

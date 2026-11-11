@@ -301,7 +301,7 @@ fn the_reach_of_an_unfiltered_token_is_asked_once() {
 }
 
 #[test]
-fn the_reach_cache_is_kept_by_fingerprint_and_holds_no_secret() {
+fn the_reach_cache_holds_the_reach_and_no_secret() {
     let (_forge, s, config) = unfiltered_token();
     s.get(&config, "acme/app", None);
     let cache = std::fs::read_to_string(s.path("data/github-reach.json")).unwrap();
