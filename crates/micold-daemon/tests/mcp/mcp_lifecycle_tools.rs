@@ -281,11 +281,35 @@ async fn start_session_on_a_starting_or_restarting_session_succeeds_unchanged() 
     }
 }
 
+/// Make a `claude` findable on `PATH`, once per process: the start looks for the CLI before it
+/// looks for the conversation, so a machine without it (CI) would refuse for the wrong reason. The
+/// stub's directory goes last, so a real `claude` still wins and other tests see no change.
+#[cfg(unix)]
+fn claude_on_path() {
+    use std::os::unix::fs::PermissionsExt;
+    static STUB: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    STUB.get_or_init(|| {
+        let dir = tempfile::tempdir().unwrap();
+        let stub = dir.path().join("claude");
+        std::fs::write(&stub, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut paths: Vec<_> =
+            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
+        paths.push(dir.path().to_path_buf());
+        std::env::set_var("PATH", std::env::join_paths(paths).unwrap());
+        dir
+    });
+}
+
+#[cfg(not(unix))]
+fn claude_on_path() {}
+
 /// A start that fails ends `Starting`. Here it fails because the session's conversation is gone
 /// (the fixture has no transcript for it), so the daemon removes the session (026 FR-008a,
 /// BUG-1795): the call reports it unknown and every window sees the row go.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_start_whose_conversation_is_gone_removes_the_session() {
+    claude_on_path();
     let f = Fixture::new().await;
     let mut window = fake_window(&f.state);
     let error = f
