@@ -571,6 +571,28 @@ Saving the Settings page does not save this section and cancelling the page does
 daemon you added, changed or removed here is kept at once, and it needs no press of the page's
 **Save**.
 
+### AI CLI configuration
+
+Every daemon's form has an **AI CLI configuration** group, with one block per supported CLI
+(Claude Code, GitHub Copilot, Pi, Codex, OpenCode): **Enabled**, **Version**, **Launch
+arguments**, **Model**, **Base URL**, **Sign-in file**, **API key file** and **Settings file**.
+Leaving a field empty, with **Enabled** left checked, means that CLI keeps the daemon's own
+default for it — a block you never touch writes nothing to the daemon's file.
+
+This configures only that daemon's own file (the `[[ai.cli]]` entries of its `daemon.toml`; see
+[Daemon configuration → `[ai]` and `[[ai.cli]]`](daemon-configuration.md#ai-and-aicli) for every
+key, what it does and which CLI it applies to). It is a different setting from **Default AI
+CLI** above: that one picks which CLI a new session runs and is kept in this app's own
+`settings.json`, the same for every daemon, while this group's values travel with the daemon and
+differ from one daemon to the next. The two do not have to agree — a CLI you can choose for a
+session elsewhere can still be set here to arrive pinned to a version, with extra launch
+arguments or model, or with a delivered sign-in, and nothing set here changes what **Default AI
+CLI** offers.
+
+Like every other `[[ai.cli]]` key, a change here needs the daemon to restart to take effect (see
+[Daemon configuration → Loading and live
+reload](daemon-configuration.md#loading-and-live-reload)).
+
 ### Removing a daemon
 
 Removal asks first and says how many worktrees are bound to the daemon and how many sessions are

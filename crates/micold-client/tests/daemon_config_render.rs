@@ -4,7 +4,7 @@
 use crate::fixtures;
 
 use fixtures::{golden, settings, KINDS};
-use micold_client::daemon_config_render::{render, DaemonSettings, ProjectSetting};
+use micold_client::daemon_config_render::{render, AiCliSetting, DaemonSettings, ProjectSetting};
 use micold_core::daemon_config::{parse, Kind, Listen, SocketSpec};
 use std::path::Path;
 
@@ -51,6 +51,22 @@ fn read_back(text: &str, kind: Kind) -> DaemonSettings {
         github_tokens: vec![],
         git_config_file: None,
         extras: Default::default(),
+        ai_cli: config
+            .ai
+            .cli
+            .into_iter()
+            .map(|c| AiCliSetting {
+                id: c.id,
+                enabled: c.enabled,
+                version: c.version,
+                args: c.args,
+                model: c.model,
+                api_base_url: c.api_base_url,
+                sign_in_file: c.sign_in_file.map(|s| s.path().to_path_buf()),
+                api_key_file: c.api_key_file.map(|s| s.path().to_path_buf()),
+                settings_file: c.settings_file,
+            })
+            .collect(),
     }
 }
 
@@ -198,4 +214,65 @@ fn the_sandbox_extras_render_and_parse_back() {
     // Nothing set: none of the tables appears.
     let plain = render(&settings(Kind::Container), Kind::Container);
     assert!(!plain.contains("[git]") && !plain.contains("[network]") && !plain.contains("session"));
+}
+
+/// #1532, FR-013d: an `[[ai.cli]]` entry Settings → Daemons writes renders into a block the
+/// daemon's own parser accepts, and every field Settings offers survives the round trip.
+#[test]
+fn an_ai_cli_setting_round_trips_through_the_rendered_file() {
+    use micold_core::daemon_config::CliId;
+
+    let mut s = settings(Kind::Host);
+    s.ai_cli = vec![AiCliSetting {
+        id: CliId::ClaudeCode,
+        enabled: Some(false),
+        version: Some("1.2.3".into()),
+        args: vec!["--verbose".into(), "--foo".into()],
+        model: Some("claude-sonnet".into()),
+        api_base_url: Some("https://api.example.com".into()),
+        sign_in_file: Some("/run/micold/secrets/claude-sign-in".into()),
+        api_key_file: Some("/run/micold/secrets/claude-api-key".into()),
+        settings_file: Some("/home/me/.claude/settings.json".into()),
+    }];
+    let text = render(&s, Kind::Host);
+    assert!(text.contains("[[ai.cli]]"), "{text}");
+    assert!(text.contains(r#"id = "claude_code""#), "{text}");
+
+    let config = parse(&text, "daemon.toml").unwrap_or_else(|e| panic!("{}", e[0]));
+    assert_eq!(config.ai.cli.len(), 1);
+    let parsed = &config.ai.cli[0];
+    assert_eq!(parsed.id, CliId::ClaudeCode);
+    assert_eq!(parsed.enabled, Some(false));
+    assert_eq!(parsed.version.as_deref(), Some("1.2.3"));
+    assert_eq!(
+        parsed.args,
+        vec!["--verbose".to_string(), "--foo".to_string()]
+    );
+    assert_eq!(parsed.model.as_deref(), Some("claude-sonnet"));
+    assert_eq!(
+        parsed.api_base_url.as_deref(),
+        Some("https://api.example.com")
+    );
+    assert_eq!(
+        parsed.sign_in_file.as_ref().map(|s| s.path()),
+        Some(Path::new("/run/micold/secrets/claude-sign-in"))
+    );
+    assert_eq!(
+        parsed.api_key_file.as_ref().map(|s| s.path()),
+        Some(Path::new("/run/micold/secrets/claude-api-key"))
+    );
+    assert_eq!(
+        parsed.settings_file.as_deref(),
+        Some(Path::new("/home/me/.claude/settings.json"))
+    );
+}
+
+/// A draft with every `[[ai.cli]]` field at its default writes no entry: an all-default CLI must
+/// not appear in the file at all (#1532, FR-013d).
+#[test]
+fn an_all_default_ai_cli_entry_renders_nothing() {
+    let s = settings(Kind::Host);
+    assert!(s.ai_cli.is_empty());
+    let text = render(&s, Kind::Host);
+    assert!(!text.contains("[[ai.cli]]"), "{text}");
 }

@@ -34,7 +34,7 @@ const SANDBOX_LISTEN: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 7000);
 const SANDBOX_TOKEN: &str = "/run/micold/secrets/client-token";
 
-pub use micold_core::daemons::ProjectSetting;
+pub use micold_core::daemons::{AiCliSetting, ProjectSetting};
 
 /// The `[startup]` table of a daemon's file: the settings and the path the script is delivered to
 /// (`startup.script_file`), which is where delivery put it, not where the user picked it from.
@@ -119,6 +119,8 @@ pub struct DaemonSettings {
     pub git_config_file: Option<PathBuf>,
     /// The SSH key, signing key, CA bundle and session files (#1536).
     pub extras: SessionExtras,
+    /// The `[[ai.cli]]` entries Settings → Daemons configures (#1532, FR-013d).
+    pub ai_cli: Vec<AiCliSetting>,
 }
 
 impl DaemonSettings {
@@ -141,6 +143,7 @@ impl DaemonSettings {
             extras: SessionExtras::default(),
             github_tokens: Vec::new(),
             git_config_file: None,
+            ai_cli: Vec::new(),
         }
     }
 
@@ -238,6 +241,7 @@ impl DaemonSettings {
             clone_root: file.clone_root.clone(),
             extras: file.extras.clone(),
             projects: file.projects.clone(),
+            ai_cli: file.ai_cli.clone(),
             startup: file
                 .startup
                 .as_ref()
@@ -315,6 +319,7 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
         let _ = writeln!(out, "path = {}", quote(&project.path.to_string_lossy()));
         key_str(&mut out, "remote", &project.remote);
     }
+    render_ai_cli(&mut out, &settings.ai_cli);
     if let Some(startup) = &settings.startup {
         render_startup(&mut out, startup);
     }
@@ -337,6 +342,29 @@ fn render_extras(out: &mut String, extras: &SessionExtras, git_config_file: &Opt
         let _ = writeln!(out, "file = {}", quote(&file.file.to_string_lossy()));
         let _ = writeln!(out, "as = {}", quote(&file.target.to_string_lossy()));
         key_str(out, "mode", &file.mode);
+    }
+}
+
+/// The `[[ai.cli]]` entries Settings → Daemons configures (#1532, FR-013d): only the fields the
+/// form offers; `env`, `token_file`, `place` and `use_machine_sign_in` have no form field yet and
+/// are left out, so the daemon keeps the file's own default for them.
+fn render_ai_cli(out: &mut String, entries: &[AiCliSetting]) {
+    for entry in entries {
+        out.push_str("\n[[ai.cli]]\n");
+        let _ = writeln!(out, "id = {}", quote(entry.id.as_str()));
+        if let Some(enabled) = entry.enabled {
+            let _ = writeln!(out, "enabled = {enabled}");
+        }
+        key_str(out, "version", &entry.version);
+        if !entry.args.is_empty() {
+            let list: Vec<String> = entry.args.iter().map(|a| quote(a)).collect();
+            let _ = writeln!(out, "args = [{}]", list.join(", "));
+        }
+        key_str(out, "model", &entry.model);
+        key_str(out, "api_base_url", &entry.api_base_url);
+        key_path(out, "sign_in_file", &entry.sign_in_file);
+        key_path(out, "api_key_file", &entry.api_key_file);
+        key_path(out, "settings_file", &entry.settings_file);
     }
 }
 

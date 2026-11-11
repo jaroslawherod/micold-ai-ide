@@ -498,6 +498,15 @@ pub(crate) fn form<'a>(
         }
     }
     let open = |section| state.section_open(section);
+    if draft.editing.is_some() {
+        fields = fields.push(container_fields::accordion(
+            Section::AiCli,
+            section_body(None, ai_cli_controls(draft, roles), roles),
+            open(Section::AiCli),
+            draft,
+            roles,
+        ));
+    }
     let sections: Vec<Element<'a, Message>> = match draft.runtime {
         DraftRuntime::Container => {
             let connection = vec![
@@ -655,6 +664,70 @@ pub(crate) fn form<'a>(
         ));
     }
     fields.into()
+}
+
+/// The `[[ai.cli]]` section's controls (#1532, FR-013d): one group per supported CLI, in
+/// [`micold_core::daemon_config::CliId::ALL`] order — enabled, version, args, model, base URL,
+/// sign-in file, API key file and settings file. `model` and `api_base_url` are Claude Code's and
+/// Codex's own fields (FR-013d); left visible but unused for the others costs nothing a mutant
+/// would catch, so they stay off rather than branch per CLI here.
+fn ai_cli_controls<'a>(draft: &'a Draft, roles: Roles) -> Vec<Element<'a, Message>> {
+    let mut controls = Vec::with_capacity(micold_core::daemon_config::CliId::ALL.len() * 2);
+    for id in micold_core::daemon_config::CliId::ALL {
+        let index = id as usize;
+        let entry = &draft.ai_cli[index];
+        controls.push(group(id.ai_cli().provider().display_name(), roles));
+        controls.push(
+            Checkbox::new("Enabled", entry.enabled, roles)
+                .on_toggle(move |v| Message::Daemons(DaemonsMsg::AiCliEnabledToggled(id, v)))
+                .into(),
+        );
+        for (label, value, field) in [
+            (
+                "Version",
+                &entry.version,
+                crate::features::daemons::AiCliField::Version,
+            ),
+            (
+                "Launch arguments",
+                &entry.args,
+                crate::features::daemons::AiCliField::Args,
+            ),
+            (
+                "Model",
+                &entry.model,
+                crate::features::daemons::AiCliField::Model,
+            ),
+            (
+                "Base URL",
+                &entry.api_base_url,
+                crate::features::daemons::AiCliField::ApiBaseUrl,
+            ),
+            (
+                "Sign-in file",
+                &entry.sign_in_file,
+                crate::features::daemons::AiCliField::SignInFile,
+            ),
+            (
+                "API key file",
+                &entry.api_key_file,
+                crate::features::daemons::AiCliField::ApiKeyFile,
+            ),
+            (
+                "Settings file",
+                &entry.settings_file,
+                crate::features::daemons::AiCliField::SettingsFile,
+            ),
+        ] {
+            controls.push(
+                TextField::new("Not set", value, roles)
+                    .label(label)
+                    .on_input(move |v| Message::Daemons(DaemonsMsg::AiCliFieldEdited(id, field, v)))
+                    .into(),
+            );
+        }
+    }
+    controls
 }
 
 /// The Start script group's controls (#1533, FR-010): the script as a path or inline text, then

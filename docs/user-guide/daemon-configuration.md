@@ -181,6 +181,27 @@ delivered sign-in:
 seeded, and the CLI uses the sign-in it manages on this computer. It is off unless your file names
 it, so a daemon that never mentioned it keeps working exactly as before.
 
+#### Setting it up in Settings, and the file-vs-`settings.json` rule
+
+**Settings → Daemons → AI CLI configuration** (every kind of daemon) edits `enabled`, `version`,
+`args` (as space-separated launch arguments), `model`, `api_base_url`, `sign_in_file`,
+`api_key_file` and `settings_file`, one group per CLI, without hand-writing the file. A field left
+empty, with the CLI's own **Enabled** checkbox left checked, writes no `[[ai.cli]]` entry for that
+CLI at all: the daemon keeps the pinned table's own default for every key. `env`, `token_file`,
+`place` and `use_machine_sign_in` have no field in this group yet; set them by hand in the file
+until a later release adds one.
+
+These are the only `[[ai.cli]]` keys this app ever writes for you — everything else about an AI
+CLI that this app remembers is kept in **this app's own `settings.json`**, never in a daemon's
+`daemon.toml`: which CLI a new session runs when you don't choose one
+([Settings → Default AI CLI](settings.md#default-ai-cli)), and which CLI *you* are signed in as,
+used only to deliver a sign-in to a daemon's `sign_in_file` or `token_file` in the first place.
+`daemon.toml`'s own `ai.default` and `[[ai.cli]]` answer a different question — what a *daemon*
+offers and how it is configured on that daemon alone — and are set from this group, independently
+for each daemon; one daemon's `[[ai.cli]]` entries never change another's, or your own
+`settings.json`. A change needs the daemon to restart, like every other `[[ai.cli]]` key (see
+*Loading and live reload* below).
+
 ### `[orchestrator]`
 
 Absent means the daemon does not connect to an orchestrator. Present, it names the orchestrator and

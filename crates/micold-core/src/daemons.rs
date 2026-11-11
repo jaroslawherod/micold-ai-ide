@@ -201,6 +201,39 @@ pub struct ProjectSetting {
     pub remote: Option<String>,
 }
 
+/// One `[[ai.cli]]` entry as Settings stores it (#1532, FR-013d). Only the fields Settings →
+/// Daemons offers; `env`, `token_file`, `place` and `use_machine_sign_in` have no form field yet
+/// and stay at the file's own default until a later milestone adds one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiCliSetting {
+    /// The CLI this entry configures.
+    pub id: crate::daemon_config::CliId,
+    /// `false` drops the CLI from provisioning; `true`/unset offers it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    /// A `MAJOR.MINOR.PATCH` override of the pinned version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// Appended after the CLI's own launch arguments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    /// The default model (`claude_code` only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// The CLI's endpoint (`claude_code` and `codex` only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_base_url: Option<String>,
+    /// A delivered sign-in's path on the daemon's machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sign_in_file: Option<PathBuf>,
+    /// An API key file's path on the daemon's machine, read when used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_file: Option<PathBuf>,
+    /// The CLI's user settings file (container and pod only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings_file: Option<PathBuf>,
+}
+
 /// What a daemon's configuration file holds that the runtime does not decide. Unset means the
 /// daemon uses the kind's default.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,6 +260,9 @@ pub struct FileSettings {
     /// The SSH key, signing key, CA bundle and session files (#1536).
     #[serde(default, skip_serializing_if = "SessionExtras::is_empty")]
     pub extras: SessionExtras,
+    /// The `[[ai.cli]]` entries Settings → Daemons configures (#1532, FR-013d).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ai_cli: Vec<AiCliSetting>,
 }
 
 /// A file copied into the session home (`[[session.files]]`, #1536).

@@ -305,7 +305,58 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-None. (M2b code is committed and reviewed; the previous unit's plan is spent. Next: wait for the M2b PR's CI and merge, then M3.)
+M4 (T066, T067) continued from part 1's WIP (`f6d092f49`, not pushed). Done this unit (not yet
+committed as of this handover — commit it first in the next unit, before anything else):
+- Fixed the two `Section::AiCli` non-exhaustive-match compile errors in
+  `crates/micold-client/src/features/daemon_sections.rs` (`container_parts`/`kube_parts`: both
+  already special-case `AiCli` in `summary()` before reaching these, so the catch-all arms just
+  gained `| Section::AiCli => Vec::new()`/`=> Vec::new()`).
+- Dropped the unused `micold_core::provider::AiCliProvider as _` import in
+  `crates/micold-client/src/ui/settings/daemons.rs` (`provider()` returns `&dyn AiCliProvider`,
+  so `.display_name()` resolves through the vtable without the trait in scope).
+- `mise run check` (plain `cargo check --workspace`) is green.
+- Fixed `crates/micold-client/tests/daemon_config_render.rs`'s `read_back` helper, which was
+  missing the new `ai_cli` field of `DaemonSettings` (a compile error `cargo check --workspace`
+  does not catch, only `--tests`/`--all-targets`) — now maps `config.ai.cli` back to
+  `AiCliSetting` (`SecretPath::path()` for the two secret paths).
+- Added tests: `an_ai_cli_setting_round_trips_through_the_rendered_file` and
+  `an_all_default_ai_cli_entry_renders_nothing` in `daemon_config_render.rs`; a new
+  `mod ai_cli_draft` in `crates/micold-client/tests/features_daemons.rs` (`to_setting`/
+  `from_setting` round trip, all-default writes `None`, `enabled` alone writes just that); fixed
+  `each_kind_lists_its_sections_in_order` and `one_concept_has_one_title_and_limits_is_gone` in
+  `crates/micold-client/tests/features_daemon_sections.rs` to include `Section::AiCli` (part 1's
+  code added it to every runtime's list; these literal-list tests had not been updated), and added
+  `ai_cli_summary_counts_overridden_clis`.
+- `cargo fmt --all` run; `cargo fmt --all -- --check` is clean.
+- T067: added "AI CLI configuration" subsection to `docs/user-guide/settings.md` (after the
+  **Add daemon** paragraph, before "Removing a daemon") describing the new accordion and the
+  file-vs-`settings.json` split; added "Setting it up in Settings, and the file-vs-`settings.json`
+  rule" subsection to `docs/user-guide/daemon-configuration.md` (after "What a delivered sign-in
+  brings with it", before `[orchestrator]`), mapping form fields to `[[ai.cli]]` keys and stating
+  which keys stay client-side in `settings.json` (`Default AI CLI`) vs. per-daemon in the file.
+
+**Not done / next unit's first steps**:
+1. `scripts/build-lock.sh cargo check -p micold-client --tests` was started to confirm every test
+   target in the crate compiles (not just `tests/main.rs`'s registered modules) but had not
+   finished when context ran out — rerun it (or `mise run check` plus a targeted
+   `cargo test -p micold-client --test main -- --list` smoke) and fix anything it finds before
+   going further. The two tests files touched are both registered in `tests/main.rs`
+   (`mod daemon_config_render;`, `mod features_daemons;`, `mod features_daemon_sections;` — confirm
+   the last two are registered; `daemon_config_render` was confirmed).
+2. Nothing from this unit is committed yet. Commit first (`feat(1532): …` or keep as `wip` if more
+   fixing is still needed), on top of `f6d092f49`.
+3. Then: `mise run check-core`/targeted test run to confirm the new tests pass (not just compile),
+   then the scoped gate, review A (`code-review` skill, `high`), review B (conformance, `sonnet`),
+   full gate, PR per `tasks/pr.md`. No visual change has been visually inspected yet — the new
+   accordion needs a `visual-pass` check (new Settings → Daemons section) per `gate.md`'s "Changed
+   how something looks?" rule.
+4. `origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind` currently points at a
+   commit (`4cca1f8fa`) that is *not* an ancestor of local `HEAD` and carries unrelated changes
+   (looks like drift from feature 1802, not 1532) — before the first push of this unit's work,
+   check `git log origin/<branch>..HEAD` and `git diff 6a739b934 4cca1f8fa` again; local `HEAD`
+   does have `origin/main` as an ancestor, so this is likely safe to overwrite with
+   `--force-with-lease`, but confirm before pushing rather than assuming.
+5. Nothing pushed; no gate has seen this diff yet.
 
 ## Open escalation
 
