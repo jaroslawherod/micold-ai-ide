@@ -35,7 +35,7 @@ None beyond T001: the trigger extraction is the P1 story's own work.
 
 - [x] T006 [US1] Extract the `Select` trigger (container shape, fill or outline, label, value, arrow, state layers, ripple) into a shared piece in `src/ui/material/` (new `select_trigger.rs`, exported through `ui/material/mod.rs`); tokens and `Roles` only, no literals; takes `open` as an input.
 - [x] T007 [US1] `src/ui/material/select.rs`: `Select` draws its trigger through the shared piece; behaviour unchanged; its existing tests stay green.
-- [x] T008 [US1] `src/ui/material/menu_select.rs`: `MenuSelect` trigger uses the shared piece in place of the text `Button`; builder API kept, ends in `.into()`; filter, chips and keyboard highlight untouched. Makes T002 to T005 green.
+- [x] T008 [US1] `src/ui/material/menu_select.rs`: `MenuSelect` trigger uses the shared piece in place of the text `Button`; builder API kept, ends in `.into()`; filter, chips and keyboard highlight untouched. Makes T002 to T005 green. Also touches `crates/micold-material/src/button.rs` (`Button::bare`: the press, keyboard and ripple without a look of its own), and, for the disabled look of T003, `crates/micold-material/src/form_field.rs` and `filled_field.rs` (`FormField::disabled`); T005's test lives in `crates/micold-client/tests/gates/composer_fits.rs`.
 - [x] T009 [P] [US1] `src/showcase/`: the `MenuSelect` and options-row entries show the new trigger beside `Select`.
 - [x] T010 [P] [US1] Docs: `docs/user-guide/structured-input.md` (session options row look) and the component catalogue docs for the shared trigger.
 
