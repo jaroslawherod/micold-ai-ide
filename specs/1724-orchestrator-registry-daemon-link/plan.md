@@ -32,8 +32,9 @@ local socket in a temp dir and a controllable clock.
 **Target Platform**: Linux, macOS, Windows (Principle VI): socket/pipe via `interprocess`, paths via
 the platform helpers, no Unix-only API in shared code.
 
-**Project Type**: desktop-app workspace (core crate + daemon crate + client crate); this feature touches
-core and daemon only.
+**Project Type**: desktop-app workspace (core crate + daemon crate + client crate); this feature adds
+core and daemon code and, for the two new wire variants, one ignoring match arm in the normal daemon
+and in any exhaustive client match (tasks find them with `findReferences`).
 
 **Performance Goals**: offline noticed within `LIVENESS_DEADLINE` + `CHECK_INTERVAL` (10 s worst case);
 a link costs one task and one ping per 3 s.
@@ -97,6 +98,8 @@ crates/micold-core/src/orchestrator/          # NEW, render-free, no tokio
 └── store.rs                                  # RegistryStore trait, JsonRegistryStore, MemoryRegistryStore
 crates/micold-core/src/protocol/messages.rs   # + DaemonMsg::LinkPing, ClientMsg::LinkPong
 crates/micold-core/src/protocol/version.rs    # PROTOCOL_VERSION 80 -> 81 (doc line)
+crates/micold-daemon/src/server.rs            # ClientMsg::LinkPong arm: ignored (stray pong on a normal daemon)
+crates/micold-client/src/...                  # any exhaustive DaemonMsg match gains a LinkPing arm: ignored
 crates/micold-core/src/daemon_config/mod.rs   # Kind gains Serialize (not hashed)
 crates/micold-core/src/lib.rs                 # pub mod orchestrator
 crates/micold-daemon/src/orchestrator/        # NEW
@@ -126,14 +129,19 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
 | FR-005 heartbeat/offline | `liveness.rs` + `link.rs` tick at `CHECK_INTERVAL`; `Registry::tick` / `answered` |
 | FR-006 older protocol | `Registry::claim` returns `Refuse::VersionMismatch` and records `needs-update` unless the id is live |
 | FR-007 one live link | `Registry::claim` decision table (live / closed / silent / restored) |
-| FR-008 no outbound | listener only; no `connect` call in the module; test uses a connect-forbidding check (grep gate + test that the module's public API holds no dial path) |
+| FR-008 no outbound | listener only. Satisfied by a source-level test that fails on any `connect(`, `Stream::connect` or `open_pipe(` under `micold-daemon/src/orchestrator/` and `micold-core/src/orchestrator/`, plus the integration run in a Linux network namespace (`unshare -rn`, Linux CI only, scope stated) where the full link suite still passes |
 | FR-009 holds no session | no `DaemonState`; restart test with a fake daemon holding a session fixture |
 | FR-010 unchanged | argument dispatch only when `args[0] == "orchestrator"`; existing suites unchanged (SC-006) |
 
 ### Pure rules (`Registry`)
 
-- `claim(ann, now, wall) -> Claim`: where `Claim` is `Accepted{ link: LinkToken, replaced: Option<LinkToken> }`
-  or `Refused(RefuseReason)`. Decision table over (existing record state, version match):
+- Two-phase claim, because `Hello` is evaluated after the preamble. `claim(ann, now, wall) -> Claim`
+  is `Reserved{ link: LinkToken }` or `Refused(RefuseReason)`; a reserved link counts as live against
+  rival claims but changes no record and closes nothing. `confirm(link, now, wall)` (after a good
+  `Hello`) upserts the record `online` and closes the replaced link. `claim_failed(link, reason)`
+  (a `Hello` refusal) releases the reservation: `VersionMismatch` records `needs-update` (same rule as a
+  preamble mismatch, never over a live record); `BuildMismatch`, `AuthRejected` and a dropped link
+  change no record. Decision table for `claim`: Decision table over (existing record state, version match):
 
   | Existing id state | Version matches | Result |
   |---|---|---|
@@ -141,6 +149,10 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
   | same, no live link | no | refuse `VersionMismatch`, record `needs-update` (a silent-link claim closes the silent link too) |
   | live link (open and `online`) | yes | refuse `AlreadyLinked`, record untouched |
   | live link | no | refuse `VersionMismatch`, record and link untouched, no overwrite |
+
+  Calls with a stale or unreserved `LinkToken` (`confirm`, `answered`, `tick`, `closed`) return
+  `LinkAction::Stale` and change nothing, so a late frame on a replaced silent link cannot move the
+  new link's record (US4.3).
 
   Claims are taken under one `Mutex<Registry>`, so two simultaneous claims serialise: exactly one wins
   (SC-004). The lock is never held across `.await` or a store write that blocks the claim: `claim` returns
@@ -160,10 +172,11 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
    close. Valid: `Registry::claim`.
 2. Write a `LinkVerdict`: `Accepted` or `Refused { reason, orchestrator_version, daemon_version, message }`
    (`VersionMismatch` message names both numbers, `AlreadyLinked` is distinct).
-3. On `Accepted`, switch to `WireCodec<ClientMsg, DaemonMsg>`; first frame must be `Hello`, evaluated
+3. On `Accepted` (a reservation), switch to `WireCodec<ClientMsg, DaemonMsg>`; first frame must be `Hello`, evaluated
    against this build with `handshake::evaluate`; a `VersionMismatch` there (same number, other schema
-   hash) is refused and recorded `needs-update` like a number mismatch; success sends `Welcome` with an
-   empty catalog.
+   hash) calls `claim_failed` and is recorded `needs-update` like a number mismatch; `BuildMismatch` and
+   `AuthRejected` call `claim_failed` and leave the registry unchanged; success calls `confirm`, then sends
+   `Welcome` with an empty catalog. The old link is closed and the record turns `online` only at `confirm`.
 4. Loop: `select!` over inbound frames (`answered`, `LinkPong` and any frame count) and a
    `CHECK_INTERVAL` timer (`tick`; `SendPing` sends `DaemonMsg::LinkPing`). `Expired` marks `offline` and
    keeps reading: a later frame brings the daemon back `online` without a new link. A claim by another
@@ -196,9 +209,10 @@ the test double. Contrast with `JsonFileStore`, which recovers silently.
 | FR-004, SC-005, torn write, failed save, corrupt file | core unit: `store.rs` with a temp dir and `MemoryRegistryStore` |
 | wire variants round-trip, version bump | core unit: `protocol/messages.rs`, `version.rs` (existing schema tests) |
 | FR-001, FR-002, US1-US5 end to end, SC-001, SC-003, SC-005 | daemon integration `tests/orchestrator/` (fake daemon over a real local socket, temp state dir, controllable `Instant` via a test clock passed into `run_with`) |
-| FR-008 | daemon integration: the listener-only module has no `connect`; assert with a source-level test plus the integration run with a socket directory that offers no outbound path |
+| FR-008 | source-level test (no `connect(` / `Stream::connect` / `open_pipe(` in the two orchestrator dirs) and the link suite under `unshare -rn` on Linux (the spec's "outbound connections blocked" wording) |
+| SC-004 on the wire | daemon integration: two fake daemons dial one id concurrently, repeated 50 times, exactly one `Accepted` each time |
 | FR-009 | daemon integration: restart the orchestrator while a fake daemon holds a session fixture |
-| FR-010, SC-006 | existing daemon suites unchanged; one test that no-arg start does not parse `orchestrator` |
+| FR-010, SC-006 | existing daemon suites unchanged apart from the protocol version constant (80 to 81) they already read; one test that no-arg start does not parse `orchestrator` |
 | Principle VI | all new tests run on the three-OS CI matrix; no `cfg(unix)` outside `platform/` |
 | Geometry gates, quickstart §B visual pass | not applicable (no UI) |
 
