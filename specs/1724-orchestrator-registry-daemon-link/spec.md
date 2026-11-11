@@ -72,7 +72,7 @@ the registry, resume replies, read it again.
 
 1. **Given** an online daemon, **When** it misses heartbeats past the deadline, **Then** its health
    is `offline` and its last seen is the time of its last answer.
-2. **Given** an offline daemon, **When** its link answers a heartbeat, **Then** its health is
+2. **Given** an offline daemon, **When** its link sends any frame (a heartbeat answer included), **Then** its health is
    `online` and last seen advances.
 3. **Given** one daemon goes silent, **When** the registry is read, **Then** the other daemons are
    unchanged.
@@ -153,7 +153,7 @@ both are listed (offline until they relink); a daemon with sessions still holds 
   reported; the previous stored registry is left intact.
 - Torn write (crash mid-save): a restart sees the old or the new registry, never a partial one.
 - Concurrency (Principle II): two links claiming one id at the same instant: exactly one wins.
-- A link announces an invalid daemon id (empty, too long, bad characters): refused at decode.
+- A link announces an invalid daemon id (empty, too long, bad characters): closed without a verdict (no registry change).
 - A daemon renames or changes capabilities on relink: the record is updated in place.
 - A daemon on a *newer* protocol than the orchestrator: refused naming both versions (same rule).
 - A version-mismatched claim on an id with a live link: refused, live record untouched (FR-006/FR-007).
@@ -173,10 +173,10 @@ both are listed (offline until they relink); a daemon with sessions still holds 
   the daemon's id, kind, display name, protocol version, capabilities and tenant id from its
   announcement. (FR-002, FR-003)
 - **FR-003**: The orchestrator MUST keep a registry with, per daemon: id, kind (host, container, SSH
-  host, pod), name, protocol version, capabilities, health (online, offline, needs-update), last seen
+  host, pod; `daemon_config::Kind` names), name, protocol version, capabilities, health (online, offline, needs-update), last seen
   and tenant id, and MUST list it on request.
 - **FR-004**: The registry MUST be saved in a persistent store and reloaded at start, so a restart sees the old
-  or the new registry, never a partial one; a corrupt store fails start with a message naming the file; a failed save keeps the previous store intact and is reported; after a restart every saved daemon is listed with health `offline` until it links again.
+  or the new registry, never a partial one; a corrupt store fails start with a message naming the file; a failed save keeps the previous store intact and is reported; after a restart every saved daemon is listed with health `offline` until it links again (a saved `needs-update` is also listed `offline`: the mismatch is re-derived when the daemon relinks).
   (FR-010)
 - **FR-005**: The orchestrator MUST heartbeat each link and MUST mark a daemon `offline` when it has
   not answered within the deadline, and `online` when it answers again; other daemons are unaffected.
@@ -187,7 +187,7 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 - **FR-007**: A *live* link is one whose transport is open and whose daemon is `online`. A second link
   claiming an id with a live link MUST be refused with a distinct reason; the first is unaffected. A
   claim on an id whose transport is closed, whose link is open but silent past the deadline, or which
-  has no link (restored from the store) MUST be accepted and replace any older link.
+  has no link (restored from the store) MUST be accepted and replace any older link. A link whose `Hello` is still pending (a *reservation*, at most the deadline) counts as live against a rival claim, which is refused with the same reason; if the replaced silent link answers during the reservation, the new link's confirmation is refused and the old link stays.
 - **FR-008**: The orchestrator MUST NOT initiate any outbound connection to a daemon; a test with
   outbound connections blocked passes. (FR-003)
 - **FR-009**: The orchestrator going down MUST NOT stop, alter or lose any daemon's sessions; the
@@ -220,6 +220,8 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 - M1 has no mTLS: the daemon id is what the link announces; taking it from a certificate is M2.
 - Tenant id has a single documented default until multi-user work (later issue) assigns real ones.
 - Heartbeat reuses the keepalive state machine and constants of `protocol/keepalive.rs`; the deadline is not configurable.
+- The heartbeat adds two protocol messages (`LinkPing`, `LinkPong`) and raises `PROTOCOL_VERSION` 80 to 81 in M2; every daemon and client of one build updates together, existing behaviour (FR-010, SC-006) is otherwise unchanged: normal daemons and clients ignore both messages.
+- Session start and list reach the orchestrator only as post-`Hello` messages on an accepted link; a client has no other path until #1725.
 - The orchestrator accepts links on a local socket; the registry is one atomically replaced JSON file.
 
 ## Out of Scope

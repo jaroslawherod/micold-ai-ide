@@ -33,7 +33,7 @@ is shown within 10 s of the last frame; online within one frame of return.
 
 ## Not hosted
 
-A session start or list sent to the orchestrator (any link or client) gets a refusal whose detail is
+A session start or list sent to the orchestrator as a post-`Hello` `ClientMsg` on an accepted link (the only path a session request can take; a client has none until #1725) gets a refusal whose detail is
 `not hosted by the orchestrator`; a list answers an empty list. No session is ever spawned.
 
 ## Listing
