@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
 - **Started**: 2026-11-11
-- **Phase**: implement M1
-- **Next step**: M1 reviews, gate, PR
+- **Phase**: M1 PR open
+- **Next step**: orchestrator merges M1 PR; then M2
 
 ## Pull requests
 
@@ -46,6 +46,9 @@ Polish T022–T023 (no code) is left to the close unit.
 | plan | 1 | design | d39de3e8e407a7fc9de2b4ab0619660de082bdb6 | 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 | CLEAN |
 | tasks | 1 | design | d1a229af7921b3585c363180a0ef535de79d0742 | 199ca061a9e675043e43796afbe22d627936dd42:0923e2cbffbbdc6215eb213142a9ae51bb4c669d | MINOR-ONLY fixes applied (prose/paths) |
 | plan | 2 | design | 6008539e285d26039a6d672265c5ad935219a48c | 4911e995a35744f47c1e54d42e3558a096da5ebe:6008539e285d26039a6d672265c5ad935219a48c | CLEAN (re-review of fix diff since d39de3e8) |
+| A | 1 | M1 | fc4869254e79369837838f82ad0cd6bc724440ca | 9bf76c49c8d226fd67193dd436febc0f16b1f301:a6ef0850eac034c3acd89097673bfed4ff004a84 | CLEAN (3 MINOR handled; code-review high) |
+| B | 1 | M1 | fc4869254e79369837838f82ad0cd6bc724440ca | 9bf76c49c8d226fd67193dd436febc0f16b1f301:a6ef0850eac034c3acd89097673bfed4ff004a84 | CLEAN (MINOR: no tdd cycle-log, tests after implementation) |
+| re-review | 2 | M1 | fc4869254e79369837838f82ad0cd6bc724440ca | d18df42aae0fb8766577d905b2ce643448e35008:fc4869254e79369837838f82ad0cd6bc724440ca | CLEAN (filled() opt-in and SelectTrigger exemption, sonnet; 1 MINOR test comment) |
 
 ## Declined review findings
 
@@ -54,9 +57,7 @@ Polish T022–T023 (no code) is left to the close unit.
 
 ## Handover
 
-M1 (T001-T010) implemented and committed on the branch (not pushed, no PR yet). Reviews: A round 1 CLEAN (3 MINOR, handled), B CLEAN (MINOR: tdd cycle-log absent, tests written after the implementation by a killed unit; T009 no code), re-review of the `MenuSelect::filled()` opt-in fix CLEAN. Decision: the 56dp trigger broke dense callers' layout gates (review source, worktree filters), so it is opt-in via `MenuSelect::filled()` for the composer's three selectors and the showcase sample; others keep the compact button. Layout snapshot regenerated (Select's trigger wraps its value in a Fill container).
-Last full `mise run gate` failed only on `showcase_completeness`: `SelectTrigger` needed a gallery exemption. Added in catalogue.rs (uncommitted until this commit); not yet re-run.
-Next: (1) record verdicts with `scripts/autopilot/record-verdict.sh` (A r1/B r1 snapshot 9bf76c49c8d226fd67193dd436febc0f16b1f301:a6ef0850eac034c3acd89097673bfed4ff004a84, re-review CLEAN) at HEAD; (2) check the visual-pass worker's result (agent a9d137791e0781942, evidence under specs/1792-structured-select-m3/) and commit it; (3) rerun `mise run gate` detached, fix reds; (4) PR per tasks/pr.md (title `feat(1792): MenuSelect takes the shared Material 3 select trigger (#1792)`, mention opt-in, TDD exception, MenuSelect focus shows the button ring), ledger row M1 -> PR.
+None.
 
 ## Open escalation
 
