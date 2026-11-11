@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M3
-- **Next step**: wait for the M3 PR CI and merge; then M4 (T066, T067).
+- **Phase**: milestone M4
+- **Next step**: M4 (T066, T067) — Settings → Daemons renders `[[ai.cli]]`, and the user guide.
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1711 | M1 — each `[[ai.cli]]` field maps to the CLI's launch | merged | 8470f7464ec548474530511495dd9ded211e5ba4 |
 | #1772 | M2a — sign-in delivery, read-only on every kind (SC-008) | merged | f585c83c829a751556ded4115f3c3275e7834221 |
 | #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | merged | b4216564604c9b93a3f8c685e9a676113f92f6cc |
-| #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | open | — |
+| #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | merged | c6f958f09e26d1f70da6c95798d0bc841c5ce90f |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 (merged, `8470f7464ec548474530511495dd9ded211e5ba4`) |
 | M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | #1772 (merged, `f585c83c829a751556ded4115f3c3275e7834221`) |
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
-| M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (open) |
+| M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (merged, `c6f958f09e26d1f70da6c95798d0bc841c5ce90f`) |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
