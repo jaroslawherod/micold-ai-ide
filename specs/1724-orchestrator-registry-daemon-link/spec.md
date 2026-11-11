@@ -176,14 +176,14 @@ both are listed (offline until they relink); a daemon with sessions still holds 
   host, pod), name, protocol version, capabilities, health (online, offline, needs-update), last seen
   and tenant id, and MUST list it on request.
 - **FR-004**: The registry MUST be saved in a persistent store and reloaded at start, so a restart sees the old
-  or the new registry, never a partial one; after a restart every saved daemon is listed with health `offline` until it links again.
+  or the new registry, never a partial one; a corrupt store fails start with a message naming the file; a failed save keeps the previous store intact and is reported; after a restart every saved daemon is listed with health `offline` until it links again.
   (FR-010)
 - **FR-005**: The orchestrator MUST heartbeat each link and MUST mark a daemon `offline` when it has
   not answered within the deadline, and `online` when it answers again; other daemons are unaffected.
 - **FR-006**: A daemon whose protocol version differs from the orchestrator's MUST be refused with a
   message naming both versions and MUST be listed as `needs-update`, unless its id has a live link, in which case the claim is refused
   and that record is left unchanged (FR-007); no other link is affected. A `needs-update` daemon that
-  relinks on the current version becomes `online`.
+  relinks on the current version becomes `online`. A mismatched claim on an id whose link is open but silent is refused, the silent link is closed and the record becomes `needs-update`.
 - **FR-007**: A *live* link is one whose transport is open and whose daemon is `online`. A second link
   claiming an id with a live link MUST be refused with a distinct reason; the first is unaffected. A
   claim on an id whose transport is closed, whose link is open but silent past the deadline, or which

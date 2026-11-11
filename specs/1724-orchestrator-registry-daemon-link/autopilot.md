@@ -35,12 +35,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
-| Review B M1 | 1 | M1 | <git rev-parse HEAD, 40 hex> | <review-snapshot.sh tree:head> | CHANGES: 2 MAJOR |
+| Spec review | 1 | spec | aefdd44 | aefdd445998f481ca6d90346e166619373ec0f18:6f3f8c1eb35c332d2bcb12a8a26721384b0a327e | CHANGES: 3 MAJOR (fixed; F3 declined) |
+| Spec review | 2 | spec fix diff | 26483b0 | 4a600a9093ae9f31e49c119977bea2be43dd4935:26483b071f6c280f063e568cd199eac4edfc4a45 | CLEAN (2 MINOR fixed, prose only) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| spec | Spec review 1 | F3: three open markers block testability | Template allows three; clarify unit resolves them |
 
 ## Handover
 
