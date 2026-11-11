@@ -312,7 +312,7 @@ mod tests {
         }
         assert!(matches!(
             ensure_clone(None, "u", "/data/repos/x"),
-            Err(CloneFailureWire::Other(t)) if t.contains(ROOT_KEY)
+            Err(CloneFailureWire::Other(t)) if t.contains("storage.clone_root")
         ));
         assert!(!root.exists());
     }

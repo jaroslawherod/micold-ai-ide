@@ -221,6 +221,59 @@ mod container {
         assert!(delivery.secrets.is_dir(), "the secrets folder is made too");
     }
 
+    /// I15-4: nothing but this ties `CONTAINER_TOKEN_PATH` to what a container daemon is told. A
+    /// container is reached over SSH and mounts no token, so the file it is delivered names none;
+    /// a file that did name one must name the path the images document, or the daemon would refuse
+    /// every connection. Both Containerfiles are read, not a variable.
+    #[test]
+    fn the_delivered_token_file_is_the_documented_container_token_path_or_none() {
+        use micold_core::protocol::auth::CONTAINER_TOKEN_PATH;
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        deliver_container(
+            "box",
+            &profile(false),
+            Path::new("/home/jaro"),
+            &delivery,
+            None,
+            None,
+        )
+        .unwrap();
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
+        assert!(errors.is_empty(), "{errors:?}\n{text}");
+        let named = config
+            .unwrap()
+            .auth
+            .and_then(|a| a.client_token_file)
+            .map(|f| f.path().to_path_buf());
+        if let Some(named) = named {
+            assert_eq!(named, Path::new(CONTAINER_TOKEN_PATH), "{text}");
+        }
+        let containerfile = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packaging/sandbox/Containerfile"
+        ))
+        .unwrap();
+        assert!(
+            containerfile.contains(CONTAINER_TOKEN_PATH),
+            "the sandbox Containerfile documents the mount at {CONTAINER_TOKEN_PATH}"
+        );
+        for image in ["sandbox", "basic"] {
+            let path = format!(
+                "{}/../../packaging/{image}/Containerfile",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(
+                !text
+                    .lines()
+                    .any(|l| !l.trim_start().starts_with('#') && l.contains(CONTAINER_TOKEN_PATH)),
+                "{image}: the token is a mount point, never baked into the image"
+            );
+        }
+    }
+
     #[test]
     fn the_keep_running_opt_in_off_leaves_the_idle_window_alone_and_a_repeat_writes_nothing() {
         let dir = tempfile::tempdir().unwrap();

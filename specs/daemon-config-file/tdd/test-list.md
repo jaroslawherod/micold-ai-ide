@@ -117,3 +117,15 @@ Baseline: `micold-core --lib` `daemon_config::matching` and `scoped_credential::
 | T141 | `session_git_env` applied to real `git ls-remote` (a read; intended scope: credential choice is the same for `git-receive-pack`, which needs a different forge reply): chosen token authenticates, an unreached repo falls back, a sandbox is refused and served without the planted helper (two tests) | US3, FR-010 | DONE |
 | T143 | The delivered gitconfig copy loses `commit.gpgsign` and `tag.gpgsign`: sandbox delivery (`sandbox.rs`), `shared_copy` itself (`gitconfig.rs`), and `shared_copy` into the pod's startup secret (`kube/start_tests.rs`; the pod caller in `daemon.rs` only calls `shared_copy`) | US3, FR-010 | DONE |
 | T144 | `credential_config::answer`: stale entry refreshed after 15 min, failed request keeps the last answer, replaced unfiltered token gets its own entry and the old one is pruned | US2, FR-008 | DONE |
+
+## Test list: Issue 15 (#1537), milestones M1 and M2
+
+Written at close from the merged tests (`TEST_AFTER`: no red run was recorded when they were written; the reds below are the mutants run by tdd-verify and T156 to T162).
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| I15-U1 | `retired_env::resolve` returns nothing for each of the eight retired names unless the test seam is on, and the raw value with it (T084, T084b) | FR-001, SC-001 | DONE |
+| I15-U2 | The daemon reads each retired variable once, warns once naming the config key that replaces it, and never warns for an unset one (T085) | FR-001, FR-012 | DONE |
+| I15-U3 | A container session over SSH with no `MICOLD_DATA_DIR` still gets the credential helper, the HTTPS rewrite and `GIT_CONFIG_GLOBAL` (T086a) | FR-012 | DONE |
+| I15-U4 | No image, entrypoint, SSH launch command or capture scene sets a retired name (T085, T085b) | SC-001 | DONE (script test) |
+| I15-U5 | The user guide names each replaced variable's config key (T086, T086b) | FR-012 | DONE (docs) |

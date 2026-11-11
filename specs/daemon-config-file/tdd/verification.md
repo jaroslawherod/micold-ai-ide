@@ -1062,3 +1062,113 @@ since it has no entries for it at all (Finding 2).
 - The full workspace suite (`mise run gate`) was not re-run; only the files this milestone touched.
 - `micold-daemon`'s release build and the `sandbox-real-runtime` acceptance suite itself were not run
   (no container runtime invoked in this audit).
+
+# Issue 15 (#1537) M1 + M2: the retired MICOLD_* start-up variables
+
+```yaml
+scope: Issue 15 (#1537) M1 + M2, T084, T084b, T085, T085b, T086a, T086b, T086; PR #1709 (M1: 41087d4de, a641f390b, ed63d945a, 59bd88d4f) and PR #1771 (M2: ba4c2bba3, 481f81292); base 5e72b83360ee747bc80ad577a468d2119f47bb48 (#1704)
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: c84209f6e
+independent: true # auditor did not write these tests; files read cold at c84209f6e; no subagent smell pass (about 250 test lines read directly)
+verdict: FAIL
+behaviors: 0 listed # tdd/test-list.md has no Issue 15 section; 7 tasks audited instead
+proven: 0
+likely: 0
+test_after: 5 # T084, T084b, T085, T085b, T086a (T086b, T086 are docs; T085 producers are script tests)
+high_findings: 3 # I15-1, I15-2, I15-3
+mutants_tried: 8 # 3 survived (A, B, G), 5 caught (C by the daemon test only, D, E, F, C2)
+mutation_score: unmeasured # no tool in the profile; deliberate mutants only
+suite: scoped - micold-core --test main retired_env:: protocol_auth:: 14 passed; micold-core --lib paths:: 13 passed; micold-daemon --test container_over_ssh_without_data_dir 1 passed; --test main config_load:: 21 passed; --lib supervisor:: 25 passed; scripts/tests basic-image-hash, basic-entrypoint, capture-harness, entrypoint-config all ok. Full workspace not run. ai_cli_config a_configured_model_is_claude_codes_default_launch_model not run (known to fail on this machine, depends on ~/.claude.json, predates the diff).
+```
+
+**Verdict: FAIL.** The release-build behaviour the issue exists for (a retired variable has no effect and warns once) is
+proven only on the pure `retired_env::resolve` with `false` passed in; the daemon's own wiring of that rule
+(`process_env`, `log_retired_warnings`, the `TEST_ENV` constant) has no test in any build, two deliberate mutants of it
+survive, and every task is `TEST_AFTER` with no red run and no test-list section.
+
+No unbuilt behaviour was found: the code for every task in scope exists and the producers (Containerfiles, entrypoint, capture
+scene) no longer set a retired name. All findings are test-strength, process or documentation findings.
+
+## Test-first evidence (Issue 15)
+
+No behavior ids exist for Issue 15 (`tdd/test-list.md` stops at Issue 5 M1b); the 7 tasks are graded instead.
+
+| Task | Class | Evidence |
+|---|---|---|
+| T084 release path via `resolve(.., false)` in `config_load.rs` | TEST_AFTER | test added in `41087d4de` with the source (`retired_env.rs`, `settings.rs`); cycle log has an M1 entry (`59bd88d4f`), no red |
+| T084b same for `MICOLD_DATA_DIR`/`MICOLD_TOKEN_PATH` in `core/tests/retired_env.rs` | TEST_AFTER | added in `ba4c2bba3` with `paths.rs`; cycle log: "No red run was recorded (`TEST_AFTER`, stated honestly)", written at close |
+| T085 daemon-side reads removed, producers stopped | TEST_AFTER | `41087d4de`; script tests (`basic-entrypoint`, `capture-harness`) edited in the same commit as the producers |
+| T085b core-side reads, images | TEST_AFTER | `ba4c2bba3`; `basic-image-hash.test.sh` SC-001 scan added in the same commit as the Containerfile edits |
+| T086a container over SSH without `MICOLD_DATA_DIR` | TEST_AFTER | `container_over_ssh_without_data_dir.rs` added in `ba4c2bba3` with the source; the cycle log claims no red. Mutant E (`kind: None`) is caught, so the test is sound |
+| T086b, T086 user guide, quickstart | NOT_APPLICABLE | documentation; the quickstart run results are recorded in `aa2b1540d` |
+
+Git history and cycle log agree (no contradiction found): both say test-after. The log entry for M2 says it was written at close
+from the commits, so it is not contemporaneous evidence.
+
+## Changes to tests that already existed (Issue 15)
+
+No assertion was weakened into a truthiness check, no test was skipped or filtered out, no coverage or mutation gate exists to lower. Changed:
+
+| File:line | Before | After | Judgment |
+|---|---|---|---|
+| `crates/micold-core/tests/protocol_auth.rs:155-170` | `the_container_token_path_matches_what_the_image_declares`: the image sets `MICOLD_TOKEN_PATH=/run/micold/token` | `the_image_no_longer_sets_the_retired_token_variable`: no non-comment line of the sandbox Containerfile names the variable | Intended reversal, but the old test also pinned the daemon's token path to the image; nothing replaces that tie (I15-4) |
+| `scripts/tests/basic-image-hash.test.sh` | each image sets `ENV MICOLD_DATA_DIR=/var/lib/micold-ai-ide` | each image does not set `XDG_DATA_HOME`, and `grep -rnE` finds no retired name under `packaging/` or `site/` | Intended; the new scan is stronger than the old assertion (all eight names, both trees) |
+| `scripts/tests/capture-harness.test.sh` | `lib.sh` assigns `MICOLD_LOG=` with no `:-` default and turns the availability line on | `lib.sh` assigns no `MICOLD_LOG`, and `grep -B6 'AI CLI availability reported' server.rs` finds `tracing::info!` | The old guard (a service-exported variable leaking into a scene) lost its subject with the variable. The new check reads the daemon's source text (I15-6) |
+| `crates/micold-core/src/ssh/argv.rs:535-542` | env fixture `MICOLD_IDLE_STOP='off'` | env fixture `LC_ALL='C'` | Not a weakening: the test still pins the quoting and order of `env K='v'`; the producer had already stopped setting the variable |
+| `crates/micold-core/src/spawn.rs:568` | `waited >= 5 s` | `waited >= 4900 ms` | Not Issue 15 (commit `e3a7ac744`, #1530); already recorded as I9-8 (T146). Not recounted here |
+| `crates/micold-daemon/src/supervisor.rs` tests, `config_load.rs`, `paths.rs` unit test | `override_from(..)` calls | `data_dir_from_env(.., true)` | Renamed seam, same assertions plus the `false` case |
+
+## Findings (Issue 15)
+
+| # | Severity | Finding | Evidence |
+|---|---|---|---|
+| I15-1 | HIGH (test strength) | The daemon's "log one warning per set variable" is untested. `process_env` records the warning and `log_retired_warnings` writes it; no test calls either. Deliberate mutants survive: A drops `pending.push(warning)`, B replaces the `!pending.contains(&warning)` dedupe with `true`. `config_load::*` (21) still passes both. T084's wording is "logs one warning per variable naming the config key"; only `resolve`'s returned string is checked | `crates/micold-daemon/src/settings.rs:70-92`; tests `crates/micold-daemon/tests/config_load.rs:455-489` |
+| I15-2 | HIGH (test strength, acceptance) | No test runs the code that decides release vs test behaviour. `TEST_ENV = cfg!(any(test, feature = "test-env"))` is true in every test build (the daemon and core both enable `test-env` through a dev-dependency on themselves), so `resolve(.., false)` is the only place the release rule is seen, and nothing checks that `process_env`, `paths::data_dir_override` and `DaemonSettings::resolve` pass the constant through. Changing the constant to `true`, or dropping the `resolve` call in `process_env`, is invisible to every test. SC-001 ("no `MICOLD_*` start-up variable remains outside test overrides") has no end-to-end test: nobody starts a feature-less `micold-daemon` with a retired variable set and sees it ignored with a warning in the log. Structural survivor (not run: no build exists in which the suite can observe it) | `crates/micold-core/src/retired_env.rs:13`, `crates/micold-daemon/src/settings.rs:62,70-80`, `crates/micold-core/src/paths.rs:34` |
+| I15-3 | HIGH (process) | No Issue 15 section in `tdd/test-list.md`, no recorded red for T084/T084b/T085/T085b/T086a; every task `[x]` with its tests written with or after the code. Fail-closed: `TEST_AFTER`. The M2 cycle-log entry says so itself and was written at close | `tdd/test-list.md`, `tdd/cycle-log.md` "Issue 15 (#1537) M2" |
+| I15-4 | MED | Nothing now ties `CONTAINER_TOKEN_PATH` to what a container daemon is told. The deleted test asserted the image's variable equalled the constant; the replacement only asserts the variable is absent. The only remaining users of the constant are mount specs in the client (`shell/sandbox.rs:1891,1947`); no test reads the delivered file's `auth.client_token_file` for a container and compares it to the mount point. A drift gives a sandbox that starts and refuses every connection, the failure the old comment named. Only the sandbox Containerfile is checked by this test (the script test covers both images for the name only) | `crates/micold-core/tests/protocol_auth.rs:155-170` |
+| I15-5 | LOW | Tautological assertion: the clone-root refusal test asserts `t.contains(ROOT_KEY)` against the constant the message is built from. Mutant G (`ROOT_KEY` = `"storage.clone_roo"`) survives `repo_clone::*` (6). The literal key is pinned nowhere for this message | `crates/micold-daemon/src/repo_clone.rs:19,315` |
+| I15-6 | LOW | `capture-harness.test.sh` proves "the daemon logs the availability line at info" by `grep -B6` over `server.rs` source text; a reformat that moves `tracing::info!` more than six lines away fails it, and a `warn!` in the window would pass it. Behaviour is not exercised | `scripts/tests/capture-harness.test.sh` (new block), `crates/micold-daemon/src/server.rs` |
+| I15-7 | LOW | Redundant test and duplicated expectation: `config_load.rs:455-489` and `core/tests/retired_env.rs:13-25` are the same loop over a `(name, key)` table calling the same pure `resolve`; the daemon copy lives in the daemon crate but tests a core function. The eight-name table is re-typed three times (`RETIRED_DAEMON_SIDE`, `CORE_SIDE`, `ENV_SETS_EVERYTHING`) and no test asserts `RETIRED` has exactly those eight names (a ninth added, or one dropped, is unchecked). The unset-variable case (`raw.is_none()`) is only covered by the daemon copy: mutant C (`test_env_enabled \|\| raw.is_none()` to `test_env_enabled`) survives the core test (3 passed) and is caught only by `config_load::a_test_env_build_honours_the_variable_and_an_unset_one_is_silent` | `crates/micold-core/tests/retired_env.rs`, `crates/micold-daemon/tests/config_load.rs:455-489` |
+| I15-8 | LOW (doc) | T085b says `spawn.rs` `IDLE_STOP_ENV` goes behind `test-env`; it is a bare constant with no read site, so nothing was needed and `spawn.rs` carries no Issue 15 change. `MICOLD_LOG` is listed in `RETIRED` yet the client still reads it (`crates/micold-client/src/shell/startup.rs:79`); that is the client's own filter, not the daemon's, but `retired_env.rs` and `settings.rs` do not say so. The `sandbox_real_*` files edited in `ba4c2bba3` need a container runtime and were not run | `crates/micold-core/src/spawn.rs:37`, `crates/micold-client/src/shell/startup.rs:79` |
+
+## Mutation results (Issue 15)
+
+No mutation tool in the profile. 8 deliberate mutants, one at a time, each restored with `cp` and verified by `git diff --quiet`; after the last, the retired_env, protocol_auth, config_load and container_over_ssh suites were re-run green and `git status` was clean. Sampled: the retired-variable rule, the data-dir override, the daemon's warning log, the container git setup (T086a), the env hygiene removal, the clone-root message. Not sampled: `protocol/auth.rs`, `idle.rs`, `logging.rs`, `server.rs` (their change is a constant, a log key or a comment).
+
+| Mutant | Behavior | Survived | Judgment |
+|---|---|---|---|
+| A `settings.rs` `pending.push(warning)` to `let _ = warning;` | T084 one warning per variable | Yes | I15-1 |
+| B `settings.rs` `!pending.contains(&warning)` to `true` | T084 once per variable | Yes | I15-1 |
+| C `retired_env.rs` `test_env_enabled \|\| raw.is_none()` to `test_env_enabled`, core test | T084b unset is silent | Yes (core), No (daemon: C2 caught by `config_load::a_test_env_build_honours_the_variable_and_an_unset_one_is_silent`) | I15-7: the T084b test alone does not pin it |
+| D `paths.rs` drop the empty-value filter | T084b empty means unset | No | Caught by `retired_env::the_data_directory_variable_counts_only_in_a_test_env_build` |
+| E `supervisor.rs` `kind: settings.kind` to `kind: None` | T086a container over SSH keeps helper, rewrite, `GIT_CONFIG_GLOBAL` | No | Caught by `container_over_ssh_without_data_dir` (`:58`) |
+| F `supervisor.rs` drop `EnvEdit::Remove(DATA_DIR_ENV)` | T085b supervisor edit | No | Caught by `supervisor::tests::a_spawned_command_does_not_inherit_the_daemons_data_dir_variable` |
+| G `repo_clone.rs` `ROOT_KEY` text | T085 refusal names the key | Yes | I15-5 |
+| TEST_ENV constant to `true` (reasoned, not run) | SC-001 | Yes, by construction | I15-2: true in every test build |
+
+## Traceability (Issue 15)
+
+| Criterion | Tests | End to end |
+|---|---|---|
+| FR-012 / SC-001 a release build ignores the eight variables | `config_load.rs:455-489`, `core/tests/retired_env.rs`, `basic-image-hash.test.sh` (no producer) | No: pure function and a source scan only (I15-2) |
+| T084 one warning per set variable, naming the key | the same `resolve` tests | No: the log path is unexercised (I15-1) |
+| `test-env` and the plumbing variables still work | `retired_env.rs:41-52`, `config_load.rs` `a_test_env_build_honours...`, the existing daemon suite driving the binary through the environment | Yes (the daemon suite is built with the feature) |
+| T085 producers stop setting the variables | `basic-entrypoint.test.sh`, `capture-harness.test.sh`, `basic-image-hash.test.sh` | Yes (scripts over the real files); I15-6 for the capture check |
+| T085 idle stop rides the delivered file, not the SSH command | `argv.rs` fixture no longer carries it; `daemon_config_render.rs:125` documents the file carrying it (outside this audit's files) | Not re-verified here |
+| T086a container over SSH, no `MICOLD_DATA_DIR` | `container_over_ssh_without_data_dir.rs` | Partly: real `apply_env_hygiene` over installed settings, not a real SSH start |
+| T086b, T086 user guide | none (docs) | n/a |
+
+Untested criteria: none outright; the release-build behaviour lacks an end-to-end test (I15-2). Tests tracing to nothing: none.
+
+## What was not audited (Issue 15)
+
+- No mutation tool; 8 deliberate mutants only, none on `protocol/auth.rs`, `idle.rs`, `logging.rs`, `server.rs`. No coverage tool.
+- `mise run gate`, `mise run image`, `mise run test-sandbox`, the `sandbox_real_*` files touched in `ba4c2bba3`, Windows and macOS legs.
+- A feature-less daemon binary run with a retired variable set (nothing in the suite does it; this audit did not either).
+- `ai_cli_config::a_configured_model_is_claude_codes_default_launch_model` (red on this machine for an unrelated reason, `~/.claude.json`), and the rest of the `micold-daemon` and `micold-core` suites.
+- Content of `docs/user-guide/*.md`, `docs/daemon.md`, `packaging/basic/README.md` beyond the script scans.
+- Earlier sections untouched.
+
+## Remediation result (Issue 15, close unit)
+
+T152 to T159 done in the close PR. Mutants A, B (T152), G (T156) and "`|| raw.is_none()` dropped" (T158) each fail their test and were restored. T153 (`scripts/tests/retired-env-release.test.sh`, a daemon built without `test-env`) asserts the file's values win and one warning per variable; the `TEST_ENV = true` mutant (`settings.rs:62`) was run by the close unit: the three warning assertions fail (found 0), then it was restored. I15-4 is closed in part: a container's delivered `daemon.toml` carries no `auth.client_token_file`, so the test accepts none or `CONTAINER_TOKEN_PATH`; `daemon_config_render::from_entry_delivering` defaults the token file to `SANDBOX_TOKEN` (`/run/micold/secrets/client-token`), which differs from `CONTAINER_TOKEN_PATH` (`/run/micold/token`): recorded as a follow-up, not fixed here (it adds behaviour).
