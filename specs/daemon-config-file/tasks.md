@@ -752,7 +752,7 @@ Verdict FAIL: Issue 9 is not done until T139 and T140 are cleared.
 - [x] T144 [US2] I9-6: test through `credential_config::answer` a stale entry refreshed after 15 min, a failed request keeping the last answer, a replaced unfiltered token getting its own entry with the old one pruned; `cargo test -p micold-daemon --lib credential_config`
 - [x] T145 [US3] I9-7, I9-9: remove `combine_git_edits` and its test (dead since `86468d87c`) and decide the legacy file path (`git_credential.rs:71-75`, `mcp/scoped_git_credential.rs`): delete it with its tests or give it a producer; `mise run check`
 - [x] T146 [US2] I9-8, I9-10: record the `spawn.rs:568` 4900 ms tolerance as intended in the test comment's rule, make `gitconfig.rs:289` fail rather than skip without git, split `git_credential_config.rs:174` into one test per rule; `cargo test -p micold-core --lib scoped_credential::gitconfig`
-- [ ] T147 [US2] Run the deliberate mutants listed under "Mutation results (Issue 9)" one at a time, restore each, and record caught or survived in `tdd/verification.md`
+- [x] T147 [US2] Run the deliberate mutants listed under "Mutation results (Issue 9)" one at a time, restore each, and record caught or survived in `tdd/verification.md`
 
 ## Phase 25: TDD remediation (Issue 10 / #1531, from `tdd/verification.md`, section "Issue 10")
 
@@ -767,7 +767,7 @@ Verdict FAIL: Issue 10 is not done until T148 and T149 are cleared.
 
 Verdict FAIL: the close unit is not done until T152 and T153 are cleared.
 
-- [ ] T152 [US2] I9-11: run the T147 mutants one at a time (restore, re-run green), write the cycle-log entry for T140-T146 with caught/survived per mutant as the red evidence, and run each new test (`cargo test -p micold-daemon --lib credential_config container_git_tests`, `--test git_credential_config`, `cargo test -p micold-core --lib scoped_credential::gitconfig`, `cargo test -p micold-client --lib the_delivered_git_config`) and `mise run check`; `grep -n "T14[1-6]" specs/daemon-config-file/tdd/cycle-log.md`
-- [ ] T153 [US2] I9-12: split `git_credential_config.rs:287` into one test per rule (answer and replaced file, cached once, secret-free cache file, miss limited to once a minute); `cargo test -p micold-daemon --test git_credential_config`
-- [ ] T154 [US3] I9-13: test that the pod's startup git config carries no `gpgsign` (through the pod caller, not `shared_copy`) and correct `tdd/test-list.md` T143 to say what is covered; `cargo test -p micold-core --lib kube`
-- [ ] T155 [US3] I9-14, I9-15: either extend T141 to a `push` (`git-receive-pack`) or record `ls-remote` as the intended scope in the test-list row; split the two scenarios of `a_sandbox_session_never_runs_the_planted_host_helper`; `cargo test -p micold-daemon --test git_credential_config`
+- [x] T152 [US2] I9-11: run the T147 mutants one at a time (restore, re-run green), write the cycle-log entry for T140-T146 with caught/survived per mutant as the red evidence, and run each new test (`cargo test -p micold-daemon --lib credential_config container_git_tests`, `--test git_credential_config`, `cargo test -p micold-core --lib scoped_credential::gitconfig`, `cargo test -p micold-client the_delivered_git_config`) and `mise run check`; `grep -n "T14[1-6]" specs/daemon-config-file/tdd/cycle-log.md`
+- [x] T153 [US2] I9-12: split `git_credential_config.rs:287` into one test per rule (answer and replaced file, cached once, secret-free cache file, miss limited to once a minute); `cargo test -p micold-daemon --test git_credential_config`
+- [x] T154 [US3] I9-13: test that the pod's startup git config carries no `gpgsign` (through the pod caller, not `shared_copy`) and correct `tdd/test-list.md` T143 to say what is covered; `cargo test -p micold-core --lib kube`
+- [x] T155 [US3] I9-14, I9-15: either extend T141 to a `push` (`git-receive-pack`) or record `ls-remote` as the intended scope in the test-list row; split the two scenarios of `a_sandbox_session_never_runs_the_planted_host_helper`; `cargo test -p micold-daemon --test git_credential_config`

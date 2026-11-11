@@ -927,6 +927,18 @@ Closed since the earlier audit: I9-2 (T139, tests recorded in the cycle log), I9
 - `docs/user-guide/sandboxed-daemon.md` and `settings.md` content; `#1531`; the one-day expiry warning's fate; Windows and macOS legs; `test-sandbox`.
 - Earlier sections of this file are untouched.
 
+## Mutation results (Issue 9 close, run by the close unit)
+
+Seven mutants, one at a time, each restored and the source re-checked clean. All caught by a test failure:
+`matching.rs` drop `Reverse` (`exact_beats_owner_beats_unfiltered`); `git_env.rs` drop the `isolate` clear (both sandbox tests of `git_credential_config`);
+`credential_config.rs` delete `fetched_at = now` (stale-refresh and failed-request tests), delete `store.retain` (prune test), delete `last_miss_fetch_at = now` (failed-request test);
+`gitconfig.rs` drop the `tag.gpgsign` arm (three tests); `supervisor.rs` accept `Kind::Host` (two `container_git_tests`). Score 7/7. Detail and the red run are in `cycle-log.md` ("Issue 9 (#1530) close").
+
+## Remediation status (Issue 9 close)
+
+I9-11 closed (cycle-log entry, mutants, every new test run green). I9-12 closed (T153: four tests). I9-13 closed (T154: `the_pods_git_config_has_no_signing_switches`; `test-list.md` T143 now names what is covered, the pod caller in `daemon.rs` only calls `shared_copy`).
+I9-14 closed as the intended scope (T155: `ls-remote` is a read; credential choice is the same for a push, recorded in the `test-list.md` T141 row). I9-15 closed: the sandbox test is split in two and the forge's hand-rolled `base64` encoder is the workspace `base64` crate.
+Verdict after remediation: PASS for Issue 9 (the audit above ran nothing; this section is the run).
 ---
 
 ---

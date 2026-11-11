@@ -110,22 +110,8 @@ fn git_advertisement_repo(request_line: &str) -> Option<String> {
 }
 
 fn base64(text: &str) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    for chunk in text.as_bytes().chunks(3) {
-        let n = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |acc, (i, b)| acc | (u32::from(*b) << (16 - 8 * i)));
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(text)
 }
 
 struct Setup {
@@ -284,32 +270,48 @@ fn the_most_specific_filter_wins_and_ties_go_to_the_first_in_the_file() {
     assert_eq!(password(&s.get(&config, "acme/lib", None)), Some("owner"));
 }
 
-#[test]
-fn an_unfiltered_token_is_used_for_what_it_reaches_and_the_reach_is_cached_by_fingerprint() {
+/// A token with no filter that reaches `Acme/App`, and the daemon file naming it.
+fn unfiltered_token() -> (Forge, Setup, PathBuf) {
     let forge = forge(&[("secret-token", &["Acme/App"])]);
     let s = Setup::new(&forge);
     s.token("any.tok", "secret-token\n");
     let config = s.config(&[("any", &[])]);
+    (forge, s, config)
+}
 
+#[test]
+fn an_unfiltered_token_answers_for_what_it_reaches() {
+    let (_forge, s, config) = unfiltered_token();
     assert_eq!(
         password(&s.get(&config, "acme/app", None)),
         Some("secret-token")
     );
-    assert_eq!(
-        password(&s.get(&config, "acme/app", None)),
-        Some("secret-token")
-    );
+}
+
+#[test]
+fn the_reach_of_an_unfiltered_token_is_asked_once() {
+    let (forge, s, config) = unfiltered_token();
+    s.get(&config, "acme/app", None);
+    s.get(&config, "acme/app", None);
     assert_eq!(
         forge.requests.load(Ordering::SeqCst),
         1,
         "cached after the first"
     );
+}
 
+#[test]
+fn the_reach_cache_is_kept_by_fingerprint_and_holds_no_secret() {
+    let (_forge, s, config) = unfiltered_token();
+    s.get(&config, "acme/app", None);
     let cache = std::fs::read_to_string(s.path("data/github-reach.json")).unwrap();
     assert!(cache.contains("acme/app"));
     assert!(!cache.contains("secret-token"), "the cache holds no secret");
+}
 
-    // A repository outside the reach is a miss: asked again, but at most once a minute.
+#[test]
+fn a_repository_outside_the_reach_is_asked_again_at_most_once_a_minute() {
+    let (forge, s, config) = unfiltered_token();
     assert_eq!(s.get(&config, "acme/other", None), "");
     let after_miss = forge.requests.load(Ordering::SeqCst);
     assert_eq!(s.get(&config, "acme/other", None), "");
@@ -386,19 +388,32 @@ fn git_falls_back_to_the_host_helper_for_a_repository_no_token_reaches() {
     assert!(s.helper_ran(), "the host helper answered");
 }
 
-#[test]
-fn a_sandbox_session_never_runs_the_planted_host_helper() {
+/// Over a host with a planted helper and a token that reaches `acme/app` only, for a sandbox
+/// session (`isolate`): returns the setup and the daemon file.
+fn sandbox_over_a_planted_helper() -> (Forge, Setup, PathBuf, String) {
     let forge = forge(&[("tok", &["acme/app"]), ("from-keychain", &["other/app"])]);
     let s = Setup::new(&forge);
     let helper = s.plant_host_helper();
     s.token("any.tok", "tok\n");
     let config = s.config(&[("any", &[])]);
+    (forge, s, config, helper)
+}
+
+#[test]
+fn a_sandbox_session_is_refused_where_only_the_planted_host_helper_would_answer() {
+    let (_forge, s, config, helper) = sandbox_over_a_planted_helper();
     let refused = s.ls_remote(&config, "other/app", true, &helper);
     assert!(
         !refused.status.success(),
         "no token reaches it and no host helper may answer"
     );
     assert_eq!(listing(&refused), "");
+    assert!(!s.helper_ran(), "a sandbox clears the inherited helper");
+}
+
+#[test]
+fn a_sandbox_session_is_served_by_the_chosen_token_without_the_planted_host_helper() {
+    let (_forge, s, config, helper) = sandbox_over_a_planted_helper();
     let served = s.ls_remote(&config, "acme/app", true, &helper);
     assert!(
         served.status.success(),
