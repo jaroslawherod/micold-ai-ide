@@ -2,10 +2,10 @@
 //! runs (#1002, FR-006, FR-007, contracts/git-in-container.md §2).
 //!
 //! With `MICOLD_DAEMON_CONFIG` set (a session of a daemon that has a configuration file, #1530) it
-//! answers `get` from the configuration: [`crate::credential_config`]. Without it, it answers nothing
-//! (the in-memory credential files of the retired grant path are no longer read). `store` and `erase` read and discard their
-//! input: a token is never kept anywhere git could write it. Every path exits 0, so git falls
-//! through to "no credential" rather than to an error.
+//! answers `get` from the configuration: [`crate::credential_config`]. Without it, it answers
+//! nothing (the in-memory credential files of the retired grant path are no longer read). `store`
+//! and `erase` read and discard their input: a token is never kept anywhere git could write it.
+//! Every path exits 0, so git falls through to "no credential" rather than to an error.
 
 use std::ffi::OsString;
 use std::io::{Read, Write};
