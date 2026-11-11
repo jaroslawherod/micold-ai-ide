@@ -51,7 +51,8 @@ link, query the registry; the daemon appears with every field and the orchestrat
    announces itself, **Then** the registry lists it with id, kind, name, protocol version,
    capabilities, health `online`, last seen and tenant id.
 2. **Given** the orchestrator mode, **When** a client asks it to start or list sessions, **Then** it
-   hosts none and says so; it never spawns a session.
+   answers a refusal "not hosted by the orchestrator" (a list returns empty) and never
+   spawns a session.
 3. **Given** a daemon that announces no tenant, **When** it joins, **Then** its tenant id is the
    documented default, not empty.
 
@@ -96,6 +97,10 @@ both numbers, the registry marks it "needs update", and a current daemon stays o
    `needs-update` and both versions.
 3. **Given** other daemons are online, **When** the older one is refused, **Then** their links and
    entries are unchanged.
+4. **Given** daemon `A` has a live link, **When** an older-protocol link claims `A`, **Then** it is
+   refused (version mismatch) and `A`'s record and link are unchanged: no `needs-update` overwrite.
+5. **Given** a `needs-update` daemon, **When** it relinks on the current version, **Then** it is
+   accepted and its health becomes `online`.
 
 ---
 
@@ -112,8 +117,12 @@ answering and stays online.
 
 1. **Given** daemon `A` has a live link, **When** a second link claims `A`, **Then** the second is
    refused with a distinct reason and `A` stays online on the first link.
-2. **Given** `A`'s link is offline (dropped), **When** a new link claims `A`, **Then** it is
-   accepted and replaces the dead one.
+2. **Given** `A`'s transport has closed, **When** a new link claims `A`, **Then** it is accepted and
+   replaces the closed one.
+3. **Given** `A`'s link is open but silent past the deadline (`offline`), **When** a new link claims
+   `A`, **Then** it is accepted, the silent link is closed and `A` becomes `online` on the new one.
+4. **Given** `A` is in the registry after a restart with no link, **When** a link claims `A`, **Then**
+   it is accepted.
 
 ---
 
@@ -138,14 +147,16 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 ### Edge Cases
 
 - Empty registry: listing returns an empty list, not an error.
-- Missing, unreadable or corrupt store at start: the orchestrator reports the cause and starts with an
-  empty registry only when the file is absent; a corrupt file is not overwritten silently.
-- Torn write (crash mid-save): the store is replaced atomically, so a restart sees the old or the new
-  registry, never a partial one.
+- Store absent at start: start with an empty registry. Store corrupt or unreadable: start fails with a
+  message naming the file and a non-zero exit; the file is not overwritten.
+- Failed save (disk full, read-only directory): the in-memory registry stays correct and the error is
+  reported; the previous stored registry is left intact.
+- Torn write (crash mid-save): a restart sees the old or the new registry, never a partial one.
 - Concurrency (Principle II): two links claiming one id at the same instant: exactly one wins.
 - A link announces an invalid daemon id (empty, too long, bad characters): refused at decode.
 - A daemon renames or changes capabilities on relink: the record is updated in place.
 - A daemon on a *newer* protocol than the orchestrator: refused naming both versions (same rule).
+- A version-mismatched claim on an id with a live link: refused, live record untouched (FR-006/FR-007).
 - A link that drops without a goodbye: treated as silence, shown offline after the deadline.
 - Cross-platform (Principle VI): state directory and socket paths come from the platform helpers; no
   Unix-only API in shared code.
@@ -164,17 +175,21 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 - **FR-003**: The orchestrator MUST keep a registry with, per daemon: id, kind (host, container, SSH
   host, pod), name, protocol version, capabilities, health (online, offline, needs-update), last seen
   and tenant id, and MUST list it on request.
-- **FR-004**: The registry MUST be saved in a persistent store, replaced atomically, and reloaded at
-  start; after a restart every saved daemon is listed with health `offline` until it links again.
+- **FR-004**: The registry MUST be saved in a persistent store and reloaded at start, so a restart sees the old
+  or the new registry, never a partial one; after a restart every saved daemon is listed with health `offline` until it links again.
   (FR-010)
 - **FR-005**: The orchestrator MUST heartbeat each link and MUST mark a daemon `offline` when it has
   not answered within the deadline, and `online` when it answers again; other daemons are unaffected.
 - **FR-006**: A daemon whose protocol version differs from the orchestrator's MUST be refused with a
-  message naming both versions and MUST be listed as `needs-update`; no other link is affected.
-- **FR-007**: A second link claiming a daemon id that has a live link MUST be refused with a distinct
-  reason; the first link is unaffected. A claim on an id whose link is dead MUST replace that link.
-- **FR-008**: The orchestrator MUST NOT need to open a connection to a daemon; links are dialled by
-  daemons. (FR-003)
+  message naming both versions and MUST be listed as `needs-update`, unless its id has a live link, in which case the claim is refused
+  and that record is left unchanged (FR-007); no other link is affected. A `needs-update` daemon that
+  relinks on the current version becomes `online`.
+- **FR-007**: A *live* link is one whose transport is open and whose daemon is `online`. A second link
+  claiming an id with a live link MUST be refused with a distinct reason; the first is unaffected. A
+  claim on an id whose transport is closed, whose link is open but silent past the deadline, or which
+  has no link (restored from the store) MUST be accepted and replace any older link.
+- **FR-008**: The orchestrator MUST NOT initiate any outbound connection to a daemon; a test with
+  outbound connections blocked passes. (FR-003)
 - **FR-009**: The orchestrator going down MUST NOT stop, alter or lose any daemon's sessions; the
   orchestrator holds no session state.
 - **FR-010**: Existing behaviour MUST NOT change: `micold-daemon` without the `orchestrator`
@@ -191,7 +206,7 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 
 - **SC-001**: A test starts the orchestrator, links a daemon and reads back every record field.
 - **SC-002**: A silent link shows `offline` within the deadline plus one check interval, and `online`
-  within one heartbeat of its return, under a controllable clock.
+  within one heartbeat of its return, under a controllable clock; "the deadline" is the keepalive deadline unless clarify changes it.
 - **SC-003**: An older-protocol link is refused with both version numbers in the message, and the
   registry lists it `needs-update` while other daemons keep their health.
 - **SC-004**: Of two simultaneous links claiming one id, exactly one is accepted, over repeated runs.
