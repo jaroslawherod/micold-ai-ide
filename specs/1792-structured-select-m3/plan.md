@@ -32,7 +32,7 @@ No new tokens, no new settings, no new persisted state (`composer_options_open` 
 
 **Storage**: N/A (existing `composer_options_open` setting only)
 
-**Testing**: `cargo test` via `mise run`: client unit and geometry tests (`tests/gates`, `ui/material/*_anatomy.rs`, `picker_parity.rs`), core unit tests for any pure helper; quickstart Part B visual pass
+**Testing**: `cargo test` via `mise run`: client unit and geometry tests (`ui/material/*_anatomy.rs`, `picker_parity.rs`, `composer.rs` tests), core unit tests for any pure helper; quickstart Part B visual pass
 
 **Target Platform**: Linux, macOS, Windows (desktop iced app)
 
@@ -81,7 +81,7 @@ crates/micold-client/src/ui/material/picker.rs         # list (existing, unchang
 crates/micold-client/src/ui/composer.rs                # options_row wrapped in material::expand; instant from reduce_motion
 crates/micold-material/src/animation.rs                # expand (existing, unchanged)
 crates/micold-client/src/showcase/                     # MenuSelect and options-row entries show the new look
-crates/micold-client/tests/gates/                      # geometry: trigger equals Select's per state
+crates/micold-client/src/ui/material/menu_select_anatomy.rs # geometry: trigger equals Select's per state
 docs/user-guide/                                       # structured view and settings pages
 ```
 
@@ -104,6 +104,6 @@ docs/user-guide/                                       # structured view and set
 ## Test strategy
 
 - **Core unit**: none expected; no new core logic. If a pure helper (duration choice) lands in core, it is tested there.
-- **Client unit/geometry (`ui/material`, `tests/gates`)**: `MenuSelect` trigger vs `Select` trigger per state (rest, hover, focus, pressed, disabled, open) for FR-001/002/009; menu list parity (FR-004); long value truncated with arrow visible, empty list opens nothing, missing value renders (FR-011).
+- **Client unit/geometry (`ui/material/*_anatomy.rs`)**: `MenuSelect` trigger vs `Select` trigger per state (rest, hover, focus, pressed, disabled, open) for FR-001/002/009; menu list parity (FR-004); long value truncated with arrow visible, empty list opens nothing, missing value renders (FR-011).
 - **Client unit (`ui/composer.rs`, `drawer_flags_tests.rs` style)**: expand duration is the motion token and zero under reduce motion (FR-006, FR-013); two sessions' rows keep separate tracks (FR-008); effort/permission/model pick messages unchanged (FR-010); `tests/material_boundary.rs` and `one_overlay_implementation.rs` still pass.
 - **Visual pass (quickstart Part B)**: look of every state, mid-animation reversal feel (FR-007), SC-001, SC-002, FR-012.
