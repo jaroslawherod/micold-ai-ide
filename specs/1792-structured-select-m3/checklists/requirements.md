@@ -13,10 +13,10 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (one open: reduced motion, for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (reduced motion resolved in Clarifications, FR-013)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
-- [ ] Success criteria are technology-agnostic (SC-003 names tokens, which the issue requires)
+- [x] Success criteria are technology-agnostic (SC-003 names tokens, which the issue requires)
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
@@ -27,8 +27,8 @@
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
-- [ ] No implementation details leak into specification (FR-001, FR-006, SC-003 name the token constraint, which the issue requires)
+- [x] No implementation details leak into specification (FR-001, FR-006, SC-003 name the token constraint, which the issue requires) (waived: the issue requires token use)
 
 ## Notes
 
-- The open marker is left for `/speckit-clarify`.
+- Reduced motion is resolved in Clarifications (FR-013); no open marker remains.

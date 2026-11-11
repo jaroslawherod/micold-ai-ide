@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
 - **Started**: 2026-11-11
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: design PR merge, then milestone M1
 
 ## Pull requests
 
@@ -23,7 +23,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T010 | full | Material 3 trigger on the three structured selects | — | pending |
+| M2 | T011–T012 | light | menu parity pinned (test-only if green) | — | pending |
+| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | pending |
 
+Polish T022–T023 (no code) is left to the close unit.
 
 ## Decisions
 
@@ -33,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
+- tasks review round 1: snapshot 199ca061a9e675043e43796afbe22d627936dd42:0923e2cbffbbdc6215eb213142a9ae51bb4c669d — CHANGES (F1 MAJOR checklist ticked, 2 with waiver; F2 MAJOR paths added to T014-T018; F3 MINOR M2 note). Fixes are artifact text only (paths, ticks); checked against the findings, no new round. speckit-analyze: no CRITICAL/HIGH; C1-C7 MEDIUM fixed.
 - plan review round 1: snapshot 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 — CHANGES (F1 MAJOR duration undecided: fixed MEDIUM_2; F2-F4 MINOR fixed). Fixes are research/contract decisions, checked against the finding; no new round.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
