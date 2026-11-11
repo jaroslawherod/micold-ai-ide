@@ -1713,8 +1713,10 @@ mod ai_cli_draft {
 
     #[test]
     fn unchecking_enabled_alone_writes_only_that() {
-        let mut draft = AiCliDraft::default();
-        draft.enabled = false;
+        let draft = AiCliDraft {
+            enabled: false,
+            ..AiCliDraft::default()
+        };
         let setting = draft.to_setting(CliId::Copilot).expect("an override");
         assert_eq!(
             setting,
