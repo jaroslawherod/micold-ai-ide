@@ -2463,6 +2463,7 @@ fn reported() -> micold_core::protocol::messages::ConfigStatus {
         last_error: None,
         tokens: Vec::new(),
         ai_cli_tokens: Vec::new(),
+        ai_cli_sign_ins: Vec::new(),
         startup: None,
     }
 }

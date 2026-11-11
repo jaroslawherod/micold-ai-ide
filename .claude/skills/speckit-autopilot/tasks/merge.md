@@ -37,9 +37,20 @@ branch no ledger names is not guarded (`UNGUARDED`). Anything else is refused: a
 the review, no row, `CHANGES` or `pending`, an unreadable PR head or ledger, or a ledger with no
 `Head` column (a run started before this rule re-reviews once). `gh` failing is a refusal.
 
+### Carrying a verdict over a clean replay
+
+A rebase or an amended message leaves the code unchanged, so an **approved** verdict carries from
+`H` to the new head `P` when, ledger files excluded, neither `merge-base(X,base)..X` range has a
+merge commit or is empty, the ordered `git patch-id --stable` lists are equal and the
+`git diff --name-status -M` path sets are equal. Anything else, a conflict resolution included,
+does not carry; `CHANGES` and `pending` never do. The guard posts the PR comment
+`verdict carried <H> -> <P>` once per pair and prints `CARRIED <n> <H> <P>` (the last carried `H`);
+the branch is untouched. `H` is the original SHA in the ledger, so chains do not drift.
+
 | Last line | Do |
 |---|---|
 | `MERGED <n> <sha>` | Run `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`; on `OVER`, tell the user in one line that `/clear` then `/speckit-autopilot resume` would restart you small, and carry on. Dispatch the next unit with the PR and SHA; it records them in the ledger. Never edit the ledger yourself between units: `branch-start.sh` refuses a dirty tree. After the run's last PR: [handoff.md](handoff.md). |
+| `CARRIED <n> <H> <P>` | The merge proceeds on its own (`wait-merge.sh` merges next); nothing to do. |
 | `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR ([dispatch.md](dispatch.md), *Continuing a unit*) with the log path and `tasks/red-ci.md` to read, at most 3 attempts. Outside it: [ci.md](ci.md). |
 | `CHECKLESS <n> <reason>` | [ci.md](ci.md), *A PR with no checks*, then run the script again. |
 | `VERDICT-REFUSED <n> reviewed <H\|none> current <P> re-review: <why>` | Do not merge. Continue the unit that opened the PR ([dispatch.md](dispatch.md), *Continuing a unit*): review the current head (the fix diff since `H`), fix, record the new round with `record-verdict.sh`, push, and run the script again. |

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M2b
-- **Next step**: wait for the M2b PR's CI and merge; then M3 (T096–T100).
+- **Phase**: milestone M3
+- **Next step**: wait for the M3 PR CI and merge; then M4 (T066, T067).
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1699 | design (tasks + milestones for Issue 11) | merged | 98aa6edcc561301f70c671b74113b9877ce2d9fd |
 | #1711 | M1 — each `[[ai.cli]]` field maps to the CLI's launch | merged | 8470f7464ec548474530511495dd9ded211e5ba4 |
 | #1772 | M2a — sign-in delivery, read-only on every kind (SC-008) | merged | f585c83c829a751556ded4115f3c3275e7834221 |
-| #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | open | — |
+| #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | merged | b4216564604c9b93a3f8c685e9a676113f92f6cc |
+| #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | open | — |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|
 | M1 | each `[[ai.cli]]` field maps to the CLI's launch; configured args/env add to the app's own | T059–T064 | full | #1711 (merged, `8470f7464ec548474530511495dd9ded211e5ba4`) |
 | M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | #1772 (merged, `f585c83c829a751556ded4115f3c3275e7834221`) |
-| M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (open) |
-| M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | — |
+| M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
+| M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (open) |
 | M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
@@ -80,8 +81,24 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D7 | milestone M2 | Connectivity note, not a decision needing a question: should a stalled `git`/`gh` call be treated as a credential failure? | No: GitHub access from this container is intermittent — one round-robin IP black-holes port 443 (why `/home/jaro/.local/bin/gh` is a retry wrapper). A call that stalls ~130s and then reports a connect timeout should simply be retried | agent-resolved | orchestrator's briefing for this unit |
 | D8 | milestone M2 | Two consecutive units spent their full context on M2's design (T065, T065a–c together) and wrote no code — does the milestone still fit one unit? | No: split M2 into M2a (T065 only — read-only sign-in delivery, SC-008) and M2b (T065a–T065c — keeping a delivered sign-in valid without a CLI refresh), each its own PR. `tasks.md`'s M2 section replaced with M2a/M2b per `milestone-format.md`; M3's `Depends on` repointed at M2b. This unit's own scope is M2a | agent-resolved | this unit's briefing (two 150k handovers with no code, `autopilot-1532.md`'s own prior two *Handover* sections); `specs/daemon-config-file/tasks.md` M2a/M2b sections |
 | D9 | milestone M2b | T065a's bullet says Settings runs `claude setup-token`/takes a pasted token and warns 14 days before expiry; T065b's bullet says the client re-delivers a derived sign-in and schedules a host-side refresh. Neither Settings UI for `[[ai.cli]]` nor a client→daemon secret-push message exists yet (both are M4/T066-T067's and M3/T100's own scope) — does M2b need to build them too? | No, same precedent as D4/D5: scope to M2b's own Deliverable/Verify lines, not the task bullets' UI detail. **T065a**: implement the backend only — `token_file` env wiring at session start (never argv) plus a 14-day expiry warning computed server-side and surfaced through the *existing* `ConfigStatus`/daemon-details-dialog diagnostic text (extending the same loop that already shows GitHub `TokenReach` lines, no new widget) rather than a `[[ai.cli]]`-table Settings UI (M4's, not built yet). **T065b**: implement only the pure, unit-tested relay logic in `crates/micold-client/src/ai_cli_relay.rs` (derive-copy-with-no-refresh-token, expiry/scheduling math, an `apply_relay` that writes the derived copy to a given destination path and never touches the source) — exactly what the Verify line (`cargo test -p micold-client --lib`) and the task's own two named tests ask for. The live notify watcher, the per-daemon destination-path lookup and the actual host/SSH/pod delivery channel are left as named follow-up: no client→daemon protocol message exists to push a secret (confirmed by exploration), the client has no structured read of a target daemon's `[[ai.cli]]` config yet (that is M4's), and pod re-delivery on a host sign-in change is already M3's own stated Deliverable. State this gap plainly in the M2b PR body | agent-resolved | exploration of `ConfigStatus`/`TokenReach` (`crates/micold-core/src/protocol/messages.rs:2433-2506`, `crates/micold-daemon/src/config_watch.rs:123-143`, `crates/micold-client/src/ui/daemon_details_dialog.rs:60-85`) and of client-side watch/scheduling/protocol building blocks (`crates/micold-client/src/shell/changes_watch.rs`, `crates/micold-client/src/shell/subscriptions.rs:286`, `crates/micold-client/src/daemon_config_delivery.rs`) found no existing client→daemon secret-push message and no client-side `[[ai.cli]]` config awareness; `specs/daemon-config-file/tasks.md` M4 line (T066/T067, Settings → Daemons renders `[[ai.cli]]`) and M3 line (T100, "the client re-delivers the pod Secret when the host sign-in changes") |
+| D10 | milestone M3 | T096–T100 name container/pod onboarding, a client-side pod-Secret watcher and a Settings "Seed again"/"asking once" UI, but the client has no read of the daemon's `[[ai.cli]]` (M4) and no daemon→client push; and `use_machine_sign_in` "off by default" could mean either "no change" or "isolate every host daemon". Scope? | Same precedent as D9: implement the pure, tested pieces plus the daemon-side wiring. T096/T098: `daemon_config/ai_cli_seed.rs` (`seed_host_config_dir`: `.claude.json` seeded once without `primaryApiKey`, `settings_file`/`place` as copies re-made only when the source's length+mtime changed, never links) wired into `State::with_host_config_dir`; `reseed` is a parameter for M4's button. T099: `uses_machine_sign_in` skips the isolated config dir and every seed; "off by default" read conservatively as unchanged behaviour for daemons that never name it (no migration needed); the once-asked Settings prompt is M4. T097: `claude_onboarding_wanted` + `MountSet::onboarding_record_for(bool)`, not yet called by the client (no `[[ai.cli]]` read there until M4). T100: `ConfigStatus.ai_cli_sign_ins` (daemon diagnostic line per delivered sign-in) and `KubeCredential::redelivery` (pure: new Secret data only when the host source changed); the client-side watcher that calls it is M4's follow-up. State these gaps in the M3 PR body | agent-resolved | exploration this unit: `settings_file`/`place` have no consumer outside `resolved.rs`; `onboarding_record` reads only `CredentialShare::AiCliAuth`; no client read of `[[ai.cli]]` |
 
 ## Review rounds
+
+| Review | Round | Scope | Head | Snapshot | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| M3 review A | 2 | 1828 | f65cbe7927f364571f2f30629a15eeb0a6eed140 | 28a2f2bb7cffb5c8037edfd2329136c793bbcef2:91aea0b4f45a48d631485130d3625c7ba9ad04bc | CLEAN MINORs only; the commits after the snapshot are ledger and user-guide prose (review-rounds.md, prose-only exception) |
+| M3 review B | 1 | 1828 | f65cbe7927f364571f2f30629a15eeb0a6eed140 | 28a2f2bb7cffb5c8037edfd2329136c793bbcef2:91aea0b4f45a48d631485130d3625c7ba9ad04bc | CLEAN 3 MINOR, all fixed in prose (Verify lines, D10 scope note) |
+
+M3 review A round 1 (snapshot `1c9f76ca9a426f7fee60d0a8f7e41741f1fb71a8:981a23b90055e9ef655bfc1c28ed68de9f11d1a2`): CHANGES, 2 MAJOR fixed (see Declined review findings), re-review (sonnet, snapshot `28a2f2bb7cffb5c8037edfd2329136c793bbcef2:91aea0b4f45a48d631485130d3625c7ba9ad04bc`): CLEAN, MINORs only. Review B (sonnet): CLEAN, 3 MINOR (Verify lines retargeted, D10 scope noted in tasks.md; Verify did not finish under the shared build lock, the scoped gate ran these tests green). plan-drift.sh cannot run for this multi-issue tasks.md.
+
+M3 CI round 1 red: the `docs check` job's user-guide gate blocked the PR (one user-facing path,
+`crates/micold-client/src/ui/daemon_details_dialog.rs`, with no page under `docs/user-guide/`
+touched). Fixed by documenting what the change actually makes visible: the per-sign-in expiry line
+in *Configuration in Details* (`docs/user-guide/settings.md`) and the seeded host/SSH config dir
+plus the `use_machine_sign_in` opt-out (`docs/user-guide/daemon-configuration.md`). Prose only, no
+new review round; `check-user-guide-updated.sh`, `check-criteria-observables.sh`, `page-set.sh` and
+`media-references.sh` run green locally. Full `[[ai.cli]]` documentation remains T067 (M4).
 
 Milestone M2b review A (autopilot-reviewer, code-review high): CHANGES round 1 - F1 MAJOR derived copy world-readable/non-atomic: fixed (owner_only::write, 0600/0700, tested); F2 MAJOR dest==source/symlink could overwrite the user's own sign-in: fixed (same_file check, InvalidInput, tested); F3 MAJOR panicking SystemTime add on huge exp: fixed (checked_add, tested); F4 MINOR unexpected JSON shape relayed with refresh token: fixed (RelayError::UnexpectedShape, tested); F5 MINOR status path dropped a token_file read failure silently: fixed (tracing::warn). Uncommitted validate.rs diff (key_variables reuses token_file_env_variable) was a behaviour-neutral refactor belonging to T065a; committed. Review B snapshot `5a5f5daa313c2bd8306c8b864b9afb7ff8eda215:23a74afd8b86554df58f86469e4fb534596f8470` (sonnet): CHANGES. F1 MAJOR cycle-log has no red phase for T065a/b: declined, the log records `TEST_AFTER` openly as the earlier unit's deviation and each review-A fix was proven by a temporary revert; the history cannot be rewritten. F2 MAJOR T065c measurements absent: fixed, annotated in tasks.md and stated in the PR body (no CLIs or container runtime here; the doc table is honest). F3 MINOR T065b tick read as full: fixed, annotated in tasks.md. F4 MINOR `refreshTokenExpiresAt` left in the Claude copy: declined, an expiry timestamp is not a secret. All prose/annotation fixes, no new round.
 
@@ -280,6 +297,8 @@ Pushed commit `ba6ae6b5e` to PR #1772's existing branch. Waiting on CI for attem
 verdict; attempt 3 is this scope's last before an escalation.
 
 ## Declined review findings
+
+M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link — fixed (`unlink_ancestors`, test). F2 [MAJOR] prepare relinked the seeded settings copy every session — fixed (prepare keeps a non-link file/dir; test runs prepare+seed twice). F3 [MINOR] seeding runs only with `sign_in_file` (config dir is only isolated then) — accepted, stated in PR body. F4 [MINOR] 0600/atomic write and stamp-name collisions — declined, taste; the seeded files are under the daemon's private data dir.
 
 - M1 review A round 2, F1 [BLOCKER]: `AiCliTable::configured(...)` not called from the real provisioning call sites (`kube::start::pod_target`, `micold-client::daemon::container_target`). Declined — see D5: neither production call site has a per-CLI `version`/`enabled` value to pass in today (`KubeSettings.providers` and `AiCliSelection` are both a bare `AiCli` set, no version/args/model field exists on the client side yet); that data model is M4's own stated scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067). `AiCliTable::configured` is exactly what M1's Deliverable and Verify line (`cargo test -p micold-core provision::ai_cli`, core-only) call for: the pure builder, ready for M4 to call once the Settings-side data exists.
 - M1 review A round 2, F3 [MINOR]: `daemon_config::ai_cli::launch_overlay`'s `args`/`model` fields unread in production (state.rs re-derives via `ai_cli_args_for`/`effective_model_for`). Declined: `effective_model_for` additionally validates the model string with `ModelName::parse` (`launch_overlay` does not — it is a pure capability-mapping function tested in isolation, not the only place the mapping has to be applied correctly), and `ai_cli_args_for` is a one-line accessor; collapsing them would couple the launch-spec wiring to a type (`LaunchOverlay`) built for a different purpose (env mapping, including the two API-key-reaching-env rules). Left as two small, independently correct functions rather than one with a secondary mode.

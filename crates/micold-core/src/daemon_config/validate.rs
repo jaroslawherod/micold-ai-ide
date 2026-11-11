@@ -326,18 +326,25 @@ impl<'a> Doc<'a> {
     }
 }
 
-/// `Ok` when `url` is an `https` URL with a host.
+/// `Ok` when `url` is an `https` URL with a host, no userinfo (a password would sit in the file)
+/// and no fragment.
 fn check_https_url(url: &str) -> Result<(), &'static str> {
+    const INVALID: &str =
+        "is not a valid URL (expected `https://host[:port]`, no credentials or fragment)";
     let Some((scheme, rest)) = url.split_once("://") else {
-        return Err("is not a valid URL (expected `https://host[:port]`)");
+        return Err(INVALID);
     };
     if !scheme.eq_ignore_ascii_case("https") {
         return Err("must use the https scheme");
     }
     let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = authority.rsplit('@').next().unwrap_or_default();
-    if host.is_empty() || host.starts_with(':') || url.contains(char::is_whitespace) {
-        return Err("is not a valid URL (expected `https://host[:port]`)");
+    if authority.contains('@')
+        || url.contains('#')
+        || authority.is_empty()
+        || authority.starts_with(':')
+        || url.contains(char::is_whitespace)
+    {
+        return Err(INVALID);
     }
     Ok(())
 }
@@ -1017,10 +1024,12 @@ impl Checker<'_, '_> {
             None => self.at_header("O1", "`orchestrator.url` is required".to_string()),
             Some(url) => {
                 if let Err(why) = check_https_url(url) {
+                    // Never echo a url with userinfo: it may hold a password.
+                    let shown = if url.contains('@') { "<redacted>" } else { url };
                     self.at(
                         "O2",
                         "orchestrator.url",
-                        format!("`orchestrator.url` \"{url}\" {why}"),
+                        format!("`orchestrator.url` \"{shown}\" {why}"),
                     );
                 }
             }

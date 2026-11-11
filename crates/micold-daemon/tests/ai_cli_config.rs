@@ -372,3 +372,80 @@ fn a_configured_model_is_claude_codes_default_launch_model() {
         None => std::env::remove_var("PATH"),
     }
 }
+
+/// T096 (research D15 row 4): a delivered Claude sign-in seeds `<data_dir>/ai/claude_code/
+/// .claude.json` once from the user's own `~/.claude.json`, without `primaryApiKey`, and the
+/// user's file is never written.
+#[test]
+fn a_delivered_claude_sign_in_seeds_claude_json_without_the_api_key() {
+    let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bin = tempfile::tempdir().unwrap();
+    stand_in(bin.path(), "claude");
+    let previous_path = std::env::var_os("PATH");
+    let previous_home = std::env::var_os("HOME");
+    std::env::set_var(
+        "PATH",
+        std::env::join_paths([
+            bin.path().to_path_buf(),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ])
+        .unwrap(),
+    );
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("HOME", home.path());
+    let user_json = r#"{"primaryApiKey":"sk-x","projects":{"/p":{"hasTrustDialogAccepted":true}}}"#;
+    std::fs::write(home.path().join(".claude.json"), user_json).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let (catalog, id) =
+        catalog_with_ai_cli_session(project.path(), store.path(), AiCli::ClaudeCode);
+    let state = DaemonState::new(catalog);
+    state.set_pasted_data_dir(data.path().to_path_buf());
+
+    let sign_in = project.path().join("sign-in.json");
+    std::fs::write(&sign_in, "{}").unwrap();
+    let text = format!(
+        "schema = 1\n[daemon]\nname = \"d\"\nkind = \"host\"\n\n[[ai.cli]]\nid = \"claude_code\"\nsign_in_file = \"{}\"\n",
+        sign_in.display(),
+    );
+    let config = micold_core::daemon_config::parse(&text, "test.toml").expect("a valid config");
+    state.set_config(Arc::new(ConfigRuntime::new(LoadedFile {
+        path: PathBuf::from("test.toml"),
+        config,
+        hash: "x".to_string(),
+        warnings: Vec::new(),
+    })));
+
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("start the ai-cli session");
+    let live = state.live_session(id).expect("registered");
+    assert!(
+        wait_until(Duration::from_secs(5), || bin
+            .path()
+            .join("claude.env")
+            .exists()),
+        "the stand-in must have run"
+    );
+    live.kill().expect("kill");
+
+    let seeded =
+        std::fs::read_to_string(data.path().join("ai/claude_code/.claude.json")).expect("seeded");
+    assert!(!seeded.contains("primaryApiKey"), "{seeded}");
+    assert!(seeded.contains("hasTrustDialogAccepted"), "{seeded}");
+    assert_eq!(
+        std::fs::read_to_string(home.path().join(".claude.json")).unwrap(),
+        user_json,
+        "the user's own file is never written"
+    );
+
+    for (name, value) in [("PATH", previous_path), ("HOME", previous_home)] {
+        match value {
+            Some(v) => std::env::set_var(name, v),
+            None => std::env::remove_var(name),
+        }
+    }
+}

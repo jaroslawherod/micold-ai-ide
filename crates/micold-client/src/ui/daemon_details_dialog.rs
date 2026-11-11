@@ -90,6 +90,12 @@ pub fn configuration_lines(status: &ConfigStatus) -> Vec<String> {
             expiring.cli, expiring.expires_at_secs
         ));
     }
+    for sign_in in &status.ai_cli_sign_ins {
+        lines.push(format!(
+            "AI CLI {} sign-in file: expiresAt {}",
+            sign_in.cli, sign_in.expires_at_secs
+        ));
+    }
     lines.push(match &status.startup {
         None => "Start script: has not run".to_string(),
         Some(run) => {
@@ -208,6 +214,7 @@ mod tests {
                 },
             ],
             ai_cli_tokens: Vec::new(),
+            ai_cli_sign_ins: Vec::new(),
             startup: Some(StartupReport {
                 outcome: StartupOutcome::Warned,
                 reason: Some(StartupReason::Exit(3)),

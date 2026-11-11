@@ -164,6 +164,23 @@ specific tokens are not an error; the first in the file wins.
 
 At most one of `sign_in_file`, `token_file` and `api_key_file` per CLI.
 
+#### What a delivered sign-in brings with it (host and SSH)
+
+On a host or SSH daemon, a CLI given a `sign_in_file` runs against its own configuration directory
+under the daemon's data directory instead of yours, and the daemon seeds that directory beside the
+delivered sign-in:
+
+- `.claude.json` is copied from your own `~/.claude.json` **once**, the first time the directory is
+  used, with `primaryApiKey` dropped. Claude Code keeps the projects you have already trusted and
+  your user MCP servers, so it does not ask to trust the folder again. Nothing is ever written back
+  to your file, and the API key never reaches the daemon.
+- Files the CLI is given beside it are **copies**, re-made only when the source changed, never links
+  into your own configuration, so the CLI can record its own state in them.
+
+`use_machine_sign_in` opts a CLI out of all of it: no separate configuration directory, nothing
+seeded, and the CLI uses the sign-in it manages on this computer. It is off unless your file names
+it, so a daemon that never mentioned it keeps working exactly as before.
+
 ### `[orchestrator]`
 
 Absent means the daemon does not connect to an orchestrator. Present, it names the orchestrator and
@@ -188,7 +205,9 @@ on a host or SSH daemon and an error in a container or pod (V14). A live reload 
 Rules, each reported as `file:line:column: message` with exit status 2:
 
 - **O1**: `url` is required. Reported at the `[orchestrator]` header.
-- **O2**: `url` must be a valid `https` URL. Reported at the `url` value.
+- **O2**: `url` must be a valid `https` URL with a host. A `url` with a user name or password
+  (`https://user:pass@host`) or a `#fragment` is refused as an invalid URL, so the file never holds a
+  password. Reported at the `url` value.
 - **O3**: `cert_file` and `key_file` come together; one without the other is refused at the key that
   is present.
 - **O4**: give `enrollment_token_file` or the `cert_file`/`key_file` pair, not both: the token

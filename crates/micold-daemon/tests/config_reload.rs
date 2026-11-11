@@ -651,3 +651,28 @@ fn the_status_carries_the_start_scripts_last_run() {
     micold_daemon::startup_script::record_report(report.clone());
     assert_eq!(runtime.status().startup, Some(report));
 }
+
+/// T100 (FR-040): the diagnostic shows each delivered sign-in's `expiresAt`, and never the token.
+#[cfg(unix)]
+#[test]
+fn the_status_shows_each_delivered_sign_ins_expiry_and_never_its_token() {
+    let dir = tempfile::tempdir().unwrap();
+    let sign_in = dir.path().join("claude.json");
+    std::fs::write(
+        &sign_in,
+        r#"{"claudeAiOauth":{"accessToken":"sk-ant-secret","expiresAt":1700000000000}}"#,
+    )
+    .unwrap();
+    mode(&sign_in, 0o600);
+    let extra = format!(
+        "[[ai.cli]]\nid = \"claude_code\"\nsign_in_file = \"{}\"\n",
+        sign_in.display()
+    );
+    let file = dir.path().join("daemon.toml");
+    std::fs::write(&file, host("1", "info", &extra)).unwrap();
+    let status = ConfigRuntime::open(&file).unwrap().status();
+    assert_eq!(status.ai_cli_sign_ins.len(), 1);
+    assert_eq!(status.ai_cli_sign_ins[0].cli, "claude_code");
+    assert_eq!(status.ai_cli_sign_ins[0].expires_at_secs, 1_700_000_000);
+    assert!(!format!("{status:?}").contains("sk-ant-secret"));
+}
