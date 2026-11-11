@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
 | #1763 | M1 (gh shim) | merged | 4b0e90f051efb9e5f2dbdfe85a4faf47c5575244 |
+| #1832 | Close (T148-T151 remediation) | open | — |
 
 ## Milestones
 
