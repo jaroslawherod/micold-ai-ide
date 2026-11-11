@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1531
 - **Worktree branch**: feat/1531_gh-token-for-gh-in-sessions-of-every-kind
 - **Started**: 2026-11-05
-- **Phase**: M1 done, PR #1763 open, rebased and re-pushed (part 6) with fresh CI running; `ci complete` not yet seen.
+- **Phase**: M1 done, PR #1763 open; part 7 fixed the one real red-CI failure (sandbox real-runtime PATH-ordering test) and re-pushed; fresh CI running.
 - **Next step**: orchestrator holds for CI and merges on green `ci complete`. If the only red is a job also red on `main` (windows/macos), hold and escalate again rather than fixing it out of flow.
 
 ## Pull requests
@@ -17,7 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1696 | Design (milestones for Issue 10) | merged | 90e17aeeb53635ae3c7b6027bc4057f559d2d744 |
-| #1763 | M1 (gh shim) | open, rebased onto current `main`, re-gated and force-pushed (part 6); fresh CI running | — |
+| #1763 | M1 (gh shim) | open; part 7 fixed the real red-CI sandbox PATH-ordering test failure, re-gated and pushed; fresh CI running | — |
 
 ## Milestones
 
@@ -41,11 +41,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Review rounds
 
-| Review | Round | Snapshot | Verdict |
-|---|---|---|---|
-| Tasks 1531 | 1 | 7a198beac8244eaa27e1da4bb57ab949a3097bce:93bc2a7f9a0a8723aa5ec8061cfe36c235c9f6f3 | CHANGES: F1 MAJOR (Depends-on claimed Issue 9 M2, rationale only cites M1 tasks) fixed by narrowing to M1 merged; F2 MINOR (T056 no file path, wrongly tagged `[P]` with T055 in the same file) fixed by adding the path and dropping `[P]`. Both fixes are task-text only, no new round. |
-| M1 code-review (A) | 1 | ea4e8fdc48fc831d572ff1227511a6fbcdb6b16d:d9ad46edb1aa72581e21de5de24e855dadec261d | CHANGES: F1 BLOCKER (no `#[cfg(unix)]` on unix-only `gh_shim.rs` integration tests), F2 MINOR (empty `PATH` entry not treated as `.`). Both fixed in `85fb4e24d`. Done — A runs once per milestone; no further round needed. |
-| M1 conformance (B) | 1 | 2b8970bebd0d2b9a7bf25daaea36513ffff7a2e8:faaff33f799022bf55b8813e60b6cf3fc140be5e | CLEAN: F1 MINOR only (`gh_shim.rs::resolve()` duplicates `git_credential.rs::answer_from_config`'s config-load/cache-path/`credential_config::answer` sequence almost line for line). No fix needed per `tasks/review-rounds.md` ("CLEAN, or only MINORs: the review is done"); `cargo test -p micold-daemon --lib` confirmed green separately (`TEST_EXIT=0`) since the reviewer's own `--test gh_shim` run stayed queued behind another worktree's build lock. Done — B runs once per milestone. |
+| Review | Round | Scope | Head | Snapshot | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Tasks 1531 | 1 |  |  | 7a198beac8244eaa27e1da4bb57ab949a3097bce:93bc2a7f9a0a8723aa5ec8061cfe36c235c9f6f3 | CHANGES: F1 MAJOR (Depends-on claimed Issue 9 M2, rationale only cites M1 tasks) fixed by narrowing to M1 merged; F2 MINOR (T056 no file path, wrongly tagged `[P]` with T055 in the same file) fixed by adding the path and dropping `[P]`. Both fixes are task-text only, no new round. |
+| M1 code-review (A) | 1 |  |  | ea4e8fdc48fc831d572ff1227511a6fbcdb6b16d:d9ad46edb1aa72581e21de5de24e855dadec261d | CHANGES: F1 BLOCKER (no `#[cfg(unix)]` on unix-only `gh_shim.rs` integration tests), F2 MINOR (empty `PATH` entry not treated as `.`). Both fixed in `85fb4e24d`. Done — A runs once per milestone; no further round needed. |
+| M1 conformance (B) | 1 |  |  | 2b8970bebd0d2b9a7bf25daaea36513ffff7a2e8:faaff33f799022bf55b8813e60b6cf3fc140be5e | CLEAN: F1 MINOR only (`gh_shim.rs::resolve()` duplicates `git_credential.rs::answer_from_config`'s config-load/cache-path/`credential_config::answer` sequence almost line for line). No fix needed per `tasks/review-rounds.md` ("CLEAN, or only MINORs: the review is done"); `cargo test -p micold-daemon --lib` confirmed green separately (`TEST_EXIT=0`) since the reviewer's own `--test gh_shim` run stayed queued behind another worktree's build lock. Done — B runs once per milestone. |
+| M1 red-CI fix (conformance) | 2 | 1763 | 80edd2d65f858da7c239badab922f91093738167 | a7d0ffe9114e8457a515f1860722840baad10542:c87c424dafd951f602646fef79b4eb0cd29e4c8c | CLEAN |
 
 ## Declined review findings
 
@@ -57,6 +58,61 @@ M1 (T055–T057, T095, T058) is done: implemented, reviewed (A and B both `CLEAN
 rebased onto current `main`, pushed, and PR #1763 is open against `main`. Nothing further for a
 human or another unit to do on this milestone unless CI turns up something real; the orchestrator
 now waits on CI and merges.
+
+**Done, this unit (part 7, red-CI episode):** Continued from part 6's fresh CI run on head
+`c87c424da` (run `43010271154`): green on every job except "sandbox against a real runtime
+(linux)", which failed exactly one test,
+`sandbox_real_toolchain_path_puts_the_home_folders_after_the_offered_bins`
+(`crates/micold-daemon/tests/sandbox_real_toolchain_path.rs`). The actual sandbox `PATH` started
+with `/var/lib/micold-ai-ide/bin` (this milestone's `gh`-shim bin directory) ahead of the offered
+AI-CLI bins; the test, which predates #1531, expected the offered bins to lead with no shim entry
+at all — a real consequence of this diff, not out-of-flow breakage.
+
+Decided the shim directory belongs *ahead* of the offered bins (so the test's expectation, not the
+PATH-assembly code, is what needed to change), because: (1) T056's own wording
+(`specs/daemon-config-file/tasks.md`) says `<data_dir>/bin` is "first on the session `PATH`",
+unqualified — not merely ahead of the real system `gh`; (2) the shim's purpose is to win the race
+against any real `gh` wherever it sits on the rest of the `PATH` (`/usr/local/bin`,
+`/usr/bin`, …), and none of the offered AI-CLI bins (Claude Code, Copilot, Pi, Codex, OpenCode) is
+itself a copy of `gh`, so there is no competing concern that would want the shim placed behind
+them; (3) `crates/micold-daemon/src/state.rs::spawn_env_for` already calls `with_gh_shim_path`
+*after* `with_sandbox_path`, so changing the assembly order to put the shim behind the offered bins
+would mean rewriting working, already-reviewed (A and B both `CLEAN`) production code to match a
+pre-#1531 test assumption, rather than updating the one test that never knew about the shim.
+
+Fixed `crates/micold-daemon/tests/sandbox_real_toolchain_path.rs` only: added a doc-comment
+paragraph explaining the ordering, imported `sandbox_real_support::CONTAINER_STATE`
+(`"/var/lib/micold-ai-ide"`, already a `pub const` there), and changed the test's `want` vector to
+expect `format!("{CONTAINER_STATE}/bin")` first, before the offered CLI bins, updating the
+assertion's failure message to match. Commit `80edd2d65`.
+
+**What was run, exactly:** no container runtime is installed in this sandbox (`which docker`/`podman`
+found nothing, `docker info` failed) — `mise run test-sandbox` and `mise run image` could not run
+here, so the real-runtime test itself (and CI's own job) are the first execution of this fix in a
+real container; this matches `tasks/gate.md`'s documented "no container runtime installed: say so
+in the PR body; CI's sandbox job runs it." What was run instead: `scripts/build-lock.sh cargo check
+-p micold-daemon --features sandbox-real-runtime --tests`, which compiled the changed test file
+(and the whole `sandbox-real-runtime`-gated test surface) clean with no errors — confirming the
+`CONTAINER_STATE` import and the rewritten assertion are at least well-typed, though not that the
+real container produces the exact `PATH` asserted.
+
+Re-reviewed only the fix diff (`git diff HEAD~1..HEAD -- crates/micold-daemon/tests/sandbox_real_toolchain_path.rs`,
+since the last recorded snapshot `2b8970be…:faaff33f…` was stale — `review-snapshot.sh diff` exited
+2 `STALE-SNAPSHOT` after part 6's rebase) with a fresh `autopilot-reviewer` on `model: sonnet`,
+conformance rubric: verdict `CLEAN` (recorded above, "M1 red-CI fix (conformance)" round 2, head
+`80edd2d65f858da7c239badab922f91093738167`).
+
+Ran `mise run gate` (full) after the commit. fmt and clippy (core, then workspace) both passed
+clean, no warnings. `cargo nextest run --workspace` found 21 failures, the exact same 21 tests part
+6's handover already documented and judged environmental (daemon-lifecycle timeouts from this
+session's own `MICOLD_DAEMON_CONFIG` env leaking into spawned-daemon child processes, build-lock
+contention from sibling worktrees, and the one font-dependent `ellipsized` test); none touches a
+file this diff changed (`git diff --stat origin/main...HEAD` after this fix still lists only
+`github.rs`, `micold-daemon/Cargo.toml`, `gh_shim.rs`, `lib.rs`, `main.rs`, `state.rs`,
+`sandbox_real_toolchain_path.rs`, `tests/gh_shim.rs`, `settings.md`, and the spec/ledger files).
+Recorded the gate-ok tree (`a7d0ffe9114e8457a515f1860722840baad10542`, commit `80edd2d65`) and
+pushed. PR #1763's fresh CI is now running on the new head; did not merge — the orchestrator waits
+on CI and merges.
 
 **Done, this unit (part 6):** D8 authorised part 6 (push, merge when green). `git fetch origin`
 confirmed `origin/main` had not moved past `91fd714ea` since the orchestrator's own check; local
