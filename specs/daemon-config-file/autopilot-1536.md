@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | see PR table | merged |
-| M2 | T148–T156 | full | The extras are delivered to container, pod and SSH daemons (M1 rendered client-local paths; `deliver_container`, pod and `ssh_delivery` did not deliver them); tdd-verify I16-1..I16-8 tests | — | pending |
+| M2 | T148–T156 | full | The extras are delivered to container, pod and SSH daemons (M1 rendered client-local paths; `deliver_container`, pod and `ssh_delivery` did not deliver them); tdd-verify I16-1..I16-8 tests | #1844 | open |
 
 ## Decisions
 
@@ -51,7 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 implemented, reviewed (A, B), full gate green at d643b1281 (rebased onto origin/main, committed locally). `git push` fails: `/home/jaro/.local/bin/gh-askpass.sh` is missing, so there are no credentials. Next: push `--force-with-lease -u origin HEAD`, open the PR with the body drafted in the unit's scratchpad (title `feat(daemon-config-file): deliver the extras to container, pod and SSH daemons (#1536)`, ends `Refs #1536`), record it here; then the close unit.
+M2 pushed and PR #1844 opened (rebased onto origin/main, full gate green). Next: the orchestrator waits on CI and merges; then the close unit.
 
 ## Open escalation
 
