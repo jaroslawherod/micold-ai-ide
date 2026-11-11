@@ -51,7 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit 2 found unbuilt behaviour (claim verified): `deliver_container`, the pod delivery and `ssh_delivery` do not deliver `ssh_key_file`, `known_hosts_file`, `signing_key_file`, `ca_file` or `[[session.files]]` sources, so only a host daemon gets them; on SSH the rendered key path is client-local. #1536 acceptance criteria 1 to 4 do not hold for C, K and S. Cut M2 (T148-T156, in tasks.md) including tdd-verify findings I16-1..I16-8 (verification.md section Issue 16 is committed). Run M2, then a new close unit: re-run tdd-verify, add #1536 rows to test-list (T156 does), record follow-up (no Settings row for `[[session.files]]`), spec Status for the Issue 16 group, close PR `docs(daemon-config-file): close the spec (#1536)`. Review B for M1 was CLEAN, so skip speckit-converge.
+M2 implemented, reviewed (A, B), full gate green at d643b1281 (rebased onto origin/main, committed locally). `git push` fails: `/home/jaro/.local/bin/gh-askpass.sh` is missing, so there are no credentials. Next: push `--force-with-lease -u origin HEAD`, open the PR with the body drafted in the unit's scratchpad (title `feat(daemon-config-file): deliver the extras to container, pod and SSH daemons (#1536)`, ends `Refs #1536`), record it here; then the close unit.
 
 ## Open escalation
 
