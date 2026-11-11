@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
 - **Started**: 2026-11-11
-- **Phase**: spec
-- **Next step**: Run the clarify unit on spec.md (one open marker: reduced motion).
+- **Phase**: clarify
+- **Next step**: Run the plan unit (clarify done: reduced motion resolved, FR-013).
 
 ## Pull requests
 

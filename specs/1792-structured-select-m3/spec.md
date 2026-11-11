@@ -8,6 +8,12 @@
 
 **Input**: User description: "feat: structured view: Material 3 select input and expand animation for the model, effort and permissions settings (#1792)"
 
+## Clarifications
+
+### Session 2026-11-11
+
+- Q: Does the app have a reduced-motion setting this feature must honour? → A: Yes, `appearance.reduce_motion` (Settings > Appearance > Reduce motion); the OS preference is not read. Added FR-013 and an Out of Scope entry. _(agent-resolved: docs/user-guide/settings.md#Reduce motion)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Material 3 select for model, effort and permissions (Priority: P1)
@@ -55,7 +61,7 @@ When the user opens the model, effort or permissions settings, they grow from th
 1. **Given** closed settings, **When** the user opens them, **Then** they grow from the trigger to full height over the app's standard motion duration and easing.
 2. **Given** open settings, **When** the user closes them, **Then** they collapse to the trigger with the same duration and easing.
 3. **Given** settings that are mid-animation, **When** the user toggles them again, **Then** the motion reverses from the current height without a jump.
-4. **Given** the user has reduced motion enabled in the app or system, **When** the settings open or close, **Then** the change is shown without the grow or collapse motion [NEEDS CLARIFICATION: does the app already have a reduced-motion setting that this feature must honour?].
+4. **Given** the user has turned on the app's Reduce motion setting (Appearance), **When** the settings open or close, **Then** the change is shown in one step without the grow or collapse motion.
 
 ---
 
@@ -85,6 +91,7 @@ When the user opens the model, effort or permissions settings, they grow from th
 - **FR-010**: Selecting an option MUST keep the existing behaviour: the chosen value is applied to the setting.
 - **FR-011**: Edge cases MUST hold: an empty option list opens no menu; a value missing from the options and very long text still render within the container with the arrow visible; a window too small for the full height keeps the settings reachable.
 - **FR-012**: The look and animation MUST be verified by the visual pass (quickstart Part B).
+- **FR-013**: When the app's Reduce motion setting (`appearance.reduce_motion`) is on, opening and closing the model, effort and permissions settings MUST switch in one step with no animation. The operating system's reduced-motion preference is not read, as for the app's other animations.
 
 ### Key Entities
 
@@ -109,6 +116,7 @@ When the user opens the model, effort or permissions settings, they grow from th
 
 ## Out of Scope
 
+- Reading the operating system's reduced-motion preference (the app does not read it anywhere).
 - Moving the settings icon in the structured view (#1764).
 - Animating settings other than model, effort and permissions.
 - Changing which options a select offers or what they do.
