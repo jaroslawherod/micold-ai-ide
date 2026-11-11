@@ -1076,10 +1076,10 @@ fn hovering_files_mark_the_drawn_pane_only_when_it_accepts_input() {
     );
 }
 
-/// FR-003, SC-004: the model, effort and permission selectors share one trigger, so their labels
-/// sit on one line and each keeps the chevron of `Select`'s trigger (feature 1792, T005).
+/// FR-003, SC-004: the model and permission selectors (the effort one is built alike) share one
+/// trigger, so their labels sit on one line and each keeps the chevron of `Select`'s trigger (feature 1792, T005).
 #[test]
-fn the_three_selectors_share_one_trigger_on_one_line() {
+fn the_model_and_permission_selectors_share_one_trigger_on_one_line() {
     use micold_client::ui::mode_control::MODE_LABEL;
     let (mut state, id) = pane();
     report(&mut state, id, TurnPhase::Idle, false, 0);

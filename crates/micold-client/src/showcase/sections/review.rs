@@ -1254,6 +1254,7 @@ fn selector_sample<'a>(open: bool, disabled: bool, roles: Roles) -> Element<'a, 
     };
     let select = MenuSelect::new("Model:", rows, open, Message::NoOp, Message::NoOp, roles)
         .title(Some("claude-opus-4 · Default"))
+        .filled()
         .width(Length::Fixed(280.0));
     let select = if disabled {
         select.disabled("Changing the model is not possible while Claude is working")

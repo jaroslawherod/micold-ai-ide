@@ -363,6 +363,7 @@ fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Elem
             roles,
         )
         .title(Some(header))
+        .filled()
         .tooltip(tooltip)
         .width(MODEL_PICKER_WIDTH)
         .into();
@@ -412,6 +413,7 @@ fn model_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Elem
         roles,
     )
     .title(Some(header))
+    .filled()
     .tooltip(tooltip)
     .keyboard(enter, stops, enter.is_some())
     .on_move(move |direction| send(Msg::ModelPickerMoved { session, direction }))
@@ -460,6 +462,7 @@ fn effort_control<'a>(state: &'a State, session: SessionId, roles: Roles) -> Ele
         send(Msg::EffortPickerClosed(session)),
         roles,
     )
+    .filled()
     .tooltip(tooltip)
     .keyboard(picker.and_then(|p| p.highlight()), options.len(), true)
     .on_move(move |direction| send(Msg::EffortPickerMoved { session, direction }))
