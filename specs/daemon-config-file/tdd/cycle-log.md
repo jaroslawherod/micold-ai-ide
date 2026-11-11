@@ -334,3 +334,15 @@ Green after restoring each: `credential_config` 6, `container_git_tests` 7, `git
 four (answer, asked once, secret-free cache, miss limited to once a minute); T155
 split the sandbox test into a refused and a served one (the table's two `git_credential_config`
 rows); T154 added `the_pods_git_config_has_no_signing_switches` in `kube/start_tests.rs`.
+
+## Issue 15 (#1537) M2: MICOLD_DATA_DIR and MICOLD_TOKEN_PATH retire; images and SSH launch stop setting them (T084b, T085b, T086a, T086)
+
+No red run was recorded (`TEST_AFTER`, stated honestly): the milestone's cycle was not logged when it
+ran, and this entry is written at close from the commits (`ba4c2bba3`, `481f81292`) and the ledger.
+
+- New tests: `crates/micold-core/tests/retired_env.rs` (the retired table and `resolve` for the two new
+  names), `crates/micold-daemon/tests/container_over_ssh_without_data_dir.rs` (a container over SSH
+  with no `MICOLD_DATA_DIR`), `protocol_auth.rs` (token path from the file, not the variable),
+  `scripts/tests/basic-image-hash.test.sh` (pin moved with the image content).
+- Green: the milestone's full gate passed except `ai_cli_config::a_configured_model_is_claude_codes_default_launch_model`,
+  which depends on the machine's `~/.claude.json` (green with `HOME` at an empty directory).
