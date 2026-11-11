@@ -199,8 +199,7 @@ record "Review B M1" 2 8 "$H" CLEAN >/dev/null; commit_all ledger2; move_base; p
 check "carry: a pure rename replayed onto a moved base is carried" 0 '^CARRIED 8 ' guard 8
 
 # vl_identity itself: a rename is one status line (old and new path, no score) and the patch-ids are
-# git's stable ones (F3). Each case
-# prints the identity of the work on `wt` over `main`.
+# git's stable ones (F3). Each case prints the identity of the work on `wt` over `main`.
 identity() { ( . "$S/verdict-lib.sh"; vl_identity "$1" "$2" ); }
 export -f identity; export S
 d="$(new_repo)"; cd "$d/wt"; git config diff.renames false  # so only an explicit -M detects the rename
