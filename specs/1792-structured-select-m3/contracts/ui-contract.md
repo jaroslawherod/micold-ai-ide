@@ -10,8 +10,8 @@
 - Existing messages (`ModelPicked`, effort and permission picks, `*Closed`, `*Moved`) are unchanged.
 
 ## §2 Options row expand
-- `expand(options_row, options_open, over)`; `over` is a `tokens::motion::duration` constant; easing the wrapper's standard pair.
+- `expand(options_row, options_open, over)`; `over` is `tokens::motion::duration::MEDIUM_2`; easing the wrapper's standard pair.
 - `over == Duration::ZERO` when `settings.reduce_motion`.
 - Toggle mid-animation reverses from current height; end height is the row's wrapped height.
-- Controls of a collapsed row are not reachable by keyboard or pointer.
+- Controls of a collapsed row are not reachable by keyboard or pointer, and an open picker is closed when the row collapses.
 - `composer_options_open` persistence unchanged.
