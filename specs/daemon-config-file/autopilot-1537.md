@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1537
 - **Worktree branch**: chore/1537_retire-the-old-micold-start-up-variables
 - **Started**: 2026-11-05
-- **Phase**: close (remediation done, review next)
-- **Next step**: close checks, spec Status, review, gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1704 | Design (milestones for Issue 15) | merged | 5e72b83360ee747bc80ad577a468d2119f47bb48 |
 | #1709 | M1 | merged | 04743add7b0041fe5e6b8e8652071b05eeebab66 |
 | #1771 | M2 | merged | 5fc3a75a7c4192b0fdf09c9dc1e867cc29562e0b |
+| (close) | Close the spec | opening | |
 
 ## Milestones
 
@@ -48,6 +49,8 @@ M1: review A (code-review high) snapshot cd610b30:2c612ac0 round 1: F1 MAJOR fix
 
 M2: review A (code-review high) 8 findings fixed or accepted; review B (sonnet) CLEAN. Local gate on the rebased tree: 12650/12651, the one failure `micold-daemon::ai_cli_config a_configured_model_is_claude_codes_default_launch_model` fails here every time and passes with `HOME` pointed at an empty directory, so it depends on this machine's real `~/.claude.json` (many live Claude sessions), not on the diff. `mise run image` built; `mise run test-sandbox` cannot run here: the runtime rejects `--tmpfs ... uid=1000` (19 targets fail at container create), and `sandbox_real_scoped_token.rs` on main still uses the retired `GitCredentialGrant` (does not compile with the feature on); CI's sandbox job decides. quickstart.md not run (cluster, SSH host, PATs): the close unit notes it.
 
+Close review (sonnet, snapshot 0525cce6:e751a686 after rebase onto main): CLEAN, 3 MINOR (F1 issue number added, fixed prose only; F2 vacuous-branch test is already recorded as I15-4 closed in part; F3 env-var test flake risk left).
+
 ## Declined review findings
 
 None.
@@ -62,5 +65,5 @@ None.
 
 ## Follow-ups not done
 
-- `daemon_config_render::from_entry_delivering` defaults `client_token_file` to `SANDBOX_TOKEN` (`/run/micold/secrets/client-token`) while `CONTAINER_TOKEN_PATH` is `/run/micold/token`: found by close remediation T155, not fixed (adds behaviour); file an issue.
+- `daemon_config_render::from_entry_delivering` defaults `client_token_file` to `SANDBOX_TOKEN` (`/run/micold/secrets/client-token`) while `CONTAINER_TOKEN_PATH` is `/run/micold/token`: found by close remediation T155, not fixed (adds behaviour); filed as #1838.
 - Milestones live in tasks.md under "Issue 15 (#1537)". The quickstart run is recorded by the close unit.
