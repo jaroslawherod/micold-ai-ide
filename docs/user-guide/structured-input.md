@@ -83,9 +83,10 @@ selector is no longer in the message box row itself.
 
 ### The selectors
 
-**Model**, **Effort** and **Permission** look and behave the same: a 32 px high box with a thin
-border, `Label: Value` inline and a chevron at the end, and the same hover, focus, pressed, open
-and disabled looks. A disabled selector says why in its tooltip. Each opens a floating list; the
+**Model**, **Effort** and **Permission** look and behave the same: the Material 3 select the
+component showcase shows: a filled container with an indicator along its bottom edge, `Label: Value`
+inline and a chevron at the end, and the same hover, pressed, open and disabled looks (the
+indicator thickens while the list is open). A disabled selector says why in its tooltip. Each opens a floating list; the
 **Model** list starts with a **filter** field that has the keyboard as it opens. Type to narrow the
 models (case does not matter); a typed name that is no listed model is offered as **Use <name>**.
 The arrow keys move through the list, **Enter** takes the highlighted row and **Esc** closes it.

@@ -310,6 +310,12 @@ So: if the list's contents depend on something the screen holds, the screen hold
 If they do not, the widget holds it. Do not make a new picker symmetric with the other one for
 symmetry's sake — that is the mistake this arrangement exists to avoid.
 
+Both share one **trigger**, `SelectTrigger` (`ui/material/select_trigger.rs`): the filled container,
+value line, chevron, state layers and indicator, with openness (`open`, `focused`) and `disabled`
+as inputs. `Select` hands it its own tree-state openness; `MenuSelect` hands it the caller's inside a
+bare `Button` (`Button::bare`), which adds the press, the keyboard and the ripple. Restyle the
+trigger there, never in either select (feature 1792).
+
 ### Keeping the highlighted row in view
 
 When rows differ in height, a fixed scroll step cannot keep the highlight visible. `menu_element`

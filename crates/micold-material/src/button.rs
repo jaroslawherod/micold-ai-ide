@@ -105,6 +105,7 @@ pub struct Button<'a, M> {
     mark: Option<super::UnreadMark<'a, M>>,
     selected: bool,
     selector: Option<bool>,
+    bare: bool,
     host: Option<style::Host>,
     id: Option<iced::advanced::widget::Id>,
 }
@@ -145,6 +146,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             mark: None,
             selected: false,
             selector: None,
+            bare: false,
             width: None,
             shape: None,
             density: micold_core::tokens::density::STANDARD,
@@ -307,6 +309,17 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         self
     }
 
+    /// Draw nothing of its own: no fill, no border, no padding and a height from the content. What
+    /// is wrapped is the whole look (a [`FormField`](super::FormField) trigger, feature 1792), so
+    /// the button only adds what a pressable control has: the press, the keyboard and the ripple
+    /// clipped to `radius`. The ripple is the button's, so the content must not ripple too.
+    pub fn bare(mut self, radius: f32) -> Self {
+        self.bare = true;
+        self.shape = Some(radius);
+        self.padding = Some(Padding::ZERO);
+        self
+    }
+
     /// The style the rendering stack's button is given: the variant's own, with the corner
     /// overridden if the caller asked, and the selected layer where it is toggled on.
     fn style_fn(&self) -> ButtonStyleFn {
@@ -314,6 +327,7 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         // selected layer are the only things an override touches, and every other call site keeps
         // the style function it has always had.
         let base: ButtonStyleFn = match self.selector {
+            _ if self.bare => Box::new(|_, _| button::Style::default()),
             Some(open) => Box::new(style::selector_trigger(self.roles, open)),
             None => self.variant.style(self.roles, self.host),
         };
@@ -447,14 +461,17 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             inner.into()
         };
         let content = container(inner)
-            .height(Length::Fill)
+            .height(if b.bare { Length::Shrink } else { Length::Fill })
             .align_y(Alignment::Center);
-        let mut widget = button(content)
-            .height(Length::Fixed(density::height(
+        let mut widget = button(content).style(style_fn);
+        widget = if b.bare {
+            widget.height(Length::Shrink)
+        } else {
+            widget.height(Length::Fixed(density::height(
                 density::BUTTON_BASE,
                 b.density,
             )))
-            .style(style_fn);
+        };
         // §7.3's horizontal padding, from the variant table. Vertical padding is zero because the
         // height above is what makes the button 40dp — padding on this axis would add to a figure
         // the contract fixes, and the centring wrapper is what places the content inside it.

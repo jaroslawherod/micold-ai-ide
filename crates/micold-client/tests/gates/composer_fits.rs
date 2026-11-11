@@ -792,9 +792,12 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
 
     let mut renderer = lay::renderer();
     let opened = lay::painted_text_settled_at(lay::view_of(&under), &mut renderer, WINDOW).0;
+    // The selectors wear `Select`'s trigger, whose chevron does not flip (feature 1792, FR-009).
     assert!(
-        opened.iter().any(|p| p.content == "\u{e316}"),
-        "an open selector draws its chevron pointing up (FR-016)"
+        resting.iter().any(|p| p.content == "\u{e5cf}")
+            && opened.iter().any(|p| p.content == "\u{e5cf}")
+            && !opened.iter().any(|p| p.content == "\u{e316}"),
+        "an open selector keeps `Select`'s chevron"
     );
     let rows: Vec<&Overflow> = PermissionMode::ALL
         .iter()
@@ -1070,5 +1073,29 @@ fn hovering_files_mark_the_drawn_pane_only_when_it_accepts_input() {
     assert!(
         frame(&state, id) == ended,
         "no cue for a session that is over"
+    );
+}
+
+/// FR-003, SC-004: the model, effort and permission selectors share one trigger, so their labels
+/// sit on one line and each keeps the chevron of `Select`'s trigger (feature 1792, T005).
+#[test]
+fn the_three_selectors_share_one_trigger_on_one_line() {
+    use micold_client::ui::mode_control::MODE_LABEL;
+    let (mut state, id) = pane();
+    report(&mut state, id, TurnPhase::Idle, false, 0);
+    state.composers.options_open = true;
+    let (painted, _) = paint(themed(state, ColorScheme::Dark), id);
+    let ys: Vec<f32> = ["Model:", &format!("{MODE_LABEL}:")]
+        .iter()
+        .map(|label| find(&painted, label).origin.y)
+        .collect();
+    assert!(
+        ys.iter().all(|y| (y - ys[0]).abs() < 0.5),
+        "the selectors' labels are on different lines: {ys:?}"
+    );
+    let chevrons = painted.iter().filter(|p| p.content == "\u{e5cf}").count();
+    assert!(
+        chevrons >= 3,
+        "{chevrons} select chevrons for three selectors"
     );
 }

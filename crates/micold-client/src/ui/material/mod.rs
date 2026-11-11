@@ -108,6 +108,7 @@ mod select;
 /// reason as `form_field_anatomy` (feature 022, FR-013).
 #[cfg(test)]
 mod select_anatomy;
+mod select_trigger;
 mod side_sheet;
 mod split_view;
 mod state_icon;

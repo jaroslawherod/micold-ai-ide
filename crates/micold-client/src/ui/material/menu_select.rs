@@ -15,8 +15,8 @@
 //! **Composed, not drawn.** Positioning, capture, dismissal and the keyboard rule are
 //! [`cdk::picker`]'s, floating (never in flow), so `tests/one_overlay_implementation.rs` needs no
 //! new exception; the list's surface, row states, ripple and transition are `material::picker`'s;
-//! the trigger is the library's [`Button`](super::Button), which already answers `Enter` and `Space`
-//! once it holds the keyboard.
+//! the trigger is the shared [`SelectTrigger`](super::select_trigger::SelectTrigger) (the look `Select` draws) inside a bare library
+//! [`Button`](super::Button), which answers `Enter` and `Space` once it holds the keyboard.
 //!
 //! [`cdk::picker`]: crate::ui::cdk::picker
 //!
@@ -25,8 +25,8 @@
 use std::borrow::Cow;
 
 use super::picker::{animated_menu, marker, row_surface, EXIT, GAP, MAX_ROWS_BEFORE_SCROLL};
-use super::{ButtonVariant, Ellipsized, Glyph, Text, TextField, ToggleChip, TypeRole};
-use crate::icons::Icon;
+use super::select_trigger::SelectTrigger;
+use super::{ButtonVariant, Ellipsized, Text, TextField, ToggleChip, TypeRole};
 use crate::ui::cdk::picker::Picker as Behaviour;
 use iced::widget::{button, column, container, row, Space};
 use iced::{alignment, Element, Length};
@@ -346,6 +346,8 @@ fn line_element<'a, M: 'a>(text: Text<'a, M>) -> Element<'a, M> {
 impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
     fn from(s: MenuSelect<'a, M>) -> Self {
         let r = s.roles;
+        // An empty list opens no menu (feature 1792, FR-011); the trigger still reads as asked.
+        let list_open = s.open && !s.rows.is_empty();
 
         let mut list = column![].width(Length::Fill);
         let mut stop = 0usize;
@@ -373,35 +375,37 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
         let capped = container(super::Scrollable::new(list, r).height(Length::Shrink))
             .max_height(s.max_list_height);
         let panel = super::menu_panel(capped, Length::Fill, r, true, spacing::XS);
-        let menu = animated_menu(panel, s.open, r);
+        let menu = animated_menu(panel, list_open, r);
 
-        // The trigger: the fixed part whole, the title in what is left, the chevron at the end.
+        // The trigger: the shared Material 3 trigger `Select` draws (feature 1792, FR-001, FR-009),
+        // its value line the fixed part whole and the title in what is left. The trigger paints; the
+        // bare button around it presses, takes the keyboard and ripples.
+        let ink = if s.disabled {
+            micold_core::tokens::over(r.on_surface, f64::from(state::DISABLED_CONTENT), r.surface)
+        } else {
+            r.on_surface
+        };
         let elastic: Element<'a, M> = match s.title {
             Some(title) => {
-                Ellipsized::at_role_spaced(title.into_owned(), TypeRole::Body, r.on_surface).into()
+                Ellipsized::at_role_spaced(title.into_owned(), TypeRole::Body, ink).into()
             }
             None => Space::new().width(Length::Fill).into(),
         };
-        // Open, the chevron points up (FR-016): `keyboard_arrow_up` is the same glyph rotated.
-        let chevron = if s.open {
-            Icon::MoveUp
-        } else {
-            Icon::SelectChevron
-        };
-        let label = row![
-            Text::new(s.fixed, TypeRole::Body, r).tint(r.on_surface),
-            elastic,
-            Glyph::new(chevron, TypeRole::Action, r).tint(r.on_surface_variant),
-        ]
-        .spacing(spacing::XS)
-        .align_y(alignment::Vertical::Center)
-        .width(Length::Fill);
-        let trigger = super::Button::with_content(label, ButtonVariant::Outlined, r)
-            .selector(s.open)
+        let value = row![Text::new(s.fixed, TypeRole::Body, r).tint(ink), elastic]
+            .spacing(spacing::XS)
+            .align_y(alignment::Vertical::Center)
+            .width(Length::Fill);
+        let face = SelectTrigger::new(value, r)
+            .open(s.open)
+            .populated(true)
+            .pressable(false)
+            .disabled(s.disabled);
+        let trigger = super::Button::with_content(face, ButtonVariant::Text, r)
+            .bare(shape::EXTRA_SMALL)
             .width(s.width)
             .on_press_maybe((!s.disabled).then_some(s.on_toggle));
 
-        let mut behaviour = Behaviour::new(trigger, menu, s.open, GAP)
+        let mut behaviour = Behaviour::new(trigger, menu, list_open, GAP)
             .exit(EXIT)
             .keyboard(s.highlight, s.stops, s.highlighted_enabled)
             .on_dismiss(s.on_dismiss);

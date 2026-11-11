@@ -86,15 +86,14 @@ use crate::ui::cdk::passthrough::forward_to_child;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{operation, tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
-use iced::widget::{container, row, Space};
-use iced::{alignment, keyboard, Element, Event, Length, Rectangle, Size, Vector};
-use micold_core::tokens::{anatomy, Roles};
+use iced::{keyboard, Element, Event, Length, Rectangle, Size, Vector};
+use micold_core::tokens::Roles;
 use micold_core::typeahead::{claims, intent_for, move_highlight, Intent};
 
 use super::form_field::{field_text_builders, FieldText};
 use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
+use super::select_trigger::SelectTrigger;
 use super::text::TypeRole;
-use crate::icons::Icon;
 use crate::ui::cdk::picker::{key_for, Picker};
 
 /// A Material select. Builder form (Principle VIII):
@@ -259,18 +258,6 @@ impl operation::Focusable for SelectState {
     }
 }
 
-/// The state layer the trigger carries.
-///
-/// A free function so the ordering can be asserted without a renderer. An open list reads at the
-/// pressed opacity (§7.7) and a select that merely holds the keyboard reads at the focus opacity;
-/// which of the two wins when both are true is [`Layer`](super::style::Layer)'s to say, exactly as
-/// it is for the checkbox — one control shows **one** layer.
-fn trigger_layer(open: bool, focused: bool) -> super::form_field::Layer {
-    use super::form_field::Layer;
-    let open = if open { Layer::Pressed } else { Layer::None };
-    open.max(if focused { Layer::Focused } else { Layer::None })
-}
-
 impl SelectState {
     /// Read and clear whatever the list reported, applying it.
     ///
@@ -324,42 +311,15 @@ where
         None => s.placeholder.clone(),
     };
 
-    let line = row![
-        super::Text::new(value, TypeRole::Body, r),
-        Space::new().width(Length::Fill),
-        super::glyph::icon(
-            Icon::SelectChevron,
-            anatomy::text_field::TRAILING_ICON,
-            r.on_surface_variant,
-        ),
-    ]
-    .align_y(alignment::Vertical::Center);
-
-    // No padding, no background and no ripple of its own. All three belong to the container now:
-    // it is the thing the pointer is read against, so it is the thing that shades and ripples
-    // (FR-034, BUG-002). A trigger that padded itself would also sit inset from every text field
-    // beside it.
-    let trigger: Element<'a, M> = container(line)
-        .width(Length::Fill)
-        .height(Length::Fill)
+    let value = super::Text::new(value, TypeRole::Body, r);
+    // The indicator, answering for itself: nothing supplies `open` and nothing can (FR-013). A
+    // selection counts as content; an unset select rests its label like an empty input.
+    let field: Element<'a, M> = SelectTrigger::new(value, r)
+        .text(s.text.clone())
+        .open(view.open)
+        .focused(view.focused)
+        .populated(populated)
         .into();
-
-    let field = super::FormField::new(trigger, r)
-        // The indicator, answering for itself. Nothing supplies this and nothing can (FR-013).
-        //
-        // Thickened by the keyboard as well as by the list (FR-030). It is the same mark a focused
-        // text field carries, which is the point: a settings surface tabbed through must show the
-        // focus in one language, not one per control.
-        .active(view.open || view.focused)
-        // An open list reads at the pressed opacity — §7.7 asks the select's open state to be
-        // carried by the layer, and the component is what knows it. Hover is not passed: the
-        // container sees the cursor for itself.
-        .layer(trigger_layer(view.open, view.focused))
-        // Every pressable surface ripples (feature 019, FR-024c) and this is one.
-        .pressable(true)
-        // A selection counts as content; an unset select rests its label like an empty input.
-        .populated(populated);
-    let field: Element<'a, M> = s.text.clone().apply(field).into();
 
     // The rows are the search picker's rows, with no matched spans — an `EmphasisedLabel` with no
     // spans is a plain label, so the same renderer serves both lists and there is one definition of
@@ -772,27 +732,5 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for ListWatch<'_, M> {
         {
             self.acted.set(Acted::Kept);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::form_field::Layer;
-    use super::*;
-
-    /// One control shows one layer, and which one is the enum's to say. A select that is both open
-    /// and focused must not blend two opacities into a tone no token names — the same rule
-    /// `style::checkbox` settles with the same `max`.
-    #[test]
-    fn the_trigger_shows_one_layer_and_open_outranks_focused() {
-        assert_eq!(trigger_layer(false, false), Layer::None);
-        assert_eq!(trigger_layer(false, true), Layer::Focused);
-        assert_eq!(trigger_layer(true, false), Layer::Pressed);
-        assert_eq!(
-            trigger_layer(true, true),
-            Layer::Pressed,
-            "an open select is already reading at the pressed opacity; adding the focus layer to \
-             it would say the same state twice",
-        );
     }
 }
