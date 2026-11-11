@@ -305,58 +305,56 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-**Process note, read first**: this unit opened with 3 files dirty (as briefed). While gathering
-context, two `Explore` sub-agents dispatched for read-only research used their Bash access to
-go beyond their remit: one committed `f6d092f49` (core data model + render + Draft wiring,
-explicitly "not yet built or tested"), and a second, dispatched later for more research, committed
-`18bd664ca` on top of it (compile fixes, tests, T067 docs) and wrote a Handover into this ledger
-describing work as done — all without this unit's instruction or review. This unit caught both via
-`git reflog`/`git log --oneline -10`showing commits it never made, un-committed the first with
-`git reset --soft HEAD~1` to review the content before trusting it, then found the second commit
-already present too. Both were then reviewed line-by-line against T066/T067 and the codebase's own
-patterns (FieldId/Section/Draft plumbing, the `render()`/`key_path`/`key_str` helpers) and judged
-sound: `mise run check` is green, the test additions match the milestone's own Verify lines, and
-the docs additions are accurate and in the right places. They are kept and built on, as `f6d092f49`
-and `18bd664ca`; nothing from either was reverted. One more compile gap they left (a `FileSettings`
-literal test fixture in `daemon_config_validate.rs` missing the new `ai_cli` field) is fixed in
-this unit's own `8a2ffd1f7`. If any later reviewer finds the content of `f6d092f49`/`18bd664ca`
-wanting, treat them as ordinary unreviewed commits on this branch (they are not an audited
-handover) and fix forward or re-do, same as any other commit.
+Continued from the previous unit's handover (its process note about two `Explore` sub-agents'
+unauthorized commits `f6d092f49`/`18bd664ca`, and the parallel unit's `8a2ffd1f7` +
+`921c9d4fe` landing mid-session, is history now — both reviewed sound, nothing reverted; see git
+log if the detail is ever needed again).
 
-Done so far, across `f6d092f49`, `18bd664ca`, `8a2ffd1f7` (all on this branch, none pushed):
-- Core: `AiCliSetting`/`FileSettings.ai_cli` (`micold-core/src/daemons.rs`); `CliId::ALL`,
-  `CliId::from_ai_cli`, `CliId: Serialize` (`daemon_config/mod.rs`).
-- Render: `DaemonSettings.ai_cli`, `render_ai_cli` into `[[ai.cli]]` blocks
-  (`micold-client/src/daemon_config_render.rs`).
-- Form: `AiCliDraft`/`AiCliField`, `Draft.ai_cli: [AiCliDraft; 5]`, `ai_cli_settings`/
-  `ai_cli_drafts` converters, `Msg::AiCliEnabledToggled`/`AiCliFieldEdited` + `update` arms
-  (`features/daemons.rs`); `Section::AiCli` added to every runtime's section list, title "AI CLI
-  configuration", `ai_cli_summary` (`features/daemon_sections.rs`); `ai_cli_controls` rendering one
-  group per CLI, pushed as an accordion gated on `draft.editing.is_some()` (same gate as the
-  extras fields) (`ui/settings/daemons.rs`).
-- Tests: round-trip render/parse and all-default-writes-nothing in `daemon_config_render.rs`;
-  `AiCliDraft::to_setting`/`from_setting` round trip in `features_daemons.rs`; `Section::AiCli`
-  coverage and `ai_cli_summary_counts_overridden_clis` in `features_daemon_sections.rs`; the
-  `daemon_config_validate.rs` fixture fix.
-- Docs (T067): "AI CLI configuration" in `docs/user-guide/settings.md`; "Setting it up in
-  Settings, and the file-vs-`settings.json` rule" in `docs/user-guide/daemon-configuration.md`.
-- `mise run check` is green (confirmed by this unit, after the build-lock queue behind another
-  worktree's build cleared).
+This unit ran `cargo test -p micold-client --test main` for the first time and found real bugs,
+all now fixed and committed in `625c6a9cc` (on top of `921c9d4fe`, nothing pushed):
+- Two new `FieldId` variants, `DaemonAiCliEnabled(CliId)` and `DaemonAiCliField(CliId,
+  AiCliField)`, so the ai.cli checkbox/text fields report focus (`field_focus_call_sites` gate);
+  `CliId` and `AiCliField` both gained `PartialOrd, Ord` for the tuple.
+- The `AiCli` accordion in `ui/settings/daemons.rs` no longer gated to `draft.editing.is_some()`
+  (own closed-by-default accordion, so an add form gets it too, matching `Section::of`'s doc
+  comment "shown for every kind") and moved to after the per-kind `sections` match, before
+  `StartScript` — matching `Section::of`'s actual order (it was wrongly first, before Connection).
+- `ai_cli_summary` in `daemon_sections.rs` never returns `""` now ("Using the pinned defaults"
+  when nothing is configured), so the closed header is the same height as every other kind's.
+- Three test-only bugs: the round-trip test in `daemon_config_render.rs` set `settings_file` on a
+  `Kind::Host` entry (V10: refused outside a sandbox) and set both `sign_in_file` and
+  `api_key_file` at once (V9: at most one credential field) — moved to `Kind::Container`, dropped
+  the redundant field; its `args` used `--verbose`, a Claude Code argument the daemon owns (V8) —
+  swapped for `--add-dir`. `daemons_feature.rs`'s `sections_open_by_toggle...` test and
+  `daemons_section_geometry.rs`'s title-count/order tests were still asserting the pre-#1532
+  section counts (CONTAINER grew 6→7) and order. `explanations_sit_where_the_contract_puts_them`
+  had to stop using blind `rfind` for "Claude Code" once the new ai.cli group's label collided
+  textually with the existing AI-tools-in-this-daemon checkbox of the same name — it now finds the
+  first "Claude Code" after the note it is checking, not the last in the whole form.
+- `cargo check --workspace` is green (confirmed after the fixes).
 
-**Not done / next unit's first steps**:
-1. No test run yet, only `cargo check --workspace`: run `mise run check-core` / a targeted
-   `cargo test -p micold-client --test main -- ai_cli` (or `scripts/build-lock.sh cargo test -p
-   micold-client --test main`) to confirm the new tests actually pass, not just compile.
-2. Then: scoped gate, review A (`code-review` skill, `high`), review B (conformance, `sonnet`),
-   full gate, PR per `tasks/pr.md`. The new accordion is a visible UI change: run the
-   `visual-pass` skill (new Settings → Daemons → AI CLI configuration section) per `gate.md`'s
-   "Changed how something looks?" rule before the PR.
-3. `origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind` points at a commit
+**Not done / next unit's first steps** (resume straight into these, in order; nothing before this
+point needs re-doing):
+1. Re-run `scripts/build-lock.sh cargo test -p micold-client --test main` (background + `hold.sh`)
+   to confirm these fixes actually turned the suite green — it was not re-run after the last batch
+   of edits (`ai_cli_summary` fallback text and the two test files it touches) because this unit
+   hit its context cap first. If anything is still red, it is most likely in
+   `daemons_section_geometry.rs` or `features_daemon_sections.rs` given how much of this unit's
+   fix touched exactly those two files.
+2. `cargo test -p micold-client --test main -- --exact` or similar targeted re-run is fine; no
+   need for `--workspace` (core is untouched by the test-only fixes; `cargo check --workspace` did
+   cover the core `Ord` derives).
+3. Then: scoped gate, review A (`code-review` skill, `high`), review B (conformance, `sonnet`),
+   full gate, PR per `tasks/pr.md`. The AiCli accordion's new always-shown-on-add-forms behaviour
+   and its new fallback summary text are both visible UI changes: run the `visual-pass` skill
+   (Settings → Daemons → add a daemon → AI CLI configuration section, both an add form and an
+   existing daemon's edit form) per `gate.md`'s "Changed how something looks?" rule before the PR.
+4. `origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind` points at a commit
    (`4cca1f8fa`) not an ancestor of local `HEAD`, carrying unrelated drift (looks like feature
-   1802, not 1532). Local `HEAD` has `origin/main` as an ancestor, so pushing with
-   `--force-with-lease` is expected to be safe — confirm with `git log origin/<branch>..HEAD` and
-   `git diff 6a739b934 4cca1f8fa` right before the first push, not from this note alone.
-4. Nothing pushed yet; no gate has seen this diff yet.
+   1802, not 1532). Local `HEAD` has `origin/main` as an ancestor, so the first push is
+   `git push --force-with-lease` — confirm with `git log origin/<branch>..HEAD` right before it,
+   not from this note alone.
+5. Nothing pushed yet; no gate has seen this diff yet.
 
 ## Open escalation
 
