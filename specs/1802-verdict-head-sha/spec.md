@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-10
 
-**Status**: Closed 2026-11-11 — shipped in PRs #1818, #1821, #1825, #CLOSE
+**Status**: Closed 2026-11-11 — shipped in PRs #1818, #1821, #1825, #1831
 
 **Input**: Issue #1802, adapted from ai-sdlc RFC-0061 (review verdict bound to the head commit).
 "Approved" in the autopilot ledger is not tied to the commit it reviewed; after a rebase or
