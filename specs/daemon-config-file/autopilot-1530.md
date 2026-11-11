@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1530
 - **Worktree branch**: feat/1530_the-daemon-s-credential-helper-chooses-the-token
 - **Started**: 2026-11-04
-- **Phase**: close
-- **Next step**: close review (round 1 running), full gate, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1700 | M1 | MERGED | 3ffb138fbe2f1fbacfb8cbad179ad4a99202e95f |
 | #1713 | M2 | MERGED | 86468d87ced75974d0aeca37c7d7675976d1a934 |
 | #1775 | M3 | MERGED | 658807d3515cd47a7979c9c5de36d32bf5304528 |
+| (close) | Close Issue 9 | OPEN | |
 
 ## Milestones
 
