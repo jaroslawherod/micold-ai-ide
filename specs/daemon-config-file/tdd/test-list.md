@@ -94,5 +94,6 @@ TDD verification (`tdd/verification.md`, Finding 2) found this milestone missing
 | ID | Behavior | Traces to | State |
 |---|---|---|---|
 | T055 | `micold-daemon gh-token --cwd <dir>` prints the token chosen for the cwd's `origin` (token line, then host line); exits 1 silently with none | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
-| T056 | The `gh` shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set from the chosen token, leaving an existing `GH_TOKEN` alone; `<data_dir>/bin` is first on the session `PATH` | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
+| T056 | The `gh` shim at `<data_dir>/bin/gh` (unix `sh`, Windows `gh.cmd`) execs the real `gh` with `GH_TOKEN` set from the chosen token, leaving an existing `GH_TOKEN` alone | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
+| T056 (PATH) | `<data_dir>/bin` is first on the session `PATH`, for every configured daemon kind | US2, FR-011, FR-035, SC-003 | TEST_AFTER (T148 adds the "prefix present" unit test; T149 adds the kind-agnostic one — see `tdd/verification.md` Finding 1 and 4) |
 | T095 | The `gh` shim also sets `GH_HOST` from the chosen token's host (D15 row 7), left alone with no token chosen, same rule as `GH_TOKEN` (T056) | US2, FR-011, FR-035, SC-003 | TEST_AFTER |
