@@ -1659,21 +1659,17 @@ for both halves of the sentence; only the second half shipped. **No task reopene
 right CLIs and starts nothing, which is what it was written to do; the missing clause had nowhere to
 live until `StartIntent` grew a place for it. See `bugs/BUG-001.md`.
 
-- [ ] T092 [BUG-1795] RED, first: `crates/micold-daemon/tests/dead_session_removed.rs`, failing on
-      today's tree. Two cases, each ending with a **reload of the catalog from disk** (a new
-      `DaemonState` over the same data dir, the restart): (a) an AI-CLI session that had a turn (label
-      `Derived`/`Named`) whose recorded conversation is gone, run through the startup presentation:
-      not listed, not listed after the reload; (b) an `InterruptedResumable` row whose conversation
+- [x] T092 [BUG-1795] RED, first: `crates/micold-daemon/tests/dead_session_removed.rs`, failing on
+      today's tree. Each case ends with a **reload of the catalog from disk** (a new `DaemonState`
+      over the same data dir, the restart): (a) an `InterruptedResumable` row whose conversation
       vanished after startup, `start_session_gated(.., Resume, ..)`: `Err`, nothing spawned, not
-      listed, not listed after the reload. Also asserts a never-used session (label `Pending`, no
-      conversation) and a session whose conversation exists are kept (the removal is not greedy).
-- [ ] T093 [BUG-1795] Startup removal. `DaemonState::present_interrupted_resumable_at_startup` also
-      collects the non-archived, `Idle`, AI-CLI sessions of an app-assigned-id provider whose label
-      is not `Pending` and whose conversation is gone (`conversation_gone`, so an unresolvable
-      config dir is ignorance, not gone) and removes them through the existing archive path
-      (`Catalog::archive_session_ids`: persisted, durable provider marker, main promoted). One log
-      line per session with the reason. Runs before the accept loop, as the presentation does.
-- [ ] T094 [BUG-1795] Start-time removal. In `start_session_gated`, the conversation-gone branch
+      listed, not listed after the reload; (b) a `Named`/`Derived` session whose conversation is gone
+      is still listed after startup and after the reload (D3: startup removes nothing). Also asserts a never-used session (label `Pending`, no conversation) and
+      a session whose conversation exists are kept (the removal is not greedy).
+- [x] T093 [BUG-1795] **Dropped (D3, decided by orchestrator default, user unanswered)**: no startup
+      removal. 029 FR-008 / 032 invariant 4 stand; a `Named`/`Derived` session whose conversation is
+      gone stays listed after a restart and is removed by T094's crash-restart removal once a start resumes it. T092(b) pins this.
+- [x] T094 [BUG-1795] Start-time removal. In `start_session_gated`, the conversation-gone branch
       removes the session through `delete_session` (persisted) in place of `start_failures.insert`,
       logs the reason, returns the same `Err(NotFound, conversation_gone_text)`, and the caller's
       existing `broadcast_catalog()` (T087) shows the row gone. No wire message, no protocol change.
@@ -1681,25 +1677,22 @@ live until `StartIntent` grew a place for it. See `bugs/BUG-001.md`.
       in the supervision tick) is the second producer of the same row: it removes the session the
       same way, after the state lock is released. Includes T096's test moves, so no task leaves the
       suite red.
-- [ ] T095 [BUG-1795] Audit, apart from the gone case: a test that loads a catalog holding one
+- [x] T095 [BUG-1795] Audit, apart from the gone case: a test that loads a catalog holding one
       session of every persisted shape (never used, used with conversation, used without, regular
       shell, each provider) and asserts that after startup every listed AI-CLI session is `Idle` or
       `InterruptedResumable` and that `start_session_gated` on it does not end in "no such session"
-      or in the gone refusal. A shape that is neither running nor startable and is not the gone case
+      or in a refusal other than the gone case (which removes the row, T094). A shape that is neither running nor startable and is not the gone case
       is recorded in BUG-1795 *Follow-ups*, not fixed here (the cap is this PR).
-- [ ] T096 [BUG-1795] (done with T094) Move the tests that assert the old contract to the new one,
+- [x] T096 [BUG-1795] (done with T094) Move the tests that assert the old contract to the new one,
       with `supervision_conversation_gone.rs` (line ~104) among them:
       `crates/micold-daemon/tests/session_start.rs::resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing`,
       `resume_failure_reported.rs::a_pi_resume_whose_conversation_is_gone_reaches_the_client`,
       `structured_resume.rs::a_resume_whose_conversation_is_gone_fails_as_a_terminal_sessions_does`:
       each still asserts nothing started and the refusal returned, and now that the session is no
       longer in the catalog instead of carrying a failure reason.
-- [ ] T098 [BUG-1795] Supersede the standing rule that a `Named`/`Derived` session is never removed
-      when its conversation is deleted (029 FR-008 and 032 data-model invariant 4, quoted in the
-      doc of `Catalog::prunable_session_cwds`): amend those two specs, that doc, user-guide line
-      ~1381 ("keeps what it was already showing") and any test asserting the rule, citing BUG-1795
-      and the user's decision. Needed by T093; land them together.
-- [ ] T097 [BUG-1795] Close the record: tick T092–T096, set BUG-1795 *Status* to Fixed with the
+- [x] T098 [BUG-1795] **Dropped (D3)**: nothing to supersede; 029 FR-008 / 032 invariant 4 and the doc of
+      `Catalog::prunable_session_cwds` stand.
+- [x] T097 [BUG-1795] Close the record: tick T092–T096, set BUG-1795 *Status* to Fixed with the
       commit, and add FR-008a cross-references; T046/T050a/T087 are not reopened (their refusal and report-by-error stay true; only the row's fate after it is new).
 
 ---

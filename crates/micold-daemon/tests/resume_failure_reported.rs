@@ -204,6 +204,33 @@ async fn next_announced_lifecycle(client: &mut Client, id: SessionId) -> Option<
     .ok()
 }
 
+/// Wait for the first `CatalogChanged` that no longer lists `id`; false on a timeout.
+async fn next_catalog_without(client: &mut Client, id: SessionId) -> bool {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match client
+                .next()
+                .await
+                .expect("the connection stays open")
+                .unwrap()
+            {
+                Frame::Control(DaemonMsg::CatalogChanged { catalog })
+                    if !catalog
+                        .projects
+                        .iter()
+                        .flat_map(|p| &p.sessions)
+                        .any(|s| s.id == id) =>
+                {
+                    return;
+                }
+                _ => continue,
+            }
+        }
+    })
+    .await
+    .is_ok()
+}
+
 /// Restarting a session whose CLI is gone tells the client so (FR-010, T087).
 #[tokio::test]
 async fn a_resume_that_fails_reaches_the_client() {
@@ -409,25 +436,20 @@ async fn a_pi_resume_whose_conversation_is_gone_reaches_the_client() {
         .await
         .unwrap();
 
-    let reported = next_announced_lifecycle(&mut client, id)
-        .await
-        .expect("a resume that failed must be announced, whichever of the two ways it failed");
-
-    let WireLifecycle::Failed { reason, attempts } = reported else {
-        panic!("expected the announced lifecycle to be a failure, got {reported:?}");
-    };
+    // FR-008a (BUG-1795): the refusal removes the row, and the client hears it as a catalog
+    // without the session, not as a failed lifecycle on it.
     assert!(
-        reason.contains(AiCli::Pi.provider().display_name()),
-        "the sentence names the CLI so the user knows who lost the conversation; got {reason:?}"
+        next_catalog_without(&mut client, id).await,
+        "a resume whose conversation is gone must announce the session removed"
     );
     assert!(
-        reason.contains("no longer has this conversation"),
-        "and it says what is missing, rather than the missing-binary sentence — the two failures \
-         ask the user for different things; got {reason:?}"
-    );
-    assert_eq!(
-        attempts, 0,
-        "a conversation that is gone is not a crash loop, and nothing was attempted"
+        !state
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .any(|s| s.id == id),
+        "the session is no longer in the catalog"
     );
 
     assert!(

@@ -6361,6 +6361,19 @@ impl DaemonState {
         Ok((owner, Self::end_removed(ptys)))
     }
 
+    /// Remove a session whose recorded conversation no longer exists (FR-008a, BUG-1795): the
+    /// same persisted removal as the user's, and the reason logged by the caller only. Returns the
+    /// owning project when the session was known. A failed write is logged and leaves the catalog.
+    fn remove_dead_session(&self, id: SessionId) -> Option<PathBuf> {
+        match self.delete_session(id) {
+            Ok((owner, _)) => owner,
+            Err(err) => {
+                tracing::warn!(session = %id.0, %err, "could not remove a session whose conversation is gone");
+                None
+            }
+        }
+    }
+
     /// Make `session` the main session of its location (FR-021) and push the catalog when the
     /// record changed. A no-op for an unknown, archived or already-main id; a failed write is
     /// logged and leaves the catalog as it was.
@@ -6806,7 +6819,9 @@ impl DaemonState {
                             cli = provider.command(),
                             "no recorded conversation to resume; not starting"
                         );
-                        self.lock().start_failures.insert(id, reason.clone());
+                        // FR-008a (BUG-1795): the row can never start, so it is removed, persistently,
+                        // rather than left listed with a reason only the start's error carried.
+                        self.remove_dead_session(id);
                         return Err(io::Error::new(io::ErrorKind::NotFound, reason));
                     }
                 }
@@ -7569,6 +7584,7 @@ impl DaemonState {
         let mut changed: Vec<PathBuf> = Vec::new();
         // Each with whether its primary is a covered terminal, whose history is carried (R4).
         let mut to_drop: Vec<(SessionId, bool)> = Vec::new();
+        let mut dead_sessions: Vec<SessionId> = Vec::new();
         // Each with the dead process the policy was applied to.
         let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli, Proc)> = Vec::new();
         // The Session error notices of this tick's give-ups, sent off the lock (feature 613, C13).
@@ -7633,9 +7649,9 @@ impl DaemonState {
             for (id, outcome, dead) in exited {
                 // Reported as the start refuses it, and settled like a stop: nothing counted.
                 let outcome = match gone.get(&id) {
-                    Some(reason) if matches!(outcome, ExitOutcome::Crashed { .. }) => {
+                    Some(_) if matches!(outcome, ExitOutcome::Crashed { .. }) => {
                         tracing::warn!(session = %id.0, "no recorded conversation to resume; not restarting");
-                        inner.start_failures.insert(id, reason.clone());
+                        dead_sessions.push(id);
                         ExitOutcome::Clean
                     }
                     _ => outcome,
@@ -7731,6 +7747,13 @@ impl DaemonState {
             };
             self.end_processes(id, removed, covered);
             gates.remove(&id);
+        }
+        // FR-008a (BUG-1795): a session whose conversation is gone is removed once its processes
+        // are torn down, so the row does not outlive its refusal.
+        for id in dead_sessions {
+            if let Some(project) = self.remove_dead_session(id) {
+                changed.push(project);
+            }
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
         for (id, cwd, mode, provider, dead) in to_respawn {

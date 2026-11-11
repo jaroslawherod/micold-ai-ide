@@ -832,38 +832,35 @@ fn resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing()
         "and nothing was spawned — not an empty terminal, and not a fresh conversation"
     );
 
-    // Read from the snapshot a client actually receives, not from `sessions_for` — the reason is
-    // runtime state, overlaid onto the durable record on the way out (FR-010's path).
-    let summary = state
-        .catalog_snapshot()
-        .projects
-        .into_iter()
-        .find(|p| p.path == project)
-        .expect("the project is still there")
-        .sessions
-        .into_iter()
-        .find(|s| s.id == id)
-        .expect("the session is still in the catalog — reporting is not closing it");
-    let WireLifecycle::Failed { reason, attempts } = summary.lifecycle else {
-        panic!("expected a reported failure, got {:?}", summary.lifecycle);
-    };
+    // FR-008a (BUG-1795): the row can never start, so the daemon removed it. Read from the
+    // snapshot a client receives, and from the saved catalog, which is the restart.
     assert!(
-        reason.contains("GitHub Copilot"),
-        "the reason names the CLI in the register a sentence wants, got {reason:?}"
+        !state
+            .catalog_snapshot()
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .any(|s| s.id == id),
+        "the session is gone from the catalog a client receives"
+    );
+    let reloaded = Catalog::load(
+        Box::new(JsonFileStore::at(store.path().join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
     );
     assert!(
-        reason.to_lowercase().contains("conversation"),
-        "and says what is missing, so the row explains itself rather than just going red: {reason:?}"
-    );
-    assert_eq!(
-        attempts, 0,
-        "a conversation that is gone is not a crash loop — retrying it three times would spend the \
-         budget on something that cannot change and make the message arrive late (FR-010's rule)"
+        reloaded
+            .workspace()
+            .find_session(id)
+            .is_none_or(|(_, s)| s.archived),
+        "and it stays gone after a restart"
     );
 
     // The negative that matters most: no conversation was begun under this id.
+    // (The removal's durable archive marker, FR-015, may leave the directory; it holds no transcript.)
     assert!(
-        !session_dir.exists(),
+        !session_dir.join("events.jsonl").exists(),
         "resuming a conversation that is gone must not create one"
     );
 }

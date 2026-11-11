@@ -458,8 +458,9 @@ async fn a_daemon_restart_keeps_the_kind_and_resumes_the_conversation() {
 }
 
 /// A resume of a session of `kind` whose recorded conversation was deleted after the daemon's
-/// restart: the start's error and the lifecycle it leaves, the project's path and the id masked.
-fn gone_resume(kind: SessionKind) -> (String, WireLifecycle) {
+/// restart: the start's error and whether the session is still listed, the project's path and the
+/// id masked.
+fn gone_resume(kind: SessionKind) -> (String, bool) {
     let store = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     let dir = project.path();
@@ -471,7 +472,8 @@ fn gone_resume(kind: SessionKind) -> (String, WireLifecycle) {
     }
     .replace(&dir.display().to_string(), "<project>")
     .replace(&id.0.to_string(), "<id>");
-    (error, summary(&state, dir, id).lifecycle)
+    let listed = state.sessions_for(dir).iter().any(|s| s.id == id);
+    (error, listed)
 }
 
 /// US3 scenario 4: a resume whose conversation is gone fails with a terminal session's report.
@@ -483,6 +485,7 @@ fn a_resume_whose_conversation_is_gone_fails_as_a_terminal_sessions_does() {
         terminal.0.contains("no longer has this conversation"),
         "{terminal:?}"
     );
+    assert!(!terminal.1, "FR-008a: the session is removed, not listed");
     assert_eq!(gone_resume(SessionKind::Structured), terminal);
 }
 
