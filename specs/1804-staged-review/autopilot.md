@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1804
 - **Worktree branch**: feat/1804_autopilot-staged-review-facts-by-code-plan-by
 - **Started**: 2026-11-10
-- **Phase**: 4-milestone M2
-- **Next step**: M2 PR #1824 open, wait CI and merge
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,13 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1809 | Design | merged | e82cc8df6bddd76f87e2d0786098f9d4ceaf8b28 |
 | #1820 | M1 | merged | 547ce702ba18af1020797f46d9adcf45462d474e |
+| #1824 | M2 | merged | d14e1692c2c03fcf03128fa1500cd99468417697 |
+| close | Close | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 (incl. T007a) | full | review-facts.py writes the facts file; tests in autopilot.test.sh | #1820 | merged |
-| M2 | T011–T015 | full | three skill files describe the staged flow, fallback, shadow | #1824 | open |
+| M2 | T011–T015 | full | three skill files describe the staged flow, fallback, shadow | #1824 | merged |
 
 ## Decisions
 
@@ -46,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code M2 B | 1 |  |  | same | CLEAN |
 | Code M2 A | 2 | M2 | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (post-rebase full diff; 1 MINOR left: dense lines at ceiling) |
 | Code M2 B | 2 | M2 | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (post-rebase full diff, conformance) |
+| Code close | 1 | close | be6578aa235c1d9ee98556a7227e0cef369fc3d5 | 8312427c4748ff20354aad339175e95c65f38c19:be6578aa235c1d9ee98556a7227e0cef369fc3d5 | CLEAN (2 MINOR fixed, prose/ledger only; single-agent, diff is tests and docs) |
 
 ## Declined review findings
 

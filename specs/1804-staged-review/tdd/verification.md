@@ -42,6 +42,8 @@ Existing tests: diffed each feature commit on `scripts/tests/autopilot.test.sh` 
 
 ## Findings
 
+Remediation (close PR): the two surviving mutants (callers line budget, `UNANSWERED: <reason>` wording) are closed by a new callers-budget case and `grep -F 'UNANSWERED: <reason>'` in `scripts/tests/autopilot.test.sh`; the suite is now 304 cases. Finding 6's drift files are committed in the same PR. The test-first gap is not retroactively fixable (no test list, no cycle log) and is accepted.
+
 | # | Severity | Finding | Evidence |
 | - | -------- | ------- | -------- |
 | 1 | HIGH | No test-first evidence: no test list, no cycle log, no red output. M1 and M2 test and source landed in the same commit; M1 review fixes landed source-first. | `specs/1804-staged-review/` has no `tdd/`; `git show --stat cb8731d73 dbee88ecd 2f17a76c4 badf7c6e9` |
