@@ -36,8 +36,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - plan review round 1: snapshot 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 — CHANGES (F1 MAJOR duration undecided: fixed MEDIUM_2; F2-F4 MINOR fixed). Fixes are research/contract decisions, checked against the finding; no new round.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec.md | n/a | 6fc85675fbf3d6f586add2d902fa44d1c23fbb8c:4b0e90f051efb9e5f2dbdfe85a4faf47c5575244 | CLEAN (3 MINOR: empty-list outcome fixed, checklist unticked; reduced-motion FR awaits clarify) |
+| plan | 1 | design | d39de3e8e407a7fc9de2b4ab0619660de082bdb6 | 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 | CLEAN |
 
 ## Declined review findings
 
