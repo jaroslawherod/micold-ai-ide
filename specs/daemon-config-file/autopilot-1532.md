@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4
-- **Next step**: M4 (T066, T067) — Settings → Daemons renders `[[ai.cli]]`, and the user guide.
+- **Phase**: milestone M4a
+- **Next step**: M4a (T066) — Settings → Daemons renders `[[ai.cli]]`: re-run the `micold-client` suite, scoped gate, review A, review B, visual pass, full gate, PR.
 
 ## Pull requests
 
@@ -30,7 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | #1772 (merged, `f585c83c829a751556ded4115f3c3275e7834221`) |
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (merged, `c6f958f09e26d1f70da6c95798d0bc841c5ce90f`) |
-| M4 | Settings → Daemons renders `[[ai.cli]]`, and the user guide | T066, T067 | full | — |
+| M4a | Settings → Daemons renders `[[ai.cli]]` | T066 | full | — |
+| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | — |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
 M1 is the field-to-launch mapping (tests + implementation together, rule 7); M2 was originally cut
@@ -82,6 +83,7 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D8 | milestone M2 | Two consecutive units spent their full context on M2's design (T065, T065a–c together) and wrote no code — does the milestone still fit one unit? | No: split M2 into M2a (T065 only — read-only sign-in delivery, SC-008) and M2b (T065a–T065c — keeping a delivered sign-in valid without a CLI refresh), each its own PR. `tasks.md`'s M2 section replaced with M2a/M2b per `milestone-format.md`; M3's `Depends on` repointed at M2b. This unit's own scope is M2a | agent-resolved | this unit's briefing (two 150k handovers with no code, `autopilot-1532.md`'s own prior two *Handover* sections); `specs/daemon-config-file/tasks.md` M2a/M2b sections |
 | D9 | milestone M2b | T065a's bullet says Settings runs `claude setup-token`/takes a pasted token and warns 14 days before expiry; T065b's bullet says the client re-delivers a derived sign-in and schedules a host-side refresh. Neither Settings UI for `[[ai.cli]]` nor a client→daemon secret-push message exists yet (both are M4/T066-T067's and M3/T100's own scope) — does M2b need to build them too? | No, same precedent as D4/D5: scope to M2b's own Deliverable/Verify lines, not the task bullets' UI detail. **T065a**: implement the backend only — `token_file` env wiring at session start (never argv) plus a 14-day expiry warning computed server-side and surfaced through the *existing* `ConfigStatus`/daemon-details-dialog diagnostic text (extending the same loop that already shows GitHub `TokenReach` lines, no new widget) rather than a `[[ai.cli]]`-table Settings UI (M4's, not built yet). **T065b**: implement only the pure, unit-tested relay logic in `crates/micold-client/src/ai_cli_relay.rs` (derive-copy-with-no-refresh-token, expiry/scheduling math, an `apply_relay` that writes the derived copy to a given destination path and never touches the source) — exactly what the Verify line (`cargo test -p micold-client --lib`) and the task's own two named tests ask for. The live notify watcher, the per-daemon destination-path lookup and the actual host/SSH/pod delivery channel are left as named follow-up: no client→daemon protocol message exists to push a secret (confirmed by exploration), the client has no structured read of a target daemon's `[[ai.cli]]` config yet (that is M4's), and pod re-delivery on a host sign-in change is already M3's own stated Deliverable. State this gap plainly in the M2b PR body | agent-resolved | exploration of `ConfigStatus`/`TokenReach` (`crates/micold-core/src/protocol/messages.rs:2433-2506`, `crates/micold-daemon/src/config_watch.rs:123-143`, `crates/micold-client/src/ui/daemon_details_dialog.rs:60-85`) and of client-side watch/scheduling/protocol building blocks (`crates/micold-client/src/shell/changes_watch.rs`, `crates/micold-client/src/shell/subscriptions.rs:286`, `crates/micold-client/src/daemon_config_delivery.rs`) found no existing client→daemon secret-push message and no client-side `[[ai.cli]]` config awareness; `specs/daemon-config-file/tasks.md` M4 line (T066/T067, Settings → Daemons renders `[[ai.cli]]`) and M3 line (T100, "the client re-delivers the pod Secret when the host sign-in changes") |
 | D10 | milestone M3 | T096–T100 name container/pod onboarding, a client-side pod-Secret watcher and a Settings "Seed again"/"asking once" UI, but the client has no read of the daemon's `[[ai.cli]]` (M4) and no daemon→client push; and `use_machine_sign_in` "off by default" could mean either "no change" or "isolate every host daemon". Scope? | Same precedent as D9: implement the pure, tested pieces plus the daemon-side wiring. T096/T098: `daemon_config/ai_cli_seed.rs` (`seed_host_config_dir`: `.claude.json` seeded once without `primaryApiKey`, `settings_file`/`place` as copies re-made only when the source's length+mtime changed, never links) wired into `State::with_host_config_dir`; `reseed` is a parameter for M4's button. T099: `uses_machine_sign_in` skips the isolated config dir and every seed; "off by default" read conservatively as unchanged behaviour for daemons that never name it (no migration needed); the once-asked Settings prompt is M4. T097: `claude_onboarding_wanted` + `MountSet::onboarding_record_for(bool)`, not yet called by the client (no `[[ai.cli]]` read there until M4). T100: `ConfigStatus.ai_cli_sign_ins` (daemon diagnostic line per delivered sign-in) and `KubeCredential::redelivery` (pure: new Secret data only when the host source changed); the client-side watcher that calls it is M4's follow-up. State these gaps in the M3 PR body | agent-resolved | exploration this unit: `settings_file`/`place` have no consumer outside `resolved.rs`; `onboarding_record` reads only `CredentialShare::AiCliAuth`; no client read of `[[ai.cli]]` |
+| D11 | milestone M4 | Category 5 escalation: M4 passed the handover limit (three parts, each spending its full 150k context, still not pushed). Split M4 into M4a/M4b, or allow a fourth part? | Split into M4a (T066 — the Settings → Daemons `[[ai.cli]]` UI: code, tests, gate, reviews, its own PR) and M4b (T067 — the user-guide docs and the `visual-pass` check, its own PR), same precedent as D8. T067's docs already landed in M4a's branch (`18bd664ca`, before the split existed) alongside M4a's code; left committed rather than unpicked onto a separate branch, so M4a's PR ships them and M4b's PR carries only the `visual-pass` check and whatever the docs review asks for. `tasks.md`'s M4 section replaced with M4a/M4b per `milestone-format.md`; no later milestone's `Depends on` named M4, so nothing else needed repointing | decided by user | user: "split into M4a and M4b" |
 
 ## Review rounds
 
@@ -358,37 +360,4 @@ point needs re-doing):
 
 ## Open escalation
 
-**Category 5 — non-convergence. M4 has passed the handover limit: three parts, each spending its
-full 150k context, and the milestone is still not ready to push.** Asked 2026-11-11 by the
-orchestrator (no unit raised it; the limit is `tasks/dispatch.md`'s, a fourth part is an
-escalation).
-
-- **Question:** split M4 into two milestones, or allow it a fourth part?
-- **Recommended: split M4 into M4a (T066 — the Settings → Daemons `[[ai.cli]]` UI: code, tests,
-  gate, reviews, its own PR) and M4b (T067 — the user-guide docs and the `visual-pass` check, its
-  own PR).** Same precedent as D8, which split M2 into M2a/M2b once two consecutive units proved
-  the grouping did not fit one context. T066 is a wide UI change (five CLIs x eight fields, a new
-  `Section::AiCli` in every runtime's list, a new draft type and its converters) and its own
-  verification — the full `micold-client` test suite, review A, review B, the full gate — is what
-  the parts keep running out of context before reaching. T067 is independent prose plus one
-  visual pass.
-- **Alternative: one more part (part 4).** Cheaper if the remaining work really is only
-  verification; but part 3 found five real test failures on the first full `micold-client` run, so
-  the remaining work is not purely mechanical, and a part that runs out again leaves the same
-  question with a day lost.
-
-What is done (committed on `feat/1532_ai-cli-configuration-from-the-file-for-every-kind`, tip
-`f154c3417`, **nothing pushed, no PR, no gate has validated the diff**):
-
-- `f6d092f49` — data model (`AiCliSetting`, `FileSettings.ai_cli`, `CliId::from_ai_cli` +
-  `Serialize`), `[[ai.cli]]` render, Settings draft/UI wiring.
-- `18bd664ca` — compile fixes, `[[ai.cli]]` round-trip and `AiCliDraft` tests, T067's docs in
-  `docs/user-guide/settings.md` and `daemon-configuration.md`.
-- `8a2ffd1f7` — missing `ai_cli` field in a `FileSettings` test fixture.
-- `625c6a9cc` — focus-tracking for the new fields, section order/height, three test-only bugs
-  (the five failures of the first full `cargo test -p micold-client --test main` run).
-
-What is left: re-run the `micold-client` suite (not re-verified since `625c6a9cc`), scoped gate,
-review A (`code-review`, high), review B (conformance), the `visual-pass` check for the new
-accordion, the full gate, then the first push as `git push --force-with-lease` (origin's branch
-tip is only the pre-rebase twin of the M3 docs commit) and the PR.
+None.
