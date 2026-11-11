@@ -91,3 +91,14 @@ kind enum.
 The orchestrator mode never constructs `DaemonState` and has no dial path. Session start returns a
 "not hosted by the orchestrator" refusal; a list returns empty. **Rejected**: a flag on `DaemonState`
 that disables sessions (keeps session machinery reachable, violating FR-001's intent).
+
+## D11. Two-phase claim (reserve, then confirm)
+
+**Decision**: the preamble reserves the id (`Registry::claim`), the `Hello` outcome confirms
+(`confirm`) or releases (`claim_failed`); a reservation expires after `LIVENESS_DEADLINE`. The record
+turns `online` and the old link closes only at `confirm`, so a refused `Hello` never leaves a false
+`online` entry or a closed good link.
+**Rejected**: single-step claim at the preamble (a `BuildMismatch` or `AuthRejected` at `Hello` would
+need a rollback of record and closed predecessor); moving `Hello` into the preamble (breaks D3: an
+older daemon's `Hello` cannot be decoded to learn its id); no reservation expiry (a stalled dialler
+would block its id forever, against FR-007).
