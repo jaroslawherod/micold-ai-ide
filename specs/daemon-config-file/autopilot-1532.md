@@ -358,4 +358,37 @@ point needs re-doing):
 
 ## Open escalation
 
-None.
+**Category 5 — non-convergence. M4 has passed the handover limit: three parts, each spending its
+full 150k context, and the milestone is still not ready to push.** Asked 2026-11-11 by the
+orchestrator (no unit raised it; the limit is `tasks/dispatch.md`'s, a fourth part is an
+escalation).
+
+- **Question:** split M4 into two milestones, or allow it a fourth part?
+- **Recommended: split M4 into M4a (T066 — the Settings → Daemons `[[ai.cli]]` UI: code, tests,
+  gate, reviews, its own PR) and M4b (T067 — the user-guide docs and the `visual-pass` check, its
+  own PR).** Same precedent as D8, which split M2 into M2a/M2b once two consecutive units proved
+  the grouping did not fit one context. T066 is a wide UI change (five CLIs x eight fields, a new
+  `Section::AiCli` in every runtime's list, a new draft type and its converters) and its own
+  verification — the full `micold-client` test suite, review A, review B, the full gate — is what
+  the parts keep running out of context before reaching. T067 is independent prose plus one
+  visual pass.
+- **Alternative: one more part (part 4).** Cheaper if the remaining work really is only
+  verification; but part 3 found five real test failures on the first full `micold-client` run, so
+  the remaining work is not purely mechanical, and a part that runs out again leaves the same
+  question with a day lost.
+
+What is done (committed on `feat/1532_ai-cli-configuration-from-the-file-for-every-kind`, tip
+`f154c3417`, **nothing pushed, no PR, no gate has validated the diff**):
+
+- `f6d092f49` — data model (`AiCliSetting`, `FileSettings.ai_cli`, `CliId::from_ai_cli` +
+  `Serialize`), `[[ai.cli]]` render, Settings draft/UI wiring.
+- `18bd664ca` — compile fixes, `[[ai.cli]]` round-trip and `AiCliDraft` tests, T067's docs in
+  `docs/user-guide/settings.md` and `daemon-configuration.md`.
+- `8a2ffd1f7` — missing `ai_cli` field in a `FileSettings` test fixture.
+- `625c6a9cc` — focus-tracking for the new fields, section order/height, three test-only bugs
+  (the five failures of the first full `cargo test -p micold-client --test main` run).
+
+What is left: re-run the `micold-client` suite (not re-verified since `625c6a9cc`), scoped gate,
+review A (`code-review`, high), review B (conformance), the `visual-pass` check for the new
+accordion, the full gate, then the first push as `git push --force-with-lease` (origin's branch
+tip is only the pre-rebase twin of the M3 docs commit) and the PR.
