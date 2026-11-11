@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4a
+- **Phase**: milestone M4a (PR open)
 - **Next step**: M4a (T066) — Settings → Daemons renders `[[ai.cli]]`: re-run the `micold-client` suite, scoped gate, review A, review B, visual pass, full gate, PR.
 
 ## Pull requests
@@ -115,6 +115,8 @@ Milestone M1 review A round 2 (sonnet, full diff — round 1 took no snapshot): 
 Milestone M2a review A round 1 (code-review skill, high effort, origin/main...HEAD): CLEAN with two MINOR findings, both fixed in fc2bb6994 (doc-comment only, no new round needed). F1 [MINOR] crates/micold-core/tests/sandbox_argv.rs - commit a65b7fef0 had overwritten the tail of a doc clause, dropping "still covers by asserting every container half is a Linux path." - fixed, line restored from origin/main and the T065 paragraph separated with a /// break. F2 [MINOR] crates/micold-core/src/kube/credentials.rs:47 - Mount::sub_path is never constructed as Some(..) anywhere in crates/, so manifest.rs:223's branch is dead - fixed as a doc note explaining why a single-file subPath mount cannot be rewritten by a CLI's own token refresh, and that the manifest still renders the field (removing the field is out of T065's scope). Both confirmed by a green cargo fmt --check -p micold-core and cargo check -p micold-core --all-targets.
 
 Milestone M2a review B (conformance, sonnet, background dispatch): CHANGES on round 1 - F1 [MAJOR] specs/daemon-config-file/tdd/cycle-log.md had no Issue 11 M2a (T065) entry - fixed, prose only: appended a TEST_AFTER entry (baseline, what was removed, each delivery path's green tests, the full-gate result) to specs/daemon-config-file/tdd/cycle-log.md. No new round (review-rounds.md's prose-only exception): the fix adds no code, test or behaviour claim, only documents tests and results review B itself already ran and reported. F2 [MINOR, informational] noted the Verify commands were still compiling at report time; on its second pass review B ran both to completion itself: cargo test -p micold-core sandbox::mod -- credential (103 passed) and cargo test -p micold-core kube::credentials (7 passed, including the_pod_relink_targets_claudes_own_sign_in_directory). Scope, ownership and task-content checks all passed: CredentialShare::writable fully removed, all three sandbox kinds (container, pod, host/SSH) covered, user guide updated, no leftovers, no M2b work leaked in.
+M4a review A round 1 (autopilot-reviewer, high, snapshot `4e9045a39ad6bfbb01c2e55efcc041d70fc7b8c1:b41d2dc189021bdcb819ff28b1b54ce56e45f4e6`): CHANGES. F1 [MAJOR] user guide told users to hand-set env/token_file/place/use_machine_sign_in for a managed daemon, which the app rewrites — fixed, prose only (docs now say they apply to hand-written files of unmanaged daemons). F2-F4 MINOR declined (see Declined). Review B (sonnet, snapshot `c1a7668925adf46715243157b9cf91962c7642db:66393c586a0d96b262095bc6fdbe839badadc0ec`): CLEAN; Verify `daemon_config_render` 10 passed, `settings::daemons` 1 passed; MINOR T066 tick done. Visual pass: PASS x4 (headless sway, evidence in `specs/daemon-config-file/visual/`). Gate fixes: clippy `field_reassign_with_default` in a test, and `window` now names `features::daemons::AiCliField` (allow-listed in `feature_registration_cost.rs`). One full-gate flake `attention_error_notice::without_focus_the_first_reporting_window_gets_the_notice` (no daemon diff; passes alone).
+
 
 ## Gate
 
@@ -300,6 +302,7 @@ verdict; attempt 3 is this scope's last before an escalation.
 
 ## Declined review findings
 
+- M4a review A round 1, F2/F3/F4 [MINOR]: Model/Base URL offered for every CLI (V7 rejects at Save), summary counts whitespace-only blocks, settings file kept in draft for host/ssh. Declined for this PR: validation already refuses them with an error at Save, nothing is written wrongly; a UI-hiding refinement is follow-up polish, not T066's deliverable.
 M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link — fixed (`unlink_ancestors`, test). F2 [MAJOR] prepare relinked the seeded settings copy every session — fixed (prepare keeps a non-link file/dir; test runs prepare+seed twice). F3 [MINOR] seeding runs only with `sign_in_file` (config dir is only isolated then) — accepted, stated in PR body. F4 [MINOR] 0600/atomic write and stamp-name collisions — declined, taste; the seeded files are under the daemon's private data dir.
 
 - M1 review A round 2, F1 [BLOCKER]: `AiCliTable::configured(...)` not called from the real provisioning call sites (`kube::start::pod_target`, `micold-client::daemon::container_target`). Declined — see D5: neither production call site has a per-CLI `version`/`enabled` value to pass in today (`KubeSettings.providers` and `AiCliSelection` are both a bare `AiCli` set, no version/args/model field exists on the client side yet); that data model is M4's own stated scope ("Settings → Daemons renders `[[ai.cli]]`", T066/T067). `AiCliTable::configured` is exactly what M1's Deliverable and Verify line (`cargo test -p micold-core provision::ai_cli`, core-only) call for: the pure builder, ready for M4 to call once the Settings-side data exists.
@@ -307,56 +310,7 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-Continued from the previous unit's handover (its process note about two `Explore` sub-agents'
-unauthorized commits `f6d092f49`/`18bd664ca`, and the parallel unit's `8a2ffd1f7` +
-`921c9d4fe` landing mid-session, is history now — both reviewed sound, nothing reverted; see git
-log if the detail is ever needed again).
-
-This unit ran `cargo test -p micold-client --test main` for the first time and found real bugs,
-all now fixed and committed in `625c6a9cc` (on top of `921c9d4fe`, nothing pushed):
-- Two new `FieldId` variants, `DaemonAiCliEnabled(CliId)` and `DaemonAiCliField(CliId,
-  AiCliField)`, so the ai.cli checkbox/text fields report focus (`field_focus_call_sites` gate);
-  `CliId` and `AiCliField` both gained `PartialOrd, Ord` for the tuple.
-- The `AiCli` accordion in `ui/settings/daemons.rs` no longer gated to `draft.editing.is_some()`
-  (own closed-by-default accordion, so an add form gets it too, matching `Section::of`'s doc
-  comment "shown for every kind") and moved to after the per-kind `sections` match, before
-  `StartScript` — matching `Section::of`'s actual order (it was wrongly first, before Connection).
-- `ai_cli_summary` in `daemon_sections.rs` never returns `""` now ("Using the pinned defaults"
-  when nothing is configured), so the closed header is the same height as every other kind's.
-- Three test-only bugs: the round-trip test in `daemon_config_render.rs` set `settings_file` on a
-  `Kind::Host` entry (V10: refused outside a sandbox) and set both `sign_in_file` and
-  `api_key_file` at once (V9: at most one credential field) — moved to `Kind::Container`, dropped
-  the redundant field; its `args` used `--verbose`, a Claude Code argument the daemon owns (V8) —
-  swapped for `--add-dir`. `daemons_feature.rs`'s `sections_open_by_toggle...` test and
-  `daemons_section_geometry.rs`'s title-count/order tests were still asserting the pre-#1532
-  section counts (CONTAINER grew 6→7) and order. `explanations_sit_where_the_contract_puts_them`
-  had to stop using blind `rfind` for "Claude Code" once the new ai.cli group's label collided
-  textually with the existing AI-tools-in-this-daemon checkbox of the same name — it now finds the
-  first "Claude Code" after the note it is checking, not the last in the whole form.
-- `cargo check --workspace` is green (confirmed after the fixes).
-
-**Not done / next unit's first steps** (resume straight into these, in order; nothing before this
-point needs re-doing):
-1. Re-run `scripts/build-lock.sh cargo test -p micold-client --test main` (background + `hold.sh`)
-   to confirm these fixes actually turned the suite green — it was not re-run after the last batch
-   of edits (`ai_cli_summary` fallback text and the two test files it touches) because this unit
-   hit its context cap first. If anything is still red, it is most likely in
-   `daemons_section_geometry.rs` or `features_daemon_sections.rs` given how much of this unit's
-   fix touched exactly those two files.
-2. `cargo test -p micold-client --test main -- --exact` or similar targeted re-run is fine; no
-   need for `--workspace` (core is untouched by the test-only fixes; `cargo check --workspace` did
-   cover the core `Ord` derives).
-3. Then: scoped gate, review A (`code-review` skill, `high`), review B (conformance, `sonnet`),
-   full gate, PR per `tasks/pr.md`. The AiCli accordion's new always-shown-on-add-forms behaviour
-   and its new fallback summary text are both visible UI changes: run the `visual-pass` skill
-   (Settings → Daemons → add a daemon → AI CLI configuration section, both an add form and an
-   existing daemon's edit form) per `gate.md`'s "Changed how something looks?" rule before the PR.
-4. `origin/feat/1532_ai-cli-configuration-from-the-file-for-every-kind` points at a commit
-   (`4cca1f8fa`) not an ancestor of local `HEAD`, carrying unrelated drift (looks like feature
-   1802, not 1532). Local `HEAD` has `origin/main` as an ancestor, so the first push is
-   `git push --force-with-lease` — confirm with `git log origin/<branch>..HEAD` right before it,
-   not from this note alone.
-5. Nothing pushed yet; no gate has seen this diff yet.
+None.
 
 ## Open escalation
 
