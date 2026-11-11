@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1802
 - **Worktree branch**: feat/1802_autopilot-bind-review-verdicts-to-the-pr-head-sha
 - **Started**: 2026-11-10
-- **Phase**: milestone M2
-- **Next step**: wait-merge M2 PR, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1818 | Design | merged | 4b2a22c130a6087fb3b38e3edf22505025cb9f00 |
 | #1821 | Milestone M1 | merged | 653cd72150666522b51b58028f01b3e72cbfe726 |
 | #1825 | Milestone M2 | merged | c6817744c2a75a82237d389f344a9419f94dedeb |
+| #CLOSE | Close | open | - |
 
 ## Milestones
 
@@ -49,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 | 1 | M2 | 9e340c7c66a804c1e6b4e7eeeb8f0435cfe1da64 | 9e1162fc01454cb33a2355b5d587b5d6b740bd03:c1e951ba852b1ba9da59fc3550ee2ef47b149aab | CHANGES: 1 MAJOR 1 MINOR (F1 CARRIED head pinned to guarded P, F2 git errors vs no-change; both fixed) |
 | Review B M2 | 1 | M2 | 9e340c7c66a804c1e6b4e7eeeb8f0435cfe1da64 | 9e1162fc01454cb33a2355b5d587b5d6b740bd03:c1e951ba852b1ba9da59fc3550ee2ef47b149aab | CLEAN (1 MINOR: CARRIED names last H, documented in merge.md) |
 | Review A M2 | 2 | M2 | 9e340c7c66a804c1e6b4e7eeeb8f0435cfe1da64 | fix-diff | CLEAN |
+| Close review | 1 | close | HEADPLACE | 8ae47cc810ff25316bdc512944bd6c9ec588f115:f413332922440f4da52c4ab1d2f924ca2a383c32 | CHANGES: 2 MAJOR 2 MINOR (F1 gate evidence: `mise run gate` exit 0 at close, quickstart 1-4 covered by verdict-guard.test.sh 69 cases and autopilot.test.sh 303 cases; F2 T025 reworded; F3/F4 fixed; prose only) |
 
 ## Declined review findings
 
