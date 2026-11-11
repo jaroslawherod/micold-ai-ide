@@ -46,6 +46,7 @@ US3 (tests only) is folded into M1 (rule 7, tests travel with code); US2 is M2 (
 | Review A M1 | 1 |  |  | a1b19852e1c9e0bb9b71caf4e9d3b694cdae72bc:5e90aef10191fe1b8f8801e63355c8a244a5eef0 | CHANGES: 1 MAJOR (fence), 2 MINOR (F2 fixed, F3 declined); fixes prose-free, covered by new tests |
 | Review B M1 | 1 |  |  | 59b1a52a21d668ef829e1b47d88795cf30ca715a:5e90aef10191fe1b8f8801e63355c8a244a5eef0 | CLEAN (1 MINOR fixed, ledger only) |
 | Review A M2 | 1 | 1830 | 49b48e92353d057accb2a2641f2c1e58a1411b09 | 5f2bf79f69c45300ea1fc1034b8ed571fdf77627:49b48e92353d057accb2a2641f2c1e58a1411b09 | CLEAN (3 MINOR left: answer.sh double message, unknown batch number, no lock; re-review on current head) |
+| Review A M2 | 2 | 1830 | d9cc520954bec73e975512f2f920ec1043cbd53d | f1a0b9ca0a981182c4f482814f7dd4034314549a:d9cc520954bec73e975512f2f920ec1043cbd53d | CLEAN (merge of origin/main; conflict in autopilot.test.sh kept both sides) |
 
 ## Declined review findings
 
