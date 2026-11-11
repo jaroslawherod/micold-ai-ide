@@ -44,6 +44,7 @@ Polish T022–T023 (no code) is left to the close unit.
 | --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec.md | n/a | 6fc85675fbf3d6f586add2d902fa44d1c23fbb8c:4b0e90f051efb9e5f2dbdfe85a4faf47c5575244 | CLEAN (3 MINOR: empty-list outcome fixed, checklist unticked; reduced-motion FR awaits clarify) |
 | plan | 1 | design | d39de3e8e407a7fc9de2b4ab0619660de082bdb6 | 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 | CLEAN |
+| tasks | 1 | design | d1a229af7921b3585c363180a0ef535de79d0742 | 199ca061a9e675043e43796afbe22d627936dd42:0923e2cbffbbdc6215eb213142a9ae51bb4c669d | MINOR-ONLY fixes applied (prose/paths) |
 
 ## Declined review findings
 
