@@ -155,20 +155,21 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
   | live link | no | refuse `VersionMismatch`, record and link untouched, no overwrite |
   | reserved link (`Hello` pending, at most `LIVENESS_DEADLINE`) | either | refuse `AlreadyLinked` (a reservation is treated as live; this extends spec FR-007 for the pending window, recorded here), record untouched |
 
+  `confirm` re-checks the replaced link: if a silent old link answered during the reservation (back to live), `confirm` returns `Refused(AlreadyLinked)`, releases the reservation and changes nothing (a live link is never replaced). The old token stays valid during a reservation.
+
   Calls with a stale or unreserved `LinkToken` (`confirm`, `answered`, `tick`, `closed`) return
   `LinkAction::Stale` and change nothing, so a late frame on a replaced silent link cannot move the
   new link's record (US4.3).
 
   Claims are taken under one `Mutex<Registry>`, so two simultaneous claims serialise: exactly one wins
   (SC-004). The lock is never held across `.await` or a store write that blocks the claim: `claim` returns
-  the snapshot to save and the caller saves it after unlocking (a failed save is reported, memory stays
-  correct, FR-004).
+  the snapshot to save, stamped with a sequence number, and the caller saves it after unlocking through one saver that skips a snapshot older than the last one saved, so saves never land out of order (a failed save is logged to stderr, memory stays correct, FR-004). Every mutating call returns the snapshot from M1 on; the store behind it arrives in M5.
 - `answered(link, now, wall)`: any inbound frame feeds `Keepalive::on_daemon_frame`; sets `online`, last
   seen = `wall`.
 - `tick(link, now) -> LinkAction`: `Keepalive::poll`: `SendPing`, `Idle`, or `Expired` which sets `offline`
   once (last seen stays the last answer's wall time).
 - `closed(link)`: marks the link not live; health stays until the deadline (a drop is silence).
-- `restore(records)`: every record `offline`, no link.
+- `restore(records)`: every record `offline` (a saved `needs-update` too: it is re-derived on relink), no link.
 - `list()`: records sorted by id.
 
 ### Link flow (`link.rs`)
@@ -186,7 +187,7 @@ docs/daemon.md, docs/user-guide/...           # Orchestrator mode section
    `CHECK_INTERVAL` timer (`tick`; `SendPing` sends `DaemonMsg::LinkPing`). `Expired` marks `offline` and
    keeps reading: a later frame brings the daemon back `online` without a new link. A claim by another
    link on a silent id closes this one (a `LinkToken` mismatch ends the loop).
-5. Session or project requests from a link or a client get `OperationResult`-style refusal "not hosted by
+5. Session or project requests (post-`Hello` `ClientMsg` such as `SessionStart`, on an accepted link) get `OperationResult`-style refusal "not hosted by
    the orchestrator"; a list returns empty (User Story 1.2).
 
 ### Wire change

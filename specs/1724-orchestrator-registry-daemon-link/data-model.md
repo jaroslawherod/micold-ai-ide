@@ -41,6 +41,7 @@ Per id, in memory: `Reserved` (preamble accepted, `Hello` pending, at most `LIVE
 `Reserved` and `Live` refuse rivals (`AlreadyLinked`); `Silent`, `Closed` and none accept them.
 `Claim = Reserved{ link } | Refused(RefuseReason)`. `LinkAction = SendPing | Idle | Expired | Stale`;
 `Stale` is returned for a token that is replaced, released or unknown and changes nothing.
+`confirm` re-checks the old link: if a silent old link answered during the reservation it is `Live` again and the confirmation is refused `AlreadyLinked` (old link and record untouched).
 `claim_failed` reasons: `VersionMismatch`, `BuildMismatch`, `AuthRejected`, `Dropped`.
 
 ## Stored file `orchestrator/registry.json`
@@ -56,4 +57,5 @@ Unknown extra fields are ignored; a missing `health` reads as `offline`. Save is
 
 `LinkAnnouncement { format: u32 = 1, id, kind, name, protocol_version, capabilities, tenant: Option<String> }`
 `LinkVerdict::Accepted | Refused { reason: RefuseReason, orchestrator_version, daemon_version, message }`
-`RefuseReason`: `VersionMismatch`, `AlreadyLinked`, `Malformed`.
+`RefuseReason`: `VersionMismatch`, `AlreadyLinked` (an invalid id or malformed JSON closes the link with no verdict).
+`LinkQuery::List` (`{ "query": "list" }`) is the stable JSON listing request, outside the schema hash (contracts/link.md).

@@ -31,14 +31,14 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 **Tests first (red):**
 
 - [ ] T004 [P] Unit tests for `DaemonRecord`, `Health`, `TenantId` in `crates/micold-core/src/orchestrator/record.rs`: name trimmed and falls back to the id, tenant defaults to `default` and is never empty, `Health` serializes `online`/`offline`/`needs-update`, a missing `health` reads `offline`, unknown fields ignored (data-model.md)
-- [ ] T005 [P] Unit tests for `announce.rs` in `crates/micold-core/src/orchestrator/announce.rs`: a golden JSON fixture of an old announcement (`format: 1`) still decodes; unknown extra fields ignored; invalid id (empty, too long, bad characters) refused at decode; malformed JSON refused; `LinkVerdict::Accepted` and `Refused { reason, orchestrator_version, daemon_version, message }` encode to the stable JSON of contracts/link.md; preamble frame cap 64 KiB rejected above it; `AlreadyLinked` and `VersionMismatch` are distinct reasons
+- [ ] T005 [P] Unit tests for `announce.rs` in `crates/micold-core/src/orchestrator/announce.rs`: a golden JSON fixture of an old announcement (`format: 1`) still decodes; unknown extra fields ignored; invalid id (empty, too long, bad characters) refused at decode; malformed JSON refused; `LinkQuery::List` encodes and decodes the stable JSON; a preamble that does not finish within `LIVENESS_DEADLINE` is closed (injected clock); `LinkVerdict::Accepted` and `Refused { reason, orchestrator_version, daemon_version, message }` encode to the stable JSON of contracts/link.md; preamble frame cap 64 KiB rejected above it; `AlreadyLinked` and `VersionMismatch` are distinct reasons
 - [ ] T006 [P] Unit tests for the basic `Registry` in `crates/micold-core/src/orchestrator/registry.rs` (injected `now: Instant`, `wall_secs: u64`): `claim` on an unknown id returns `Reserved{link}` and changes no record; `confirm` upserts the record `online` with `last_seen = wall`; a relink with a new name or capabilities updates the record in place, never duplicates it; `list()` is sorted by id and empty for an empty registry; `confirm` with an unknown or replaced `LinkToken` returns `LinkAction::Stale` and changes nothing
 
 **Implementation (green):**
 
 - [ ] T007 [P] Implement `DaemonRecord`, `Health`, `TenantId` in `crates/micold-core/src/orchestrator/record.rs` per data-model.md
 - [ ] T008 [P] Implement `LinkAnnouncement`, `LinkVerdict`, `RefuseReason` and their encode/decode in `crates/micold-core/src/orchestrator/announce.rs` (`#[serde(default)]` additive fields, `WireDaemonId` validated at decode, no dependency on `SCHEMA_HASH`)
-- [ ] T009 Implement `Registry` (`claim` accept path, `confirm`, `list`, `LinkToken`, `Claim`, `LinkAction::Stale`) in `crates/micold-core/src/orchestrator/registry.rs`; refusal rows, `claim_failed`, heartbeat and restore come in later milestones. Needs T007, T008
+- [ ] T009 Implement `Registry` (`claim` accept path, `confirm`, `list`, `LinkToken`, `Claim`, `LinkAction::Stale`; every mutating call returns the sequence-stamped snapshot to save) in `crates/micold-core/src/orchestrator/registry.rs`; refusal rows, `claim_failed`, heartbeat and restore come in later milestones. Needs T007, T008
 
 ## Phase 3: User Story 1 — The orchestrator starts and lists a joined daemon (P1) 🎯 MVP
 
@@ -49,7 +49,7 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 **Tests first (red):**
 
 - [ ] T010 [P] [US1] Create the test harness `crates/micold-daemon/tests/orchestrator/main.rs` plus `support.rs`: temp state dir, `run_with` start on a real local socket in that dir, controllable test clock, fake daemon that sends the announcement, reads the verdict, sends `Hello`, reads `Welcome`, and a listing client. Then in `link_and_list.rs` the US1 scenarios 1 and 3 (SC-001): every field listed `online`; no tenant announced lists `default`
-- [ ] T011 [P] [US1] `crates/micold-daemon/tests/orchestrator/not_hosted.rs`: session start and session list from a link get the refusal `not hosted by the orchestrator` and an empty list; no child process or PTY is spawned (US1 scenario 2, FR-001)
+- [ ] T011 [P] [US1] `crates/micold-daemon/tests/orchestrator/not_hosted.rs`: session start and session list as post-`Hello` messages on an accepted link get the refusal `not hosted by the orchestrator` and an empty list; no child process or PTY is spawned (US1 scenario 2, FR-001)
 - [ ] T012 [P] [US1] Test in `crates/micold-daemon/tests/orchestrator/dispatch.rs` of the pure `parse_mode(args)` (in `crates/micold-daemon/src/orchestrator/mod.rs`): `Mode::Orchestrator` only when `args[0] == "orchestrator"`; no argument and any other argument give `Mode::Daemon` (FR-010)
 
 **Implementation (green):**
@@ -70,8 +70,8 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 **Tests first (red):**
 
 - [ ] T017 [P] [US2] Unit tests in `crates/micold-core/src/orchestrator/liveness.rs` and `registry.rs`: `Heartbeat` wraps `protocol::keepalive::Keepalive`; `tick` returns `SendPing` after `PING_INTERVAL`, `Idle` between, `Expired` after `LIVENESS_DEADLINE` and sets `offline` once with `last_seen` unchanged (SC-002, US2.1); `answered` sets `online` and advances `last_seen` to the injected wall time (US2.2); `closed` keeps health until the deadline; a stale token changes nothing; another daemon's record is unchanged (US2.3)
-- [ ] T018 [P] [US2] Codec round-trip tests for `DaemonMsg::LinkPing { nonce }` and `ClientMsg::LinkPong { nonce }` in `crates/micold-core/src/protocol/messages.rs`, and a version test in `version.rs` that `PROTOCOL_VERSION` is 81; update any schema-hash fixture the existing tests pin
-- [ ] T019 [P] [US2] Tests that the ignoring arms exist: a stray `ClientMsg::LinkPong` sent to a normal daemon is ignored and the connection stays up (in the existing `crates/micold-daemon/tests/connection/` suite, new file `link_pong_ignored.rs` wired in its `main.rs`), and a client handles `DaemonMsg::LinkPing` without error (client-side test beside the exhaustive match found in T022)
+- [ ] T018 [P] [US2] Codec round-trip tests for `DaemonMsg::LinkPing { nonce }` and `ClientMsg::LinkPong { nonce }` in `crates/micold-core/src/protocol/messages.rs`, and a version test in `version.rs` that `PROTOCOL_VERSION` is 81
+- [ ] T019 [P] [US2] Tests that the ignoring arms exist: a stray `ClientMsg::LinkPong` sent to a normal daemon is ignored and the connection stays up (in the existing `crates/micold-daemon/tests/connection/` suite, new file `link_pong_ignored.rs` wired in its `main.rs`), and a client handles `DaemonMsg::LinkPing` without error (client-side test beside the exhaustive match; write it after T022 has found that match)
 - [ ] T020 [P] [US2] `crates/micold-daemon/tests/orchestrator/heartbeat.rs`: the fake daemon silenced past the deadline lists `offline` with the last answer's time; its reply brings `online` and a later `last_seen`; a second daemon's record is unchanged throughout; the orchestrator sends a `LinkPing` every `PING_INTERVAL` when idle
 
 **Implementation (green):**
@@ -97,7 +97,7 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 
 **Implementation (green):**
 
-- [ ] T028 [US3] `Registry::claim` version rows and `Registry::claim_failed` (reasons `VersionMismatch`, `BuildMismatch`, `AuthRejected`, `Dropped`) in `crates/micold-core/src/orchestrator/registry.rs`; listing carries the orchestrator's version for `needs-update` records
+- [ ] T028 [US3] `Registry::claim` link-state model (`Reserved`/`Live`/`Silent`/`Closed`: which state an id's link is in) and its version rows, and `Registry::claim_failed` (reasons `VersionMismatch`, `BuildMismatch`, `AuthRejected`, `Dropped`) in `crates/micold-core/src/orchestrator/registry.rs`; listing carries the orchestrator's version for `needs-update` records
 - [ ] T029 [US3] `crates/micold-daemon/src/orchestrator/link.rs`: write `LinkVerdict::Refused` and close on a refused claim; map a `handshake::evaluate` refusal after `Accepted` to `claim_failed` and send `DaemonMsg::Refused`. Needs T028
 - [ ] T030 [US3] Docs: `needs-update` meaning and the refusal text in `docs/daemon.md` and `docs/user-guide/orchestrator-mode.md`
 
@@ -111,12 +111,12 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 
 **Tests first (red):**
 
-- [ ] T031 [P] [US4] Unit tests in `crates/micold-core/src/orchestrator/registry.rs` for the rest of the decision table: live link refuses `AlreadyLinked` with the record untouched (US4.1); closed transport accepts and replaces (US4.2); silent link accepts, the old token becomes `Stale` and its late frames cannot move the new record (US4.3, US3 edge); restored-without-link accepts (US4.4); a reserved link refuses a rival `AlreadyLinked` for at most `LIVENESS_DEADLINE`, then `claim_failed(Dropped)` or expiry releases it with no record change; two simultaneous claims through one `Mutex<Registry>` give exactly one `Reserved` (SC-004)
+- [ ] T031 [P] [US4] Unit tests in `crates/micold-core/src/orchestrator/registry.rs` for the rest of the decision table: live link refuses `AlreadyLinked` with the record untouched (US4.1); closed transport accepts and replaces (US4.2); silent link accepts, the old token becomes `Stale` and its late frames cannot move the new record (US4.3, US3 edge); restored-without-link accepts (US4.4); a silent old link that answers during a rival's reservation makes `confirm` refuse and leaves the old link live; a reserved link refuses a rival `AlreadyLinked` for at most `LIVENESS_DEADLINE`, then `claim_failed(Dropped)` or expiry releases it with no record change; two simultaneous claims through one `Mutex<Registry>` give exactly one `Reserved` (SC-004)
 - [ ] T032 [P] [US4] `crates/micold-daemon/tests/orchestrator/one_link_per_id.rs`: second link refused `AlreadyLinked` while the first stays `online`; replacement after a closed transport; a silent link is closed when a new link takes over; a link that never sends `Hello` is released at the deadline (controllable clock) and a rival is then accepted; two fake daemons dial one id concurrently, repeated 50 times, exactly one `Accepted` each time (SC-004 on the wire)
 
 **Implementation (green):**
 
-- [ ] T033 [US4] Complete `Registry::claim` (live and reserved refusals, closed/silent replacement, reservation expiry at `LIVENESS_DEADLINE`) in `crates/micold-core/src/orchestrator/registry.rs`
+- [ ] T033 [US4] Complete `Registry::claim` for current-version claims (live and reserved `AlreadyLinked` refusals, closed/silent replacement, reservation expiry at `LIVENESS_DEADLINE`, `confirm` refused when the silent old link answered during the reservation); the link-state model is from T028 in `crates/micold-core/src/orchestrator/registry.rs`
 - [ ] T034 [US4] `crates/micold-daemon/src/orchestrator/link.rs`: `Hello` read timeout `LIVENESS_DEADLINE` calling `claim_failed(Dropped)`, connection close calling `claim_failed(Dropped)`, and the loop ends when its `LinkToken` is replaced. Needs T033
 - [ ] T035 [US4] Docs: the one-link-per-id rule and the up-to-9 s reservation window in `docs/daemon.md` and `docs/user-guide/orchestrator-mode.md`
 
@@ -130,21 +130,21 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 
 **Tests first (red):**
 
-- [ ] T036 [P] [US5] Unit tests in `crates/micold-core/src/orchestrator/store.rs` and `registry.rs`: `JsonRegistryStore` round-trips `{ "version": 1, "daemons": [...] }`; an absent file loads empty; an unparsable or unreadable file returns `StoreError::Corrupt { path }` and is not touched; a torn write leaves the old or the new file (through `owner_only::write_with`); a failed save through `MemoryRegistryStore` leaves memory correct and the stored copy intact; `Registry::restore` marks every record `offline` with no link and `claim` snapshots are returned for saving after unlock
-- [ ] T037 [P] [US5] `crates/micold-daemon/tests/orchestrator/restart.rs`: two joined daemons, stop, start on the same dir: same records listed `offline` (SC-005); a relink turns one `online` and updates, not duplicates, its record; a fake daemon holding a session fixture keeps it across the restart (FR-009); a corrupt `orchestrator/registry.json` makes the start fail non-zero with `orchestrator registry <path> is unreadable: <reason>` and the file unchanged; a failed save is reported while links keep working
+- [ ] T036 [P] [US5] Unit tests in `crates/micold-core/src/orchestrator/store.rs` and `registry.rs`: `JsonRegistryStore` round-trips `{ "version": 1, "daemons": [...] }`; an absent file loads empty; an unparsable or unreadable file returns `StoreError::Corrupt { path }` and is not touched; a torn write leaves the old or the new file (through `owner_only::write_with`); a failed save through `MemoryRegistryStore` leaves memory correct and the stored copy intact; `Registry::restore` marks every record `offline` (a saved `needs-update` too) with no link; mutating calls return sequence-stamped snapshots; the saver skips a snapshot older than the last saved (two out-of-order saves leave the newer file)
+- [ ] T037 [P] [US5] `crates/micold-daemon/tests/orchestrator/restart.rs`: two joined daemons, stop, start on the same dir: same records listed `offline` (SC-005); a relink turns one `online` and updates, not duplicates, its record; the orchestrator spawns nothing and holds no session state to lose (FR-009, by construction: asserted by there being no session code path, with the fake daemon's own session fixture untouched); a corrupt `orchestrator/registry.json` makes the start fail non-zero with `orchestrator registry <path> is unreadable: <reason>` and the file unchanged; a failed save is logged to stderr while links keep working
 
 **Implementation (green):**
 
 - [ ] T038 [US5] `RegistryStore` trait, `JsonRegistryStore` (`orchestrator/registry.json` under `micold_core::paths::data_dir()`, `owner_only::write_with`), `MemoryRegistryStore` with an injectable save failure in `crates/micold-core/src/orchestrator/store.rs`; `Registry::restore`
-- [ ] T039 [US5] `crates/micold-daemon/src/orchestrator/mod.rs`: load the store at start (corrupt: error naming the file, non-zero exit via `main.rs`), save the snapshot returned by each mutating registry call after unlocking, report a failed save. Needs T038
+- [ ] T039 [US5] `crates/micold-daemon/src/orchestrator/mod.rs`: load the store at start (corrupt: error naming the file, non-zero exit via `main.rs`), save the snapshot returned by each mutating registry call after unlocking, log a failed save to stderr, through the single saver that skips older snapshots. Needs T038
 - [ ] T040 [US5] Docs: registry file location, restart behaviour (all `offline` until relink) and the corrupt-file message in `docs/daemon.md` and `docs/user-guide/orchestrator-mode.md`
 
 **Checkpoint**: M5 deliverable works.
 
 ## Phase 8: Polish and cross-cutting
 
-- [ ] T041 [P] Source-level test `crates/micold-daemon/tests/orchestrator/no_outbound.rs`: fails on any `connect(`, `Stream::connect` or `open_pipe(` under `crates/micold-daemon/src/orchestrator/` and `crates/micold-core/src/orchestrator/` (FR-008)
-- [ ] T042 [P] Linux-only test in `crates/micold-daemon/tests/orchestrator/netns.rs` that re-runs the link suite under `unshare -rn` (outbound connections blocked) and skips with a stated reason where unprivileged user namespaces are unavailable (FR-008, scope stated in the test)
+- [ ] T041 [P] Source-level test `crates/micold-daemon/tests/orchestrator/no_outbound.rs`: fails on any whole-word `connect`, `Stream::connect` or `open_pipe` call (word-boundary regex, comments stripped) under `crates/micold-daemon/src/orchestrator/` and `crates/micold-core/src/orchestrator/` (FR-008)
+- [ ] T042 [P] Linux-only test in `crates/micold-daemon/tests/orchestrator/netns.rs` that re-runs the `link_and_list` and `heartbeat` tests (test binary re-executed with `unshare -rn`) (outbound connections blocked) and skips with a stated reason where unprivileged user namespaces are unavailable (FR-008, scope stated in the test)
 - [ ] T043 Run `quickstart.md` Part A and B against the finished build and record the results; confirm `docs/daemon.md` and the user guide describe the whole feature and `docs/SUMMARY.md` links the page
 
 ## Dependencies and order
