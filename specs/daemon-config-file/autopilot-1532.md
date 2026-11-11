@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4a (PR open)
+- **Phase**: milestone M4a (gate green, push blocked)
 - **Next step**: M4a (T066) — Settings → Daemons renders `[[ai.cli]]`: re-run the `micold-client` suite, scoped gate, review A, review B, visual pass, full gate, PR.
 
 ## Pull requests
@@ -310,7 +310,7 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-None.
+M4a is done and gated: full `mise run gate` green on the tree at this commit, reviews A/B and visual pass recorded above. Only the push and PR remain. `git push --force-with-lease -u origin HEAD` was DENIED by the permission classifier (remote branch carries unrelated drift `4cca1f8fa`, so a force push is needed). Next: the orchestrator/user pushes (confirm `git log origin/<branch>..HEAD`) and opens the PR titled `feat(daemon-config-file): Settings → Daemons renders [[ai.cli]] (#1532)` with a body ending `Refs #1532`; body draft is in the unit's scratchpad pr-body.md (rebuild from the Review rounds text if lost).
 
 ## Open escalation
 
