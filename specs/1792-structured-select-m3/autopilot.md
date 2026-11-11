@@ -54,8 +54,9 @@ Polish T022–T023 (no code) is left to the close unit.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 (T001-T010) implemented and committed on the branch (not pushed, no PR yet). Reviews: A round 1 CLEAN (3 MINOR, handled), B CLEAN (MINOR: tdd cycle-log absent, tests written after the implementation by a killed unit; T009 no code), re-review of the `MenuSelect::filled()` opt-in fix CLEAN. Decision: the 56dp trigger broke dense callers' layout gates (review source, worktree filters), so it is opt-in via `MenuSelect::filled()` for the composer's three selectors and the showcase sample; others keep the compact button. Layout snapshot regenerated (Select's trigger wraps its value in a Fill container).
+Last full `mise run gate` failed only on `showcase_completeness`: `SelectTrigger` needed a gallery exemption. Added in catalogue.rs (uncommitted until this commit); not yet re-run.
+Next: (1) record verdicts with `scripts/autopilot/record-verdict.sh` (A r1/B r1 snapshot 9bf76c49c8d226fd67193dd436febc0f16b1f301:a6ef0850eac034c3acd89097673bfed4ff004a84, re-review CLEAN) at HEAD; (2) check the visual-pass worker's result (agent a9d137791e0781942, evidence under specs/1792-structured-select-m3/) and commit it; (3) rerun `mise run gate` detached, fix reds; (4) PR per tasks/pr.md (title `feat(1792): MenuSelect takes the shared Material 3 select trigger (#1792)`, mention opt-in, TDD exception, MenuSelect focus shows the button ring), ledger row M1 -> PR.
 
 ## Open escalation
 

@@ -1619,6 +1619,13 @@ pub const MOTION: &[MotionEntry] = sections::motion::MOTION;
 /// they are exercised on the page without being posed on it.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
+        module: "material/select_trigger.rs",
+        component: "SelectTrigger",
+        reason: "the Material 3 trigger `Select` and `MenuSelect::filled` draw: not a control on \
+                 its own (it has no press or list), and every state of it is posed by the Select \
+                 and MenuSelect entries (feature 1792).",
+    },
+    Exemption {
         module: "material/give_way.rs",
         component: "GiveWayRow",
         reason: "the row whose children give way by rank when it is too narrow: a layout primitive \
