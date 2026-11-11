@@ -56,6 +56,7 @@ pub mod naming;
 pub mod navigation;
 pub mod notify;
 pub mod occupancy;
+pub mod orchestrator;
 pub mod origin;
 pub mod os_theme;
 pub mod overlay;

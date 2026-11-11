@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: tasks
+- **Phase**: milestone M1
 - **Next step**: push (force-with-lease needed: origin holds 4 pre-rebase twins of local commits), open design PR, then M1 after merge
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1841 | Design | open | … |
+| #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
 
 ## Milestones
 
@@ -63,8 +63,36 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 unit, written at 150k context. PR #1841 is recorded merged above. All M1 code is written and
+committed in one WIP commit, but it was NEVER COMPILED OR RUN: other worktrees held the shared build
+lock for 40+ minutes, so no `cargo` ran. No red phase was captured; the next unit compiles first and
+fixes what the compiler and tests say. A detached `cargo test -p micold-core` of mine may still be
+queued on the lock (log in the old scratchpad); it is harmless.
+
+Written (tasks.md ticks NOT done; tick T001-T016 once green):
+- core: `crates/micold-core/src/orchestrator/{mod,record,announce,registry}.rs` (tests included for
+  T004 T005 T006; impl T007 T008 T009), `pub mod orchestrator` in lib.rs, `Kind` derives `Serialize`
+  plus a round-trip test in `daemon_config/tests.rs` (T001 T003). Registry M1 API: `claim(&ann)`,
+  `confirm(link, wall_secs)`, `closed(link)`, `list()`, `Snapshot{seq,records}`; no `now`/Keepalive
+  yet (M2 adds it); `LinkAction::{Stale,Idle}`; a reserved or live id refuses a rival.
+- daemon: `crates/micold-daemon/src/orchestrator/{mod,link,query}.rs` (T013 T014: `Mode`,
+  `parse_mode`, `Clock`, `SystemClock`, `run`, `run_with(socket, clock)`, `main()`; uses
+  `singleton::acquire` on `orchestrator.sock`/`.lock` beside the daemon's), `main.rs` dispatch (T015),
+  `lib.rs` `pub mod orchestrator`, `Cargo.toml` `[[test]] orchestrator` (T002), `catalog.rs` free
+  `wire_settings(&Settings)` used by `Catalog::settings_wire` and the orchestrator's Welcome.
+- tests: `crates/micold-daemon/tests/orchestrator/{main,support,link_and_list,not_hosted,dispatch}.rs`
+  plus one-line stubs for heartbeat, netns, no_outbound, one_link_per_id, restart, version_mismatch
+  (T010 T011 T012). Session start = `SessionCreate{req}` answered `OperationError{Refused,
+  "not hosted by the orchestrator"}`; session list = `Attach` answered `Attached` with no sessions.
+- docs: `docs/daemon.md` "Orchestrator mode (#1724)", `docs/user-guide/orchestrator-mode.md`,
+  `docs/SUMMARY.md` (T016).
+
+Next steps: 1) `scripts/build-lock.sh cargo test -p micold-core --lib -- orchestrator daemon_config`
+(`preamble_expired` is a pure helper the daemon does not use; it uses `tokio::time::timeout`);
+2) `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` (watch: `Framed::map_codec`
+after the preamble, `Stream` Unpin, clippy); 3) `every_test_file_is_wired` and one existing daemon
+suite (SC-006); 4) tick T001-T016, `mise run test-core`, quickstart Part B steps 1, 2, 7, then
+implement.md step 3 onward (verify.md, review A and B, gate, PR). Review rounds: none yet.
 
 ## Open escalation
 

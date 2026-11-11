@@ -628,6 +628,28 @@ The grant messages (`GitCredentialGrant`, `GitCredentialRevoke`, `GitCredentialT
 in protocol 79 (the current version is 80). The token is never logged (`SecretToken`'s `Debug` is redacted) and never written
 where git could keep it.
 
+## Orchestrator mode (#1724)
+
+`micold-daemon orchestrator` starts the same binary as a registry of daemons instead of a session
+host. It binds its own local socket (`orchestrator.sock`, beside the daemon's), accepts daemon links
+and lists them. It hosts no session: it builds no session state, starts no supervisor and spawns no
+PTY or child process. `micold-daemon` with no argument (or any other first argument) is the daemon,
+unchanged.
+
+A daemon opens a link with a version-stable JSON *announcement* (id, kind, name, protocol version,
+capabilities, optional tenant), the orchestrator answers with a verdict, and on `Accepted` the link
+continues with the usual `Hello`/`Welcome` handshake. The orchestrator then lists the daemon with
+these fields: `id`, `kind`, `name`, `protocol_version`, `capabilities`, `health`, `last_seen` (unix
+seconds) and `tenant` (`default` when the daemon announces none). A connection whose first frame is
+`{ "query": "list" }` is answered with `{ "daemons": [...], "orchestrator_version": N }`, sorted by
+id, and closed. A session start sent over an accepted link is refused with
+`not hosted by the orchestrator`; a session list is empty. The wire shapes are in
+`specs/1724-orchestrator-registry-daemon-link/contracts/link.md`.
+
+This first step keeps the registry in memory and lists every linked daemon `online`; heartbeat,
+`offline`, `needs-update`, one live link per id and a registry that survives a restart follow in the
+same issue (#1724).
+
 ## Finding the logs and recent errors
 
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two

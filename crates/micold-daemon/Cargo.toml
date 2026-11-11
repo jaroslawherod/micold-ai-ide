@@ -102,6 +102,10 @@ workspace = true
 # `mod` of `tests/main.rs` or be listed here; `every_test_file_is_wired` checks it.
 
 [[test]]
+name = "orchestrator"
+path = "tests/orchestrator/main.rs"
+
+[[test]]
 name = "main"
 path = "tests/main.rs"
 

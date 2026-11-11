@@ -68,7 +68,7 @@ pub struct DaemonConfig {
 }
 
 /// What kind of daemon the file is for; sets defaults and is reported, nothing more.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Host,

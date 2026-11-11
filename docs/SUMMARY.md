@@ -28,6 +28,7 @@
 - [Running the session service in a container](user-guide/sandboxed-daemon.md)
 - [Running the session service on another computer over SSH](user-guide/remote-daemons.md)
 - [A cheap remote daemon on a private Tailscale network](user-guide/remote-daemon-tailscale.md)
+- [Orchestrator mode: one registry of your daemons](user-guide/orchestrator-mode.md)
 - [Running the session service in a Kubernetes cluster](user-guide/kubernetes-daemons.md)
 
 # The session service
