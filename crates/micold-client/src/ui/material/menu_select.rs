@@ -1,7 +1,8 @@
 //! `MenuSelect` — a select whose options are caller-built rows that may hold chips (feature 1272,
 //! Constitution Principle VIII).
 //!
-//! A text trigger (a fixed label part, an elastic title that ends in `…`, a chevron, a tooltip) and
+//! A trigger (a fixed label part, an elastic title that ends in `…`, a chevron, a tooltip; the
+//! Material 3 select trigger when [`filled`](MenuSelect::filled), else a compact button) and
 //! a floating list of rows: options, options with chips and a note, headings and note lines. The
 //! review's source control is its first caller: an option per source, with the Working tree
 //! option's Committed and Uncommitted chips inside it.
@@ -26,7 +27,8 @@ use std::borrow::Cow;
 
 use super::picker::{animated_menu, marker, row_surface, EXIT, GAP, MAX_ROWS_BEFORE_SCROLL};
 use super::select_trigger::SelectTrigger;
-use super::{ButtonVariant, Ellipsized, Text, TextField, ToggleChip, TypeRole};
+use super::{ButtonVariant, Ellipsized, Glyph, Text, TextField, ToggleChip, TypeRole};
+use crate::icons::Icon;
 use crate::ui::cdk::picker::Picker as Behaviour;
 use iced::widget::{button, column, container, row, Space};
 use iced::{alignment, Element, Length};
@@ -167,6 +169,7 @@ pub struct MenuSelect<'a, M> {
     max_list_height: f32,
     width: Length,
     panel_width: Option<f32>,
+    filled: bool,
 }
 
 impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
@@ -199,6 +202,7 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
             max_list_height: DEFAULT_LIST_HEIGHT,
             width: Length::Fill,
             panel_width: None,
+            filled: false,
         }
     }
 
@@ -214,6 +218,15 @@ impl<'a, M: Clone + 'a> MenuSelect<'a, M> {
     pub fn disabled(mut self, reason: impl Into<String>) -> Self {
         self.disabled = true;
         self.tooltip = Some(reason.into());
+        self
+    }
+
+    /// Draw the trigger as the Material 3 select `Select` draws (feature 1792, FR-001, FR-009),
+    /// a filled 56dp container, rather than the compact outlined button. The structured view's
+    /// settings use it; the dense callers (the review's source control, the worktree filters) do
+    /// not fit that height and keep the button.
+    pub fn filled(mut self) -> Self {
+        self.filled = true;
         self
     }
 
@@ -377,33 +390,68 @@ impl<'a, M: Clone + 'a> From<MenuSelect<'a, M>> for Element<'a, M> {
         let panel = super::menu_panel(capped, Length::Fill, r, true, spacing::XS);
         let menu = animated_menu(panel, list_open, r);
 
-        // The trigger: the shared Material 3 trigger `Select` draws (feature 1792, FR-001, FR-009),
-        // its value line the fixed part whole and the title in what is left. The trigger paints; the
-        // bare button around it presses, takes the keyboard and ripples.
-        let ink = if s.disabled {
-            micold_core::tokens::over(r.on_surface, f64::from(state::DISABLED_CONTENT), r.surface)
+        let trigger: Element<'a, M> = if s.filled {
+            // The trigger: the shared Material 3 trigger `Select` draws (feature 1792, FR-001, FR-009),
+            // its value line the fixed part whole and the title in what is left. The trigger paints; the
+            // bare button around it presses, takes the keyboard and ripples.
+            let ink = if s.disabled {
+                micold_core::tokens::over(
+                    r.on_surface,
+                    f64::from(state::DISABLED_CONTENT),
+                    r.surface,
+                )
+            } else {
+                r.on_surface
+            };
+            let elastic: Element<'a, M> = match s.title {
+                Some(title) => {
+                    Ellipsized::at_role_spaced(title.into_owned(), TypeRole::Body, ink).into()
+                }
+                None => Space::new().width(Length::Fill).into(),
+            };
+            let value = row![Text::new(s.fixed, TypeRole::Body, r).tint(ink), elastic]
+                .spacing(spacing::XS)
+                .align_y(alignment::Vertical::Center)
+                .width(Length::Fill);
+            let face = SelectTrigger::new(value, r)
+                .open(s.open)
+                .populated(true)
+                .pressable(false)
+                .disabled(s.disabled);
+            let bare = super::Button::with_content(face, ButtonVariant::Text, r)
+                .bare(shape::EXTRA_SMALL)
+                .width(s.width)
+                .on_press_maybe((!s.disabled).then_some(s.on_toggle));
+            bare.into()
         } else {
-            r.on_surface
-        };
-        let elastic: Element<'a, M> = match s.title {
-            Some(title) => {
-                Ellipsized::at_role_spaced(title.into_owned(), TypeRole::Body, ink).into()
-            }
-            None => Space::new().width(Length::Fill).into(),
-        };
-        let value = row![Text::new(s.fixed, TypeRole::Body, r).tint(ink), elastic]
+            // The trigger: the fixed part whole, the title in what is left, the chevron at the end.
+            let elastic: Element<'a, M> = match s.title {
+                Some(title) => {
+                    Ellipsized::at_role_spaced(title.into_owned(), TypeRole::Body, r.on_surface)
+                        .into()
+                }
+                None => Space::new().width(Length::Fill).into(),
+            };
+            // Open, the chevron points up (FR-016): `keyboard_arrow_up` is the same glyph rotated.
+            let chevron = if s.open {
+                Icon::MoveUp
+            } else {
+                Icon::SelectChevron
+            };
+            let label = row![
+                Text::new(s.fixed, TypeRole::Body, r).tint(r.on_surface),
+                elastic,
+                Glyph::new(chevron, TypeRole::Action, r).tint(r.on_surface_variant),
+            ]
             .spacing(spacing::XS)
             .align_y(alignment::Vertical::Center)
             .width(Length::Fill);
-        let face = SelectTrigger::new(value, r)
-            .open(s.open)
-            .populated(true)
-            .pressable(false)
-            .disabled(s.disabled);
-        let trigger = super::Button::with_content(face, ButtonVariant::Text, r)
-            .bare(shape::EXTRA_SMALL)
-            .width(s.width)
-            .on_press_maybe((!s.disabled).then_some(s.on_toggle));
+            let button = super::Button::with_content(label, ButtonVariant::Outlined, r)
+                .selector(s.open)
+                .width(s.width)
+                .on_press_maybe((!s.disabled).then_some(s.on_toggle));
+            button.into()
+        };
 
         let mut behaviour = Behaviour::new(trigger, menu, list_open, GAP)
             .exit(EXIT)

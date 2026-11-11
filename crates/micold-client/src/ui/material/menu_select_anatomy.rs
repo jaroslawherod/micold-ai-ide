@@ -40,6 +40,7 @@ fn selector_over(
         roles(),
     )
     .title(Some(title.to_string()))
+    .filled()
     .width(width);
     if disabled {
         menu.disabled("Why it is off").into()

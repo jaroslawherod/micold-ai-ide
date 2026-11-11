@@ -80,6 +80,7 @@ pub fn seams<'a>(
         roles,
     )
     .title(Some(mode.label()))
+    .filled()
     .tooltip(format!("{MODE_LABEL}: {}", mode.label()))
     .keyboard(highlighted, MODE_CHOICES.len(), highlighted.is_some())
     .on_move(move |direction| {
