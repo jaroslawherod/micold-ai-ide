@@ -21,6 +21,19 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 fn main() {
+    // `orchestrator`: the registry mode (#1724). It hosts no session, so it takes no singleton,
+    // settings or log set-up from the daemon below. Anything else is the daemon, unchanged.
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    match micold_daemon::orchestrator::parse_mode(&args) {
+        micold_daemon::orchestrator::Mode::Orchestrator => {
+            if let Err(e) = micold_daemon::orchestrator::main() {
+                eprintln!("micold-daemon: orchestrator: {e}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        micold_daemon::orchestrator::Mode::Daemon => {}
+    }
     // `status-line <relay-file>`: Claude Code's status-line command for a session the app started
     // (feature 490, contract S2). Before the runtime, the log and the singleton: the relay is a
     // short-lived child of Claude Code, not a daemon, and must stay silent.

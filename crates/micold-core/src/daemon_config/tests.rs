@@ -1448,3 +1448,12 @@ fn orchestrator_files_owner_only_files_pass() {
     let text = host(&orch_files(dir.path(), 0o600));
     assert!(check_files(&text, ORIGIN, &ok(&text)).is_empty());
 }
+
+#[test]
+fn kind_serializes_as_the_word_it_parses_from() {
+    for kind in [Kind::Host, Kind::Ssh, Kind::Container, Kind::Kubernetes] {
+        let json = serde_json::to_string(&kind).unwrap();
+        assert_eq!(json, format!("\"{}\"", kind.as_str()));
+        assert_eq!(serde_json::from_str::<Kind>(&json).unwrap(), kind);
+    }
+}

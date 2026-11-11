@@ -213,6 +213,35 @@ impl ProjectJiraChange<'_> {
     }
 }
 
+/// A [`Settings`] projected to the wire. Free so the orchestrator, which holds no catalog, can
+/// send the default settings in its `Welcome`.
+pub fn wire_settings(settings: &Settings) -> DaemonSettings {
+    DaemonSettings {
+        scrollback_lines: settings.scrollback_lines,
+        env_include_enabled: settings.env_include_enabled,
+        env_include_script_path: settings.env_include_script_path.clone(),
+        env_include_timeout_secs: settings.env_include_timeout_secs,
+        default_ai_cli: settings.default_ai_cli,
+        default_prompt_template: settings.default_prompt_template.clone(),
+        pi_activity_component: settings.pi_activity_component,
+        save_terminal_history: settings.save_terminal_history,
+        tool_server_enabled: settings.tool_server_enabled,
+        cross_session_access: settings.cross_session_access,
+        pr_status_enabled: settings.pr_status_enabled,
+        worktree_guard_enabled: settings.worktree_guard_enabled,
+        jira_enabled: settings.jira_enabled,
+        jira_connections: settings.jira_connections.clone(),
+        github_issues_enabled: settings.github_issues_enabled,
+        jira_base_urls: settings.jira_base_urls.clone(),
+        desktop_notifications: settings.desktop_notifications,
+        notification_kinds: settings.notification_kinds,
+        long_task_threshold_secs: settings.long_task_threshold_secs,
+        diff_layout: settings.diff_layout,
+        plan_usage_enabled: settings.plan_usage_enabled,
+        plan_usage_warn_percent: settings.plan_usage_warn_percent,
+    }
+}
+
 impl Catalog {
     /// Set the id every projected row carries (#1723).
     pub fn set_daemon_id(&mut self, daemon: WireDaemonId) {
@@ -362,30 +391,7 @@ impl Catalog {
 
     /// The current settings projected to the wire (FR-012a, FR-012b).
     pub fn settings_wire(&self) -> DaemonSettings {
-        DaemonSettings {
-            scrollback_lines: self.settings.scrollback_lines,
-            env_include_enabled: self.settings.env_include_enabled,
-            env_include_script_path: self.settings.env_include_script_path.clone(),
-            env_include_timeout_secs: self.settings.env_include_timeout_secs,
-            default_ai_cli: self.settings.default_ai_cli,
-            default_prompt_template: self.settings.default_prompt_template.clone(),
-            pi_activity_component: self.settings.pi_activity_component,
-            save_terminal_history: self.settings.save_terminal_history,
-            tool_server_enabled: self.settings.tool_server_enabled,
-            cross_session_access: self.settings.cross_session_access,
-            pr_status_enabled: self.settings.pr_status_enabled,
-            worktree_guard_enabled: self.settings.worktree_guard_enabled,
-            jira_enabled: self.settings.jira_enabled,
-            jira_connections: self.settings.jira_connections.clone(),
-            github_issues_enabled: self.settings.github_issues_enabled,
-            jira_base_urls: self.settings.jira_base_urls.clone(),
-            desktop_notifications: self.settings.desktop_notifications,
-            notification_kinds: self.settings.notification_kinds,
-            long_task_threshold_secs: self.settings.long_task_threshold_secs,
-            diff_layout: self.settings.diff_layout,
-            plan_usage_enabled: self.settings.plan_usage_enabled,
-            plan_usage_warn_percent: self.settings.plan_usage_warn_percent,
-        }
+        wire_settings(&self.settings)
     }
 
     /// The session summaries for one project (empty if the project is unknown).
