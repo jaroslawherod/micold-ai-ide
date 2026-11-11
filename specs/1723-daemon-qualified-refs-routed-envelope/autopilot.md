@@ -47,16 +47,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - plan round 1 (2 MAJOR, fixed in plan.md/research.md R8/contract; fixed); round 2 CLEAN (1 MINOR wording fixed): snapshot ce0b24a494d4883155b2267618bc0ebdc5e4fdb5:0dbeec202ce5bd41eef5b88e8730935b12bf1e78
 
-| Review | Round | Snapshot | Verdict |
-|---|---|---|---|
-| M1 A (code-review high) | 1 | a5e3ecbe92ecefe6042eb4216ef33aeac508537d:78438d64861b2f818d68333ba837d352d8bee242 | 8 findings, 2 fixed (daemon.id restart key + test, stale doc), 6 declined |
-| M2 A (autopilot-reviewer, correctness) | 1 | fca14197d (committed tree) | CLEAN; 1 MINOR fixed (InvalidTarget names the JSON type, not the value) |
-| M3 A (code-review high) | 1 | dff811436e3204a50436d87f225dc4e8f1e7eee4:8bfb8a2d209fab73d84f1a3ecd4c29a4fe4df55e | 8 findings: fixed protocol bump to 80, cache lock held across git, failed reads cached, bare-tag identity accepted; 4 declined (see below), git under state lock noted as follow-up |
-| M2 B (conformance, sonnet) | 1 | same | CLEAN; 3 MINOR: non-JSON routed test added; header list test and cycle-log not added |
-| M3 B (conformance, sonnet) | 1 | same | CLEAN; 1 MINOR fixed (Verify names `--test main protocol_roundtrip`); full gate green |
-| M4 A (autopilot-reviewer, high) | 1 | f12ba8cd128f7e4991b3220575fecbf2e837f027:65af9ee8b8261613467556ca09cdab5a566d0991 | CLEAN; 2 MINOR fixed (errors paragraph check, NestedEnvelope target) |
-| M4 B (conformance, sonnet) | 1 | same | CLEAN; Verify green; 3 MINOR prose fixed |
-| Close (autopilot-reviewer, sonnet) | 1 | 3b418c94523c185c28f51f67587ff55a24b36e5b:f5c42e6cf5bdbd138b51ec9bfa32857ed075d3c2 | CLEAN; 3 MINOR (quickstart gate claim, #2 wording fixed prose only; counts are from the runs recorded in this unit) |
+| Review | Round | Scope | Head | Snapshot | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| M1 A (code-review high) | 1 |  |  | a5e3ecbe92ecefe6042eb4216ef33aeac508537d:78438d64861b2f818d68333ba837d352d8bee242 | 8 findings, 2 fixed (daemon.id restart key + test, stale doc), 6 declined |
+| M2 A (autopilot-reviewer, correctness) | 1 |  |  | fca14197d (committed tree) | CLEAN; 1 MINOR fixed (InvalidTarget names the JSON type, not the value) |
+| M3 A (code-review high) | 1 |  |  | dff811436e3204a50436d87f225dc4e8f1e7eee4:8bfb8a2d209fab73d84f1a3ecd4c29a4fe4df55e | 8 findings: fixed protocol bump to 80, cache lock held across git, failed reads cached, bare-tag identity accepted; 4 declined (see below), git under state lock noted as follow-up |
+| M2 B (conformance, sonnet) | 1 |  |  | same | CLEAN; 3 MINOR: non-JSON routed test added; header list test and cycle-log not added |
+| M3 B (conformance, sonnet) | 1 |  |  | same | CLEAN; 1 MINOR fixed (Verify names `--test main protocol_roundtrip`); full gate green |
+| M4 A (autopilot-reviewer, high) | 1 |  |  | f12ba8cd128f7e4991b3220575fecbf2e837f027:65af9ee8b8261613467556ca09cdab5a566d0991 | CLEAN; 2 MINOR fixed (errors paragraph check, NestedEnvelope target) |
+| M4 B (conformance, sonnet) | 1 |  |  | same | CLEAN; Verify green; 3 MINOR prose fixed |
+| Close (autopilot-reviewer, sonnet) | 1 |  |  | 3b418c94523c185c28f51f67587ff55a24b36e5b:f5c42e6cf5bdbd138b51ec9bfa32857ed075d3c2 | CLEAN; 3 MINOR (quickstart gate claim, #2 wording fixed prose only; counts are from the runs recorded in this unit) |
+| Close (autopilot-reviewer, sonnet) | 2 | 1839 | 9134c1d6a0cefd7c454530e71247beb403fb064c | 5094462d0880bbe84b1eede1dc830e73fbc4691c:9134c1d6a0cefd7c454530e71247beb403fb064c | CLEAN - 1 MINOR (test counts not re-run by reviewer, build lock busy; code read only) |
 
 ## Declined review findings
 
