@@ -86,6 +86,14 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "window",
+        "daemons",
+        "AiCliField — `FieldId::DaemonAiCliField` names the `[[ai.cli]]` text field it focuses by \
+         the daemons feature's own field enum, so the focus tracker and the form cannot disagree \
+         about which field has focus; the type is a plain `Copy` id and no daemons state is \
+         touched (#1532, FR-013d)",
+    ),
+    (
         "header_bar",
         "session_strip",
         "session_working — the top bar's Working badge reads the same pure question the strip's \
