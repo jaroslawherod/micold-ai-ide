@@ -201,7 +201,7 @@ fn path_text(path: &Option<PathBuf>) -> String {
 }
 
 /// Which text field of one `[[ai.cli]]` entry a form field holds (#1532, FR-013d).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AiCliField {
     Version,
     Args,

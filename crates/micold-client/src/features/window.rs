@@ -241,6 +241,13 @@ pub enum FieldId {
     DaemonCredential(micold_core::sandbox::CredentialShare),
     /// Settings → Daemons: one AI CLI's checkbox in the form (feature 806).
     DaemonAiCli(micold_core::session::AiCli),
+    /// Settings → Daemons: one `[[ai.cli]]` entry's Enabled checkbox (#1532, FR-013d).
+    DaemonAiCliEnabled(micold_core::daemon_config::CliId),
+    /// Settings → Daemons: one `[[ai.cli]]` entry's text field (#1532, FR-013d).
+    DaemonAiCliField(
+        micold_core::daemon_config::CliId,
+        crate::features::daemons::AiCliField,
+    ),
     /// A tool permission request's deny-message field (feature 942), by its session: a request id
     /// is unique within one daemon only.
     PromptDenyMessage(

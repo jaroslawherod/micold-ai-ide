@@ -367,7 +367,7 @@ pub struct Ai {
 }
 
 /// An AI CLI as the file names it (snake_case); mapped to `session::AiCli` by [`CliId::ai_cli`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CliId {
     ClaudeCode,
