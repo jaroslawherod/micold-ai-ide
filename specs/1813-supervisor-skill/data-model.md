@@ -33,7 +33,7 @@ Occupying a slot: `starting`, `running`. Released (never block a later issue): `
 | `dead-no-ledger` | > Grace | `lost` (reported) |
 | `asking`, `stuck`, `blocked`, `waiting-ci`, `running` | any | `running`, reported when asking/stuck/blocked |
 | (run-status exit 2: worktree gone, or exit 3: several ledgers) | any | `lost`, the exit code in the note |
-| (row `starting`, Worktree or Session cell empty) | any | the skill looks for an existing worktree and session of the issue; found: fill the cells, `running`; none: back to `queued`, a try counted |
+| (row `starting`, Worktree or Session cell empty) | any | the skill looks for an existing worktree and session of the issue; found: fill the cells, `running`; none: back to `queued`, a try counted, 3 tries: `failed` |
 | (session id not in live list, state not `done`) | any | `lost` |
 
 ## Gate reading

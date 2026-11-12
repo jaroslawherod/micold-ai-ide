@@ -119,7 +119,7 @@ starts autopilot sessions and never runs a flow itself.
 | `supervisor.test.sh` next cases | US1 1-2, SC-001, US3 1-3, FR-004, FR-008 |
 | `supervisor.test.sh` map/ledger cases | US4 1-4, SC-002, FR-011, tries/`failed`, owner refusal, `map --exit 2/3`, `skipped` via `ledger set`, owner set after `FREE` |
 | `supervisor.test.sh` watcher cases | exits on a changed state and at the ceiling (`AUTOPILOT_WATCH_CEILING`), uses a stub `run-status.sh` through `AUTOPILOT_RUN_STATUS`, `--interval 1 --ceiling 2` |
-| `supervisor.test.sh` skill-text cases | US5: no `read_session_output`, `--json` used, supervised marker and prompt present |
+| `supervisor.test.sh` skill-text cases | US5: no `read_session_output`, `--json` used, supervised marker and prompt present, speckit-autopilot SKILL.md documents the `supervised` argument |
 | Not tested automatically | the live MCP calls (`create_worktree`, `create_session`): quickstart.md Part B, run by hand once |
 | Core / client / geometry / visual pass | not applicable: no Rust or UI change |
 
