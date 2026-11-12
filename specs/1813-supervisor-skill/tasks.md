@@ -24,7 +24,7 @@ cases live in `scripts/tests/supervisor.test.sh`, so test tasks are never `[P]` 
 - [ ] T006 [US1] Implement `supervisor.sh next` (cap and slots only; overlap is added in US3)
 - [ ] T007 [US1] Add skill-text test cases to `scripts/tests/supervisor.test.sh` (red before T008/T009): `.claude/skills/speckit-autopilot/SKILL.md` documents the trailing `supervised` argument and the literal `- **Supervised**: yes` line `supervised.sh` matches; `.claude/skills/autopilot-supervisor/SKILL.md` names the prompt `/speckit-autopilot #<n> supervised` and never names `read_session_output`
 - [ ] T008 [US1] Document the trailing `supervised` argument (writes the ledger's `- **Supervised**: yes` line) in `.claude/skills/speckit-autopilot/SKILL.md`
-- [ ] T009 [US1] Create `.claude/skills/autopilot-supervisor/SKILL.md`: *Build the queue* (list or `autopilot:queue`, sorted), *Start an issue* (`create_worktree` with `github_issue`, `create_session` prompt `/speckit-autopilot #<n> supervised`, ledger write before and after; a closed or missing issue, or one that already has a worktree or ledger, gets `ledger set <n> State skipped` with the reason in Note; a failed create counts a try), the advance loop (`next`, start, an empty queue says nothing to do, stop when no slot is occupied), finishing report
+- [ ] T009 [US1] Create `.claude/skills/autopilot-supervisor/SKILL.md`: *Build the queue* (list or `autopilot:queue`, sorted), *Start an issue* (`create_worktree` with `github_issue`, `create_session` prompt `/speckit-autopilot #<n> supervised`, ledger write before and after; a closed or missing issue, or one that already has a worktree or ledger, gets `ledger set <n> State skipped` with the reason in Note; a failed create is noted in Note; the tries counter and `failed` after 3 tries are enforced in M2, T014-T015), the advance loop (`next`, start, an empty queue says nothing to do, stop when no slot is occupied), finishing report
 - [ ] T010 [US1] Add a pointer to the supervisor skill in `.claude/skills/speckit-autopilot/README.md`
 
 ## Phase 4: User Story 2 - Resource gate before every start (P1)
@@ -67,7 +67,7 @@ Phases run in order; within a phase, tests before implementation. `supervisor.sh
 
 ## Implementation Strategy
 
-MVP is M1 (ledger, `next` under a cap, the resource gate, the skill that starts sessions; the gate is in M1 because the spec runs it before every start and M1 starts sessions unattended; M1 has 13 small tasks, under the 800 line limit). Each later milestone adds
+MVP is M1 (ledger, `next` under a cap, the resource gate, the skill that starts sessions; restart and double-start protection (US4) is M2, so M1 is a single foreground run; the gate is in M1 because the spec runs it before every start and M1 starts sessions unattended; M1 has 13 small tasks, under the 800 line limit). Each later milestone adds
 one story to the same helper and skill. Quickstart Part B (live MCP calls) is run by the close unit.
 No user-guide task: tooling only, the PR carries the `docs-not-needed` label.
 
