@@ -43,6 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B (M2) | 1 |  |  | same | CHANGES: F1/F2 cycle-log entries missing (fixed in the log; mutation run left to close unit's tdd-verify); F3/F4 MINOR to follow-ups; scoped gate green stood in for Verify |
 | A | 2 | 1844 | e76339bd8894d8f87c9dcfe227589e69ffe70ef4 | 109d5824af9fb44fdc5cc730b1bfd7fdd39de921:e76339bd8894d8f87c9dcfe227589e69ffe70ef4 | CLEAN (2 MINOR: stale remote key copies, delivery write comment says rename; follow-ups) |
 | B | 2 | 1844 | e76339bd8894d8f87c9dcfe227589e69ffe70ef4 | 109d5824af9fb44fdc5cc730b1bfd7fdd39de921:e76339bd8894d8f87c9dcfe227589e69ffe70ef4 | CLEAN (3 MINOR; Verify by CI green on head, targeted run not started) |
+| A | 3 | 1844 | 99825b74517607de40b166cbf02135ca66fc131a | 2bcfdff2dd60d54a3ffb7231b0b3cb831a170f2d:99825b74517607de40b166cbf02135ca66fc131a | CLEAN (rebase onto main: code patch-ids identical, docs conflicts kept both sides; gate green 12838 tests) |
+| B | 3 | 1844 | 99825b74517607de40b166cbf02135ca66fc131a | 2bcfdff2dd60d54a3ffb7231b0b3cb831a170f2d:99825b74517607de40b166cbf02135ca66fc131a | CLEAN (rebase onto main: code patch-ids identical, docs conflicts kept both sides; gate green 12838 tests) |
 
 ## Declined review findings
 
