@@ -5,9 +5,13 @@
 //! against fixture sessions; this file pins the public surface from outside the crate, building only
 //! a `State` and naming no other feature's types.
 
-use micold_client::app::State;
+use crate::support::covered_states::transcript_pane_insights;
+use micold_client::app::{Message, State};
+use micold_client::features::header_bar::{HeaderMenu, Msg as HeaderMsg};
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session_strip::{
-    marked_tab, marked_tab_index, member_offsets, scroll_into_view, Member, StripModel, StripTab,
+    marked_tab, marked_tab_index, member_offsets, scroll_into_view, Member, PlusMenuModel,
+    StripModel, StripTab, ANOTHER_SESSION, PLUS_MENU_NAME, TERMINAL,
 };
 use micold_core::session::{SessionId, ShellInstanceId};
 
@@ -65,4 +69,60 @@ fn a_member_scrolls_just_into_view_and_not_when_it_is_already_there() {
         None,
         "just in view after the scroll"
     );
+}
+
+#[test]
+fn the_plus_menu_offers_another_session_and_a_terminal_in_the_shown_location() {
+    let state = transcript_pane_insights();
+    let menu = PlusMenuModel::of(&state).expect("a session is shown");
+    assert_eq!(PLUS_MENU_NAME, "Add session or terminal");
+    let labels: Vec<_> = menu.items.iter().map(|item| item.label).collect();
+    assert_eq!(labels, [ANOTHER_SESSION, TERMINAL]);
+    assert_eq!(ANOTHER_SESSION, "Another session");
+    assert_eq!(TERMINAL, "Terminal");
+    let location = state.current_session_location().expect("a location");
+    assert_eq!(
+        menu.items[0].press,
+        Message::Session(SessionMsg::AdditionalRequested(location)),
+        "the session entry asks for the existing add-session choice"
+    );
+    assert_eq!(
+        menu.items[1].press,
+        Message::Session(SessionMsg::ShellInstanceOpenRequested),
+        "the terminal entry opens a terminal, every time"
+    );
+    assert_eq!(PlusMenuModel::of(&State::default()), None, "nothing shown");
+}
+
+#[test]
+fn there_is_one_plus_and_it_opens_the_menu() {
+    let state = transcript_pane_insights();
+    let model = StripModel::of(&state).expect("a strip");
+    let pluses: Vec<_> = model
+        .members
+        .iter()
+        .filter(|m| matches!(m, Member::Plus))
+        .collect();
+    assert_eq!(pluses.len(), 1, "exactly one `+`");
+    assert_eq!(
+        pluses[0].press(),
+        Message::HeaderBar(HeaderMsg::Toggled(HeaderMenu::Plus)),
+        "it opens the menu rather than adding a terminal"
+    );
+}
+
+#[test]
+fn choosing_an_entry_closes_the_plus_menu() {
+    let mut state = transcript_pane_insights();
+    for press in [
+        Message::Session(SessionMsg::ShellInstanceOpenRequested),
+        Message::Session(SessionMsg::AdditionalRequested(
+            state.current_session_location().expect("a location"),
+        )),
+    ] {
+        state.update(Message::HeaderBar(HeaderMsg::Toggled(HeaderMenu::Plus)));
+        assert_eq!(state.header_bar.menu, HeaderMenu::Plus);
+        state.update(press);
+        assert_eq!(state.header_bar.menu, HeaderMenu::None, "the menu closed");
+    }
 }

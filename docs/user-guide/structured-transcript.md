@@ -67,6 +67,11 @@ of actions for the selected worktree or session. The app menu (the other **⋮**
   Other CLIs have one view, so the control is not shown.
 - Escape, or a press outside the menu, closes it; so does selecting another worktree or session.
 
+The tab row has one **+**, named *Add session or terminal*, in place of the two add icons and the
+**Open in terminal** button that used to sit there. It opens a menu with **Another session** and
+**Terminal**; Escape or a press outside closes it. Switching a session to the terminal is **Terminal**
+in the worktree menu above.
+
 ## Status, Changes and context in the top bar
 
 With a worktree or session selected, the top bar shows, before the settings button and the app

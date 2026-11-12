@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M2 (in review)
-- **Next step**: wait for M2 CI and merge
+- **Phase**: milestone M3 (in progress)
+- **Next step**: M3 verify gates, review, PR (see Handover)
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1797 | Design | merged | ad2d932dc0b678b50e19e0b3646e8036d62c6e8a |
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
-| #1827 | M2 | in review | |
+| #1827 | M2 | merged | cb41c216e778ce87dcc7379f7852f3ffa85fa3bf |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
-| M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | in review |
+| M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
 | M3 | T017–T020 | full | Single `+` menu | | pending |
 | M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
 
@@ -55,7 +55,9 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-None.
+M3 (T017-T020) code and docs are written but UNVERIFIED and tasks.md T017-T020 are NOT yet ticked. Branch was reset to origin/main (M2 merged as #1827, cb41c216e); work is uncommitted-then-WIP-committed on top.
+Done: `PlusMenuModel`/`PlusItem`/consts in `features/session_strip.rs` (one `Member::Plus` pushed after all tabs, press = `HeaderBar(Toggled(Plus))`); `PlusMenu` surface + registry entry with mutual `displaces` against `WorktreeMenu` (`header_bar.rs`, `overlay/registry.rs`, `tests/popover_displacement.rs`); `app.rs` closes the Plus menu when `AdditionalRequested`/`ShellInstanceOpenRequested` runs; `ui/session_area.rs`: `plus_menu()` overlay (hung_from computed anchor), `new_session` icon, `switch_slot` and the cluster's `switch` removed; `ui/mod.rs` pushes `header_plus_menu` LAST (so layout gate paths that address dialogs by index do not shift); tests added in `tests/features_session_strip.rs`; `feature_registration_cost.rs` ALLOWED row session_strip->header_bar; `session_area_stability.rs` switch_slot entry dropped; `gates/session_area_fits.rs` switch-slot tests removed/rewritten (cluster is now words + restart); user guide edited (terminal-panes.md, worktrees-and-sessions.md, structured-transcript.md).
+Next: (1) `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast --test main --test popover_displacement --test feature_registration_cost --test layout_snapshot` (builds wait on other worktrees' lock; run detached, poll <170 s loops) and fix reds: expect strip gates (`strip_controls_anchor_the_trailing_edge::new_session_and_the_splits...`, `strip_controls_hold_their_size`, `strip_controls_share_a_midline`, tab_children_fit, `session_area_fits` incl. `a_long_title...`) to need the removed New-session control dropped/repointed, and `gates/*` paths for `Member::Plus`; then regenerate the fixture `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` and review its diff. (2) tick T017-T020 in tasks.md, drift note if any. (3) Review A (high) + B (sonnet), full `mise run gate`, push, PR `feat(1793): add the single + menu (#1793)`, body per tasks/pr.md, `Refs #1793`. Visual pass not run (no Xvfb). The `+` anchor is approximate (computed from sidebar width and strip offsets), confirm in review.
 
 ## Open escalation
 

@@ -1804,7 +1804,7 @@ have no such entry.
   terminal** with `/login`, which switches the same way.
 - **Open in structured view.** A Claude Code terminal session, whether it started as one or was
   switched, has **Structured** in the worktree **⋮** menu in the top bar, and **Open in structured
-  view** in the tab strip above its terminal and in its menu. The terminal's
+  view** in its menu in the sidebar. The terminal's
   Claude Code process ends and the session starts again as a structured session, resuming the same
   conversation.
 - **Work in progress is asked about.** Switching while a turn is running, a permission request
@@ -2182,8 +2182,8 @@ commands, scripts, or anything else scoped to that session's worktree without le
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
 instances as you need, side by side.
 
-- An **open a new instance** button — the "+" — sits in the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) right after the session's
-  numbered tabs, or after its own tab while it has none. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
+- The one "+" — named *Add session or terminal* — sits in the [tab strip](./terminal-panes.md#the-tab-strip-above-the-terminal) after the tabs. Press it and
+  choose **Terminal** (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
   to start another independent shell, scoped to the same session working directory as the first.
   The button is there even when no instance is open yet, so you can always add one.
 - The keyboard shortcut works from the AI tab too: it opens a new instance and marks its tab, so a

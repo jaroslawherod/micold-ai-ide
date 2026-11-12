@@ -34,8 +34,12 @@ to go back to the AI CLI. Nothing is drawn under the terminal.
   session, as its sidebar row does.
 - **Shell tabs**: the shown session's shell instances, numbered, right after its tab, with a close
   control each. Press one to show that shell.
-- **"+"**: opens another shell instance of the shown session (`Ctrl+Shift+T`, or `Cmd+Shift+T` on
-  macOS, while the terminal has focus).
+- **"+"**: the one add control, after the tabs, named *Add session or terminal*. It opens a small
+  menu: **Another session** starts another session in the shown worktree, as the sidebar's *Start
+  another session…* does, confirmation included (cancel changes nothing; confirm adds the new
+  helper's tab and shows it); **Terminal** opens another shell instance of the shown session, every
+  time you choose it (`Ctrl+Shift+T`, or `Cmd+Shift+T` on macOS, while the terminal has focus does
+  the same). Escape, or a press outside the menu, closes it and opens nothing.
 - **Status and restart**: the shown session's status (*running*, *starting…*, *idle*, *exited*,
   *failed after 3 attempts* and so on) sits after the tabs. While the shown process has stopped,
   its tab wears the stopped mark and a **restart** control appears beside the status; press it to
@@ -47,17 +51,10 @@ to go back to the AI CLI. Nothing is drawn under the terminal.
   closes the review. It carries a badge with the number of draft comments and, while you are on a
   session tab, a dot when the worktree's files changed since you last looked at the review. While
   it is shown, the status, its **restart** and the split buttons keep their place, greyed out.
-- **New session**: starts another session in the shown worktree, as the sidebar's *Start another
-  session…* does, confirmation included. Cancel changes nothing; confirm adds the new helper's tab
-  after the others and shows it.
 - **Split buttons** at the right end: split the focused pane side by side or stacked.
-- For a Claude Code terminal session in a single pane, **Open in structured view** sits in the
-  strip after the status words and before **restart**, with a note beside it when messages typed
-  for the structured view are waiting. It is hidden while the Review tab is shown. With split
-  panes each pane keeps its own row for it.
 
-When the tabs do not fit, the row scrolls with the mouse wheel rather than shrinking a tab. New
-session, the split buttons and restart stay whole at the right end; in a narrow window the waiting-messages
+When the tabs do not fit, the row scrolls with the mouse wheel rather than shrinking a tab. The
+split buttons and restart stay whole at the right end; in a narrow window the waiting-messages
 note is cut first, then the **Open in structured view** label, each with its full text on hover. A faded edge says more tabs lie beyond it, and
 it takes the accent colour when the marked tab is the one out of view.
 
