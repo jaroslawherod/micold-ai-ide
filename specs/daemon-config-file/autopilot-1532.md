@@ -101,6 +101,7 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | M4b review B | 1 | 1532 | 80711fb26b0b6dfa2d919297fa16675f56967767 | c2840539a031a8afba65b7d74a1478d205434e70:80711fb26b0b6dfa2d919297fa16675f56967767 | CLEAN — Deliverable's `[[ai.cli]]` fields/file-vs-settings.json rule confirmed present in docs (landed with M4a); scope/ownership clean; plan-drift.sh pre-existing regex limitation, not a finding |
 | M4b review A | 1 | 1846 | 1d3e4741dd066b2113a88c3a33abb4023a9754a0 | 6f0ea70f7d600a2f2f80eac620d92a14d4f9f6fc:1d3e4741dd066b2113a88c3a33abb4023a9754a0 | CLEAN |
 | M4b review B | 1 | 1846 | 1d3e4741dd066b2113a88c3a33abb4023a9754a0 | 6f0ea70f7d600a2f2f80eac620d92a14d4f9f6fc:1d3e4741dd066b2113a88c3a33abb4023a9754a0 | CLEAN |
+| A | 1 | close | 08c5c4bdc1026be4a1207c8f03f924d838e0c3fe | 46aaead04ac354d1341226453cd67e93d211cd08:08c5c4bdc1026be4a1207c8f03f924d838e0c3fe | CLEAN |
 
 M3 review A round 1 (snapshot `1c9f76ca9a426f7fee60d0a8f7e41741f1fb71a8:981a23b90055e9ef655bfc1c28ed68de9f11d1a2`): CHANGES, 2 MAJOR fixed (see Declined review findings), re-review (sonnet, snapshot `28a2f2bb7cffb5c8037edfd2329136c793bbcef2:91aea0b4f45a48d631485130d3625c7ba9ad04bc`): CLEAN, MINORs only. Review B (sonnet): CLEAN, 3 MINOR (Verify lines retargeted, D10 scope noted in tasks.md; Verify did not finish under the shared build lock, the scoped gate ran these tests green). plan-drift.sh cannot run for this multi-issue tasks.md.
 
