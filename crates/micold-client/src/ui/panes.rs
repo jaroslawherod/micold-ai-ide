@@ -109,19 +109,23 @@ pub fn terminal_status(state: &State, t: TerminalRef) -> String {
 
 /// A split button for `pane`; `None` draws it disabled (feature 1269, U15: the strip's while the
 /// Review tab is shown).
-fn split_button<'a>(pane: Option<&Pane>, axis: Axis, r: Roles) -> Element<'a, Message> {
+fn split_button<'a>(
+    pane: Option<&Pane>,
+    axis: Axis,
+    r: Roles,
+    target: Option<f32>,
+) -> Element<'a, Message> {
     let (icon, tip) = match axis {
         Axis::Vertical => (Icon::SplitVertical, "Split into side-by-side panes"),
         Axis::Horizontal => (Icon::SplitHorizontal, "Split into stacked panes"),
     };
-    Tooltip::new(
-        IconButton::new(icon, r).compact().on_press_maybe(
-            pane.map(|pane| Message::Session(SessionMsg::Pane(PaneMsg::Split(pane.id(), axis)))),
-        ),
-        tip,
-        r,
-    )
-    .into()
+    let mut button = IconButton::new(icon, r).compact().on_press_maybe(
+        pane.map(|pane| Message::Session(SessionMsg::Pane(PaneMsg::Split(pane.id(), axis)))),
+    );
+    if let Some(side) = target {
+        button = button.target(side);
+    }
+    Tooltip::new(button, tip, r).into()
 }
 
 fn close_button<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
@@ -139,19 +143,23 @@ fn close_button<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
 
 /// The two split buttons for `pane`, the pair the bottom bar and every header carry.
 pub fn split_buttons<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
-    split_pair(Some(pane), r)
+    split_pair(Some(pane), r, None)
 }
 
-/// The two split buttons, disabled: the session strip's while the Review tab is shown, so they
-/// keep their place (feature 1269, U15).
-pub fn split_buttons_disabled<'a>(r: Roles) -> Element<'a, Message> {
-    split_pair(None, r)
+/// The split buttons at the one-row header's height: the session strip's (feature 1793, FR-001),
+/// disabled when `pane` is `None`.
+pub fn split_buttons_in_row<'a>(
+    pane: Option<&Pane>,
+    side: f32,
+    r: Roles,
+) -> Element<'a, Message> {
+    split_pair(pane, r, Some(side))
 }
 
-fn split_pair<'a>(pane: Option<&Pane>, r: Roles) -> Element<'a, Message> {
+fn split_pair<'a>(pane: Option<&Pane>, r: Roles, target: Option<f32>) -> Element<'a, Message> {
     row![
-        split_button(pane, Axis::Vertical, r),
-        split_button(pane, Axis::Horizontal, r)
+        split_button(pane, Axis::Vertical, r, target),
+        split_button(pane, Axis::Horizontal, r, target)
     ]
     .spacing(spacing::XS)
     .into()

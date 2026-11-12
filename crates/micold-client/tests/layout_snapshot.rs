@@ -274,14 +274,6 @@ mod top_bar_items;
 #[path = "gates/window_regions_fit.rs"]
 mod window_regions_fit;
 
-// --- The session bar's figures stay whole inside the pane (feature 944, T037) -------------------
-
-// A structured session's pane with the meter warning, the totals, a running background task and an
-// open subagent thread: in the layout window the three figures share one row; at the smallest
-// window each is drawn whole inside the pane.
-#[path = "gates/session_bar_fits.rs"]
-mod session_bar_fits;
-
 // --- The rich transcript's table wraps in its cells (feature 940, T037) --------------------------
 
 // The recorded markdown reply in a narrow transcript: each table cell inside its column, and a long
@@ -289,13 +281,22 @@ mod session_bar_fits;
 #[path = "gates/transcript_rich_table_wraps.rs"]
 mod transcript_rich_table_wraps;
 
-// --- The session area's header fits (feature 1126, T011) ----------------------------------------
+// --- The session area's strip fits (feature 1126, T011; feature 1793) --------------------------
 
 // In every covered state that shows a session, at the smallest window beside a 300 px sidebar and
-// at the layout window, light and dark: the header's title and chips lie inside the session area
-// and overlap nothing (contract H10, FR-013).
+// at the layout window, light and dark: the strip's tab region and controls lie inside the session
+// area and overlap nothing (contract S9, FR-013).
 #[path = "gates/session_area_fits.rs"]
 mod session_area_fits;
+
+// --- The header is one 40 px row (feature 1793, T021, T029) -------------------------------------
+
+// The strip is the only row above the first event, `ROW_HEIGHT` tall, with or without a background
+// task, with the `N hidden` chip at none, a few and past a thousand, and beside many tabs.
+#[path = "gates/header_row_fits.rs"]
+mod header_row_fits;
+
+
 // Feature 1270 (T015, T041): Send review (n) holds its bounds; the drawer covers the diff without
 // moving it (SC-001, SC-002, SC-004, FR-017).
 #[path = "gates/review_bar_fixed.rs"]
