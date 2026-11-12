@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1819 | design (spec, plan, tasks) | merged | 5e90aef10191fe1b8f8801e63355c8a244a5eef0 |
 | #1823 | M1 | merged | acc28c34cd44b5d3eafac49cec605878b4007433 |
 | #1830 | M2 | merged | 8753adb2d4b25d900aa2b6558d07843712a158af |
+| #1850 | close | open | |
 
 ## Milestones
 
