@@ -7,12 +7,12 @@ use std::sync::Arc;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::orchestrator::{
-    decode_first_frame, Claim, FirstFrame, LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason,
-    MAX_PREAMBLE_FRAME,
+    decode_first_frame, Claim, FirstFrame, LinkAction, LinkAnnouncement, LinkToken, LinkVerdict,
+    RefuseReason, MAX_PREAMBLE_FRAME,
 };
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
-use micold_core::protocol::keepalive::LIVENESS_DEADLINE;
+use micold_core::protocol::keepalive::{CHECK_INTERVAL, LIVENESS_DEADLINE};
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg};
 use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::settings::Settings;
@@ -149,7 +149,11 @@ where
             .await
             .map_err(io::Error::other);
     }
-    if shared.registry().confirm(link, shared.wall_secs()).is_err() {
+    if shared
+        .registry()
+        .confirm(link, shared.now(), shared.wall_secs())
+        .is_err()
+    {
         return Ok(());
     }
     framed
@@ -162,19 +166,66 @@ where
         .await
         .map_err(io::Error::other)?;
 
-    while let Some(frame) = framed.next().await {
-        match frame.map_err(io::Error::other)? {
-            Frame::Control(ClientMsg::Goodbye) => break,
-            Frame::Control(msg) => {
-                if let Some(answer) = query::not_hosted(&msg) {
-                    framed
-                        .send(Frame::Control(answer))
-                        .await
-                        .map_err(io::Error::other)?;
+    steady(shared, framed, link).await
+}
+
+/// The steady state (contracts/link.md, step 4): every inbound frame is an answer, a timer sends
+/// `LinkPing` when the link is idle and marks the daemon `offline` when it has been silent past
+/// the deadline. After `Expired` the loop keeps reading, so a later frame brings the daemon back
+/// `online` on the same link. When the transport ends the loop lets the deadline run out first, so
+/// a drop is seen as silence and the record turns `offline` like any other.
+async fn steady<S>(
+    shared: &Shared,
+    mut framed: Framed<S, DaemonCodec>,
+    link: LinkToken,
+) -> io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let mut timer = tokio::time::interval(CHECK_INTERVAL);
+    timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut open = true;
+    let mut nonce = 0_u64;
+    loop {
+        tokio::select! {
+            frame = framed.next(), if open => {
+                let Some(frame) = frame else {
+                    open = false;
+                    continue;
+                };
+                let frame = frame.map_err(io::Error::other)?;
+                if shared.registry().answered(link, shared.now(), shared.wall_secs()).0
+                    == LinkAction::Stale
+                {
+                    return Ok(());
+                }
+                match frame {
+                    Frame::Control(ClientMsg::Goodbye) => return Ok(()),
+                    Frame::Control(msg) => {
+                        if let Some(answer) = query::not_hosted(&msg) {
+                            framed
+                                .send(Frame::Control(answer))
+                                .await
+                                .map_err(io::Error::other)?;
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+            _ = timer.tick() => {
+                let (action, _) = shared.registry().tick(link, shared.now());
+                match action {
+                    LinkAction::Stale => return Ok(()),
+                    LinkAction::Expired if !open => return Ok(()),
+                    LinkAction::SendPing if open => {
+                        nonce += 1;
+                        if framed.send(Frame::Control(DaemonMsg::LinkPing { nonce })).await.is_err() {
+                            open = false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
-    Ok(())
 }

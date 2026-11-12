@@ -2373,6 +2373,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             };
             follow_up = Task::batch([follow_up, crate::shell::setup::update(app, msg)]);
         }
+        // The orchestrator's heartbeat probe (#1724): only an orchestrator link answers it.
+        DaemonMsg::LinkPing { .. } => {}
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
@@ -4609,6 +4611,20 @@ pub(crate) mod tests {
                 "{outcome:?}: the dialog closes"
             );
         }
+    }
+
+    /// #1724 T022: the orchestrator's `LinkPing` means nothing to a client: it is ignored, nothing
+    /// is sent back and nothing panics.
+    #[test]
+    fn a_link_ping_is_ignored() {
+        let (mut app, mut rx) = app_with_attach_dialog(DiscoveryReport::default());
+        let _ = on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::LinkPing { nonce: 5 },
+        );
+        let sent = drain_sent(&mut rx);
+        assert!(sent.is_empty(), "got {sent:?}");
     }
 
     /// T039: an `AlreadyRunning` refusal means it runs elsewhere already: nothing is started.

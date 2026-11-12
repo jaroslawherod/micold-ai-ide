@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: milestone M1
-- **Next step**: full gate green, push (force-with-lease), open M1 PR, hand to orchestrator
+- **Phase**: milestone M2
+- **Next step**: scoped gate + review A/B, full gate, push, open M2 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
+| #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #… | in review |
+| M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #… | pending |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
@@ -67,7 +68,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-M1 is done and committed locally (HEAD above origin/main, tree recorded in autopilot-gate-ok for CI validation). Compiled, core 146 and daemon orchestrator 11 tests green, clippy clean, fmt fixed, reviews A and B done and recorded. Full `mise run gate` got through fmt, clippy and the whole nextest run except `ai_cli_config::configured_token_file_reaches_claude_code_as_oauth_token_without_the_expiry_line` (unrelated, failed under load, passed 3 of 3 alone); `test-scripts` not reached. NOT pushed: origin's branch holds 4 pre-rebase twins of PR 1841's commits, so the push needs `git push --force-with-lease -u origin HEAD` after `git fetch`, which the auto-mode classifier denied to this unit. Next: the caller (or a user-approved unit) force-pushes, then opens the M1 PR (title `feat(1724): orchestrator registry, daemon link and listing (#1724)`, body per pr.md: Local gate scoped only, full gate left to CI; mention the flaky test and that quickstart Part B 1, 2, 7 are covered by the dispatch, link_and_list and not_hosted tests).
+None.
 
 ## Open escalation
 

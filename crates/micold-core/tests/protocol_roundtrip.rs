@@ -481,6 +481,7 @@ pub(crate) fn sample_client_msgs() -> Vec<ClientMsg> {
             session: sid(),
         },
         ClientMsg::Ping { nonce: 0xdead_beef },
+        ClientMsg::LinkPong { nonce: 0xfeed },
         // Feature 034 M5 (FR-014): a window's answer to an agent's destructive request.
         ClientMsg::ConfirmationAnswer { id: 7, allow: true },
         ClientMsg::ConfirmationAnswer {
@@ -677,6 +678,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             by: ClientIdentity::new("other-client", ClientInstance::current()),
         },
         DaemonMsg::Pong { nonce: 5 },
+        DaemonMsg::LinkPing { nonce: 6 },
         DaemonMsg::OperationProgress {
             req: 7,
             stage: CreateStage::CreatingWorktree,
@@ -991,8 +993,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
 }
 
 #[test]
-fn the_protocol_version_is_80() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 80);
+fn the_protocol_version_is_81() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 81);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
