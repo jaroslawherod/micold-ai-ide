@@ -5,22 +5,26 @@ The user does not watch the autopilot. Write each question so they can answer it
 phone notification, hours later, with no scrollback. What may be asked:
 [../rules/escalation.md](../rules/escalation.md).
 
+0. **Supervised?** `scripts/autopilot/supervised.sh <ledger>` exits 0 and the ledger exists: send the
+   banner below and the step 3 notification, no `AskUserQuestion`, end the turn. No ledger yet or not
+   supervised: ask as below. The answer returns as `resume <answer>` (label or free text; a batch:
+   a line `<n>. <answer>` per question).
 1. **Batch.** Finish the current round, checklist or review first. Send what is left in one
    `AskUserQuestion` call with up to 4 questions. A single question goes out alone, at once. Never
    hold questions for a later round.
 2. **Recommend.** Put the recommended option first, labelled `(Recommended)`. Its description says
    why and cites a path, a measurement or a principle.
-3. **Notify.** Load `PushNotification` with `ToolSearch("select:PushNotification")`. Send
+3. **Notify.** Load `PushNotification` (`ToolSearch("select:PushNotification")`), send
    `🛑 <issue> needs a decision: <topic>`.
 4. **Restart small.** Before the `AskUserQuestion`, run
-   `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`. On `OVER`, do not call
-   `AskUserQuestion`: it blocks the session, so the user cannot `/clear` while it is open, and an
-   answer hours later re-writes your whole context to the cache. Confirm the ledger's *Open
-   escalation* holds the question with its options and your recommendation, send the banner
-   with the extra line `Cheaper: /clear, then /speckit-autopilot resume — it asks this again from
-   the ledger.`, send the notification, and end the turn. `tasks/resume.md` re-asks it.
-5. **Record.** The escalation is in the ledger's *Open escalation* before you ask (the unit wrote
-   it; the flow question at entry has no ledger yet). When the answer arrives, the unit moves it to *Decisions* as `decided by user`.
+   `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`. On `OVER`, do not call it: it blocks
+   the session (no `/clear`), and an answer hours later re-writes your whole context to the cache.
+   Confirm *Open escalation* holds the question, options and recommendation, send the banner with
+   the extra line `Cheaper: /clear, then /speckit-autopilot resume — it asks this again from the
+   ledger.`, send the notification, and end the turn. `tasks/resume.md` re-asks it.
+5. **Record.** The escalation is in *Open escalation* before you ask (the unit wrote it; the flow
+   question at entry has no ledger). Supervised, `answer.sh` records the answer; else the unit
+   moves it to *Decisions* as `decided by user`.
 
 The message text right before the `AskUserQuestion` call is exactly this banner:
 
@@ -41,9 +45,9 @@ What you need to do: <exact command or click path>, then reply "done".
 
 ## After the answer
 
+- Supervised: `answer.sh` wrote the *Decisions* rows and cleared the section; a repeat is `ignored`.
 - The unit applies the answer to the source artifact (spec.md, plan.md or tasks.md), not only the
-  ledger.
-- Continue at once. Do not ask "shall I continue?".
+  ledger. Continue at once; do not ask "shall I continue?".
 
 ## When the user asks for a category 3 action themselves
 

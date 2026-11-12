@@ -22,6 +22,13 @@ and GitHub's state for each recorded PR.
   back to a milestone unit. If a commit on `main` reverted it, escalate (category 6).
 - A non-empty *Open escalation* means the question was never answered: ask it again, then dispatch
   a fresh unit of that kind with the answer.
+- **`resume <answer>`** (a supervised run): run `scripts/autopilot/answer.sh <ledger> "<answer>"`.
+  Exit 0: dispatch the unit to apply the answer to its source artifact and continue from *Next
+  step*. Exit 2 (a batch answer misses or repeats a question number): send the message it printed,
+  end the turn. Exit 3: say `ignored: no open escalation`, change nothing.
+- **`resume` alone**, supervised, with a non-empty *Open escalation*: send its banner again and end
+  the turn (the user asked what is pending). `scripts/autopilot/run-status.sh --json` reports a run
+  as `asking` with the question.
 - **A ledger whose Issue is `none`** (a run from before every run had one): open one now
   ([issue.md](issue.md)) and pass it to the next unit, which records it.
 - **An older ledger:** **Kind** `quick` is the chore flow; **Kind** `bug` with a ledger under

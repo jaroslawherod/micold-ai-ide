@@ -61,19 +61,19 @@ description: "Task list for autopilot supervisor M1: machine-readable run status
 
 ### Tests for US2 (write first, watch them fail)
 
-- [ ] T015 [US2] In `scripts/tests/autopilot.test.sh` add failing cases for `scripts/autopilot/supervised.sh` (exit 0 with `AUTOPILOT_SUPERVISED` set, non-empty and not `0`; exit 0 with ledger `- **Supervised**: yes`; exit 1 with neither; no output) (FR-009, FR-013)
-- [ ] T016 [US2] In `scripts/tests/autopilot.test.sh` add failing cases for `scripts/autopilot/answer.sh <ledger> <answer-text>`: single answer (one *Decisions* row by `user`, `D<n>` one past the highest, section reset to `None.`, rows printed, exit 0), batched answer (one row per question), missing or repeated question number (exit 2, ledger unchanged), no open escalation (exit 3, `ignored: no open escalation`, ledger unchanged, so a second call is ignored), `|` written `\|` and newlines to spaces (FR-010, FR-011a, FR-012, SC-003, SC-004)
+- [x] T015 [US2] In `scripts/tests/autopilot.test.sh` add failing cases for `scripts/autopilot/supervised.sh` (exit 0 with `AUTOPILOT_SUPERVISED` set, non-empty and not `0`; exit 0 with ledger `- **Supervised**: yes`; exit 1 with neither; no output) (FR-009, FR-013)
+- [x] T016 [US2] In `scripts/tests/autopilot.test.sh` add failing cases for `scripts/autopilot/answer.sh <ledger> <answer-text>`: single answer (one *Decisions* row by `user`, `D<n>` one past the highest, section reset to `None.`, rows printed, exit 0), batched answer (one row per question), missing or repeated question number (exit 2, ledger unchanged), no open escalation (exit 3, `ignored: no open escalation`, ledger unchanged, so a second call is ignored), `|` written `\|` and newlines to spaces (FR-010, FR-011a, FR-012, SC-003, SC-004)
 
 ### Implementation for US2
 
-- [ ] T017 [US2] Create `scripts/autopilot/supervised.sh [<ledger>]` per `contracts/supervised-escalation.md` *Marker*; T015 goes green
-- [ ] T018 [US2] Create `scripts/autopilot/answer.sh` (the only writer of the answer rows; batch versus single set by the number of `### Q<n>` subsections); T016 goes green
+- [x] T017 [US2] Create `scripts/autopilot/supervised.sh [<ledger>]` per `contracts/supervised-escalation.md` *Marker*; T015 goes green
+- [x] T018 [US2] Create `scripts/autopilot/answer.sh` (the only writer of the answer rows; batch versus single set by the number of `### Q<n>` subsections); T016 goes green
 - [x] T019 [P] [US2] (ships in M1) Edit `.claude/skills/speckit-autopilot/templates/autopilot-ledger.md`: add the `- **Supervised**:` header line after **Effort** and the structured *Open escalation* format (Category, Question, Options, Recommended, Evidence, Banner; `### Q<n>` batch)
-- [ ] T020 [P] [US2] Edit `.claude/skills/speckit-autopilot/tasks/ask.md`: supervised branch (print banner and notification, no `AskUserQuestion`, end the turn; no ledger yet keeps the interactive question, FR-011c), the `resume <answer>` message format and *After the answer* (FR-010, FR-011, FR-011a; unsupervised path untouched, FR-013)
-- [ ] T021 [P] [US2] Edit `.claude/skills/speckit-autopilot/tasks/resume.md`: `resume <answer>` calls `answer.sh` then continues from *Next step*; `resume` alone with a non-empty escalation re-prints the banner and ends the turn, supervised only (FR-011b); pointer to `run-status.sh`
-- [ ] T022 [P] [US2] Edit `.claude/skills/speckit-autopilot/rules/unit.md` and `.claude/skills/speckit-autopilot/rules/escalation.md`: a unit writes the structured *Open escalation* (FR-010, FR-011c)
-- [ ] T023 [P] [US2] Edit `.claude/skills/speckit-autopilot/tests/pressure-scenarios.md`: supervised-escalation scenario (orchestrator must not call `AskUserQuestion`, a repeated answer is not asked again) (SC-003, SC-004)
-- [ ] T024 [P] [US2] Edit `.claude/skills/speckit-autopilot/README.md`: list `run-status.sh`, `supervised.sh` and `answer.sh`
+- [x] T020 [P] [US2] Edit `.claude/skills/speckit-autopilot/tasks/ask.md`: supervised branch (print banner and notification, no `AskUserQuestion`, end the turn; no ledger yet keeps the interactive question, FR-011c), the `resume <answer>` message format and *After the answer* (FR-010, FR-011, FR-011a; unsupervised path untouched, FR-013)
+- [x] T021 [P] [US2] Edit `.claude/skills/speckit-autopilot/tasks/resume.md`: `resume <answer>` calls `answer.sh` then continues from *Next step*; `resume` alone with a non-empty escalation re-prints the banner and ends the turn, supervised only (FR-011b); pointer to `run-status.sh`
+- [x] T022 [P] [US2] Edit `.claude/skills/speckit-autopilot/rules/unit.md` and `.claude/skills/speckit-autopilot/rules/escalation.md`: a unit writes the structured *Open escalation* (FR-010, FR-011c)
+- [x] T023 [P] [US2] Edit `.claude/skills/speckit-autopilot/tests/pressure-scenarios.md`: supervised-escalation scenario (orchestrator must not call `AskUserQuestion`, a repeated answer is not asked again) (SC-003, SC-004)
+- [x] T024 [P] [US2] Edit `.claude/skills/speckit-autopilot/README.md`: list `run-status.sh`, `supervised.sh` and `answer.sh`
 
 **Checkpoint**: supervised escalation works end to end in the fixture; `mise run gate` green.
 

@@ -850,6 +850,72 @@ check "plan-drift: a note naming a longer path does not record" 1 'UNPLANNED src
 printf 'src/stray.rs — needed by the icon\ntests/icons.rs — covered in src/icons.rs\n' > specs/001-x/drift-M1.md
 check "plan-drift: recorded reasons are accepted" 0 '^no plan drift for M1$' "$P" specs/001-x M1 origin/main
 
+# supervised.sh: the marker, from the environment or the ledger.
+d="$(new_repo)"; cd "$d/wt"
+SV="$S/supervised.sh"; ledger "$d/plain.md" wt milestones
+cp "$d/plain.md" "$d/sup.md"; sed -i 's/^- \*\*Phase\*\*.*/&\n- **Supervised**: yes/' "$d/sup.md"
+unset AUTOPILOT_SUPERVISED
+check "supervised: exit 1 with neither marker" 1 '^$' "$SV" "$d/plain.md"
+check "supervised: exit 1 without a ledger" 1 '^$' "$SV"
+check "supervised: the ledger field" 0 '^$' "$SV" "$d/sup.md"
+check "supervised: the variable" 0 '^$' env AUTOPILOT_SUPERVISED=1 "$SV" "$d/plain.md"
+check "supervised: the variable without a ledger" 0 '^$' env AUTOPILOT_SUPERVISED=yes "$SV"
+check "supervised: 0 does not mark it" 1 '^$' env AUTOPILOT_SUPERVISED=0 "$SV" "$d/plain.md"
+check "supervised: empty does not mark it" 1 '^$' env AUTOPILOT_SUPERVISED= "$SV" "$d/plain.md"
+
+# answer.sh: the only writer of the answer rows.
+A="$S/answer.sh"
+esc_ledger() {  # esc_ledger <file> <escalation-text>; two earlier decisions, so the next is D3
+  ledger "$1" wt milestones
+  sed -i '/^| D1 |/c\| # | Phase | Question | Answer | By | Evidence |\n|---|---|---|---|---|---|\n| D1 | spec | a | b | agent-resolved | c |\n| D2 | plan | a | b | user | c |' "$1"
+  sed -i '/^## Open escalation/,$d' "$1"
+  { echo "## Open escalation"; echo; printf '%s\n' "$2"; echo; echo "## Follow-ups not done"; echo; echo "None."; } >> "$1"
+}
+ONE='- **Category**: 1 Product or scope decision
+- **Question**: Which store?
+- **Options**:
+  1. SQLite (Recommended) — local
+  2. Postgres — remote
+- **Recommended**: SQLite — simple
+- **Evidence**: spec.md
+- **Banner**: sent 2026-11-10'
+BATCH='- **Category**: 1 Product or scope decision
+- **Banner**: sent 2026-11-10
+### Q1
+- **Question**: Which store?
+- **Recommended**: SQLite — simple
+### Q2
+- **Question**: Which port?
+- **Recommended**: 80 — usual'
+l="$d/one.md"; esc_ledger "$l" "$ONE"
+check "answer: a single answer exits 0 and prints the row" 0 '^\| D3 \| milestones \| Which store\? \| Postgres \| user \|' "$A" "$l" "Postgres"
+check "answer: the row is in Decisions, after D2" 0 '^D3 after D2$' bash -c "grep -n '^| D' '$l' | awk -F: 'NR==2{p=\$1} NR==3{print (\$1==p+1) ? \"D3 after D2\" : \"no\"}'"
+check "answer: None. follows the heading" 0 '^None\.$' bash -c "sed -n '/^## Open escalation/,/^## Follow/p' '$l' | grep -v '^\$' | sed -n 2p"
+check "answer: the section after it survives" 0 '^## Follow-ups not done$' bash -c "grep '^## Follow' '$l'"
+before="$(cat "$l")"
+check "answer: a second call is ignored" 3 '^ignored: no open escalation$' "$A" "$l" "Postgres"
+check "answer: the ignored call leaves the ledger alone" 0 '^same$' bash -c "[ \"\$(cat '$l')\" = '$(sed "s/'/'\\\\''/g" <<<"$before")' ] && echo same"
+l="$d/pipe.md"; esc_ledger "$l" "$ONE"
+check "answer: a pipe is escaped and newlines become spaces" 0 '\| a\\\|b c \| user \|' "$A" "$l" $'a|b\nc'
+l="$d/free.md"; esc_ledger "$l" "Which flow fits?"
+check "answer: a free-text escalation uses its first line" 0 '\| Which flow fits\? \| bug \|' "$A" "$l" bug
+l="$d/none.md"; esc_ledger "$l" "None."
+check "answer: no open escalation exits 3" 3 '^ignored: no open escalation$' "$A" "$l" "x"
+l="$d/batch.md"; esc_ledger "$l" "$BATCH"
+check "answer: a batch gets one row per question" 0 '^\| D3 .*Which store\? \| SQLite \| user .*' "$A" "$l" $'1. SQLite\n2: 8080'
+check "answer: the second question's row" 0 '^\| D4 \| milestones \| Which port\? \| 8080 \| user \|' bash -c "grep '^| D4 ' '$l'"
+l="$d/batch2.md"; esc_ledger "$l" "$BATCH"; before="$(cat "$l")"
+check "answer: a missing question number exits 2" 2 'missing answer to question 2' "$A" "$l" "1. SQLite"
+check "answer: a repeated number exits 2" 2 'question 1 answered twice' "$A" "$l" $'1. a\n1. b\n2. c'
+check "answer: a refused batch leaves the ledger alone" 0 '^same$' bash -c "[ \"\$(cat '$l')\" = '$(sed "s/'/'\\\\''/g" <<<"$before")' ] && echo same"
+check "answer: a refused batch keeps the escalation open" 0 'Which port' bash -c "sed -n '/^## Open escalation/,/^## Follow/p' '$l'"
+check "answer: a wrapped batch answer joins its lines" 0 'SQLite and more' bash -c "'$A' '$l' \$'1. SQLite\nand more\n2. 80' | head -1"
+l="$d/prose.md"; ledger "$l" wt milestones; sed -i 's/^| D1 |.*/Prose decisions only./' "$l"
+sed -i '/^## Open escalation/,$d' "$l"; printf '## Open escalation\n\n%s\n' "$ONE" >> "$l"
+check "answer: a prose Decisions section gets a table" 0 '^\| D1 \|' "$A" "$l" "SQLite"
+check "answer: that table has its header" 0 '^\| # \| Phase ' bash -c "grep '^| #' '$l'"
+check "answer: a blank line ends that table" 0 '^$' bash -c "grep -B1 '^## Open escalation' '$l' | head -1"
+
 # Staged review flow: the three skill files describe it (FR-004..007, FR-010, FR-011, FR-013 wording).
 R="$ROOT/.claude/agents/autopilot-reviewer.md"
 RV="$ROOT/.claude/skills/speckit-autopilot/tasks/review.md"

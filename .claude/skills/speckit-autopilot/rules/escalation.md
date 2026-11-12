@@ -25,3 +25,10 @@ category 5 or 6, labelled `blocked by work outside my flow`. Do not fix it.
 - visual verification (use the `visual-pass` skill)
 - equivalent implementations, naming, file layout, test count
 - a clarify question the repo answers
+
+## Writing it down
+
+Every escalation goes into the ledger's *Open escalation* in full, in the format of
+`templates/autopilot-ledger.md`: category, question, every option, the recommendation and the
+evidence. A supervised run ([../tasks/ask.md](../tasks/ask.md)) ends its turn on it, and
+`run-status.sh` reads it back, so a field left out is a question the supervisor cannot show.

@@ -25,11 +25,11 @@ message. Read any other file only when a task sends you there.
 ## Escalating
 
 You have no `AskUserQuestion`. Escalate only for the six categories in
-[escalation.md](escalation.md). Write the escalation into the ledger's *Open escalation*, then
-return `STATUS: ESCALATE` with the questions in the banner format of
-[../tasks/ask.md](../tasks/ask.md), each with a `(Recommended)` option and its evidence. The
-orchestrator asks and continues you with the answers. An escalation before the ledger exists goes
-only in the return.
+[escalation.md](escalation.md). Write the complete escalation into the ledger's *Open escalation*
+(format: escalation.md, *Writing it down*), then return `STATUS: ESCALATE` with the questions in the
+banner format of [../tasks/ask.md](../tasks/ask.md), each with a `(Recommended)` option and its
+evidence. The orchestrator asks and continues you with the answers. An escalation before the ledger
+exists goes only in the return.
 
 ## Wrong flow
 

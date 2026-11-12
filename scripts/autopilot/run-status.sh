@@ -98,8 +98,7 @@ else
   flow="$(sed -n 's/^- \*\*Kind\*\*: //p' "$ledger" | head -1)"; [ "$flow" = quick ] && flow=chore
   ledger_json="$(jq -n --arg l "$ledger" '$l')"
   supervised=false
-  { [ -n "${AUTOPILOT_SUPERVISED:-}" ] && [ "${AUTOPILOT_SUPERVISED}" != 0 ]; } && supervised=true
-  grep -qxF -- '- **Supervised**: yes' "$ledger" && supervised=true
+  "$here/supervised.sh" "$ledger" && supervised=true
 
   # GitHub is the only source of a PR's state; the ledger supplies the numbers.
   open_prs=""

@@ -137,3 +137,16 @@ away until tomorrow. `context.py` printed `CONTEXT 112000 OVER 80000`.
 - B) Send the banner with the `Cheaper: /clear, then /speckit-autopilot resume` line and the
   notification, do not call `AskUserQuestion`, and end the turn.
 - C) Call `AskUserQuestion` and also tell the user in one line that `/clear` would be cheaper.
+
+## S12 a supervised run escalates (orchestrator, opus) — pass: B
+
+You are running `/speckit-autopilot #730` and `scripts/autopilot/supervised.sh <ledger>` exits 0. A
+unit returned `ESCALATE`: category 1, two options, one recommended; its *Open escalation* is
+complete. The user watches many runs through a supervisor. Later the message `resume SQLite`
+arrives, and then the same message arrives again.
+
+- A) Call `AskUserQuestion` so the answer is certain, then continue.
+- B) Send the banner and the notification, call no `AskUserQuestion`, end the turn. On `resume
+  SQLite` run `answer.sh`, continue from *Next step*; on the repeat `answer.sh` prints `ignored`
+  and nothing is asked or recorded again.
+- C) End the turn without the banner: the ledger already holds the question.
