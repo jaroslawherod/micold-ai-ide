@@ -8,3 +8,7 @@
 - tests/settings_sections.rs: `show_raw_events` is chosen by the strip chip; tests/terminal_size_reporting.rs, terminal_tabs.rs, transcript_insights_view.rs, layout_text_overflow.rs follow the one-row header.
 - docs/user-guide/structured-transcript.md, worktrees-and-sessions.md: the one-row header, chip, dot, narrow windows.
 - FR-011 (tabs shrink before they scroll) is NOT done: tabs keep their fixed width and the strip scrolls; the `+` and chip stay reachable. Recorded as a follow-up in the ledger.
+- crates/micold-client/src/showcase/sections/surfaces.rs: drops the session-bar poses (the bar is gone, T025).
+- crates/micold-client/src/ui/material/mod.rs: drops the `card_palette` re-export its only user (the removed title row) no longer needs.
+- crates/micold-client/src/ui/terminal.rs: drops the transcript_body `switch_button`; "Open in terminal" stays reachable through header_bar's ViewSwitch (`switch_entries`), so FR-012 holds.
+- tests/feature_registration_cost.rs: allows the strip's `structured_transcript` message (chip); tests/gates/composer_fits.rs renames `header_height` to `strip_height`; tests/transcript_entry_view.rs and transcript_selection_parity.rs follow the removed session bar's arguments.
