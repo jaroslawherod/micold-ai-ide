@@ -111,9 +111,8 @@ impl MeterText {
         if totals.turns_counted > 0 {
             lines.push(format!("Turns: {}", format_turns(totals.turns_counted)));
         }
-        let cli_running = state
-            .workspace
-            .find_session(session.expect("insights imply a session"))
+        let cli_running = session
+            .and_then(|id| state.workspace.find_session(id))
             .is_some_and(|(_, s)| s.lifecycle == SessionLifecycle::Running);
         lines.extend(running_text(insights.running_background(cli_running)));
         if warning {
