@@ -1,15 +1,12 @@
-//! The session area's context header and tab strip fit (feature 1126, T011, T028, contracts H10,
-//! S9, A1, A2, FR-013, SC-004, SC-005).
+//! The session area's one-row tab strip fits (feature 1126, T011, T028, contracts S9, A1, A2,
+//! FR-013, SC-004, SC-005; feature 1793, FR-001: the context header is gone).
 //!
 //! Every covered state that shows a session is laid out at the smallest window the application
-//! allows beside a 300 px sidebar, and at the layout window, in light and in dark: the header's
-//! title and each of its chips, and the strip's scrolling region, status and split
-//! buttons, lie inside the session area and inside the window, and none of them overlaps another.
-//! The strip states hold 1, 6 and 12 tabs. Top to bottom the area is header, strip, pane area, and
-//! nothing is laid out under the pane area (A1); with two panes the header and the strip are each
-//! laid out once, above the pane area (A2). A stressed variant shows the longest worktree name with
-//! a pull request, so the title and the chips have to give way with an ellipsis rather than push
-//! each other out.
+//! allows beside a 300 px sidebar, and at the layout window, in light and in dark: the strip's
+//! scrolling region and controls lie inside the session area and inside the window, and none of
+//! them overlaps another. The strip states hold 1, 6 and 12 tabs. Top to bottom the area is strip,
+//! pane area, and nothing is laid out under the pane area (A1); with two panes the strip is laid
+//! out once, above the pane area (A2). `header_row_fits.rs` holds the strip's 40 px height.
 //!
 //! Compiled into the `layout_snapshot` binary beside the other geometry gates.
 
@@ -26,8 +23,8 @@ use micold_core::theme::ThemePreference;
 /// Half a pixel, matching every geometry gate beside this one.
 const TOLERANCE: f32 = 0.5;
 
-/// The session area: the parent of the anchor `session.header` (`SESSION_HEADER`).
-const SESSION_AREA: &[usize] = &[0, 0, 1, 1];
+/// The session area: the parent of the strip and the pane area.
+pub(crate) const SESSION_AREA: &[usize] = &[0, 0, 1, 1];
 
 /// The covered states that show a session, and so the header.
 const SESSION_STATES: &[&str] = &[
@@ -41,26 +38,10 @@ const SESSION_STATES: &[&str] = &[
     "session-area-review-hidden",
 ];
 
-/// A branch's worth of counts: more than `Changes` alone, within H10's three-digit bound.
-const A_BRANCHS_COUNTS: micold_core::context_header::ChangeSummary =
-    micold_core::context_header::ChangeSummary {
-        files: 12,
-        added: 345,
-        removed: 67,
-    };
-
-/// The widest counts a branch ever shows: five-digit files and six-digit lines (M3 review B F2).
-const THE_WIDEST_COUNTS: micold_core::context_header::ChangeSummary =
-    micold_core::context_header::ChangeSummary {
-        files: 12_345,
-        added: 987_654,
-        removed: 876_543,
-    };
-
 /// The sidebar width H10 measures the smallest window beside.
-const SIDEBAR: u16 = 300;
+pub(crate) const SIDEBAR: u16 = 300;
 
-fn rect(record: &LayoutRecord) -> Rectangle {
+pub(crate) fn rect(record: &LayoutRecord) -> Rectangle {
     Rectangle {
         x: record.x,
         y: record.y,
@@ -75,7 +56,7 @@ fn records_at(state: State, window: Size) -> Vec<LayoutRecord> {
 }
 
 /// The base tree of `under` laid out in a window `window` large.
-fn records_of(under: StateUnderTest, window: Size) -> Vec<LayoutRecord> {
+pub(crate) fn records_of(under: StateUnderTest, window: Size) -> Vec<LayoutRecord> {
     let renderer = lay::renderer();
     let mut element = lay::view_of(&under);
     let mut tree = Tree::new(element.as_widget());
@@ -86,81 +67,56 @@ fn records_of(under: StateUnderTest, window: Size) -> Vec<LayoutRecord> {
     lay::walk(Layout::new(&node), lay::Layer::Base)
 }
 
-/// The context header's height in `state` at the layout window: chrome above the pane area that
-/// other gates measuring the pane leave out of the pane's room.
-pub(crate) fn header_height(state: State) -> f32 {
+/// The strip's height in `state` at the layout window: chrome above the pane area that other gates
+/// measuring the pane leave out of the pane's room.
+pub(crate) fn strip_height(state: State) -> f32 {
     let records = records_at(state, WINDOW);
-    let header = [SESSION_AREA, &[0]].concat();
-    at(&records, &header)
-        .expect("the session area draws its header")
+    at(&records, &[SESSION_AREA, &[0]].concat())
+        .expect("the session area draws its strip")
         .height
 }
 
 /// The record at `path`.
-fn at<'r>(records: &'r [LayoutRecord], path: &[usize]) -> Option<&'r LayoutRecord> {
+pub(crate) fn at<'r>(records: &'r [LayoutRecord], path: &[usize]) -> Option<&'r LayoutRecord> {
     records.iter().find(|r| r.path == path)
 }
 
-/// The header's Changes button: the header line's third child (H9, feature 1463).
-const CHANGES_BUTTON: &[usize] = &[0, 0, 2];
-
-/// The header's title and chips in `records`: the title, each chip of the chips row, then the
-/// Changes button.
-pub(crate) fn header_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
-    let header = [SESSION_AREA, &[0]].concat();
-    let title = [header.as_slice(), &[0, 0]].concat();
-    let chips = [header.as_slice(), &[0, 1]].concat();
-    let button = [SESSION_AREA, CHANGES_BUTTON].concat();
-    let mut parts = vec![
-        (
-            "title".to_string(),
-            rect(at(records, &title).expect("the header draws its title")),
-        ),
-        (
-            "Changes button".to_string(),
-            rect(at(records, &button).expect("the header draws its Changes button")),
-        ),
-    ];
-    parts.extend(
-        records
-            .iter()
-            .filter(|r| r.path.len() == chips.len() + 1 && r.path.starts_with(&chips))
-            .map(|r| (format!("chip {}", r.path[chips.len()]), rect(r))),
-    );
-    parts
-}
-
-fn inside(part: &Rectangle, host: &Rectangle) -> bool {
+pub(crate) fn inside(part: &Rectangle, host: &Rectangle) -> bool {
     part.x >= host.x - TOLERANCE
         && part.y >= host.y - TOLERANCE
         && part.x + part.width <= host.x + host.width + TOLERANCE
         && part.y + part.height <= host.y + host.height + TOLERANCE
 }
 
-fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
+pub(crate) fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
     a.x + TOLERANCE < b.x + b.width
         && b.x + TOLERANCE < a.x + a.width
         && a.y + TOLERANCE < b.y + b.height
         && b.y + TOLERANCE < a.y + a.height
 }
 
-/// The strip's own row's children: its scrolling region, status cluster and splits
-/// (S7). The members inside the region scroll, so they are not parts that must fit the window.
+/// The strip's own row's children: its scrolling region and each control after it (restart, the
+/// splits, the `N hidden` chip; S7). The members inside the region scroll, so they are not parts
+/// that must fit the window.
 pub(crate) fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
-    let row = [SESSION_AREA, &[1, 0]].concat();
+    let row = [SESSION_AREA, &[0, 0]].concat();
     let controls = [row.as_slice(), &[1]].concat();
     let mut parts: Vec<(String, Rectangle)> = Vec::new();
-    let named = |path: Vec<usize>, name: &str| {
-        at(records, &path).map(|r| (format!("strip {name}"), rect(r)))
-    };
-    parts.extend(named([row.as_slice(), &[0]].concat(), "tab region"));
-    parts.extend(named([controls.as_slice(), &[0]].concat(), "status"));
-    parts.extend(named([controls.as_slice(), &[1]].concat(), "split buttons"));
+    parts.extend(
+        at(records, &[row.as_slice(), &[0]].concat())
+            .map(|r| ("strip tab region".to_string(), rect(r))),
+    );
+    parts.extend(
+        children_of(records, &controls)
+            .into_iter()
+            .enumerate()
+            .map(|(i, r)| (format!("strip control {i}"), rect(r))),
+    );
     parts
 }
 
-/// A1, A2: the session area holds the header, the strip and the pane area, in that order, each
-/// once, and nothing under the pane area.
+/// A1, A2: the session area holds the strip and the pane area, in that order, each once, and
+/// nothing under the pane area.
 pub(crate) fn assert_order(name: &str, records: &[LayoutRecord], area: &Rectangle) {
     let children: Vec<&LayoutRecord> = records
         .iter()
@@ -168,14 +124,13 @@ pub(crate) fn assert_order(name: &str, records: &[LayoutRecord], area: &Rectangl
         .collect();
     assert_eq!(
         children.len(),
-        3,
-        "{name}: the session area is header, strip and pane area, each laid out once (A1, A2)"
+        2,
+        "{name}: the session area is strip and pane area, each laid out once (A1, A2)"
     );
-    let [header, strip, panes] = [children[0], children[1], children[2]].map(rect);
+    let [strip, panes] = [children[0], children[1]].map(rect);
     assert!(
-        header.y + header.height <= strip.y + TOLERANCE
-            && strip.y + strip.height <= panes.y + TOLERANCE,
-        "{name}: header {header:?}, strip {strip:?} and pane area {panes:?} are not top to bottom"
+        strip.y + strip.height <= panes.y + TOLERANCE,
+        "{name}: strip {strip:?} and pane area {panes:?} are not top to bottom"
     );
     assert!(
         (panes.y + panes.height - (area.y + area.height)).abs() <= TOLERANCE,
@@ -189,63 +144,6 @@ fn assert_fits(name: &str, state: &State) {
     assert_fits_under(name, || StateUnderTest::new(state.clone()));
 }
 
-/// The width the header's Changes button asks for in `state`, laid out on its own with no bound.
-fn changes_button_request(state: &State) -> f32 {
-    let location = state.shown_location().expect("a location is shown");
-    let label = micold_core::context_header::changes_label(
-        micold_client::ui::session_area::counts_of(state, &location),
-    );
-    let roles = micold_core::tokens::roles(state.color_scheme());
-    let mut element =
-        micold_client::ui::session_area::changes_button(state, &location, label, roles);
-    let renderer = lay::renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = layout::Limits::new(Size::ZERO, Size::INFINITE);
-    element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits)
-        .size()
-        .width
-}
-
-/// The title is at its minimum below this width: little more than its ellipsis (FR-002).
-const TITLE_MINIMUM: f32 = 40.0;
-
-/// The header's side padding and the gap between its title, chips and button (`session_area.rs`).
-const HEADER_PADDING: f32 = micold_core::tokens::spacing::LG;
-const HEADER_GAP: f32 = micold_core::tokens::spacing::MD;
-
-/// H10' (feature 1463): the Changes button is laid out at the width it asks for while the title
-/// has any room; once the title is gone the label is cut with an ellipsis and the button is no
-/// wider than it asks for.
-fn assert_button_unsqueezed(what: &str, records: &[LayoutRecord], state: &State) {
-    let button = [SESSION_AREA, CHANGES_BUTTON].concat();
-    let laid = at(records, &button).expect("the header draws its Changes button");
-    let wanted = changes_button_request(state);
-    let [title, chips, _] = header_line(records);
-    if title.width >= TITLE_MINIMUM {
-        assert!(
-            (laid.width - wanted).abs() <= TOLERANCE,
-            "{what}: the Changes button is laid out {} wide, it asks for {wanted} while the title \
-             still has room (H10')",
-            laid.width
-        );
-    } else {
-        // The title is gone, so the button takes what the line leaves: from the chips' end plus
-        // one gap to the header's right padding. Never wider than it asks for, never clipped.
-        let header = rect(at(records, &[SESSION_AREA, &[0]].concat()).expect("the header"));
-        let line_right = header.x + header.width - HEADER_PADDING;
-        let left = (chips.x + chips.width + HEADER_GAP).min(line_right);
-        let expected = wanted.min(line_right - left);
-        assert!(
-            (laid.width - expected).abs() <= TOLERANCE,
-            "{what}: the cut Changes button {laid:?} is {} wide, the line leaves {expected} (it \
-             asks for {wanted}) (H10')",
-            laid.width
-        );
-    }
-}
-
 pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
     for theme in [ThemePreference::Light, ThemePreference::Dark] {
         for window in [MIN_WINDOW_SIZE, WINDOW] {
@@ -256,44 +154,20 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
                 .or_else(|| Some(micold_core::pane_layout::PaneLayout::single()));
             under.state.settings.theme_pref = theme;
             under.state.sidebar.width = SIDEBAR;
-            let state = under.state.clone();
             let records = records_of(under, window);
-            assert_button_unsqueezed(&format!("{name} {theme:?} {window:?}"), &records, &state);
             let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
             let screen = Rectangle::with_size(window);
             assert_order(name, &records, &area);
-            let mut touch_checked = 0;
-            for (what, part) in strip_parts(&records) {
-                // The split buttons are never squeezed under a touch target (FR-012).
-                if what == "strip split buttons" {
-                    touch_checked += 1;
-                    assert!(
-                        part.width >= micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET - TOLERANCE,
-                        "{name} {theme:?} {window:?}: the {what} {part:?} is narrower than the touch target"
-                    );
-                }
-            }
-            assert_eq!(
-                touch_checked, 1,
-                "{name} {theme:?} {window:?}: the touch-target check ran on the split buttons"
-            );
-            let mut parts = header_parts(&records);
+            let parts = strip_parts(&records);
             assert!(
                 parts.len() >= 2,
-                "{name} {theme:?} {window:?}: the title and at least the state chip: {parts:?}"
+                "{name} {theme:?} {window:?}: the tab region and the controls: {parts:?}"
             );
-            let strip = strip_parts(&records);
-            assert_eq!(
-                strip.len(),
-                3,
-                "{name} {theme:?} {window:?}: the strip's three children: {strip:?}"
-            );
-            parts.extend(strip);
             for (what, part) in &parts {
-                // Only the title and the strip's tab region may shrink to nothing: FR-012 lets
-                // the tab region go before restart or the splits are clipped.
+                // Only the strip's tab region may shrink to nothing: FR-012 lets the tab region
+                // go before the controls are clipped.
                 assert!(
-                    (part.width > 0.0 || what == "title" || what == "strip tab region")
+                    (part.width > 0.0 || what == "strip tab region")
                         && inside(part, &area)
                         && inside(part, &screen),
                     "{name} {theme:?} {window:?}: the {what} {part:?} lies inside the session \
@@ -312,102 +186,8 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
     }
 }
 
-/// The header's line: its title, chips row and Changes button, in that order (FR-001, H9).
-fn header_line(records: &[LayoutRecord]) -> [Rectangle; 3] {
-    let header = [SESSION_AREA, &[0]].concat();
-    [vec![0, 0], vec![0, 1], vec![0, 2]].map(|tail| {
-        let path = [header.as_slice(), tail.as_slice()].concat();
-        rect(at(records, &path).expect("the header line has three children"))
-    })
-}
-
-/// FR-001, FR-003, SC-003: title, chips and Changes sit on one line in that order; the header is
-/// about one line tall and the Changes button is no taller than the chips.
 #[test]
-fn the_header_is_one_line_with_a_compact_changes_button() {
-    for name in SESSION_STATES {
-        let covered = covered_states()
-            .iter()
-            .find(|s| s.name == *name)
-            .unwrap_or_else(|| panic!("the covered state {name} exists"));
-        for window in [MIN_WINDOW_SIZE, WINDOW] {
-            let mut under = (covered.build)();
-            under.state.sidebar.width = SIDEBAR;
-            let records = records_of(under, window);
-            let [title, chips, changes] = header_line(&records);
-            let what = format!("{name} {window:?}");
-            assert!(
-                title.x + title.width <= chips.x + TOLERANCE
-                    && chips.x + chips.width <= changes.x + TOLERANCE,
-                "{what}: title {title:?}, chips {chips:?}, Changes {changes:?} are not left to right"
-            );
-            for part in [&title, &chips, &changes] {
-                assert!(
-                    part.y < title.y + title.height && part.y + part.height > title.y,
-                    "{what}: {part:?} is not on the title's line {title:?}"
-                );
-            }
-            let header = rect(at(&records, &[SESSION_AREA, &[0]].concat()).expect("the header"));
-            assert!(
-                header.height <= 40.0 + TOLERANCE,
-                "{what}: the header is {} tall, about one line is 40 (SC-003)",
-                header.height
-            );
-            assert!(
-                changes.height <= title.height + TOLERANCE,
-                "{what}: the Changes button {changes:?} is taller than the title line {title:?}, so \
-                 it sets the header's height (FR-003)"
-            );
-        }
-    }
-}
-
-/// FR-002, H10': at the smallest window the title shortens first, then the chips; the Changes
-/// button keeps its requested width.
-#[test]
-fn the_title_shortens_before_the_chips_and_the_button() {
-    let covered = covered_states()
-        .iter()
-        .find(|s| s.name == "session-area-one-tab")
-        .expect("the covered state exists");
-    for counts in [A_BRANCHS_COUNTS, THE_WIDEST_COUNTS] {
-        let measure = |window: Size| {
-            let mut under = (covered.build)();
-            under.state.sidebar.width = SIDEBAR;
-            let location = under
-                .state
-                .current_session_location()
-                .expect("a session is shown");
-            let project = under.state.workspace.active.clone().unwrap();
-            under.state.changes.header.entry = Some((project, location));
-            under.state.changes.header.load = micold_client::features::changes::Load::Ready(counts);
-            let state = under.state.clone();
-            let records = records_of(under, window);
-            assert_button_unsqueezed(&format!("{counts:?} {window:?}"), &records, &state);
-            header_line(&records)
-        };
-        let [wide_title, wide_chips, _] = measure(WINDOW);
-        let [title, chips, changes] = measure(MIN_WINDOW_SIZE);
-        assert!(
-            title.width < wide_title.width,
-            "{counts:?}: the title {title:?} gives way at the smallest window (was {wide_title:?})"
-        );
-        // The chips give way only once the title has nothing more to give.
-        assert!(
-            chips.width <= wide_chips.width + TOLERANCE
-                && (chips.width >= wide_chips.width - TOLERANCE || title.width < TITLE_MINIMUM),
-            "{counts:?}: the chips {chips:?} shortened (was {wide_chips:?}) while the title \
-             {title:?} still had room (FR-002)"
-        );
-        assert!(
-            changes.x + changes.width <= MIN_WINDOW_SIZE.width,
-            "{counts:?}: the Changes button {changes:?} lies inside the window"
-        );
-    }
-}
-
-#[test]
-fn the_header_and_the_strip_fit_in_every_session_state_at_both_windows() {
+fn the_strip_fits_in_every_session_state_at_both_windows() {
     for name in SESSION_STATES {
         let covered = covered_states()
             .iter()
@@ -417,60 +197,8 @@ fn the_header_and_the_strip_fit_in_every_session_state_at_both_windows() {
     }
 }
 
-/// The longest worktree name with a pull request whose chip is long too: title and chips give way
-/// with an ellipsis and still fit (FR-013).
-#[test]
-fn a_long_title_and_a_pull_request_chip_still_fit() {
-    let covered = covered_states()
-        .iter()
-        .find(|s| s.name == "session-area-one-tab")
-        .expect("the covered state exists");
-    let mut state = (covered.build)().state;
-    let long = state
-        .worktree
-        .worktrees
-        .iter()
-        .max_by_key(|w| w.dir_name.len())
-        .expect("the fixture has worktrees")
-        .clone();
-    for session in state.workspace.sessions.values_mut().flatten() {
-        session.location = SessionLocation::Worktree(long.dir_name.clone());
-    }
-    state.pr_status.enabled = true;
-    state.pr_status.statuses.insert(
-        long.branch.clone().expect("the long worktree has a branch"),
-        PullRequestStatus {
-            number: 123_456,
-            title: "A pull request".into(),
-            url: "https://github.com/o/r/pull/123456".into(),
-            state: PrState::Draft {
-                checks: CheckStatus::Pending,
-            },
-            review: ReviewState::ChangesRequested,
-            head: "abc".into(),
-            conflict: false,
-        },
-    );
-    // A branch's worth of counts, so the button asks for more than `Changes` alone: H10's bound at
-    // the smallest window (about 286 px on the title line beside the 300 px sidebar).
-    let location = state
-        .current_session_location()
-        .expect("a session is shown");
-    state.changes.header.entry = Some((state.workspace.active.clone().unwrap(), location));
-    state.changes.header.load = micold_client::features::changes::Load::Ready(A_BRANCHS_COUNTS);
-    let parts = header_parts(&records_at(state.clone(), WINDOW));
-    assert_eq!(
-        parts.len(),
-        5,
-        "title, Changes button, state, branch and pull request chips: {parts:?}"
-    );
-    assert_fits("long title with a pull request", &state);
-}
-
-/// T053 (R12, A1, H10), feature 1269 T037 (U16): with a review shown the session area is the
-/// header, the strip, then the view; the header's title, chips and Changes button and the strip's
-/// controls fit at both windows and themes, the button at the width it asks for. A sessionless
-/// location's strip has no status words, so only its status may be empty.
+/// T053 (R12, A1), feature 1269 T037 (U16): with a review shown the session area is the strip,
+/// then the view; the strip's controls fit at both windows and themes.
 #[test]
 fn the_header_and_the_strip_stand_over_the_shown_review() {
     for name in [
@@ -489,7 +217,6 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
                 let mut under = (covered.build)();
                 under.state.settings.theme_pref = theme;
                 under.state.sidebar.width = SIDEBAR;
-                let state = under.state.clone();
                 let records = records_of(under, window);
                 let what = format!("{name} {theme:?} {window:?}");
                 let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
@@ -502,31 +229,21 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
                     .collect();
                 assert_eq!(
                     children.len(),
-                    3,
-                    "{what}: the header, the strip, then the view: {children:?}"
+                    2,
+                    "{what}: the strip, then the view: {children:?}"
                 );
                 assert!(
-                    children[0].y + children[0].height <= children[1].y + TOLERANCE
-                        && children[1].y + children[1].height <= children[2].y + TOLERANCE,
-                    "{what}: header, strip and view are not top to bottom: {children:?}"
+                    children[0].y + children[0].height <= children[1].y + TOLERANCE,
+                    "{what}: strip and view are not top to bottom: {children:?}"
                 );
-                let mut parts = header_parts(&records);
-                let strip = strip_parts(&records);
-                assert_eq!(
-                    strip.len(),
-                    3,
-                    "{what}: the strip's three children: {strip:?}"
-                );
-                for (part, r) in &strip {
-                    assert!(
-                        r.width > 0.0 || part == "strip status",
-                        "{what}: the {part} {r:?} is laid out"
-                    );
-                }
-                parts.extend(strip.into_iter().filter(|(_, r)| r.width > 0.0));
+                let parts: Vec<(String, Rectangle)> = strip_parts(&records)
+                    .into_iter()
+                    .filter(|(_, r)| r.width > 0.0)
+                    .collect();
+                assert!(parts.len() >= 2, "{what}: the strip's parts: {parts:?}");
                 for (part, r) in &parts {
                     assert!(
-                        (r.width > 0.0 || part == "title") && inside(r, &area),
+                        inside(r, &area),
                         "{what}: the {part} {r:?} lies inside the session area {area:?}"
                     );
                 }
@@ -538,7 +255,6 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
                         );
                     }
                 }
-                assert_button_unsqueezed(&what, &records, &state);
             }
         }
     }
@@ -547,11 +263,11 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
 /// The Changes view's own header row, under the session area's view: its title column, the source
 /// control (feature 1272), then the progress slot (feature 1270 moved the panel toggle and the review
 /// buttons to the review bar).
-const VIEW_HEADER: &[usize] = &[2, 0, 0];
+const VIEW_HEADER: &[usize] = &[1, 0, 0];
 /// The diff pane's header row: the layout and whole-file chips, then the mark control.
-const DIFF_HEADER: &[usize] = &[2, 1, 1, 0, 0, 0];
+const DIFF_HEADER: &[usize] = &[1, 1, 1, 0, 0, 0];
 /// The diff pane, the diff area's first layer, which the diff header row must stay inside.
-const DIFF_PANE: &[usize] = &[2, 1, 1, 0];
+const DIFF_PANE: &[usize] = &[1, 1, 1, 0];
 
 /// Feature 1271 T033 (FR-009, SC-005): at 1280×800 in both themes the view header's title and *n
 /// of m reviewed* slot, and the diff header's chips and **Mark reviewed**, each lie whole inside
@@ -579,7 +295,7 @@ fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
             for (row, host) in [
                 (
                     [SESSION_AREA, VIEW_HEADER].concat(),
-                    [SESSION_AREA, &[2]].concat(),
+                    [SESSION_AREA, &[1]].concat(),
                 ),
                 (
                     [SESSION_AREA, DIFF_HEADER].concat(),
@@ -630,7 +346,7 @@ fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
 
 /// The progress slot's bar, under the view header: the slot's two containers, its row, then the
 /// bar after the *n of m reviewed* words.
-const PROGRESS_BAR: &[usize] = &[2, 0, 0, 1];
+const PROGRESS_BAR: &[usize] = &[1, 0, 0, 1];
 
 /// Feature 1271 (visual re-pass V2): the header's progress bar is drawn, at its full width where
 /// the slot has room for it beside its words. A `Fill` bar in the slot's `Shrink` row was laid out
@@ -747,7 +463,7 @@ fn a_changed_rows_text_is_clipped_clear_of_the_dot() {
 }
 
 /// The scrolling members' keyed row (`SESSION_STRIP_TABS`), under the session area.
-const STRIP_TABS: &[usize] = &[1, 0, 0, 0, 0, 0, 0];
+const STRIP_TABS: &[usize] = &[0, 0, 0, 0, 0, 0, 0];
 
 /// The immediate children of `parent` in `records`.
 fn children_of<'r>(records: &'r [LayoutRecord], parent: &[usize]) -> Vec<&'r LayoutRecord> {
@@ -835,100 +551,16 @@ fn the_review_tab_holds_its_label_badge_mark_and_close_whole() {
     }
 }
 
-/// H10's bound (M3 review B F2): at 1280×800 a label with counts as wide as a branch ever gets is
-/// laid out whole beside the title and the chips. At the smallest window, where the bound is
-/// three-digit counts (`a_long_title_and_a_pull_request_chip_still_fit`), it is cut rather than
-/// pushing anything out: the title, chips and button still lie inside the area, overlapping nothing.
-#[test]
-fn the_widest_counts_fit_at_the_layout_window() {
-    let covered = covered_states()
-        .iter()
-        .find(|s| s.name == "session-area-one-tab")
-        .expect("the covered state exists");
-    let mut one_line: Option<f32> = None;
-    for (theme, window) in [ThemePreference::Light, ThemePreference::Dark]
-        .into_iter()
-        .flat_map(|theme| [(theme, WINDOW), (theme, MIN_WINDOW_SIZE)])
-    {
-        let mut under = (covered.build)();
-        under.panes = Some(micold_core::pane_layout::PaneLayout::single());
-        under.state.settings.theme_pref = theme;
-        under.state.sidebar.width = SIDEBAR;
-        let location = under
-            .state
-            .current_session_location()
-            .expect("a session is shown");
-        let project = under.state.workspace.active.clone().unwrap();
-        under.state.changes.header.entry = Some((project, location));
-        under.state.changes.header.load =
-            micold_client::features::changes::Load::Ready(THE_WIDEST_COUNTS);
-        let state = under.state.clone();
-        let records = records_of(under, window);
-        let what = format!("widest counts {theme:?} {window:?}");
-        if window == WINDOW {
-            assert_button_unsqueezed(&what, &records, &state);
-        }
-        let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-        let parts = header_parts(&records);
-        for (part, r) in &parts {
-            assert!(
-                (r.width > 0.0 || part == "title") && inside(r, &area),
-                "{what}: the {part} {r:?} lies inside the session area {area:?}"
-            );
-        }
-        for (i, (a_name, a)) in parts.iter().enumerate() {
-            for (b_name, b) in &parts[i + 1..] {
-                assert!(
-                    !overlap(a, b),
-                    "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}"
-                );
-            }
-        }
-        // The label stays one line: its text is no taller than at the layout window, where it is
-        // laid out whole (checked first).
-        let button = [SESSION_AREA, CHANGES_BUTTON].concat();
-        let inside_button: Vec<&LayoutRecord> = records
-            .iter()
-            .filter(|r| r.path.len() > button.len() && r.path.starts_with(&button))
-            .collect();
-        assert!(
-            !inside_button.is_empty(),
-            "{what}: the Changes button holds a glyph and a label"
-        );
-        // The deepest nodes are the glyph and the label's text, under the 40 dp button's fill.
-        let deepest = inside_button
-            .iter()
-            .map(|r| r.path.len())
-            .max()
-            .unwrap_or(0);
-        let inner = inside_button
-            .iter()
-            .filter(|r| r.path.len() == deepest)
-            .map(|r| r.height)
-            .fold(0.0_f32, f32::max);
-        assert!(inner > 0.0, "{what}: the button's label has a height");
-        // The baseline is the layout window in light, laid out whole; it comes first in the loop.
-        if matches!(theme, ThemePreference::Light) && window == WINDOW {
-            one_line = Some(inner);
-        }
-        let one_line = one_line.expect("the light layout window is measured first");
-        assert!(
-            inner <= one_line + TOLERANCE,
-            "{what}: the button's label wraps ({inner} tall inside, one line is {one_line})"
-        );
-    }
-}
-
 /// The Changes view's body: the file column beside the diff area (feature 1272, R8).
-const VIEW_BODY: &[usize] = &[2, 1];
+const VIEW_BODY: &[usize] = &[1, 1];
 /// The file column: the body's first child, a fixed-width container.
-const FILE_COLUMN: &[usize] = &[2, 1, 0];
+const FILE_COLUMN: &[usize] = &[1, 1, 0];
 /// What the file column holds: the container's column.
-const FILE_COLUMN_CONTENT: &[usize] = &[2, 1, 0, 0];
+const FILE_COLUMN_CONTENT: &[usize] = &[1, 1, 0, 0];
 /// The diff area, the body's second child.
-const DIFF_AREA: &[usize] = &[2, 1, 1];
+const DIFF_AREA: &[usize] = &[1, 1, 1];
 /// The source control's slot in the view header.
-const SOURCE_CONTROL: &[usize] = &[2, 0, 0, 1];
+const SOURCE_CONTROL: &[usize] = &[1, 0, 0, 1];
 
 /// `pose` laid out in a window `window` large beside a 300 px sidebar in `theme`: what it painted
 /// and the boxes of both layers, entrances finished.
@@ -1180,7 +812,7 @@ fn the_file_column_keeps_its_width_and_the_diff_takes_the_rest() {
                     && control.x + control.width <= width + TOLERANCE,
                 "{what}: the control {control:?} keeps its width in the header {header:?}"
             );
-            titles.push(part_at(&records, &[2, 0, 0, 0], &what).width);
+            titles.push(part_at(&records, &[1, 0, 0, 0], &what).width);
         }
         assert!(
             titles[2] < titles[0],
@@ -1224,20 +856,14 @@ fn claude_terminal(stopped: bool, queued: usize) -> State {
     state
 }
 
-/// Two rows above the terminal: header (at most 40 px) and strip (64 px: a 48 dp touch target and
-/// its padding, which this feature does not change), against the 190 px of three rows before
-/// (FR-009, SC-001). The spec's "about 90" is this 100 within rounding of the strip's own height.
-const TWO_ROWS_MAX: f32 = 100.0;
+/// One row above the terminal: the strip (feature 1793, FR-001), at most this tall.
+const ONE_ROW_MAX: f32 = micold_client::ui::session_area::ROW_HEIGHT;
 
-/// The header is at most this tall (FR-001).
-const HEADER_MAX: f32 = 40.0;
+/// The strip's controls after the tabs: restart while the process is stopped, the splits.
+const CONTROLS: &[usize] = &[0, 0, 1];
 
-/// The strip's status cluster: its words and, while the process is stopped, restart (the view
-/// switch moved into the worktree menu, feature 1793).
-const CLUSTER: &[usize] = &[1, 0, 1, 0];
-
-fn cluster_children(records: &[LayoutRecord]) -> Vec<Rectangle> {
-    let path = [SESSION_AREA, CLUSTER].concat();
+fn controls_children(records: &[LayoutRecord]) -> Vec<Rectangle> {
+    let path = [SESSION_AREA, CONTROLS].concat();
     children_of(records, &path).into_iter().map(rect).collect()
 }
 
@@ -1256,27 +882,23 @@ fn records_for(mut state: State, theme: ThemePreference, window: Size) -> Vec<La
     records_of(under, window)
 }
 
-/// US2 scenarios 1, 2, 3 (FR-004, FR-005, FR-009, SC-001, SC-002): a Claude terminal session in a
-/// single pane has two rows above the terminal, restart follows the status words and comes last;
-/// nothing is laid out between the strip and the terminal, and no switch is in the strip (feature
-/// 1793: it is in the worktree menu).
+/// US2 scenarios 1, 2, 3 (FR-004, FR-005, FR-009, SC-001, SC-002; feature 1793): a Claude terminal
+/// session in a single pane has one row above the terminal, restart comes first among the controls
+/// while the process is stopped, nothing is laid out between the strip and the terminal, and no
+/// switch is in the strip (it is in the worktree menu).
 #[test]
-fn a_claude_terminal_session_has_two_rows_and_no_switch_in_the_strip() {
+fn a_claude_terminal_session_has_one_row_and_no_switch_in_the_strip() {
     for (stopped, queued) in [(false, 0), (true, 0), (true, 3)] {
         each_window(|what, theme, window| {
             let what = format!("stopped {stopped}, {queued} queued {what}");
             let records = records_for(claude_terminal(stopped, queued), theme, window);
             let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-            let [header, strip, panes] = [0, 1, 2]
+            let [strip, panes] = [0, 1]
                 .map(|i| rect(at(&records, &[SESSION_AREA, &[i]].concat()).expect("a row")));
             assert!(
-                header.height <= HEADER_MAX + TOLERANCE,
-                "{what}: the header {header:?} is over {HEADER_MAX} px (FR-001)"
-            );
-            assert!(
-                panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
-                "{what}: the terminal starts {} px below the area, over {TWO_ROWS_MAX} (FR-009): header \
-                 {header:?}, strip {strip:?}",
+                panes.y - area.y <= ONE_ROW_MAX + TOLERANCE,
+                "{what}: the terminal starts {} px below the area, over {ONE_ROW_MAX} (FR-001): \
+                 strip {strip:?}",
                 panes.y - area.y
             );
             assert!(
@@ -1284,33 +906,23 @@ fn a_claude_terminal_session_has_two_rows_and_no_switch_in_the_strip() {
                 "{what}: something sits between the strip {strip:?} and the pane area {panes:?} \
                  (no switch row, FR-004)"
             );
-            let cluster = cluster_children(&records);
+            let controls = controls_children(&records);
             let expected = if stopped { 2 } else { 1 };
-            assert_eq!(
-                cluster.len(),
-                expected,
-                "{what}: words, restart? {cluster:?}"
-            );
-            let words = cluster[0];
-            assert!(
-                inside(&words, &area) && inside(&words, &Rectangle::with_size(window)),
-                "{what}: the words {words:?} lie inside the area"
-            );
-            if let Some(restart) = cluster.get(1) {
+            assert_eq!(controls.len(), expected, "{what}: restart?, splits {controls:?}");
+            for control in &controls {
                 assert!(
-                    restart.x >= words.x + words.width - TOLERANCE,
-                    "{what}: restart {restart:?} is the last control, after the words {words:?} \
-                     (FR-005)"
+                    inside(control, &area) && inside(control, &Rectangle::with_size(window)),
+                    "{what}: the control {control:?} lies inside the area"
                 );
             }
         });
     }
 }
 
-/// US3 scenario 2 (FR-011): at the smallest window beside the sidebar, header and strip with
-/// restart shown lie inside the area and overlap nothing, light and dark.
+/// US3 scenario 2 (FR-011): at the smallest window beside the sidebar, the strip with restart
+/// shown lies inside the area and overlaps nothing, light and dark.
 #[test]
-fn the_filled_strip_and_the_header_fit_at_the_smallest_window() {
+fn the_filled_strip_fits_at_the_smallest_window() {
     assert_fits_under("claude terminal, queue held", || {
         StateUnderTest::new(claude_terminal(true, 3))
     });
@@ -1336,14 +948,14 @@ fn restart_keeps_its_place_when_the_review_is_shown_and_closed() {
         let mut from_right = Vec::new();
         for (what, state) in [("shown", shown()), ("hidden", hidden())] {
             let records = records_for(state, ThemePreference::Light, window);
-            let cluster = cluster_children(&records);
+            let cluster = controls_children(&records);
             assert_eq!(
                 cluster.len(),
                 2,
-                "{what} {window:?}: words, restart: {cluster:?}"
+                "{what} {window:?}: restart, splits: {cluster:?}"
             );
-            let controls = at(&records, &[SESSION_AREA, &[1, 0, 1]].concat()).expect("controls");
-            let restart = cluster[1];
+            let controls = at(&records, &[SESSION_AREA, CONTROLS].concat()).expect("controls");
+            let restart = cluster[0];
             from_right.push((controls.x + controls.width) - (restart.x + restart.width));
         }
         assert!(
@@ -1383,7 +995,7 @@ fn a_tiled_pane_still_has_its_switch_row() {
         )
         .expect("the first pane shows the Claude terminal");
     let records = records_of(StateUnderTest::new(state).panes(layout), WINDOW);
-    let panes_path = [SESSION_AREA, &[2]].concat();
+    let panes_path = [SESSION_AREA, &[1]].concat();
     let panes = rect(at(&records, &panes_path).expect("pane area"));
     // The pane area's tiles: [split, first tile]; a tile is the column pane header, switch row,
     // terminal (`ui::panes`).

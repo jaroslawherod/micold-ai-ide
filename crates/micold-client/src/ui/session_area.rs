@@ -187,8 +187,10 @@ pub(crate) fn strip<'a>(
     // Feature 1269 (U15): while the Review tab is shown the split buttons keep their place,
     // disabled, as they act on panes that are not drawn.
     let splits: Element<'a, Message> = match area.and_then(|a| a.layout.pane(a.layout.focused())) {
-        _ if model.review_shown() => crate::ui::panes::split_buttons_disabled(r),
-        Some(pane) => crate::ui::panes::split_buttons(pane, r),
+        _ if model.review_shown() => {
+            crate::ui::panes::split_buttons_in_row(None, ROW_HEIGHT, r)
+        }
+        Some(pane) => crate::ui::panes::split_buttons_in_row(Some(pane), ROW_HEIGHT, r),
         None => container(Space::new()).into(),
     };
     // The controls after the tabs keep their size: the restart while the marked process is stopped
@@ -216,7 +218,8 @@ pub(crate) fn strip<'a>(
         .align_y(Alignment::Center);
     material::Surface::new(strip, SurfaceKind::Toolbar, r)
         .width(Length::Fill)
-        .padding(spacing::SM)
+        .padding([0.0, spacing::SM])
+        .height(ROW_HEIGHT)
         .into()
 }
 
@@ -407,6 +410,7 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
         Member::Plus => Tooltip::new(
             IconButton::new(Icon::AddSession, r)
                 .padding(spacing::SM)
+                .target(ROW_HEIGHT)
                 .on_press(m.press()),
             PLUS_MENU_NAME,
             r,
