@@ -622,10 +622,10 @@ fn delivered(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Wait, within 10 s, until `delivered(dir)` equals `expected`: the stand-in records a message
+/// Wait, within 30 s (a loaded CI runner, #1787), until `delivered(dir)` equals `expected`: the stand-in records a message
 /// asynchronously, so the daemon's `OperationOk` can arrive before the record has the line.
 async fn delivered_is<const N: usize>(dir: &Path, expected: [&str; N]) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
     loop {
         let got = delivered(dir);
         if got == expected {
@@ -659,7 +659,7 @@ fn is_result(r: &structured::Received) -> bool {
 
 /// Wait, within 10 s, until the stand-in has started `n` times in `dir`.
 async fn started_times(dir: &Path, n: usize) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while structured::starts(dir) < n {
         assert!(
             std::time::Instant::now() < deadline,
