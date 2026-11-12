@@ -28,6 +28,8 @@ fn write(path: &Path, text: &str, mode: u32) {
     std::fs::write(path, text).unwrap();
     #[cfg(unix)]
     std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(mode)).unwrap();
+    #[cfg(not(unix))]
+    let _ = mode;
 }
 
 fn vars(edits: &[EnvEdit]) -> BTreeMap<String, String> {
@@ -245,6 +247,7 @@ fn file(from: &Path, to: &str, mode: Option<&str>) -> SessionFile {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_session_file_lands_in_the_home_with_its_mode() {
     let dir = tempfile::tempdir().unwrap();
