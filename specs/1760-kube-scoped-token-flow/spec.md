@@ -72,6 +72,14 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - Two clients start the same pod at once, or the token store changes between start and first use: the pod ends with one complete delivered set (last write wins), never a mix; a token file with loose permissions on Unix is refused by the client, on Windows the ACL rule applies.
 - Several sessions in one pod: every session sees the same helper and none sees the token.
 
+## Clarifications
+
+### Session 2026-11-12
+
+- Q: Which stored tokens reach the pod (FR-009)? → A: only those whose repository filter matches a project of this daemon. _(agent-resolved: specs/1002-sandbox-scoped-token/spec.md#FR-005 "only the PAT of the container's own project's repository")_
+- Q: When is the token removed from the cluster (FR-010)? → A: with the pod's other secrets on delete/Remove, replaced at each start, withdrawn at the next start once deleted in Settings. _(agent-resolved: docs/user-guide/kubernetes-daemons.md, resource table: startup and credential secrets removed at the next start or Remove; specs/1002-sandbox-scoped-token/spec.md#FR-008)_
+- Q: May a host-stored token be placed in a Kubernetes Secret, and with what consent (FR-008)? → A: OPEN, escalated to the user.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -84,8 +92,8 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - **FR-006**: A runtime-gated `kube_real_` test in `micold-client` MUST assert FR-003 to FR-005 on the kind cluster, run by CI job `kube-cluster`, and be reported skipped when the cluster tooling is absent.
 - **FR-007**: The harness MUST provide, for that test, a fake GitHub API and an HTTP git backend reachable from a pod that accept only the run's token, and a way to read a pod session's environment and list its home directory.
 - **FR-008**: Delivering a host-stored token into a cluster Secret MUST follow [NEEDS CLARIFICATION: security boundary: may a host-stored token be placed in a Kubernetes Secret (readable by cluster admins and stored in etcd), and with what consent: always when stored, per-daemon opt-in in the daemon's settings, or never by default (test-only injection)? Recommended: per-daemon opt-in, off by default].
-- **FR-009**: The set of tokens delivered MUST be [NEEDS CLARIFICATION: every stored token, or only those whose repository filter matches a project of this daemon? Recommended: only matching tokens, so a pod never holds a token it cannot use].
-- **FR-010**: The delivered token MUST be removed from the cluster [NEEDS CLARIFICATION: when? Recommended: with the pod's other secrets when the pod is deleted, and replaced at each start; a token deleted in Settings is withdrawn at the next start].
+- **FR-009**: The set of tokens delivered MUST be only those whose repository filter matches a project of this daemon, so a pod never holds a token it cannot use.
+- **FR-010**: A delivered token MUST be removed from the cluster with the pod's other secrets when the pod is deleted or removed, MUST be replaced at each start, and a token deleted in Settings MUST be withdrawn at the next start.
 
 ### Key Entities
 

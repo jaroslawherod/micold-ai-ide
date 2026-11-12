@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: test/1760_scoped-token-step-11-assert-the-credential-flow-in
 - **Started**: 2026-11-12
 - **Phase**: spec
-- **Next step**: clarify (FR-008, FR-009, FR-010 security-boundary markers; FR-008 likely escalates)
+- **Next step**: clarify: apply the user's FR-008 answer to spec.md, then plan
 
 ## Pull requests
 
@@ -46,7 +46,18 @@ None.
 
 ## Open escalation
 
-None.
+Category 2 (security boundary), clarify round 1, FR-008.
+
+**Question**: May a host-stored GitHub token be placed in a Kubernetes Secret (readable by anyone with secret read access in the namespace, stored in etcd), and with what consent?
+
+**Options**:
+1. Per-daemon opt-in in the daemon's settings, off by default (spec's recommendation; matches the opt-in pattern of sign-in and pull credential secrets).
+2. Delivered whenever a matching token is stored: pasting the token in Settings is the consent (what docs/user-guide/kubernetes-daemons.md l.149-153 promises: "Once you have [pasted a token], the pod pushes and pulls"). No new setting.
+3. Never by default; test-only injection.
+
+**Recommendation**: option 2 would match shipped docs; option 1 is the safer boundary but changes the documented contract and adds a setting. Orchestrator to relay: recommend 1 per spec unless the user prefers the documented behaviour.
+
+**Evidence**: specs/1002-sandbox-scoped-token/spec.md FR-005/FR-006 (token only for the container's own project, readable only inside it; a cluster Secret is readable by namespace admins, not covered); docs/user-guide/kubernetes-daemons.md l.65-68 (existing credential secrets, per-daemon opt-in), l.149-153; the old ClientMsg memory-volume delivery (1002 research R6) was retired in #1530. FR-009 and FR-010 were resolved from the repo and applied to spec.md.
 
 ## Follow-ups not done
 
