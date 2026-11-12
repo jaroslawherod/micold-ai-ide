@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1797 | Design | merged | ad2d932dc0b678b50e19e0b3646e8036d62c6e8a |
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
 | #1827 | M2 | merged | cb41c216e778ce87dcc7379f7852f3ffa85fa3bf |
+| #1847 | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
 | M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
-| M3 | T017–T020 | full | Single `+` menu | PR | open |
+| M3 | T017–T020 | full | Single `+` menu | #1847 | open |
 | M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
 
 ## Decisions
