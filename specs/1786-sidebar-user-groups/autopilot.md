@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1786
 - **Worktree branch**: feat/1786_feat-sidebar-let-the-user-create-groups
 - **Started**: 2026-11-11
-- **Phase**: spec
-- **Next step**: clarify unit: resolve FR-016 (run groups)
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
