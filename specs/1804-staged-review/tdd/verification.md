@@ -1,6 +1,6 @@
 ---
 feature: 1804-staged-review
-verdict: FAIL
+verdict: FAIL # at verified_at; the two surviving mutants are closed in the close PR (see Remediation)
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against
 verified_at: d14e1692c
 behaviors: 0 # no tdd/test-list.md; audited against spec.md and tasks.md instead
