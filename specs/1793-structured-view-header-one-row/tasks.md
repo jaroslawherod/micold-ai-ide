@@ -35,10 +35,10 @@ Paths are relative to the repo root. `client` = `crates/micold-client`, `materia
 
 ## Phase 4: User Story 3 - Single `+` for a session or a terminal (P1)
 
-- [ ] T017 [US3] Test first: `PlusMenuModel` tests in `crates/micold-client/tests/features_session_strip.rs` (accessible name, Escape closes, items "Another session" and "Terminal", session entry sends `AdditionalRequested(location)`, terminal entry sends `ShellInstanceOpenRequested` every time, one `+` only)
-- [ ] T018 [US3] Implement `PlusMenuModel` and drop the `Member::Plus` split in `crates/micold-client/src/features/session_strip.rs` (depends on T017)
-- [ ] T019 [US3] Replace the two add icons and the `Open in terminal` switch slot with one `+` in `crates/micold-client/src/ui/session_area.rs`; add its anchored `MenuOverlay` in `crates/micold-client/src/ui/mod.rs` (accessible name "Add session or terminal", Escape closes; depends on T008, T015, T018)
-- [ ] T020 [US3] User guide: the `+` menu replaces `Open in terminal` in `docs/user-guide/worktrees-and-sessions.md` and `docs/user-guide/structured-transcript.md`
+- [x] T017 [US3] Test first: `PlusMenuModel` tests in `crates/micold-client/tests/features_session_strip.rs` (accessible name, Escape closes, items "Another session" and "Terminal", session entry sends `AdditionalRequested(location)`, terminal entry sends `ShellInstanceOpenRequested` every time, one `+` only)
+- [x] T018 [US3] Implement `PlusMenuModel` and drop the `Member::Plus` split in `crates/micold-client/src/features/session_strip.rs` (depends on T017)
+- [x] T019 [US3] Replace the two add icons and the `Open in terminal` switch slot with one `+` in `crates/micold-client/src/ui/session_area.rs`; add its anchored `MenuOverlay` in `crates/micold-client/src/ui/mod.rs` (accessible name "Add session or terminal", Escape closes; depends on T008, T015, T018)
+- [x] T020 [US3] User guide: the `+` menu replaces `Open in terminal` in `docs/user-guide/worktrees-and-sessions.md` and `docs/user-guide/structured-transcript.md`
 
 ## Phase 5: User Story 1 - One-row header (P1)
 

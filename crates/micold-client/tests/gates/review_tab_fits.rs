@@ -226,7 +226,7 @@ fn laid_out(
         lay::text_overflows_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
     // A tab the strip's scroll viewport cuts is scrolled, not squeezed: its label keeps its own
     // width and the viewport clips it (feature 1793 widened the viewport, so which tab is cut moved).
-    let tabs = format!("{}/", lay::path_token(&[&[0], SESSION_STRIP_TABS].concat()));
+    let tabs = format!("{}/", lay::path_token(SESSION_STRIP_TABS));
     overflows.retain(|o| !o.node_path.starts_with(&tabs));
     (overflows, records)
 }

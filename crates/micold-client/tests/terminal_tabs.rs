@@ -287,14 +287,14 @@ fn each_strip_member_sends_its_s5_message() {
                 Message::Session(SessionMsg::ShellInstanceSelected(main, shell))
             ),
             (
+                MemberKey::Session(other),
+                Message::Session(SessionMsg::Selected(other))
+            ),
+            (
                 MemberKey::Plus,
                 Message::HeaderBar(micold_client::features::header_bar::Msg::Toggled(
                     micold_client::features::header_bar::HeaderMenu::Plus
                 ))
-            ),
-            (
-                MemberKey::Session(other),
-                Message::Session(SessionMsg::Selected(other))
             ),
         ]
     );
@@ -304,10 +304,9 @@ fn each_strip_member_sends_its_s5_message() {
         Some(SessionLocation::Default),
         "New session starts another session here"
     );
-    let src = area_source();
-    let strip = body_from(&src, "pub(crate) fn strip<'a>(");
+    // The `+` menu's first entry runs **Start another session…** for the shown location.
     assert!(
-        strip.contains("SessionMsg::AdditionalRequested(at)") && strip.contains("Icon::AddSession"),
-        "New session runs **Start another session…** for the shown location (US2 sc. 3)"
+        strip_rules_source().contains("SessionMsg::AdditionalRequested(location)"),
+        "the + menu's New session runs **Start another session…** for the shown location (US2 sc. 3)"
     );
 }

@@ -335,7 +335,10 @@ pub struct State {
     /// The open menu.
     pub menu: HeaderMenu,
     /// The selection the menu was opened under; a different one closes it.
-    under: Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+    under: (
+        Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+        usize,
+    ),
 }
 
 impl State {
@@ -353,15 +356,17 @@ impl State {
         }
     }
 
-    /// Close the menu once the selection is not the one it was opened under (a selection change
-    /// closes it); remember the selection otherwise.
+    /// Close the menu once the selection, or the shell count of the active session (an entry that
+    /// opened a shell), is not what it was opened under; remember them otherwise.
     pub fn follow(
         &mut self,
         selection: Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+        shells: usize,
     ) {
-        if self.under != selection {
+        let key = (selection, shells);
+        if self.under != key {
             self.menu = HeaderMenu::None;
-            self.under = selection;
+            self.under = key;
         }
     }
 }

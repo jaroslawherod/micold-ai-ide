@@ -153,15 +153,15 @@ fn a_selection_change_closes_the_open_menu() {
     let here = Some((SessionLocation::Worktree("a".into()), None));
     let there = Some((SessionLocation::Worktree("b".into()), None));
     let mut menus = Menus::default();
-    menus.follow(here.clone());
+    menus.follow(here.clone(), 0);
     menus.update(Msg::Toggled(HeaderMenu::Worktree));
-    menus.follow(here);
+    menus.follow(here, 0);
     assert_eq!(
         menus.menu,
         HeaderMenu::Worktree,
         "the same selection keeps it"
     );
-    menus.follow(there);
+    menus.follow(there, 0);
     assert_eq!(menus.menu, HeaderMenu::None, "another selection closes it");
 }
 
