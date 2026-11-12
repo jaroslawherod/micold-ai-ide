@@ -49,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code M2 A | 2 | M2 | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (post-rebase full diff; 1 MINOR left: dense lines at ceiling) |
 | Code M2 B | 2 | M2 | c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | 93d3ae4a366406afc1e6949c5dcc517bb7962b8d:c0809662d0414b3e40a6ff4fcc6dac7d96b05a82 | CLEAN (post-rebase full diff, conformance) |
 | Code close | 1 | close | be6578aa235c1d9ee98556a7227e0cef369fc3d5 | 8312427c4748ff20354aad339175e95c65f38c19:be6578aa235c1d9ee98556a7227e0cef369fc3d5 | CLEAN (2 MINOR fixed, prose/ledger only; single-agent, diff is tests and docs) |
+| Code close | 2 | 1833 | 62ed509a89749b15149eb2b5d141327cf59c0b62 | fadac88b2fbdfd326e654d889fdb7878dc7f21bf:4f61dca7adbce97357c5402a34a12f81b37bd395 | CLEAN (2 MINOR: frontmatter note fixed, prose only; budget-path assert left; single-agent, tests and docs diff) |
 
 ## Declined review findings
 
