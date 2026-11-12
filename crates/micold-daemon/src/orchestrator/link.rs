@@ -193,6 +193,10 @@ where
                 // A read error, like the end of the stream, is silence: the deadline runs out
                 // first, so the record turns `offline` and the loop ends after that.
                 let Some(Ok(frame)) = frame else {
+                    // Already reported offline: nothing is left to wait for.
+                    if expired {
+                        return Ok(());
+                    }
                     open = false;
                     continue;
                 };

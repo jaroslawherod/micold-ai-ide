@@ -103,6 +103,7 @@ async fn a_link_that_drops_after_going_offline_can_be_relinked() {
     orchestrator.clock.advance(LIVENESS_DEADLINE);
     record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
     drop(linked);
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     // The ended link releases its id, so the daemon links again and is online.
     let _again = FakeDaemon::link(&orchestrator, &announcement("a")).await;
