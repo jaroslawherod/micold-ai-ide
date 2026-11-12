@@ -123,6 +123,14 @@ fully clean verified one is listed; with the opt-in off nothing is removed.
   exit 0; follow-up count read as 0.
 - Paths and dates work on Linux and macOS (Principle VI): no GNU-only flags.
 
+## Clarifications
+
+### Session 2026-11-12
+
+- Q: How many follow-ups before escalating? → A: 3 per run. _(agent-resolved: .claude/skills/speckit-autopilot/rules/escalation.md#category 5, "CI red after 3 fix attempts")_
+- Q: Where do tokens come from? → A: A `Tokens` field in the run's ledger, else `unknown`; no run total is recorded anywhere today. _(agent-resolved: docs/development/autopilot-tokens.md, scripts/autopilot/checkpoint.sh)_
+- Q: How is the worktree-removal opt-in given? → A: Supervisor-ledger field `- **Auto-remove**: yes`. _(agent-resolved: scripts/autopilot/supervised.sh, the `Supervised` ledger-field precedent)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -140,23 +148,21 @@ fully clean verified one is listed; with the opt-in off nothing is removed.
   the remaining items for a live session, or a resume request for a stopped one.
 - **FR-007**: Follow-ups per run MUST be counted in the supervisor's ledger and capped; at the cap
   the tooling MUST record a category 5 escalation (`rules/escalation.md`) and send no more. The cap
-  is [NEEDS CLARIFICATION: how many follow-ups before escalating? Default proposed: 3, matching "CI
-  red after 3 fix attempts" in category 5].
+  is 3 follow-ups per run, matching "CI
+  red after 3 fix attempts" in category 5.
 - **FR-008**: A report command MUST write one report over the given runs with, per run: issue, PRs
   and their GitHub states, decisions by user and by agent (from the ledger's *Decisions* **By**
   column), interventions (from the supervisor ledger), and tokens.
 - **FR-009**: Tokens MUST be reported only from a recorded source; where none exists the entry says
-  `unknown`. [NEEDS CLARIFICATION: where do tokens come from? Options: the ledger's last
-  `checkpoint.sh` CONTEXT line (one unit's context, not run total), the metrics of #1803 when it
-  lands, or omit the column until then. Default proposed: print `unknown` unless the ledger has a
-  `Tokens` field.]
+  `unknown`. The source is a `- **Tokens**: <n>` field in the run's ledger; with no such field the entry
+  says `unknown`. No ledger field, `checkpoint.sh` line or metric records a run total today (each
+  `CONTEXT` line is one unit's context), so the tooling does not derive one.
 - **FR-010**: The report MUST list not-done and escalated runs in a separate section from completed
   ones.
 - **FR-011**: A lister MUST name worktrees safe to remove: verified run, clean tree, nothing
   unpushed, no live session; and give the reason for each worktree left out.
-- **FR-012**: Removal MUST stay a user action unless the user opted in. [NEEDS CLARIFICATION: how is
-  the opt-in given? Options: an environment variable, a field in the supervisor ledger, or an
-  argument per report. Default proposed: a supervisor-ledger field `- **Auto-remove**: yes`.]
+- **FR-012**: Removal MUST stay a user action unless the user opted in. The opt-in is a field `- **Auto-remove**: yes` in the supervisor ledger, the same
+  shape as the `- **Supervised**: yes` ledger field; absent or any other value means no opt-in.
 - **FR-013**: Even with opt-in, removal MUST go through the app's own worktree removal, and MUST
   NOT remove a worktree that is not on the safe list.
 - **FR-014**: Tests under `scripts/tests/` MUST cover each verdict (merged, open PR, dirty tree,
