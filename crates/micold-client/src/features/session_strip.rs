@@ -823,8 +823,8 @@ pub(crate) mod tests {
             .unwrap_or_default()
     }
 
-    /// S1: session tabs in the location's order, the shown session's shells and "+" right after its
-    /// own tab, and no other session's shells.
+    /// S1: session tabs in the location's order, the shown session's shells, then the "+" after
+    /// the last tab, and no other session's shells.
     #[test]
     fn the_strip_holds_each_session_then_the_shown_ones_shells_and_plus() {
         let (state, [m, h1, h2]) = strip_fixture(0);
@@ -836,9 +836,9 @@ pub(crate) mod tests {
                 MemberKey::Session(m),
                 MemberKey::Shell(m, shells[0]),
                 MemberKey::Shell(m, shells[1]),
-                MemberKey::Plus,
                 MemberKey::Session(h1),
                 MemberKey::Session(h2),
+                MemberKey::Plus,
             ]
         );
 
@@ -848,8 +848,8 @@ pub(crate) mod tests {
             vec![
                 MemberKey::Session(m),
                 MemberKey::Session(h1),
-                MemberKey::Plus,
                 MemberKey::Session(h2),
+                MemberKey::Plus,
             ],
             "another session's shell tabs are not members while it is not shown (US2 sc. 7)"
         );
@@ -967,9 +967,9 @@ pub(crate) mod tests {
                 (MemberKey::Session(m), false),
                 (MemberKey::Shell(m, shells[0]), false),
                 (MemberKey::Shell(m, shells[1]), true),
-                (MemberKey::Plus, false),
                 (MemberKey::Session(h1), true),
                 (MemberKey::Session(h2), false),
+                (MemberKey::Plus, false),
             ],
             "a stopped helper never marks the main tab"
         );
@@ -1109,7 +1109,9 @@ pub(crate) mod tests {
         let plus = member(MemberKey::Plus);
         assert_eq!(
             plus.press(),
-            Message::Session(SessionMsg::ShellInstanceOpenRequested)
+            Message::HeaderBar(crate::features::header_bar::Msg::Toggled(
+                crate::features::header_bar::HeaderMenu::Plus
+            ))
         );
         assert_eq!((plus.close(), plus.menu_tab()), (None, None));
     }
@@ -1628,9 +1630,9 @@ pub(crate) mod tests {
                 MemberKey::Session(m),
                 MemberKey::Shell(m, shells[0]),
                 MemberKey::Shell(m, shells[1]),
-                MemberKey::Plus,
                 MemberKey::Session(h1),
                 MemberKey::Session(h2),
+                MemberKey::Plus,
                 MemberKey::Review,
             ]
         );
@@ -1802,8 +1804,8 @@ pub(crate) mod tests {
         assert!(!review.stopped());
     }
 
-    /// Review A M4 F1 (US1.2, U2): with the Review tab shown, pressing the current session's tab,
-    /// one of its shell tabs or the "+" shows the terminal: the review is hidden, kept.
+    /// Review A M4 F1 (US1.2, U2): with the Review tab shown, pressing the current session's tab
+    /// or one of its shell tabs shows the terminal: the review is hidden, kept.
     #[test]
     fn a_session_shell_or_plus_press_hides_a_shown_review() {
         let (state, [m, _, _]) = with_review(0, false);
@@ -1811,7 +1813,6 @@ pub(crate) mod tests {
         for key in [
             MemberKey::Session(m),
             MemberKey::Shell(m, shells_of(&state, m)[0]),
-            MemberKey::Plus,
         ] {
             let mut pressed = state.clone();
             assert!(pressed.review_shown().is_some(), "the premise");
