@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1812
 - **Worktree branch**: feat/1812_autopilot-supervisor-m1-machine-readable-run
 - **Started**: 2026-11-10
-- **Phase**: milestones
-- **Next step**: M2 PR merges, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,14 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1819 | design (spec, plan, tasks) | merged | 5e90aef10191fe1b8f8801e63355c8a244a5eef0 |
 | #1823 | M1 | merged | acc28c34cd44b5d3eafac49cec605878b4007433 |
-| #1830 | M2 | open | |
+| #1830 | M2 | merged | 8753adb2d4b25d900aa2b6558d07843712a158af |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #1823 | merged |
-| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #1830 | in-review |
+| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #1830 | merged |
 
 ## Decisions
 
@@ -57,7 +57,7 @@ US3 (tests only) is folded into M1 (rule 7, tests travel with code); US2 is M2 (
 
 ## Handover
 
-M2 PR #1830 is open and reviewed (Review A re-run on the current head: CLEAN). Next: the orchestrator merges.
+None. M2 merged; close PR is the last.
 
 ## Open escalation
 

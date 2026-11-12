@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-10
 
-**Status**: Draft
+**Status**: Closed 2026-11-12 — shipped in PRs #1819, #1823, #1830
 
 **Input**: User description: "autopilot supervisor M1: machine-readable run status and non-blocking escalation (issue #1812)"
 

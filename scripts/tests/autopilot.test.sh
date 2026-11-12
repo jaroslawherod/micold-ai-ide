@@ -634,6 +634,18 @@ check "context hook tells a prep unit in another worktree to hand over" 0 '24000
 check "context hook ignores a missing transcript" 0 '^$' chook nope
 check "ask.md skips AskUserQuestion over the cap" 0 'do not call' grep -A3 'Restart small' "$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"
 
+# Supervised escalation prose (US2 AC1-AC3, FR-010, FR-011b, FR-013, SC-003): tasks/ask.md and tasks/resume.md.
+AK="$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"; RM="$ROOT/.claude/skills/speckit-autopilot/tasks/resume.md"
+check "ask.md: a supervised run asks through supervised.sh" 0 '^ok$' bash -c "grep -q 'supervised.sh <ledger>' '$AK' && grep -q 'exits 0' '$AK' && echo ok"
+check "ask.md: supervised sends banner and notification, no AskUserQuestion, ends the turn" 0 '^ok$' bash -c "grep -A3 'Supervised?' '$AK' | grep -qi 'no .AskUserQuestion' && grep -A3 'Supervised?' '$AK' | grep -qi 'end the turn' && echo ok"
+check "ask.md: no ledger or not supervised keeps asking as before" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$AK' | grep -qi 'No ledger yet or not supervised: ask as below' && echo ok"
+check "ask.md: the answer returns as resume <answer>" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$AK' && echo ok"
+check "ask.md: supervised, answer.sh records the answer" 0 '^ok$' bash -c "grep -q 'answer.sh. records the answer' '$AK' && echo ok"
+check "resume.md: resume <answer> calls answer.sh then continues" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$RM' && grep -q 'answer.sh <ledger>' '$RM' && grep -qi 'apply the answer' '$RM' && echo ok"
+check "resume.md: a refused batch is relayed and a repeat is ignored" 0 '^ok$' bash -c "grep -q 'Exit 2' '$RM' && grep -q 'ignored: no open escalation' '$RM' && echo ok"
+check "resume.md: resume alone re-sends the banner and ends the turn" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$RM' | grep -qi 'resume. alone.*banner again and end the turn' && echo ok"
+check "resume.md: run-status.sh reports the run as asking" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$RM' | grep -q 'run-status.sh --json. reports a run as .asking. with the question' && echo ok"
+
 # The same hook: after three requests in a row that each made one read-only call, it says to batch.
 tuse() {  # tuse <id> <context> <tool json>...
   local id="$1" ctx="$2"; shift 2; local blocks; blocks="$(IFS=,; echo "$*")"
