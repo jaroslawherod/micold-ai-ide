@@ -246,6 +246,7 @@ mod container {
             &delivery,
             None,
             None,
+            &micold_core::daemons::SessionExtras::default(),
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
