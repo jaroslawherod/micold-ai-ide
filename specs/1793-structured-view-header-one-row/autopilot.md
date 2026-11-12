@@ -53,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 Review B (sonnet) | 2 | M3 | c9a0aca2f3183ea98d7930ebe34c1019f5689022 | e7d809e858b3a14d0c9d98208cce436e08d65c72:c9a0aca2f3183ea98d7930ebe34c1019f5689022 | CLEAN (round 2: fix diff since reviewed head 1341b483 is ledger-only, no code change; round 1 findings fixed and covered by the round-1 A+B CLEAN row) |
 | M3 Review A (high) | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
 | M3 Review B (sonnet) | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
+| M3 Review A+B | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
 
 ## Declined review findings
 
