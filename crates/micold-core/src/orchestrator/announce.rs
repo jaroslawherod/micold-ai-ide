@@ -134,10 +134,7 @@ pub fn decode_first_frame(body: &[u8]) -> Result<FirstFrame, DecodeError> {
 
 /// Whether a preamble that began at `started` has run out of time at `now`.
 pub fn preamble_expired(started: Instant, now: Instant) -> bool {
-    todo!(
-        "{started:?} {now:?} {LIVENESS_DEADLINE:?} {:?}",
-        Duration::ZERO
-    )
+    now.saturating_duration_since(started) >= LIVENESS_DEADLINE
 }
 
 #[cfg(test)]
