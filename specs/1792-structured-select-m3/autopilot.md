@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
 | #1842 | M1 | merged | 7628262fce95c344ccb9eed01db1138e2da2a5fa |
+| #1851 | M2 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | merged |
-| M2 | T011–T012 | light | menu parity pinned (test-only if green) | PR pending | open |
+| M2 | T011–T012 | light | menu parity pinned (test-only if green) | #1851 | open |
 | M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | pending |
 
 Polish T022–T023 (no code) is left to the close unit.
