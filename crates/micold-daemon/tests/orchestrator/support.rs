@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use interprocess::local_socket::tokio::{prelude::*, Stream};
 use interprocess::local_socket::{GenericFilePath, ToFsName};
@@ -111,7 +112,7 @@ impl Orchestrator {
     pub async fn list(&self) -> serde_json::Value {
         let mut framed = Framed::new(self.dial().await, preamble_codec());
         framed
-            .send(br#"{"query":"list"}"#.as_slice().into())
+            .send(Bytes::from_static(br#"{"query":"list"}"#))
             .await
             .expect("the query is sent");
         let frame = tokio::time::timeout(WITHIN, framed.next())
@@ -186,7 +187,7 @@ impl FakeDaemon {
     /// Send the announcement and read the verdict.
     pub async fn announce(&mut self, announcement: &LinkAnnouncement) -> LinkVerdict {
         let body = serde_json::to_vec(announcement).expect("encodes");
-        self.framed.send(body.into()).await.expect("sent");
+        self.framed.send(Bytes::from(body)).await.expect("sent");
         let frame = tokio::time::timeout(WITHIN, self.framed.next())
             .await
             .expect("a verdict arrives")
