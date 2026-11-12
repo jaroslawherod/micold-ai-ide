@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 2 | 1844 | e76339bd8894d8f87c9dcfe227589e69ffe70ef4 | 109d5824af9fb44fdc5cc730b1bfd7fdd39de921:e76339bd8894d8f87c9dcfe227589e69ffe70ef4 | CLEAN (3 MINOR; Verify by CI green on head, targeted run not started) |
 | A | 3 | 1844 | 99825b74517607de40b166cbf02135ca66fc131a | 2bcfdff2dd60d54a3ffb7231b0b3cb831a170f2d:99825b74517607de40b166cbf02135ca66fc131a | CLEAN (rebase onto main: code patch-ids identical, docs conflicts kept both sides; gate green 12838 tests) |
 | B | 3 | 1844 | 99825b74517607de40b166cbf02135ca66fc131a | 2bcfdff2dd60d54a3ffb7231b0b3cb831a170f2d:99825b74517607de40b166cbf02135ca66fc131a | CLEAN (rebase onto main: code patch-ids identical, docs conflicts kept both sides; gate green 12838 tests) |
+| A | 4 | 1844 | 6017c87a9389b5dd17a4434143f8d4c595ef6a0f | 5fe37646c018536c95ec1295237631b11b0cee2d:6017c87a9389b5dd17a4434143f8d4c595ef6a0f | CLEAN (rebase onto moved main plus call-site fix 6017c87a9; patch lines unchanged; gate green 12888 tests) |
+| B | 4 | 1844 | 6017c87a9389b5dd17a4434143f8d4c595ef6a0f | 5fe37646c018536c95ec1295237631b11b0cee2d:6017c87a9389b5dd17a4434143f8d4c595ef6a0f | CLEAN (rebase onto moved main plus call-site fix 6017c87a9; patch lines unchanged; gate green 12888 tests) |
 
 ## Declined review findings
 
