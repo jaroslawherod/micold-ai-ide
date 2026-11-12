@@ -274,7 +274,7 @@ pub enum MemberKey {
 }
 
 /// The "+" member's width: its icon button's touch target (R8).
-pub const PLUS_WIDTH: f32 = micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET;
+pub const PLUS_WIDTH: f32 = crate::ui::session_area::ROW_HEIGHT;
 
 impl Member {
     /// The key its widget state is kept under (R10).

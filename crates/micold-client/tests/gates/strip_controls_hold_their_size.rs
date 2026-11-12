@@ -63,7 +63,7 @@ fn every_member_is_laid_out_at_its_own_width() {
     assert!(checked > 0, "no strip member was located");
 }
 
-/// S9, FR-010: the status cluster and the split buttons are each laid out wider
+/// S9, FR-010: each strip control is laid out wider
 /// than nothing, and the splits measure the same at every member count.
 #[test]
 fn the_fixed_controls_hold_their_size_at_every_member_count() {
