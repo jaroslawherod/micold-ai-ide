@@ -32,8 +32,9 @@ first and the third starts when one finishes.
 3. **Given** the label `autopilot:queue` and no explicit list, **When** the supervisor starts,
    **Then** it queues the open issues carrying that label, in ascending issue number.
 4. **Given** a started issue, **When** the supervisor starts it, **Then** it creates the worktree
-   for the issue and starts the session with the prompt `/speckit-autopilot #<n>` and the
-   supervised marker from M1 (`AUTOPILOT_SUPERVISED`).
+   for the issue and starts the session with the prompt `/speckit-autopilot #<n> supervised`,
+   which makes the run record `- **Supervised**: yes` in its ledger (`create_session` has no
+   environment argument, so the marker travels in the prompt).
 
 ---
 
@@ -163,7 +164,8 @@ output; the status read is `--json`.
   the failing check when any fails.
 - **FR-003**: For each issue it starts, the supervisor MUST create the worktree with
   `create_worktree` (`github_issue` set) and then start the session with `create_session` using the
-  prompt `/speckit-autopilot #<n>` and the supervised marker.
+  prompt `/speckit-autopilot #<n> supervised`; the `speckit-autopilot` skill MUST write
+  `- **Supervised**: yes` into its ledger when given that trailing argument.
 - **FR-004**: The supervisor MUST NOT start an issue while another issue with overlapping touched
   files occupies a slot (any ledger state except `done`, `failed`, `lost`, `skipped`), and MUST take the touched files from the issue's declaration first, and from
   `flows`/spec paths otherwise.
@@ -207,7 +209,7 @@ output; the status read is `--json`.
 ## Assumptions
 
 - M1 (#1812) is merged: `scripts/autopilot/run-status.sh --json` and `supervised.sh` exist, and
-  `AUTOPILOT_SUPERVISED` marks a supervised run.
+  `AUTOPILOT_SUPERVISED` or the ledger line `- **Supervised**: yes` marks a supervised run.
 - The micold MCP tools `create_worktree` and `create_session` are available to the supervisor
   session, as `CLAUDE.md` describes for "Start work on issue".
 - A session's slot is released when its status is `done`; a merged PR is handled by that session.

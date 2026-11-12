@@ -99,7 +99,7 @@ starts autopilot sessions and never runs a flow itself.
 |---|---|
 | FR-001 queue from list or label | SKILL.md *Build the queue* (`gh issue list --label autopilot:queue`, sorted); `supervisor.sh ledger init` |
 | FR-002 gate | `supervisor.sh gate`; contracts/supervisor-cli.md |
-| FR-003 worktree + session | SKILL.md *Start an issue* (MCP calls, prompt `/speckit-autopilot #<n>`, prompt `/speckit-autopilot #<n> supervised`, research D8) |
+| FR-003 worktree + session | SKILL.md *Start an issue* (MCP calls, prompt `/speckit-autopilot #<n> supervised`, research D8) |
 | FR-004 overlap | `supervisor.sh touches`, `supervisor.sh overlap`, used by `next` |
 | FR-005 ledger | data-model.md; `supervisor.sh ledger set/get` |
 | FR-006 resume | SKILL.md *Restart* (incl. a `starting` row with empty cells, data-model.md); `supervisor.sh map` + `check-owner` |
@@ -119,7 +119,7 @@ starts autopilot sessions and never runs a flow itself.
 | `supervisor.test.sh` next cases | US1 1-2, SC-001, US3 1-3, FR-004, FR-008 |
 | `supervisor.test.sh` map/ledger cases | US4 1-4, SC-002, FR-011, tries/`failed`, owner refusal, `map --exit 2/3`, `skipped` via `ledger set`, owner set after `FREE` |
 | `supervisor.test.sh` watcher cases | exits on a changed state and at the ceiling (`AUTOPILOT_WATCH_CEILING`), uses a stub `run-status.sh` through `AUTOPILOT_RUN_STATUS`, `--interval 1 --ceiling 2` |
-| `supervisor.test.sh` skill-text cases | US5: no `read_session_output`, `--json` used, supervised marker and prompt present, speckit-autopilot SKILL.md documents the `supervised` argument |
+| `supervisor.test.sh` skill-text cases | US5: no `read_session_output`, `--json` used, supervised marker and prompt present, speckit-autopilot SKILL.md documents the `supervised` argument and the literal `- **Supervised**: yes` line `supervised.sh` matches |
 | Not tested automatically | the live MCP calls (`create_worktree`, `create_session`): quickstart.md Part B, run by hand once |
 | Core / client / geometry / visual pass | not applicable: no Rust or UI change |
 
