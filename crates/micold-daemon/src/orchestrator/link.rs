@@ -185,28 +185,30 @@ where
     let mut timer = tokio::time::interval(CHECK_INTERVAL);
     timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut open = true;
+    let mut expired = false;
     let mut nonce = 0_u64;
     loop {
         tokio::select! {
             frame = framed.next(), if open => {
-                let Some(frame) = frame else {
+                // A read error, like the end of the stream, is silence: the deadline runs out
+                // first, so the record turns `offline` and the loop ends after that.
+                let Some(Ok(frame)) = frame else {
                     open = false;
                     continue;
                 };
-                let frame = frame.map_err(io::Error::other)?;
+                expired = false;
                 if shared.registry().answered(link, shared.now(), shared.wall_secs()).0
                     == LinkAction::Stale
                 {
                     return Ok(());
                 }
                 match frame {
-                    Frame::Control(ClientMsg::Goodbye) => return Ok(()),
+                    Frame::Control(ClientMsg::Goodbye) => open = false,
                     Frame::Control(msg) => {
                         if let Some(answer) = query::not_hosted(&msg) {
-                            framed
-                                .send(Frame::Control(answer))
-                                .await
-                                .map_err(io::Error::other)?;
+                            if framed.send(Frame::Control(answer)).await.is_err() {
+                                open = false;
+                            }
                         }
                     }
                     _ => {}
@@ -217,6 +219,9 @@ where
                 match action {
                     LinkAction::Stale => return Ok(()),
                     LinkAction::Expired if !open => return Ok(()),
+                    LinkAction::Expired => expired = true,
+                    // Closed after the deadline had already run out: nothing is left to wait for.
+                    _ if !open && expired => return Ok(()),
                     LinkAction::SendPing if open => {
                         nonce += 1;
                         if framed.send(Frame::Control(DaemonMsg::LinkPing { nonce })).await.is_err() {

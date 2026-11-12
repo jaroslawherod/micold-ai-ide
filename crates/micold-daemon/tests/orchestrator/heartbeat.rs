@@ -92,3 +92,16 @@ async fn a_dropped_link_turns_offline_once_the_deadline_passes() {
     let offline = record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
     assert_eq!(offline["last_seen"], start);
 }
+
+#[tokio::test]
+async fn a_link_that_drops_after_going_offline_can_be_relinked() {
+    let orchestrator = Orchestrator::start().await;
+    let linked = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    orchestrator.clock.advance(LIVENESS_DEADLINE);
+    record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
+    drop(linked);
+
+    // The ended link releases its id, so the daemon links again and is online.
+    let _again = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    record_when(&orchestrator, "a", |a| a["health"] == "online").await;
+}
