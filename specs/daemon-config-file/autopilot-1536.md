@@ -49,7 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 3 | 1844 | 99825b74517607de40b166cbf02135ca66fc131a | 2bcfdff2dd60d54a3ffb7231b0b3cb831a170f2d:99825b74517607de40b166cbf02135ca66fc131a | CLEAN (rebase onto main: code patch-ids identical, docs conflicts kept both sides; gate green 12838 tests) |
 | A | 4 | 1844 | 6017c87a9389b5dd17a4434143f8d4c595ef6a0f | 5fe37646c018536c95ec1295237631b11b0cee2d:6017c87a9389b5dd17a4434143f8d4c595ef6a0f | CLEAN (rebase onto moved main plus call-site fix 6017c87a9; patch lines unchanged; gate green 12888 tests) |
 | B | 4 | 1844 | 6017c87a9389b5dd17a4434143f8d4c595ef6a0f | 5fe37646c018536c95ec1295237631b11b0cee2d:6017c87a9389b5dd17a4434143f8d4c595ef6a0f | CLEAN (rebase onto moved main plus call-site fix 6017c87a9; patch lines unchanged; gate green 12888 tests) |
-| A | 1 | close | 4884ffcbc8c6e0de14703b1de33a3abaeecc1206 | b516856df9ae864e99ceea047c63c84187522f7d:8d86299527ffd3011afd845c30a8f28b76029cee | CLEAN (3 MINOR, in follow-ups; full gate green) |
+| A | 5 | 1854 | ecfbe32df4107e9062dd10ff06c7a0fae4b2140e | b516856df9ae864e99ceea047c63c84187522f7d:ecfbe32df4107e9062dd10ff06c7a0fae4b2140e | CLEAN (close review of 4884ffcbc; 4884ffcbc..ecfbe32df is ledger/format-only; 3 MINOR in follow-ups; full gate green) |
 
 ## Declined review findings
 
