@@ -1137,10 +1137,7 @@ mod tests {
         let node = element.as_widget_mut().layout(
             &mut tree,
             &renderer,
-            &iced::advanced::layout::Limits::new(
-                iced::Size::ZERO,
-                iced::Size::new(2000.0, 4000.0),
-            ),
+            &iced::advanced::layout::Limits::new(iced::Size::ZERO, iced::Size::new(2000.0, 4000.0)),
         );
         let mut collected = CollectedText(Vec::new());
         element.as_widget_mut().operate(
@@ -1170,8 +1167,7 @@ mod tests {
             "each error adds the same: {none} {one} {two}"
         );
 
-        let mut with_error =
-            daemon_row(view_of(&["disk quota exceeded"]), &state, None, roles);
+        let mut with_error = daemon_row(view_of(&["disk quota exceeded"]), &state, None, roles);
         let text = rendered_text(&mut with_error);
         assert!(
             text.contains("disk quota exceeded"),
