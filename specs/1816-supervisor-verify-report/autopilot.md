@@ -30,7 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
+| Review spec | 1 | spec | ccda446bbb793388d82591ed5efe64fcd9f1a86a | d9bb42cb052543f3a2ea6c08b2e67dddbd00b4b9:c1af633993e0d08fce04690906bf0074fe12df1d | CLEAN (3 MINOR fixed, prose only) |
 
 ## Declined review findings
 
