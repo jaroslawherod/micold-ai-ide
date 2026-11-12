@@ -184,7 +184,7 @@ Includes AI sign-in delivery (replaces the `[[ai.sign_in]]` draft): research D9.
 - [X] T099 [US4] Failing test in `crates/micold-core/src/provision/ai_cli.rs`: `use_machine_sign_in` (H/S, off by default) makes the CLI use the machine's own sign-in and config dir, with the read-only rule not applying; then implement it, with existing host daemons migrating with it off and Settings asking once (D15, user decision)
 - [X] T100 [US4] Failing tests: in `crates/micold-daemon/tests/config_reload.rs` the diagnostic shows each delivered AI sign-in's `expiresAt`; in `crates/micold-core/src/kube/credentials.rs` the client re-delivers the pod Secret when the host sign-in changes; then implement both (D15 row 14)
 - [x] T066 [US4] Settings → Daemons per CLI (`crates/micold-client/src/ui/settings/daemons.rs`): enabled, version, args, model, base URL, sign-in, API key, settings file; render into `[[ai.cli]]`; `default_ai_cli` and other live settings stay in `settings.json` (FR-013d)
-- [ ] T067 [US4] Document in `docs/user-guide/settings.md` and `daemon-configuration.md`, including the file-vs-settings.json rule
+- [x] T067 [US4] Document in `docs/user-guide/settings.md` and `daemon-configuration.md`, including the file-vs-settings.json rule
 
 ---
 

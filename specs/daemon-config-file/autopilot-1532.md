@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4a (PR open, awaiting CI/merge)
-- **Next step**: orchestrator waits on CI for #1843 and merges; then M4b (T067) — user guide + `visual-pass` of the new accordion.
+- **Phase**: milestone M4b (gate/reviews done, PR next)
+- **Next step**: commit, push, open M4b's PR (docs-tier, T067); then the orchestrator merges and dispatches the close unit.
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1772 | M2a — sign-in delivery, read-only on every kind (SC-008) | merged | f585c83c829a751556ded4115f3c3275e7834221 |
 | #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | merged | b4216564604c9b93a3f8c685e9a676113f92f6cc |
 | #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | merged | c6f958f09e26d1f70da6c95798d0bc841c5ce90f |
-| #1843 | M4a — Settings → Daemons renders `[[ai.cli]]` | open | — |
+| #1843 | M4a — Settings → Daemons renders `[[ai.cli]]` | merged | 80711fb26b0b6dfa2d919297fa16675f56967767 |
 
 ## Milestones
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2a | sign-in delivery, read-only on every kind (SC-008) | T065 | full | #1772 (merged, `f585c83c829a751556ded4115f3c3275e7834221`) |
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (merged, `c6f958f09e26d1f70da6c95798d0bc841c5ce90f`) |
-| M4a | Settings → Daemons renders `[[ai.cli]]` | T066 | full | #1843 (open) |
+| M4a | Settings → Daemons renders `[[ai.cli]]` | T066 | full | #1843 (merged, `80711fb26b0b6dfa2d919297fa16675f56967767`) |
 | M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | — |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
@@ -96,6 +96,8 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | Review B | 1 | 1843 | 66393c586a0d96b262095bc6fdbe839badadc0ec | c1a7668925adf46715243157b9cf91962c7642db:66393c586a0d96b262095bc6fdbe839badadc0ec | CLEAN Verify daemon_config_render 10 passed, settings::daemons 1 passed |
 | Review A | 2 | 1843 | 196fa5462cd5b726ab2bc4798967f5a517718945 | b0b3f3f361c640b031a1c0e038064d6f89a73643:196fa5462cd5b726ab2bc4798967f5a517718945 | CLEAN fix diff only (clippy struct-update + allow-list entry), verified equivalent |
 | Review B | 2 | 1843 | 196fa5462cd5b726ab2bc4798967f5a517718945 | b0b3f3f361c640b031a1c0e038064d6f89a73643:196fa5462cd5b726ab2bc4798967f5a517718945 | CLEAN fix diff only; Verify re-confirmed by the full workspace test run in the recorded green gate on this tree |
+| M4b review A | 1 | 1532 | 80711fb26b0b6dfa2d919297fa16675f56967767 | c2840539a031a8afba65b7d74a1478d205434e70:80711fb26b0b6dfa2d919297fa16675f56967767 | CLEAN — docs-only ledger/tasks.md bookkeeping, accurate |
+| M4b review B | 1 | 1532 | 80711fb26b0b6dfa2d919297fa16675f56967767 | c2840539a031a8afba65b7d74a1478d205434e70:80711fb26b0b6dfa2d919297fa16675f56967767 | CLEAN — Deliverable's `[[ai.cli]]` fields/file-vs-settings.json rule confirmed present in docs (landed with M4a); scope/ownership clean; plan-drift.sh pre-existing regex limitation, not a finding |
 
 M3 review A round 1 (snapshot `1c9f76ca9a426f7fee60d0a8f7e41741f1fb71a8:981a23b90055e9ef655bfc1c28ed68de9f11d1a2`): CHANGES, 2 MAJOR fixed (see Declined review findings), re-review (sonnet, snapshot `28a2f2bb7cffb5c8037edfd2329136c793bbcef2:91aea0b4f45a48d631485130d3625c7ba9ad04bc`): CLEAN, MINORs only. Review B (sonnet): CLEAN, 3 MINOR (Verify lines retargeted, D10 scope noted in tasks.md; Verify did not finish under the shared build lock, the scoped gate ran these tests green). plan-drift.sh cannot run for this multi-issue tasks.md.
 
@@ -124,6 +126,17 @@ M4a review A round 1 (autopilot-reviewer, high, snapshot `4e9045a39ad6bfbb01c2e5
 
 
 ## Gate
+
+M4b: diff is docs-tier (ledger + `tasks.md` only — the T067 docs prose itself landed in M4a's PR
+#1843). `mise run test-scripts` green (`GATE_EXIT=0`) at tree `c2840539a031a8afba65b7d74a1478d205434e70`,
+no code/test/script/build-config files touched so no `mise run gate` is required. Visual pass
+re-confirmation attempted (milestone's Verify line): this sandbox has no Xvfb, xdotool, sway, grim
+or ImageMagick, and no apt-get/docker/mise plugin to add them (confirmed via `which`/`dpkg -l`,
+same gap hit independently by a delegated `autopilot-worker`) — not a finding against the diff,
+an environment limitation. The accordion's own visual pass already ran and passed during M4a
+(PASS x4, headless sway, evidence at `specs/daemon-config-file/visual/*.png`, already merged to
+`main` in #1843); nothing in M4b's diff touches the UI, so that evidence stands for M4b's
+deliverable.
 
 M2b: full `mise run gate` (MICOLD_DAEMON_CONFIG unset) green on the rebased tree (an earlier run failed only on the unrelated flaky `structured_session::an_exit_mid_turn_ends_the_turn_with_a_note` and a still earlier one went red only on this diff's own new test, an over-strict Claude `u64::MAX` ms assertion, fixed).
 
