@@ -22,7 +22,7 @@ description: "Task list for feature 1786: sidebar user groups"
 - [ ] T005 [A24][U7][U8] Add `layouts_path`, `load_layout`, `save_layout` to `crates/micold-core/src/store.rs` (`JsonFileStore` plus `Store` trait defaults like runs), reusing `write_atomic` and `read_or_quarantine`, file `layouts/<project id>.json` (depends on T003, T004).
 - [ ] T006 [U9][U10][U11][U12] [A28] Tests in `crates/micold-client/tests/sidebar_state.rs` and `sidebar_tree.rs`: with an empty layout `sidebar_entries` is unchanged; with a layout, order is Default, then per group `UserGroup(header)` plus its rows (run groups with their runs as one unit) when expanded, then ungrouped rows; collapsed group hides rows but keeps header; empty group keeps header; tag filter hides rows but keeps stored order; `row_heights`/`row_index` count headers; `location_nodes` skips headers; reconcile runs when the live worktree list changes (a worktree added or removed appears in ungrouped or leaves its group); hover, context menu and keyboard navigation (803) work over a grouped list (C5, FR-017). Red first.
 - [ ] T007 [U9][U10][U11][U12] [A28] Implement in `crates/micold-client/src/features/sidebar.rs`: `SidebarEntry::UserGroup(GroupHeaderNode)`; the state holds the loaded layout (loaded and reconciled when a project opens, and reconciled again on every change of the live worktree list, so a worktree added or removed by another window or on disk is appended or dropped while the app runs; tested in T006); `sidebar_entries` applies it after `arrange_groups`; update `row_heights`, `row_index`; `reveal_ready` expands a collapsed group holding the target. Edit `crates/micold-client/src/features/navigation.rs` so `location_nodes` skips headers and a header is one stop (depends on T005, T006).
-- [ ] T008 [P] Create the shared `GroupHeader::new(name, on_toggle).collapsed(b).count(n).roles(r)` and `DropMarker` builders in `crates/micold-client/src/ui/material/group_header.rs` (export in `ui/material/mod.rs`) and add the role `TypeRole::UserGroupHeader` (not `SidebarGroup`); a long name is truncated, empty group shows an empty state (R7, Principle VIII).
+- [ ] T008 [P] Create the shared `GroupHeader::new(name, on_toggle).collapsed(b).count(n).roles(r)` and `DropMarker` builders in `crates/micold-client/src/ui/material/group_header.rs` (export in `ui/material/mod.rs`) and add the role `TypeRole::UserGroupHeader` in `crates/micold-material/src/text.rs` (not `SidebarGroup`); a long name is truncated, empty group shows an empty state (R7, Principle VIII).
 
 ## Phase 3: User Story 1 - Create, rename and delete a group (P1) 🎯 MVP
 
@@ -37,7 +37,7 @@ Create (scenarios 1, 4, 5 on create):
 - [ ] T012 [A1][U31] [US1] Create `crates/micold-client/src/features/sidebar_group_actions.rs`: `Msg::New`, naming draft `{ target: New | Rename(id) | NewAndMove(item), text, error }`, apply-and-save outcome (save off the render path, failed save keeps the in-memory layout and sets the status message, R9) (depends on T010, T011).
 - [ ] T013 [US1] Edit `crates/micold-client/src/ui/rename_dialog.rs` (title and error line parameters) and register the group naming dialog in `crates/micold-client/src/overlay/registry.rs` beside `WorktreeContextMenu` (R6).
 - [ ] T014 [US1] Add "New group" to `more_menu_items` (feature 1125) and a new empty-area sidebar menu, the chord entry in `crates/micold-client/src/keymap.rs` and `crates/micold-client/src/ui/shortcut_sheet.rs` (C6a, FR-001).
-- [ ] T015 [US1] Geometry gate test `crates/micold-client/tests/gates/sidebar_group_header_fits.rs`: `row_heights` with headers, long name truncates, header fits the row height; the full name stays reachable (tooltip on the header, and the rename field shows it). Red first.
+- [ ] T015 [US1] Geometry gate test `crates/micold-client/tests/gates/sidebar_group_header_fits.rs`, wired by a `#[path = "gates/sidebar_group_header_fits.rs"] mod` line in `crates/micold-client/tests/layout_snapshot.rs`, laying out a new `pub` GroupHeader showcase pose added in `crates/micold-client/src/showcase/sections/surfaces.rs` (as `disclosure_card_header_fits` does): `row_heights` with headers, long name truncates, header fits the row height; the full name stays reachable (tooltip on the header, and the rename field shows it). Red first.
 - [ ] T016 [US1] Glue in `crates/micold-client/src/ui/sidebar.rs` (draw `GroupHeader` rows from `SidebarEntry::UserGroup`, "New group" button in the project header and empty-area menu) and `crates/micold-client/src/main.rs` (route group Msgs) (depends on T007, T008, T012, T013, T014, T015).
 - [ ] T017 [US1] User guide: creating a group, naming rules, in `docs/user-guide/worktrees-and-sessions.md` (Constitution VII; CI user-guide gate).
 
@@ -84,8 +84,8 @@ Rename and delete (scenarios 2, 3):
 
 ## Phase 7: Polish and cross-cutting
 
-- [ ] T043 [P] Showcase poses for group header, drop marker and drop highlight in `crates/micold-client/src/showcase/sections/surfaces.rs` (Principle VIII).
-- [ ] T044 Re-record the layout snapshot `crates/micold-client/tests/layout_snapshot.rs` and update `docs/development/layout-snapshot.md`.
+- [ ] T043 [P] Showcase poses for the drop marker and drop highlight (the group header pose is T015) in `crates/micold-client/src/showcase/sections/surfaces.rs` (Principle VIII).
+- [ ] T044 Re-record the layout snapshot `crates/micold-client/tests/layout_snapshot.rs` for the M1 header and "New group" button and update `docs/development/layout-snapshot.md` (a later milestone whose UI changes the snapshot re-records it in its own PR). Run after T016.
 - [ ] T045 Run quickstart §B (visual-pass skill), save screenshots of layout, highlight and marker in both themes to `specs/1786-sidebar-user-groups/visual-pass/` (SC-007).
 
 ## Dependencies and order
@@ -95,7 +95,7 @@ Phase 1 → Phase 2 → US1 (create, then rename/delete) → US2 → US3/US5 →
 ## Parallel examples
 
 - T002 with T004 (core unit file vs store test file); T008 with T004.
-- T043 with T044 after all stories.
+- T043 with T045 after all stories.
 
 ## Implementation Strategy
 
@@ -107,9 +107,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Layout core, store and create a group 🎯 MVP
 
-- **Tasks**: T001–T017
+- **Tasks**: T001–T017, T044
 - **Deliverable**: a user chooses "New group", names it, sees the group header in the sidebar and finds it after a restart; blank and duplicate names are refused with a message.
-- **Satisfies**: US1 acceptance scenarios 1, 4, 5 (create); FR-001, FR-004, FR-012, FR-013, FR-014, FR-018; SC-003
+- **Satisfies**: US1 acceptance scenarios 1, 4, 5 (create); FR-001, FR-004, FR-012, FR-013, FR-014, FR-015, FR-017, FR-018; SC-003
 - **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions --test sidebar_layout_store`; quickstart §B step 1
 - **Depends on**: —
 - **Tier**: full
@@ -145,15 +145,15 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T035–T042
 - **Deliverable**: rows and groups reorder by drag and Move up/down; groups collapse and expand and keep their state across restarts; card state never moves a row.
-- **Satisfies**: US4 acceptance scenarios 1–4; US6 acceptance scenarios 1–3; US7 acceptance scenarios 1–2; FR-011, FR-013, FR-017, FR-019 (group reorder, header arming); SC-005
+- **Satisfies**: US4 acceptance scenarios 1–4; US6 acceptance scenarios 1–3; US7 acceptance scenarios 1–2; FR-002 (group menu Move up/down), FR-010 (Move up/down), FR-011, FR-013, FR-017, FR-019 (group reorder, header arming); SC-005
 - **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test sidebar_drag --test sidebar_group_actions`; quickstart §B steps 4–6
 - **Depends on**: M4
 - **Tier**: full
 
-### M6 — Showcase, snapshot and visual pass
+### M6 — Showcase poses and visual pass
 
-- **Tasks**: T043–T045
-- **Deliverable**: the showcase shows the group header, marker and highlight; the layout snapshot and its doc describe user groups; the visual pass is recorded in both themes.
+- **Tasks**: T043, T045
+- **Deliverable**: the showcase shows the drop marker and highlight (header pose shipped in M1); the visual pass is recorded in both themes.
 - **Satisfies**: SC-007; Constitution VII, VIII
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot`; quickstart §B step 7
 - **Depends on**: M5
