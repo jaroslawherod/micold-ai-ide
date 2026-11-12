@@ -13,6 +13,7 @@ use micold_client::features::session_strip::{
     marked_tab, marked_tab_index, member_offsets, scroll_into_view, Member, PlusMenuModel,
     StripModel, StripTab, ANOTHER_SESSION, PLUS_MENU_NAME, TERMINAL,
 };
+use micold_client::features::structured_transcript::TranscriptMsg;
 use micold_core::session::{SessionId, ShellInstanceId};
 
 #[test]
@@ -139,4 +140,82 @@ fn choosing_an_entry_closes_the_plus_menu() {
         state.update(press);
         assert_eq!(state.header_bar.menu, HeaderMenu::None, "the menu closed");
     }
+}
+
+fn with_lifecycle(
+    mut state: State,
+    lifecycle: micold_core::session::SessionLifecycle,
+) -> State {
+    for session in state.workspace.sessions.values_mut().flatten() {
+        session.lifecycle = lifecycle.clone();
+    }
+    state
+}
+
+fn working_of(state: &State) -> Vec<bool> {
+    StripModel::of(state)
+        .expect("a strip")
+        .members
+        .iter()
+        .filter_map(|m| match m {
+            Member::Session { working, .. } => Some(*working),
+            _ => None,
+        })
+        .collect()
+}
+
+/// T022 (FR-006): a working session's tab carries the activity dot; failed, exited or idle ones
+/// carry none, and no member carries a `running` word.
+#[test]
+fn only_a_working_session_tab_shows_the_activity_dot() {
+    use micold_core::session::SessionLifecycle;
+    let running = with_lifecycle(transcript_pane_insights(), SessionLifecycle::Running);
+    assert_eq!(working_of(&running), [true], "a running session is working");
+    for lifecycle in [
+        SessionLifecycle::Idle,
+        SessionLifecycle::Starting,
+        SessionLifecycle::Failed {
+            reason: "boom".into(),
+            attempts: 3,
+        },
+    ] {
+        let state = with_lifecycle(transcript_pane_insights(), lifecycle.clone());
+        assert_eq!(working_of(&state), [false], "{lifecycle:?} shows no dot");
+    }
+    for member in StripModel::of(&running).expect("a strip").members {
+        if let Member::Session { label, .. } = member {
+            assert!(!label.contains("running"), "no running text: {label:?}");
+        }
+    }
+}
+
+/// T022 (FR-001, FR-010, FR-013): the `N hidden` chip exists only while events are hidden, is named
+/// "N hidden events, show" and shows them.
+#[test]
+fn the_hidden_chip_shows_the_count_only_while_events_are_hidden() {
+    let mut state = transcript_pane_insights();
+    let session = state.session.active.expect("a session");
+    state.settings.show_raw_events = false;
+    let hidden = state
+        .structured_transcript
+        .transcript(session)
+        .expect("a transcript")
+        .hidden_count(false);
+    assert!(hidden > 0, "the premise: the recording hides events");
+    let chip = StripModel::of(&state)
+        .expect("a strip")
+        .hidden
+        .expect("a chip while events are hidden");
+    assert_eq!(chip.text, format!("{hidden} hidden"));
+    assert_eq!(chip.name, format!("{hidden} hidden events, show"));
+    assert_eq!(
+        chip.press,
+        Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(true)))
+    );
+    state.settings.show_raw_events = true;
+    assert_eq!(
+        StripModel::of(&state).expect("a strip").hidden,
+        None,
+        "nothing is hidden with raw events shown"
+    );
 }
