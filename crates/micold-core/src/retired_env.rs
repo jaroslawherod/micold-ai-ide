@@ -37,6 +37,8 @@ pub const RETIRED: &[Retired] = &[
         name: "MICOLD_IDLE_STOP",
         key: "daemon.idle_stop",
     },
+    // The daemon's filter only: the client's own `MICOLD_LOG` filter
+    // (`micold-client/src/shell/startup.rs`) is not retired.
     Retired {
         name: "MICOLD_LOG",
         key: "daemon.log",
