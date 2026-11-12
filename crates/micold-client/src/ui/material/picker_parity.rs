@@ -23,7 +23,7 @@ use iced::{Element, Event, Rectangle, Size, Vector};
 
 use super::picker::Row;
 use super::test_support::roles;
-use super::{Select, Typeahead};
+use super::{MenuSelect, MenuSelectRow, Select, Typeahead};
 /// One frame, named rather than restated — see `select_anatomy`'s copy of this import.
 use crate::ui::cdk::motion::FRAME;
 
@@ -520,5 +520,83 @@ fn the_two_subjects_are_two_different_controls() {
         SUBJECTS[0].opens_by_press != SUBJECTS[1].opens_by_press,
         "both subjects open the same way, so one of them is not the control it claims to be — the \
          asymmetry of ownership is the thing that makes this a parity test (data-model §2.2)"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The structured view's menu is the select's menu (feature 1792, T011 — FR-004, US2)
+// ---------------------------------------------------------------------------------------------
+
+/// `MenuSelect`'s open menu over the same three labels, the first chosen. Its openness is its
+/// caller's, so it is posed open like the search picker's.
+fn menu_select_list() -> layout::Node {
+    let r = roles();
+    let rows: Vec<MenuSelectRow<'static, String>> = LABELS
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            MenuSelectRow::option(
+                super::Text::new(*l, super::TypeRole::Body, r),
+                i == 0,
+                l.to_string(),
+            )
+        })
+        .collect();
+    floating_list(
+        MenuSelect::new(
+            "Type",
+            rows,
+            true,
+            "toggle".to_string(),
+            "dismiss".to_string(),
+            r,
+        )
+        .filled(),
+        false,
+    )
+}
+
+/// The structured selects' menu has the select's panel and option rows: the same panel box (size
+/// included), and rows at the same offsets and heights (Material 3 menu item layout, FR-004).
+///
+/// Geometry only: colour, elevation and the state layers come from `menu_panel` and `row_surface`,
+/// which both controls call; a paint-level comparison is not made here (see the ledger's
+/// follow-ups).
+#[test]
+fn the_structured_select_menu_has_the_selects_panel_and_rows() {
+    let select = shape(&select_list());
+    let menu = shape(&menu_select_list());
+    assert_eq!(
+        select[0], menu[0],
+        "the structured menu's panel is not the select's box (x, y, width, height)"
+    );
+    // The option rows: the pressable surfaces, one Material 3 menu item tall. What sits inside a row
+    // is each control's content (a plain label against a two-line-capable body) and not compared.
+    let rows = |v: &[(f32, f32, f32, f32)]| {
+        let mut rows: Vec<(f32, f32, f32)> = v
+            .iter()
+            .skip(1)
+            .filter(|b| {
+                b.0 == v[1].0
+                    && b.2 > v[0].2 * 0.8
+                    && b.3 == micold_core::tokens::density::MENU_ITEM_BASE
+            })
+            .map(|b| (b.0, b.1, b.3))
+            .collect();
+        // The select wraps its first row once more at the same box.
+        rows.dedup();
+        rows
+    };
+    let (a, b) = (rows(&select), rows(&menu));
+    let ys: std::collections::BTreeSet<i32> = a.iter().map(|r| (r.1 * 10.0) as i32).collect();
+    assert!(
+        ys.len() >= LABELS.len(),
+        "found {} distinct row offsets in the select, expected at least {}",
+        ys.len(),
+        LABELS.len()
+    );
+    assert_eq!(
+        a, b,
+        "the structured menu's rows do not sit where the select's do (x, y, height)"
     );
 }

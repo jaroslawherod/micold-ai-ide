@@ -45,8 +45,8 @@ None beyond T001: the trigger extraction is the P1 story's own work.
 
 **Independent test**: `scripts/build-lock.sh cargo test -p micold-client picker_parity`.
 
-- [ ] T011 [US2] Characterization test (a green first run is acceptable, then T012 is skipped; note it in the cycle log) in `src/ui/material/picker_parity.rs`: `MenuSelect` and `Select` menus use the same surface, item layout, selected emphasis and item state layers (FR-004, US2 scenarios 1-2).
-- [ ] T012 [US2] Only if T011 fails: align `src/ui/material/menu_select.rs` with `picker::animated_menu` / `row_surface`, no new menu widget.
+- [x] T011 [US2] Characterization test (a green first run is acceptable, then T012 is skipped; note it in the cycle log) in `src/ui/material/picker_parity.rs`: `MenuSelect` and `Select` menus use the same surface, item layout, selected emphasis and item state layers (FR-004, US2 scenarios 1-2).
+- [x] T012 [US2] Only if T011 fails: align `src/ui/material/menu_select.rs` with `picker::animated_menu` / `row_surface`, no new menu widget. Skipped: T011 was green on its first run (no drift).
 
 ## Phase 5: User Story 3 - Expand and collapse animation for the settings (P2)
 
