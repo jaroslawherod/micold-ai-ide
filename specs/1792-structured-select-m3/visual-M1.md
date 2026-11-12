@@ -13,4 +13,4 @@ Images: `visual-M1-compare.png` (top to bottom: Select closed, MenuSelect closed
 - Observation, not a defect: the MenuSelect text sits in the lower half (label-and-value layout); the unset Select "Theme" is vertically centred.
 
 Not covered: dark scheme, narrow window, Select open list (the click did not visibly open it in this capture), animation, the dense "closed" poses (not filled by design).
-Verdict: PASS.
+Verdict: PASS for the checked states; pressed layer, focus and the Select open list unverified (see visual-pass-M1.md).
