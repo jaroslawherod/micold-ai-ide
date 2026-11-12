@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | merged | c6f958f09e26d1f70da6c95798d0bc841c5ce90f |
 | #1843 | M4a — Settings → Daemons renders `[[ai.cli]]` | merged | 80711fb26b0b6dfa2d919297fa16675f56967767 |
 | #1846 | M4b — user guide documents `[[ai.cli]]`, visual-pass confirmed | merged | 46c5f71f23fb87d7c9d75c7c27cbf350c09ce70e |
+| #1855 | close (full gate, close review A rounds 1-3, converge, tdd-verify) | open | — |
 
 ## Milestones
 
