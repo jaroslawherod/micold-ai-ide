@@ -5,5 +5,5 @@
 - [x] Success criteria are measurable and technology-agnostic.
 - [x] Edge cases cover empty input, failure, concurrency and cross-platform.
 - [x] FR-011 and US4.4 (added after round 1) verified in round 2.
-- [ ] Three `[NEEDS CLARIFICATION]` markers remain; the clarify unit resolves them.
+- [x] The three `[NEEDS CLARIFICATION]` markers are resolved (none remain in spec.md, checked at the tasks unit).
 - [x] Out-of-scope items are listed.

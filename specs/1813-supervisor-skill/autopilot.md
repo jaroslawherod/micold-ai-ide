@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1813
 - **Worktree branch**: feat/1813_autopilot-supervisor-m2-supervisor-skill-that
 - **Started**: 2026-11-12
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: review tasks, gate, design PR
 
 ## Pull requests
 
@@ -23,7 +23,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T013 | full | capped, gated queue start with ledger | #… | pending |
+| M2 | T014–T018 | full | resume from ledger, report, watcher | #… | pending |
+| M3 | T019–T021 | full | overlap sequencing | #… | pending |
+| M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
 
 ## Decisions
 
