@@ -28,7 +28,7 @@ group-header menu built the same way. Decisions: [research.md](research.md).
 **Storage**: `layouts/<project id>.json` under the app state directory, JSON, atomic write; Principle IV
 
 **Testing**: `micold-core` unit tests (`mise run test-core`) for `sidebar_layout`; client render-free
-tests in `crates/micold-client/tests/` (`sidebar_groups.rs` new, `sidebar_state.rs`,
+tests in `crates/micold-client/tests/` (`sidebar_group_actions.rs` new, `sidebar_state.rs`,
 `sidebar_tree.rs`, `navigation_apply.rs`, `gates/*`, `layout_snapshot.rs`); quickstart §B visual pass
 
 **Target Platform**: Linux, macOS, Windows; no platform branch, drag uses iced pointer events only
@@ -70,14 +70,17 @@ crates/micold-core/src/lib.rs              # module line
 crates/micold-core/src/store.rs            # layouts_path, load_layout, save_layout (JsonFileStore + Store trait defaults like runs)
 crates/micold-client/src/features/sidebar.rs # SidebarEntry::UserGroup(GroupHeaderNode); sidebar_entries applies layout; row_heights, row_index, reveal_ready expand a collapsed group
 crates/micold-client/src/features/sidebar_drag.rs # new: DragState, DropTarget, hit_test, reducer
-crates/micold-client/src/features/sidebar_groups.rs # new: Msg (New, Rename, Delete, Move, MoveUp/Down, Toggle), naming draft, apply+save outcome
+crates/micold-client/src/features/sidebar_group_actions.rs # new: Msg (New, Rename, Delete, Move, MoveUp/Down, Toggle), naming draft, apply+save outcome
 crates/micold-client/src/features/navigation.rs # location_nodes skips headers; keyboard reaches headers (803)
 crates/micold-client/src/features/worktree.rs # menu items: Move to group submenu, Move up/down
-crates/micold-client/src/ui/sidebar.rs     # header row, drop highlight, marker, drag wiring (glue)
+crates/micold-core/src/sidebar_groups.rs  # existing (feature 483 run-group state), unrelated and unchanged; the new core module is sidebar_layout
+crates/micold-client/src/overlay/registry.rs # register GroupContextMenu (layer ContextMenu) and the group naming dialog beside WorktreeContextMenu
+crates/micold-client/src/features/sidebar_group_actions.rs # also owns GroupContextMenu and the naming draft; dialog reuses ui/rename_dialog.rs (edited: title and error line)
+crates/micold-client/src/ui/sidebar.rs     # "New group" button in the chip-bar more menu row and project header; header row, drop highlight, marker, drag wiring (glue)
 crates/micold-client/src/ui/material/group_header.rs # new shared GroupHeader, DropMarker builders
 crates/micold-client/src/showcase/sections/surfaces.rs # group header, marker, highlight poses
 crates/micold-client/src/main.rs           # Escape and window cursor events route to drag (glue)
-crates/micold-client/tests/{sidebar_groups.rs,sidebar_drag.rs,sidebar_layout_store.rs} # new
+crates/micold-client/tests/{sidebar_group_actions.rs,sidebar_drag.rs,sidebar_layout_store.rs} # new
 docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, tests/layout_snapshot.rs
 ```
 
@@ -85,12 +88,14 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
 
 | Req | Where |
 |---|---|
-| FR-001, FR-002, FR-004 | `SidebarLayout::{create,rename,delete}` + `LayoutError::{Blank,Duplicate}`; sidebar_groups Msg; naming draft shown with the error (contract C2) |
+| FR-001 entry point | "New group" is an item of the chip bar's more menu (`more_menu_items`, feature 1125) and of the empty-area sidebar menu, so it needs no worktree; keyboard reaches it through the 803 chip-bar stop and its menu; also a chord entry in `keymap.rs`/shortcut sheet (contract C6) |
+| FR-011 keyboard | A header is a tab stop; Enter/Space toggles collapse (as `tree_view` rows do), and the group menu has "Collapse"/"Expand" |
+| FR-001, FR-002, FR-004 | `SidebarLayout::{create,rename,delete}` + `LayoutError::{Blank,Duplicate}`; sidebar_group_actions Msg; naming draft shown with the error (contract C2) |
 | FR-003, FR-014 | `delete` returns members to ungrouped; tests assert worktree/session lists unchanged |
 | FR-005, FR-016 | `LayoutItem` keyed by location key (worktree dir name or run group id); `move_item` removes before insert |
 | FR-006, FR-008, FR-009, FR-019 | `sidebar_drag` reducer + `hit_test` (contract C3, C4); `DropMarker`; Escape and off-target cancel |
 | FR-007 | Layout holds no session data; entries built from `active_sessions()` as today |
-| FR-010 | Menu items from `sidebar_groups::move_menu_items(state, key)`; keyboard via feature 803 menu path |
+| FR-010 | Menu items from `sidebar_group_actions::move_menu_items(state, key)`; keyboard via feature 803 menu path |
 | FR-011, FR-017 | `UserGroup.collapsed`; `reveal_ready` expands the holding group; header is a navigation stop |
 | FR-012, FR-018 | `layouts/<id>.json`; `from_json` + quarantine; `reconcile` drops stale, appends new, first-group-wins |
 | FR-013 | Layout never reads a state; test cycling five card states (SC-005) |
@@ -107,6 +112,8 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
   state cycling leaves position (SC-005); drag reducer (press without move is a click, hit-test,
   drop outcomes, Escape, vanished worktree); `reveal_ready` expands; menu items; keyboard reaches
   every action without a pointer (SC-006).
+- **Newer version / no state header** (core + client): a file with a newer `version` loads empty; a test walks every `SidebarEntry::UserGroup` header and role and asserts none is keyed by a card state (FR-013, US7-2).
+- **SC map**: SC-001 quickstart §B timing plus menu-path client test; SC-002 core unit; SC-003 `sidebar_layout_store`; SC-004 core unit and client `sidebar_group_actions` (worktree and session lists unchanged after delete); SC-005 client; SC-006 client menu/keyboard test; SC-007 §B.
 - **Store**: save/load/quarantine in `sidebar_layout_store.rs`, as the runs store tests.
-- **Geometry gates / snapshot**: `row_heights` with headers; layout snapshot re-recorded.
+- **Geometry gates / snapshot** (new `tests/gates/sidebar_group_header_fits.rs`; `layout_snapshot.rs`): `row_heights` with headers; layout snapshot re-recorded.
 - **Quickstart §B**: visual pass of layout, drop highlight and marker, both themes (SC-007).

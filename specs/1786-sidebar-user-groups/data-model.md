@@ -10,7 +10,7 @@
 ## UserGroup
 | Field | Type | Rules |
 |---|---|---|
-| `id` | GroupKey (u64, monotonic per layout) | never reused |
+| `id` | UserGroupId (u64, monotonic per layout) | never reused |
 | `name` | String | trimmed, non-empty, unique case-insensitively (FR-004) |
 | `collapsed` | bool | default false (FR-011) |
 | `items` | Vec<LayoutItem> | ordered members |
@@ -19,7 +19,7 @@
 `Worktree(dir_name: String)` | `Run(GroupId)`. Default is never an item (FR-015). An item appears in exactly one of `groups[*].items` or `ungrouped` (FR-005); every operation moves, never copies.
 
 ## Operations (pure, return `Result<(), LayoutError>`)
-`create(name) -> GroupKey`, `rename(id, name)`, `delete(id)` (its items are appended to the end of `ungrouped` in their order, contract C1), `move_item(item, DropTarget)`, `move_group(id, to_index)`, `step_item(item, ±1)`, `step_group(id, ±1)`, `set_collapsed(id, bool)`, `reconcile(live: &[LayoutItem])`.
+`create(name) -> UserGroupId`, `rename(id, name)`, `delete(id)` (its items are appended to the end of `ungrouped` in their order, contract C1), `move_item(item, DropTarget)`, `move_group(id, to_index)`, `step_item(item, ±1)`, `step_group(id, ±1)`, `set_collapsed(id, bool)`, `reconcile(live: &[LayoutItem])`.
 
 `LayoutError`: `Blank`, `Duplicate`, `UnknownGroup`, `UnknownItem`, `IsDefault`.
 

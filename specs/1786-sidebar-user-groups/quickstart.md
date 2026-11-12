@@ -3,7 +3,7 @@
 ## Part A: automated
 ```sh
 mise run test-core                                  # sidebar_layout unit tests
-scripts/build-lock.sh cargo test -p micold-client --test sidebar_groups
+scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions
 scripts/build-lock.sh cargo test -p micold-client --test sidebar_drag
 scripts/build-lock.sh cargo test -p micold-client --test sidebar_layout_store
 mise run gate                                       # before pushing

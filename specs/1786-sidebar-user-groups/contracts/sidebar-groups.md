@@ -13,3 +13,5 @@
 **C6 Menus**: worktree/run-group menu: "Move to group" entries (each group, "Ungrouped", "New group…"), "Move up", "Move down" (disabled at the ends); group menu: Rename, Delete, Move up, Move down. Opened by pointer and by the 803 keyboard chord.
 
 **C7 Store**: `JsonFileStore::{load_layout, save_layout}`; missing, corrupt or older file gives an empty layout; write is atomic.
+
+**C6a New group and collapse**: "New group" is an item of the chip bar's more menu and of a sidebar empty-area menu, with a chord in the shortcut sheet; it opens the naming dialog (C2) with no worktree needed. Collapse: Enter/Space on a focused header, or "Collapse"/"Expand" in the group menu.
