@@ -54,8 +54,8 @@ to go back to the AI CLI. Nothing is drawn under the terminal.
 - **Split buttons** at the right end: split the focused pane side by side or stacked.
 
 When the tabs do not fit, the row scrolls with the mouse wheel rather than shrinking a tab. The
-split buttons and restart stay whole at the right end; in a narrow window the waiting-messages
-note is cut first, then the **Open in structured view** label, each with its full text on hover. A faded edge says more tabs lie beyond it, and
+split buttons and restart stay whole at the right end; in a narrow window the status words
+are cut first, with the full words on hover. A faded edge says more tabs lie beyond it, and
 it takes the accent colour when the marked tab is the one out of view.
 
 ## Split and pick a terminal
