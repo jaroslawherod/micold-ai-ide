@@ -48,7 +48,11 @@ where
         None => return Ok(()),
     };
     match decode_first_frame(&body).map_err(invalid)? {
-        FirstFrame::Query(query) => framed.send(Bytes::from(query::listing(&shared, query))).await,
+        FirstFrame::Query(query) => {
+            framed
+                .send(Bytes::from(query::listing(&shared, query)))
+                .await
+        }
         FirstFrame::Announcement(announcement) => link(shared, framed, announcement).await,
     }
 }
