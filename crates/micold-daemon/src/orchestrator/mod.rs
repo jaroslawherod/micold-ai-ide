@@ -102,6 +102,11 @@ pub async fn run() -> io::Result<()> {
 
 /// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
 pub fn main() -> io::Result<()> {
+    // Stderr only: the orchestrator keeps no log file. `try_init` so a second call is harmless.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(io::stderr)
+        .try_init();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
@@ -132,7 +137,16 @@ async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
     };
     let shared = Arc::new(Shared::new(clock));
     loop {
-        let conn = bound.listener.accept().await?;
+        // One failed accept (a peer that left mid-accept, a full descriptor table) must not end
+        // the registry and every link with it: log, back off, go on.
+        let conn = match bound.listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::warn!(error = %e, "orchestrator accept failed");
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                continue;
+            }
+        };
         let shared = Arc::clone(&shared);
         tokio::spawn(async move {
             if let Err(e) = link::serve_connection(shared, conn).await {

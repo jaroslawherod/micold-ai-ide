@@ -60,12 +60,19 @@ async fn no_child_process_is_spawned() {
     drop(orchestrator);
 }
 
+/// Children of every thread of this process: the orchestrator runs on tokio worker threads, and
+/// `/proc/<pid>/task/<pid>/children` lists only those of the main thread.
 #[cfg(target_os = "linux")]
 fn child_count() -> usize {
     let me = std::process::id();
-    std::fs::read_to_string(format!("/proc/{me}/task/{me}/children"))
+    let Ok(tasks) = std::fs::read_dir(format!("/proc/{me}/task")) else {
+        return 0;
+    };
+    tasks
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.path().join("children")).ok())
         .map(|children| children.split_whitespace().count())
-        .unwrap_or(0)
+        .sum()
 }
 
 #[cfg(not(target_os = "linux"))]
