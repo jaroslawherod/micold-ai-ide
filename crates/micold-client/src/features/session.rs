@@ -842,6 +842,17 @@ impl crate::app::State {
             .unwrap_or(&[])
     }
 
+    /// How many shell instances the current session has: what an entry that opens one changes.
+    pub fn active_shell_count(&self) -> usize {
+        let Some(id) = self.session.active else {
+            return 0;
+        };
+        self.active_sessions()
+            .iter()
+            .find(|s| s.id == id)
+            .map_or(0, |s| s.shells.len())
+    }
+
     /// Make `next` the current session — the one write to `active_session` the whole application
     /// goes through, bar one (feature 024, contract §3.0).
     ///
@@ -2345,21 +2356,6 @@ fn files_dropped(
 }
 
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
-    // Choosing a `+` menu entry closes the menu (feature 1793, FR-013); the registry knows how.
-    let closes_plus_menu = matches!(
-        msg,
-        Msg::AdditionalRequested(_) | Msg::ShellInstanceOpenRequested
-    );
-    let mut outcomes = update_inner(state, msg);
-    if closes_plus_menu {
-        outcomes.push(crate::features::Outcome::OverlayDismissed(
-            crate::features::header_bar::PlusMenu::ID,
-        ));
-    }
-    outcomes
-}
-
-fn update_inner(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Started(session) => return started(state, session),
         Msg::Selected(id) => return selected(state, id),
