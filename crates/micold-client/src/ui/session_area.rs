@@ -376,9 +376,10 @@ pub(crate) fn plus_menu<'a>(
         .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32);
     let anchor = (
         (crate::ui::freed_width(state) + spacing::SM + at.max(0.0)) as u16,
+        // The bar's bottom edge, the context header row, then the strip (one touch target each,
+        // padded). Approximate until the one-row header (M4) merges the header into the strip.
         (tokens::anatomy::app_bar::BOTTOM_EDGE
-            + tokens::anatomy::button::MIN_TOUCH_TARGET
-            + 2.0 * spacing::SM) as u16,
+            + 2.0 * (tokens::anatomy::button::MIN_TOUCH_TARGET + 2.0 * spacing::SM)) as u16,
     );
     let (x, y) = crate::features::project::clamp_menu_anchor(
         anchor,
