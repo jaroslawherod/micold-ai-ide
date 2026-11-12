@@ -78,7 +78,8 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 
 - Q: Which stored tokens reach the pod (FR-009)? → A: only those whose repository filter matches a project of this daemon. _(agent-resolved: specs/1002-sandbox-scoped-token/spec.md#FR-005 "only the PAT of the container's own project's repository")_
 - Q: When is the token removed from the cluster (FR-010)? → A: with the pod's other secrets on delete/Remove, replaced at each start, withdrawn at the next start once deleted in Settings. _(agent-resolved: docs/user-guide/kubernetes-daemons.md, resource table: startup and credential secrets removed at the next start or Remove; specs/1002-sandbox-scoped-token/spec.md#FR-008)_
-- Q: May a host-stored token be placed in a Kubernetes Secret, and with what consent (FR-008)? → A: OPEN, escalated to the user.
+- Q: May a host-stored token be placed in a Kubernetes Secret, and with what consent (FR-008)? → A: per-daemon opt-in in the daemon settings, off by default; no Secret holds a token otherwise. _(decided by user)_
+- Q: Does a daemon saved before the opt-in existed deliver tokens? → A: no; the opt-in loads as off, so the pod behaves as today until the user turns it on. _(agent-resolved: specs/1002-sandbox-scoped-token/spec.md#FR-002, saved settings load without error; a new item defaults to off)_
 
 ## Requirements *(mandatory)*
 
@@ -91,7 +92,7 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - **FR-005**: A session in the pod MUST have no `SSH_AUTH_SOCK` and no token value in its environment, and the pod home MUST have no `~/.ssh` directory.
 - **FR-006**: A runtime-gated `kube_real_` test in `micold-client` MUST assert FR-003 to FR-005 on the kind cluster, run by CI job `kube-cluster`, and be reported skipped when the cluster tooling is absent.
 - **FR-007**: The harness MUST provide, for that test, a fake GitHub API and an HTTP git backend reachable from a pod that accept only the run's token, and a way to read a pod session's environment and list its home directory.
-- **FR-008**: Delivering a host-stored token into a cluster Secret MUST follow [NEEDS CLARIFICATION: security boundary: may a host-stored token be placed in a Kubernetes Secret (readable by cluster admins and stored in etcd), and with what consent: always when stored, per-daemon opt-in in the daemon's settings, or never by default (test-only injection)? Recommended: per-daemon opt-in, off by default].
+- **FR-008**: A stored token MUST be delivered into the cluster (as a Kubernetes Secret) only when the daemon's settings carry a per-daemon opt-in for GitHub tokens, which is off by default and saved with the daemon's other settings. With it off, no Secret holds a token and the pod has no `[[github.tokens]]` entry. The opt-in's label names the exposure: anyone who can read Secrets in the namespace, and etcd, can read the token. The test enables the opt-in for its daemon.
 - **FR-009**: The set of tokens delivered MUST be only those whose repository filter matches a project of this daemon, so a pod never holds a token it cannot use.
 - **FR-010**: A delivered token MUST be removed from the cluster with the pod's other secrets when the pod is deleted or removed, MUST be replaced at each start, and a token deleted in Settings MUST be withdrawn at the next start.
 
