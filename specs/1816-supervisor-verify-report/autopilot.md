@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | Review spec | 1 | spec | ccda446bbb793388d82591ed5efe64fcd9f1a86a | d9bb42cb052543f3a2ea6c08b2e67dddbd00b4b9:c1af633993e0d08fce04690906bf0074fe12df1d | CLEAN (3 MINOR fixed, prose only) |
+| Review plan | 1 | design | 544462318f4689651683e5fe6040a35b3bdc557e | 34ac5b9c25a116953a645270bf401005d0390523:2dbd44316839e9d860da057b6e15d691917e45e4 | CLEAN (3 MINOR fixed, prose only) |
 
 ## Declined review findings
 
