@@ -2345,6 +2345,21 @@ fn files_dropped(
 }
 
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
+    // Choosing a `+` menu entry closes the menu (feature 1793, FR-013); the registry knows how.
+    let closes_plus_menu = matches!(
+        msg,
+        Msg::AdditionalRequested(_) | Msg::ShellInstanceOpenRequested
+    );
+    let mut outcomes = update_inner(state, msg);
+    if closes_plus_menu {
+        outcomes.push(crate::features::Outcome::OverlayDismissed(
+            crate::features::header_bar::PlusMenu::ID,
+        ));
+    }
+    outcomes
+}
+
+fn update_inner(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Started(session) => return started(state, session),
         Msg::Selected(id) => return selected(state, id),

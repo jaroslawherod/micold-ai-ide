@@ -746,7 +746,7 @@ fn the_details_rows_add_height_and_the_footer_keeps_its_place() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
     let waiting = records_named(all, "add-worktree-dialog-issue-details-loading");
-    let actions: &[usize] = &[10, 0, 0, 1];
+    let actions: &[usize] = &[12, 0, 0, 1];
     let place = |records: &[lay::LayoutRecord]| {
         let r = records
             .iter()

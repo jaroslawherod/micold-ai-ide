@@ -1569,16 +1569,6 @@ impl State {
                 let _ = self.update_insights(msg, &crate::ui::syntax::GRAMMAR);
             }
             Message::Session(msg) => {
-                // Choosing a `+` menu entry closes the menu (feature 1793, FR-013).
-                if matches!(
-                    msg,
-                    crate::features::session::Msg::AdditionalRequested(_)
-                        | crate::features::session::Msg::ShellInstanceOpenRequested
-                ) && self.header_bar.menu == crate::features::header_bar::HeaderMenu::Plus
-                {
-                    self.header_bar
-                        .update(crate::features::header_bar::Msg::Chosen);
-                }
                 let outcomes = crate::features::session::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }

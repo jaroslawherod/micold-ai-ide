@@ -53,7 +53,12 @@ use support::layout as lay;
 ///
 /// If a real one is ever added, the rules above still hold: record what was measured, keep the
 /// suite green, and require the entry to keep firing.
-const KNOWN_OVERFLOWS: &[&str] = &[];
+///
+/// **One entry since feature 1793 (not a defect):** a session tab the tab strip's scroll viewport
+/// cuts, in `session-area-six-tabs`. The label keeps its own width and the viewport clips it, as
+/// it does for any scrolled tab; the single `+` leaving the strip's trailing controls widened the
+/// viewport, so which tab the edge cuts moved onto this one.
+const KNOWN_OVERFLOWS: &[&str] = &["0/0/0/1/1/1/0/0/0/0/0/0/5/0/0/0/0/1/0"];
 
 /// Name an offending node by its anchor where one covers it, otherwise by its path (FR-004).
 ///

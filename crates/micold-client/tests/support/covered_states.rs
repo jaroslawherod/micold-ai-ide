@@ -386,7 +386,7 @@ const ADD_WORKTREE_ANCHORS: &[Anchor] = &[
     },
     Anchor {
         name: "dialog.actions",
-        path: &[10, 0, 0, 1],
+        path: &[12, 0, 0, 1],
     },
 ];
 
@@ -445,10 +445,11 @@ pub const SESSION_STRIP_ROW: &[usize] = &[0, 0, 1, 1, 1, 0];
 /// The keyed row of members inside the scrolling region: `EdgeFade` → stack → layer → viewport →
 /// row. No padding container since feature 027's trailing slack went (R9, R14).
 pub const SESSION_STRIP_TABS: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0];
-/// **New session**, the strip row's controls group's second child (feature 1463).
-pub const SESSION_STRIP_NEW_SESSION: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 1];
+/// The status cluster, the strip row's controls group's first child (feature 1463; the New session
+/// icon and the switch slot left it in feature 1793).
+pub const SESSION_STRIP_STATUS: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 0];
 /// The split buttons, the controls group's last child.
-pub const SESSION_STRIP_SPLIT: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 2];
+pub const SESSION_STRIP_SPLIT: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 1];
 
 /// The width the strip hands its scrolling region at the fixture's 1280dp window, as recorded: the
 /// running application learns it from `Scrollable::on_viewport_resize`, a hand-built state does not,
@@ -1034,7 +1035,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // than to the number.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[10, 0, 0, 1],
+                    path: &[12, 0, 0, 1],
                 },
             ],
         },
@@ -1058,7 +1059,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // free-standing `Type` label inside the control's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[10, 0, 0, 1],
+                    path: &[12, 0, 0, 1],
                 },
             ],
         },
@@ -1113,7 +1114,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.actions",
-                    path: &[10, 0, 0, 1],
+                    path: &[12, 0, 0, 1],
                 },
             ],
         },
@@ -1707,7 +1708,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // own, and it pushes the actions down.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[10, 0, 0, 1],
+                    path: &[12, 0, 0, 1],
                 },
             ],
         },
@@ -1788,7 +1789,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Index 4: the heading, the source switch, then the caption under it (feature 034),
                 // the `* required` legend (feature 937), then the Type row, whose first child is
                 // the select (feature 776: the AI CLI select shares the row).
-                StateUnderTest::new(state).pressing(&[10, 0, 0, 0, 4, 0])
+                StateUnderTest::new(state).pressing(&[12, 0, 0, 0, 4, 0])
             },
             anchors: &[
                 Anchor {
@@ -1797,13 +1798,13 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[10, 0, 0, 0, 4, 0],
+                    path: &[12, 0, 0, 0, 4, 0],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[10, 0, 0, 1],
+                    path: &[12, 0, 0, 1],
                 },
             ],
         },
@@ -1996,8 +1997,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_SESSION,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2046,8 +2047,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_REVIEW,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2090,8 +2091,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_REVIEW,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2135,8 +2136,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: REVIEW_TAB_BADGE,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2171,8 +2172,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_SESSION,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2704,8 +2705,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_REVIEW,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2853,8 +2854,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_EXITED,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2887,8 +2888,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_ACTIVE,
                 },
                 Anchor {
-                    name: "session.strip.new_session",
-                    path: SESSION_STRIP_NEW_SESSION,
+                    name: "session.strip.status",
+                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -3290,7 +3291,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.actions",
-                    path: &[10, 0, 0, 1],
+                    path: &[12, 0, 0, 1],
                 },
             ],
         },
@@ -4365,7 +4366,7 @@ pub const REVIEW_PROGRESS: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 2, 0, 0];
 /// *n files changed since you looked*: the header's second control, before the source control.
 pub const REVIEW_STALE: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 1];
 /// The shortcut sheet's dialog surface, over its scrim at the root.
-pub const REVIEW_SHEET: &[usize] = &[10, 0];
+pub const REVIEW_SHEET: &[usize] = &[12, 0];
 /// The new comment's composer a line-number drag opened: the diff pane's padding → the diff's
 /// column → its lines (led by #1466's zero-height ruler) → the dragged range's last line, whose
 /// slot hangs the composer under it.
