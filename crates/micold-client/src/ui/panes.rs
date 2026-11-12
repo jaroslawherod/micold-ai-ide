@@ -148,11 +148,7 @@ pub fn split_buttons<'a>(pane: &Pane, r: Roles) -> Element<'a, Message> {
 
 /// The split buttons at the one-row header's height: the session strip's (feature 1793, FR-001),
 /// disabled when `pane` is `None`.
-pub fn split_buttons_in_row<'a>(
-    pane: Option<&Pane>,
-    side: f32,
-    r: Roles,
-) -> Element<'a, Message> {
+pub fn split_buttons_in_row<'a>(pane: Option<&Pane>, side: f32, r: Roles) -> Element<'a, Message> {
     split_pair(pane, r, Some(side))
 }
 

@@ -378,11 +378,7 @@ fn the_progress_bar_has_its_width_beside_its_words() {
             )
         };
         let part = |path: &[usize]| part_of(&header, path);
-        let (slot, words, bar) = (
-            part(&[2]),
-            part(&[2, 0, 0, 0]),
-            part(PROGRESS_BAR),
-        );
+        let (slot, words, bar) = (part(&[2]), part(&[2, 0, 0, 0]), part(PROGRESS_BAR));
         assert!(
             (bar.width - micold_client::ui::PROGRESS_BAR_WIDTH).abs() <= TOLERANCE,
             "{theme:?}: the bar {bar:?} is {} px wide, not its {} beside {words:?}",
@@ -892,8 +888,8 @@ fn a_claude_terminal_session_has_one_row_and_no_switch_in_the_strip() {
             let what = format!("stopped {stopped}, {queued} queued {what}");
             let records = records_for(claude_terminal(stopped, queued), theme, window);
             let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-            let [strip, panes] = [0, 1]
-                .map(|i| rect(at(&records, &[SESSION_AREA, &[i]].concat()).expect("a row")));
+            let [strip, panes] =
+                [0, 1].map(|i| rect(at(&records, &[SESSION_AREA, &[i]].concat()).expect("a row")));
             assert!(
                 panes.y - area.y <= ONE_ROW_MAX + TOLERANCE,
                 "{what}: the terminal starts {} px below the area, over {ONE_ROW_MAX} (FR-001): \
@@ -907,7 +903,11 @@ fn a_claude_terminal_session_has_one_row_and_no_switch_in_the_strip() {
             );
             let controls = controls_children(&records);
             let expected = if stopped { 2 } else { 1 };
-            assert_eq!(controls.len(), expected, "{what}: restart?, splits {controls:?}");
+            assert_eq!(
+                controls.len(),
+                expected,
+                "{what}: restart?, splits {controls:?}"
+            );
             for control in &controls {
                 assert!(
                     inside(control, &area) && inside(control, &Rectangle::with_size(window)),

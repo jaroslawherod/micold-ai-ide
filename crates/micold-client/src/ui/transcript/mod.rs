@@ -37,9 +37,7 @@ use crate::icons::Icon;
 use crate::ui::cdk::Keyed;
 use crate::ui::focus::TrackFocusAs;
 use crate::ui::material::selection_area::Edge;
-use crate::ui::material::{
-    Button, ContextMenu, MenuItem, Scrollable, SelectionArea,
-};
+use crate::ui::material::{Button, ContextMenu, MenuItem, Scrollable, SelectionArea};
 use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::protocol::messages::PromptId;

@@ -12,8 +12,9 @@ use crate::features::session_strip::{
 use crate::icons::Icon;
 use crate::ui::cdk::keyed::Keyed;
 use crate::ui::material::{
-    self, tab, tab_content_colour, ActivityBadge, BadgeEmphasis,
-    CountBadge, Ellipsized, IconButton, IndicatorEdge, SurfaceKind, Tab, Text, Tooltip, TooltipPosition, TypeRole, UnreadMark,
+    self, tab, tab_content_colour, ActivityBadge, BadgeEmphasis, CountBadge, Ellipsized,
+    IconButton, IndicatorEdge, SurfaceKind, Tab, Text, Tooltip, TooltipPosition, TypeRole,
+    UnreadMark,
 };
 use crate::ui::terminal;
 use iced::widget::{column, container, row, Space};
@@ -187,9 +188,7 @@ pub(crate) fn strip<'a>(
     // Feature 1269 (U15): while the Review tab is shown the split buttons keep their place,
     // disabled, as they act on panes that are not drawn.
     let splits: Element<'a, Message> = match area.and_then(|a| a.layout.pane(a.layout.focused())) {
-        _ if model.review_shown() => {
-            crate::ui::panes::split_buttons_in_row(None, ROW_HEIGHT, r)
-        }
+        _ if model.review_shown() => crate::ui::panes::split_buttons_in_row(None, ROW_HEIGHT, r),
         Some(pane) => crate::ui::panes::split_buttons_in_row(Some(pane), ROW_HEIGHT, r),
         None => container(Space::new()).into(),
     };
@@ -236,6 +235,27 @@ fn hidden_chip<'a>(chip: &HiddenChip, r: tokens::Roles) -> Element<'a, Message> 
     .into()
 }
 
+/// Where the `+` menu hangs from: the `+`'s leading edge in the strip, then the strip's bottom
+/// edge. The `+` sits after the tabs, so its offset follows the tab region's scroll; one scrolled
+/// out of view hangs from the region's end instead. The strip's own origin is the sidebar's width.
+fn plus_anchor(state: &State) -> (u16, u16) {
+    let at = StripModel::of(state)
+        .and_then(|model| {
+            let index = model
+                .members
+                .iter()
+                .position(|m| matches!(m, Member::Plus))?;
+            Some(member_offsets(&model.members)[index].0)
+        })
+        .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32)
+        .clamp(0.0, state.session.tab_strip_viewport_width as f32);
+    (
+        (crate::ui::freed_width(state) + spacing::SM + at) as u16,
+        // The bar's bottom edge, then the strip's one row (feature 1793: no header row above it).
+        (tokens::anatomy::app_bar::BOTTOM_EDGE + ROW_HEIGHT) as u16,
+    )
+}
+
 /// The `+` menu as a floating overlay (feature 1793, FR-007): another session, then a terminal,
 /// hung from the `+`. Pushed whether or not it is open, so it can fade out; it holds nothing while
 /// no strip shows.
@@ -258,24 +278,7 @@ pub(crate) fn plus_menu<'a>(
             .collect()
     });
     let count = items.len();
-    // The `+` sits after the tabs, so the panel hangs from its leading edge below the strip; the
-    // strip's own origin is the sidebar's width and the bar's bottom edge.
-    let at = StripModel::of(state)
-        .and_then(|model| {
-            let index = model
-                .members
-                .iter()
-                .position(|m| matches!(m, Member::Plus))?;
-            Some(member_offsets(&model.members)[index].0)
-        })
-        .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32);
-    // A `+` scrolled out of the tab region hangs from the region's trailing edge instead.
-    let at = at.clamp(0.0, state.session.tab_strip_viewport_width as f32);
-    let anchor = (
-        (crate::ui::freed_width(state) + spacing::SM + at) as u16,
-        // The bar's bottom edge, then the strip's one row (feature 1793: no header row above it).
-        (tokens::anatomy::app_bar::BOTTOM_EDGE + ROW_HEIGHT) as u16,
-    );
+    let anchor = plus_anchor(state);
     let (x, y) = crate::features::project::clamp_menu_anchor(
         anchor,
         material::menu_panel_size(count),
@@ -424,6 +427,34 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
 mod tests {
     use super::*;
     use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+
+    /// FR-007: the `+` menu hangs from the strip's bottom edge, and a `+` scrolled out of the tab
+    /// region hangs from the region's end rather than off-screen.
+    #[test]
+    fn the_plus_menu_hangs_below_the_strip_and_stays_in_the_tab_region() {
+        let (mut state, _) = shown_worktree();
+        state.session.tab_strip_viewport_width = 300;
+        let origin = crate::ui::freed_width(&state) + spacing::SM;
+        let (x, y) = plus_anchor(&state);
+        assert_eq!(
+            y,
+            (tokens::anatomy::app_bar::BOTTOM_EDGE + ROW_HEIGHT) as u16,
+            "one row below the bar"
+        );
+        assert!(f32::from(x) >= origin && f32::from(x) <= origin + 300.0);
+        state.session.tab_strip_scroll_offset = 100_000;
+        assert_eq!(
+            plus_anchor(&state).0,
+            origin as u16,
+            "scrolled past the leading edge: at the region's start"
+        );
+        state.session.tab_strip_scroll_offset = 0;
+        state.session.tab_strip_viewport_width = 10;
+        assert!(
+            f32::from(plus_anchor(&state).0) <= origin + 10.0,
+            "a `+` beyond the region's end hangs from the end"
+        );
+    }
 
     const NOW: u64 = 1_000_000;
 

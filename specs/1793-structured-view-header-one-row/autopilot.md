@@ -64,21 +64,7 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-M4 unit 2 hit the 150k cap. Work is in a second local WIP commit on top of b07534df9, NOT pushed, no PR yet. Unit 1's items 5 (user guide) and 6 (drift-M4.md, verify, reviews, full gate, PR) are untouched.
-**Done in unit 2** (`cargo check --tests` clean):
-- Strip is a 40 px row: `session_area::strip` has `.padding([0, SM]).height(ROW_HEIGHT)`; `+` and the split buttons use `.target(ROW_HEIGHT)` (`panes::split_buttons_in_row`; `split_buttons_disabled` removed).
-- `tests/gates/session_area_fits.rs` re-pointed (header tests/consts removed, paths shifted one level up, `strip_height` replaces `header_height` for `composer_fits.rs`, `strip_parts` = tab region + each control child, `CONTROLS=[0,0,1]`); `session_bar_fits.rs` retired (T035) with its `#[path]`; new `tests/gates/header_row_fits.rs` registered (3 tests, pass: strip == ROW_HEIGHT, 2 area children, chip at 0/3/1200 hidden, many tabs). `session_area_stability.rs` header/status_cluster pieces removed. `tests/support/covered_states.rs`: removed all `session.header*` and `session.strip.status` anchors and consts, shifted `[0,0,1,1,1..]`->`[0,0,1,1,0..]` and `[0,0,1,1,2..]`->`[0,0,1,1,1..]`.
-**Left (layout_snapshot has 11 failures; `main` binary never ran: the lock was held by another worktree; run `scripts/build-lock.sh cargo test -p micold-client --test main --no-fail-fast` detached):**
-1. `Member::Plus` width: `PLUS_WIDTH` in `features/session_strip.rs` must become `ROW_HEIGHT` (40) (`strip_controls_hold_their_size` says Plus laid out 40 vs fixed 48); check `member_offsets` tests in `tests/features_session_strip.rs`.
-2. `SESSION_STRIP_SPLIT` const is `[0,0,1,1,0,0,1,1]` (assumes restart is controls child 0); the controls group is now `[restart?, splits, chip?]`, so anchor per state (`...,1,0]` without restart, `...,1,1]` with). `an_anchor_whose_path_does_not_resolve` names `session-area-review-shown`; also `review_tab_fits.rs:414` still expects the `session.header` anchor (remove from its list ~line 42).
-3. Gates still using the removed status cluster: `strip_controls_share_a_midline.rs` (line 33 status anchor), `strip_controls_anchor_the_trailing_edge.rs` (status + splits last two children -> splits (or the chip) are the last child, flush with the strip's padding), `strip_controls_hold_their_size.rs`.
-4. `containment.rs:128` `TAB_STRIP_CONTENT = ["0/0/0/1/1/1/0/0/0/0/0/0"]` -> `"0/0/0/1/1/0/0/0/0/0/0/0"` (recorded overflow is now that node; `review_tab_fits` escapes by 364 px at that path).
-5. `session_area_fits::the_progress_bar_has_its_width_beside_its_words`: `VIEW_HEADER` is relative to SESSION_AREA but the test also uses `header=[SESSION_AREA, VIEW_HEADER]` with `part(&[2])` etc. (path `[1,0,0,1]` not laid out: `PROGRESS_BAR=[1,0,0,1]` is absolute from SESSION_AREA yet the test joins it to `header`; it was `[2,0,0,1]` = absolute; use `[SESSION_AREA, PROGRESS_BAR]` directly, and slot `part(&[2])` relative to VIEW_HEADER is correct). Also remove unused imports (`CheckStatus`, `PrState`, `PullRequestStatus`, `ReviewState`) and unused `assert_fits` in `session_area_fits.rs`.
-6. Regenerate `tests/fixtures/layout_snapshot.txt` (`UPDATE_LAYOUT_SNAPSHOT=1 scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot`) and review its diff (expect strip 40 px, no header row).
-7. Run the `main` binary and fix (`terminal_tabs.rs` source-text tests, `transcript_*`); FR-011 "tabs shrink": tabs are fixed-width, only scroll exists; record as follow-up (or implement).
-8. `plus_menu` anchor: in `ui/session_area.rs::plus_menu` replace the estimate (`BOTTOM_EDGE + 2*(48+2*SM)`) with `BOTTOM_EDGE + ROW_HEIGHT` and clamp x to `[0, tab_strip_viewport_width]` when `+` is scrolled out; add a test (context_menu_anchor gate or popover test); confirm worktree-menu keyboard highlight (M2 minor).
-9. User guide T027/T031: `docs/user-guide/structured-transcript.md`, `docs/user-guide/worktrees-and-sessions.md` (~1499-1600 still describes the session bar meter/totals/toggle); remove dead `shown::hidden_text`/`SHOW_HIDDEN`/`SHOW_RAW_EVENTS*` if unused.
-10. `drift-M4.md`; tick T021-T027, T029, T031, T034, T035 in tasks.md; scoped gate, Review A (high) + B, full gate (`mise run gate`), push, PR (title `feat(1793): one-row header (#1793)`, `Refs #1793`). A part 3 is the last allowed.
+None.
 
 ## Open escalation
 

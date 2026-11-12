@@ -142,10 +142,7 @@ fn choosing_an_entry_closes_the_plus_menu() {
     }
 }
 
-fn with_lifecycle(
-    mut state: State,
-    lifecycle: micold_core::session::SessionLifecycle,
-) -> State {
+fn with_lifecycle(mut state: State, lifecycle: micold_core::session::SessionLifecycle) -> State {
     for session in state.workspace.sessions.values_mut().flatten() {
         session.lifecycle = lifecycle.clone();
     }

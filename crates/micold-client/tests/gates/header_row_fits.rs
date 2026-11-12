@@ -10,7 +10,9 @@
 //!
 //! Compiled into the `layout_snapshot` binary beside `session_area_fits`.
 
-use crate::session_area_fits::{at, inside, overlap, records_of, rect, strip_parts, SESSION_AREA, SIDEBAR};
+use crate::session_area_fits::{
+    at, inside, overlap, records_of, rect, strip_parts, SESSION_AREA, SIDEBAR,
+};
 use crate::support::covered_states::{covered_states, structured_pane, transcript_pane_insights};
 use crate::support::layout::{LayoutRecord, StateUnderTest, WINDOW};
 use iced::{Rectangle, Size};
@@ -67,7 +69,10 @@ fn assert_parts_fit(what: &str, records: &[LayoutRecord], window: Size) {
     let strip = rect(at(records, &[SESSION_AREA, &[0]].concat()).expect("the strip is drawn"));
     let screen = Rectangle::with_size(window);
     let parts = strip_parts(records);
-    assert!(parts.len() >= 2, "{what}: the tab region and the controls: {parts:?}");
+    assert!(
+        parts.len() >= 2,
+        "{what}: the tab region and the controls: {parts:?}"
+    );
     for (name, part) in &parts {
         assert!(
             (part.width > 0.0 || name == "strip tab region")
@@ -78,7 +83,10 @@ fn assert_parts_fit(what: &str, records: &[LayoutRecord], window: Size) {
     }
     for (i, (a_name, a)) in parts.iter().enumerate() {
         for (b_name, b) in &parts[i + 1..] {
-            assert!(!overlap(a, b), "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}");
+            assert!(
+                !overlap(a, b),
+                "{what}: the {a_name} {a:?} overlaps the {b_name} {b:?}"
+            );
         }
     }
 }
@@ -135,7 +143,10 @@ fn the_hidden_chip_fits_at_none_a_few_and_past_a_thousand() {
         let chip = StripModel::of(&state).expect("a strip").hidden;
         if extra > 1_000 {
             let text = chip.as_ref().expect("a chip").text.clone();
-            assert!(text.starts_with("12") || text.len() >= 10, "{text}: a count past 1000");
+            assert!(
+                text.starts_with("12") || text.len() >= 10,
+                "{text}: a count past 1000"
+            );
         }
         chips.push(chip.is_some());
         each_window(|when, theme, window| {
@@ -179,7 +190,8 @@ fn the_chip_stays_at_the_strips_end_beside_many_tabs() {
         let strip = rect(at(&records, &[SESSION_AREA, &[0]].concat()).expect("the strip"));
         assert!(
             tabs.x + tabs.width <= chip.x + TOLERANCE
-                && (strip.x + strip.width - (chip.x + chip.width)) <= micold_core::tokens::spacing::SM + TOLERANCE,
+                && (strip.x + strip.width - (chip.x + chip.width))
+                    <= micold_core::tokens::spacing::SM + TOLERANCE,
             "{what}: the chip {chip:?} ends the strip {strip:?}, after the tab region {tabs:?}"
         );
     });

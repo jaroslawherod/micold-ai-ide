@@ -296,7 +296,6 @@ mod session_area_fits;
 #[path = "gates/header_row_fits.rs"]
 mod header_row_fits;
 
-
 // Feature 1270 (T015, T041): Send review (n) holds its bounds; the drawer covers the diff without
 // moving it (SC-001, SC-002, SC-004, FR-017).
 #[path = "gates/review_bar_fixed.rs"]

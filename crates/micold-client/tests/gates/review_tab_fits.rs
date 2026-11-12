@@ -38,10 +38,7 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
     (
         "session-area-changes-open",
         "session-area-review-shown",
-        &[
-            "session.strip",
-            "session.strip.tabs.review",
-        ],
+        &["session.strip", "session.strip.tabs.review"],
     ),
     (
         "review-tab-beside-sessions",

@@ -97,7 +97,7 @@ const ROWS_LOST_TO_THE_GUTTER: u16 = 1;
 /// The session area's header, strip and pane area heights in `state` at the layout window,
 /// measured as `composer_fits` measures its header, and the height of the terminal body the pane
 /// area holds (a single pane has no control row of its own since feature 1463).
-fn session_area_heights(state: &State) -> [f32; 4] {
+fn session_area_heights(state: &State) -> [f32; 3] {
     let renderer = lay::renderer();
     let mut element = view(state);
     let mut tree = Tree::new(element.as_widget());
@@ -106,7 +106,7 @@ fn session_area_heights(state: &State) -> [f32; 4] {
         .as_widget_mut()
         .layout(&mut tree, &renderer, &limits);
     let records = lay::walk(layout::Layout::new(&node), lay::Layer::Base);
-    [&[0][..], &[1], &[2], &[2, 0]].map(|child| {
+    [&[0][..], &[1], &[1, 0]].map(|child| {
         let path = [SESSION_AREA, child].concat();
         records
             .iter()
@@ -163,16 +163,15 @@ fn the_terminal_area_reports_its_size_before_any_output_arrives() {
         cols > 100,
         "reported {cols}×{rows}, which is no larger than the seed it exists to replace"
     );
-    let [header, strip, pane_area, room] =
+    let [strip, pane_area, room] =
         session_area_heights(&session_displayed_before_its_first_frame());
     assert!(
-        header > 0.0 && strip > 0.0,
-        "the header ({header}) and the strip ({strip}) take room above the panes"
+        strip > 0.0,
+        "the strip ({strip}) takes room above the panes"
     );
     assert!(
-        header + strip + pane_area + micold_core::tokens::anatomy::status_bar::HEIGHT
-            <= WINDOW.height,
-        "the header {header}, strip {strip}, pane area {pane_area} and status bar leave the window"
+        strip + pane_area + micold_core::tokens::anatomy::status_bar::HEIGHT <= WINDOW.height,
+        "the strip {strip}, pane area {pane_area} and status bar leave the window"
     );
     let fit = (room / CellMetrics::new(TERM_FONT_SIZE).height).floor() as u16;
     assert!(
