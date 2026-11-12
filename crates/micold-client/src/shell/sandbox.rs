@@ -1496,6 +1496,7 @@ mod tests {
             &delivery,
             Some(&text),
             None,
+            &SessionExtras::default(),
         )
         .unwrap();
         let copy = std::fs::read_to_string(
