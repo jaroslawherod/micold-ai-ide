@@ -76,6 +76,7 @@ crates/micold-client/src/features/worktree.rs # menu items: Move to group submen
 crates/micold-core/src/sidebar_groups.rs  # existing (feature 483 run-group state), unrelated and unchanged; the new core module is sidebar_layout
 crates/micold-client/src/overlay/registry.rs # register GroupContextMenu (layer ContextMenu) and the group naming dialog beside WorktreeContextMenu
 crates/micold-client/src/features/sidebar_group_actions.rs # also owns GroupContextMenu and the naming draft; dialog reuses ui/rename_dialog.rs (edited: title and error line)
+crates/micold-client/src/keymap.rs, ui/shortcut_sheet.rs  # chord entry for New group
 crates/micold-client/src/ui/sidebar.rs     # "New group" button in the chip-bar more menu row and project header; header row, drop highlight, marker, drag wiring (glue)
 crates/micold-client/src/ui/material/group_header.rs # new shared GroupHeader, DropMarker builders
 crates/micold-client/src/showcase/sections/surfaces.rs # group header, marker, highlight poses
@@ -88,7 +89,7 @@ docs/user-guide/worktrees-and-sessions.md, docs/development/layout-snapshot.md, 
 
 | Req | Where |
 |---|---|
-| FR-001 entry point | "New group" is an item of the chip bar's more menu (`more_menu_items`, feature 1125) and of the empty-area sidebar menu, so it needs no worktree; keyboard reaches it through the 803 chip-bar stop and its menu; also a chord entry in `keymap.rs`/shortcut sheet (contract C6) |
+| FR-001 entry point | "New group" is an item of the chip bar's more menu (`more_menu_items`, feature 1125) and of a new empty-area sidebar menu (new, in `ui/sidebar.rs`), so it needs no worktree; keyboard reaches it through the 803 chip-bar stop and its menu; also a chord entry in `keymap.rs`/shortcut sheet (contract C6a) |
 | FR-011 keyboard | A header is a tab stop; Enter/Space toggles collapse (as `tree_view` rows do), and the group menu has "Collapse"/"Expand" |
 | FR-001, FR-002, FR-004 | `SidebarLayout::{create,rename,delete}` + `LayoutError::{Blank,Duplicate}`; sidebar_group_actions Msg; naming draft shown with the error (contract C2) |
 | FR-003, FR-014 | `delete` returns members to ungrouped; tests assert worktree/session lists unchanged |
