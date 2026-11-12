@@ -45,8 +45,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 Review B (sonnet) | 1 |  |  | 14aea717:34cfb594 | CLEAN |
 | M2 Review A (high) | 1 |  |  | 1b71d9df:4b30f70c | CLEAN (1 MINOR: Chosen doc, left) |
 | M2 Review A+B (sonnet) | 2 | M2 | bc9262d05a01f8146f898a15d2a0896dc2e19b29 | d28d938bd831dae098ca3fd7dcb6453d3054c43f:bc9262d05a01f8146f898a15d2a0896dc2e19b29 | CLEAN (2 MINOR: worktree menu keyboard highlight to confirm in M4; no tdd dir, left) |
-| M3 Review A (high) | 1 | M3 | | edb22866:18a8d7b5 | CHANGES (1 MAJOR anchor y fixed, 2 MINOR fixed) |
-| M3 Review B (sonnet) | 1 | M3 | | | CHANGES (2 MAJOR: drift-M3.md written, orphaned switch offer removed; 2 MINOR fixed); fixes are gate-covered, no re-run |
+| M3 Review A (high) | 1 | M3 |  | edb22866:18a8d7b5 | CHANGES (1 MAJOR anchor y fixed, 2 MINOR fixed) |
+| M3 Review B (sonnet) | 1 | M3 |  |  | CHANGES (2 MAJOR: drift-M3.md written, orphaned switch offer removed; 2 MINOR fixed); fixes are gate-covered, no re-run |
+| M3 Review A+B | 1 | M3 | 1341b48328fe557270f4d776fb13371590a30dc0 | 94fab10166996ae7d1b1a78b37d0209300817186:1341b48328fe557270f4d776fb13371590a30dc0 | CLEAN after fixes (A 1 MAJOR, B 2 MAJOR fixed; gate green) |
 
 ## Declined review findings
 
