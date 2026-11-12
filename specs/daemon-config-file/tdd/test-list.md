@@ -139,3 +139,9 @@ Written at close from the merged tests (`TEST_AFTER`: no red run was recorded wh
 | I16-2a | A pod daemon's extras are keys of the startup secret and the rendered paths name its mount; a non-text source stops the start naming it | FR-036, FR-037, FR-038 | DONE |
 | I16-3a | An SSH host is sent the CA file and session files only; every extras path its file renders is one of the files sent | FR-037, FR-038 | DONE |
 | I16-2..I16-8 | The tdd-verify findings: the Settings mapping, session environment of C and K, the proxy and CA trust, the signed commit, the SSH command edges, the session-file edges (T151-T155) | FR-036, FR-037, FR-038 | DONE |
+| I16-9 | The daemon's own HTTPS trusts exactly the delivered CA file (trust root, not a handshake) | FR-037 | DONE |
+| I16-10 | Two session files are delivered under `session-file-0` and `session-file-1` in container, pod and SSH | FR-038 | DONE |
+| I16-11 | A cluster start puts the CA file in the startup secret and names its mount; an extra over 512 KiB stops the start naming it | FR-036, FR-037, FR-038 | DONE |
+| I16-12 | `NO_PROXY` matches on a dot boundary (`notcorp` is proxied for entry `corp`) | FR-037 | DONE |
+| I16-13 | A pod without the startup secret is recreated when only extras need it | FR-036, FR-037, FR-038 | DONE |
+| I16-14..I16-16 | The four CA variable names are pinned; `secret_env` proxy value is trimmed; session files fall back to `HOME` | FR-037, FR-038 | DONE |
