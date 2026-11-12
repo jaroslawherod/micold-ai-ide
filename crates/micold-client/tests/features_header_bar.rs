@@ -280,3 +280,13 @@ fn escape_closes_the_open_worktree_menu() {
     let escape = micold_client::overlay::registry::escape(&state);
     assert_eq!(escape, Some(Message::HeaderBar(Msg::Dismissed)));
 }
+
+#[test]
+fn escape_closes_the_open_plus_menu() {
+    let mut state = transcript_pane_insights();
+    state.header_bar.update(Msg::Toggled(HeaderMenu::Plus));
+    assert_eq!(
+        micold_client::overlay::registry::escape(&state),
+        Some(Message::HeaderBar(Msg::Dismissed))
+    );
+}
