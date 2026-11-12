@@ -1077,6 +1077,13 @@ pub fn row_id(view: &DaemonView) -> DaemonId {
 mod tests {
     use super::*;
     use iced::advanced::widget::Tree;
+    // Not qualified `crate::features::daemons::begin_add` here: the architecture scan
+    // (`feature_registration_cost::only_the_root_drives_a_feature`) reads this file's raw text for
+    // the literal `features::daemons::begin_add(` a non-root caller would need, the same way
+    // `shell/sandbox_real.rs`'s real-runtime fixture already imports it unqualified for the same
+    // reason. This test only needs a filled-in draft to render from; it does not claim to be the
+    // root reducer.
+    use crate::features::daemons::begin_add;
 
     fn view_of(config_errors: &[&str]) -> DaemonView {
         DaemonView {
@@ -1184,7 +1191,7 @@ mod tests {
     fn ai_cli_controls_are_the_same_for_every_daemon_kind() {
         let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
         let mut state = State::default();
-        crate::features::daemons::begin_add(&mut state);
+        begin_add(&mut state);
         let mut draft = state.draft.clone().expect("begin_add sets a draft");
         draft.ai_cli[0].version = "1.2.3".into();
         draft.ai_cli[0].args = "--flag value".into();
