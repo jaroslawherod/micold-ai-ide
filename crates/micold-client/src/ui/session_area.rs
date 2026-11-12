@@ -34,11 +34,6 @@ pub const CHIP_MAX_WIDTH: f32 = 240.0;
 /// words are in their tooltip.
 pub const STATUS_MAX_WIDTH: f32 = 160.0;
 
-/// The widest the held-queue caption beside the switch control grows before it is cut with an
-/// ellipsis (feature 1463 FR-012); the full text is in its tooltip. The session tabs keep at least
-/// one tab's width at the smallest window beside the sidebar (research R5).
-pub const SWITCH_CAPTION_MAX_WIDTH: f32 = 120.0;
-
 /// The session area for the shown session: the header, the strip, then the pane area (A1, A2). The
 /// header's and the strip's slots are there even when they have nothing to draw, empty, so the pane
 /// area's place in the tree never moves (feature 023 FR-008a).
@@ -293,8 +288,8 @@ pub(crate) fn strip<'a>(
         None => container(Space::new()).into(),
     };
     // The controls after the tabs give way by rank when the strip is too narrow (feature 1463
-    // FR-012): the status words give way first, while the split buttons stay whole. A plain `row!` would squeeze the controls it
-    // lays out last instead.
+    // FR-012): the status words give way first, while the split buttons stay whole. A plain
+    // `row!` would squeeze the controls it lays out last instead.
     let controls = material::GiveWayRow::new(spacing::SM)
         .shorten(0, status_cluster(model, r))
         .keep(splits);
