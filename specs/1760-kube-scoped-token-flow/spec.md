@@ -116,4 +116,5 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - The delivery mechanism (a Kubernetes Secret key mounted read-only and named by `token_file`) follows the existing startup-secret pattern; it is a plan decision.
 - The per-token `host` key lets the test point the helper at the fake forge; the shipped default stays `github.com` (#1542 FR-003/FR-004: no environment override).
 - The container's missing delivery (docs promise it, code lacks it) is out of scope and recorded as a follow-up.
+- "A project of this daemon" (FR-009) means the daemon's saved projects with a remote; a project added in the pod at runtime has no remote the client can read and counts from no start (plan research R3).
 - Out of scope: renewing tokens, a real GitHub check (stays manual, step 7), changing the container or host arms.
