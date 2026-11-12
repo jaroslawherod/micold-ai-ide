@@ -72,4 +72,6 @@ RESOLVED (human, option 1: slim in-body row; spec US1 AC1, FR-001, SC-001 amende
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- FR-011 tabs shrink before they scroll: tabs keep their fixed width and only scroll (M4; `+`, restart, splits and chip stay reachable). T029/T031 cover scroll only.
+- Worktree-menu keyboard highlight (M2 minor) not separately verified in M4.
+- `header_row_fits.rs` 1000+ chip text assertion is loose (review MINOR).

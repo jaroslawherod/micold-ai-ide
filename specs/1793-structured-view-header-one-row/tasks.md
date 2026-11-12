@@ -57,9 +57,9 @@ Paths are relative to the repo root. `client` = `crates/micold-client`, `materia
 Delivered inside M1 and M4 (tests travel with the code): no separate milestone.
 
 - [x] T028 [US5] Gate test first (runs in M1, before T010): `crates/micold-client/tests/gates/top_bar_collapse.rs`, registered in `crates/micold-client/tests/layout_snapshot.rs`; ring text hides, then Changes label with icon kept, no overlap at wide (1280 px) and narrow (800 px) widths (pattern: `strip_controls_hold_their_size.rs`)
-- [x] T029 [US5] Gate test first (runs in M4, before T024): tabs shrink then scroll, `+` and chip stay reachable with many tabs, in `crates/micold-client/tests/gates/header_row_fits.rs`
+- [x] T029 [US5] Gate test first (runs in M4, before T024): tabs shrink then scroll, `+` and chip stay reachable with many tabs, in `crates/micold-client/tests/gates/header_row_fits.rs` (M4 covers scroll and reachability; tabs shrinking before they scroll, FR-011, is a recorded follow-up)
 - [ ] T030 Removed (folded into T010 and T024, which must make T028 and T029 green)
-- [x] T031 [US5] User guide: tab shrink and scroll in narrow windows in `docs/user-guide/structured-transcript.md`
+- [x] T031 [US5] User guide: tab shrink and scroll in narrow windows in `docs/user-guide/structured-transcript.md` (M4 covers scroll and reachability; tabs shrinking before they scroll, FR-011, is a recorded follow-up)
 
 ## Phase 7: Polish
 
