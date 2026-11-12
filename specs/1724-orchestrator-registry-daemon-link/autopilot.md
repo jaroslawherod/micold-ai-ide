@@ -53,8 +53,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Tasks review | 1 | design | e54fe2ac892095469bf8be6f87367263f851fc04 | 673e0707cfeb5edb3ef35ec5c344958f332e2803:a072867aaeee867f059df4bfbe37482ecec78c6e | CHANGES: 1 MAJOR (fixed) |
 | Tasks review | 2 | design | 0ce895e9c35ffccbfb9286ff28c6ea420909299e | 9ad55870f0db7e677deeb1fae7de1961d3fd11aa:4ffca1f8894248ad587365c08647f34375bfcff1 | CLEAN after 1 MAJOR fixed (T010 stubs, task text only, self-checked) |
 | Design review | 3 | 1841 | 1c98492e91d156a3e3ea9266e07bb50b22ce4efa | fd50a3aac7fb35f49b943487c4b3db7ecfe12203:1c98492e91d156a3e3ea9266e07bb50b22ce4efa | CLEAN |
-| Review A (code-review high) | 1 | M1 diff | 3d0b | origin/main...HEAD | CHANGES: fixed accept-error exit, orchestrator tracing to stderr, vacuous child-count test. Declined: Ping/read-timeout/offline-on-close (M2), VersionMismatch (M3), auth/reservation limits (out of scope, local socket), claim snapshot clone and query-key routing (MINOR) |
-| Review B (conformance, sonnet) | 1 | M1 | d6cc4d8:32a0514 | brief M1 | CHANGES: 3 MAJOR: drift-M1.md and tdd/cycle-log.md written (no red phase captured, recorded honestly); Verify covered by the green full gate. MINOR F4/F5 declined |
+| Review A | 1 | M1 | 5c59d3f85a518f02f1c7905c62fdf46deac74115 | 199f867e401c566658aba6d806dc0ce1497f0bfa:5c59d3f85a518f02f1c7905c62fdf46deac74115 | CHANGES: fixed accept-error exit, stderr tracing, vacuous child test; declined Ping/offline/read-timeout (M2), VersionMismatch (M3), auth, MINORs |
+| Review B | 1 | M1 | 5c59d3f85a518f02f1c7905c62fdf46deac74115 | d6cc4d875c0d02cea290fa072f377ffe5504906a:32a0514a3f960be76b65f4e701e38e0a2bc4f516 | CHANGES: 3 MAJOR fixed by drift-M1.md, tdd/cycle-log.md (no red captured, recorded), Verify via full gate; MINOR declined |
 
 ## Declined review findings
 
