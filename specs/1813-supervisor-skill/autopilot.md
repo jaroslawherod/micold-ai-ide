@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1813_autopilot-supervisor-m2-supervisor-skill-that
 - **Started**: 2026-11-12
 - **Phase**: plan
-- **Next step**: escalation answer, then tasks unit (plan written; review round 3 still found 2 MAJOR, fixed by hand)
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -30,6 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D5 | plan | Plan review round 3 still found 2 MAJOR; accept hand fixes or one more round? | Accept fixes (commit 09892a167); no fourth round | decided by user | AskUserQuestion 2026-11-12 |
 
 ## Review rounds
 
@@ -54,14 +55,7 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-- **Category**: 5 Non-convergence
-- **Question**: Plan review round 3 still found 2 MAJOR (spec and quickstart disagreed with the plan on the supervised marker); both are fixed and committed but no fourth round is allowed. Accept the fixes as they stand and go on to tasks?
-- **Options**:
-  1. Accept (Recommended) — wording alignment only: spec FR-003 and US1.4 now say the prompt `/speckit-autopilot #<n> supervised`; quickstart passes the ledger path to `supervised.sh`; each checked against its finding.
-  2. One more review round — a fresh sonnet reviewer on the last fix diff.
-- **Recommended**: Accept — the MAJORs were consistency leftovers of one decision (no `env` on `create_session`), not design flaws.
-- **Evidence**: specs/1813-supervisor-skill/autopilot.md *Review rounds*; commit 09892a167; `create_session` schema has only `ai_cli, allow_additional_session, prompt, worktree`.
-- **Banner**: sent 2026-11-12
+None.
 
 ## Follow-ups not done
 
