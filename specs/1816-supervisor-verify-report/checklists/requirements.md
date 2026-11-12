@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (3 open: FR-007 cap, FR-009 tokens, FR-012 opt-in; the clarify unit resolves them)
+- [x] No [NEEDS CLARIFICATION] markers remain (the clarify unit resolved FR-007, FR-009, FR-012)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
