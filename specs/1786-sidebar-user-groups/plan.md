@@ -70,12 +70,11 @@ crates/micold-core/src/lib.rs              # module line
 crates/micold-core/src/store.rs            # layouts_path, load_layout, save_layout (JsonFileStore + Store trait defaults like runs)
 crates/micold-client/src/features/sidebar.rs # SidebarEntry::UserGroup(GroupHeaderNode); sidebar_entries applies layout; row_heights, row_index, reveal_ready expand a collapsed group
 crates/micold-client/src/features/sidebar_drag.rs # new: DragState, DropTarget, hit_test, reducer
-crates/micold-client/src/features/sidebar_group_actions.rs # new: Msg (New, Rename, Delete, Move, MoveUp/Down, Toggle), naming draft, apply+save outcome
+crates/micold-client/src/features/sidebar_group_actions.rs # new: Msg (New, Rename, Delete, Move, MoveUp/Down, Toggle), naming draft, apply+save outcome; also owns GroupContextMenu and the naming draft
 crates/micold-client/src/features/navigation.rs # location_nodes skips headers; keyboard reaches headers (803)
 crates/micold-client/src/features/worktree.rs # menu items: Move to group submenu, Move up/down
 crates/micold-core/src/sidebar_groups.rs  # existing (feature 483 run-group state), unrelated and unchanged; the new core module is sidebar_layout
 crates/micold-client/src/overlay/registry.rs # register GroupContextMenu (layer ContextMenu) and the group naming dialog beside WorktreeContextMenu
-crates/micold-client/src/features/sidebar_group_actions.rs # also owns GroupContextMenu and the naming draft; dialog reuses ui/rename_dialog.rs (edited: title and error line)
 crates/micold-client/src/keymap.rs, ui/shortcut_sheet.rs  # chord entry for New group
 crates/micold-client/src/ui/sidebar.rs     # "New group" button in the chip-bar more menu row and project header; header row, drop highlight, marker, drag wiring (glue)
 crates/micold-client/src/ui/material/group_header.rs # new shared GroupHeader, DropMarker builders

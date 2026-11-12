@@ -2,7 +2,7 @@
 feature: 1786-sidebar-user-groups
 loop: outside-in
 profile: .specify/memory/tdd-profile.md
-spec_criteria: 26
+spec_criteria: 27 # A19 merges US4-4 and US7-1; A27, A28 cover FR-016, FR-018
 planned_at: HEAD
 updated_at: HEAD
 suite_baseline: unknown
@@ -42,6 +42,8 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | A24 | Layout, order and collapsed state survive a restart | US6-2, FR-012, SC-003 | example | PENDING | tasks T002, T003, T004, T005, T039 |
 | A25 | A stale assignment is ignored on load | US6-3, FR-018 | example | PENDING | tasks T002, T003, T039 |
 | A26 | No header names a state | US7-2, FR-013 | example | PENDING | tasks T041 |
+| A27 | A run group row is dragged and dropped as one unit; a group header arms for group drag | FR-016, FR-019 | example | PENDING | tasks T029, T037 |
+| A28 | A worktree added or removed while running appears in ungrouped or leaves its group | FR-005, FR-018 | example | PENDING | tasks T006, T007 |
 
 ## Inner loop: unit behaviors
 
