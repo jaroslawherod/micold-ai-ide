@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4b (gate/reviews done, PR next)
-- **Next step**: commit, push, open M4b's PR (docs-tier, T067); then the orchestrator merges and dispatches the close unit.
+- **Phase**: milestone M4b (PR open, awaiting CI/merge)
+- **Next step**: orchestrator waits on CI for #1846 and merges; this is the run's last milestone — then the close unit.
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | merged | b4216564604c9b93a3f8c685e9a676113f92f6cc |
 | #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | merged | c6f958f09e26d1f70da6c95798d0bc841c5ce90f |
 | #1843 | M4a — Settings → Daemons renders `[[ai.cli]]` | merged | 80711fb26b0b6dfa2d919297fa16675f56967767 |
+| #1846 | M4b — user guide documents `[[ai.cli]]`, visual-pass confirmed | open | — |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (merged, `c6f958f09e26d1f70da6c95798d0bc841c5ce90f`) |
 | M4a | Settings → Daemons renders `[[ai.cli]]` | T066 | full | #1843 (merged, `80711fb26b0b6dfa2d919297fa16675f56967767`) |
-| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | — |
+| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | #1846 (open) |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
 M1 is the field-to-launch mapping (tests + implementation together, rule 7); M2 was originally cut
@@ -328,7 +329,7 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-None. M4a is pushed (force-pushed over superseded drift `4cca1f8fa`) and PR #1843 is open against `main`, three-dot diff verified to be exactly M4a's scope. All four M4a review rounds are recorded in *Review rounds* (Review A round 1 CHANGES→fixed, round 2 CLEAN on the post-gate clippy/allow-list fix diff; Review B round 1 CLEAN, round 2 CLEAN — the round-2 pair exists because the gate's own clippy fixes (`4a49cb184`, `5f47edff9`) changed code after each review's round-1 snapshot; this does not count against the round limit per review-rounds.md). Full gate recorded green on the tree at `196fa5462` (includes both fix commits). Next: the orchestrator waits on CI for #1843 and merges, then dispatches M4b (T067).
+None. M4a (#1843) merged as `80711fb26b0b6dfa2d919297fa16675f56967767`, recorded in *Pull requests*/*Milestones*. M4b (T067) is done and pushed: PR #1846 is open against `main` (the run's last milestone — a close unit follows). Its diff is bookkeeping only (ledger + `tasks.md`'s T067 tick), since the user-guide prose itself landed with M4a. Review A and Review B both CLEAN (recorded in *Review rounds*, snapshot `c2840539a031a8afba65b7d74a1478d205434e70:80711fb26b0b6dfa2d919297fa16675f56967767`). Docs-tier gate (`mise run test-scripts`) green. A fresh visual-pass re-run of the Settings → Daemons AI CLI accordion was attempted but could not execute — this sandbox has no Xvfb/xdotool/sway/grim/ImageMagick and no apt-get/docker/mise plugin to add them; the accordion's visual pass already ran and passed during M4a (PASS x4, evidence at `specs/daemon-config-file/visual/*.png`, already on `main`), and nothing in M4b's diff touches the UI, so that evidence stands for the deliverable. Next: the orchestrator waits on CI for #1846 and merges, then dispatches the close unit.
 
 ## Open escalation
 
