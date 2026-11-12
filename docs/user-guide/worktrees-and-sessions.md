@@ -1496,23 +1496,25 @@ the background service keeps the events it reports. It is Claude Code only.
   **Raw event** row with its original text. If the service no longer holds the earliest events, the
   first entry says how many earlier events are not shown. A turn whose process ended before it
   reported a result ends with "The turn ended without a result" instead of a footer.
-- **The session bar** sits at the top of the pane, above the conversation, and stays in place while
-  it scrolls:
-  - the **context meter** shows how much of Claude's context the conversation fills, as of the
-    latest reply: tokens used out of the model's context window and the share as a whole percent,
-    on a bar with a tick at the point where Claude Code compacts the conversation, when it reports
-    one. Hover it for the figures (context used, the window, the compaction threshold). Before the
-    first reply it says **No data yet**; when Claude Code did not report the model's window it shows
-    the tokens only, with no bar. It follows each reply, and drops after a compaction;
-  - at the compaction threshold (or at 90% of the window when no threshold is reported) the meter
-    turns to its warning look: the meter's bar in the error colour, a warning icon and the words **Near
-    compaction**, so it reads as a warning in greyscale too;
-  - the **session totals**: the cost of the session so far and how many turns that covers, as
-    `$0.1400 est. · 3 turns`. Hover it for each token figure (input, output, cached read and
-    written), one line per model Claude Code used, any turn left out because it reported no usage,
-    and **Partial** when the earliest events are no longer held, so the totals cover only the turns
-    still shown;
-  - while background work runs, **N background tasks running**.
+- **One header row.** Above the conversation sits a single 40 px row: the session tabs (they scroll
+  sideways when there are many), then, at the end of the row, the restart control (only for a stopped
+  session), the split buttons and an **N hidden** chip. There is no title row, no `running` text and no
+  status cluster in the pane; the status ring and **Changes** are in the top bar. Hover the ring for
+  the context used, the cost and turns (totals) and the number of running background tasks. A tab shows
+  an activity dot only while its session is working; a failed or exited session shows none.
+  - the ring's tooltip carries what the old session bar showed: tokens used out of the model's context
+    window and the share as a whole percent, the compaction threshold when Claude Code reports one, the
+    session's cost so far and turn count (`$0.1400 est. · 3 turns`), each token figure, one line per
+    model, any turn left out because it reported no usage, and **Partial** when the earliest events are
+    no longer held. Before the first reply it shows no data yet. Near compaction (the threshold, or 90%
+    of the window when none is reported) the ring turns to its warning colour;
+  - the **N hidden** chip (named "N hidden events, show") appears only while events are hidden; press
+    it to show the raw events. At zero hidden events it is not there;
+  - the **+** menu offers **Another session** and **Terminal**;
+  - in a narrow window the tabs scroll sideways; **+**, restart, the split buttons and the chip stay
+    reachable.
+- **The transcript's first row.** The list of background tasks and the mode label sit in a slim first
+  row of the transcript, shown only when there is something to show.
 - **Every cost is an estimate.** Claude Code estimates cost at API list prices; on a subscription
   plan that is not what you are billed. Each cost says **est.**, and the details of each say so in
   words. It is shown for every account.
@@ -1533,11 +1535,11 @@ the background service keeps the events it reports. It is Claude Code only.
   never shown) are under a placeholder, **Subagent of an earlier step**, naming that step, which
   unfolds the same way; nothing is dropped.
 - **Background tasks.** When Claude leaves a command or a sub-agent running in the background, the
-  session bar lists it under **Background tasks** (folded; press it to unfold): each task with an
+  transcript's first row lists it under **Background tasks** (folded; press it to unfold): each task with an
   icon for its kind, its description and its state, **Running**, **Finished**, **Failed**,
   **Stopped** or **Ended without a report** (Claude Code stopped or restarted while it ran), with
   the outcome Claude Code reported. The tool card that started a task shows the task's state in its
-  header too. A session without background tasks shows neither the list nor the count.
+  header too. A session without background tasks shows no list.
 - **Plan usage.** A structured session also keeps the [status bar](./appearance-theming.md#status-bar)'s
   [Claude plan usage](#claude-plan-usage) indicator up to date, with no terminal session open.
 - **It follows the end.** While you are at the end of the transcript, it stays there as a reply
@@ -1593,7 +1595,7 @@ the background service keeps the events it reports. It is Claude Code only.
   - **Plan** has Claude only investigate and propose, until you approve its plan.
   - **Bypass** never asks: **Claude runs every tool without asking**, including commands that
     delete files or reach the network. Starting a session in Bypass first asks you to confirm.
-    While a session is in Bypass, its session bar says **Bypass: Claude runs every tool without
+    While a session is in Bypass, the transcript's first row says **Bypass: Claude runs every tool without
     asking**, with a warning icon. Use it only for work you would let Claude do unattended.
 
   Terminal sessions are unchanged: they ask in their own terminal screen, and have no mode here.

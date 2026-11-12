@@ -203,7 +203,10 @@ fn a_session_tab_has_a_close_control() {
 fn the_marks_slot_is_reserved_rather_than_pushed_when_stopped() {
     let body = member_body(&area_source());
     assert_eq!(
-        body.matches(".leading(mark(").count(),
+        body.matches(".leading(mark(").count()
+            + body
+                .matches(".leading(ActivityBadge::for_emphasis(")
+                .count(),
         2,
         "both kinds of tab must always build their leading slot (FR-012c, research R4)"
     );

@@ -42,24 +42,24 @@ Paths are relative to the repo root. `client` = `crates/micold-client`, `materia
 
 ## Phase 5: User Story 1 - One-row header (P1)
 
-- [ ] T021 [P] [US1] Test first: gate `crates/micold-client/tests/gates/header_row_fits.rs`, registered with a `#[path]` entry in `crates/micold-client/tests/layout_snapshot.rs` (one 40 px row above the first event with and without background tasks or a mode label present, the slim in-body row only when there is something to show, no title row, chip at 0 and 1000+, `+` and chip fit) and update `crates/micold-client/tests/session_area_stability.rs` for the removed `status_cluster`
-- [ ] T022 [P] [US1] Test first: `crates/micold-client/tests/features_session_strip.rs` activity dot per session (working only, failed or exited sessions show no dot, no `running` text), chip accessible name "N hidden events, show", `HiddenChip` text `N hidden` absent at zero, activation emits `TranscriptMsg::ShowRawEvents(true)`
-- [ ] T023 [US1] Implement the per-tab activity dot, `HiddenChip` and chip data in `crates/micold-client/src/features/session_strip.rs` (depends on T022)
-- [ ] T035 [US1] Test first: update or retire the gates `crates/micold-client/tests/gates/session_bar_fits.rs` and `crates/micold-client/tests/gates/session_area_fits.rs` for the removed session bar and header, and their `#[path]` entries in `crates/micold-client/tests/layout_snapshot.rs`
-- [ ] T024 [US1] Remove the title row `session_area::header`, the `running` text and `status_cluster`; draw the dot and the `N hidden` chip at the row end in `crates/micold-client/src/ui/session_area.rs` (depends on T021, T023, T035)
-- [ ] T034 [US1] Test first: the ring tooltip includes totals and running count (R6) in `crates/micold-client/tests/features_header_bar.rs`; the slim body row is present only when background tasks or a mode label exist (decision made: option 1, spec amended)
-- [ ] T025 [US1] Remove the session bar meter and raw-events toggle row from `view_full` in `crates/micold-client/src/ui/transcript/mod.rs` and `crates/micold-client/src/ui/transcript/session_bar.rs`; fold totals and running count into the ring tooltip (R6) in `crates/micold-client/src/features/header_bar.rs` (depends on T034)
-- [ ] T026 [US1] Move the background-tasks accordion and mode label to a slim first row of the transcript body, shown only when there is something to show, and replace `hidden_notice` by the chip in `crates/micold-client/src/ui/transcript/entries.rs` and `crates/micold-client/src/ui/transcript/mod.rs` (R6); depends on T024
-- [ ] T027 [US1] User guide: one-row header, `N hidden` chip and activity dot in `docs/user-guide/structured-transcript.md`
+- [x] T021 [P] [US1] Test first: gate `crates/micold-client/tests/gates/header_row_fits.rs`, registered with a `#[path]` entry in `crates/micold-client/tests/layout_snapshot.rs` (one 40 px row above the first event with and without background tasks or a mode label present, the slim in-body row only when there is something to show, no title row, chip at 0 and 1000+, `+` and chip fit) and update `crates/micold-client/tests/session_area_stability.rs` for the removed `status_cluster`
+- [x] T022 [P] [US1] Test first: `crates/micold-client/tests/features_session_strip.rs` activity dot per session (working only, failed or exited sessions show no dot, no `running` text), chip accessible name "N hidden events, show", `HiddenChip` text `N hidden` absent at zero, activation emits `TranscriptMsg::ShowRawEvents(true)`
+- [x] T023 [US1] Implement the per-tab activity dot, `HiddenChip` and chip data in `crates/micold-client/src/features/session_strip.rs` (depends on T022)
+- [x] T035 [US1] Test first: update or retire the gates `crates/micold-client/tests/gates/session_bar_fits.rs` and `crates/micold-client/tests/gates/session_area_fits.rs` for the removed session bar and header, and their `#[path]` entries in `crates/micold-client/tests/layout_snapshot.rs`
+- [x] T024 [US1] Remove the title row `session_area::header`, the `running` text and `status_cluster`; draw the dot and the `N hidden` chip at the row end in `crates/micold-client/src/ui/session_area.rs` (depends on T021, T023, T035)
+- [x] T034 [US1] Test first: the ring tooltip includes totals and running count (R6) in `crates/micold-client/tests/features_header_bar.rs`; the slim body row is present only when background tasks or a mode label exist (decision made: option 1, spec amended)
+- [x] T025 [US1] Remove the session bar meter and raw-events toggle row from `view_full` in `crates/micold-client/src/ui/transcript/mod.rs` and `crates/micold-client/src/ui/transcript/session_bar.rs`; fold totals and running count into the ring tooltip (R6) in `crates/micold-client/src/features/header_bar.rs` (depends on T034)
+- [x] T026 [US1] Move the background-tasks accordion and mode label to a slim first row of the transcript body, shown only when there is something to show, and replace `hidden_notice` by the chip in `crates/micold-client/src/ui/transcript/entries.rs` and `crates/micold-client/src/ui/transcript/mod.rs` (R6); depends on T024
+- [x] T027 [US1] User guide: one-row header, `N hidden` chip and activity dot in `docs/user-guide/structured-transcript.md`
 
 ## Phase 6: User Story 5 - Narrow windows (P2)
 
 Delivered inside M1 and M4 (tests travel with the code): no separate milestone.
 
 - [x] T028 [US5] Gate test first (runs in M1, before T010): `crates/micold-client/tests/gates/top_bar_collapse.rs`, registered in `crates/micold-client/tests/layout_snapshot.rs`; ring text hides, then Changes label with icon kept, no overlap at wide (1280 px) and narrow (800 px) widths (pattern: `strip_controls_hold_their_size.rs`)
-- [ ] T029 [US5] Gate test first (runs in M4, before T024): tabs shrink then scroll, `+` and chip stay reachable with many tabs, in `crates/micold-client/tests/gates/header_row_fits.rs`
+- [x] T029 [US5] Gate test first (runs in M4, before T024): tabs shrink then scroll, `+` and chip stay reachable with many tabs, in `crates/micold-client/tests/gates/header_row_fits.rs`
 - [ ] T030 Removed (folded into T010 and T024, which must make T028 and T029 green)
-- [ ] T031 [US5] User guide: tab shrink and scroll in narrow windows in `docs/user-guide/structured-transcript.md`
+- [x] T031 [US5] User guide: tab shrink and scroll in narrow windows in `docs/user-guide/structured-transcript.md`
 
 ## Phase 7: Polish
 

@@ -2157,12 +2157,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-review-marks-unavailable",
             build: review_marks_unavailable,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1274: the current hunk marked (T021, FR-005, FR-021) ---------------------
         //
@@ -2171,12 +2169,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "review-current-hunk",
             build: review_current_hunk,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1274: the shortcut sheet (T046, FR-012, FR-021, FR-022) --------------------
         //
@@ -2233,12 +2229,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-tree-collapsed",
             build: review_tree_collapsed,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // The same review filtered by `tree`, sorted by Size (T037, FR-009, FR-012): the two
         // `tree.rs` files listed with their matched characters highlighted, the collapsed `tests`
@@ -2270,12 +2264,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-tree-no-match",
             build: || review_tree_filtered("zzz", false),
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1275: suggestion chips (T042, FR-023, FR-027) ----------------------------
         //
@@ -2285,12 +2277,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-review-held-chips",
             build: review_held_chips,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1272: the review's source control (T024, FR-012) -------------------------
         //

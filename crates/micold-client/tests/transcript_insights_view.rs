@@ -485,14 +485,16 @@ fn a_card_that_started_a_background_task_shows_its_state() {
 // ---- X1 drawn ----
 
 #[test]
-fn the_view_draws_the_session_bar_above_the_entries() {
+fn the_view_no_longer_draws_a_session_bar_above_the_entries() {
     let w = Window::recorded("text-turn");
     let painted = w.painted(true);
+    // Feature 1793: the session bar (context meter and totals) is gone from above the entries.
     let label =
         micold_core::structured::insights::figures::context_label(&w.core().context().state());
-    assert!(has(&painted, &label), "{label:?} in {painted:?}");
-    let empty = Window::of(&[]);
-    assert!(has(&empty.painted(true), "No data yet"));
+    assert!(
+        !has(&painted, &label),
+        "{label:?} still drawn in {painted:?}"
+    );
 }
 
 #[test]
