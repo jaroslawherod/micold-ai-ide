@@ -772,7 +772,7 @@ The close unit's re-audit findings I9-11 to I9-15, all cleared.
 - [x] T154 [US3] I9-13: test that `shared_copy`'s output in the pod's startup secret carries no `gpgsign` (the pod caller in `daemon.rs` only calls `shared_copy`) and correct `tdd/test-list.md` T143 to say what is covered; `cargo test -p micold-core --lib kube`
 - [x] T155 [US3] I9-14, I9-15: either extend T141 to a `push` (`git-receive-pack`) or record `ls-remote` as the intended scope in the test-list row; split the two scenarios of `a_sandbox_session_never_runs_the_planted_host_helper`; `cargo test -p micold-daemon --test git_credential_config`
 
-## Phase 25: TDD remediation (Issue 15 / #1537, from `tdd/verification.md`, section "Issue 15")
+## Phase 27: TDD remediation (Issue 15 / #1537, from `tdd/verification.md`, section "Issue 15")
 
 Verdict FAIL: Issue 15 is not done until T156, T157 and T158 are cleared. No finding is unbuilt behaviour; all are test strength, process or documentation.
 
