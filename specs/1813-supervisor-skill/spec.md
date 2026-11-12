@@ -134,7 +134,7 @@ output; the status read is `--json`.
 ### Edge Cases
 
 - An *advance* is one read-decide-start pass. The supervisor waits between advances without a
-  polling loop in its own context; what wakes it is an open question for the clarify unit.
+  polling loop in its own context; a background watcher wakes it (see Clarifications).
 
 - Empty input: no issues and no `autopilot:queue` label: the supervisor reports "nothing to do"
   and ends; it creates no ledger entry.
@@ -211,11 +211,31 @@ output; the status read is `--json`.
 - The micold MCP tools `create_worktree` and `create_session` are available to the supervisor
   session, as `CLAUDE.md` describes for "Start work on issue".
 - A session's slot is released when its status is `done`; a merged PR is handled by that session.
-- [NEEDS CLARIFICATION: where does the supervisor ledger live and how is it kept out of feature
-  branches: a gitignored file under the project root, or committed on main?]
-- [NEEDS CLARIFICATION: how does the supervisor learn the `done` of a session started in another
-  worktree: run `run-status.sh <worktree-dir>` for each recorded worktree path?]
-- [NEEDS CLARIFICATION: default memory and load thresholds when the person gives none.]
+- The supervisor ledger is `.autopilot/supervisor.md` under the project root where the supervisor
+  runs, listed in `.gitignore`, so it is never on a feature branch and never committed.
+- `run-status.sh --json <worktree-dir>` is read-only and works for any worktree from any directory,
+  so the supervisor learns each session's state from the worktree path recorded in its ledger.
+- Default gate thresholds, overridable by the person: at least 4 GiB of available memory, and a
+  one-minute load average no higher than the number of CPU cores.
+
+## Clarifications
+
+### Session 2026-11-12
+
+- Q: Where does the supervisor ledger live and how is it kept off feature branches? → A: a
+  gitignored `.autopilot/supervisor.md` under the project root; add `/.autopilot/` to `.gitignore`.
+  _(agent-resolved: .gitignore, "speckit-autopilot bug and chore runs keep their ledger local")_
+- Q: How does the supervisor learn `done` of a session in another worktree? → A: run
+  `run-status.sh --json <worktree-dir>` per recorded worktree; the script takes any worktree dir.
+  _(agent-resolved: scripts/autopilot/run-status.sh usage; specs/1812-supervisor-run-status/contracts/run-status.md)_
+- Q: Default memory and load thresholds? → A: 4 GiB available memory, one-minute load average at
+  most the CPU core count; both overridable. _(agent-resolved: Rust builds are the heavy load, CLAUDE.md
+  "One target directory, one build at a time"; sensible default, no repo value exists)_
+- Q: What wakes the supervisor between advances? → A: a detached background shell loop (one
+  `run_in_background` Bash call) that checks each recorded worktree's `run-status.sh --json` outside
+  the supervisor's context and exits when any state changed or after a 10-minute ceiling; its exit
+  notification starts the next advance. The supervisor never polls with repeated calls.
+  _(agent-resolved: .claude/skills/speckit-autopilot/rules/waiting.md, "Never poll")_
 
 ## Out of Scope
 

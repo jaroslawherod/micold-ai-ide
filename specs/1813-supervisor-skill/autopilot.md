@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1813
 - **Worktree branch**: feat/1813_autopilot-supervisor-m2-supervisor-skill-that
 - **Started**: 2026-11-12
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the 3 NEEDS CLARIFICATION markers in spec.md (spec reviewed CLEAN, round 2)
+- **Phase**: clarify
+- **Next step**: plan unit (clarify done: 4 agent-resolved, none escalated)
 
 ## Pull requests
 
