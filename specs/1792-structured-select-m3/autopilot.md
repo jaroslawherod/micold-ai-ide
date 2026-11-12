@@ -51,6 +51,8 @@ Polish T022–T023 (no code) is left to the close unit.
 | B | 1 | M1 | fc4869254e79369837838f82ad0cd6bc724440ca | 9bf76c49c8d226fd67193dd436febc0f16b1f301:a6ef0850eac034c3acd89097673bfed4ff004a84 | CLEAN (MINOR: no tdd cycle-log, tests after implementation) |
 | re-review | 2 | M1 | fc4869254e79369837838f82ad0cd6bc724440ca | d18df42aae0fb8766577d905b2ce643448e35008:fc4869254e79369837838f82ad0cd6bc724440ca | CLEAN (filled() opt-in and SelectTrigger exemption, sonnet; 1 MINOR test comment) |
 | A | 2 | M1 | b5b53dc563ed7ac0f4d995b91affc24f90cb0abe | 036204b27bc5b3a64874237b02ba18aa3b41e429:b5b53dc563ed7ac0f4d995b91affc24f90cb0abe | CLEAN (docs-only fix diff since fc4869254; 2 MINOR fixed, prose only) |
+| B | 2 | M1 | c3006f98426d537f9efdfbd610d68bfb786d8c99 | b3843889d265b8ecafb685cdd31a4fde808229b0:c3006f98426d537f9efdfbd610d68bfb786d8c99 | CLEAN (docs-only fix diff since fc4869254; 1 MINOR fixed, prose only) |
+| re-review | 3 | M1 | c3006f98426d537f9efdfbd610d68bfb786d8c99 | de5364e74e35bf1faa0d4b82bfa4e5206887bd84:c3006f98426d537f9efdfbd610d68bfb786d8c99 | CLEAN (docs-only since fc4869254, no code) |
 
 ## Declined review findings
 
