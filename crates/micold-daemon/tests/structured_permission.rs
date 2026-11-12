@@ -133,6 +133,21 @@ impl Daemon {
         self.summary(n).activity
     }
 
+    /// Wait, within 15 s, until session `n`'s catalog activity is `want`: the catalog follows the
+    /// request or decision a window sees by a step, so a read made at once can see the old value
+    /// (#1787).
+    async fn activity_is(&self, n: usize, want: ActivitySignal) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        while self.activity(n) != want {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "session {n} is {:?}, expected {want:?}",
+                self.activity(n)
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     /// Send session `n`'s CLI a user message, opening a turn.
     async fn say(&self, n: usize, text: &str) {
         let (state, id, text) = (Arc::clone(&self.state), self.ids[n], text.to_string());
@@ -1055,11 +1070,11 @@ async fn two_sessions_waiting_are_marked_separately() {
         let request = requested(&mut a).await;
         ids.insert(request.session, request.id);
     }
-    assert_eq!(daemon.activity(0), ActivitySignal::AwaitingInput);
-    assert_eq!(daemon.activity(1), ActivitySignal::AwaitingInput);
+    daemon.activity_is(0, ActivitySignal::AwaitingInput).await;
+    daemon.activity_is(1, ActivitySignal::AwaitingInput).await;
     let s1 = daemon.ids[1];
     assert_ok(&decide(&mut a, 1, s1, ids[&s1], PromptChoice::Allow).await);
-    assert_eq!(daemon.activity(1), ActivitySignal::Working);
+    daemon.activity_is(1, ActivitySignal::Working).await;
     assert_eq!(daemon.activity(0), ActivitySignal::AwaitingInput);
 }
 
