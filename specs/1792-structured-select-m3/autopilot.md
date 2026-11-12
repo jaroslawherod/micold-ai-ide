@@ -10,22 +10,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
 - **Started**: 2026-11-11
-- **Phase**: M1 PR open
-- **Next step**: orchestrator merges M1 PR; then M2
+- **Phase**: M2 PR open
+- **Next step**: orchestrator merges M2 PR; then M3
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
-| #1842 | M1 | open | — |
+| #1842 | M1 | merged | 7628262fce95c344ccb9eed01db1138e2da2a5fa |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | open |
-| M2 | T011–T012 | light | menu parity pinned (test-only if green) | — | pending |
+| M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | merged |
+| M2 | T011–T012 | light | menu parity pinned (test-only if green) | PR pending | open |
 | M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | pending |
 
 Polish T022–T023 (no code) is left to the close unit.
@@ -37,6 +37,8 @@ Polish T022–T023 (no code) is left to the close unit.
 
 
 ## Review rounds
+
+- M2 review A+B round 1: snapshot bdbecb1122a12e455a4771a21711c319a8022b73:7628262fce95c344ccb9eed01db1138e2da2a5fa — CHANGES (F1 declined; F2, F3 fixed in the test; F4 mutation proof done: +8px marker height turned it red). Round 2 snapshot 13130c93e19f445a3233ed4aa9df7fc16d3c644d:7628262fce95c344ccb9eed01db1138e2da2a5fa.
 
 - tasks review round 1: snapshot 199ca061a9e675043e43796afbe22d627936dd42:0923e2cbffbbdc6215eb213142a9ae51bb4c669d — CHANGES (F1 MAJOR checklist ticked, 2 with waiver; F2 MAJOR paths added to T014-T018; F3 MINOR M2 note). Fixes are artifact text only (paths, ticks); checked against the findings, no new round. speckit-analyze: no CRITICAL/HIGH; C1-C7 MEDIUM fixed.
 - plan review round 1: snapshot 2abfa9d1e636fc5404daaf01505ef89fbd1530d6:0725198f2bce1c07e7457288f82dcb60a582ea54 — CHANGES (F1 MAJOR duration undecided: fixed MEDIUM_2; F2-F4 MINOR fixed). Fixes are research/contract decisions, checked against the finding; no new round.
@@ -60,6 +62,8 @@ Polish T022–T023 (no code) is left to the close unit.
 | re-review | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase resolution) |
 
 ## Declined review findings
+
+- M2 review A+B F1 (MAJOR, paint-level colour/state-layer comparison): declined; the parity test is geometry only and says so. menu_panel and row_surface are shared functions both controls call; a draw dump is out of proportion for a test-only milestone.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -88,4 +92,4 @@ Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- Parity test (M2) compares geometry only; colour, elevation and state-layer paint are not compared. T011 was green first run, T012 skipped.
