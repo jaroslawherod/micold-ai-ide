@@ -65,7 +65,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-None.
+M1 is done and committed locally (HEAD above origin/main, tree recorded in autopilot-gate-ok for CI validation). Compiled, core 146 and daemon orchestrator 11 tests green, clippy clean, fmt fixed, reviews A and B done and recorded. Full `mise run gate` got through fmt, clippy and the whole nextest run except `ai_cli_config::configured_token_file_reaches_claude_code_as_oauth_token_without_the_expiry_line` (unrelated, failed under load, passed 3 of 3 alone); `test-scripts` not reached. NOT pushed: origin's branch holds 4 pre-rebase twins of PR 1841's commits, so the push needs `git push --force-with-lease -u origin HEAD` after `git fetch`, which the auto-mode classifier denied to this unit. Next: the caller (or a user-approved unit) force-pushes, then opens the M1 PR (title `feat(1724): orchestrator registry, daemon link and listing (#1724)`, body per pr.md: Local gate scoped only, full gate left to CI; mention the flaky test and that quickstart Part B 1, 2, 7 are covered by the dispatch, link_and_list and not_hosted tests).
 
 ## Open escalation
 
