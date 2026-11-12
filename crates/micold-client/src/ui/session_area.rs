@@ -306,10 +306,7 @@ pub(crate) fn strip<'a>(
 /// and while its marked process is stopped the restart as the cluster's last
 /// child, so its coming and going moves no other control (R9, US2 sc. 5 and 6). While the Review
 /// tab is shown the restart keeps its place, disabled (feature 1269, U15).
-fn status_cluster<'a>(
-    model: &StripModel,
-    r: tokens::Roles,
-) -> Element<'a, Message> {
+fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Message> {
     let words = Tooltip::new(
         container(
             Ellipsized::<Message>::at_role(
@@ -365,7 +362,10 @@ pub(crate) fn plus_menu<'a>(
     // strip's own origin is the sidebar's width and the bar's bottom edge.
     let at = StripModel::of(state)
         .and_then(|model| {
-            let index = model.members.iter().position(|m| matches!(m, Member::Plus))?;
+            let index = model
+                .members
+                .iter()
+                .position(|m| matches!(m, Member::Plus))?;
             Some(member_offsets(&model.members)[index].0)
         })
         .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32);

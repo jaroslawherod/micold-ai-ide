@@ -15,7 +15,8 @@ use crate::containment::clips_deliberately;
 use crate::session_area_fits::assert_fits_under;
 use crate::status_bar_fits::assert_the_bar_holds_its_place;
 use crate::support::covered_states::{
-    covered_states, REVIEW_BAR, REVIEW_DIFF_PANE, REVIEW_DRAWER, REVIEW_TREE, REVIEW_TREE_FILTER, SESSION_STRIP_TABS,
+    covered_states, REVIEW_BAR, REVIEW_DIFF_PANE, REVIEW_DRAWER, REVIEW_TREE, REVIEW_TREE_FILTER,
+    SESSION_STRIP_TABS,
 };
 use crate::support::layout::{self as lay, CoveredState, LayoutRecord, StateUnderTest, WINDOW};
 use iced::{Rectangle, Size};
