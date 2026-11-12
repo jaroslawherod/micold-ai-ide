@@ -53,6 +53,8 @@ Polish T022–T023 (no code) is left to the close unit.
 | A | 2 | M1 | b5b53dc563ed7ac0f4d995b91affc24f90cb0abe | 036204b27bc5b3a64874237b02ba18aa3b41e429:b5b53dc563ed7ac0f4d995b91affc24f90cb0abe | CLEAN (docs-only fix diff since fc4869254; 2 MINOR fixed, prose only) |
 | B | 2 | M1 | c3006f98426d537f9efdfbd610d68bfb786d8c99 | b3843889d265b8ecafb685cdd31a4fde808229b0:c3006f98426d537f9efdfbd610d68bfb786d8c99 | CLEAN (docs-only fix diff since fc4869254; 1 MINOR fixed, prose only) |
 | re-review | 3 | M1 | c3006f98426d537f9efdfbd610d68bfb786d8c99 | de5364e74e35bf1faa0d4b82bfa4e5206887bd84:c3006f98426d537f9efdfbd610d68bfb786d8c99 | CLEAN (docs-only since fc4869254, no code) |
+| A | 3 | M1 | 479f03320a9e5061f848e43dd1132ddac78464bc | 9653b12411aeb09ce729b80ac2af910ef9a517b6:479f03320a9e5061f848e43dd1132ddac78464bc | CLEAN (docs-only fix diff since b5b53dc56, no code) |
+| B | 3 | M1 | 479f03320a9e5061f848e43dd1132ddac78464bc | 9653b12411aeb09ce729b80ac2af910ef9a517b6:479f03320a9e5061f848e43dd1132ddac78464bc | CLEAN (same head as B round 2; no change since) |
 
 ## Declined review findings
 
