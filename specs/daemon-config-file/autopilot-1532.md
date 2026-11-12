@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: close unit, part 4 (fourth part allowed by D12; continues from *Handover*)
-- **Next step**: a fresh close unit continues from *Handover*: resolve the rebase conflicts (renumbering T152-T156 to T156-T160 as Phase 27), full gate, finish the ledger, open the close PR.
+- **Phase**: close unit, part 5 (rebased onto origin/main; gate running, then the close PR)
+- **Next step**: full gate green, then open the close PR.
 
 ## Pull requests
 
@@ -334,77 +334,7 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-Status as of this unit (verified from git, not from the stale text this replaces): working tree
-clean, HEAD `31583c623`, branch ahead 5 / behind 25 of `origin/main`, no PR open yet.
-close.md steps 1-4 are done:
-
-- T152-T156 (tasks.md Phase 26, test-list.md Issue 11 section, the two T153 deliberate-mutant
-  checks in cycle-log.md, T155's full `ai_cli*` suite run, T154/T156 `daemons.rs` test strength)
-  are all committed (`ec7771bc1`, `08c5c4bdc`, `4581ebe73` — the last one a `cargo fmt` gate fix to
-  the T154/T156 test code).
-- Review A round 1 (close, head `08c5c4bdc`) recorded CLEAN (`816754e97`).
-- Review A round 2 (close, head `816754e97`, scope: just the `4581ebe73` fmt-only fix, required
-  because that fix landed after round 1's snapshot) also recorded CLEAN (`31583c623`).
-
-**Still open — the actual next step:** `git rebase origin/main` conflicts in three shared files
-this feature directory's `tasks.md`/`tdd/*` share with other issues' close units that merged to
-`main` after this branch forked (notably Issue 9/#1530's close, which also added a "Phase 26" with
-task IDs T152-T155 for *its own* different work). I resolved this once already but hit the context
-cap mid-rebase; the resolution is correct in principle, do it this way:
-
-1. **Do not jump straight to the final post-rebase content when resolving the *first* conflicting
-   commit** (`ec7771bc1`). Each of our three local commits (`ec7771bc1`, `08c5c4bdc`, `4581ebe73`)
-   touches these files again on top of the previous one; resolving the first conflict with the
-   *final* state (as I did once) makes `git rebase --continue` try to re-apply `08c5c4bdc`'s and
-   `4581ebe73`'s diffs against content that already has them, producing a second, spurious
-   conflict. Resolve each commit's conflict using only *that commit's own* diff on top of
-   `origin/main`'s already-resolved state, and let the next commit apply on top normally.
-2. **The task-ID collision**, found and the fix worked out already: `origin/main`'s own
-   `tasks.md` has its own "## Phase 26: TDD remediation (Issue 9 / #1530 close re-audit...)" using
-   T152-T155 (`git show origin/main:specs/daemon-config-file/tasks.md` — its highest task ID is
-   T155). Our own Phase 26 (Issue 11, T152-T156) must be renumbered to avoid colliding with it:
-   rename the heading to `## Phase 27` and renumber **T152->T156, T153->T157, T154->T158,
-   T155->T159, T156->T160** (do the substitution with a single regex alternation so T152->T156
-   does not then get re-matched and turned into T160 by the T156->T160 rule — that double-apply
-   bug is what cost this unit its context budget). Apply the same renumbering to every reference in
-   `tdd/verification.md`'s Issue 11 report (the section starting `# TDD verification: ... Issue 11
-   ...`, near the end of the file once merged) and `tdd/cycle-log.md`'s `## Issue 11 (#1532)
-   close-unit remediation (T153): ...` section — grep both for `T15[2-6]\b` after the rebase lands
-   to confirm nothing was missed, and that nothing of Issue 9's own T152-T155 in those same files
-   got touched.
-3. **`tdd/cycle-log.md` and `tdd/verification.md` are append-only across issues** — every issue in
-   this shared feature directory keeps its own report/section; `origin/main`'s version has ten
-   `tdd/verification.md` reports (Issues 3, 13, 4, 14, 5, 8, 6, 7, 9, 10) that our branch's own
-   `verification.md` does not have (ours only ever had our own Issue 11 report, 178 lines). The
-   correct resolution is `origin/main`'s full file, with our Issue 11 report (frontmatter + `#
-   TDD verification: ... Issue 11 ...` header + body) appended after the Issue 10 report at the
-   end — not a replacement. I verified this is right by diffing `origin/main`'s file against ours
-   and checking `## ` headings line up with no loss on either side; redo that check after
-   resolving, with `grep -n "^# TDD verification\|^# Issue"` on the result (should show 11
-   sections, Issue 11 last) and the same `## Issue N` check on `cycle-log.md`. **Watch especially
-   for `cycle-log.md`: in my first attempt, `git rebase` resolved it with *no* conflict markers at
-   all and silently kept only `origin/main`'s side, dropping our own `## Issue 11 (#1532)
-   close-unit remediation (T153)` section entirely** — confirm after the rebase that
-   `grep -n "Issue 11.*close-unit remediation" specs/daemon-config-file/tdd/cycle-log.md` still
-   finds it; if not, re-append it from `git show 4581ebe73:specs/daemon-config-file/tdd/cycle-log.md`
-   (its tail, from that heading to EOF) same as I did.
-4. **`test-list.md`** had the easiest conflict: both sides append their own `## Test list: Issue
-   N ...` section at the same point with no ID collision (different task-ID ranges) — just drop
-   the conflict markers and keep both sections, with a blank line between them.
-5. After a clean rebase (`git status` shows no conflict markers anywhere, `grep -rn
-   "^<<<<<<<\|^=======\|^>>>>>>>" specs/daemon-config-file/`  empty), continue close.md step 5: run
-   the **full** gate (`mise run gate`, the diff touches code — `daemons.rs` tests) per `gate.md`.
-6. Finish the ledger (step 6): **Phase** `done`, **Next step** `handoff`, record the close PR here
-   once opened.
-7. Open the close PR (step 7, `pr.md`): title `docs(1532): close the spec (#1532)`, body per the
-   milestone/bugfix template's shape but for a close PR — note Review A's two rounds (CLEAN, CLEAN)
-   and the gate result. Body ends `Refs #1532`.
-
-No code changes are needed beyond what is already committed; this is purely finishing the rebase,
-the renumbering, the gate, and the PR. The *Review rounds* table already has both close-review
-rounds recorded correctly (`A | 1 | close | 08c5c4bdc... | CLEAN`, `A | 2 | close | 816754e97... |
-CLEAN`) — do not re-review unless the rebase's conflict resolution changes behaviour-bearing
-content (it should not; it is pure bookkeeping/doc merging plus renumbering).
+None.
 
 ## Open escalation
 
