@@ -51,7 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Close | 1 | 1834 | bc845dea87574dd174dc18af75b0f2b640099818 | bc845dea87574dd174dc18af75b0f2b640099818:b9cb9954ae561d72d738fc411cf4514a65c734dc | CLEAN 3 MINOR fixed (test renamed, cycle-log note, task text reworded; prose only); pre-rebase |
 | Close | 2 | 1834 | 8370972b6d1fde4425d6f4911664fc058ba8c1e9 | 28d824cac888a129ef3551dd6cd0701cc4494105:8370972b6d1fde4425d6f4911664fc058ba8c1e9 | CLEAN 1 MINOR fixed (module doc rewrapped; prose only) |
 
-- Close (resumed unit): rebased onto origin/main; found a leftover mutant (`Some(()).map` in `daemon_config_delivery.rs`) in the working tree and restored it; T147-T151 done: 7/7 mutants caught (cycle-log, verification.md), I9-11..I9-15 closed; spec Status extended for Issue 9.
+- Close (resumed unit): rebased onto origin/main; found a leftover mutant (`Some(()).map` in `daemon_config_delivery.rs`) in the working tree and restored it; T147 and T152-T155 done: 7/7 mutants caught (cycle-log, verification.md), I9-11..I9-15 closed; spec Status extended for Issue 9.
 
 ## Declined review findings
 
