@@ -271,7 +271,8 @@ pub struct WorktreeMenu;
 
 impl WorktreeMenu {
     /// Its surface id, named by the surfaces it displaces.
-    pub const ID: crate::overlay::SurfaceId = crate::overlay::SurfaceId::new("header_worktree_menu");
+    pub const ID: crate::overlay::SurfaceId =
+        crate::overlay::SurfaceId::new("header_worktree_menu");
 }
 
 crate::floating_surface!(

@@ -188,9 +188,11 @@ fn opener(id: &str) -> Message {
                 micold_client::features::header_bar::HeaderMenu::Worktree,
             ))
         }
-        "header_plus_menu" => Message::HeaderBar(micold_client::features::header_bar::Msg::Toggled(
-            micold_client::features::header_bar::HeaderMenu::Plus,
-        )),
+        "header_plus_menu" => {
+            Message::HeaderBar(micold_client::features::header_bar::Msg::Toggled(
+                micold_client::features::header_bar::HeaderMenu::Plus,
+            ))
+        }
         other => panic!("no opener for `{other}`"),
     }
 }
