@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
 - **Phase**: milestone M3 (in progress)
-- **Next step**: M3 verify gates, review, PR (see Handover)
+- **Next step**: wait CI, merge M3, then M4
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
 | M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
-| M3 | T017–T020 | full | Single `+` menu | | pending |
+| M3 | T017–T020 | full | Single `+` menu | PR | open |
 | M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
 
 ## Decisions
@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 Review B (sonnet) | 1 |  |  | 14aea717:34cfb594 | CLEAN |
 | M2 Review A (high) | 1 |  |  | 1b71d9df:4b30f70c | CLEAN (1 MINOR: Chosen doc, left) |
 | M2 Review A+B (sonnet) | 2 | M2 | bc9262d05a01f8146f898a15d2a0896dc2e19b29 | d28d938bd831dae098ca3fd7dcb6453d3054c43f:bc9262d05a01f8146f898a15d2a0896dc2e19b29 | CLEAN (2 MINOR: worktree menu keyboard highlight to confirm in M4; no tdd dir, left) |
+| M3 Review A (high) | 1 | M3 | | edb22866:18a8d7b5 | CHANGES (1 MAJOR anchor y fixed, 2 MINOR fixed) |
+| M3 Review B (sonnet) | 1 | M3 | | | CHANGES (2 MAJOR: drift-M3.md written, orphaned switch offer removed; 2 MINOR fixed); fixes are gate-covered, no re-run |
 
 ## Declined review findings
 
@@ -55,14 +57,7 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-M3 (T017-T020) code is written; targeted tests mostly fixed; tasks.md T017-T020 NOT yet ticked; no review, no full gate, no push, no PR yet. The branch is not rebased on current origin/main (72ea93fee, 8 commits ahead of M2 merge): run `git fetch && git rebase origin/main` before the full gate.
-Done this unit (uncommitted, WIP-commit them): `PlusMenu::ID`/`WorktreeMenu::ID` consts (registry macro needs them); dialog layer paths re-pointed 10 -> 12 (covered_states.rs, layout_snapshot.rs, gates/containment.rs strings) because the closed Plus menu adds two overlay nodes; strip anchors: `SESSION_STRIP_NEW_SESSION` replaced by `SESSION_STRIP_STATUS` ([..,1,0]), `SESSION_STRIP_SPLIT` = [..,1,1], gates strip_controls_* and `session_area_fits.rs` (strip is three children, one touch-checked control) rewritten; session_area_stability restart path [1,0,1]; tests terminal_tabs (Plus press = HeaderBar Toggled), terminal_focus (Plus filtered, "+ menu: Terminal" press added), features_session_strip (Dismissed first, so `follow` records the selection); text-overflow: KNOWN_OVERFLOWS entry for the scroll-cut tab in `session-area-six-tabs` (layout_text_overflow.rs); layout_snapshot.txt regenerated (UPDATE_LAYOUT_SNAPSHOT=1), not yet reviewed beyond the added 0/9,0/10 closed-menu nodes.
-Still red (last run /scratchpad t5.log):
-1. `session::update` now pushes `Outcome::OverlayDismissed(header_bar::PlusMenu::ID)` to close the menu after `AdditionalRequested`/`ShellInstanceOpenRequested`: `feature_registration_cost` (session names header_bar) and `surface_registration_cost` (PlusMenu named outside its module) reject it. (A direct `state.header_bar` write in session.rs was rejected by `feature_write_isolation`; a root-arm write by `root_is_routing_only`.) Pick another route: e.g. header_bar feature closes the menu itself (extend `State::follow` key with the active session's shell count plus whether the confirm-additional dialog is open), or give header_bar a generic `Outcome` consumer; then drop the `OverlayDismissed` push and `update_inner` wrapper in `features/session.rs`. Test `features_session_strip::choosing_an_entry_closes_the_plus_menu` states the contract.
-2. `gates/review_tab_fits.rs` `laid_out` filter (drops overflows under the strip tab row) did not take: node_path is `0/0/0/1/1/1/0/0/0/0/0/0/2/0/0/0/0/1/0`, my prefix from `path_token(&[&[0], SESSION_STRIP_TABS].concat())` has probably a different format (check `path_token`, maybe no leading 0 means the root already included): print it and fix; or the filter is not on the code path of `findings` (line ~281 and 431 use `laid_out`, so check the prefix).
-3. `terminal_tabs::each_strip_member_sends_its_s5_message`: the Plus member is now LAST (after the other session): move the `(MemberKey::Plus, HeaderBar Toggled(Plus))` tuple after `MemberKey::Session(other)`.
-4. Remaining unchecked after these: `feature_write_isolation`, `layout_text_overflow`, whole `layout_snapshot` and `main` re-run (3375/3378 passed in t4 before the session.rs change), `popover_displacement` ok, `mise run check` clippy on the `+` anchor code.
-Then: tick T017-T020 in tasks.md, review A (high) + B (sonnet), rebase, full `mise run gate`, push, PR `feat(1793): add the single + menu (#1793)` per tasks/pr.md, `Refs #1793`. Visual pass not run (no Xvfb). The `+` anchor is approximate (sidebar width and strip offsets), confirm in review. Build lock waits are long (other worktrees): start tests detached with `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast --test main --test layout_snapshot ...` (`features_session_strip` is a module of `--test main`, not its own target).
+None.
 
 ## Open escalation
 
