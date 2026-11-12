@@ -22,10 +22,13 @@ flow:feature. Related: #1718 (`specs/1718-sidebar-stable-order`), which removed 
 
 ## Clarifications
 
-### Open questions for the clarify unit
+### Session 2026-11-12
 
-- Run groups (feature 483): whether a run group row can be dragged into a user group is marked in
-  FR-016.
+- Q: May a run group row (feature 483) be dragged into a user group (its runs follow), or does it
+  always stay in the ungrouped list? → A: It may. A run group is one location row with its runs
+  nested (feature 1718 Terms and edge cases), so it is assigned, moved, reordered and menu-moved like
+  a worktree row, and its runs follow it as one unit; a single run inside it is not separately
+  assignable. _(agent-resolved: specs/1718-sidebar-stable-order/spec.md#Terms)_
 
 ## User Scenarios & Testing
 
@@ -225,7 +228,7 @@ any group or in the ungrouped list, changes position or group.
 - **FR-013**: User groups MUST be the only grouping in the sidebar: no group, order or row position depends on a session's or card's state; a row's state indicator stays (feature 1718 FR-001 to FR-004).
 - **FR-014**: Groups MUST be kept per project, and creating, moving or deleting them MUST NOT alter any worktree, branch or session.
 - **FR-015**: The Default entry MUST stay first and MUST NOT be assignable to a group.
-- **FR-016**: Run groups (feature 483) MUST [NEEDS CLARIFICATION: may a run group row be dragged into a user group (its runs follow), or does it always stay in the ungrouped list?].
+- **FR-016**: A run group row (feature 483) MUST be assignable to a user group, movable and reorderable like a worktree row, by drag and by the menu of FR-010; its runs MUST follow it as one unit and MUST NOT be assignable individually.
 - **FR-017**: Hover, selection, ripple, context menu, tag filtering, keyboard navigation and reveal-current-session MUST keep working over the grouped list; reveal MUST expand a collapsed group that holds the target row.
 - **FR-018**: A corrupt, missing or older stored layout MUST load without error as "no groups"; an assignment to a worktree that no longer exists MUST be ignored; an empty group MUST stay a valid drop target; a drop on a collapsed group MUST expand it; a drag whose worktree disappears MUST end with no change.
 - **FR-019**: Users MUST be able to reorder groups by dragging a group header (with the same highlight, marker and cancel rules as FR-008 and FR-009) and by the menu of FR-010.
