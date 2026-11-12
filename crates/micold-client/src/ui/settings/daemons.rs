@@ -1106,8 +1106,54 @@ mod tests {
         1 + tree.children.iter().map(widgets).sum::<usize>()
     }
 
+    /// Collects every fragment an `iced::widget::Text` reports through [`Operation::text`], in
+    /// traversal order — enough to search the rendered row for a string, not to reconstruct its
+    /// layout.
+    struct CollectedText(Vec<String>);
+
+    impl<T> iced::advanced::widget::Operation<T> for CollectedText {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation<T>),
+        ) {
+            operate(self);
+        }
+
+        fn text(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            _bounds: iced::Rectangle,
+            text: &str,
+        ) {
+            self.0.push(text.to_string());
+        }
+    }
+
+    /// Every piece of text `element` renders, laid out the way the real window would (the generic
+    /// `Text` widget only reports its content from `operate`, which needs a layout to walk).
+    fn rendered_text(element: &mut Element<'_, Message>) -> String {
+        let renderer = crate::ui::material::test_support::renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &iced::advanced::layout::Limits::new(
+                iced::Size::ZERO,
+                iced::Size::new(2000.0, 4000.0),
+            ),
+        );
+        let mut collected = CollectedText(Vec::new());
+        element.as_widget_mut().operate(
+            &mut tree,
+            iced::advanced::Layout::new(&node),
+            &renderer,
+            &mut collected,
+        );
+        collected.0.join("\n")
+    }
+
     /// Each line of `config_errors` is a row of its own under the daemon (FR-013f): the row grows
-    /// by the same amount for every line.
+    /// by the same amount for every line, and the error's own text is findable in it.
     #[test]
     fn each_config_error_adds_a_line_to_the_row() {
         let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
@@ -1123,5 +1169,55 @@ mod tests {
             one - none,
             "each error adds the same: {none} {one} {two}"
         );
+
+        let mut with_error =
+            daemon_row(view_of(&["disk quota exceeded"]), &state, None, roles);
+        let text = rendered_text(&mut with_error);
+        assert!(
+            text.contains("disk quota exceeded"),
+            "the config error's own text is missing from the rendered row: {text}"
+        );
+    }
+
+    /// The `[[ai.cli]]` accordion (`ai_cli_controls`) names no runtime (SC-006): it reads only
+    /// `draft.ai_cli`, so the same config renders the same controls whichever of the four kinds
+    /// `draft.runtime` is set to. The doc comment at its definition explains why — branching it per
+    /// kind would cost nothing a mutant could catch — and this guards that choice: if a future edit
+    /// made it branch on `draft.runtime` after all, the kinds below would stop agreeing.
+    #[test]
+    fn ai_cli_controls_are_the_same_for_every_daemon_kind() {
+        let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
+        let mut state = State::default();
+        crate::features::daemons::begin_add(&mut state);
+        let mut draft = state.draft.clone().expect("begin_add sets a draft");
+        draft.ai_cli[0].version = "1.2.3".into();
+        draft.ai_cli[0].args = "--flag value".into();
+        draft.ai_cli[1].model = "gpt-5".into();
+
+        let kinds = [
+            DraftRuntime::Host,
+            DraftRuntime::Ssh,
+            DraftRuntime::Container,
+            DraftRuntime::Kubernetes,
+        ];
+        let rendered: Vec<(usize, String)> = kinds
+            .iter()
+            .map(|&kind| {
+                draft.runtime = kind;
+                let mut section: Element<'_, Message> =
+                    column(ai_cli_controls(&draft, None, roles)).into();
+                (widgets(&Tree::new(&section)), rendered_text(&mut section))
+            })
+            .collect();
+        for (kind, (count, text)) in kinds.iter().zip(&rendered) {
+            assert_eq!(
+                *count, rendered[0].0,
+                "{kind:?}'s AI CLI section has a different number of controls: {rendered:?}"
+            );
+            assert_eq!(
+                text, &rendered[0].1,
+                "{kind:?}'s AI CLI section renders different text: {rendered:?}"
+            );
+        }
     }
 }

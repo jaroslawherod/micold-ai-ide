@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4b (PR open, awaiting CI/merge)
-- **Next step**: orchestrator waits on CI for #1846 and merges; this is the run's last milestone — then the close unit.
+- **Phase**: close unit (handover — context cap during T153's remediation, see *Handover*)
+- **Next step**: a fresh close unit continues from *Handover*: finish T153 (and confirm T154/T156/T155), code-diff review, gate, close PR.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | merged | b4216564604c9b93a3f8c685e9a676113f92f6cc |
 | #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | merged | c6f958f09e26d1f70da6c95798d0bc841c5ce90f |
 | #1843 | M4a — Settings → Daemons renders `[[ai.cli]]` | merged | 80711fb26b0b6dfa2d919297fa16675f56967767 |
-| #1846 | M4b — user guide documents `[[ai.cli]]`, visual-pass confirmed | open | — |
+| #1846 | M4b — user guide documents `[[ai.cli]]`, visual-pass confirmed | merged | 46c5f71f23fb87d7c9d75c7c27cbf350c09ce70e |
 
 ## Milestones
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (merged, `c6f958f09e26d1f70da6c95798d0bc841c5ce90f`) |
 | M4a | Settings → Daemons renders `[[ai.cli]]` | T066 | full | #1843 (merged, `80711fb26b0b6dfa2d919297fa16675f56967767`) |
-| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | #1846 (open) |
+| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | #1846 (merged, `46c5f71f23fb87d7c9d75c7c27cbf350c09ce70e`) |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
 M1 is the field-to-launch mapping (tests + implementation together, rule 7); M2 was originally cut
@@ -331,7 +331,20 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-None. M4a (#1843) merged as `80711fb26b0b6dfa2d919297fa16675f56967767`, recorded in *Pull requests*/*Milestones*. M4b (T067) is done and pushed: PR #1846 is open against `main` at head `1d3e4741dd066b2113a88c3a33abb4023a9754a0` (the run's last milestone — a close unit follows). Its diff is bookkeeping only (ledger + `tasks.md`'s T067 tick), since the user-guide prose itself landed with M4a. The merge attempt refused the prior rounds because they were recorded with scope `1532`/head `80711fb26…` (M4a's merge SHA), not scope `1846`/PR #1846's own head — re-reviewed at the current head and recorded correctly: Review A and Review B both CLEAN against PR #1846's head `1d3e4741dd066b2113a88c3a33abb4023a9754a0` (scope `1846`, snapshot `6f0ea70f7d600a2f2f80eac620d92a14d4f9f6fc:1d3e4741dd066b2113a88c3a33abb4023a9754a0`, recorded in *Review rounds*). Docs-tier gate (`mise run test-scripts`) green at that head. A fresh visual-pass re-run of the Settings → Daemons AI CLI accordion was attempted but could not execute — this sandbox has no Xvfb/xdotool/sway/grim/ImageMagick and no apt-get/docker/mise plugin to add them; the accordion's visual pass already ran and passed during M4a (PASS x4, evidence at `specs/daemon-config-file/visual/*.png`, already on `main`), and nothing in M4b's diff touches the UI, so that evidence stands for the deliverable. Next: the orchestrator waits on CI for #1846 and merges, then dispatches the close unit.
+M4b (#1846) merged as `46c5f71f23fb87d7c9d75c7c27cbf350c09ce70e`, recorded in *Pull requests*/*Milestones* (this commit). This is the close unit for Issue 11 (every milestone merged). Close-unit progress so far, all on the branch's working tree, **uncommitted**:
+
+1. `tasks.md`'s T059-T064 were still ticked `[ ]` despite M1 (#1711) having built and tested them (`crates/micold-core/src/daemon_config/ai_cli.rs`, `crates/micold-daemon/tests/ai_cli_config.rs`, `ai_cli_availability.rs`, `crates/micold-core/src/provision/ai_cli.rs` all exist with full test coverage) — ticked to `[x]`, bookkeeping only, no code change.
+2. `plan-drift.sh` cannot run for this multi-issue `tasks.md` (no per-milestone `## M<K>` headings — a pre-existing, already-documented limitation, see M3/M4b review notes); not re-litigated.
+3. `speckit-converge` run (required: M1/#1711 had no recorded review B, so the ledger's skip condition — a CLEAN review B for every milestone — was not met). Result: **CONVERGED, no gaps** against US4's acceptance scenarios and FR-013/FR-013a/FR-025/FR-033/FR-034/FR-040/FR-043/SC-006/SC-008 (scoped check by a worker, not the full multi-issue spec). `tasks.md` untouched by this step.
+4. `speckit-tdd-verify branch` run. Verdict **PASS_WITH_GAPS** (criteria coverage 9/11, SC-006 and FR-025 untested; M1/M3/M4a landed source+tests in one commit each, no red-phase evidence). Wrote `specs/daemon-config-file/tdd/verification.md` (now correct — see note below) and appended **Phase 26** to `tasks.md`: T152 (backfill `tdd/test-list.md`), T153 (two cycle-log deliberate-mutant checks, M1 and M3), T154 (strengthen a weak client-side assertion), T155 (run the full `ai_cli*` suite once the shared build lock frees), T156 (add an SC-006 coverage test).
+5. T152: **done.** `tdd/test-list.md` has a new "Issue 11" section, 14 rows.
+6. T154 and T156: **done, but not yet confirmed green** — `crates/micold-client/src/ui/settings/daemons.rs` gained a `rendered_text`/`CollectedText` helper, a strengthened `each_config_error_adds_a_line_to_the_row` (now also asserts the error text itself appears), and a new `ai_cli_controls_are_the_same_for_every_daemon_kind` test (T156, SC-006). **Run `scripts/build-lock.sh cargo test -p micold-client --lib ui::settings::daemons` before anything else** — the shared build lock (held by other worktrees' builds the whole session: `feat-1786_feat-sidebar-...`, earlier `feat-1536_ssh-key-signing-key-...`) never freed long enough to confirm this compiles/passes.
+7. T153: **not done.** Two different background `autopilot-worker` subagents attempted it and both got stuck on the same shared-build-lock contention, abandoned their task mid-mutant-check, and twice left the repo in a bad state: once with the production fix for `ai_cli_disabled` (`crates/micold-daemon/src/state.rs`) left reverted to the deliberate mutant (`fn ai_cli_disabled(&self, which: AiCli) -> bool { let _ = which; false }` instead of the real body), and once with `specs/daemon-config-file/tdd/verification.md` wiped back to its stale pre-session content (the old Issue 3/#1524 report) by a careless `git checkout`/`git restore`. **Both have been fixed by this unit** — confirmed clean right before this handover: `git diff crates/micold-daemon/src/state.rs` and `git diff crates/micold-core/src/daemon_config/ai_cli.rs` are both empty, and `tdd/verification.md` is the correct PASS_WITH_GAPS report (163 lines, `verdict: PASS_WITH_GAPS` on line 4). T153 itself (the two mutant checks) still needs doing: see its description in `tasks.md`'s Phase 26. **Do not delegate this to a background subagent without a short, non-build-dependent task** — the build lock was contended for the entire session; either wait for it free first (`scripts/build-lock.sh --print-target-dir` / check `ps aux | grep cargo-build-lock`) or do the two reverts/test-runs/restores inline, one command at a time, confirming `git diff --stat` shows no production-file diff before ending the step.
+8. T155: not started (same lock contention; do after T153/T154/T156 are confirmed).
+
+Working tree right now (uncommitted): `crates/micold-client/src/ui/settings/daemons.rs` (T154+T156), `specs/daemon-config-file/tasks.md` (T059-T064 ticks + Phase 26), `specs/daemon-config-file/tdd/test-list.md` (T152), `specs/daemon-config-file/tdd/verification.md` (the tdd-verify report, restored). `crates/micold-daemon/src/state.rs` and `crates/micold-core/src/daemon_config/ai_cli.rs` have **zero diff** (confirmed clean).
+
+Next: a fresh close unit — confirm the build lock is free, run T153's two mutant checks and record them in `tdd/cycle-log.md`, confirm T154/T156's test command passes, run T155 (full `ai_cli*` suite, record pass counts in `verification.md`'s "What was not audited"), then close.md step 4 onward (a fresh-subagent diff review, the gate, finish the ledger, open the close PR).
 
 ## Open escalation
 
