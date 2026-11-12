@@ -110,7 +110,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T001–T017, T044
 - **Deliverable**: a user chooses "New group", names it, sees the group header in the sidebar and finds it after a restart; blank and duplicate names are refused with a message.
 - **Satisfies**: US1 acceptance scenarios 1, 4, 5 (create); FR-001, FR-004, FR-012, FR-013, FR-014, FR-015, FR-017, FR-018; SC-003
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions --test sidebar_layout_store`; quickstart §B step 1
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions --test sidebar_layout_store --test layout_snapshot`; quickstart §B step 1
 - **Depends on**: —
 - **Tier**: full
 
