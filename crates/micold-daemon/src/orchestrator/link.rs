@@ -4,6 +4,7 @@
 use std::io;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::orchestrator::{
     decode_first_frame, Claim, FirstFrame, LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason,
@@ -47,7 +48,7 @@ where
         None => return Ok(()),
     };
     match decode_first_frame(&body).map_err(invalid)? {
-        FirstFrame::Query(query) => framed.send(query::listing(&shared, query).into()).await,
+        FirstFrame::Query(query) => framed.send(Bytes::from(query::listing(&shared, query))).await,
         FirstFrame::Announcement(announcement) => link(shared, framed, announcement).await,
     }
 }
@@ -66,7 +67,7 @@ where
         Claim::Refused(reason) => {
             let verdict = refusal(reason, &announcement);
             return framed
-                .send(serde_json::to_vec(&verdict).map_err(invalid)?.into())
+                .send(Bytes::from(serde_json::to_vec(&verdict).map_err(invalid)?))
                 .await;
         }
     };
@@ -102,7 +103,7 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let accepted = serde_json::to_vec(&LinkVerdict::Accepted).map_err(invalid)?;
-    framed.send(accepted.into()).await?;
+    framed.send(Bytes::from(accepted)).await?;
     // From here the frames are the wire protocol's.
     let mut framed = framed.map_codec(|_| DaemonCodec::new());
 
