@@ -347,6 +347,6 @@ ran, and this entry is written at close from the commits (`ba4c2bba3`, `481f8129
 - Green: the milestone's full gate passed except `ai_cli_config::a_configured_model_is_claude_codes_default_launch_model`,
   which depends on the machine's `~/.claude.json` (green with `HOME` at an empty directory).
 
-### Issue 15 close remediation (T152-T159)
+### Issue 15 close remediation (T156-T163)
 
 Reds are the mutants named in `tdd/verification.md`, "Remediation result (Issue 15, close unit)"; each was run, failed its test and was restored.

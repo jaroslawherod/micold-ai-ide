@@ -120,7 +120,7 @@ Baseline: `micold-core --lib` `daemon_config::matching` and `scoped_credential::
 
 ## Test list: Issue 15 (#1537), milestones M1 and M2
 
-Written at close from the merged tests (`TEST_AFTER`: no red run was recorded when they were written; the reds below are the mutants run by tdd-verify and T156 to T162).
+Written at close from the merged tests (`TEST_AFTER`: no red run was recorded when they were written; the reds below are the mutants run by tdd-verify and T160 to T162).
 
 | ID | Behavior | Traces to | State |
 |---|---|---|---|
