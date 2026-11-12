@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1816
 - **Worktree branch**: feat/1816_autopilot-supervisor-m5-verify-handoff-and-report
 - **Started**: 2026-11-12
-- **Phase**: spec
-- **Next step**: clarify (3 open markers: FR-007 cap, FR-009 tokens, FR-012 opt-in)
+- **Phase**: clarify
+- **Next step**: plan (clarify done: 3 markers resolved from repo, 1 round)
 
 ## Pull requests
 
