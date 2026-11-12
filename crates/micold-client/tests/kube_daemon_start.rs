@@ -184,7 +184,10 @@ async fn a_cluster_start_delivers_the_ca_file_through_the_startup_secret() {
         .manifest(NS, ObjectKind::ConfigMap, &names().config_map())
         .unwrap();
     let file = map["data"]["daemon.toml"].as_str().unwrap();
-    assert!(file.contains("/run/micold/secrets/startup/ca.pem"), "{file}");
+    assert!(
+        file.contains("/run/micold/secrets/startup/ca.pem"),
+        "{file}"
+    );
 }
 
 #[tokio::test]

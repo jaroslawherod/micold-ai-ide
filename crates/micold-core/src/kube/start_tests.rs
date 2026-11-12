@@ -619,7 +619,11 @@ async fn a_pod_without_the_startup_secret_is_recreated_when_only_the_extras_need
         let mut request = start_request(&fake, &s, &n, &keys, &client, choice, &no_files);
         request.secret_files = &files;
         ready(start(&request, &mut |_| {}).await);
-        assert_eq!(deletes(&fake), [format!("delete Pod {}", n.pod())], "{choice:?}");
+        assert_eq!(
+            deletes(&fake),
+            [format!("delete Pod {}", n.pod())],
+            "{choice:?}"
+        );
     }
 }
 

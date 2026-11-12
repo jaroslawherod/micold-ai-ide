@@ -568,8 +568,14 @@ mod container {
             );
         }
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
-        assert!(text.contains("/run/micold/secrets/session-file-0"), "{text}");
-        assert!(text.contains("/run/micold/secrets/session-file-1"), "{text}");
+        assert!(
+            text.contains("/run/micold/secrets/session-file-0"),
+            "{text}"
+        );
+        assert!(
+            text.contains("/run/micold/secrets/session-file-1"),
+            "{text}"
+        );
     }
 
     #[test]
