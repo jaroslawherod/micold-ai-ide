@@ -16,7 +16,6 @@ use iced::advanced::widget::Tree;
 use iced::advanced::{layout, Layout};
 use iced::{Rectangle, Size};
 use micold_client::app::{State, MIN_WINDOW_SIZE};
-use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::session::SessionLocation;
 use micold_core::theme::ThemePreference;
 
@@ -137,11 +136,6 @@ pub(crate) fn assert_order(name: &str, records: &[LayoutRecord], area: &Rectangl
         "{name}: something is laid out under the pane area {panes:?} in the session area \
          {area:?} (SC-005)"
     );
-}
-
-/// H10 and S9 for `under` named `name`, in both schemes, at both windows.
-fn assert_fits(name: &str, state: &State) {
-    assert_fits_under(name, || StateUnderTest::new(state.clone()));
 }
 
 pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) {
@@ -346,7 +340,7 @@ fn the_view_header_and_the_diff_header_hold_the_mark_controls() {
 
 /// The progress slot's bar, under the view header: the slot's two containers, its row, then the
 /// bar after the *n of m reviewed* words.
-const PROGRESS_BAR: &[usize] = &[1, 0, 0, 1];
+const PROGRESS_BAR: &[usize] = &[2, 0, 0, 1];
 
 /// Feature 1271 (visual re-pass V2): the header's progress bar is drawn, at its full width where
 /// the slot has room for it beside its words. A `Fill` bar in the slot's `Shrink` row was laid out
@@ -377,13 +371,18 @@ fn the_progress_bar_has_its_width_beside_its_words() {
             .is_some_and(|v| v.drawer.state.open));
         let records = records_of(under, WINDOW);
         let header = [SESSION_AREA, VIEW_HEADER].concat();
-        let part = |path: &[usize]| {
+        let part_of = |base: &[usize], path: &[usize]| {
             rect(
-                at(&records, &[header.as_slice(), path].concat())
+                at(&records, &[base, path].concat())
                     .unwrap_or_else(|| panic!("{theme:?}: the header part {path:?} is laid out")),
             )
         };
-        let (slot, words, bar) = (part(&[2]), part(&[2, 0, 0, 0]), part(PROGRESS_BAR));
+        let part = |path: &[usize]| part_of(&header, path);
+        let (slot, words, bar) = (
+            part(&[2]),
+            part(&[2, 0, 0, 0]),
+            part(PROGRESS_BAR),
+        );
         assert!(
             (bar.width - micold_client::ui::PROGRESS_BAR_WIDTH).abs() <= TOLERANCE,
             "{theme:?}: the bar {bar:?} is {} px wide, not its {} beside {words:?}",

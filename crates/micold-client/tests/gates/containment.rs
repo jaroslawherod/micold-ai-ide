@@ -125,7 +125,7 @@ const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0/0"];
 ///
 /// `the_recorded_tab_overflow_is_the_instance_strip` proves the attribution from the records rather
 /// than from the shape.
-const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/1/0/0/0/0/0/0"];
+const TAB_STRIP_CONTENT: &[&str] = &["0/0/0/1/1/0/0/0/0/0/0/0"];
 
 /// A **Settings page** taller than the viewport it scrolls in (feature 039, T111).
 ///
@@ -258,16 +258,20 @@ fn is_inline_link_gutter(state: &str, escape: &lay::Escape) -> bool {
 /// tool turn, and the transcript outgrows its viewport, so its end is reached by scrolling (and the
 /// state is detached, which is what shows "Jump to latest"). Like [`SETTINGS_PAGE_CONTENT`] it
 /// holds only there, and only past the **bottom** edge of the transcript's `Scrollable`
-/// ([`TRANSCRIPT_VIEWPORT`]). Feature 941 put the transcript in a column over the composer (the
+/// ([`TRANSCRIPT_VIEWPORTS`]). Feature 941 put the transcript in a column over the composer (the
 /// `0` after the pane's prefix). Feature 944 put the session bar above the scrollable (`1` before the
 /// last two steps) and added `session-transcript-insights`, whose open thread outgrows it too.
 /// Feature 1126 put the session area's header and strip above the panes (the `2` after the main
 /// area's prefix) and dropped the pane column the bottom bar shared (one `0` fewer). #1464 wrapped
 /// the lone transcript in a drop cue (one `0` more, after the pane's prefix).
-const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/2/0/0/0/1/0/0"];
+///
+/// Feature 1793 moved the header into the strip and dropped the session bar above the transcript;
+/// the tasks accordion is a slim row above it only while background tasks exist (then nothing
+/// overflows any more, so only the row-less shape is recorded).
+const TRANSCRIPT_CONTENT: &[&str] = &["0/0/0/1/1/1/0/0/0/0/0/0"];
 
 /// The transcript's `Scrollable`: the parent of [`TRANSCRIPT_CONTENT`].
-const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/0/1/0";
+const TRANSCRIPT_VIEWPORTS: &[&str] = &["0/0/0/1/1/1/0/0/0/0/0"];
 
 /// The folded bodies of **feature 944's cards** in `session-transcript-insights` (T037): the
 /// background-task list's `AccordionSection`, the `Agent` card whose thread is open below it, and a
@@ -277,9 +281,9 @@ const TRANSCRIPT_VIEWPORT: &str = "0/0/0/1/1/2/0/0/0/1/0";
 /// that padding, so a body that grew past it still fires. #943 put the session bar in a row with
 /// **Open in terminal** (`0/0` after the bar's container).
 const FOLDED_BODY_REVEAL: &[&str] = &[
-    "0/0/0/1/1/2/0/0/0/0/0/0/0/0/1/1/0",
-    "0/0/0/1/1/2/0/0/0/1/0/0/1/0/0/1/0",
-    "0/0/0/1/1/2/0/0/0/1/0/0/1/1/0/0/1/0/0/1/0/1/0",
+    "0/0/0/1/1/1/0/0/0/0/0/0/1/0",
+    "0/0/0/1/1/1/0/0/0/1/0/0/0/0/0/1/0",
+    "0/0/0/1/1/1/0/0/0/1/0/0/0/1/0/0/1/0/0/1/0/1/0",
 ];
 
 /// The folded body's padding that [`FOLDED_BODY_REVEAL`] overhangs by (`spacing::SM`).
@@ -289,12 +293,13 @@ const FOLDED_BODY_PADDING: f32 = 8.0;
 /// `DisclosureCard`, so its row `N` of the transcript's content holds the card's body at
 /// `N/0/1/0`, the same folded `Expand` as [`FOLDED_BODY_REVEAL`], in every transcript state.
 fn is_summary_card_body(state: &str, child_path: &str) -> bool {
-    let prefix = format!("{}/", TRANSCRIPT_CONTENT[0]);
     state.starts_with("session-transcript")
-        && child_path
-            .strip_prefix(&prefix)
-            .and_then(|rest| rest.strip_suffix("/0/1/0"))
-            .is_some_and(|row| row.parse::<u32>().is_ok())
+        && TRANSCRIPT_CONTENT.iter().any(|content| {
+            child_path
+                .strip_prefix(&format!("{content}/"))
+                .and_then(|rest| rest.strip_suffix("/0/1/0"))
+                .is_some_and(|row| row.parse::<u32>().is_ok())
+        })
 }
 
 /// Whether `escape`, in the covered state `state`, is a folded card's body of
@@ -314,7 +319,7 @@ fn is_transcript_scroll(state: &str, escape: &lay::Escape) -> bool {
         state,
         "session-transcript-pane" | "session-transcript-rich" | "session-transcript-insights"
     ) && TRANSCRIPT_CONTENT.contains(&escape.child_path.as_str())
-        && escape.parent_path == TRANSCRIPT_VIEWPORT
+        && TRANSCRIPT_VIEWPORTS.contains(&escape.parent_path.as_str())
         && escape.edge == "bottom"
 }
 
@@ -325,10 +330,10 @@ fn is_transcript_scroll(state: &str, escape: &lay::Escape) -> bool {
 /// the rest is reached by scrolling. Held only there and only past the viewport's **bottom** edge
 /// ([`DRAWER_ROWS_VIEWPORT`]): the sheet's panel → its column → the content → the drawer's padding →
 /// the tabs-and-rows column → the rows' `Scrollable`.
-const DRAWER_ROWS_CONTENT: &[&str] = &["0/0/0/1/1/2/1/1/1/0/0/1/0/0/1/0"];
+const DRAWER_ROWS_CONTENT: &[&str] = &["0/0/0/1/1/1/1/1/1/0/0/1/0/0/1/0"];
 
 /// The drawer's rows `Scrollable`: the parent of [`DRAWER_ROWS_CONTENT`].
-const DRAWER_ROWS_VIEWPORT: &str = "0/0/0/1/1/2/1/1/1/0/0/1/0/0/1";
+const DRAWER_ROWS_VIEWPORT: &str = "0/0/0/1/1/1/1/1/1/0/0/1/0/0/1";
 
 /// Whether `escape`, in the covered state `state`, is the drawer's rows outgrowing their viewport
 /// downwards, which is the only overhang [`DRAWER_ROWS_CONTENT`] allows.
