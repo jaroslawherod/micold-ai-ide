@@ -22,7 +22,10 @@ async fn record_when(
         if ready(record) {
             return record.clone();
         }
-        assert!(started.elapsed() < WITHIN, "{id} never became ready: {record}");
+        assert!(
+            started.elapsed() < WITHIN,
+            "{id} never became ready: {record}"
+        );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }

@@ -67,7 +67,10 @@ mod tests {
     fn pings_after_the_interval_and_is_idle_between() {
         let t0 = Instant::now();
         let mut beat = Heartbeat::new(t0);
-        assert_eq!(beat.tick(t0 + Duration::from_secs(1)), KeepaliveAction::Idle);
+        assert_eq!(
+            beat.tick(t0 + Duration::from_secs(1)),
+            KeepaliveAction::Idle
+        );
         assert_eq!(beat.tick(t0 + PING_INTERVAL), KeepaliveAction::SendPing);
         assert_eq!(
             beat.tick(t0 + PING_INTERVAL + Duration::from_secs(1)),
@@ -81,7 +84,10 @@ mod tests {
         let mut beat = Heartbeat::new(t0);
         assert_eq!(beat.tick(t0 + LIVENESS_DEADLINE), KeepaliveAction::Expired);
         let after = t0 + LIVENESS_DEADLINE;
-        assert_eq!(beat.tick(after + Duration::from_secs(1)), KeepaliveAction::Idle);
+        assert_eq!(
+            beat.tick(after + Duration::from_secs(1)),
+            KeepaliveAction::Idle
+        );
         assert_eq!(beat.tick(after + PING_INTERVAL), KeepaliveAction::SendPing);
         assert_eq!(
             beat.tick(after + PING_INTERVAL + Duration::from_secs(1)),

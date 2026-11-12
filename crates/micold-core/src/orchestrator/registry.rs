@@ -418,9 +418,15 @@ mod tests {
         registry.closed(link);
         assert_eq!(health(&registry, "a"), (Health::Online, 100));
         assert_eq!(registry.tick(link, at(30)), (LinkAction::Stale, None));
-        assert_eq!(registry.answered(link, at(30), 130), (LinkAction::Stale, None));
+        assert_eq!(
+            registry.answered(link, at(30), 130),
+            (LinkAction::Stale, None)
+        );
         let (reserved, _) = reserve(&mut registry, &ann("b", "B"));
-        assert_eq!(registry.answered(reserved, at(1), 5), (LinkAction::Stale, None));
+        assert_eq!(
+            registry.answered(reserved, at(1), 5),
+            (LinkAction::Stale, None)
+        );
         assert_eq!(registry.tick(reserved, at(30)), (LinkAction::Stale, None));
         assert_eq!(health(&registry, "a"), (Health::Online, 100));
     }
