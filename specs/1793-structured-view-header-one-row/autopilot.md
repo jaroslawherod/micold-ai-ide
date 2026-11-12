@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M3 (in progress)
-- **Next step**: wait CI, merge M3, then M4
+- **Phase**: milestone M4 (in progress)
+- **Next step**: continue M4 from Handover
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1797 | Design | merged | ad2d932dc0b678b50e19e0b3646e8036d62c6e8a |
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
 | #1827 | M2 | merged | cb41c216e778ce87dcc7379f7852f3ffa85fa3bf |
-| #1847 | M3 | open | |
+| #1847 | M3 | merged | 747d325b504576e2bc43d96c2804e9ee430c09d7 |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
 | M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
-| M3 | T017–T020 | full | Single `+` menu | #1847 | open |
+| M3 | T017–T020 | full | Single `+` menu | #1847 | merged |
 | M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
 
 ## Decisions
@@ -64,7 +64,21 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-None.
+M4 unit 1 hit the 150k context cap. branch-start reset to origin/main (clean). Work is committed as a WIP commit, not pushed, no PR yet.
+
+**Done (code compiles, `cargo check --tests` clean; lib tests 1085 pass):**
+- T034/T025 (ring tooltip carries running count): `features/header_bar.rs` `MeterText::of`, test in `tests/features_header_bar.rs`.
+- T022/T023: `Member::Session.working`, `HiddenChip`, `StripModel.hidden` in `features/session_strip.rs`; tests appended to `tests/features_session_strip.rs`.
+- T024 (code): `ui/session_area.rs` lost `header`, `state_chip`, `neutral_chip`, `status_cluster`, `header_text`, `pr_chip_input` and their tests; `view`/`over_review` are `column![strip, pane]`; strip controls are restart (kept), splits, then `hidden_chip` (ToggleChip in a Tooltip named "N hidden events, show"); session tab leading slot shows `BadgeEmphasis::Working` dot. `ROW_HEIGHT = 40.0` const added but NOT yet applied to the strip.
+- T025/T026 (code): `ui/transcript/session_bar.rs` is now the slim row (`bar`/`view` return `Option`, mode label + tasks accordion only); `view_full` lost `trailing` and the raw-events toggle row; `Row::Hidden`/`hidden_notice`/`RowKey::Hidden` removed; `terminal.rs` no longer passes `switch_button`; showcase poses reduced to Running and Bypass. `tests/transcript_entry_view.rs` and `transcript_selection_parity.rs` updated.
+
+**Left:**
+1. Run `scripts/build-lock.sh cargo test -p micold-client --test main` (never ran; the layout_snapshot failure stopped cargo) and fix failures, e.g. `session_area_stability.rs` (`status_cluster` source check), `terminal_tabs.rs` source-text tests, `transcript_*` tests.
+2. `layout_snapshot` has 38 failures, all from the removed header row: the session area is now `[strip, pane]`, so paths `SESSION_AREA=[0,0,1,1]`, `STRIP_TABS`, `CLUSTER`, `CHANGES_BUTTON`, `VIEW_HEADER` etc. in `tests/gates/session_area_fits.rs` (1423 lines; drop the header-line tests `the_header_is_one_line...`, `the_title_shortens...`, `a_long_title...`, `the_widest_counts...`, re-point the rest one level up), `review_bar_fixed.rs`, `review_tab_fits.rs`, `tab_children_fit.rs`, `strip_controls_*.rs`, `containment.rs`, `top_bar_*`. Retire `gates/session_bar_fits.rs` (T035) and its `#[path]` entry in `tests/layout_snapshot.rs`. Then regenerate `tests/fixtures/layout_snapshot.txt` (see how the earlier commit "regenerate layout fixture" did it).
+3. T021/T029: new gate `tests/gates/header_row_fits.rs` + `#[path]` entry: one 40 px row above the first event (strip height must equal 40; today the Surface pads SM around 48 px controls, so set the strip row to `ROW_HEIGHT`, check tab/control heights fit), with/without background tasks or mode, chip at 0 and 1000+, `+` and chip fit, many tabs: tabs scroll, `+` and chip reachable. FR-011 "tabs shrink": tabs are fixed-width today (`tab::SESSION_WIDTH`); only scroll is implemented. Decide: add shrink or record as a declined/follow-up item.
+4. Carry-over: replace the `+` menu anchor estimate in `ui/session_area.rs::plus_menu` (y = BOTTOM_EDGE + 2*(48+2*SM)) with the real one-row geometry: y = `app_bar::BOTTOM_EDGE + ROW_HEIGHT`; x clamps to the strip's edge when the `+` is scrolled out of view (`at` from `member_offsets` minus scroll offset, clamp to `[0, tab_strip_viewport_width]`). Add a test (context_menu_anchor gate or `popover_displacement`). Confirm the worktree menu keyboard highlight (M2 minor).
+5. T027/T031 user guide `docs/user-guide/structured-transcript.md` (one-row header, `N hidden` chip, activity dot, tab scroll in narrow windows); `docs/user-guide/worktrees-and-sessions.md` lines ~1499-1600 still describe the session bar meter/totals/toggle: update. `shown::hidden_text`/`SHOW_HIDDEN`/`SHOW_RAW_EVENTS*` consts may now be unused: remove if dead.
+6. Write `drift-M4.md` (drift list: session_area header/status cluster removed, session bar reduced to slim row, Row::Hidden removed, header chips (state, branch, PR) dropped with the title row, showcase poses, `Open in terminal` trailing removed), then verify.md steps: scoped gate, Review A (high) and B, visual pass, full gate, PR.
 
 ## Open escalation
 

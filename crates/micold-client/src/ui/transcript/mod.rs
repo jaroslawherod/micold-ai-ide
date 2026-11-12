@@ -31,7 +31,6 @@ pub use rich::EDIT_TOOLS;
 
 use crate::features::permission_prompts::Placement;
 use crate::features::structured_transcript::{Follow, State, TranscriptMsg};
-use crate::features::transcript_selection::shown;
 use crate::features::transcript_selection::{Click, EdgeDir, SelectMsg};
 use crate::features::window::FieldId;
 use crate::icons::Icon;
@@ -39,7 +38,7 @@ use crate::ui::cdk::Keyed;
 use crate::ui::focus::TrackFocusAs;
 use crate::ui::material::selection_area::Edge;
 use crate::ui::material::{
-    Button, ContextMenu, LabelledToggle, MenuItem, Scrollable, SelectionArea, Tooltip,
+    Button, ContextMenu, MenuItem, Scrollable, SelectionArea,
 };
 use iced::widget::{column, container, lazy, stack, Space};
 use iced::{Alignment, Element, Length};
@@ -62,8 +61,6 @@ pub fn transcript_scroll_id(session: SessionId) -> iced::advanced::widget::Id {
 enum RowKey {
     Omitted,
     Empty,
-    /// The hidden-events notice (#1664).
-    Hidden,
     Entry(EntryId),
     /// A permission request whose tool card is not held, after the last entry (feature 942).
     Prompt(PromptId),
@@ -125,7 +122,6 @@ pub fn view_with_insights<'a>(
         ctx,
         std::convert::identity,
         None,
-        None,
     )
 }
 
@@ -154,8 +150,8 @@ pub fn view_with_prompts<'a, M: Clone + 'a>(
 }
 
 /// The window's transcript: [`view_with_insights`] with the permission requests of
-/// [`view_with_prompts`] drawn in it when `prompts` is given, and `trailing` (#943: **Open in
-/// terminal**) at the end of the session bar's row.
+/// [`view_with_prompts`] drawn in it when `prompts` is given, under the slim row of
+/// [`session_bar`] (feature 1793).
 #[allow(clippy::too_many_arguments)]
 pub fn view_full<'a, M: Clone + 'a>(
     state: &'a State,
@@ -165,43 +161,28 @@ pub fn view_full<'a, M: Clone + 'a>(
     ctx: RenderCtx<'a>,
     on_transcript: fn(TranscriptMsg) -> M,
     prompts: Option<PromptsView<'a, M>>,
-    trailing: Option<Element<'a, M>>,
 ) -> Element<'a, M> {
-    let session_bar = container(
-        session_bar::view(
-            insights.state,
-            session,
-            insights.cli_running,
-            insights.mode,
-            ctx.roles,
-        )
-        .map(on_transcript),
+    // The slim first row of the body (feature 1793, R6): the mode label and the background-task
+    // list, only while there is something to show.
+    let slim = session_bar::view(
+        insights.state,
+        session,
+        insights.cli_running,
+        insights.mode,
+        ctx.roles,
     )
-    .width(Length::Fill);
-    // The toggle takes a row of its own under the figures: beside them it squeezes the meter, the
-    // totals and the running count (whose row wraps) out of the narrowest pane.
-    let toggle_row = container(raw_events_toggle(ctx).map(on_transcript))
-        .width(Length::Fill)
-        .align_x(Alignment::End);
-    let bar = container(
-        column![
-            iced::widget::row![session_bar]
-                .push(trailing)
-                .spacing(spacing::SM)
-                .align_y(Alignment::Start),
-            toggle_row
-        ]
-        .spacing(spacing::XS),
-    )
-    .padding(iced::Padding {
-        top: spacing::SM,
-        bottom: 0.0,
-        left: spacing::MD,
-        right: spacing::MD,
-    })
-    .width(Length::Fill);
+    .map(|row| {
+        container(row.map(on_transcript))
+            .width(Length::Fill)
+            .padding(iced::Padding {
+                top: spacing::SM,
+                bottom: 0.0,
+                left: spacing::MD,
+                right: spacing::MD,
+            })
+    });
     column![
-        bar,
+        slim,
         build(
             state,
             Some(insights),
@@ -215,17 +196,6 @@ pub fn view_full<'a, M: Clone + 'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
-}
-
-/// The header's "Show raw events" toggle (#1664, FR-005): tinted while on.
-fn raw_events_toggle<'a>(ctx: RenderCtx<'a>) -> Element<'a, TranscriptMsg> {
-    let roles = ctx.roles;
-    let mut toggle = LabelledToggle::new(Icon::Filter, shown::SHOW_RAW_EVENTS, roles)
-        .on_press(TranscriptMsg::ShowRawEvents(!ctx.show_raw));
-    if ctx.show_raw {
-        toggle = toggle.tint(roles.primary);
-    }
-    Tooltip::new(toggle, shown::SHOW_RAW_EVENTS_TIP, roles).into()
 }
 
 fn build<'a, M: Clone + 'a>(
@@ -323,10 +293,6 @@ fn build<'a, M: Clone + 'a>(
                     entries::omitted_notice(n, &ctx).map(on_transcript),
                 )
             }
-            Row::Hidden(n) => (
-                RowKey::Hidden,
-                entries::hidden_notice(n, roles).map(on_transcript),
-            ),
             Row::Empty => (RowKey::Empty, entries::no_output(roles).map(on_transcript)),
             Row::Entry(entry) => {
                 let open = state.is_open(session, entry.key());
