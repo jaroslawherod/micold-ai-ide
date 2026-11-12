@@ -269,9 +269,14 @@ pub enum HeaderMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorktreeMenu;
 
+impl WorktreeMenu {
+    /// Its surface id, named by the surfaces it displaces.
+    pub const ID: crate::overlay::SurfaceId = crate::overlay::SurfaceId::new("header_worktree_menu");
+}
+
 crate::floating_surface!(
     WorktreeMenu,
-    id: crate::overlay::SurfaceId::new("header_worktree_menu"),
+    id: Self::ID,
     layer: Popover,
     cancelled_by: Message::HeaderBar(Msg::Dismissed),
 );
@@ -289,9 +294,14 @@ impl crate::overlay::registry::Registered for WorktreeMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlusMenu;
 
+impl PlusMenu {
+    /// Its surface id, named by the surfaces it displaces.
+    pub const ID: crate::overlay::SurfaceId = crate::overlay::SurfaceId::new("header_plus_menu");
+}
+
 crate::floating_surface!(
     PlusMenu,
-    id: crate::overlay::SurfaceId::new("header_plus_menu"),
+    id: Self::ID,
     layer: Popover,
     cancelled_by: Message::HeaderBar(Msg::Dismissed),
 );

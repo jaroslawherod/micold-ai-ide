@@ -778,8 +778,8 @@ mod rendered_presses {
             .1
             .mark_shell_exited(shell);
         // The status cluster is the first child of the strip's controls group (the strip row's
-        // second child); its words, switch slot and restart control are its three children.
-        let path = [SESSION_STRIP_ROW, &[1, 0, 2]].concat();
+        // second child); its words and restart control are its two children.
+        let path = [SESSION_STRIP_ROW, &[1, 0, 1]].concat();
         let pressed: Vec<Message> = click(under, &path)
             .into_iter()
             .filter(|m| {

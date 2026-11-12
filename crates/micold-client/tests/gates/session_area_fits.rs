@@ -3,7 +3,7 @@
 //!
 //! Every covered state that shows a session is laid out at the smallest window the application
 //! allows beside a 300 px sidebar, and at the layout window, in light and in dark: the header's
-//! title and each of its chips, and the strip's scrolling region, status, New session and split
+//! title and each of its chips, and the strip's scrolling region, status and split
 //! buttons, lie inside the session area and inside the window, and none of them overlaps another.
 //! The strip states hold 1, 6 and 12 tabs. Top to bottom the area is header, strip, pane area, and
 //! nothing is laid out under the pane area (A1); with two panes the header and the strip are each
@@ -144,7 +144,7 @@ fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
         && b.y + TOLERANCE < a.y + a.height
 }
 
-/// The strip's own row's children: its scrolling region, status cluster, New session and splits
+/// The strip's own row's children: its scrolling region, status cluster and splits
 /// (S7). The members inside the region scroll, so they are not parts that must fit the window.
 pub(crate) fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> {
     let row = [SESSION_AREA, &[1, 0]].concat();
@@ -155,8 +155,7 @@ pub(crate) fn strip_parts(records: &[LayoutRecord]) -> Vec<(String, Rectangle)> 
     };
     parts.extend(named([row.as_slice(), &[0]].concat(), "tab region"));
     parts.extend(named([controls.as_slice(), &[0]].concat(), "status"));
-    parts.extend(named([controls.as_slice(), &[1]].concat(), "New session"));
-    parts.extend(named([controls.as_slice(), &[2]].concat(), "split buttons"));
+    parts.extend(named([controls.as_slice(), &[1]].concat(), "split buttons"));
     parts
 }
 
@@ -265,8 +264,8 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
             assert_order(name, &records, &area);
             let mut touch_checked = 0;
             for (what, part) in strip_parts(&records) {
-                // New session and the split buttons are never squeezed under a touch target (FR-012).
-                if what == "strip New session" || what == "strip split buttons" {
+                // The split buttons are never squeezed under a touch target (FR-012).
+                if what == "strip split buttons" {
                     touch_checked += 1;
                     assert!(
                         part.width >= micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET - TOLERANCE,
@@ -275,8 +274,8 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
                 }
             }
             assert_eq!(
-                touch_checked, 2,
-                "{name} {theme:?} {window:?}: the touch-target check ran on New session and the split buttons"
+                touch_checked, 1,
+                "{name} {theme:?} {window:?}: the touch-target check ran on the split buttons"
             );
             let mut parts = header_parts(&records);
             assert!(
@@ -286,13 +285,13 @@ pub(crate) fn assert_fits_under(name: &str, build: impl Fn() -> StateUnderTest) 
             let strip = strip_parts(&records);
             assert_eq!(
                 strip.len(),
-                4,
-                "{name} {theme:?} {window:?}: the strip's four children: {strip:?}"
+                3,
+                "{name} {theme:?} {window:?}: the strip's three children: {strip:?}"
             );
             parts.extend(strip);
             for (what, part) in &parts {
                 // Only the title and the strip's tab region may shrink to nothing: FR-012 lets
-                // the tab region go before restart, New session or the splits are clipped.
+                // the tab region go before restart or the splits are clipped.
                 assert!(
                     (part.width > 0.0 || what == "title" || what == "strip tab region")
                         && inside(part, &area)
@@ -515,8 +514,8 @@ fn the_header_and_the_strip_stand_over_the_shown_review() {
                 let strip = strip_parts(&records);
                 assert_eq!(
                     strip.len(),
-                    4,
-                    "{what}: the strip's four children: {strip:?}"
+                    3,
+                    "{what}: the strip's three children: {strip:?}"
                 );
                 for (part, r) in &strip {
                     assert!(

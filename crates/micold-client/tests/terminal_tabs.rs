@@ -288,7 +288,9 @@ fn each_strip_member_sends_its_s5_message() {
             ),
             (
                 MemberKey::Plus,
-                Message::Session(SessionMsg::ShellInstanceOpenRequested)
+                Message::HeaderBar(micold_client::features::header_bar::Msg::Toggled(
+                    micold_client::features::header_bar::HeaderMenu::Plus
+                ))
             ),
             (
                 MemberKey::Session(other),

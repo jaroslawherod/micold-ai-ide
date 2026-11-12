@@ -120,6 +120,8 @@ fn choosing_an_entry_closes_the_plus_menu() {
             state.current_session_location().expect("a location"),
         )),
     ] {
+        // A selection change closes a menu, and the first update records the selection.
+        state.update(Message::HeaderBar(HeaderMsg::Dismissed));
         state.update(Message::HeaderBar(HeaderMsg::Toggled(HeaderMenu::Plus)));
         assert_eq!(state.header_bar.menu, HeaderMenu::Plus);
         state.update(press);

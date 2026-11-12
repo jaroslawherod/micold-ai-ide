@@ -63,13 +63,13 @@ fn every_member_is_laid_out_at_its_own_width() {
     assert!(checked > 0, "no strip member was located");
 }
 
-/// S9, FR-010: the status cluster, **New session** and the split buttons are each laid out wider
-/// than nothing, and New session and the splits measure the same at every member count.
+/// S9, FR-010: the status cluster and the split buttons are each laid out wider
+/// than nothing, and the splits measure the same at every member count.
 #[test]
 fn the_fixed_controls_hold_their_size_at_every_member_count() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
-    let mut seen: Vec<(&str, f32, f32)> = Vec::new();
+    let mut seen: Vec<(&str, f32)> = Vec::new();
     for (covered, records) in covered_states().iter().zip(all.iter()) {
         let Some(strip) = at(covered, records, "session.strip") else {
             continue;
@@ -85,22 +85,19 @@ fn the_fixed_controls_hold_their_size_at_every_member_count() {
                 control.width,
             );
         }
-        let new_session = at(covered, records, "session.strip.new_session")
-            .unwrap_or_else(|| panic!("{}: New session is anchored", covered.name));
         let split = at(covered, records, "session.strip.split")
             .unwrap_or_else(|| panic!("{}: the split buttons are anchored", covered.name));
-        seen.push((covered.name, new_session.width, split.width));
+        seen.push((covered.name, split.width));
     }
     assert!(
         seen.len() >= STRIP_MEMBERS.len(),
         "fewer strip states than member counts: {seen:?}"
     );
-    let (first, new_session, split) = seen[0];
-    for (name, n, s) in &seen {
+    let (first, split) = seen[0];
+    for (name, s) in &seen {
         assert!(
-            (n - new_session).abs() < TOLERANCE && (s - split).abs() < TOLERANCE,
-            "{name}: New session {n:.1}dp and splits {s:.1}dp against {first}'s \
-             {new_session:.1}/{split:.1}dp — a fixed control whose size depends on how many tabs \
+            (s - split).abs() < TOLERANCE,
+            "{name}: splits {s:.1}dp against {first}'s {split:.1}dp — a fixed control whose size depends on how many tabs \
              are open is not laid out; it is left over"
         );
     }
