@@ -11,13 +11,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1786_feat-sidebar-let-the-user-create-groups
 - **Started**: 2026-11-11
 - **Phase**: tasks
-- **Next step**: open design PR, then milestone M1
+- **Next step**: wait for design PR #1848 to merge, then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open | … |
+| #1848 | Design | open | … |
 
 ## Milestones
 
