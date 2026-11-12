@@ -44,7 +44,7 @@ M1: review A (code-review high) snapshot cd610b30:2c612ac0 round 1: F1 MAJOR fix
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | --- | --- | --- | --- | --- | --- |
-| Close 1537 | 1 |  |  | 74c0062f37bc014c7f1a95208eff01db01e768a6:c84209f6efdb6fdb9d18d144f35e3ff30dcb20b0 | CHANGES: F1 MAJOR mutant TEST_ENV=true not run (now run, fails the test, restored), F2-F3 MINOR T155 marked partial; prose/record fixes, no new round |
+| Close 1537 | 1 |  |  | 74c0062f37bc014c7f1a95208eff01db01e768a6:c84209f6efdb6fdb9d18d144f35e3ff30dcb20b0 | CHANGES: F1 MAJOR mutant TEST_ENV=true not run (now run, fails the test, restored), F2-F3 MINOR T159 marked partial; prose/record fixes, no new round |
 | Tasks 1537 | 1 |  |  | 72c2d2e1:3ffb138f | CHANGES: F1 capture lib.sh producer, F2 retired_env module uncreated, F3 entrypoint wording; all fixed (task text), F4-F6 MINOR fixed |
 | Close 1537 diff | 2 | close | 7b385025813cc24f3224a7b02ffce12e299fcb8e | 0525cce6c899d315c7a1f41bdcedaa3bae9d61a4:e751a68607f108be83495634c31add8aff4e9fc2 | CLEAN 3 MINOR (F1 fixed prose only) |
 | Close 1537 PR | 1 | 1840 | 9c2c00a04aa1f211de6dee15b2f8b40e8e655b09 | 485792a1bfe0563b71ecd8ebc82acc19200888a3:b23e24833f8c3136a29854d08a0901672e9fc920 | CLEAN F1 MAJOR fixed (comment and task text only, prose only), F2-F3 MINOR left |
@@ -68,5 +68,5 @@ None.
 
 ## Follow-ups not done
 
-- `daemon_config_render::from_entry_delivering` defaults `client_token_file` to `SANDBOX_TOKEN` (`/run/micold/secrets/client-token`) while `CONTAINER_TOKEN_PATH` is `/run/micold/token`: found by close remediation T155, not fixed (adds behaviour); filed as #1838.
+- `daemon_config_render::from_entry_delivering` defaults `client_token_file` to `SANDBOX_TOKEN` (`/run/micold/secrets/client-token`) while `CONTAINER_TOKEN_PATH` is `/run/micold/token`: found by close remediation T159, not fixed (adds behaviour); filed as #1838.
 - Milestones live in tasks.md under "Issue 15 (#1537)". The quickstart run is recorded by the close unit.
