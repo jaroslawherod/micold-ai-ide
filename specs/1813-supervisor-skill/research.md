@@ -40,12 +40,14 @@ the ledger, and exits on the first change or at 600 s. Rejected: the supervisor 
 cost, `waiting.md` "Never poll"); a cron (needs a harness feature we do not rely on).
 
 ## D8. Supervised marker
-Decision: the session is started with `AUTOPILOT_SUPERVISED=1` in its environment, through the
-`env` argument of `create_session`. The skill checks the tool's schema at start; if it takes no
-environment, the supervisor refuses to start any issue and tells the person (an unsupervised run
-would block on `AskUserQuestion`). Rejected: a prompt prefix that the autopilot turns into a ledger
-line (needs a speckit-autopilot change outside this feature's scope); a marker in the ledger only
-(the ledger does not exist when the session starts).
+Decision: `create_session` has no environment argument (its schema: `ai_cli`, `allow_additional_session`,
+`prompt`, `worktree`), so the marker travels in the prompt: `/speckit-autopilot #<n> supervised`.
+This feature adds one line to `speckit-autopilot/SKILL.md`: a trailing `supervised` argument makes
+the run write `- **Supervised**: yes` into its ledger on creation (`supervised.sh` already reads
+it). A grep case in `supervisor.test.sh` asserts that line and the supervisor skill's prompt agree.
+Rejected: an `env` argument on `create_session` (needs a micold MCP change outside this feature);
+a marker pre-written in the worktree (the ledger does not exist before the autopilot runs);
+`export AUTOPILOT_SUPERVISED=1` typed in the prompt (not a documented way to set a session's env).
 
 ## D9. Failure and tries
 Decision: `tries` column in the ledger; each failed start adds one; at 3 the state is `failed`.

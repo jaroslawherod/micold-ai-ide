@@ -86,6 +86,7 @@ scripts/tests/supervisor.test.sh               # new: fixture tests, one per acc
 scripts/tests/lib/autopilot-fixtures.sh        # reused (new_repo, tmp); extended only if a helper is missing
 .gitignore                                     # + /.autopilot/
 .claude/skills/speckit-autopilot/README.md     # + pointer to the supervisor skill
+.claude/skills/speckit-autopilot/SKILL.md      # + trailing `supervised` argument writes the ledger's Supervised line
 ```
 
 **Structure Decision**: helpers beside `run-status.sh` in `scripts/autopilot/`, test beside
@@ -98,7 +99,7 @@ starts autopilot sessions and never runs a flow itself.
 |---|---|
 | FR-001 queue from list or label | SKILL.md *Build the queue* (`gh issue list --label autopilot:queue`, sorted); `supervisor.sh ledger init` |
 | FR-002 gate | `supervisor.sh gate`; contracts/supervisor-cli.md |
-| FR-003 worktree + session | SKILL.md *Start an issue* (MCP calls, prompt `/speckit-autopilot #<n>`, `AUTOPILOT_SUPERVISED=1` in the session `env`; no env support: refuse, research D8) |
+| FR-003 worktree + session | SKILL.md *Start an issue* (MCP calls, prompt `/speckit-autopilot #<n>`, prompt `/speckit-autopilot #<n> supervised`, research D8) |
 | FR-004 overlap | `supervisor.sh touches`, `supervisor.sh overlap`, used by `next` |
 | FR-005 ledger | data-model.md; `supervisor.sh ledger set/get` |
 | FR-006 resume | SKILL.md *Restart* (incl. a `starting` row with empty cells, data-model.md); `supervisor.sh map` + `check-owner` |
