@@ -55,6 +55,9 @@ Polish T022–T023 (no code) is left to the close unit.
 | re-review | 3 | M1 | c3006f98426d537f9efdfbd610d68bfb786d8c99 | de5364e74e35bf1faa0d4b82bfa4e5206887bd84:c3006f98426d537f9efdfbd610d68bfb786d8c99 | CLEAN (docs-only since fc4869254, no code) |
 | A | 3 | M1 | 479f03320a9e5061f848e43dd1132ddac78464bc | 9653b12411aeb09ce729b80ac2af910ef9a517b6:479f03320a9e5061f848e43dd1132ddac78464bc | CLEAN (docs-only fix diff since b5b53dc56, no code) |
 | B | 3 | M1 | 479f03320a9e5061f848e43dd1132ddac78464bc | 9653b12411aeb09ce729b80ac2af910ef9a517b6:479f03320a9e5061f848e43dd1132ddac78464bc | CLEAN (same head as B round 2; no change since) |
+| A | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase onto main; resolution diff re-reviewed by sonnet: patches unchanged, snapshot regenerated, gate green) |
+| B | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase onto main; same resolution review) |
+| re-review | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase resolution) |
 
 ## Declined review findings
 
