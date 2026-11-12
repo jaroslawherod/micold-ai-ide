@@ -28,6 +28,7 @@ use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, ConfirmOperation, DaemonMsg, LossSummary, WireLifecycle,
 };
 use micold_core::session::{AiCli, SessionId, SessionLifecycle, TerminalMode};
+use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
 
@@ -56,10 +57,16 @@ struct Fixture {
     addr: std::net::SocketAddr,
     _project: tempfile::TempDir,
     _store: tempfile::TempDir,
+    _stub: Option<tempfile::TempDir>,
 }
 
 impl Fixture {
     async fn new() -> Self {
+        Self::build(false).await
+    }
+
+    /// `claude_stub`: a `claude` is findable on the daemon's `PATH` (unix only; elsewhere a no-op).
+    async fn build(claude_stub: bool) -> Self {
         let project = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
         init_repo(project.path());
@@ -113,6 +120,13 @@ impl Fixture {
                 AiCli::ClaudeCode,
             ),
         ];
+        #[cfg(unix)]
+        let stub = claude_stub.then(|| self::claude_stub(store.path()));
+        #[cfg(not(unix))]
+        let stub = {
+            let _ = claude_stub;
+            None
+        };
         let state = state_over(
             vec![(project.path().to_path_buf(), true, sessions)],
             store.path(),
@@ -123,6 +137,7 @@ impl Fixture {
             addr,
             _project: project,
             _store: store,
+            _stub: stub,
         }
     }
 
@@ -281,36 +296,39 @@ async fn start_session_on_a_starting_or_restarting_session_succeeds_unchanged() 
     }
 }
 
-/// Make a `claude` findable on `PATH`, once per process: the start looks for the CLI before it
-/// looks for the conversation, so a machine without it (CI) would refuse for the wrong reason. The
-/// stub's directory goes last, so a real `claude` still wins and other tests see no change.
+/// A directory with a stub `claude` in it, and an environment-include script that appends the
+/// directory to `PATH`: the start looks for the CLI before it looks for the conversation, so a
+/// machine without it (CI) would refuse for the wrong reason. Appended last, so a real `claude`
+/// still wins; it reaches the daemon through its resolved environment, not this process's.
 #[cfg(unix)]
-fn claude_on_path() {
+fn claude_stub(store: &std::path::Path) -> tempfile::TempDir {
     use std::os::unix::fs::PermissionsExt;
-    static STUB: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
-    STUB.get_or_init(|| {
-        let dir = tempfile::tempdir().unwrap();
-        let stub = dir.path().join("claude");
-        std::fs::write(&stub, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let mut paths: Vec<_> =
-            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
-        paths.push(dir.path().to_path_buf());
-        std::env::set_var("PATH", std::env::join_paths(paths).unwrap());
-        dir
-    });
+    let dir = tempfile::tempdir().unwrap();
+    let stub = dir.path().join("claude");
+    std::fs::write(&stub, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let script = store.join("env-include.sh");
+    std::fs::write(
+        &script,
+        format!("export PATH=\"$PATH:{}\"\n", dir.path().display()),
+    )
+    .unwrap();
+    JsonFileSettingsStore::at(store.join("settings.json"))
+        .save(&Settings {
+            env_include_enabled: true,
+            env_include_script_path: script.to_string_lossy().into_owned(),
+            ..Settings::default()
+        })
+        .unwrap();
+    dir
 }
-
-#[cfg(not(unix))]
-fn claude_on_path() {}
 
 /// A start that fails ends `Starting`. Here it fails because the session's conversation is gone
 /// (the fixture has no transcript for it), so the daemon removes the session (026 FR-008a,
 /// BUG-1795): the call reports it unknown and every window sees the row go.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_start_whose_conversation_is_gone_removes_the_session() {
-    claude_on_path();
-    let f = Fixture::new().await;
+    let f = Fixture::build(true).await;
     let mut window = fake_window(&f.state);
     let error = f
         .err(
