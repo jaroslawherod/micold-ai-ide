@@ -60,6 +60,7 @@ Polish T022–T023 (no code) is left to the close unit.
 | A | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase onto main; resolution diff re-reviewed by sonnet: patches unchanged, snapshot regenerated, gate green) |
 | B | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase onto main; same resolution review) |
 | re-review | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase resolution) |
+| B | 2 | M2 | a9db09bbb89f702d329e281fce2869adbfad06f9 | 13130c93e19f445a3233ed4aa9df7fc16d3c644d:7628262fce95c344ccb9eed01db1138e2da2a5fa | CLEAN |
 
 ## Declined review findings
 
