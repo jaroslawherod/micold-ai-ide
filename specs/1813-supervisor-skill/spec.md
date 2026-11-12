@@ -87,7 +87,7 @@ the disjoint ones start together.
 
 The supervisor records the queue and each session's id in a supervisor ledger file, updated
 before each start and after each state change. A restarted supervisor reads that file, matches
-each recorded session against `run-status.sh --json`, and continues: it does not restart an issue
+each recorded worktree against `run-status.sh --json <worktree-dir>`, and continues: it does not restart an issue
 that already has a live session and it does not lose the queue.
 
 **Why this priority**: the supervisor's own session can end; without the ledger every restart
@@ -175,15 +175,15 @@ output; the status read is `--json`.
 - **FR-007**: The supervisor MUST read run state only through `run-status.sh --json` (plus
   `list_sessions` metadata for liveness) and MUST NOT read session transcripts.
 - **FR-008**: The supervisor MUST count a session in any state except `done` (and `lost`,
-  `failed`) as occupying a slot, and MUST start the next queued issue when a slot frees.
+  `failed`, `skipped`) as occupying a slot, and MUST start the next queued issue when a slot frees.
 - **FR-009**: The supervisor MUST report `asking`, `stuck`, `blocked` and `dead-no-ledger` runs to
   the person with the JSON's question or reason, and MUST NOT answer or restart them itself,
   except that `dead-no-ledger` within a grace period after the start counts as `running`.
-- **FR-011**: The mapping from the run-status states to the supervisor ledger states MUST be
-  defined: `done` to `done`; `dead-no-ledger` past the grace period to `lost`; every other state
-  keeps the issue `running` (and its slot).
 - **FR-010**: The decisions (gate, overlap, which issues to start) MUST be reproducible from fixture
   inputs without live sessions.
+- **FR-011**: The mapping from the run-status states to the supervisor ledger states MUST be
+  defined: `done` to `done`; `dead-no-ledger` past the grace period to `lost`; every other state
+  keeps the issue `running` (and its slot). `failed` and `skipped` are set by the supervisor itself, not by run-status.
 
 ### Key Entities
 
