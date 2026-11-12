@@ -75,6 +75,7 @@ crates/micold-client/src/features/navigation.rs # location_nodes skips headers; 
 crates/micold-client/src/features/worktree.rs # menu items: Move to group submenu, Move up/down
 crates/micold-core/src/sidebar_groups.rs  # existing (feature 483 run-group state), unrelated and unchanged; the new core module is sidebar_layout
 crates/micold-client/src/overlay/registry.rs # register GroupContextMenu (layer ContextMenu) and the group naming dialog beside WorktreeContextMenu
+crates/micold-client/src/ui/rename_dialog.rs  # edited: title and error line parameters, reused by the group naming dialog
 crates/micold-client/src/keymap.rs, ui/shortcut_sheet.rs  # chord entry for New group
 crates/micold-client/src/ui/sidebar.rs     # "New group" button in the chip-bar more menu row and project header; header row, drop highlight, marker, drag wiring (glue)
 crates/micold-client/src/ui/material/group_header.rs # new shared GroupHeader, DropMarker builders
