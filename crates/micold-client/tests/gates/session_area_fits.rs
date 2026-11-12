@@ -1233,7 +1233,8 @@ const TWO_ROWS_MAX: f32 = 100.0;
 /// The header is at most this tall (FR-001).
 const HEADER_MAX: f32 = 40.0;
 
-/// The strip's status cluster: its words, switch slot and, while the process is stopped, restart.
+/// The strip's status cluster: its words and, while the process is stopped, restart (the view
+/// switch moved into the worktree menu, feature 1793).
 const CLUSTER: &[usize] = &[1, 0, 1, 0];
 
 fn cluster_children(records: &[LayoutRecord]) -> Vec<Rectangle> {
@@ -1257,10 +1258,11 @@ fn records_for(mut state: State, theme: ThemePreference, window: Size) -> Vec<La
 }
 
 /// US2 scenarios 1, 2, 3 (FR-004, FR-005, FR-009, SC-001, SC-002): a Claude terminal session in a
-/// single pane has two rows above the terminal, the switch slot follows the status words and
-/// restart comes last; nothing is laid out between the strip and the terminal.
+/// single pane has two rows above the terminal, restart follows the status words and comes last;
+/// nothing is laid out between the strip and the terminal, and no switch is in the strip (feature
+/// 1793: it is in the worktree menu).
 #[test]
-fn a_claude_terminal_session_has_two_rows_and_its_switch_in_the_strip() {
+fn a_claude_terminal_session_has_two_rows_and_no_switch_in_the_strip() {
     for (stopped, queued) in [(false, 0), (true, 0), (true, 3)] {
         each_window(|what, theme, window| {
             let what = format!("stopped {stopped}, {queued} queued {what}");
@@ -1284,24 +1286,21 @@ fn a_claude_terminal_session_has_two_rows_and_its_switch_in_the_strip() {
                  (no switch row, FR-004)"
             );
             let cluster = cluster_children(&records);
-            let expected = if stopped { 3 } else { 2 };
+            let expected = if stopped { 2 } else { 1 };
             assert_eq!(
                 cluster.len(),
                 expected,
-                "{what}: words, switch slot, restart? {cluster:?}"
+                "{what}: words, restart? {cluster:?}"
             );
-            let (words, switch) = (cluster[0], cluster[1]);
+            let words = cluster[0];
             assert!(
-                switch.width > 0.0
-                    && switch.x >= words.x + words.width - TOLERANCE
-                    && inside(&switch, &area)
-                    && inside(&switch, &Rectangle::with_size(window)),
-                "{what}: the switch slot {switch:?} follows the words {words:?}, inside the area"
+                inside(&words, &area) && inside(&words, &Rectangle::with_size(window)),
+                "{what}: the words {words:?} lie inside the area"
             );
-            if let Some(restart) = cluster.get(2) {
+            if let Some(restart) = cluster.get(1) {
                 assert!(
-                    restart.x >= switch.x + switch.width - TOLERANCE,
-                    "{what}: restart {restart:?} is the last control, after the switch {switch:?} \
+                    restart.x >= words.x + words.width - TOLERANCE,
+                    "{what}: restart {restart:?} is the last control, after the words {words:?} \
                      (FR-005)"
                 );
             }
@@ -1309,98 +1308,8 @@ fn a_claude_terminal_session_has_two_rows_and_its_switch_in_the_strip() {
     }
 }
 
-/// US2 scenario 5 (FR-009): a session with no switch (a plain terminal, a transcript) has two rows
-/// too, and its switch slot is empty.
-#[test]
-fn a_session_without_a_switch_has_two_rows_and_an_empty_slot() {
-    let plain = covered_states()
-        .iter()
-        .find(|s| s.name == "session-area-one-tab")
-        .expect("the covered state exists")
-        .build;
-    type Build = Box<dyn Fn() -> State>;
-    let builds: [(&str, Build); 2] = [
-        ("plain terminal", Box::new(move || plain().state)),
-        (
-            "transcript",
-            Box::new(|| {
-                crate::support::covered_states::session_pane(
-                    micold_core::session::SessionKind::Structured,
-                    &[],
-                )
-                .0
-            }),
-        ),
-    ];
-    for (kind, build) in &builds {
-        each_window(|what, theme, window| {
-            let records = records_for(build(), theme, window);
-            let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-            let panes = rect(at(&records, &[SESSION_AREA, &[2]].concat()).expect("pane area"));
-            assert!(
-                panes.y - area.y <= TWO_ROWS_MAX + TOLERANCE,
-                "{kind} {what}: the pane area starts {} px below the area (FR-009)",
-                panes.y - area.y
-            );
-            let cluster = cluster_children(&records);
-            assert!(
-                cluster.len() >= 2 && cluster[1].width == 0.0,
-                "{kind} {what}: the switch slot is empty: {cluster:?}"
-            );
-        });
-    }
-}
-
-/// The held-queue caption's width ceiling (FR-012), restated here so changing the code's cap fails
-/// this gate instead of moving it along.
-const CAPTION_CAP: f32 = 120.0;
-
-/// US2 scenario 3, FR-012, SC-006: the longest held-queue caption is cut with an ellipsis before
-/// the switch control or restart is clipped, at the smallest window with the sidebar open.
-#[test]
-fn a_long_caption_is_cut_before_the_switch_or_restart_is_clipped() {
-    each_window(|what, theme, window| {
-        let records = records_for(claude_terminal(true, 12_345), theme, window);
-        let area = rect(at(&records, SESSION_AREA).expect("the session area is drawn"));
-        let strip = strip_parts(&records);
-        let cluster = cluster_children(&records);
-        assert_eq!(
-            cluster.len(),
-            3,
-            "{what}: words, switch slot, restart: {cluster:?}"
-        );
-        for (name, part) in cluster.iter().enumerate() {
-            assert!(
-                inside(part, &area) && inside(part, &Rectangle::with_size(window)),
-                "{what}: cluster child {name} {part:?} lies inside the area {area:?}"
-            );
-        }
-        let switch = cluster[1];
-        let [caption, button] = [0, 1].map(|i| {
-            let path = [SESSION_AREA, CLUSTER, &[1, i]].concat();
-            rect(at(&records, &path).unwrap_or_else(|| panic!("{what}: slot child {i}")))
-        });
-        assert!(
-            caption.width <= CAPTION_CAP + micold_core::tokens::spacing::SM + TOLERANCE
-                && button.width > 0.0
-                && button.x + button.width <= switch.x + switch.width + TOLERANCE,
-            "{what}: caption {caption:?} is capped and the button {button:?} is whole in {switch:?}"
-        );
-        let mut parts = strip;
-        parts.retain(|(name, _)| !name.contains("status"));
-        for (i, (a_name, a)) in parts.iter().enumerate() {
-            for (b_name, b) in &parts[i + 1..] {
-                assert!(
-                    !overlap(a, b),
-                    "{what}: {a_name} {a:?} overlaps {b_name} {b:?}"
-                );
-            }
-        }
-    });
-}
-
-/// US3 scenario 2 (FR-011): at the smallest window beside the sidebar, header and strip with the
-/// switch slot filled lie inside the area and overlap nothing, light and dark.
+/// US3 scenario 2 (FR-011): at the smallest window beside the sidebar, header and strip with
+/// restart shown lie inside the area and overlap nothing, light and dark.
 #[test]
 fn the_filled_strip_and_the_header_fit_at_the_smallest_window() {
     assert_fits_under("claude terminal, queue held", || {
@@ -1408,9 +1317,8 @@ fn the_filled_strip_and_the_header_fit_at_the_smallest_window() {
     });
 }
 
-/// FR-006, FR-008, FR-005: with the Review tab shown the switch slot is empty and restart keeps
-/// its distance from the strip's right end, as it has with the Review tab hidden and the switch in
-/// place.
+/// FR-008, FR-005: restart keeps its distance from the strip's right end whether the Review tab is
+/// shown or hidden.
 #[test]
 fn restart_keeps_its_place_when_the_review_is_shown_and_closed() {
     use micold_client::features::changes::{self, Msg};
@@ -1432,18 +1340,11 @@ fn restart_keeps_its_place_when_the_review_is_shown_and_closed() {
             let cluster = cluster_children(&records);
             assert_eq!(
                 cluster.len(),
-                3,
-                "{what} {window:?}: words, slot, restart: {cluster:?}"
-            );
-            assert_eq!(
-                cluster[1].width > 0.0,
-                what == "hidden",
-                "{what} {window:?}: the switch slot is empty exactly while the Review is shown \
-                 (FR-006): {:?}",
-                cluster[1]
+                2,
+                "{what} {window:?}: words, restart: {cluster:?}"
             );
             let controls = at(&records, &[SESSION_AREA, &[1, 0, 1]].concat()).expect("controls");
-            let restart = cluster[2];
+            let restart = cluster[1];
             from_right.push((controls.x + controls.width) - (restart.x + restart.width));
         }
         assert!(
@@ -1520,35 +1421,4 @@ fn a_tiled_pane_still_has_its_switch_row() {
         8.0,
     );
     near("the button's height", button.height, 40.0);
-}
-
-/// FR-012: when the strip is too narrow for the status words and the switch slot both, the switch
-/// slot (caption, then button label) gives way first and the words only once it is gone: the
-/// words keep their natural width while the switch is still shown cut, and are cut only when the
-/// switch has nothing left.
-#[test]
-fn the_switch_slot_gives_way_before_the_status_words() {
-    let widths = |width: f32| {
-        let records = records_for(
-            claude_terminal(true, 12_345),
-            ThemePreference::Light,
-            Size::new(width, 480.0),
-        );
-        let cluster = cluster_children(&records);
-        (cluster[0].width, cluster[1].width)
-    };
-    let (natural_words, natural_switch) = widths(1280.0);
-    // Room for the words but not the whole switch slot: only the switch is cut.
-    let (words, switch) = widths(640.0);
-    assert!(
-        (words - natural_words).abs() <= TOLERANCE && switch > 0.0 && switch < natural_switch,
-        "the switch slot is cut ({switch} of {natural_switch}) while the words keep {natural_words}: \
-         {words}"
-    );
-    // No room for even the cut switch: it is gone, and then the words are cut.
-    let (words, switch) = widths(520.0);
-    assert!(
-        switch <= TOLERANCE && words > 0.0 && words < natural_words - TOLERANCE,
-        "the switch slot is gone ({switch}) before the words are cut ({words} of {natural_words})"
-    );
 }

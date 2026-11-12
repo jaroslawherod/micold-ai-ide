@@ -246,7 +246,7 @@ pub enum Member {
         marked: bool,
         stopped: bool,
     },
-    /// Open another shell instance of the shown session.
+    /// The one `+` after the tabs (feature 1793, FR-007): it opens [`PlusMenuModel`]'s menu.
     Plus,
     /// The shown location's Review tab (feature 1269, U13, R10): `Review`, its draft count and
     /// changed mark, and its ×.
@@ -318,7 +318,9 @@ impl Member {
                 instance,
                 ..
             } => session(SessionMsg::ShellInstanceSelected(*id, *instance)),
-            Self::Plus => session(SessionMsg::ShellInstanceOpenRequested),
+            Self::Plus => Message::HeaderBar(crate::features::header_bar::Msg::Toggled(
+                crate::features::header_bar::HeaderMenu::Plus,
+            )),
             Self::Review { entry, .. } => Message::Sidebar(
                 crate::features::sidebar::Msg::ReviewChangesRequested(entry.clone()),
             ),
@@ -364,6 +366,50 @@ impl Member {
             Self::Shell { .. } => TAB_WIDTH,
             Self::Plus => PLUS_WIDTH,
         }
+    }
+}
+
+/// The `+` menu's accessible name (feature 1793, FR-013).
+pub const PLUS_MENU_NAME: &str = "Add session or terminal";
+/// The `+` menu's session entry.
+pub const ANOTHER_SESSION: &str = "Another session";
+/// The `+` menu's terminal entry.
+pub const TERMINAL: &str = "Terminal";
+
+/// One entry of the `+` menu.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlusItem {
+    /// The entry's words.
+    pub label: &'static str,
+    /// What choosing it sends.
+    pub press: Message,
+}
+
+/// What the `+` menu holds (feature 1793, data-model.md *PlusMenuModel*): another session in the
+/// shown location, with today's AI CLI and kind choice, or a terminal in it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlusMenuModel {
+    /// In order: another session, then a terminal.
+    pub items: Vec<PlusItem>,
+}
+
+impl PlusMenuModel {
+    /// The menu for the shown location; `None` while there is none, as there is no `+` then.
+    pub fn of(state: &State) -> Option<Self> {
+        state.session.active?;
+        let location = state.current_session_location()?;
+        Some(Self {
+            items: vec![
+                PlusItem {
+                    label: ANOTHER_SESSION,
+                    press: Message::Session(SessionMsg::AdditionalRequested(location)),
+                },
+                PlusItem {
+                    label: TERMINAL,
+                    press: Message::Session(SessionMsg::ShellInstanceOpenRequested),
+                },
+            ],
+        })
     }
 }
 
@@ -445,9 +491,10 @@ impl StripModel {
                     marked: marked == Some(StripTab::Instance(instance)),
                     stopped: process_stopped(state, id, StripTab::Instance(instance)),
                 }));
-                members.push(Member::Plus);
             }
         }
+        // The one `+` after the tabs, before the Review tab (feature 1793, FR-007).
+        members.push(Member::Plus);
         members.extend(review);
         Some(Self {
             members,

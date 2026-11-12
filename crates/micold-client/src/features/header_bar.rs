@@ -284,6 +284,24 @@ impl crate::overlay::registry::Registered for WorktreeMenu {
     }
 }
 
+/// The `+` menu of the tab row as a floating surface: a popover, so Escape or an outside click
+/// closes it (FR-013).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlusMenu;
+
+crate::floating_surface!(
+    PlusMenu,
+    id: crate::overlay::SurfaceId::new("header_plus_menu"),
+    layer: Popover,
+    cancelled_by: Message::HeaderBar(Msg::Dismissed),
+);
+
+impl crate::overlay::registry::Registered for PlusMenu {
+    fn open_in(state: &App) -> Option<Self> {
+        (state.header_bar.menu == HeaderMenu::Plus).then_some(PlusMenu)
+    }
+}
+
 /// What the header menus' state is told.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Msg {

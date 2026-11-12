@@ -557,6 +557,8 @@ pub fn view_with<'a>(
 
     // The top bar's worktree `⋮` menu (feature 1793, FR-009), beside the app menu.
     let header_worktree_menu = toolbar::worktree_menu(state, roles);
+    // The tab row's `+` menu (feature 1793, FR-007).
+    let header_plus_menu = session_area::plus_menu(state, roles);
 
     // The project switcher panel — the same `MenuOverlay` the ⋮ menu is, carrying different items
     // (018 FR-029c). Rows are built purely from the workspace: active marker,
@@ -953,6 +955,9 @@ pub fn view_with<'a>(
         .push_maybe(session_start_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)
+        // Last, so it moves none of the surfaces before it: the layout gates address a dialog by
+        // its place among them. The overlay draws by layer, not by this order.
+        .push(header_plus_menu)
         .into()
 }
 

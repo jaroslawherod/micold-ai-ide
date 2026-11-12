@@ -114,14 +114,6 @@ fn builders() -> Vec<(&'static str, String)> {
             ),
         ),
         (
-            "session_area::switch_slot",
-            body_from(
-                &area,
-                "fn switch_slot<'a>(",
-                &["strip_switch_offer(", "container(Space"],
-            ),
-        ),
-        (
             "session_area::member",
             body_from(&area, "fn member<'a>(", &["Member::Plus", "Member::Shell"]),
         ),

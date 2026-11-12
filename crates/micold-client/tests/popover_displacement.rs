@@ -127,9 +127,11 @@ const DISPLACES: &[(&str, &[&str])] = &[
     ("transcript_context_menu", &[]),
     // #1721's composer Paste menu: closes nothing, and no other popover closes it.
     ("composer_context_menu", &[]),
-    // Feature 1793's worktree `⋮` menu in the top bar: it closes nothing, and no other popover
-    // closes it (the app menu's backdrop keeps the two from being open together).
-    ("header_worktree_menu", &[]),
+    // Feature 1793's worktree `⋮` menu in the top bar and `+` menu in the tab row are one
+    // `HeaderMenu` value, so each closes the other and nothing else (the app menu's backdrop keeps
+    // either from being open with it).
+    ("header_worktree_menu", &["header_plus_menu"]),
+    ("header_plus_menu", &["header_worktree_menu"]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -186,6 +188,9 @@ fn opener(id: &str) -> Message {
                 micold_client::features::header_bar::HeaderMenu::Worktree,
             ))
         }
+        "header_plus_menu" => Message::HeaderBar(micold_client::features::header_bar::Msg::Toggled(
+            micold_client::features::header_bar::HeaderMenu::Plus,
+        )),
         other => panic!("no opener for `{other}`"),
     }
 }

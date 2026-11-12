@@ -5,8 +5,11 @@
 //! module only lays them out (contracts H9, S7).
 
 use crate::app::{Message, State};
+use crate::features::header_bar::{HeaderMenu, Msg as HeaderMsg};
 use crate::features::session::Msg as SessionMsg;
-use crate::features::session_strip::{strip_overflow, Member, StripModel};
+use crate::features::session_strip::{
+    member_offsets, strip_overflow, Member, PlusMenuModel, StripModel, PLUS_MENU_NAME,
+};
 use crate::icons::Icon;
 use crate::ui::cdk::keyed::Keyed;
 use crate::ui::material::{
@@ -282,19 +285,6 @@ pub(crate) fn strip<'a>(
     .accent_on(marked_beyond)
     .width(Length::Fill);
 
-    let new_session = Tooltip::new(
-        IconButton::new(Icon::AddSession, r)
-            .padding(spacing::SM)
-            .on_press_maybe(
-                model
-                    .location
-                    .clone()
-                    .map(|at| Message::Session(SessionMsg::AdditionalRequested(at))),
-            ),
-        "Start another session…",
-        r,
-    )
-    .position(TooltipPosition::Left);
     // Feature 1269 (U15): while the Review tab is shown the split buttons keep their place,
     // disabled, as they act on panes that are not drawn.
     let splits: Element<'a, Message> = match area.and_then(|a| a.layout.pane(a.layout.focused())) {
@@ -302,14 +292,11 @@ pub(crate) fn strip<'a>(
         Some(pane) => crate::ui::panes::split_buttons(pane, r),
         None => container(Space::new()).into(),
     };
-    let switch = switch_slot(state, area, model, r);
     // The controls after the tabs give way by rank when the strip is too narrow (feature 1463
-    // FR-012): the cluster's caption, then the switch button's label, then the status words, while
-    // New session and the split buttons stay whole. A plain `row!` would squeeze the controls it
+    // FR-012): the status words give way first, while the split buttons stay whole. A plain `row!` would squeeze the controls it
     // lays out last instead.
     let controls = material::GiveWayRow::new(spacing::SM)
-        .shorten(0, status_cluster(model, switch, r))
-        .keep(new_session)
+        .shorten(0, status_cluster(model, r))
         .keep(splits);
     let strip = row![tabs, controls]
         .spacing(spacing::SM)
@@ -320,65 +307,12 @@ pub(crate) fn strip<'a>(
         .into()
 }
 
-/// The switch slot (feature 1463 FR-004, FR-006, FR-008): always one child, so the cluster's child
-/// list does not vary. A single pane's Claude terminal session gets the held-queue caption (cut
-/// with an ellipsis under [`SWITCH_CAPTION_MAX_WIDTH`], full text on hover) and **Open in
-/// structured view**; anything else, a tiled pane, a transcript and the shown Review tab included,
-/// gets an empty container.
-fn switch_slot<'a>(
-    state: &'a State,
-    area: Option<&crate::ui::panes::PaneArea<'a>>,
-    model: &StripModel,
-    r: tokens::Roles,
-) -> Element<'a, Message> {
-    let several = area.is_some_and(|a| a.layout.len() > 1);
-    let slot =
-        terminal::strip_switch_offer(state, several, model.review_shown()).and_then(|offer| {
-            let button = terminal::switch_button_shrinking(state, offer.session, r)?;
-            // Always two children, so a held queue coming and going moves no widget state from
-            // the button to the caption; the caption carries its own gap as right padding.
-            let caption: Element<'a, Message> = match offer.caption {
-                Some(line) => container(
-                    Tooltip::new(
-                        container(
-                            Ellipsized::<Message>::at_role(
-                                line.clone(),
-                                TypeRole::Caption,
-                                r.on_surface_variant,
-                            )
-                            .shrink(),
-                        )
-                        .max_width(SWITCH_CAPTION_MAX_WIDTH),
-                        line,
-                        r,
-                    )
-                    .position(TooltipPosition::Bottom),
-                )
-                .padding(iced::Padding {
-                    right: spacing::SM,
-                    ..iced::Padding::ZERO
-                })
-                .into(),
-                None => container(Space::new()).into(),
-            };
-            let slot = material::GiveWayRow::new(0.0).shorten(0, caption);
-            Some(slot.shorten(1, button))
-        });
-    match slot {
-        Some(slot) => slot.into(),
-        // An empty container rather than a bare `Space`: a void child is dropped from the tree,
-        // which would move the controls after it (see `right_aligned_tabs`).
-        None => container(Space::new()).into(),
-    }
-}
-
 /// The shown session's status words, cut under [`STATUS_MAX_WIDTH`] with the full words on hover,
-/// then the switch slot, and while its marked process is stopped the restart as the cluster's last
+/// and while its marked process is stopped the restart as the cluster's last
 /// child, so its coming and going moves no other control (R9, US2 sc. 5 and 6). While the Review
 /// tab is shown the restart keeps its place, disabled (feature 1269, U15).
 fn status_cluster<'a>(
     model: &StripModel,
-    switch: Element<'a, Message>,
     r: tokens::Roles,
 ) -> Element<'a, Message> {
     let words = Tooltip::new(
@@ -395,10 +329,7 @@ fn status_cluster<'a>(
         r,
     )
     .position(TooltipPosition::Bottom);
-    // Rank 0 gives way first: the switch slot (its caption, then its button's label), then the words.
-    let mut cluster = material::GiveWayRow::new(spacing::SM)
-        .shorten(1, words)
-        .shorten(0, switch);
+    let mut cluster = material::GiveWayRow::new(spacing::SM).shorten(0, words);
     if let Some(restart) = model.restart.clone() {
         cluster = cluster.keep(
             material::Button::with_content(
@@ -411,6 +342,53 @@ fn status_cluster<'a>(
         );
     }
     cluster.into()
+}
+
+/// The `+` menu as a floating overlay (feature 1793, FR-007): another session, then a terminal,
+/// hung from the `+`. Pushed whether or not it is open, so it can fade out; it holds nothing while
+/// no strip shows.
+pub(crate) fn plus_menu<'a>(
+    state: &State,
+    roles: tokens::Roles,
+) -> crate::ui::cdk::overlay::Surface<'a, Message> {
+    let model = PlusMenuModel::of(state);
+    let items = model.map_or_else(Vec::new, |menu| {
+        menu.items
+            .into_iter()
+            .map(|item| {
+                let icon = if item.label == crate::features::session_strip::TERMINAL {
+                    Icon::AddTerminalInstance
+                } else {
+                    Icon::AddSession
+                };
+                material::MenuItem::new(icon, item.label, item.press)
+            })
+            .collect()
+    });
+    let count = items.len();
+    // The `+` sits after the tabs, so the panel hangs from its leading edge below the strip; the
+    // strip's own origin is the sidebar's width and the bar's bottom edge.
+    let at = StripModel::of(state)
+        .and_then(|model| {
+            let index = model.members.iter().position(|m| matches!(m, Member::Plus))?;
+            Some(member_offsets(&model.members)[index].0)
+        })
+        .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32);
+    let anchor = (
+        (crate::ui::freed_width(state) + spacing::SM + at.max(0.0)) as u16,
+        (tokens::anatomy::app_bar::BOTTOM_EDGE
+            + tokens::anatomy::button::MIN_TOUCH_TARGET
+            + 2.0 * spacing::SM) as u16,
+    );
+    let (x, y) = crate::features::project::clamp_menu_anchor(
+        anchor,
+        material::menu_panel_size(count),
+        state.window.window_size,
+    );
+    material::MenuOverlay::new(items, Message::HeaderBar(HeaderMsg::Dismissed), roles)
+        .open(state.header_bar.menu == HeaderMenu::Plus && count > 0)
+        .hung_from(Some(iced::Point::new(x as f32, y as f32)))
+        .into()
 }
 
 /// One strip member (S5, S7): a session tab at [`tab::SESSION_WIDTH`], a shell tab at
@@ -526,13 +504,10 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
                 .into()
         }
         Member::Plus => Tooltip::new(
-            IconButton::new(Icon::AddTerminalInstance, r)
+            IconButton::new(Icon::AddSession, r)
                 .padding(spacing::SM)
                 .on_press(m.press()),
-            format!(
-                "Open a new terminal instance ({})",
-                crate::keymap::new_terminal_chord_label()
-            ),
+            PLUS_MENU_NAME,
             r,
         )
         .position(TooltipPosition::Bottom)
