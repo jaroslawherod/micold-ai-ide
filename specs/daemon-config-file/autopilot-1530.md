@@ -50,6 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 |  |  | fd03d24b9bf4c7aac5fd8b2e77207878cc688dbc:259bcb30e95d60c215c8bba19b45fac7123e8c07 | CHANGES: F1 MAJOR (no guide task in M2) fixed by writing docs into T094; F2 MINOR git_credential_grant.rs added to T053; F3 MINOR noted: matching.rs and git_credential_config.rs are created by T046/T047, no `TokenChoice` exists yet. Fixes are task-text only, no new round |
 | Close | 1 | 1834 | bc845dea87574dd174dc18af75b0f2b640099818 | bc845dea87574dd174dc18af75b0f2b640099818:b9cb9954ae561d72d738fc411cf4514a65c734dc | CLEAN 3 MINOR fixed (test renamed, cycle-log note, task text reworded; prose only); pre-rebase |
 | Close | 2 | 1834 | 8370972b6d1fde4425d6f4911664fc058ba8c1e9 | 28d824cac888a129ef3551dd6cd0701cc4494105:8370972b6d1fde4425d6f4911664fc058ba8c1e9 | CLEAN 1 MINOR fixed (module doc rewrapped; prose only) |
+| Close | 3 | 1834 | 78e16efebd57a0d691c14b4cc71cabee790cfd2a | 4324ff2f616f41354dece572d037d22076f94aa1:78e16efebd57a0d691c14b4cc71cabee790cfd2a | CLEAN rebase-resolution review (sonnet), 0 findings; full gate green on the rebased tree |
 
 - Close (resumed unit): rebased onto origin/main; found a leftover mutant (`Some(()).map` in `daemon_config_delivery.rs`) in the working tree and restored it; T147 and T152-T155 done: 7/7 mutants caught (cycle-log, verification.md), I9-11..I9-15 closed; spec Status extended for Issue 9.
 
