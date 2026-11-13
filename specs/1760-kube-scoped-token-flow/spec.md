@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-12
 
-**Status**: Draft
+**Status**: Clarified
 
 **Input**: User description: "Scoped-token step 11: assert the credential flow in a kind (Kubernetes) pod" (issue #1760, follow-up of #1542; closes FR-008 / US3.4 / SC-002 of `specs/1542-github-api-base-override`, Part C step 11 of `specs/1002-sandbox-scoped-token/quickstart.md`).
 
@@ -19,7 +19,7 @@
 
 ### User Story 1 - A pod daemon pushes and pulls with the scoped token (Priority: P1)
 
-A user with a fine-grained GitHub token stored in Settings starts a Kubernetes daemon for a project. Sessions in the pod push and pull the project's repository over HTTPS using that token, and never see the token itself.
+A user with a fine-grained GitHub token stored in Settings starts a Kubernetes daemon for a project. Sessions in the pod push and pull the project's repository over HTTPS using that token, and never see the token in their environment.
 
 **Why this priority**: Without delivery there is nothing to assert; this is the capability step 11 needs.
 
@@ -69,14 +69,14 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - The token expires or is revoked while the pod runs: the pod's push fails; the application does not renew it (documented behaviour of tokens).
 - The pod is stopped, deleted or the cluster context changes: no secret holding the token is left in the namespace by this client after the pod is deleted.
 - Windows and macOS clients: the token file is read from the client's PAT store with the same owner-only rules (Principle VI); the test itself is Linux-only (kind).
-- Two clients start the same pod at once, or the token store changes between start and first use: the pod ends with one complete delivered set (last write wins), never a mix; a token file with loose permissions on Unix is refused by the client, on Windows the ACL rule applies.
+- Two clients start the same pod at once, or the token store changes between start and first use: the pod ends with one complete delivered set (last write wins), never a mix; a token file with loose permissions on Unix is refused by the client, on Windows the PAT store's existing rule applies and the client adds no check of its own.
 - Several sessions in one pod: every session sees the same helper and none sees the token.
 
 ## Clarifications
 
 ### Session 2026-11-12
 
-- Q: Which stored tokens reach the pod (FR-009)? → A: only those whose repository filter matches a project of this daemon. _(agent-resolved: specs/1002-sandbox-scoped-token/spec.md#FR-005 "only the PAT of the container's own project's repository")_
+- Q: Which stored tokens reach the pod (FR-009)? → A: only those whose repository filter matches a saved project of this daemon. _(agent-resolved: specs/1002-sandbox-scoped-token/spec.md#FR-005 "only the PAT of the container's own project's repository")_
 - Q: When is the token removed from the cluster (FR-010)? → A: with the pod's other secrets on delete/Remove, replaced at each start, withdrawn at the next start once deleted in Settings. _(agent-resolved: docs/user-guide/kubernetes-daemons.md, resource table: startup and credential secrets removed at the next start or Remove; specs/1002-sandbox-scoped-token/spec.md#FR-008)_
 - Q: May a host-stored token be placed in a Kubernetes Secret, and with what consent (FR-008)? → A: per-daemon opt-in in the daemon settings, off by default; no Secret holds a token otherwise. _(decided by user)_
 - Q: Does a daemon saved before the opt-in existed deliver tokens? → A: no; the opt-in loads as off, so the pod behaves as today until the user turns it on. _(agent-resolved: specs/1002-sandbox-scoped-token/spec.md#FR-002, saved settings load without error; a new item defaults to off)_
@@ -93,7 +93,7 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - **FR-006**: A runtime-gated `kube_real_` test in `micold-client` MUST assert FR-003 to FR-005 on the kind cluster, run by CI job `kube-cluster`, and be reported skipped when the cluster tooling is absent.
 - **FR-007**: The harness MUST provide, for that test, a fake GitHub API and an HTTP git backend reachable from a pod that accept only the run's token, and a way to read a pod session's environment and list its home directory.
 - **FR-008**: A stored token MUST be delivered into the cluster (as a Kubernetes Secret) only when the daemon's settings carry a per-daemon opt-in for GitHub tokens, which is off by default and saved with the daemon's other settings. With it off, no Secret holds a token and the pod has no `[[github.tokens]]` entry. The opt-in's label names the exposure: anyone who can read Secrets in the namespace, and etcd, can read the token. The test enables the opt-in for its daemon.
-- **FR-009**: The set of tokens delivered MUST be only those whose repository filter matches a project of this daemon, so a pod never holds a token it cannot use.
+- **FR-009**: The set of tokens delivered MUST be only those whose repository filter matches a saved project of this daemon, or that has no repository filter (its reach is unknown client-side, so it may not reach the project), so a pod holds no token that is known to be unusable.
 - **FR-010**: A delivered token MUST be removed from the cluster with the pod's other secrets when the pod is deleted or removed, MUST be replaced at each start, and a token deleted in Settings MUST be withdrawn at the next start.
 
 ### Key Entities
@@ -117,4 +117,7 @@ A maintainer's CI job `kube-cluster` fails when the pod credential flow regresse
 - The per-token `host` key lets the test point the helper at the fake forge; the shipped default stays `github.com` (#1542 FR-003/FR-004: no environment override).
 - The container's missing delivery (docs promise it, code lacks it) is out of scope and recorded as a follow-up.
 - "A project of this daemon" (FR-009) means the daemon's saved projects with a remote; a project added in the pod at runtime has no remote the client can read and counts from no start (plan research R3).
+- Session processes run as the pod user and can read the mounted token file (as the daemon does); FR-002 and FR-005 claim the environment, the pod specification, the configuration and the home directory, not isolation of that file. Pod-side file isolation is out of scope.
+- A project remote that `GithubRepo::from_remote_url` cannot parse contributes no repository; a token's `host` defaults to `github.com`, so a project on another host matches no default-host token unless the host is set (the test sets it).
+- Two clients starting one pod at once and a context change are covered by the existing Secret replace and the `kube_real_concurrent`/`kube_real_lifecycle` tests; no new test.
 - Out of scope: renewing tokens, a real GitHub check (stays manual, step 7), changing the container or host arms.

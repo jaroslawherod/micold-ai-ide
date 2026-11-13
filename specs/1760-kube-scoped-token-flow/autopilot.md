@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1760
 - **Worktree branch**: test/1760_scoped-token-step-11-assert-the-credential-flow-in
 - **Started**: 2026-11-12
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: design PR merge, then M1
 
 ## Pull requests
 
@@ -22,6 +22,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | - | pending |
+| M2 | T018–T019 | light | form tick and user guide | - | pending |
+| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
 ## Decisions
 
@@ -39,6 +42,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | plan.md, research.md, data-model.md, contracts | 2ea1951e53ce0daa188acf55cc01f06b058a2534 | e5bec1b3666ceed4478d5c774ad949d9017a7fac:2ea1951e53ce0daa188acf55cc01f06b058a2534 | CHANGES: 2 MAJOR fixed (runtime-project source narrowed to saved projects; KubeEnv.tokens seam), 3 MINOR fixed |
 | Plan review | 2 | fix diff | 2ea1951e53ce0daa188acf55cc01f06b058a2534 | fbbd354fff65ccc938db0d8d610033b6124a24d6:2ea1951e53ce0daa188acf55cc01f06b058a2534 | CLEAN (3 MINOR: 1 fixed, 2 left for tasks) |
 | Plan review | 2 | plan fix diff | 44e5569db6c05e6b2c3da07cd58d488222b8f023 | fbbd354fff65ccc938db0d8d610033b6124a24d6:2ea1951e53ce0daa188acf55cc01f06b058a2534 | CLEAN |
+
+| Tasks analyze | 1 | tasks.md | - | - | 1 HIGH (arm C vs AS3) and 4 MEDIUM (task order, M1 docs vs M2 tick, mount vs home, test-first notes) fixed; prose/task-list only |
+| Tasks review | 1 | tasks.md, milestones | f8a94ddf6 | 893ed26f20eb272e8a1574de8cdaf6fe034c8fdd:f8a94ddf620220ccd11a592b6644bb6b2a5a3d57 | CHANGES: 1 MAJOR fixed (user-guide task T020 moved to M1), 2 MINOR fixed; prose/task-list only, no re-review |
 
 ## Declined review findings
 

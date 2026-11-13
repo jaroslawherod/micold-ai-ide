@@ -37,7 +37,7 @@ A pod daemon gets no `[[github.tokens]]` today. Add, behind a per-daemon opt-in 
 - [x] **III. Worktree Integration**: no file/VCS operation outside the daemon's existing paths; the project repositories are read from the daemon's projects (R3).
 - [x] **IV. Local-First**: tokens stay in the local PAT store; leave the device only into the user's own cluster, only on explicit per-daemon opt-in (FR-008). Works offline for everything but the cluster.
 - [x] **V. Rust + iced**: `github_tokens` is a `bool` field with a serde default; the delivered set is a typed `PodGithubTokens` (R4, data-model) so a token without a file path is unrepresentable.
-- [x] **VI. Cross-Platform**: the PAT store and its owner-only rules are the existing abstraction; delivery code has no `cfg` of its own; the test is Linux-only by nature (kind), CI builds all three.
+- [x] **VI. Cross-Platform**: the PAT store and its owner-only rules are the existing abstraction; the loose-mode check is one `#[cfg(unix)]` helper (no-op elsewhere) in the delivery module, no other platform code; the test is Linux-only by nature (kind), CI builds all three.
 - [x] **VII. Documentation**: `docs/user-guide/kubernetes-daemons.md` (new tick, exposure wording, the fixed "Until you paste a GitHub token" paragraph) and `docs/user-guide/settings.md#github-tokens`, same change; quickstart row 11 of `specs/1002-sandbox-scoped-token/quickstart.md` updated.
 - [x] **VIII. Reusable UI**: the tick reuses the form's existing checkbox-row builder used by the allowed-credentials list in `ui/settings/daemons.rs`; no feature-local widget.
 
