@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1858_worktree-parent-m1-persist-and-expose-the-parent
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: full gate, PR
+- **Next step**: merge (CI)
 
 ## Pull requests
 
@@ -42,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 1 | origin/main...HEAD | 11d635f5 | d7c7f1d4eb34:11d635f5ac23 | CHANGES: T011 no test (task text updated, drift-M1.md), T004/T007 path drift (drift-M1.md), mutant evidence (daemon mutants added to cycle log) |
 | A | 1 | M1 | 337f121e09c146f3f3eaf9a369088dabb4bcffd4 | 6575cda573337d5cac492ec5d86db857ba0283ff:337f121e09c146f3f3eaf9a369088dabb4bcffd4 | MINOR-ONLY after triage (findings declined with reasons, F1/F2 follow-up) |
 | B | 1 | M1 | 337f121e09c146f3f3eaf9a369088dabb4bcffd4 | 6575cda573337d5cac492ec5d86db857ba0283ff:337f121e09c146f3f3eaf9a369088dabb4bcffd4 | CHANGES fixed (docs, drift record, daemon mutants, test fixes); not re-run |
+| B | 2 | M1 | 73605a1b51507be22bd169b6576566de44db6462 | b198666fb3c888f7c13fa1797ce5011f87c6f28c:73605a1b51507be22bd169b6576566de44db6462 | CLEAN (round 2 sonnet on fix diff; daemon worktree_parent 13 passed) |
+| A | 2 | M1 | 73605a1b51507be22bd169b6576566de44db6462 | b198666fb3c888f7c13fa1797ce5011f87c6f28c:73605a1b51507be22bd169b6576566de44db6462 | MINOR-ONLY (round 1 findings declined; no code change since, only rebase onto main with the #1863 daemon-lookup fix) |
 
 ## Declined review findings
 
