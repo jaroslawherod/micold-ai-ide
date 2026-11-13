@@ -657,7 +657,7 @@ fn is_result(r: &structured::Received) -> bool {
     matches!(r.event.event, StructuredEvent::Result { .. })
 }
 
-/// Wait, within 10 s, until the stand-in has started `n` times in `dir`.
+/// Wait, within 30 s, until the stand-in has started `n` times in `dir`.
 async fn started_times(dir: &Path, n: usize) {
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while structured::starts(dir) < n {
