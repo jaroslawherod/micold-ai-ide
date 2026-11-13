@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1813
 - **Worktree branch**: feat/1813_autopilot-supervisor-m2-supervisor-skill-that
 - **Started**: 2026-11-12
-- **Phase**: tasks
-- **Next step**: review tasks, gate, design PR
+- **Phase**: design-pr
+- **Next step**: wait for CI, merge design PR, then M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open | … |
+| #1865 | Design | open | … |
 
 ## Milestones
 
