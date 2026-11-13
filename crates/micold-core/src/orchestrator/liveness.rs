@@ -28,6 +28,7 @@ impl Heartbeat {
     /// been reported expired (it is live again).
     pub fn answered(&mut self, now: Instant) -> bool {
         self.keepalive.on_daemon_frame(now);
+        self.last_probe = now;
         std::mem::take(&mut self.expired)
     }
 
@@ -41,6 +42,7 @@ impl Heartbeat {
             }
             KeepaliveAction::Expired if !self.expired => {
                 self.expired = true;
+                self.last_probe = now;
                 KeepaliveAction::Expired
             }
             KeepaliveAction::Expired => {

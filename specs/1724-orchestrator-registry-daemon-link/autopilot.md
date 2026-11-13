@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
 - **Phase**: milestone M2
-- **Next step**: scoped gate + review A/B, full gate, push, open M2 PR
+- **Next step**: full gate, push, open M2 PR
 
 ## Pull requests
 
@@ -57,6 +57,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review A | 1 | M1 | 5c59d3f85a518f02f1c7905c62fdf46deac74115 | 199f867e401c566658aba6d806dc0ce1497f0bfa:5c59d3f85a518f02f1c7905c62fdf46deac74115 | CHANGES: fixed accept-error exit, stderr tracing, vacuous child test; declined Ping/offline/read-timeout (M2), VersionMismatch (M3), auth, MINORs |
 | Review B | 1 | M1 | 5c59d3f85a518f02f1c7905c62fdf46deac74115 | d6cc4d875c0d02cea290fa072f377ffe5504906a:32a0514a3f960be76b65f4e701e38e0a2bc4f516 | CHANGES: 3 MAJOR fixed by drift-M1.md, tdd/cycle-log.md (no red captured, recorded), Verify via full gate; MINOR declined |
 | Review A | 2 | 1849 | dc4be4463cf3af17723b84edf3f7f83fce9f37ce | c2dde15b7b31e2f5255141b5a33838fd770ea022:dc4be4463cf3af17723b84edf3f7f83fce9f37ce | CLEAN: round-1 fixes hold, declined reasons stand |
+| Review A | 1 | M2 | f55a3107f | 39c243ff36055d9c49d128dc0e59cd7ca0cd59a7:f55a3107ffe3b3fd7538a51692d4c4e49e7dd753 | CHANGES: fixed F3 (bounded sends), F5 (probe clock reset), scoped-gate liveness tests; declined F1/F2/F4/F6 |
+| Review B | 1 | M2 | f55a3107f | same | CHANGES: 2 MAJOR accepted as recorded deviations (no red for T017-T022, T022 arm vacuous; see cycle-log, drift-M2); Verify run by full gate |
 | Review B | 2 | 1849 | dc4be4463cf3af17723b84edf3f7f83fce9f37ce | c2dde15b7b31e2f5255141b5a33838fd770ea022:dc4be4463cf3af17723b84edf3f7f83fce9f37ce | CLEAN: Verify 37+11 pass; MINOR drift note added |
 
 ## Declined review findings
@@ -64,6 +66,9 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | Spec review 1 | F3: three open markers block testability | Template allows three; clarify unit resolves them |
+| M2 | Review A 1 | F1/F2: transport end or Goodbye holds the id slot until the 9 s deadline | Spec and plan: a drop is silence, health stays until the deadline; releasing a closed-transport slot for a redial is the claim table of M4 (T031+) |
+| M2 | Review A 1 | F4 snapshots discarded; F6 no dialer answers LinkPing | Saver lands in M5; the dialer is outside #1724 |
+| M2 | Review B 1 | F1 retroactive red; F2 vacuous arm tests | Already recorded in cycle-log and drift-M2; the heartbeat behaviours are covered by non-vacuous tests (two failed and were fixed in this round) |
 | tasks | analyze | F10 split T014/T010; F14 move T041 to M1; F16 dup note | Each task is one coherent file pair; the no-outbound proof needs the whole feature; T018/T021 mention is harmless |
 
 ## Handover
