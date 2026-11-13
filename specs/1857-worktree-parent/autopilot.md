@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #… | in-progress |
+| M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #PR | in-review |
 
 ## Decisions
 
@@ -36,9 +36,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | A | 1 | origin/main...HEAD | 11d635f5 | d7c7f1d4eb34:11d635f5ac23 | 9 findings, none fixed (declined, see below; F1/F2 are real narrow races) |
 | B | 1 | origin/main...HEAD | 11d635f5 | d7c7f1d4eb34:11d635f5ac23 | CHANGES: T011 no test (task text updated, drift-M1.md), T004/T007 path drift (drift-M1.md), mutant evidence (daemon mutants added to cycle log) |
+| A | 1 | M1 | 337f121e09c146f3f3eaf9a369088dabb4bcffd4 | 6575cda573337d5cac492ec5d86db857ba0283ff:337f121e09c146f3f3eaf9a369088dabb4bcffd4 | MINOR-ONLY after triage (findings declined with reasons, F1/F2 follow-up) |
+| B | 1 | M1 | 337f121e09c146f3f3eaf9a369088dabb4bcffd4 | 6575cda573337d5cac492ec5d86db857ba0283ff:337f121e09c146f3f3eaf9a369088dabb4bcffd4 | CHANGES fixed (docs, drift record, daemon mutants, test fixes); not re-run |
 
 ## Declined review findings
 
