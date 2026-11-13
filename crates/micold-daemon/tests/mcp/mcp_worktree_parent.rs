@@ -323,7 +323,8 @@ async fn deleting_the_parent_leaves_children_removed_and_a_same_name_worktree_ad
         (Some("w"), Some("removed")),
         "the child keeps the last name and no error is raised"
     );
-    f.create(sid(1), "w", json!({"mode": "existing_local"})).await;
+    f.create(sid(1), "w", json!({"mode": "existing_local"}))
+        .await;
     assert_eq!(parent_of(&f.row("c1").await), (Some("w"), Some("removed")));
     assert_eq!(
         parent_of(&f.row("w").await),
