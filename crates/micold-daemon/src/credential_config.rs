@@ -334,7 +334,7 @@ mod tests {
             std::fs::write(
                 dir.path().join("daemon.toml"),
                 format!(
-                    "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = \"{d}\"\n\n[[github.tokens]]\nname = \"any\"\ntoken_file = \"{d}/any.tok\"\nhost = \"http://forge.test\"\n",
+                    "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = '{d}'\n\n[[github.tokens]]\nname = \"any\"\ntoken_file = '{d}/any.tok'\nhost = \"http://forge.test\"\n",
                     d = dir.path().display()
                 ),
             )
