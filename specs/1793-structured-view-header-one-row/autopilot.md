@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M4 (gate pending)
-- **Next step**: finish M4 from Handover (gate, visual pass, PR)
+- **Phase**: milestone M4 (in review)
+- **Next step**: orchestrator waits on CI and merges PR for M4
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
 | #1827 | M2 | merged | cb41c216e778ce87dcc7379f7852f3ffa85fa3bf |
 | #1847 | M3 | merged | 747d325b504576e2bc43d96c2804e9ee430c09d7 |
+| #1869 | M4 | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
 | M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
 | M3 | T017–T020 | full | Single `+` menu | #1847 | merged |
-| M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
+| M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | #1869 | in review |
 
 ## Decisions
 
@@ -66,7 +67,7 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-M4 code, tests, docs, drift-M4.md done (T021-T027, T029, T031, T034, T035 ticked); rebased onto origin/main (M3 merge 747d325b5). Reviews A and B round 1 CLEAN at head 789204a6b, verdicts recorded. Not done: full gate (queued 55+ min behind ~20 other worktrees' builds on the shared build lock; detached log gate2-1794557599.log in the unit scratchpad, may still be running, check GATE_EXIT before starting another), visual pass (not run; needs a build too), push, PR. Next: wait for or rerun `mise run gate` (or, as gate.md allows when queued past 15 min, scoped gate then record the tree and say so in the PR body), run the visual-pass skill via autopilot-worker if possible, push plain, open PR `feat(1793): one-row structured view header (#1793)` body ending `Refs #1793`, record PR in ledger, Handover None. Nothing pushed yet; branch has no PR.
+None.
 
 ## Open escalation
 
