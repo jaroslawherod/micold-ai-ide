@@ -217,6 +217,11 @@ mod tests {
         );
         forget(&mut ids, &mut links, "w");
         assert_eq!(name_of(&views(&ids, &links), "d").1, ParentState::Removed);
+        let child = ids["d"];
+        assert!(
+            links[&child].removed,
+            "the persisted link is flagged, not only reported through the missing id"
+        );
     }
 
     #[test]
