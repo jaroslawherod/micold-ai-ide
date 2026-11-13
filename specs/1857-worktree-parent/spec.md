@@ -20,6 +20,16 @@ Terms: the **parent** of a worktree is the worktree whose session created it. Th
 the worktree named `default`. A worktree with no recorded parent is **unparented** (created by the
 user in the app, or before this feature).
 
+## Clarifications
+
+### Session 2026-11-13
+
+- Q: Is the directory name a safe identity for the link, given FR-007 (no re-adoption of a recreated same-name parent)? → A: No. A rename keeps the directory name, but a deleted and recreated worktree reuses it. Each worktree gets a stable id recorded in app state when first seen (lazily, for worktrees that predate this feature); the link stores the parent's id and resolves to its current name for display. Deleting through the app or tool marks the children removed at once; a worktree removed outside the app is marked at the next reconcile.
+- Q: Does a parent filter return direct children only or all descendants? → A: Direct children only; a caller walks deeper levels with further calls. `default` is a valid filter value.
+- Q: Who may change a parent after creation? → A: Nobody in this feature (FR-004). Deferred to a later issue if a supervisor needs to adopt runs.
+- Q: Sidebar nesting or label? → A: Label plus a filter (see Assumptions); no user question needed, the repo's state grouping and stable ordering rule nesting out.
+- Q: Keep `origin`? → A: Yes, unchanged and independent (FR-011).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A supervisor finds its own runs (Priority: P1)
@@ -175,7 +185,7 @@ state, a session in `default` reports none.
 - **FR-007**: A new worktree with the same name as a deleted parent MUST NOT be treated as that
   parent (no re-adoption).
 - **FR-008**: The worktree listing MUST return each worktree's parent and parent state (`known` or
-  `removed`), omitting both for an unparented worktree, and MUST allow filtering by parent.
+  `removed`), omitting both for an unparented worktree, and MUST allow filtering by parent (direct children only; `default` is a valid value).
 - **FR-009**: The session listing and single-session lookup MUST return the parent and parent
   state of the worktree a session runs in, omitting both when there is none.
 - **FR-010**: The sidebar MUST label every worktree that has a parent with the parent's current
@@ -189,6 +199,9 @@ state, a session in `default` reports none.
 - **FR-013**: The user guide for the agent tools MUST describe the parent, its default, the
   override, the removed state and the filter, and the supervisor skills MUST be told to use the
   parent to find their runs and to leave runs with another parent alone.
+
+- **FR-014**: Each worktree MUST have a stable identity that survives renames and is never reused
+  by a later worktree of the same name; the parent link (FR-005, FR-007) refers to that identity.
 
 ### Key Entities
 
@@ -215,9 +228,9 @@ state, a session in `default` reports none.
 
 ## Assumptions
 
-- The identity of a worktree is its directory name under the project's agent worktree folder; a
-  rename changes only the display name, so a link keyed on that identity needs no rewrite. A
-  separate stable id is not needed.
+- A rename changes only a worktree's display name (the directory name stays), but the directory
+  name can be reused by a later worktree, so the link is keyed on a stable worktree id kept in app
+  state, not on the name. A worktree outside the app's knowledge when first seen gets its id then.
 - The parent is stored with the project's other per-worktree app state (next to display names), so
   it follows the project through restart and relocation. A git-config location is not used.
 - Re-parenting is out of scope: the user's recourse is to delete and recreate the worktree. Revisit
