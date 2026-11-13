@@ -745,6 +745,7 @@ impl StoredProjectState {
 
 /// How a single project's state file resolved (bugfix BUG-001; mirrors [`LoadStatus`] but scoped
 /// to one project rather than the whole catalog, per FR-012a's fault-isolation guarantee).
+#[allow(clippy::large_enum_variant)] // a transient load result, never stored in a collection
 enum ProjectStateLoad {
     /// The file existed and parsed — its data is authoritative for this project.
     Found(StoredProjectState),
