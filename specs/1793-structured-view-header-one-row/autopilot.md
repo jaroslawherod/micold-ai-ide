@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M4 (in progress)
-- **Next step**: continue M4 from Handover
+- **Phase**: milestone M4 (gate pending)
+- **Next step**: finish M4 from Handover (gate, visual pass, PR)
 
 ## Pull requests
 
@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 Review A (high) | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
 | M3 Review B (sonnet) | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
 | M3 Review A+B | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
+| M4 Review A (high) | 1 | M4 | 789204a6b1e85e98c8e3f934e72d35d24125d961 | b43fab3189bb8d6f288aafaa8005993809cd1b42:789204a6b1e85e98c8e3f934e72d35d24125d961 | CLEAN (2 MINOR: hidden_count O(n) per view, plus_anchor clamp at width 0; left) |
+| M4 Review B (sonnet) | 1 | M4 | 789204a6b1e85e98c8e3f934e72d35d24125d961 | b43fab3189bb8d6f288aafaa8005993809cd1b42:789204a6b1e85e98c8e3f934e72d35d24125d961 | CLEAN (2 MINOR: gate written after code, FR-011 follow-up recorded; left) |
 
 ## Declined review findings
 
@@ -64,7 +66,7 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 ## Handover
 
-None.
+M4 code, tests, docs, drift-M4.md done (T021-T027, T029, T031, T034, T035 ticked); rebased onto origin/main (M3 merge 747d325b5). Reviews A and B round 1 CLEAN at head 789204a6b, verdicts recorded. Not done: full gate (queued 55+ min behind ~20 other worktrees' builds on the shared build lock; detached log gate2-1794557599.log in the unit scratchpad, may still be running, check GATE_EXIT before starting another), visual pass (not run; needs a build too), push, PR. Next: wait for or rerun `mise run gate` (or, as gate.md allows when queued past 15 min, scoped gate then record the tree and say so in the PR body), run the visual-pass skill via autopilot-worker if possible, push plain, open PR `feat(1793): one-row structured view header (#1793)` body ending `Refs #1793`, record PR in ledger, Handover None. Nothing pushed yet; branch has no PR.
 
 ## Open escalation
 
