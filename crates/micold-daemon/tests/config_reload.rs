@@ -131,12 +131,7 @@ fn every_restart_key_changed_alone_sets_restart_needed_and_names_itself() {
         ("daemon.log", file_with("t", "host", "log = \"debug\"", "")),
         (
             "listen",
-            file_with(
-                "t",
-                "host",
-                "",
-                &format!("[listen]\nsocket = \"{t}/l.sock\""),
-            ),
+            file_with("t", "host", "", &format!("[listen]\nsocket = '{t}/l.sock'")),
         ),
         (
             "auth",
@@ -144,12 +139,12 @@ fn every_restart_key_changed_alone_sets_restart_needed_and_names_itself() {
                 "t",
                 "host",
                 "",
-                &format!("[auth]\nclient_token_file = \"{}\"", token.display()),
+                &format!("[auth]\nclient_token_file = '{}'", token.display()),
             ),
         ),
         (
             "ssh",
-            file_with("t", "host", "", &format!("[ssh]\ndir = \"{t}\"")),
+            file_with("t", "host", "", &format!("[ssh]\ndir = '{t}'")),
         ),
         (
             "storage.clone_root",
@@ -161,7 +156,7 @@ fn every_restart_key_changed_alone_sets_restart_needed_and_names_itself() {
                 "t",
                 "host",
                 "",
-                &format!("[startup]\nscript_file = \"{}\"", script.display()),
+                &format!("[startup]\nscript_file = '{}'", script.display()),
             ),
         ),
     ];
