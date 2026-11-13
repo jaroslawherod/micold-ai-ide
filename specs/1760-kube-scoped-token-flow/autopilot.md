@@ -55,7 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Tasks, milestones, analyze fixes and the tasks review are committed (HEAD 9562dc383+). Not pushed: gate-hook refuses push until `mise run gate` is green (the classifier denied hand-recording the tree). A detached `mise run gate` was started, log `$SCRATCHPAD/gate.log` of the previous unit (/tmp/claude-1000/.../c47cee65-.../scratchpad/gate.log), queued behind another worktree's build lock. Next: when GATE_EXIT=0 (or rerun `mise run gate` detached), `git push --force-with-lease -u origin HEAD`, open the design PR (title `docs(1760): specify and plan kube scoped token flow (#1760)`, body ends `Refs #1760`), record its number in the ledger.
 
 ## Open escalation
 
