@@ -18,6 +18,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
+use alacritty_terminal::term::TermMode;
 use mcp_support::*;
 use micold_core::mcp::errors::ErrorCategory;
 use micold_core::protocol::messages::{DaemonMsg, ReviewEditOp};
@@ -178,7 +179,7 @@ impl Fixture {
         let target = match tool {
             "send_session_input" => sibling_of(caller),
             "interrupt_session" => sibling(caller, SHELL),
-            "report_review_comment" => return Some(self.sent_comment().await),
+            "report_review_comment" => return Some(self.sent_comment(caller).await),
             _ => return None,
         };
         let started = self
@@ -192,8 +193,23 @@ impl Fixture {
         None
     }
 
+    /// Wait until every running AI session of worktree `b` reports bracketed paste: the stand-in
+    /// turns it on only after it starts, and a review send refuses a terminal that has not.
+    async fn await_bracketed_paste(&self, caller: SessionId) {
+        for id in [caller, sibling_of(caller)] {
+            let ready = wait_until(std::time::Duration::from_secs(30), || {
+                self.state
+                    .primary_pty(id)
+                    .filter(|pty| pty.is_alive())
+                    .is_none_or(|pty| pty.term().lock().mode().contains(TermMode::BRACKETED_PASTE))
+            })
+            .await;
+            assert!(ready, "session {} never turned bracketed paste on", id.0);
+        }
+    }
+
     /// Add a comment to worktree `b` and send it; the arguments of a report on it.
-    async fn sent_comment(&self) -> Value {
+    async fn sent_comment(&self, caller: SessionId) -> Value {
         let project = self._project.path();
         self.state
             .review_edit(
@@ -210,6 +226,7 @@ impl Fixture {
                 },
             )
             .expect("a valid comment is accepted");
+        self.await_bracketed_paste(caller).await;
         let sent = self.state.review_send(project, "b", &[], None).await;
         assert!(sent.is_ok(), "the send is delivered: {sent:?}");
         let reference = self
