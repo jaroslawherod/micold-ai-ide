@@ -140,7 +140,10 @@ impl std::fmt::Debug for NonEmptyText {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     Whoami,
-    ListWorktrees,
+    /// `parent` narrows the list to that worktree's direct children (spec 1857, FR-008).
+    ListWorktrees {
+        parent: Option<WorktreeRef>,
+    },
     ListBranches,
     ListSessions {
         worktree: Option<WorktreeRef>,
@@ -238,6 +241,8 @@ pub enum CreateWorktreeRequest {
         mode: CreateMode,
         /// The session created with the worktree (776), when the call defined one.
         start: Option<StartSession>,
+        /// The explicit parent (spec 1857, FR-002); `None` takes the caller's worktree.
+        parent: Option<WorktreeRef>,
     },
     /// The form's inputs: at least one of the four fields, never a `branch`, `mode` or `remote`.
     /// `name` is the description the branch and directory are derived from.
@@ -248,6 +253,8 @@ pub enum CreateWorktreeRequest {
         github_issue: Option<u32>,
         /// The session created with the worktree (776), when the call defined one.
         start: Option<StartSession>,
+        /// The explicit parent (spec 1857, FR-002); `None` takes the caller's worktree.
+        parent: Option<WorktreeRef>,
     },
 }
 
@@ -257,6 +264,14 @@ impl CreateWorktreeRequest {
         match self {
             CreateWorktreeRequest::Literal { start, .. }
             | CreateWorktreeRequest::Derived { start, .. } => start.as_ref(),
+        }
+    }
+
+    /// The explicit parent the call named, if any.
+    pub fn parent(&self) -> Option<&WorktreeRef> {
+        match self {
+            CreateWorktreeRequest::Literal { parent, .. }
+            | CreateWorktreeRequest::Derived { parent, .. } => parent.as_ref(),
         }
     }
 
@@ -309,7 +324,7 @@ impl Operation {
     pub fn tool_name(&self) -> &'static str {
         match self {
             Operation::Whoami => "whoami",
-            Operation::ListWorktrees => "list_worktrees",
+            Operation::ListWorktrees { .. } => "list_worktrees",
             Operation::ListBranches => "list_branches",
             Operation::ListSessions { .. } => "list_sessions",
             Operation::GetSession { .. } => "get_session",
@@ -333,7 +348,10 @@ impl Operation {
     pub fn audit_target(&self) -> String {
         match self {
             Operation::Whoami | Operation::ListBranches => String::new(),
-            Operation::ListWorktrees => String::new(),
+            Operation::ListWorktrees { parent } => parent
+                .as_ref()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default(),
             Operation::ListResumableSessions { worktree, .. } => worktree
                 .as_ref()
                 .map(|w| w.as_str().to_string())
@@ -402,6 +420,11 @@ fn worktree_property() -> Value {
         "description": "A worktree ref from list_worktrees (not \"default\")."})
 }
 
+/// A `parent` argument (spec 1857): `default` or a worktree ref.
+fn parent_property(description: &str) -> Value {
+    json!({"type": "string", "minLength": 1, "description": description})
+}
+
 /// The shipped tools, in the order `tools/list` names them.
 const TOOLS: &[Tool] = &[
     Tool {
@@ -418,8 +441,11 @@ const TOOLS: &[Tool] = &[
         name: "list_worktrees",
         description: "List the project's worktrees as the app's sidebar shows them: \"default\" \
             (the project root) first, then each worktree with its branch, status and how many \
-            sessions it hosts. Every worktree is listed.",
-        properties: no_properties,
+            sessions it hosts. Every worktree is listed. A worktree created by a session carries \
+            parent (the worktree whose session created it, or \"default\") and parent_state \
+            (\"known\", or \"removed\" once that parent was deleted; parent then keeps its last \
+            name). Pass parent to list only that worktree's direct children.",
+        properties: || json!({"parent": parent_property("List only the direct children of this worktree.")}),
         required: &[],
         read_only: true,
         destructive: false,
@@ -556,6 +582,10 @@ const TOOLS: &[Tool] = &[
                 "github_issue": {"type": "integer", "minimum": 1,
                     "description": "Derived only: a GitHub issue number. Fills ticket, name and type from the open issue; explicit values win. \
                         The result's issue object reports its relationships."},
+                "parent": parent_property("The new worktree's parent, recorded when it is \
+                    created and never changed after. Default: the caller's own worktree \
+                    (\"default\" for a session in the project root). Refused unless it is \
+                    \"default\" or a worktree of this project."),
                 "ai_cli": {"type": "string",
                     "enum": AiCli::ALL.map(AiCli::tool_name),
                     "description": "The AI CLI of the worktree's session; with it or prompt the \
@@ -830,7 +860,9 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
     }
     Ok(match name {
         "whoami" => Operation::Whoami,
-        "list_worktrees" => Operation::ListWorktrees,
+        "list_worktrees" => Operation::ListWorktrees {
+            parent: optional_worktree(args, "parent")?,
+        },
         "list_branches" => Operation::ListBranches,
         "list_sessions" => Operation::ListSessions {
             worktree: optional_worktree(args, "worktree")?,
@@ -910,6 +942,7 @@ fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRe
     // A blank prompt is no prompt, as for the dialog (feature 776); either field defines a session.
     let prompt = prompt.filter(|p| !p.trim().is_empty());
     let start = (ai_cli.is_some() || prompt.is_some()).then_some(StartSession { ai_cli, prompt });
+    let parent = optional_worktree(args, "parent")?;
     let literal = ["branch", "mode", "remote"]
         .into_iter()
         .filter(|k| present(k))
@@ -932,6 +965,7 @@ fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRe
             name: optional_string(args, "name")?,
             mode: create_mode(args)?,
             start,
+            parent,
         });
     }
     if present("mode") || present("remote") {
@@ -963,6 +997,7 @@ fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRe
         name,
         github_issue,
         start,
+        parent,
     })
 }
 

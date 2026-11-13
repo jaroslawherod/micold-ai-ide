@@ -112,3 +112,4 @@ pub mod workspace;
 pub mod worktree;
 pub mod worktree_branches;
 pub mod worktree_guard;
+pub mod worktree_parent;

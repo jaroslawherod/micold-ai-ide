@@ -15,6 +15,7 @@ mod mcp_create_worktree_setup;
 mod mcp_endpoint;
 mod mcp_lifecycle_tools;
 mod mcp_read_tools;
+mod mcp_worktree_parent;
 mod merged_branch_check;
 mod ops_extraction;
 mod remote_list;
