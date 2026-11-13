@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
+| #1871 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
-| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | PR_PLACEHOLDER | in review |
+| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | in review |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
