@@ -353,5 +353,29 @@ None.
 
 ## Open escalation
 
-None. (The category 5 non-convergence question is answered — see D12: allow a fourth close
-part.)
+**E1 — category 4, blocked by work outside my flow** (raised by the orchestrator, 2026-11-13).
+
+Question: PR #1855 (the close PR, the run's last) cannot merge because CI's `kubernetes daemon on
+a real cluster (linux)` job is red, and that redness is not this flow's. Do you want to (a) wait
+for the kube job to be fixed on `main` and then merge #1855, (b) merge #1855 with the kube job
+failing (an owner override of the `ci complete` gate), or (c) have this flow investigate and fix
+the kube test harness itself (out of this flow's ownership)?
+
+Recommended: (a) wait — the breakage is in shared CI infrastructure, and #1855 is docs plus one
+already-reviewed client file, so nothing in it is urgent.
+
+Evidence:
+- Run 43287989595: every other job passes (classify, lint, test on all three OSes, linux-daemons,
+  docs, assertions); only `kube-cluster` fails, so `ci complete` prints `BLOCKED kube-cluster`.
+- Every `kube_real_*` test panics at `crates/micold-client/tests/kube_real_support/mod.rs:403`
+  with `build micold-daemon first (cargo build -p micold-daemon):
+  .../target/debug/build/micold-client/<hash>/micold-daemon` — the helper cannot find the daemon
+  binary beside the test executable. 7 targets failed; 0 tests ran.
+- `daemon_binary()` at that line is from commit e0d251344f (2026-10-18); no commit on this branch
+  touches `crates/micold-client/tests/kube_real_support/`.
+- `main` at the identical SHA c1af633993e0d08fce04690906bf0074fe12df1d passed this job in run
+  43277809829 (2026-11-12 18:14) and failed it in run 43358686770 (2026-11-13 03:23), which also
+  failed container-daemon (docker and podman), windows and macos — a shared-infrastructure wobble,
+  not a code change.
+- Rerun once per `tasks/ci.md` (`gh run rerun 43287989595 --failed`): the job failed again with
+  the same panic (job 131768536328).
