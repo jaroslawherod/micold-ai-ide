@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
 - **Phase**: milestone M2
-- **Next step**: full gate, push, open M2 PR
+- **Next step**: wait for M2 CI and merge, then M3
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
-| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #… | pending |
+| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | PR_PLACEHOLDER | in review |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
@@ -60,6 +60,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review A | 1 | M2 | f55a3107f | 39c243ff36055d9c49d128dc0e59cd7ca0cd59a7:f55a3107ffe3b3fd7538a51692d4c4e49e7dd753 | CHANGES: fixed F3 (bounded sends), F5 (probe clock reset), scoped-gate liveness tests; declined F1/F2/F4/F6 |
 | Review B | 1 | M2 | f55a3107f | same | CHANGES: 2 MAJOR accepted as recorded deviations (no red for T017-T022, T022 arm vacuous; see cycle-log, drift-M2); Verify run by full gate |
 | Review B | 2 | 1849 | dc4be4463cf3af17723b84edf3f7f83fce9f37ce | c2dde15b7b31e2f5255141b5a33838fd770ea022:dc4be4463cf3af17723b84edf3f7f83fce9f37ce | CLEAN: Verify 37+11 pass; MINOR drift note added |
+| Review A | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: 3 MINOR (send timeout, ignore-arm tests are guards, ping-reset assertion) not fixed |
+| Review B | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: F1 MAJOR (no red for T017-T022) declined, gap recorded in cycle-log, T022 waiver in drift-M2; heartbeat 4 pass; plan-drift clean; cadence note added |
 
 ## Declined review findings
 
