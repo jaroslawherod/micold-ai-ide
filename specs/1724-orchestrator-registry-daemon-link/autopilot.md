@@ -80,21 +80,16 @@ None.
 
 ## Open escalation
 
-None. <or, one question:>
-
 ```
-- **Category**: <number and name from rules/escalation.md>
-- **Question**: <one sentence>
+- **Category**: 5 Non-convergence, blocked by work outside my flow (red main)
+- **Question**: PR 1871 (M2) is red only in jobs red on main too; merge it over them, or wait for main to be fixed?
 - **Options**:
-  1. <label> (Recommended) — <description>
-  2. <label> — <description>
-- **Recommended**: <label> — <reason>
-- **Evidence**: <paths, commands, results>
-- **Banner**: sent <date>
+  1. Fix 1863 first on its own PR, then rerun 1871 (Recommended) - the container (docker, podman) and kubernetes real-runtime tests find micold-daemon by walking up from current_exe, which breaks under the rustc 1.100 test layout; same failure on main run 43358686770.
+  2. Merge 1871 over the red jobs - they do not touch M2 code (orchestrator link, registry, liveness, protocol).
+- **Recommended**: Fix 1863 first - keeps main green and the gate honest.
+- **Evidence**: run 43402845520: docker job sandbox_real.rs:364 "no micold-daemon build to copy into the container", kube_real_support/mod.rs:403; identical on main 43358686770 (podman, docker, kubernetes). Issue 1863 open. The sandbox against a real runtime job failed at sandbox_real_lifecycle.rs:243 (sandbox_real_no_outbound_still_resolves_names, DNS), a micold-core sandbox test M2 does not touch; main's run did not fail it, so likely a flake; rerun issued (gh run rerun 43402845520 --failed).
+- **Banner**: sent 2026-11-13
 ```
-
-<A batch: `### Q1`, `### Q2`... each holding Question, Options, Recommended and Evidence; Category and
-Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
 
