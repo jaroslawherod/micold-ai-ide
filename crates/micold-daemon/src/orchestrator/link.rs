@@ -169,6 +169,19 @@ where
     steady(shared, framed, link).await
 }
 
+/// Send one frame, giving up after the liveness deadline: a peer that keeps the socket open but
+/// stops reading must not stall the loop, or the timer would never mark it offline. `false` when
+/// the send failed or timed out.
+async fn send_bounded<S>(framed: &mut Framed<S, DaemonCodec>, msg: DaemonMsg) -> bool
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    matches!(
+        tokio::time::timeout(LIVENESS_DEADLINE, framed.send(Frame::Control(msg))).await,
+        Ok(Ok(()))
+    )
+}
+
 /// The steady state (contracts/link.md, step 4): every inbound frame is an answer, a timer sends
 /// `LinkPing` when the link is idle and marks the daemon `offline` when it has been silent past
 /// the deadline. After `Expired` the loop keeps reading, so a later frame brings the daemon back
@@ -210,7 +223,7 @@ where
                     Frame::Control(ClientMsg::Goodbye) => open = false,
                     Frame::Control(msg) => {
                         if let Some(answer) = query::not_hosted(&msg) {
-                            if framed.send(Frame::Control(answer)).await.is_err() {
+                            if !send_bounded(&mut framed, answer).await {
                                 open = false;
                             }
                         }
@@ -228,7 +241,7 @@ where
                     _ if !open && expired => return Ok(()),
                     LinkAction::SendPing if open => {
                         nonce += 1;
-                        if framed.send(Frame::Control(DaemonMsg::LinkPing { nonce })).await.is_err() {
+                        if !send_bounded(&mut framed, DaemonMsg::LinkPing { nonce }).await {
                             open = false;
                         }
                     }

@@ -5,7 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 
-use crate::support::conn::{connect, service};
+use crate::conn::{connect, service};
 
 #[tokio::test]
 async fn a_stray_link_pong_is_ignored_and_the_connection_stays_up() {
