@@ -291,6 +291,19 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),
+    // Feature 1857: the worktree ids and parent links held against the path go with it.
+    (
+        "project",
+        "workspace.worktree_ids",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
+        "workspace.worktree_parents",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
 ];
 
 /// The shared source-text scan (feature 028, T042): what every operation on `State` writes,
