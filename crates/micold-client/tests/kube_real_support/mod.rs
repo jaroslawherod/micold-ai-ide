@@ -397,8 +397,12 @@ pub fn daemon_binary() -> PathBuf {
     if let Some(p) = std::env::var_os("MICOLD_DAEMON_BIN") {
         return PathBuf::from(p);
     }
-    daemon_bin::built_daemon()
-        .expect("build micold-daemon first: none above the test executable's directory")
+    daemon_bin::built_daemon().unwrap_or_else(|| {
+        panic!(
+            "build micold-daemon first; none above {:?}",
+            std::env::current_exe()
+        )
+    })
 }
 
 /// One client: its key directory and the environment a Kubernetes start needs, wired to the live
