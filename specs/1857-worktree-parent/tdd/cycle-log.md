@@ -29,3 +29,13 @@ persisted but every read path also goes through the missing id. Added an asserti
 flag to `forgetting_a_child_drops_its_entries_and_a_parent_tombstones` (red evidence: with `link.removed = false`, 8 passed and 1 FAILED, that test; reverted).
 The second survivor is killed by the same core unit test (8 passed, 1 FAILED:
 `forgetting_a_child_drops_its_entries_and_a_parent_tombstones`).
+
+## Daemon-wiring mutants (review B F3)
+
+Each edit reverted after the run; `-p micold-daemon --test mcp worktree_parent`:
+
+| Mutant | Result |
+|---|---|
+| `refresh_worktrees` never calls `reconcile_worktree_parents` (state.rs) | 2 FAILED: `the_first_refresh_mints_an_id_for_every_live_worktree_and_keeps_them`, `a_worktree_removed_outside_the_app_tombstones_its_children_at_the_next_refresh` |
+| session rows lose the parent (mcp/tools.rs `session_row`) | 1 FAILED: `session_rows_carry_the_worktrees_parent_independent_of_origin` |
+| `ops::delete_worktree` does not call `forget_worktree_parent` | survived (13 passed): the refresh that follows every delete reconciles the same way, so the explicit forget is an equivalent mutant at this surface; it keeps the maps current when the refresh is skipped |

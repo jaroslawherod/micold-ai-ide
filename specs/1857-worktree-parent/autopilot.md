@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1858_worktree-parent-m1-persist-and-expose-the-parent
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: gate, reviews A and B, then PR
+- **Next step**: full gate, PR
 
 ## Pull requests
 
@@ -37,20 +37,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
+| A | 1 | origin/main...HEAD | 11d635f5 | d7c7f1d4eb34:11d635f5ac23 | 9 findings, none fixed (declined, see below; F1/F2 are real narrow races) |
+| B | 1 | origin/main...HEAD | 11d635f5 | d7c7f1d4eb34:11d635f5ac23 | CHANGES: T011 no test (task text updated, drift-M1.md), T004/T007 path drift (drift-M1.md), mutant evidence (daemon mutants added to cycle log) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | record after create leaves a window with no parent (F1) | Design in plan.md records after the create returns; a window of milliseconds; passing parent into the create path is a follow-up |
+| M1 | A | record retires a refresh-minted id, a concurrent child of the same parent turns removed (F2) | Same window; needs a concurrent create of a child within it; follow-up with F1 |
+| M1 | A | caller's worktree missing from the cached snapshot gives no parent (F3) | Spec'd: an unresolvable caller creates an unparented worktree (test `an_unresolvable_caller_creates_an_unparented_worktree`) |
+| M1 | A | store save does not merge on-disk ids/links (F4) | Only the daemon saves the workspace with these maps; follow-up if a client writer appears |
+| M1 | A | transient absence tombstones children (F7) | The documented R3 design; guarded by directory-exists check |
+| M1 | A | perf of views per read, clone in refresh, parent_choice ordering, 8-arg fn (F5, F6, F8, F9) | MINOR, taste |
 
 ## Handover
 
-Done (uncommitted-to-green; NOTHING COMPILED YET, the build lock was held by other worktrees for 20+ min): all M1 code and docs are written but never built or run.
-- core: `WorktreeId/ParentRef/ParentState/ParentLink` in `crates/micold-core/src/worktree.rs`; pure rules + unit tests in `crates/micold-core/src/worktree_parent.rs` (registered in lib.rs); `worktree_ids`/`worktree_parents` in `workspace.rs` and the per-project state in `store.rs` (+ `worktree_parent_tests` module); MCP schema/parse in `crates/micold-core/src/mcp/tools.rs` (`Operation::ListWorktrees { parent }`, `parent` on both `CreateWorktreeRequest` variants, `parent()` accessor); core tests updated (`mcp_tools_catalog.rs`, `mcp_policy.rs`).
-- daemon: `Catalog` methods (`reconcile_worktree_parents`, `record_worktree_parent`, `forget_worktree_parent`, `worktree_parent_views`, `worktree_ids`) in `catalog.rs`; `DaemonState` wrappers + reconcile call inside `refresh_worktrees` in `state.rs`; `forget_worktree_parent` in `ops::delete_worktree`; MCP `parent_choice`, `insert_parent`, `Context.parents`, `list_worktrees` filter, session rows, record after create in `crates/micold-daemon/src/mcp/tools.rs`.
-- daemon tests: `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs` (registered in `tests/mcp/main.rs`); includes the catalog tests (T004), US1-US3, US5.
-- docs: `docs/user-guide/agent-tools.md` (T010, T014, T022).
-Next step: (1) `cargo fmt`, then ONE detached `scripts/build-lock.sh cargo check --workspace --all-targets` (log in scratchpad; use hold.sh; a stale queued one of mine may still be waiting, ignore or let it run) and fix compile errors (likely spots: `refresh_worktrees` borrow of `gone` closure / `inner.catalog` in state.rs; `Context` literals; `WorktreeRef` import in daemon tools.rs; test imports in mcp_worktree_parent.rs). (2) run targeted tests: `scripts/build-lock.sh cargo test -p micold-core --lib worktree_parent`, `-p micold-core --test mcp_tools_catalog --test mcp_policy`, `-p micold-daemon --test mcp worktree_parent`; fix. (3) tick T001-T014, T020-T022 in tasks.md (none ticked yet), TDD cycle log not written (tests were written after code: say so). (4) scoped gate + review A in its shadow, review B, full gate, PR per verify.md/pr.md; PR title `feat(1857): record and expose the worktree parent (#1858)`, body ends `Refs #1858`. Open questions: none. Reviews run: none. PR: none opened. branch-start.sh already ran (rebased 4 commits onto origin/main).
+None.
 
 ## Open escalation
 
@@ -58,4 +61,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- Record the parent inside the create path (review A F1/F2): closes the window where a new worktree is visible without its link and a concurrent child of it can be tombstoned.
