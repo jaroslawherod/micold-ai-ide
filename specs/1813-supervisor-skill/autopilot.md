@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1813_autopilot-supervisor-m2-supervisor-skill-that
 - **Started**: 2026-11-12
 - **Phase**: design-pr
-- **Next step**: wait for CI, merge design PR, then M1
+- **Next step**: user merges #1865 over the red kube job; then M1
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D6 | design-pr | PR #1865 red on kube real-cluster job, also red on main; how to proceed? | Merge over the red job (user does the override; hook blocks `--admin`) | decided by user | AskUserQuestion 2026-11-13 |
 | D5 | plan | Plan review round 3 still found 2 MAJOR; accept hand fixes or one more round? | Accept fixes (commit 09892a167); no fourth round | decided by user | AskUserQuestion 2026-11-12 |
 
 ## Review rounds
