@@ -50,7 +50,7 @@ fn secret_fixture(dir: &Path, relative: &str, content: &str) -> (PathBuf, String
     #[cfg(unix)]
     mode(&secret, 0o600);
     let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
+        "[[github.tokens]]\nname = \"a\"\ntoken_file = '{}'\n",
         secret.display()
     );
     (secret, named)
@@ -245,7 +245,7 @@ fn an_invalid_orchestrator_table_keeps_the_last_configuration() {
     #[cfg(unix)]
     mode(&token, 0o600);
     let valid = format!(
-        "[orchestrator]\nurl = \"https://orch.example\"\nenrollment_token_file = \"{}\"\n",
+        "[orchestrator]\nurl = \"https://orch.example\"\nenrollment_token_file = '{}'\n",
         token.display()
     );
     let (_dir, file, runtime) = setup(&host("1", "info", &valid));
@@ -320,7 +320,7 @@ fn a_secret_that_is_not_there_yet_is_retried_and_reported_after_120_seconds() {
     let (dir, file, runtime) = setup(&host("1", "info", ""));
     let secret = dir.path().join("late-token");
     let named = format!(
-        "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
+        "[[github.tokens]]\nname = \"a\"\ntoken_file = '{}'\n",
         secret.display()
     );
     let start = Instant::now();
