@@ -1,1 +1,3 @@
-{"feature_directory":"specs/1786-sidebar-user-groups"}
+{
+  "feature_directory": "specs/1760-kube-scoped-token-flow"
+}
