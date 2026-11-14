@@ -51,6 +51,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 2 | M1 | 73605a1b51507be22bd169b6576566de44db6462 | b198666fb3c888f7c13fa1797ce5011f87c6f28c:73605a1b51507be22bd169b6576566de44db6462 | CLEAN (round 2 sonnet on fix diff; daemon worktree_parent 13 passed) |
 | A | 2 | M1 | 73605a1b51507be22bd169b6576566de44db6462 | b198666fb3c888f7c13fa1797ce5011f87c6f28c:73605a1b51507be22bd169b6576566de44db6462 | MINOR-ONLY (round 1 findings declined; no code change since, only rebase onto main with the #1863 daemon-lookup fix) |
 
+| A | 1 | M1b | 7318d57 | (code-review skill, high, no subagent tool) | 7 findings: list_resumable_sessions and list_branches scoped, scope computed in the blocking closure, redundant retain removed, `Scope::unrestricted()`, list_branches test added; 2 declined |
+| B | 1 | M1b | — | — | not run: this unit has no subagent tool; orchestrator to run the conformance review |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -60,6 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | caller's worktree missing from the cached snapshot gives no parent (F3) | Spec'd: an unresolvable caller creates an unparented worktree (test `an_unresolvable_caller_creates_an_unparented_worktree`) |
 | M1 | A | store save does not merge on-disk ids/links (F4) | Only the daemon saves the workspace with these maps; follow-up if a client writer appears |
 | M1 | A | transient absence tombstones children (F7) | The documented R3 design; guarded by directory-exists check |
+| M1b | A | `list_worktrees` `parent` filter is not scope-checked | An out-of-scope name returns an empty list, the same as an unknown name (documented); no leak |
+| M1b | A | a worktree literally named `default` collides with the root ref | Directory names are produced by `checked_dir_name`/slugs; the collision already breaks `WorktreeRef` parsing before this change |
 | M1 | A | perf of views per read, clone in refresh, parent_choice ordering, 8-arg fn (F5, F6, F8, F9) | MINOR, taste |
 
 ## Handover
@@ -72,4 +77,6 @@ None.
 
 ## Follow-ups not done
 
+- `list_branches` and `create_worktree` error text (`BlockReason::explain`) can still name a worktree outside the caller's scope in `unavailable_reason`; only `checked_out_in` is filtered.
+- Tests that exercise tool behaviour use `full_view_credential` (tests/support/mcp.rs) or default callers; scope handling per tool is covered by `mcp_worktree_parent_visibility` only.
 - Record the parent inside the create path (review A F1/F2): closes the window where a new worktree is visible without its link and a concurrent child of it can be tombstoned.

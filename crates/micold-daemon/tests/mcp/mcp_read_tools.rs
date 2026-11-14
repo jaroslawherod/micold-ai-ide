@@ -380,7 +380,7 @@ async fn an_unknown_or_foreign_session_is_not_found_with_the_same_message() {
 async fn list_branches_reports_where_each_branch_is_checked_out() {
     let f = fixture().await;
     git(f.repo(), &["branch", "free"]);
-    let out = f.ok(sid(3), "list_branches", json!({})).await;
+    let out = f.ok(sid(1), "list_branches", json!({})).await;
     let branch = |name: &str| -> Value {
         out["branches"]
             .as_array()
@@ -408,7 +408,7 @@ async fn list_branches_reports_a_remote_tracking_branch_as_remote() {
         f.repo(),
         &["update-ref", "refs/remotes/origin/elsewhere", "HEAD"],
     );
-    let out = f.ok(sid(3), "list_branches", json!({})).await;
+    let out = f.ok(sid(1), "list_branches", json!({})).await;
     let remote = out["branches"]
         .as_array()
         .unwrap()

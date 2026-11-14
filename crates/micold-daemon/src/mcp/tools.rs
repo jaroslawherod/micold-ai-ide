@@ -409,6 +409,7 @@ fn read_call(
             limit,
             offset,
             worktree.as_ref(),
+            &scope,
         )),
         Operation::CreateWorktree(_)
         | Operation::CreateSession { .. }
@@ -434,6 +435,12 @@ fn read_call(
 struct Scope(Option<BTreeSet<String>>);
 
 impl Scope {
+    /// Everything: for the row of what the caller itself just made or changed, which may be a
+    /// child of a sibling, and so outside its scope.
+    fn unrestricted() -> Self {
+        Self(None)
+    }
+
     fn new(
         project: &ProjectSnapshot,
         parents: &BTreeMap<String, ParentView>,
@@ -1077,8 +1084,12 @@ async fn create_derived_worktree(
     asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
-    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
-    let scope = scope_of(state, &project, caller);
+    let (who, project, scope) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let scope = scope_of(&st, &project, caller);
+        Ok((who, project, scope))
+    })
+    .await?;
     let parent = parent_choice(&who, &project, &scope, request.parent())?;
     let Some((repo, true)) = state.project_repo(&project.path) else {
         return Err(OpError::invalid_input(
@@ -1319,8 +1330,12 @@ async fn create_literal_worktree(
     asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
-    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
-    let scope = scope_of(state, &project, caller);
+    let (who, project, scope) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let scope = scope_of(&st, &project, caller);
+        Ok((who, project, scope))
+    })
+    .await?;
     let parent = parent_choice(&who, &project, &scope, parent.as_ref())?;
     let Some((repo, true)) = state.project_repo(&project.path) else {
         return Err(OpError::invalid_input(
@@ -1544,9 +1559,7 @@ async fn worktree_row(
             project: &project,
             modes: &modes,
             parents: &parents,
-            // The row of what the caller itself just made or changed (it may be a child of a
-            // sibling, which the caller does not otherwise see).
-            scope: &Scope(None),
+            scope: &Scope::unrestricted(),
         };
         context
             .worktree_rows()
@@ -1621,6 +1634,7 @@ fn list_resumable_sessions(
     limit: usize,
     offset: usize,
     worktree: Option<&WorktreeRef>,
+    scope: &Scope,
 ) -> Value {
     use micold_core::attach::{AttachTarget, ResumableStatus, SkipReason, UnresumableReason};
     let report = state.attach_discover(&project.path);
@@ -1631,6 +1645,7 @@ fn list_resumable_sessions(
     let matching: Vec<_> = report
         .sessions
         .iter()
+        .filter(|s| scope.allows(&target_ref(&s.target)))
         .filter(|s| worktree.is_none_or(|w| w.as_str() == target_ref(&s.target)))
         .collect();
     let rows: Vec<Value> = matching
@@ -2007,9 +2022,7 @@ async fn session_reply(
             project: &project,
             modes: &modes,
             parents: &parents,
-            // The row of what the caller itself just made or changed (it may be a child of a
-            // sibling, which the caller does not otherwise see).
-            scope: &Scope(None),
+            scope: &Scope::unrestricted(),
         };
         context.get_session(session)
     })
@@ -2223,14 +2236,17 @@ impl Context<'_> {
             .iter()
             .filter(|s| s.worktree_dir.is_none())
             .count();
-        let mut rows = vec![json!({
-            "ref": WorktreeRef::DEFAULT,
-            "display_name": DEFAULT_DISPLAY_NAME,
-            "branch": Value::Null,
-            "path": native(&self.project.path),
-            "status": "clean",
-            "session_count": root_count,
-        })];
+        let mut rows = Vec::new();
+        if self.scope.allows(WorktreeRef::DEFAULT) {
+            rows.push(json!({
+                "ref": WorktreeRef::DEFAULT,
+                "display_name": DEFAULT_DISPLAY_NAME,
+                "branch": Value::Null,
+                "path": native(&self.project.path),
+                "status": "clean",
+                "session_count": root_count,
+            }));
+        }
         for wt in self
             .project
             .worktrees
@@ -2254,7 +2270,6 @@ impl Context<'_> {
             insert_parent(&mut row, self.parents.get(&wt.dir_name));
             rows.push(row);
         }
-        rows.retain(|row| self.scope.allows(row["ref"].as_str().unwrap_or_default()));
         rows
     }
 
@@ -2286,7 +2301,9 @@ impl Context<'_> {
                         Some(WorktreeRef::DEFAULT.to_string())
                     }
                     Some(BlockReason::CheckedOutOutsideApp { .. }) | None => None,
-                };
+                }
+                // A worktree the caller cannot see is not named (spec 1857, FR-015).
+                .filter(|worktree| self.scope.allows(worktree));
                 json!({
                     "name": c.name,
                     "kind": match c.origin {

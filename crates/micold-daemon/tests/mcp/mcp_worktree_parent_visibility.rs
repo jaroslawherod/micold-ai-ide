@@ -229,3 +229,26 @@ async fn an_explicit_parent_outside_the_callers_set_is_invalid_input() {
         .await;
     assert_eq!(root["parent"], "X", "default names any: {root}");
 }
+
+#[tokio::test]
+async fn list_branches_does_not_name_a_worktree_the_caller_cannot_see() {
+    let f = Fixture::new().await;
+    let checked_out = |out: &Value, branch: &str| {
+        out["branches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["name"] == branch)
+            .unwrap_or_else(|| panic!("no branch {branch}: {out}"))["checked_out_in"]
+            .clone()
+    };
+    let from_a = f.call(A, "list_branches", json!({})).await;
+    assert_eq!(checked_out(&from_a, "B"), "B", "a sibling is named");
+    assert_eq!(
+        checked_out(&from_a, "X"),
+        Value::Null,
+        "an unrelated worktree is not"
+    );
+    let from_default = f.call(DEFAULT, "list_branches", json!({})).await;
+    assert_eq!(checked_out(&from_default, "X"), "X");
+}

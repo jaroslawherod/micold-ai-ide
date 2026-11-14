@@ -406,8 +406,10 @@ worktree whose parent was removed has no parent to see either.
 
 Everything else is reported as "not found", exactly as one that does not exist is, in every tool
 that lists, reads or addresses a session or worktree: `list_worktrees`, `list_sessions`,
-`get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `start_session`,
-`stop_session`, `create_session`, `rename_worktree` and `delete_worktree`. Listings leave it out.
+`get_session`, `list_resumable_sessions`, `read_session_output`, `send_session_input`,
+`interrupt_session`, `start_session`, `stop_session`, `create_session`, `rename_worktree` and
+`delete_worktree`. Listings leave it out, and `list_branches` does not name such a worktree as the
+place a branch is checked out.
 `create_worktree` takes an explicit `parent` only from the same set, so a session outside `default`
 cannot name `default` or an unrelated worktree: that is refused with `invalid_input` and nothing is
 created. The permission settings below still apply on top.
