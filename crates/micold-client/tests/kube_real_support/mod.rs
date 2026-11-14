@@ -490,6 +490,7 @@ pub async fn start(
         settings,
         None,
         &Default::default(),
+        &[],
         DriftChoice::Keep,
         &events.sink(),
     )

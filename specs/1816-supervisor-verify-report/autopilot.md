@@ -7,23 +7,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1816
-- **Worktree branch**: claude/project-thread-i50nzc
+- **Worktree branch**: claude/project-thread-9puqm3
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: open the M1 PR (reviews done, both CLEAN); then M2 (M3, M4 wait on #1860)
+- **Next step**: M2 PR open, wait on CI then squash-merge; M3, M4 wait on #1860
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1867 | design | merged | 749d63f |
+| #1909 | M1 | merged | 7c96443 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | verify-run.sh verdict | | review done |
-| M2 | T009–T012 | full | follow-up.sh and cap | | pending |
+| M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
+| M2 | T009–T012 | full | follow-up.sh and cap | | implemented, awaiting reviews |
 | M3 | T013–T014 | full | close-out-report.sh | | pending |
 | M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
 
@@ -44,6 +45,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M1 | 48ae431f513a090ba0c9ef22726015a5f2e8ab7e | a7b5c63f4353827b85efd13bd60d2ffd644d82e4:48ae431f513a090ba0c9ef22726015a5f2e8ab7e | CHANGES (F1 drift-M1.md, F2 cycle-log, F3 T004 fixed) |
 | Review A | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | CLEAN (1 MINOR declined) |
 | Review B | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | CLEAN |
+| Review A | 1 | M2 | 733b29cb33318483b3015ab4353f5c29e254bcfb | 62fb0a7eddc5e9ab87abad102eace4a605e662de:733b29cb33318483b3015ab4353f5c29e254bcfb | CHANGES (F1, F2 MAJOR, F3-F5 MINOR fixed) |
+| Review B | 1 | M2 | 733b29cb33318483b3015ab4353f5c29e254bcfb | 62fb0a7eddc5e9ab87abad102eace4a605e662de:733b29cb33318483b3015ab4353f5c29e254bcfb | CLEAN (MINORs: F4/F5 as A, drift-M2.md added) |
+| Review A | 2 | M2 | 5c82564f98dc584383f89ef8ce4224b1ea48df01 | d6f38ac696c314114dabe21416b0901e18a02c2a:5c82564f98dc584383f89ef8ce4224b1ea48df01 | CLEAN (round-1 F1-F5 confirmed fixed) |
 
 ## Declined review findings
 
@@ -53,7 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 implemented (T009–T012 ticked): scripts/autopilot/supervisor-ledger.sh, follow-up.sh, follow-up cases in scripts/tests/close-out.test.sh (50 pass). Review A and Review B are to be dispatched by the orchestrator (a cloud unit cannot spawn subagents); they are not run. Next: reviews, PR, merge. M3, M4 stay blocked on #1860.
 
 ## Open escalation
 

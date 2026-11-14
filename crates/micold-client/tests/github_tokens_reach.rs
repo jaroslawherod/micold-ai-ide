@@ -34,11 +34,13 @@ fn the_rendered_block_carries_name_token_file_and_repos_and_parses_back() {
             name: "org".into(),
             token_file: PathBuf::from("/secrets/github-pat/org"),
             repos: vec![pattern("acme/*"), pattern("acme/app")],
+            host: None,
         },
         GithubTokenSetting {
             name: "any".into(),
             token_file: PathBuf::from("/secrets/github-pat/any"),
             repos: vec![],
+            host: None,
         },
     ]);
     assert!(
@@ -56,6 +58,40 @@ fn the_rendered_block_carries_name_token_file_and_repos_and_parses_back() {
         .collect();
     assert_eq!(names, ["org", "any"], "file order is kept");
     assert_eq!(config.github.tokens[1].repos, None, "no filter, no key");
+}
+
+/// #1760 (T004): a token's forge is written as `host = "..."` only when set, the daemon reads it
+/// back, and the rendered entries name only the tokens' files, never their values.
+#[test]
+fn a_token_host_is_rendered_only_when_set_and_no_value_is_rendered() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = PatStore::new(dir.path());
+    let pat = StoredPat {
+        token: SecretToken::new(FAKE),
+        expires_at: T0,
+        repos: vec![pattern("owner/repo")],
+    };
+    store.put("forge", &pat).unwrap();
+    store.put("plain", &pat).unwrap();
+    let mut tokens = GithubTokenSetting::from_store(&store);
+    assert!(
+        tokens.iter().all(|t| t.host.is_none()),
+        "the store sets no host"
+    );
+    tokens[0].host = Some("http://172.18.0.1:8123".into());
+    let text = rendered(tokens);
+    assert_eq!(text.matches("host = ").count(), 1, "{text}");
+    assert!(
+        text.contains("repos = [\"owner/repo\"]\nhost = \"http://172.18.0.1:8123\"\n"),
+        "{text}"
+    );
+    assert!(!text.contains(FAKE), "{text}");
+    let config = parse(&text, "daemon.toml").expect("parses");
+    assert_eq!(
+        config.github.tokens[0].host.as_deref(),
+        Some("http://172.18.0.1:8123")
+    );
+    assert_eq!(config.github.tokens[1].host, None);
 }
 
 #[test]

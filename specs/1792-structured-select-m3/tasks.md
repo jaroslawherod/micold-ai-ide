@@ -56,18 +56,18 @@ None beyond T001: the trigger extraction is the P1 story's own work.
 
 ### Tests (write first, see them fail)
 
-- [ ] T013 [US3] Red tests in `src/ui/composer.rs` tests (`drawer_flags_tests.rs` style): expand duration is `tokens::motion::duration::MEDIUM_2`, and `Duration::ZERO` when `settings.reduce_motion` (FR-005, FR-006, FR-013); stepping the track settles at that duration (within one frame) with no single-step full-height jump (SC-002).
-- [ ] T014 [US3] In `src/ui/composer.rs` tests: red test: toggling mid-animation reverses from the current height without a jump (FR-007), and rapid repeated toggles leave no stuck half-open state.
-- [ ] T015 [US3] In `src/ui/composer.rs` tests: red test: two sessions' composers keep separate expand tracks (FR-008).
-- [ ] T016 [US3] In `src/ui/composer.rs` tests: red test: a collapsed row's controls are not reachable by keyboard or pointer (research R3, contract §2; no FR, spec edge case "Rapid repeated toggling" and FR-005 imply it).
-- [ ] T017 [US3] Red test in the tests of the module that owns the `options_open` toggle and `*Closed` messages (`src/features/composer.rs`): collapsing the row closes any open model, effort or permission picker (research R3, contract §2: `Expand::overlay` has no hidden guard; no FR of its own).
-- [ ] T018 [US3] In `src/ui/composer.rs` tests: red geometry test at a narrow width: the end height equals the row's wrapped height, and in a window shorter than the row it ends at the reachable (clipped) height (FR-011, R5; clip is the behaviour, contract §2).
+- [X] T013 [US3] Red tests in `src/ui/composer.rs` tests (`drawer_flags_tests.rs` style): expand duration is `tokens::motion::duration::MEDIUM_2`, and `Duration::ZERO` when `settings.reduce_motion` (FR-005, FR-006, FR-013); stepping the track settles at that duration (within one frame) with no single-step full-height jump (SC-002).
+- [X] T014 [US3] In `src/ui/composer.rs` tests: red test: toggling mid-animation reverses from the current height without a jump (FR-007), and rapid repeated toggles leave no stuck half-open state.
+- [X] T015 [US3] In `src/ui/composer.rs` tests: red test: two sessions' composers keep separate expand tracks (FR-008).
+- [X] T016 [US3] In `src/ui/composer.rs` tests: red test: a collapsed row's controls are not reachable by keyboard or pointer (research R3, contract §2; no FR, spec edge case "Rapid repeated toggling" and FR-005 imply it).
+- [X] T017 [US3] Red test in the tests of the module that owns the `options_open` toggle and `*Closed` messages (`src/features/composer.rs`): collapsing the row closes any open model, effort or permission picker (research R3, contract §2: `Expand::overlay` has no hidden guard; no FR of its own).
+- [X] T018 [US3] In `src/ui/composer.rs` tests: red geometry test at a narrow width: the end height equals the row's wrapped height, and in a window shorter than the row it ends at the reachable (clipped) height (FR-011, R5; clip is the behaviour, contract §2).
 
 ### Implementation
 
-- [ ] T019 [US3] `src/ui/composer.rs`: build `options_row` always and wrap it in `micold_material::animation::expand(row, options_open, over)`; `over` = `MEDIUM_2`, `Duration::ZERO` when `state.settings.reduce_motion`, read in `composer::view`; no literal duration or easing (SC-003).
-- [ ] T020 [US3] Toggling the row closed also emits the existing model, effort and permission `*Closed` messages for any open picker (in `src/features/composer.rs` / `src/shell/composer.rs` where `options_open` is toggled). Makes T017 green.
-- [ ] T021 [P] [US3] Docs: `docs/user-guide/structured-input.md` (expand and collapse of the options row) and `docs/user-guide/settings.md` (Reduce motion also applies to it).
+- [X] T019 [US3] `src/ui/composer.rs`: build `options_row` always and wrap it in `micold_material::animation::expand(row, options_open, over)`; `over` = `MEDIUM_2`, `Duration::ZERO` when `state.settings.reduce_motion`, read in `composer::view`; no literal duration or easing (SC-003).
+- [X] T020 [US3] Toggling the row closed also emits the existing model, effort and permission `*Closed` messages for any open picker (in `src/features/composer.rs` / `src/shell/composer.rs` where `options_open` is toggled). Makes T017 green.
+- [X] T021 [P] [US3] Docs: `docs/user-guide/structured-input.md` (expand and collapse of the options row) and `docs/user-guide/settings.md` (Reduce motion also applies to it).
 
 ## Phase 6: Polish and cross-cutting (close unit; changes no code)
 

@@ -104,7 +104,7 @@ impl Fixture {
     async fn listed(&self) -> Vec<String> {
         let out = call_ok(
             self.addr,
-            &credential(&self.state, sid(3)),
+            &credential(&self.state, sid(1)),
             "list_worktrees",
             json!({}),
         )

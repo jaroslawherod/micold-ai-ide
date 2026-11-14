@@ -167,7 +167,13 @@ fn allow_every_prompt(state: &Arc<DaemonState>) {
 
 impl Fixture {
     async fn call(&self, caller: SessionId, tool: &str, args: Value) -> Value {
-        call_tool(self.addr, &credential(&self.state, caller), tool, args).await
+        call_tool(
+            self.addr,
+            &full_view_credential(&self.state, caller),
+            tool,
+            args,
+        )
+        .await
     }
 
     /// What `good_call` for `tool` needs to be true first. `send_session_input` types into a
@@ -250,7 +256,7 @@ impl Fixture {
         let request = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"});
         let (status, body) = post_mcp(
             self.addr,
-            Some(&credential(&self.state, caller)),
+            Some(&full_view_credential(&self.state, caller)),
             &request.to_string(),
         )
         .await;

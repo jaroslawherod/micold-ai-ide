@@ -140,7 +140,7 @@ impl Fixture {
     async fn create(&self, args: Value) -> Value {
         call_ok(
             self.addr,
-            &credential(&self.state, sid(3)),
+            &full_view_credential(&self.state, sid(3)),
             "create_session",
             args,
         )
@@ -150,7 +150,7 @@ impl Fixture {
     async fn get(&self, id: SessionId) -> Value {
         call_ok(
             self.addr,
-            &credential(&self.state, sid(3)),
+            &full_view_credential(&self.state, sid(3)),
             "get_session",
             json!({"session": id.0.to_string()}),
         )
@@ -283,7 +283,7 @@ async fn starting_an_unavailable_provider_over_mcp_is_refused_naming_it_and_crea
         let before = session_count(&f);
         let err = call_err(
             f.addr,
-            &credential(&f.state, sid(3)),
+            &full_view_credential(&f.state, sid(3)),
             "create_session",
             json!({"worktree": "b", "ai_cli": cli.tool_name()}),
         )
