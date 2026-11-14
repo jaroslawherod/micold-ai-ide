@@ -695,9 +695,12 @@ check "ask.md skips AskUserQuestion over the cap" 0 'do not call' grep -A3 'Rest
 # Supervised escalation prose (US2 AC1-AC3, FR-010, FR-011b, FR-013, SC-003): tasks/ask.md and tasks/resume.md.
 AK="$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"; RM="$ROOT/.claude/skills/speckit-autopilot/tasks/resume.md"
 check "ask.md: a supervised run asks through supervised.sh" 0 '^ok$' bash -c "grep -q 'supervised.sh <ledger>' '$AK' && grep -q 'exits 0' '$AK' && echo ok"
-check "ask.md: supervised sends banner and notification, no AskUserQuestion, ends the turn" 0 '^ok$' bash -c "grep -A3 'Supervised?' '$AK' | grep -qi 'no .AskUserQuestion' && grep -A3 'Supervised?' '$AK' | grep -qi 'end the turn' && echo ok"
+check "ask.md: supervised sends the banner, no AskUserQuestion, ends the turn" 0 '^ok$' bash -c "grep -A3 'Supervised?' '$AK' | tr -s ' \n' '  ' | grep -qi 'no .AskUserQuestion' && grep -A3 'Supervised?' '$AK' | tr -s ' \n' '  ' | grep -qi 'end the turn' && echo ok"
 check "ask.md: no ledger or not supervised keeps asking as before" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$AK' | grep -qi 'No ledger yet or not supervised: ask as below' && echo ok"
 check "ask.md: the answer returns as resume <answer>" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$AK' && echo ok"
+check "ask.md: a supervised run sends no notification, the supervisor does" 0 '^ok$' bash -c "grep -A5 'Supervised?' '$AK' | tr -s ' \n' '  ' | grep -qi 'no notification (the supervisor sends the only one)' && echo ok"
+check "ask.md: an unsupervised run still notifies" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$AK' | grep -qi 'ask as below, notification included' && echo ok"
+check "supervised.md: says who notifies" 0 'Who notifies' grep -n 'Who notifies' "$ROOT/.claude/skills/speckit-autopilot/rules/supervised.md"
 check "ask.md: supervised, answer.sh records the answer" 0 '^ok$' bash -c "grep -q 'answer.sh. records the answer' '$AK' && echo ok"
 check "resume.md: resume <answer> calls answer.sh then continues" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$RM' && grep -q 'answer.sh <ledger>' '$RM' && grep -qi 'apply the answer' '$RM' && echo ok"
 check "resume.md: a refused batch is relayed and a repeat is ignored" 0 '^ok$' bash -c "grep -q 'Exit 2' '$RM' && grep -q 'ignored: no open escalation' '$RM' && echo ok"
