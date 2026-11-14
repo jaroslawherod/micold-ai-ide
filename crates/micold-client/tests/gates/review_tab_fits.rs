@@ -38,12 +38,7 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
     (
         "session-area-changes-open",
         "session-area-review-shown",
-        &[
-            "session.header",
-            "session.header.changes",
-            "session.strip",
-            "session.strip.tabs.review",
-        ],
+        &["session.strip", "session.strip.tabs.review"],
     ),
     (
         "review-tab-beside-sessions",
@@ -133,37 +128,18 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
             "review-drag-composer",
             "review-shortcut-sheet",
             "review-source-open",
-            "review-two-worktrees",
         ],
-        "0/0/0/1/1/2/1/0/0/0/2",
+        "0/0/0/1/1/1/1/0/0/0/2",
         "bottom",
         "base",
         "the tree's VirtualRows: rows past its viewport",
     ),
     (
-        &[
-            "changes-review-held",
-            "changes-review-marks",
-            "review-drag-composer",
-            "review-shortcut-sheet",
-            "review-source-open",
-        ],
-        "0/0/0/1/1/2/1/1/0/0/1",
+        &["review-drag-composer"],
+        "0/0/0/1/1/1/1/1/0/0/1",
         "bottom",
         "base",
         "the diff's Scrollable: lines past its viewport",
-    ),
-    (
-        &[
-            "changes-review-held",
-            "changes-review-marks",
-            "review-shortcut-sheet",
-            "review-source-open",
-        ],
-        "0/0/0/1/1/2/1/1/0/0/1",
-        "right",
-        "base",
-        "the diff's Scrollable: a line wider than its viewport, scrolled sideways (#1466)",
     ),
 ];
 

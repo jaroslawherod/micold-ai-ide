@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1793
 - **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
 - **Started**: 2026-11-10
-- **Phase**: milestone M3 (in progress)
-- **Next step**: wait CI, merge M3, then M4
+- **Phase**: milestone M4 (in review)
+- **Next step**: orchestrator waits on CI and merges PR for M4
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1797 | Design | merged | ad2d932dc0b678b50e19e0b3646e8036d62c6e8a |
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
 | #1827 | M2 | merged | cb41c216e778ce87dcc7379f7852f3ffa85fa3bf |
-| #1847 | M3 | open | |
+| #1847 | M3 | merged | 747d325b504576e2bc43d96c2804e9ee430c09d7 |
+| #1869 | M4 | open | |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
 | M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
-| M3 | T017–T020 | full | Single `+` menu | #1847 | open |
-| M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | | pending |
+| M3 | T017–T020 | full | Single `+` menu | #1847 | merged |
+| M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | #1869 | in review |
 
 ## Decisions
 
@@ -54,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 Review A (high) | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
 | M3 Review B (sonnet) | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
 | M3 Review A+B | 3 | M3 | 379b3719e2c7a47e8e1176795a9fd244397bccff | rebase:379b3719e2c7a47e8e1176795a9fd244397bccff | CLEAN (rebase onto main; code diff identical, fixture regenerated for #1792) |
+| M4 Review A (high) | 1 | M4 | 789204a6b1e85e98c8e3f934e72d35d24125d961 | b43fab3189bb8d6f288aafaa8005993809cd1b42:789204a6b1e85e98c8e3f934e72d35d24125d961 | CLEAN (2 MINOR: hidden_count O(n) per view, plus_anchor clamp at width 0; left) |
+| M4 Review B (sonnet) | 1 | M4 | 789204a6b1e85e98c8e3f934e72d35d24125d961 | b43fab3189bb8d6f288aafaa8005993809cd1b42:789204a6b1e85e98c8e3f934e72d35d24125d961 | CLEAN (2 MINOR: gate written after code, FR-011 follow-up recorded; left) |
 
 ## Declined review findings
 
@@ -72,4 +75,6 @@ RESOLVED (human, option 1: slim in-body row; spec US1 AC1, FR-001, SC-001 amende
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- FR-011 tabs shrink before they scroll: tabs keep their fixed width and only scroll (M4; `+`, restart, splits and chip stay reachable). T029/T031 cover scroll only.
+- Worktree-menu keyboard highlight (M2 minor) not separately verified in M4.
+- `header_row_fits.rs` 1000+ chip text assertion is loose (review MINOR).

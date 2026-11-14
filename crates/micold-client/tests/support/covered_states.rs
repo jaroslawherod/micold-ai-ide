@@ -438,18 +438,18 @@ const APP_BAR_SWITCHER_TRIGGER: &[usize] = &[0, 0, 0, 0, 0, 1];
 /// header and the pane area. Filled in from the recorded tree rather than derived by reading the
 /// view; an anchor that does not resolve fails by name
 /// (`an_anchor_whose_path_does_not_resolve_fails_naming_it`), so a stale path here cannot go quiet.
-pub const SESSION_STRIP: &[usize] = &[0, 0, 1, 1, 1];
+pub const SESSION_STRIP: &[usize] = &[0, 0, 1, 1, 0];
 /// The strip's own row (inside its toolbar surface): the scrolling members, the status cluster,
 /// **New session** and the split buttons, a child list that never varies.
-pub const SESSION_STRIP_ROW: &[usize] = &[0, 0, 1, 1, 1, 0];
+pub const SESSION_STRIP_ROW: &[usize] = &[0, 0, 1, 1, 0, 0];
 /// The keyed row of members inside the scrolling region: `EdgeFade` → stack → layer → viewport →
 /// row. No padding container since feature 027's trailing slack went (R9, R14).
-pub const SESSION_STRIP_TABS: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0];
-/// The status cluster, the strip row's controls group's first child (feature 1463; the New session
-/// icon and the switch slot left it in feature 1793).
-pub const SESSION_STRIP_STATUS: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 0];
-/// The split buttons, the controls group's last child.
-pub const SESSION_STRIP_SPLIT: &[usize] = &[0, 0, 1, 1, 1, 0, 1, 1];
+pub const SESSION_STRIP_TABS: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+/// The split buttons: the controls group's first child, or its second where the stopped session's
+/// restart comes first ([`SESSION_STRIP_SPLIT_AFTER_RESTART`]).
+pub const SESSION_STRIP_SPLIT: &[usize] = &[0, 0, 1, 1, 0, 0, 1, 0];
+/// The split buttons beside the restart (feature 1793: the controls are `[restart?, splits, chip?]`).
+pub const SESSION_STRIP_SPLIT_AFTER_RESTART: &[usize] = &[0, 0, 1, 1, 0, 0, 1, 1];
 
 /// The width the strip hands its scrolling region at the fixture's 1280dp window, as recorded: the
 /// running application learns it from `Scrollable::on_viewport_resize`, a hand-built state does not,
@@ -458,7 +458,7 @@ const TAB_STRIP_VIEWPORT: u32 = 837;
 
 /// The member a state marks: `n` steps into the keyed row.
 const fn strip_member(n: usize) -> [usize; 12] {
-    [0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, n]
+    [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, n]
 }
 const SESSION_STRIP_TAB_ACTIVE: [usize; 12] = strip_member(2);
 const SESSION_STRIP_TAB_EXITED: [usize; 12] = strip_member(3);
@@ -466,13 +466,6 @@ const SESSION_STRIP_TAB_SESSION: [usize; 12] = strip_member(0);
 /// The Review tab of [`review_shown`] and [`review_hidden`]: after the main session, its shell,
 /// the "+" and the helper (feature 1269).
 const SESSION_STRIP_TAB_REVIEW: [usize; 12] = strip_member(4);
-
-/// The session area's context header (feature 1126, A1): the session area's first child, above
-/// the pane area, which moved one level down with it.
-const SESSION_HEADER: &[usize] = &[0, 0, 1, 1, 0];
-
-/// The header's Changes button (feature 1126, H9): the header line's third child, after the title and the chips (feature 1463).
-pub const SESSION_HEADER_CHANGES: &[usize] = &[0, 0, 1, 1, 0, 0, 2];
 
 /// A **nested** sidebar row — the session under an expanded `feat-short`, at depth 1 in the tree
 /// (BUG-005, T116). The sidebar's tree column is `…/2/0/0`, whose children are its rows in order:
@@ -1981,10 +1974,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TOOLBAR_MARK,
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "session.strip",
                     path: SESSION_STRIP,
                 },
@@ -1997,12 +1986,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_SESSION,
                 },
                 Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
-                },
-                Anchor {
                     name: "session.strip.split",
-                    path: SESSION_STRIP_SPLIT,
+                    path: SESSION_STRIP_SPLIT_AFTER_RESTART,
                 },
             ],
         },
@@ -2027,14 +2012,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TOOLBAR_MARK,
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
-                    name: "session.header.changes",
-                    path: SESSION_HEADER_CHANGES,
-                },
-                Anchor {
                     name: "session.strip",
                     path: SESSION_STRIP,
                 },
@@ -2045,10 +2022,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.strip.tabs.review",
                     path: &SESSION_STRIP_TAB_REVIEW,
-                },
-                Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2071,14 +2044,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
-                    name: "session.header.changes",
-                    path: SESSION_HEADER_CHANGES,
-                },
-                Anchor {
                     name: "session.strip",
                     path: SESSION_STRIP,
                 },
@@ -2089,10 +2054,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.strip.tabs.review",
                     path: &SESSION_STRIP_TAB_REVIEW,
-                },
-                Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2136,10 +2097,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: REVIEW_TAB_BADGE,
                 },
                 Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
-                },
-                Anchor {
                     name: "session.strip.split",
                     path: SESSION_STRIP_SPLIT,
                 },
@@ -2156,24 +2113,12 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
-                    name: "session.header.changes",
-                    path: SESSION_HEADER_CHANGES,
-                },
-                Anchor {
                     name: "session.strip.tabs",
                     path: SESSION_STRIP_TABS,
                 },
                 Anchor {
                     name: "session.strip.tabs.review",
                     path: &SESSION_STRIP_TAB_SESSION,
-                },
-                Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2196,10 +2141,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "review.progress",
                     path: REVIEW_PROGRESS,
                 },
@@ -2216,16 +2157,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-review-marks-unavailable",
             build: review_marks_unavailable,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1274: the current hunk marked (T021, FR-005, FR-021) ---------------------
         //
@@ -2234,16 +2169,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "review-current-hunk",
             build: review_current_hunk,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1274: the shortcut sheet (T046, FR-012, FR-021, FR-022) --------------------
         //
@@ -2286,10 +2215,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "review.stale",
                     path: REVIEW_STALE,
                 },
@@ -2304,16 +2229,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-tree-collapsed",
             build: review_tree_collapsed,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // The same review filtered by `tree`, sorted by Size (T037, FR-009, FR-012): the two
         // `tree.rs` files listed with their matched characters highlighted, the collapsed `tests`
@@ -2325,10 +2244,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "shell.root",
                     path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
                 },
                 Anchor {
                     name: "review.tree",
@@ -2349,16 +2264,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-tree-no-match",
             build: || review_tree_filtered("zzz", false),
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1275: suggestion chips (T042, FR-023, FR-027) ----------------------------
         //
@@ -2368,16 +2277,10 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "changes-review-held-chips",
             build: review_held_chips,
-            anchors: &[
-                Anchor {
-                    name: "shell.root",
-                    path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-            ],
+            anchors: &[Anchor {
+                name: "shell.root",
+                path: &[],
+            }],
         },
         // --- Feature 1272: the review's source control (T024, FR-012) -------------------------
         //
@@ -2503,10 +2406,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "review.bar",
                     path: REVIEW_BAR,
                 },
@@ -2531,10 +2430,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "shell.root",
                     path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
                 },
                 Anchor {
                     name: "review.bar",
@@ -2571,10 +2466,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "review.bar",
                     path: REVIEW_BAR,
                 },
@@ -2609,10 +2500,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "review.bar",
                     path: REVIEW_BAR,
                 },
@@ -2637,10 +2524,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "review.diff",
                     path: REVIEW_DIFF_PANE,
                 },
@@ -2657,10 +2540,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "shell.root",
                     path: &[],
-                },
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
                 },
                 Anchor {
                     name: "review.tree",
@@ -2689,10 +2568,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "session.strip",
                     path: SESSION_STRIP,
                 },
@@ -2703,10 +2578,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.strip.tabs.review",
                     path: &SESSION_STRIP_TAB_REVIEW,
-                },
-                Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -2736,15 +2607,11 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TOOLBAR_MARK,
                 },
                 // Feature 1126: the header above the panes.
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
                 // The transcript's `Scrollable`, whose content `gates/containment.rs` lets overhang
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 2, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 1, 0, 0, 1, 0],
                 },
             ],
         },
@@ -2766,23 +2633,18 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TOOLBAR_MARK,
                 },
                 // Feature 1126: the header above the panes.
-                Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
                 // The transcript's `Scrollable`, whose content `gates/containment.rs` lets overhang
                 // its bottom edge (`TRANSCRIPT_VIEWPORT`).
                 Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 2, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 1, 0, 0, 1, 0],
                 },
             ],
         },
         // --- Feature 944: the session bar and an open subagent thread (T037) --------------------
         //
         // The meter in its warning, the totals, a running background task and the `Agent` call's
-        // thread unfolded under its card. `gates/session_bar_fits.rs` holds the bar's figures
-        // whole inside the pane.
+        // thread unfolded under its card.
         CoveredState {
             name: "session-transcript-insights",
             build: || StateUnderTest::new(transcript_pane_insights()),
@@ -2797,12 +2659,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 // Feature 1126: the header above the panes.
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "transcript.viewport",
-                    path: &[0, 0, 1, 1, 2, 0, 0, 1, 0],
+                    path: &[0, 0, 1, 1, 1, 0, 0, 1, 0],
                 },
             ],
         },
@@ -2830,10 +2688,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: TOOLBAR_MARK,
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "session.strip",
                     path: SESSION_STRIP,
                 },
@@ -2854,10 +2708,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &SESSION_STRIP_TAB_EXITED,
                 },
                 Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
-                },
-                Anchor {
                     name: "session.strip.split",
                     path: SESSION_STRIP_SPLIT,
                 },
@@ -2872,10 +2722,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[],
                 },
                 Anchor {
-                    name: "session.header",
-                    path: SESSION_HEADER,
-                },
-                Anchor {
                     name: "session.strip",
                     path: SESSION_STRIP,
                 },
@@ -2886,10 +2732,6 @@ pub fn covered_states() -> &'static [CoveredState] {
                 Anchor {
                     name: "session.strip.tabs.active",
                     path: &SESSION_STRIP_TAB_ACTIVE,
-                },
-                Anchor {
-                    name: "session.strip.status",
-                    path: SESSION_STRIP_STATUS,
                 },
                 Anchor {
                     name: "session.strip.split",
@@ -4316,61 +4158,61 @@ pub fn review_source(pose: SourcePose, open: bool) -> StateUnderTest {
 }
 
 /// The review header's source control (feature 1272): the view's header row's second child.
-pub const REVIEW_SOURCE: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 1];
+pub const REVIEW_SOURCE: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 1];
 /// The Review tab's bar: the Changes view's last row (feature 1270, B1), under the session area's
 /// header and strip.
-pub const REVIEW_BAR: &[usize] = &[0, 0, 1, 1, 2, 2];
+pub const REVIEW_BAR: &[usize] = &[0, 0, 1, 1, 1, 2];
 /// **Send review (n)**: the bar's container → column → strip → trailing group → its third control.
-pub const REVIEW_BAR_SEND: &[usize] = &[0, 0, 1, 1, 2, 2, 0, 1, 1, 2];
+pub const REVIEW_BAR_SEND: &[usize] = &[0, 0, 1, 1, 1, 2, 0, 1, 1, 2];
 /// The Changes view's body: the file list beside the diff area.
-pub const REVIEW_BODY: &[usize] = &[0, 0, 1, 1, 2, 1];
+pub const REVIEW_BODY: &[usize] = &[0, 0, 1, 1, 1, 1];
 /// The diff area: the stack of the diff pane and, while open, the drawer (FR-010).
-pub const REVIEW_DIFF_AREA: &[usize] = &[0, 0, 1, 1, 2, 1, 1];
+pub const REVIEW_DIFF_AREA: &[usize] = &[0, 0, 1, 1, 1, 1, 1];
 /// The diff pane, the diff area's first layer.
-pub const REVIEW_DIFF_PANE: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0];
+pub const REVIEW_DIFF_PANE: &[usize] = &[0, 0, 1, 1, 1, 1, 1, 0];
 /// The drawer's panel: the diff area's second layer, the sheet's only child.
-pub const REVIEW_DRAWER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 1, 0];
+pub const REVIEW_DRAWER: &[usize] = &[0, 0, 1, 1, 1, 1, 1, 1, 0];
 
 // Feature 1276 (M2, contracts/review-states.md): the elements the review states introduce, filled
 // in from the recorded tree. An anchor that does not resolve fails by name
 // (`an_anchor_whose_path_does_not_resolve_fails_naming_it`).
 
 /// The Review tab's draft badge: the tab's content row → the label's slot → its row's second child.
-pub const REVIEW_TAB_BADGE: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1, 0, 1];
+pub const REVIEW_TAB_BADGE: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1, 0, 1];
 /// The hidden Review tab's changed mark: the dot in the content row's leading slot.
-pub const REVIEW_TAB_CHANGED: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0];
+pub const REVIEW_TAB_CHANGED: &[usize] = &[0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0];
 /// The bar's ⋮: the trailing group's second control, between **Comments** and **Send review (n)**.
-pub const REVIEW_BAR_OVERFLOW: &[usize] = &[0, 0, 1, 1, 2, 2, 0, 1, 1, 1];
+pub const REVIEW_BAR_OVERFLOW: &[usize] = &[0, 0, 1, 1, 1, 2, 0, 1, 1, 1];
 /// The status bar, the window column's last child.
 pub const STATUS_BAR: &[usize] = &[0, 0, 2];
 /// The drawer's **Drafts** / **Replies** tabs: the panel → its column → the content → the drawer's
 /// padding → the tabs-and-rows column → its first child.
-pub const REVIEW_DRAWER_TABS: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 1, 0, 0, 1, 0, 0, 0];
+pub const REVIEW_DRAWER_TABS: &[usize] = &[0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0];
 /// The source control's open list, in the overlay layer: the floated surface under the overlay's
 /// full-window wrappers. No base node has this path in the states that anchor it.
 pub const REVIEW_SOURCE_LIST: &[usize] = &[0, 0, 0, 0, 0, 0, 0];
 /// The file column's list: the filter box, the sort chips and the tree, or the sentence that takes
 /// their place (no changes, a failed read).
-pub const REVIEW_TREE: &[usize] = &[0, 0, 1, 1, 2, 1, 0, 0, 0];
+pub const REVIEW_TREE: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 0, 0];
 /// The tree's filter box, the list's first child.
-pub const REVIEW_TREE_FILTER: &[usize] = &[0, 0, 1, 1, 2, 1, 0, 0, 0, 0];
+pub const REVIEW_TREE_FILTER: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 0, 0, 0];
 /// The tree's sort chips, the list's second child.
-pub const REVIEW_TREE_SORT: &[usize] = &[0, 0, 1, 1, 2, 1, 0, 0, 0, 1];
+pub const REVIEW_TREE_SORT: &[usize] = &[0, 0, 1, 1, 1, 1, 0, 0, 0, 1];
 /// The review mark of `changes-review-marks`'s first file row (`src/a.rs`, under the `src` row):
 /// the row → its tooltip → the button → its clip → the line → the text column → the title row's
 /// first child.
 pub const REVIEW_TREE_ROW_MARK: &[usize] =
-    &[0, 0, 1, 1, 2, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0, 0];
+    &[0, 0, 1, 1, 1, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0, 0];
 /// *n of m reviewed* with its bar: the progress slot's row, the header's last control.
-pub const REVIEW_PROGRESS: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 2, 0, 0];
+pub const REVIEW_PROGRESS: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 2, 0, 0];
 /// *n files changed since you looked*: the header's second control, before the source control.
-pub const REVIEW_STALE: &[usize] = &[0, 0, 1, 1, 2, 0, 0, 1];
+pub const REVIEW_STALE: &[usize] = &[0, 0, 1, 1, 1, 0, 0, 1];
 /// The shortcut sheet's dialog surface, over its scrim at the root.
 pub const REVIEW_SHEET: &[usize] = &[12, 0];
 /// The new comment's composer a line-number drag opened: the diff pane's padding → the diff's
 /// column → its lines (led by #1466's zero-height ruler) → the dragged range's last line, whose
 /// slot hangs the composer under it.
-pub const REVIEW_COMPOSER: &[usize] = &[0, 0, 1, 1, 2, 1, 1, 0, 0, 1, 0, 4, 1];
+pub const REVIEW_COMPOSER: &[usize] = &[0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 4, 1];
 
 /// The mixed review of `feat-short`'s working tree the feature 1270 states show: 3 drafts, 2 sent,
 /// 1 applied with a one-line reply and 1 answered with a reply that wraps over several lines.

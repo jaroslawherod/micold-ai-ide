@@ -14,7 +14,7 @@ fn config(dir: &Path, kind: &str, tail: &str) -> DaemonConfig {
         let client = dir.join("client");
         write(&client, "x", 0o600);
         text.push_str(&format!(
-            "image = \"img\"\n[listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = \"{}\"\n",
+            "image = \"img\"\n[listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = '{}'\n",
             client.display()
         ));
     }
@@ -47,7 +47,7 @@ fn git_section(dir: &Path) -> String {
     write(&key, "k", 0o600);
     write(&hosts, "h", 0o644);
     format!(
-        "[git]\nssh_key_file = \"{}\"\nknown_hosts_file = \"{}\"\n",
+        "[git]\nssh_key_file = '{}'\nknown_hosts_file = '{}'\n",
         key.display(),
         hosts.display()
     )
@@ -151,7 +151,7 @@ fn signing_follows_the_key_and_is_off_without_it() {
     let on = extras(&config(
         dir.path(),
         "container",
-        &format!("[git]\nsigning_key_file = \"{}\"\n", key.display()),
+        &format!("[git]\nsigning_key_file = '{}'\n", key.display()),
     ));
     assert_eq!(
         on.git,
@@ -235,7 +235,7 @@ fn a_signed_commit_succeeds_with_the_delivered_key() {
     ssh_keygen(&key);
     let edits = extras_edits(
         dir.path(),
-        &format!("[git]\nsigning_key_file = \"{}\"\n", key.display()),
+        &format!("[git]\nsigning_key_file = '{}'\n", key.display()),
     );
     assert!(
         commit_with(dir.path(), &edits),
@@ -269,7 +269,7 @@ fn the_ca_file_reaches_every_tool_that_reads_one() {
     let cfg = config(
         dir.path(),
         "host",
-        &format!("[network]\nca_file = \"{}\"\n", ca.display()),
+        &format!("[network]\nca_file = '{}'\n", ca.display()),
     );
     let env = extras(&cfg).env.into_iter().collect::<BTreeMap<_, _>>();
     for name in CA_VARIABLES {
@@ -287,7 +287,7 @@ fn the_daemon_takes_its_proxy_from_session_env_or_a_secret_file() {
         dir.path(),
         "host",
         &format!(
-            "[session.env]\nNO_PROXY = \"localhost,.corp\"\n[session.secret_env]\nHTTPS_PROXY = \"{}\"\n",
+            "[session.env]\nNO_PROXY = \"localhost,.corp\"\n[session.secret_env]\nHTTPS_PROXY = '{}'\n",
             secret.display()
         ),
     );
@@ -364,7 +364,7 @@ fn a_secret_env_file_that_cannot_be_read_gives_no_proxy() {
     let secret = dir.path().join("proxy");
     write(&secret, "http://proxy.corp:3128\n", 0o600);
     let toml = format!(
-        "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[session.secret_env]\nHTTPS_PROXY = \"{}\"\n",
+        "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[session.secret_env]\nHTTPS_PROXY = '{}'\n",
         secret.display()
     );
     let path = dir.path().join("daemon.toml");

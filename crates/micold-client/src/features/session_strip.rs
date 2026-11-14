@@ -6,6 +6,7 @@
 
 use crate::app::{Message, State};
 use crate::features::session::Msg as SessionMsg;
+use crate::features::structured_transcript::TranscriptMsg;
 use crate::ui::material::{tab, TAB_WIDTH};
 use micold_core::review_tabs::ReviewTabFace;
 use micold_core::session::{
@@ -237,6 +238,8 @@ pub enum Member {
         shown: bool,
         marked: bool,
         stopped: bool,
+        /// Its process is running: the tab shows the activity dot (feature 1793, FR-006).
+        working: bool,
     },
     /// One of the shown session's shell instances, labelled by its ordinal.
     Shell {
@@ -271,7 +274,7 @@ pub enum MemberKey {
 }
 
 /// The "+" member's width: its icon button's touch target (R8).
-pub const PLUS_WIDTH: f32 = micold_core::tokens::anatomy::button::MIN_TOUCH_TARGET;
+pub const PLUS_WIDTH: f32 = crate::ui::session_area::ROW_HEIGHT;
 
 impl Member {
     /// The key its widget state is kept under (R10).
@@ -413,6 +416,32 @@ impl PlusMenuModel {
     }
 }
 
+/// The `N hidden` chip at the strip's end (feature 1793, FR-001, FR-010, FR-013): present only
+/// while events are hidden, and what it presses is the former hidden-events notice's `Show`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HiddenChip {
+    /// `N hidden`.
+    pub text: String,
+    /// Its accessible name, `N hidden events, show`.
+    pub name: String,
+    /// What activating it sends: show the raw events.
+    pub press: Message,
+}
+
+impl HiddenChip {
+    fn of(state: &State, session: SessionId) -> Option<Self> {
+        let n = state
+            .structured_transcript
+            .transcript(session)?
+            .hidden_count(state.settings.show_raw_events);
+        (n > 0).then(|| Self {
+            text: format!("{n} hidden"),
+            name: format!("{n} hidden events, show"),
+            press: Message::Session(SessionMsg::Transcript(TranscriptMsg::ShowRawEvents(true))),
+        })
+    }
+}
+
 /// What the strip above the terminal shows (data-model *StripModel*; contract S1–S4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct StripModel {
@@ -424,6 +453,8 @@ pub struct StripModel {
     pub restart: Option<Message>,
     /// The shown location, for **New session**; `None` when it no longer resolves.
     pub location: Option<SessionLocation>,
+    /// The `N hidden` chip, while the shown session has hidden events.
+    pub hidden: Option<HiddenChip>,
 }
 
 impl StripModel {
@@ -450,6 +481,7 @@ impl StripModel {
                 status: String::new(),
                 restart: None,
                 location: state.shown_location(),
+                hidden: None,
             });
         };
         let location = state.current_session_location();
@@ -502,6 +534,7 @@ impl StripModel {
             restart: attached_process_restartable(state, shown)
                 .then(|| restart_message(state, shown)),
             location,
+            hidden: HiddenChip::of(state, shown),
         })
     }
 
@@ -628,6 +661,7 @@ fn session_member(
         shown,
         marked: shown && marked == Some(StripTab::Ai),
         stopped: process_stopped(state, id, StripTab::Ai),
+        working: session_working(state, id),
     }
 }
 
@@ -1172,6 +1206,7 @@ pub(crate) mod tests {
             shown,
             marked: shown,
             stopped: false,
+            working: false,
         };
         let main = session(true);
         let MemberKey::Session(id) = main.key() else {
