@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
 | #1912 | M1b | merged | 95fa459da7e2b4381424c66ba66f40454159a70b |
-| (pending) | M3 | open (draft) | — |
+| #1917 | M3 | open (draft) | — |
 
 ## Milestones
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
 | M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | merged |
-| M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | (pending) | in-review |
+| M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | #1917 | in-review |
 
 ## Decisions
 
