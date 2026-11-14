@@ -133,6 +133,7 @@ route_table() { awk '/^## Routing$/ { f = 1; next } f && /^## / { f = 0 } f && N
 
 route_cmd() {
   local sub="${1:-}"; [ $# -gt 0 ] && shift
+  [ "$sub" = gate ] && { route_gate "$@"; return; }
   need_ledger
   case "$sub" in
     add) route_add "$@" ;; next) route_next "$@" ;; state) route_state "$@" ;;

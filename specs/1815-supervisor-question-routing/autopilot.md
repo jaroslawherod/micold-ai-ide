@@ -50,8 +50,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M1 | 376190a4be97904b43a9e7f016686821aac73982 | 2bd106940fdee380edb76ad2873a20ad878779dd:376190a4be97904b43a9e7f016686821aac73982 | CHANGES: 2 MAJOR, 1 MINOR; fixed or declined with reasons (round 2 pending) |
 | Review A | 2 | M1 | d95705445c1ef4707649eac990722985e6fe2e40 | 0be4456b2a3083247fe354b62a7f7f4706c8fee9:d95705445c1ef4707649eac990722985e6fe2e40 | CLEAN (1 MINOR: --by supervisor prefix not yet parsed by answer.sh; M2 owns it) |
 | Review B | 2 | M1 | d95705445c1ef4707649eac990722985e6fe2e40 | 0be4456b2a3083247fe354b62a7f7f4706c8fee9:d95705445c1ef4707649eac990722985e6fe2e40 | CLEAN (1 MINOR: drift-M1.md not written; reason in Declined table) |
+| Review A+B | 1 | M2 | 8b5a7551b283d5ab5400d0bfa75f791c87cb012f | fc1b56097cbb953362207a5d0e22305d0b0a2fc2:8b5a7551b283d5ab5400d0bfa75f791c87cb012f | CHANGES: A F1 MAJOR, B F1 MAJOR fixed; F2 fixed; A F3 partly declined (round 2 pending) |
 
 ## Declined review findings
+
+- M2 round 1, Review A F3 (first two parts): one escalation is answered by one `resume`, and `answer.sh` writes one By per message, so a mixed batch is By `user` (the user ratified the batch); FR-005 requires the evidence in the answer text. The `route gate` ordering part was fixed.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

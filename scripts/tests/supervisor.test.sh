@@ -376,6 +376,9 @@ check "route2: no evidence goes to the user batch as pending" 0 '^ok$' rq_has "n
 check "route2: sends with resume --by supervisor" 0 '^ok$' rq_has "resume --by supervisor"
 check "route2: a route gate exit 2 goes to the user" 0 '^ok$' rq_has "exits 2" "user"
 check "route2: step 2 sits between Collect and Batch" 0 '^ok$' bash -c 'ord() { :; }; r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; a="$(printf "%s" "$r" | grep -n "^1\. \*\*Collect" | cut -d: -f1)"; b="$(printf "%s" "$r" | grep -n "route gate" | head -1 | cut -d: -f1)"; c="$(printf "%s" "$r" | grep -n "route next" | head -1 | cut -d: -f1)"; [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && echo ok' "$SKILL"
+check "route2: Batch with nothing pending still sends resolved, unsent issues" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; printf "%s" "$r" | grep "^3\. " | grep -qF "run steps 9 to 11" && echo ok' "$SKILL"
+check "route2: the follow-up batch goes back to step 3" 0 'back to step 3' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -o "back to step 3"' "$SKILL"
+check "route gate: works on a malformed ledger" 0 '^judge$' "$SUP" route gate --ledger "$D/bad.md" 1
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
