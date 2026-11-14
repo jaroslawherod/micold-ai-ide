@@ -107,6 +107,13 @@ const SHARED: &[(&str, &str)] = &[(
 /// so it has a reader outside its feature and its view.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
     (
+        "sidebar.layouts",
+        "tests/sidebar_tree.rs::user_groups::row_metrics_count_headers_and_navigation_skips_them — \
+         the user-group layout orders the drawn list that navigation, reveal and the row metrics \
+         walk, whatever view is on screen (feature 1786, contract C5). Interim pin: once \
+         sidebar_group_actions writes it (T012) this entry no longer qualifies and is removed",
+    ),
+    (
         "history.list",
         "tests/history.rs::two_windows_keep_independent_histories — the window's Back/Forward \
          history is recorded after every message from the place shown, whatever view is on \

@@ -1030,6 +1030,9 @@ mod flat_list {
             SidebarEntry::Group(group) => {
                 SessionLocation::Worktree(format!("group {}", group.name))
             }
+            SidebarEntry::UserGroup(header) => {
+                SessionLocation::Worktree(format!("user group {}", header.name))
+            }
         }
     }
 

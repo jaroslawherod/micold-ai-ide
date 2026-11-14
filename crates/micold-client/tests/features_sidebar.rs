@@ -915,7 +915,7 @@ fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
             .flat_map(|e| match e {
                 SidebarEntry::Default(node) => node.sessions.clone(),
                 SidebarEntry::Worktree(node) => node.sessions.clone(),
-                SidebarEntry::Group(_) => Vec::new(),
+                SidebarEntry::Group(_) | SidebarEntry::UserGroup(_) => Vec::new(),
             })
             .map(|s| s.provider)
             .collect::<Vec<_>>(),

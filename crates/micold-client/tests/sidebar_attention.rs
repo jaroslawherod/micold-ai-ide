@@ -79,6 +79,7 @@ fn state_with_worktrees(recorded: Vec<Worktree>, sessions: Vec<Session>) -> Stat
 fn entry_name(entry: &SidebarEntry) -> String {
     match entry {
         SidebarEntry::Group(group) => group.name.clone(),
+        SidebarEntry::UserGroup(header) => format!("[{}]", header.name),
         SidebarEntry::Default(_) => "Default".to_string(),
         SidebarEntry::Worktree(node) => node.worktree.dir_name.clone(),
     }

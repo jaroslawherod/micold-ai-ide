@@ -43,7 +43,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | A25 | A stale assignment is ignored on load | US6-3, FR-018 | example | PENDING | tasks T002, T003, T039 |
 | A26 | No header names a state | US7-2, FR-013 | example | PENDING | tasks T041 |
 | A27 | A run group row is dragged and dropped as one unit; a group header arms for group drag | FR-016, FR-019 | example | PENDING | tasks T029, T037 |
-| A28 | A worktree added or removed while running appears in ungrouped or leaves its group | FR-005, FR-018 | example | PENDING | tasks T006, T007 |
+| A28 | A worktree added or removed while running appears in ungrouped or leaves its group | FR-005, FR-018 | example | DONE | tests/sidebar_tree.rs::user_groups::a_worktree_added_while_running_is_ungrouped_and_a_removed_one_leaves_its_group |
 
 ## Inner loop: unit behaviors
 
@@ -57,10 +57,10 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U6 | Default is never stored (IsDefault) | FR-015 | example | PENDING | tasks T002, T003, T024, T025 |
 | U7 | save/load round trip, missing file empty | C7, SC-003 | example | DONE | tests/sidebar_layout_store.rs::a_saved_layout_loads_back_after_a_restart, a_missing_file_loads_as_no_groups |
 | U8 | corrupt file renamed .corrupt, empty layout loads | FR-018 | example | DONE | tests/sidebar_layout_store.rs::a_corrupt_file_is_kept_aside_and_loads_as_no_groups |
-| U9 | sidebar_entries with empty layout equals the stable order | FR-013 | example | PENDING | tasks T006, T007 |
-| U10 | Entries order: Default, group headers with rows, ungrouped | C5 | example | PENDING | tasks T006, T007 |
-| U11 | Collapsed group hides rows, empty group keeps header, tag filter keeps stored order | C5, FR-017 | example | PENDING | tasks T006, T007 |
-| U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | PENDING | tasks T006, T007 |
+| U9 | sidebar_entries with empty layout equals the stable order | FR-013 | example | DONE | tests/sidebar_tree.rs::user_groups::with_no_layout_the_drawn_list_is_the_stable_order |
+| U10 | Entries order: Default, group headers with rows, ungrouped | C5 | example | DONE | tests/sidebar_tree.rs::user_groups::groups_come_after_default_with_their_rows_then_the_ungrouped_rows |
+| U11 | Collapsed group hides rows, empty group keeps header, tag filter keeps stored order | C5, FR-017 | example | DONE | tests/sidebar_tree.rs::user_groups::a_collapsed_group_keeps_its_header_and_hides_its_rows_and_an_empty_group_keeps_its_header, a_tag_filter_hides_grouped_rows_and_keeps_their_stored_order |
+| U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | DONE | tests/sidebar_tree.rs::user_groups::a_run_group_sits_in_a_user_group_as_one_unit, row_metrics_count_headers_and_navigation_skips_them |
 | U13 | create trims, ids monotonic and never reused | FR-004 | example | DONE | micold-core sidebar_layout::tests::create_trims_the_name_and_adds_an_empty_group_last, created_ids_grow_and_are_never_reused |
 | U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | DONE | micold-core sidebar_layout::tests::create_refuses_a_blank_name_and_changes_nothing, create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing |
 | U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | PENDING | tasks T018, T019 |

@@ -41,3 +41,25 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   Same command -> `4 passed; 0 failed`.
 - refactor: none needed
 - notes: deviation, the red is a missing-symbol compile error rather than an assertion failure.
+
+## Cycle 3: U9–U12, A28 the drawn list applies the layout (T006, T007)
+
+- test: `crates/micold-client/tests/sidebar_tree.rs::user_groups` (7 new tests)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test main user_groups`
+  -> `assertion left == right failed: Default first, the group's rows in stored order, ...` /
+  `left: ["Default", "a", "b", "c", "d"]` (`1 passed; 6 failed`; the no-layout test passes by
+  design). `SidebarEntry::UserGroup(GroupHeaderNode)`, `State::sidebar_layout_loaded` and the new
+  arms of every `SidebarEntry` match (src and 7 test files, made exhaustive, no assertion changed)
+  were added first so the tests compile.
+- green: `layout_item`, `apply_layout` (reconcile a copy against the listed rows, then headers,
+  members, ungrouped) in `features/sidebar.rs`; `State::sidebar_list` applies the active project's
+  layout. `--test main sidebar` -> `193 passed; 0 failed`; whole `--test main` -> one failure,
+  `root_state_is_shared::component_local_paths_are_pinned_or_moved` (`state.sidebar.layouts` has
+  one writer), answered by an interim `COMPONENT_LOCAL` pin that T012 removes; then
+  `--test main root_state_is_shared` -> `4 passed`.
+- refactor: none needed
+- notes: the layout is applied in `sidebar_list` (the drawn list), not in `sidebar_entries` as
+  T007 words it: the Overview's cards walk `sidebar_entries`, and a collapsed group must not hide
+  cards. Reconcile runs on a copy at every draw, so a worktree added or removed on disk shows at
+  once (A28) without writing the file. T007's `reveal_ready` expanding a collapsed group (U29) and
+  the header as a keyboard stop (U28) are M5 behaviours on the test list; not implemented here.

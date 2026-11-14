@@ -66,6 +66,7 @@ use micold_core::overview::CardState;
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
+use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroupId};
 use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
 use std::collections::{BTreeMap, BTreeSet};
@@ -150,6 +151,10 @@ pub struct State {
     /// The row a navigation chord gave the sidebar's keyboard (feature 803, contracts/ui.md U3):
     /// the reveal scroll reaches it rather than the current session's row.
     pub keyboard_row: Option<RowRef>,
+    /// Each project's user-group layout (feature 1786), by project path: loaded from the store
+    /// when the project is entered and saved after every committed group operation (R9). A
+    /// project with no entry has no groups.
+    pub layouts: BTreeMap<std::path::PathBuf, SidebarLayout>,
 }
 
 /// A sidebar row named by what it shows, not by its position, so it survives the list arriving
@@ -194,6 +199,22 @@ pub enum SidebarEntry {
     Default(DefaultNode),
     /// A run group's row with its runs one level in (feature 483, G1–G3).
     Group(GroupNode),
+    /// A user group's header (feature 1786, contract C5): its member rows follow it in the list
+    /// as entries of their own while it is expanded. It names no state (FR-013).
+    UserGroup(GroupHeaderNode),
+}
+
+/// A user group's header row (feature 1786, contract C5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupHeaderNode {
+    /// The group.
+    pub id: UserGroupId,
+    /// Its name, as the user gave it.
+    pub name: String,
+    /// Whether its rows are hidden under it (FR-011).
+    pub collapsed: bool,
+    /// How many of its rows the list holds now, shown whether or not it is collapsed.
+    pub count: usize,
 }
 
 impl SidebarEntry {
@@ -205,6 +226,7 @@ impl SidebarEntry {
             SidebarEntry::Group(group) => group.runs.iter().any(
                 |run| matches!(&run.row, RunRow::Worktree(node) if node.location() == *location),
             ),
+            SidebarEntry::UserGroup(_) => false,
         }
     }
 }
@@ -402,6 +424,54 @@ pub fn collapsed_bar(
 /// **Run in parallel** was chosen: the root opens the dialog for the active project.
 pub fn run_in_parallel() -> Vec<crate::features::Outcome> {
     vec![crate::features::Outcome::RunInParallelRequested]
+}
+
+/// The item a user-group layout names `entry` by (feature 1786, research R2): a worktree by its
+/// `dir_name`, a run group by its id. Default and a header are never items (FR-015).
+pub fn layout_item(entry: &SidebarEntry) -> Option<LayoutItem> {
+    match entry {
+        SidebarEntry::Worktree(node) => Some(LayoutItem::Worktree(node.worktree.dir_name.clone())),
+        SidebarEntry::Group(group) => Some(LayoutItem::Run(group.id)),
+        SidebarEntry::Default(_) | SidebarEntry::UserGroup(_) => None,
+    }
+}
+
+/// Arrange the stable-order `entries` by `layout` (feature 1786, contract C5): Default first, then
+/// each group's header and, while it is expanded, its rows in stored order, then the ungrouped rows
+/// in saved order. The layout is fitted to the listed rows first ([`SidebarLayout::reconcile`] on a
+/// copy), so a row it does not know lands among the ungrouped in stable order and a row hidden by a
+/// tag filter or gone from disk is skipped while its stored place stays. Reads no state (FR-013).
+pub fn apply_layout(entries: Vec<SidebarEntry>, layout: &SidebarLayout) -> Vec<SidebarEntry> {
+    if layout.is_empty() {
+        return entries;
+    }
+    let live: Vec<LayoutItem> = entries.iter().filter_map(layout_item).collect();
+    let mut layout = layout.clone();
+    layout.reconcile(&live);
+    let mut rows: std::collections::HashMap<LayoutItem, SidebarEntry> =
+        std::collections::HashMap::new();
+    let mut out = Vec::new();
+    for entry in entries {
+        match layout_item(&entry) {
+            Some(item) => {
+                rows.insert(item, entry);
+            }
+            None => out.push(entry),
+        }
+    }
+    for group in &layout.groups {
+        out.push(SidebarEntry::UserGroup(GroupHeaderNode {
+            id: group.id,
+            name: group.name.clone(),
+            collapsed: group.collapsed,
+            count: group.items.len(),
+        }));
+        if !group.collapsed {
+            out.extend(group.items.iter().filter_map(|item| rows.remove(item)));
+        }
+    }
+    out.extend(layout.ungrouped.iter().filter_map(|item| rows.remove(item)));
+    out
 }
 
 /// Put the runs of `groups` under their group rows (feature 483, G1–G3).
@@ -717,6 +787,7 @@ impl SidebarEntry {
                     .filter(|session| micold_core::attention::counts_as_unread(session, in_view))
                     .count();
             }
+            SidebarEntry::UserGroup(_) => return 0,
         };
         sessions
             .iter()
@@ -892,6 +963,7 @@ pub fn row_heights(rows: &[SidebarEntry]) -> Vec<f32> {
                     }
                 }
             }
+            SidebarEntry::UserGroup(_) => heights.push(one_line),
         }
     }
     heights
@@ -1014,6 +1086,10 @@ pub fn row_index(rows: &[SidebarEntry], target: &RowRef) -> Option<usize> {
                 }
                 found
             }
+            SidebarEntry::UserGroup(_) => {
+                row += 1;
+                None
+            }
         };
         if found.is_some() {
             return found;
@@ -1088,6 +1164,7 @@ pub fn location_row(rows: &[SidebarEntry], target: &SessionLocation) -> Option<u
                     }
                 }
             }
+            SidebarEntry::UserGroup(_) => row += 1,
         }
     }
     None
@@ -1799,8 +1876,27 @@ impl crate::app::State {
 
     /// The sidebar's drawn list (feature 1718, FR-001): every location row in the stable order of
     /// [`Self::sidebar_entries`], whatever the card states. Empty when no project is open.
+    ///
+    /// Feature 1786 (contract C5): the active project's user-group layout is applied here, not in
+    /// [`Self::sidebar_entries`], so the Overview's cards, which walk the stable entries, keep
+    /// every location whether or not its group is collapsed.
     pub fn sidebar_list(&self) -> Vec<SidebarEntry> {
-        self.sidebar_entries()
+        let entries = self.sidebar_entries();
+        match self.sidebar_layout() {
+            Some(layout) => apply_layout(entries, layout),
+            None => entries,
+        }
+    }
+
+    /// The active project's user-group layout, if the store gave one (feature 1786).
+    pub fn sidebar_layout(&self) -> Option<&SidebarLayout> {
+        self.sidebar.layouts.get(self.workspace.active.as_ref()?)
+    }
+
+    /// The store's layout for `project` arrived (feature 1786): kept for the project, replacing
+    /// whatever was held.
+    pub fn sidebar_layout_loaded(&mut self, project: std::path::PathBuf, layout: SidebarLayout) {
+        self.sidebar.layouts.insert(project, layout);
     }
 
     /// The sidebar's keyboard left the row a navigation chord gave it, or the current session

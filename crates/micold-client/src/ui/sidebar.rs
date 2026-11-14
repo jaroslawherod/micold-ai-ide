@@ -848,6 +848,7 @@ fn build_items(
                 items.extend(group_items(state, group, at + items.len(), r));
                 continue;
             }
+            crate::features::sidebar::SidebarEntry::UserGroup(_header) => continue,
         };
         let wt = &node.worktree;
         // No leading git icon (FR-010); a non-Valid worktree is cued by an error-tinted name
