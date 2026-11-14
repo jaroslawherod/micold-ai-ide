@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: milestone M2
-- **Next step**: wait for M2 CI and merge, then M3
+- **Phase**: milestone M3
+- **Next step**: dispatch the M3 milestone unit (T026–T030)
 
 ## Pull requests
 
@@ -19,14 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
-| #1871 | M2 | open | |
+| #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
-| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | in review |
+| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
@@ -76,20 +76,11 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-None.
+M2 squash-merged 2026-11-14 as b05740e1 after main was merged in (issue 1863 fixed on main; all CI jobs green on 389f5e5d). Next thread: `/speckit-autopilot resume #1724`, which starts M3 (T026–T030, older-protocol daemon refused and listed needs-update) from this branch.
 
 ## Open escalation
 
-```
-- **Category**: 5 Non-convergence, blocked by work outside my flow (red main)
-- **Question**: PR 1871 (M2) is red only in jobs red on main too; merge it over them, or wait for main to be fixed?
-- **Options**:
-  1. Fix 1863 first on its own PR, then rerun 1871 (Recommended) - the container (docker, podman) and kubernetes real-runtime tests find micold-daemon by walking up from current_exe, which breaks under the rustc 1.100 test layout; same failure on main run 43358686770.
-  2. Merge 1871 over the red jobs - they do not touch M2 code (orchestrator link, registry, liveness, protocol).
-- **Recommended**: Fix 1863 first - keeps main green and the gate honest.
-- **Evidence**: run 43402845520: docker job sandbox_real.rs:364 "no micold-daemon build to copy into the container", kube_real_support/mod.rs:403; identical on main 43358686770 (podman, docker, kubernetes). Issue 1863 open. The sandbox against a real runtime job failed at sandbox_real_lifecycle.rs:243 (sandbox_real_no_outbound_still_resolves_names, DNS), a micold-core sandbox test M2 does not touch; main's run did not fail it, so likely a flake; rerun issued (gh run rerun 43402845520 --failed).
-- **Banner**: sent 2026-11-13
-```
+None. (The 2026-11-13 question on red main is settled: 1863 was fixed on main, option 1.)
 
 ## Follow-ups not done
 
