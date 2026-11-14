@@ -61,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
 | Review A | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 2 MAJOR (object shape of list_sessions; `default` parent), 2 MINOR (parent_state/live pick; is_caller fallback), all fixed |
 | Review B | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 1 MAJOR (T021 names supervisor-route.sh; plan-drift exit 0) fixed, 1 MINOR declined |
+| Review A | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: only failed lifecycle demoted; left as is) |
+| Review B | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: contracts/routing-cli.md route target row predates round-1 fixes; close unit updates it) |
 
 ## Declined review findings
 
@@ -84,4 +86,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- Close unit: extend the `route target` row in contracts/routing-cli.md with the M4 round-1 rules (object-shaped list, is_caller fallback, parent_state known, `default` via worktree lookup, live over failed). Review B M4 round 2 MINOR.
