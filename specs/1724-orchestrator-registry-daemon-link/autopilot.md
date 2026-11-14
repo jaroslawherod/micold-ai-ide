@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-3cm73q
 - **Started**: 2026-11-11
 - **Phase**: milestone M5
-- **Next step**: M5 reviews A and B, then push and PR
+- **Next step**: M5 Review A (high) and Review B on snapshot aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735, then the PR
 
 ## Pull requests
 
