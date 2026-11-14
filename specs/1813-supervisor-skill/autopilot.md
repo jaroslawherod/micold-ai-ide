@@ -8,25 +8,26 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1813
-- **Worktree branch**: claude/project-thread-9ycwrh
+- **Worktree branch**: claude/project-thread-aqhtd9
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M1 (implement)
-- **Next step**: M1 fixes for review A/B round 1 done; scoped re-review of A, then merge of #1885
+- **Phase**: M2 (PR open)
+- **Next step**: merge the M2 PR on green CI, then hand over to M3
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1865 | Design | merged | bec5d62c7 |
-| #1885 | M1 | open (draft) | … |
+| #1885 | M1 | merged | 2084ae6eb |
+| #1888 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | capped, gated queue start with ledger | #… | pending |
-| M2 | T014–T018 | full | resume from ledger, report, watcher | #… | pending |
+| M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
+| M2 | T014–T018 | full | resume from ledger, report, watcher | #1888 | open |
 | M3 | T019–T021 | full | overlap sequencing | #… | pending |
 | M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
 
@@ -53,6 +54,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 | 2 | M1 | 1b47d969deda1a299d42c6d4098ce871113166ea | 883e9e28e4bcb50d050a1933e298048422f50072:1b47d969deda1a299d42c6d4098ce871113166ea | CLEAN (scoped, sonnet; all 8 round-1 findings verified fixed) |
 | Review B M1 | 2 | M1 | 1b47d969deda1a299d42c6d4098ce871113166ea | 883e9e28e4bcb50d050a1933e298048422f50072:1b47d969deda1a299d42c6d4098ce871113166ea | CHANGES: 1 MAJOR (5 MISSING paths not in drift-M1.md), fixed |
 | Review B M1 | 3 | M1 | d85c11e2d86f1483d7fea77719665d2beec3d849 | c6eec4d17d8f2c33413a5ae234d64920cd3608fe:d85c11e2d86f1483d7fea77719665d2beec3d849 | CLEAN (scoped, sonnet) |
+| Review A M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | CHANGES: 1 MAJOR, 3 MINOR, all fixed |
+| Review B M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | CHANGES: 1 MAJOR (drift-M2.md), fixed |
+| Review A M2 | 2 | M2 | 65f3c5c54e06942a0c097dc61725d4e619230b18 | 256c7c859e5fb9cfc28f374abe306c9ab5c51110:65f3c5c54e06942a0c097dc61725d4e619230b18 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed, 1 MINOR wording) |
+| Review B M2 | 2 | M2 | 65f3c5c54e06942a0c097dc61725d4e619230b18 | 256c7c859e5fb9cfc28f374abe306c9ab5c51110:65f3c5c54e06942a0c097dc61725d4e619230b18 | CLEAN (scoped, sonnet) |
+
+## Red runs
+
+M2 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 112 case(s), 45 failure(s)`.
+- T014 map, retry, skipped, check-owner cases: `unknown subcommand map|retry|check-owner` (exit 2, want 0/1), failing for the missing subcommands.
+- T016 watcher cases: `supervisor-watch.sh: No such file or directory` (exit 127), failing for the missing script.
+- T018 skill-text cases: grep exit 1 (no *Restart*, `check-owner`, `supervisor.sh map`, `retry`, `list_sessions`, `run_in_background`, `supervisor-watch.sh` in SKILL.md).
 
 ## Declined review findings
 
@@ -61,8 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 merged in #1885 (squash 2084ae6eb) on 2026-11-14. Next: a fresh cloud thread runs `/speckit-autopilot resume #1813` and dispatches the M2 milestone unit (T014–T018). That thread works on its own `claude/...` branch: set the **Worktree branch** line above to it first (resume.sh finds the ledger by that line; it falls back to origin/main). No open findings. Reviews ran as `autopilot-reviewer` subagents dispatched by the orchestrator (units have no Agent tool); `verdict-guard.sh`/`wait-merge.sh` need gh, so the orchestrator merged via GitHub MCP after the ledger's Review rounds were CLEAN for the head.
 
 ## Open escalation
 

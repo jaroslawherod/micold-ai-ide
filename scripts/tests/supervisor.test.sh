@@ -93,6 +93,68 @@ check "init: no partial file after the failure" 2 'No such file' ls "$D2/s.md"
 check "init: duplicate issue numbers are rejected" 2 'duplicate' "$SUP" ledger init --ledger "$D2/s.md" --owner o --cap 1 --source x 12 12
 check "init: works after a rejected attempt" 0 '^$' "$SUP" ledger init --ledger "$D2/s.md" --owner o --cap 1 --source x 12
 
+# --- T014: map, retry, check-owner -------------------------------------------------------------
+js() { printf '{"state":"%s","underlying_state":"%s","issue":"#1","escalation":null}\n' "$1" "$1" > "$D/j.json"; }
+mp() { js "$1"; shift; "$SUP" map "$D/j.json" "$@"; }
+mk 3 12
+check "map: done is done at any time" 0 '^done$' mp done --started 1000 --now 1001
+check "map: dead-no-ledger within Grace is running" 0 '^running$' mp dead-no-ledger --started 1000 --now 1600 --grace 600
+check "map: dead-no-ledger past Grace is lost" 0 '^lost$' mp dead-no-ledger --started 1000 --now 1601 --grace 600
+check "map: Grace comes from the ledger header" 0 '^lost$' mp dead-no-ledger --started 1000 --now 1601 --ledger "$L"
+check "map: Grace of the ledger is honoured within" 0 '^running$' mp dead-no-ledger --started 1000 --now 1500 --ledger "$L"
+for s in asking stuck blocked waiting-ci running; do
+  check "map: $s keeps the issue running" 0 '^running$' mp "$s" --started 1000 --now 99999 --grace 600
+done
+check "map: reads the JSON from stdin" 0 '^done$' bash -c 'echo "{\"state\":\"done\"}" | "$0" map - --started 1 --now 2' "$SUP"
+check "map: --exit 2 is lost" 0 '^lost$' "$SUP" map --exit 2 --started 1000
+check "map: --exit 3 is lost" 0 '^lost$' "$SUP" map --exit 3 --started 1000
+check "map: an unknown state is a usage error" 2 'state' mp bogus --started 1 --now 2
+check "map: --started is required" 2 'started' mp done
+check "map: an unreadable file is a usage error" 2 'json' "$SUP" map "$D/none.json" --started 1
+check "retry: first failed start goes back to queued" 0 '^queued$' bash -c '"$0" ledger set --ledger "$1" 12 Tries 1 && "$0" retry --ledger "$1" 12 && "$0" ledger get --ledger "$1" 12 State' "$SUP" "$L"
+check "retry: 3 tries is failed" 0 '^failed$' bash -c '"$0" ledger set --ledger "$1" 12 Tries 3 && "$0" retry --ledger "$1" 12' "$SUP" "$L"
+check "retry: failed is written to the ledger" 0 '^failed$' "$SUP" ledger get --ledger "$L" 12 State
+check "retry: an unknown issue is rejected" 2 'no row' "$SUP" retry --ledger "$L" 99
+mk 3 12 14; st 12 skipped
+check "skipped via ledger set releases the slot" 0 '^14$' bash -c '"$0" ledger set --ledger "$1" 12 Note closed && "$0" next --ledger "$1"' "$SUP" "$L"
+mk 3 12
+check "check-owner: the owner itself is OWN" 0 '^OWN$' "$SUP" check-owner --ledger "$L" --live-sessions "s-0 s-1" --me s-0
+check "check-owner: an owner not listed is FREE" 0 '^FREE$' "$SUP" check-owner --ledger "$L" --live-sessions "s-1" --me s-5
+check "check-owner: no live sessions is FREE" 0 '^FREE$' "$SUP" check-owner --ledger "$L" --live-sessions "" --me s-5
+check "check-owner: a live other owner is HELD" 1 '^HELD s-0$' "$SUP" check-owner --ledger "$L" --live-sessions "s-0 s-1" --me s-5
+check "check-owner: an empty Owner is FREE" 0 '^FREE$' bash -c '"$0" ledger owner --ledger "$1" "" ; "$0" check-owner --ledger "$1" --live-sessions "s-1" --me s-5' "$SUP" "$L"
+check "check-owner: needs --me" 2 'me' "$SUP" check-owner --ledger "$L" --live-sessions "s-1"
+check "check-owner: FREE then ledger owner sets the owner" 0 'Owner\*\*: s-5' bash -c '"$0" check-owner --ledger "$1" --live-sessions "s-1" --me s-5 >/dev/null && "$0" ledger owner --ledger "$1" s-5 && cat "$1"' "$SUP" "$L"
+
+# --- T016: watcher -----------------------------------------------------------------------------
+WATCH="$S/supervisor-watch.sh"
+mk 3 12 14; st 12 running; st 14 running
+"$SUP" ledger set --ledger "$L" 12 Worktree "$D/w12"; "$SUP" ledger set --ledger "$L" 14 Worktree "$D/w14"
+cat > "$D/rs.sh" <<'STUB'
+#!/usr/bin/env bash
+# stub run-status: --json <dir>; the state is the content of <dir>.state, "running" when absent
+d="${@: -1}"; echo x >> "$(dirname "$d")/calls"; s="$(cat "$d.state" 2>/dev/null || echo running)"
+printf '{"state":"%s"}\n' "$s"
+STUB
+chmod +x "$D/rs.sh"
+export AUTOPILOT_RUN_STATUS="$D/rs.sh"
+check "watch: no change exits CEILING" 0 '^CEILING$' "$WATCH" --ledger "$L" --interval 1 --ceiling 2
+# chg k=v...: flips states once the stub has been called for both rows (the watcher's baseline is read)
+chg() { : > "$D/calls"; ( while [ "$(cat "$D/calls" 2>/dev/null | wc -l)" -lt 2 ]; do sleep 0.1; done
+  for kv in "$@"; do echo "${kv#*=}" > "$D/w${kv%%=*}.state"; done ) & }
+chg 14=asking
+check "watch: a changed state exits CHANGED" 0 '^CHANGED 14 running asking$' "$WATCH" --ledger "$L" --interval 1 --ceiling 5
+echo running > "$D/w14.state"; chg 12=done
+check "watch: reports the first changed issue" 0 '^CHANGED 12 running done$' "$WATCH" --ledger "$L" --interval 1 --ceiling 5
+echo running > "$D/w12.state"
+check "watch: AUTOPILOT_WATCH_CEILING sets the ceiling" 0 '^CEILING$' env AUTOPILOT_WATCH_CEILING=1 "$WATCH" --ledger "$L" --interval 1 --ceiling 1
+mk 3 12; st 12 queued
+check "watch: only starting/running rows are watched" 0 '^CEILING$' "$WATCH" --ledger "$L" --interval 1 --ceiling 1
+check "watch: a zero interval is a usage error" 2 'interval' "$WATCH" --ledger "$L" --interval 0 --ceiling 1
+check "watch: an empty interval is a usage error" 2 'interval' "$WATCH" --ledger "$L" --interval "" --ceiling 1
+check "watch: a missing ledger is a usage error" 2 'no ledger' "$WATCH" --ledger "$D/none.md" --interval 1 --ceiling 1
+unset AUTOPILOT_RUN_STATUS
+
 # --- T007: skill text (supervised marker) ------------------------------------------------------
 check "speckit-autopilot documents the supervised argument" 0 'supervised' grep -n -i 'trailing `supervised`' "$AUTO"
 check "speckit-autopilot names the literal ledger line" 0 'Supervised\*\*: yes' grep -nF -- "- **Supervised**: yes" "$SUPMD"
@@ -100,6 +162,20 @@ check "the literal line is the one supervised.sh matches" 0 'Supervised\*\*: yes
 check "supervisor skill names the supervised prompt" 0 'speckit-autopilot #<n> supervised' grep -nF -- '/speckit-autopilot #<n> supervised' "$SKILL"
 check "supervisor skill never reads a transcript" 1 '^$' grep -n 'read_session_output' "$SKILL"
 check "supervisor skill runs the gate before create_worktree" 0 'supervisor.sh gate' bash -c 'g=$(grep -n "supervisor.sh gate" "$0" | head -1 | cut -d: -f1); w=$(grep -n "create_worktree. with" "$0" | head -1 | cut -d: -f1); [ "$g" -lt "$w" ] && grep -n "supervisor.sh gate" "$0"' "$SKILL"
+
+# --- T018: skill text (restart, report, watcher) -----------------------------------------------
+check "skill has a Restart section" 0 '## Restart' grep -n '^## Restart' "$SKILL"
+check "skill checks the owner at start" 0 'check-owner' grep -n 'supervisor.sh check-owner' "$SKILL"
+check "skill sets the owner after FREE" 0 'ledger owner' grep -n 'ledger owner <' "$SKILL"
+check "skill uses list_sessions for liveness" 0 'list_sessions' grep -n 'list_sessions' "$SKILL"
+check "skill maps run-status JSON with map" 0 'supervisor.sh map' grep -n 'supervisor.sh map' "$SKILL"
+check "skill reads run-status --json" 0 'run-status.sh --json' grep -n 'run-status.sh --json' "$SKILL"
+check "skill recovers a starting row with empty cells" 0 'empty' grep -n -i 'starting.*empty\|empty.*starting' "$SKILL"
+check "skill counts tries with retry" 0 'supervisor.sh retry' grep -n 'supervisor.sh retry' "$SKILL"
+check "skill reports asking, stuck, blocked and lost runs" 0 'dead-no-ledger' grep -n 'asking.*stuck.*blocked.*dead-no-ledger' "$SKILL"
+check "skill does not answer or restart a reported run" 0 'Never answer' grep -n -i 'never answer' "$SKILL"
+check "skill starts the watcher in the background" 0 'run_in_background' grep -n 'run_in_background' "$SKILL"
+check "skill names the watcher script" 0 'supervisor-watch.sh' grep -n 'supervisor-watch.sh' "$SKILL"
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

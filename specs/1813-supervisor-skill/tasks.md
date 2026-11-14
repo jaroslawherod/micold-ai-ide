@@ -39,11 +39,11 @@ cases live in `scripts/tests/supervisor.test.sh`, so test tasks are never `[P]` 
 
 **Independent test**: given run-status fixtures, `map` and `check-owner` reproduce each state and a restart starts nothing twice.
 
-- [ ] T014 [US4] Add test cases to `scripts/tests/supervisor.test.sh`: `map` per data-model.md table (done, dead-no-ledger within and past Grace, asking/stuck/blocked/waiting-ci/running, `--exit 2|3` gives `lost`), tries and `failed` after 3, `skipped` via `ledger set`, `check-owner` OWN/FREE/HELD, owner set after FREE (US4 1-4, SC-002, FR-011)
-- [ ] T015 [US4] Implement `supervisor.sh map` and `check-owner`, plus the tries counter rule
-- [ ] T016 [US4] Add watcher test cases to `scripts/tests/supervisor.test.sh`: exits `CHANGED <issue> <old> <new>` on a changed state and `CEILING` at the ceiling, stub run-status via `AUTOPILOT_RUN_STATUS`, `--interval 1 --ceiling 2`
-- [ ] T017 [US4] Create `scripts/autopilot/supervisor-watch.sh` (state-change or 10 minute exit, `AUTOPILOT_WATCH_CEILING`)
-- [ ] T018 [US4] Add *Restart*, *Report* (`asking`, `stuck`, `blocked`, `dead-no-ledger` runs, from the JSON `escalation`) and the background watcher via `run_in_background` to `.claude/skills/autopilot-supervisor/SKILL.md`, including the owner check at start (`check-owner`, then `ledger owner <id>` after `FREE`), `list_sessions` liveness for `lost`, and the `starting` row with empty cells recovery (FR-006, FR-009)
+- [x] T014 [US4] Add test cases to `scripts/tests/supervisor.test.sh`: `map` per data-model.md table (done, dead-no-ledger within and past Grace, asking/stuck/blocked/waiting-ci/running, `--exit 2|3` gives `lost`), tries and `failed` after 3, `skipped` via `ledger set`, `check-owner` OWN/FREE/HELD, owner set after FREE (US4 1-4, SC-002, FR-011)
+- [x] T015 [US4] Implement `supervisor.sh map` and `check-owner`, plus the tries counter rule
+- [x] T016 [US4] Add watcher test cases to `scripts/tests/supervisor.test.sh`: exits `CHANGED <issue> <old> <new>` on a changed state and `CEILING` at the ceiling, stub run-status via `AUTOPILOT_RUN_STATUS`, `--interval 1 --ceiling 2`
+- [x] T017 [US4] Create `scripts/autopilot/supervisor-watch.sh` (state-change or 10 minute exit, `AUTOPILOT_WATCH_CEILING`)
+- [x] T018 [US4] Add *Restart*, *Report* (`asking`, `stuck`, `blocked`, `dead-no-ledger` runs, from the JSON `escalation`) and the background watcher via `run_in_background` to `.claude/skills/autopilot-supervisor/SKILL.md`, including the owner check at start (`check-owner`, then `ledger owner <id>` after `FREE`), `list_sessions` liveness for `lost`, and the `starting` row with empty cells recovery (FR-006, FR-009)
 
 ## Phase 6: User Story 3 - Sequence issues that touch the same files (P2)
 
