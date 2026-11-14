@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
 - **Phase**: M1 (implement)
-- **Next step**: implement T001–T013
+- **Next step**: M1 implemented and gated; reviews A and B pending, then PR
 
 ## Pull requests
 
@@ -41,6 +41,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | --- | --- | --- | --- | --- | --- |
+| Review A M1 | 1 | M1 | 4e24482ca1e30121ade91d0f143e3b68e47fc0c2 | 5a044470d49df96bb8775c5a03e41d23774fa6c5:4e24482ca1e30121ade91d0f143e3b68e47fc0c2 | pending (orchestrator dispatches) |
+| Review B M1 | 1 | M1 | 4e24482ca1e30121ade91d0f143e3b68e47fc0c2 | 5a044470d49df96bb8775c5a03e41d23774fa6c5:4e24482ca1e30121ade91d0f143e3b68e47fc0c2 | pending (orchestrator dispatches) |
 | Review spec | 1 | spec | 62f51d14dbd48b0ba3434ad53aed66a19cd26b65 | c1af633993e0d08fce04690906bf0074fe12df1d:62f51d14dbd48b0ba3434ad53aed66a19cd26b65 | CHANGES: 3 MAJOR, fixed |
 | Review spec | 2 | spec | 0fb591fff8b90b2d0562841744f93891dd323802 | 6362a8c68621e9b59d41d9acad67d623b69dbd07:0fb591fff8b90b2d0562841744f93891dd323802 | CLEAN (3 MINOR fixed, prose only) |
 | Review plan | 1 | design | 09892a1672a95d7ec7f8772b8f1fe16d30dd566a | 215dda838db4069559cf0af8fc45ed9bf133cc53:3cb9cd476b47253d273ced1dd535825e4c22ba4a | CHANGES: 3 MAJOR, fixed |
@@ -63,5 +65,8 @@ snapshots. The next unit sets it back to None.>
 None.
 
 ## Follow-ups not done
+
+- Full gate: all green except `micold-daemon session_extras::tests::a_signed_commit_succeeds_with_the_delivered_key` (signing, cloud env; no Rust touched). `scripts/tests/*.test.sh` ran individually, all green.
+- T008: the supervised argument text lives in `rules/supervised.md` (SKILL.md is at its 60-line ceiling), linked from SKILL.md's route table.
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
