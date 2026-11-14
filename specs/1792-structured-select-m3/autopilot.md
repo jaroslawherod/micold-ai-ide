@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: claude/project-thread-q9zjol
 - **Started**: 2026-11-11
-- **Phase**: M3 verify
-- **Next step**: M3 review A round 2 (fix diff), full gate, review B and visual pass (autopilot-unit, model opus override, cloud thread)
+- **Phase**: M3 PR open
+- **Next step**: orchestrator dispatches review B (conformance, sonnet) and the M3 visual pass (quickstart Part B steps 2, 3, 5, 6; no Agent tool in this unit, forked visual-pass got no args), then waits on CI and merges the M3 PR
 
 ## Pull requests
 
@@ -27,9 +27,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | merged |
 | M2 | T011–T012 | light | menu parity pinned (test-only if green) | #1851 | merged |
-| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | in progress |
+| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | (see PR table) | PR open |
 
 Polish T022–T023 (no code) is left to the close unit.
+
+M3 local gate (cloud): fmt, clippy core+workspace (`scripts/gate.sh`, stopped at missing cargo-nextest), doctests, `cargo clippy -p micold-client --all-targets -D warnings`, and `cargo test -p micold-client --no-fail-fast` green at 3a16d5d8a; other crates unchanged. CI is the gate of record.
 
 ## Decisions
 
