@@ -286,6 +286,7 @@ register! {
             crate::features::sidebar::SidebarMoreMenu,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::quick_switch::QuickSwitcherDialog => crate::ui::quick_switcher::dialog,
     crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
@@ -336,6 +337,7 @@ register! {
             crate::features::sidebar::SidebarMoreMenu,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
     crate::features::session::ConfirmLinkOpenDialog => crate::ui::confirm_link_open::dialog,
@@ -396,6 +398,7 @@ register! {
             crate::features::project::ProjectSwitcher,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     // The setup output view (feature 1289, contract U4).
     crate::features::setup::SetupOutputDialog => crate::ui::setup_output::dialog,

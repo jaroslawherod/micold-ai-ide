@@ -386,3 +386,25 @@ fn the_group_menu_opens_only_for_a_group_the_project_has() {
     send(&mut none, Msg::MenuOpened(UserGroupId(0), (40, 60)));
     assert!(none.sidebar_groups.group_menu.is_none());
 }
+
+#[test]
+fn confirming_a_rename_without_a_change_writes_nothing() {
+    let mut state = grouped();
+    send(&mut state, Msg::Rename(UserGroupId(0)));
+    send(&mut state, Msg::Confirmed);
+    assert!(state.sidebar_groups.naming.is_none(), "the dialog closes");
+    assert!(state.sidebar.layouts_unsaved.is_empty());
+}
+
+#[test]
+fn rename_over_an_open_dialog_closes_the_menu_and_keeps_that_dialog() {
+    let mut state = grouped();
+    send(&mut state, Msg::New);
+    send(&mut state, Msg::MenuOpened(UserGroupId(0), (40, 60)));
+    send(&mut state, Msg::Rename(UserGroupId(0)));
+    assert!(state.sidebar_groups.group_menu.is_none());
+    assert_eq!(
+        state.sidebar_groups.naming.as_ref().map(|d| &d.target),
+        Some(&NamingTarget::New)
+    );
+}

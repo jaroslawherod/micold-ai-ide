@@ -621,8 +621,26 @@ pub fn more_menu_items(state: &State) -> Vec<material::MenuItem<Message>> {
     .collect()
 }
 
-/// The sidebar's empty-area menu (feature 1786, C6a): **New group…**, at the press point, clamped
-/// into the window like the row menus. `None` while it is closed.
+/// A context menu of `items` hanging from `anchor`, clamped into the window like the row menus.
+fn menu_at<'a>(
+    state: &State,
+    anchor: (u16, u16),
+    items: Vec<material::MenuItem<Message>>,
+    dismissed: Message,
+    r: Roles,
+) -> cdk::overlay::Surface<'a, Message> {
+    let (x, y) = crate::features::project::clamp_menu_anchor(
+        anchor,
+        material::menu_panel_size(items.len()),
+        state.window.window_size,
+    );
+    material::MenuOverlay::new(items, dismissed, r)
+        .anchor(iced::Point::new(x as f32, y as f32))
+        .into()
+}
+
+/// The sidebar's empty-area menu (feature 1786, C6a): **New group…**, at the press point.
+/// `None` while it is closed.
 pub fn empty_area_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'a, Message>> {
     use crate::features::sidebar_group_actions::Msg;
     let anchor = state.sidebar_groups.empty_menu?;
@@ -631,24 +649,12 @@ pub fn empty_area_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surf
         "New group…",
         Message::SidebarGroups(Msg::New),
     )];
-    let (x, y) = crate::features::project::clamp_menu_anchor(
-        anchor,
-        material::menu_panel_size(items.len()),
-        state.window.window_size,
-    );
-    Some(
-        material::MenuOverlay::new(
-            items,
-            Message::SidebarGroups(Msg::EmptyAreaMenuDismissed),
-            r,
-        )
-        .anchor(iced::Point::new(x as f32, y as f32))
-        .into(),
-    )
+    let dismissed = Message::SidebarGroups(Msg::EmptyAreaMenuDismissed);
+    Some(menu_at(state, anchor, items, dismissed, r))
 }
 
-/// A user group header's menu (feature 1786, C6): **Rename** and **Delete**, at the press point,
-/// clamped into the window like the row menus. `None` while it is closed.
+/// A user group header's menu (feature 1786, C6): **Rename** and **Delete**, at the press point.
+/// `None` while it is closed.
 pub fn group_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'a, Message>> {
     use crate::features::sidebar_group_actions::{Msg, GROUP_MENU_ITEMS};
     let menu = state.sidebar_groups.group_menu?;
@@ -664,16 +670,8 @@ pub fn group_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'
             Message::SidebarGroups(Msg::Delete(menu.group)),
         ),
     ];
-    let (x, y) = crate::features::project::clamp_menu_anchor(
-        menu.anchor,
-        material::menu_panel_size(items.len()),
-        state.window.window_size,
-    );
-    Some(
-        material::MenuOverlay::new(items, Message::SidebarGroups(Msg::MenuDismissed), r)
-            .anchor(iced::Point::new(x as f32, y as f32))
-            .into(),
-    )
+    let dismissed = Message::SidebarGroups(Msg::MenuDismissed);
+    Some(menu_at(state, menu.anchor, items, dismissed, r))
 }
 
 /// What choosing `action` on the more menu does: the message today's header button sent (FR-015).

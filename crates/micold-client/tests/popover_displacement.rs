@@ -50,6 +50,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "sidebar_more",
             "project_menu",
             "run_group_menu",
+            "user_group_menu",
         ],
     ),
     (
@@ -59,6 +60,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "sidebar_more",
             "project_menu",
             "run_group_menu",
+            "user_group_menu",
         ],
     ),
     (
@@ -68,6 +70,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "project_switcher",
             "project_menu",
             "run_group_menu",
+            "user_group_menu",
         ],
     ),
     // The project row menu closes two of the three panels and the other context menu. **Not the

@@ -158,6 +158,7 @@ fn new_started(state: &mut crate::app::State) {
 /// opens nothing. Not over an open dialog, as for **New group…**.
 fn rename_started(state: &mut crate::app::State, id: UserGroupId) {
     if crate::overlay::registry::open_dialog(state).is_some() {
+        state.sidebar_groups.group_menu = None;
         return;
     }
     let Some(name) = state
@@ -206,10 +207,11 @@ fn confirmed(state: &mut crate::app::State) -> Vec<Outcome> {
     ) else {
         return Vec::new();
     };
-    let mut layout = state
+    let held = state
         .sidebar_layout()
         .cloned()
         .unwrap_or_else(SidebarLayout::default);
+    let mut layout = held.clone();
     let result = match &draft.target {
         NamingTarget::New => layout.create(&draft.text).map(|_| ()),
         NamingTarget::Rename(id) => layout.rename(*id, &draft.text),
@@ -217,6 +219,10 @@ fn confirmed(state: &mut crate::app::State) -> Vec<Outcome> {
     match result {
         Ok(()) => {
             state.sidebar_groups.naming = None;
+            // Confirming a rename without a change writes nothing.
+            if layout == held {
+                return Vec::new();
+            }
             vec![Outcome::SidebarLayoutChanged { project, layout }]
         }
         Err(error) => {

@@ -78,7 +78,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U27 | move_menu_items lists each group, Ungrouped, New group…; none for Default | C6, FR-010 | example | PENDING | tasks T026, T027 |
 | U28 | set_collapsed; Enter/Space on a header toggles; menu Collapse/Expand | FR-011 | example | PENDING | tasks T039, T040 |
 | U29 | reveal_ready expands the group holding the target | FR-017 | example | PENDING | tasks T039, T040 |
-| U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | DONE | tasks T020, T021 |
+| U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | PARTIAL: items operable (done); the keyboard opener is T040 (M5) | tasks T020, T021 |
 | U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | DONE | tests/sidebar_group_actions.rs::new_group_is_on_the_more_menu_with_no_worktree_needed, no_project_open_offers_no_new_group, the_new_group_chord_is_primary_shift_g_and_on_the_shortcut_sheet (empty-area menu still open, T014) |
 
 ## Out of scope
