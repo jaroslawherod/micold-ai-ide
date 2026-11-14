@@ -1092,6 +1092,8 @@ impl crate::app::State {
         self.composers
             .palette
             .open_picker(session, &reported, &current);
+        // `/model` with the row collapsed: the menu needs its trigger (feature 1792 D1).
+        self.composers.expand_options();
     }
 
     /// The arrows in `session`'s picker.
@@ -1144,6 +1146,10 @@ impl crate::app::State {
                 self.composers.clear_notice(session);
                 self.composers.replace_text(session, String::new(), (0, 0));
                 self.open_effort_picker(session);
+                // `/effort` with the row collapsed: the list needs its trigger (feature 1792 D1).
+                if self.effort_picker.picker(session).is_some() {
+                    self.composers.expand_options();
+                }
                 SendIntent::Nothing
             }
             Classified::Effort(Ok(choice)) => SendIntent::SetEffort(choice),
@@ -1287,8 +1293,9 @@ impl crate::overlay::registry::Registered for ConfirmSwitchKindDialog {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::open_editor_visible;
+    use micold_core::session::SessionId;
 
     /// Feature 1703 FR-004: the button shows with several lines, or while focused or hovered.
     #[test]
@@ -1298,6 +1305,34 @@ mod tests {
         assert!(open_editor_visible(2, false, false));
         assert!(open_editor_visible(1, true, false));
         assert!(open_editor_visible(1, false, true));
+    }
+
+    /// A window with one structured Claude Code session, which offers all three pickers.
+    pub(crate) fn structured_state() -> (crate::app::State, SessionId) {
+        let mut state = crate::app::State::default();
+        let path = std::path::PathBuf::from("/repo/options");
+        state.workspace.active = Some(path);
+        let id = add_structured_session(&mut state);
+        (state, id)
+    }
+
+    /// Add a structured Claude Code session to the active project of `state`.
+    pub(crate) fn add_structured_session(state: &mut crate::app::State) -> SessionId {
+        use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
+        let session = Session::start_new_of_kind(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+            SessionKind::Structured,
+        );
+        let id = session.id;
+        let path = state.workspace.active.clone().expect("an active project");
+        state
+            .workspace
+            .sessions
+            .entry(path)
+            .or_default()
+            .push(session);
+        id
     }
 }
 

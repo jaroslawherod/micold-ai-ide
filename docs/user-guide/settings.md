@@ -57,7 +57,9 @@ the app is running.
 Off by default. Turn it on and the Overview's [full-screen](overview.md#full-screen) zoom switches
 in one step: the sidebar goes or returns and the cards take their new places in the next frame, with
 no sliding. The focus outline of an Overview card, and the shadow of an expanded card, also appear
-and disappear at once instead of easing in and out over 150 ms. Other animations in the app are
+and disappear at once instead of easing in and out over 150 ms. In a structured session the
+[session options](structured-input.md#session-options) row shows and hides in one step instead of
+growing and collapsing over 300 ms. Other animations in the app are
 unchanged. Like the other settings it applies when you press **Save** and is discarded by
 **Cancel**. The operating system's reduced-motion setting is not read.
 

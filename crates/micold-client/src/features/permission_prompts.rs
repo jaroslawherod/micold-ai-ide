@@ -580,6 +580,11 @@ impl State {
         self.mode_menu.remove(&session);
     }
 
+    /// Close every session's mode list (the options row that holds them collapsed, feature 1792).
+    pub fn close_mode_menus(&mut self) {
+        self.mode_menu.clear();
+    }
+
     /// The session whose Bypass confirmation is shown.
     pub fn mode_confirmation(&self) -> Option<SessionId> {
         self.mode_confirmation
