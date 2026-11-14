@@ -283,6 +283,8 @@ pub async fn delete_worktree(
                 }
             }
             state.invalidate_env_include(&cache_path);
+            // Spec 1857 (FR-006): its children keep their link, marked removed; its own go.
+            state.forget_worktree_parent(&project, &dir_name);
             // A confirmation still waiting to delete this worktree has nothing left to delete
             // (FR-014, EC-4): it fails `not_found` instead of reaching git.
             state.confirmations_worktree_gone(&project, &dir_name);

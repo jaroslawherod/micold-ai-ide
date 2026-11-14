@@ -429,8 +429,6 @@ mod tests {
         let link = tmp.path().join("link.json");
         #[cfg(unix)]
         std::os::unix::fs::symlink(&source, &link).unwrap();
-        #[cfg(not(unix))]
-        let link = source.clone();
         let now = SystemTime::UNIX_EPOCH;
         for dest in [&source, &link] {
             let err = apply_relay(&source, dest, AiCli::ClaudeCode, now).unwrap_err();

@@ -915,7 +915,7 @@ fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
             .flat_map(|e| match e {
                 SidebarEntry::Default(node) => node.sessions.clone(),
                 SidebarEntry::Worktree(node) => node.sessions.clone(),
-                SidebarEntry::Group(_) => Vec::new(),
+                SidebarEntry::Group(_) | SidebarEntry::UserGroup(_) => Vec::new(),
             })
             .map(|s| s.provider)
             .collect::<Vec<_>>(),
@@ -2274,13 +2274,15 @@ mod chip_bar {
     }
 
     #[test]
-    fn the_more_menu_holds_refresh_attach_existing_and_run_in_parallel_in_that_order() {
+    fn the_more_menu_holds_refresh_attach_existing_run_in_parallel_and_new_group_in_that_order() {
+        // Feature 1786 (C6a) appended New group.
         assert_eq!(
             MORE_MENU,
             [
                 MoreAction::Refresh,
                 MoreAction::AttachExisting,
-                MoreAction::RunInParallel
+                MoreAction::RunInParallel,
+                MoreAction::NewGroup
             ]
         );
         let actions: Vec<MoreAction> = more_menu_items(true, false)
@@ -2304,7 +2306,8 @@ mod chip_bar {
             [
                 "Refresh the worktree list",
                 "Attach existing…",
-                "Run in parallel…"
+                "Run in parallel…",
+                "New group…"
             ]
         );
         assert_eq!(
@@ -2312,7 +2315,8 @@ mod chip_bar {
             [
                 "Refreshing worktrees…",
                 "Attach existing…",
-                "Run in parallel…"
+                "Run in parallel…",
+                "New group…"
             ],
             "a running refresh says so, as the header button did"
         );
@@ -2330,7 +2334,8 @@ mod chip_bar {
             [
                 "Refresh the worktree list",
                 "Attach existing…",
-                "Run in parallel…"
+                "Run in parallel…",
+                "New group…"
             ]
         );
     }
@@ -2345,9 +2350,9 @@ mod chip_bar {
                 .map(|item: &MoreMenuItem| item.enabled)
                 .collect()
         };
-        assert_eq!(enabled(true, false), [true, true, true]);
-        assert_eq!(enabled(true, true), [false, true, true]);
-        assert_eq!(enabled(false, false), [false, false, false]);
+        assert_eq!(enabled(true, false), [true, true, true, true]);
+        assert_eq!(enabled(true, true), [false, true, true, true]);
+        assert_eq!(enabled(false, false), [false, false, false, false]);
     }
 
     /// Nine filters on offer: more than fit one line (BUG-1470, US4.7).

@@ -43,6 +43,7 @@ fn create_worktree() -> Operation {
         name: None,
         mode: CreateMode::NewBranch,
         start: None,
+        parent: None,
     })
 }
 
@@ -71,6 +72,7 @@ fn a_default_caller_may_create_a_worktree() {
             name: None,
             mode: mode.clone(),
             start: None,
+            parent: None,
         });
         assert_eq!(
             decide_for(SessionLocation::Default, &operation),
@@ -91,6 +93,7 @@ fn a_derived_create_is_allowed_and_audited_by_name_or_issue() {
             name: name.map(str::to_string),
             github_issue: issue,
             start: None,
+            parent: None,
         })
     };
     assert_eq!(derived(Some("login"), None).audit_target(), "login");
@@ -132,7 +135,7 @@ fn the_default_refusal_names_rename_and_delete_and_not_create() {
 fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
     for operation in [
         Operation::Whoami,
-        Operation::ListWorktrees,
+        Operation::ListWorktrees { parent: None },
         Operation::CreateSession {
             worktree: WorktreeRef::Named("b".into()),
             ai_cli: None,
@@ -153,7 +156,7 @@ fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
 fn the_read_only_operations_proceed_for_a_worktree_caller_and_a_default_caller() {
     for operation in [
         Operation::Whoami,
-        Operation::ListWorktrees,
+        Operation::ListWorktrees { parent: None },
         Operation::ListBranches,
         Operation::ListSessions { worktree: None },
         Operation::GetSession {

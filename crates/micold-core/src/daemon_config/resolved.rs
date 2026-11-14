@@ -141,11 +141,6 @@ pub(super) fn mode_of(path: &Path) -> Option<Option<u32>> {
         use std::os::unix::fs::PermissionsExt;
         Some(Some(meta.permissions().mode() & 0o777))
     }
-    #[cfg(not(unix))]
-    {
-        let _ = meta;
-        Some(None)
-    }
 }
 
 fn probe(path: &Path) -> SecretStatus {
@@ -286,13 +281,7 @@ pub fn resolved_view(config: &DaemonConfig) -> ResolvedView {
         ca_file: config.network.as_ref().and_then(|n| n.ca_file.clone()),
         startup: config.startup.as_ref().map(|s| StartupView {
             script_file: s.script_file.clone(),
-            shell: s.shell.clone().unwrap_or_else(|| {
-                PathBuf::from(if cfg!(windows) {
-                    "powershell.exe"
-                } else {
-                    "/bin/sh"
-                })
-            }),
+            shell: s.shell.clone().unwrap_or_else(|| PathBuf::from("/bin/sh")),
             timeout_secs: s.timeout_secs.map_or(300, |n| n.clamp(1, 3600) as u32),
             on_failure: s.on_failure.unwrap_or(OnFailure::Refuse),
             run: s.run.unwrap_or(RunPolicy::EveryStart),

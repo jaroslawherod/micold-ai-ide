@@ -28,20 +28,10 @@ fn sh(script: &str) -> CommandBuilder {
     cmd.arg(script);
     cmd
 }
-/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
-#[cfg(windows)]
-fn sh(script: &str) -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/c");
-    cmd.arg(script);
-    cmd
-}
 
 /// A script that stays alive long enough to be stopped by the test.
 #[cfg(unix)]
 const IDLE_30S: &str = "sleep 30";
-#[cfg(windows)]
-const IDLE_30S: &str = "ping -n 31 127.0.0.1 >nul";
 
 /// A project with two Regular sessions: one we will run and stop, one we will never start.
 fn state_with_two_sessions(project: &Path) -> (DaemonState, SessionId, SessionId) {

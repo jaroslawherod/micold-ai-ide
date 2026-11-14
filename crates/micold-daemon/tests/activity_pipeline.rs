@@ -139,12 +139,6 @@ fn catalog_with_session_in_mode(
 fn register_cat(state: &DaemonState, id: SessionId) -> std::sync::Arc<PtySession> {
     #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
     state.register_session(session)
@@ -170,70 +164,6 @@ fn emitter_command(printf_body: &str) -> CommandBuilder {
     cmd.arg("-c");
     cmd.arg(format!("printf '{printf_body}'; sleep 5"));
     cmd
-}
-
-/// ConPTY does not pass a child's own escape sequences through verbatim: it keeps the console's
-/// state and re-renders it as VT. A title reaches the parser as the OSC-0 ConPTY emits when the
-/// console title changes, so on Windows the emitter sets the title and ConPTY writes the sequence.
-///
-/// A body may set several titles in turn, as the Unix emitter's `printf` does, joined by
-/// `'; sleep <seconds>; printf '`; each pause becomes a `Start-Sleep` between the titles.
-#[cfg(windows)]
-fn emitter_command(printf_body: &str) -> CommandBuilder {
-    let decoded = printf_octal_unescape(printf_body);
-    let mut steps = Vec::new();
-    for (index, part) in decoded.split("'; sleep ").enumerate() {
-        let osc = if index == 0 {
-            part
-        } else {
-            let (seconds, rest) = part
-                .split_once("; printf '")
-                .expect("titles are joined by `'; sleep <seconds>; printf '`");
-            let seconds: f64 = seconds.parse().expect("a pause in seconds");
-            steps.push(format!(
-                "Start-Sleep -Milliseconds {}",
-                (seconds * 1000.0) as u64
-            ));
-            rest
-        };
-        let title = osc
-            .strip_prefix("\x1b]0;")
-            .and_then(|rest| rest.strip_suffix('\x07'))
-            .expect("the Windows emitter only sets OSC-0 titles");
-        steps.push(powershell_set_title(title));
-    }
-    steps.push("Start-Sleep -Seconds 5".to_string());
-    let mut cmd = CommandBuilder::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
-    cmd.arg(steps.join("; "));
-    cmd
-}
-
-/// A PowerShell statement that sets the console title to `title`, spelled as UTF-16 code units so
-/// no character in it needs quoting on its way through the command line.
-#[cfg(windows)]
-fn powershell_set_title(title: &str) -> String {
-    let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
-    format!("[Console]::Title = -join [char[]]({})", codes.join(","))
-}
-
-/// Resolve the `\NNN` octal escapes a `printf` format uses, decoding the bytes as UTF-8.
-#[cfg(windows)]
-fn printf_octal_unescape(body: &str) -> String {
-    let mut bytes = Vec::new();
-    let mut rest = body.as_bytes();
-    while let Some((&first, tail)) = rest.split_first() {
-        if first == b'\\' && tail.len() >= 3 && tail[..3].iter().all(|b| (b'0'..=b'7').contains(b))
-        {
-            let octal = std::str::from_utf8(&tail[..3]).unwrap();
-            bytes.push(u8::from_str_radix(octal, 8).expect("a three-digit octal escape"));
-            rest = &tail[3..];
-        } else {
-            bytes.push(first);
-            rest = tail;
-        }
-    }
-    String::from_utf8(bytes).expect("the escaped body is UTF-8")
 }
 
 /// `COPILOT_HOME` is process-global, so every test that points the Copilot provider at a private
@@ -579,11 +509,6 @@ fn a_shell_tabs_title_never_becomes_the_sessions_name() {
     let (input, output): (&[u8], &str) = (
         b"printf '\\033]0;user@host: ~/proj\\007'; echo t026_$((1+1))\n",
         "t026_2",
-    );
-    #[cfg(windows)]
-    let (input, output): (&[u8], &str) = (
-        b"title user@host: ~/proj& echo t026_%OS%\r",
-        "t026_Windows_NT",
     );
     state.session_input(id, 0, input);
     let ran = wait_until(Duration::from_secs(5), || {
@@ -1082,18 +1007,6 @@ fn a_running_pi_row_reads_its_first_message_until_it_is_named() {
         cmd.arg(format!(
             r"printf '\033]0;\317\200 - demo\007'; while [ ! -e '{}' ]; do sleep 0.05; done; printf '\033]0;\317\200 - my task - demo\007'; sleep 10",
             named.display()
-        ));
-        cmd
-    };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("powershell");
-        cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
-        cmd.arg(format!(
-            "{}; while (-not (Test-Path -LiteralPath '{}')) {{ Start-Sleep -Milliseconds 50 }}; {}; Start-Sleep -Seconds 10",
-            powershell_set_title("π - demo"),
-            named.display().to_string().replace('\'', "''"),
-            powershell_set_title("π - my task - demo"),
         ));
         cmd
     };

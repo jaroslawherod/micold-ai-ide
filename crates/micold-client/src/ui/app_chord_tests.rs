@@ -5,9 +5,6 @@ use super::*;
 use iced::keyboard::{self, key::Code, key::Physical, Key, Modifiers};
 
 fn primary_shift(key: &str, code: Code) -> keyboard::Event {
-    #[cfg(target_os = "macos")]
-    let modifiers = Modifiers::LOGO | Modifiers::SHIFT;
-    #[cfg(not(target_os = "macos"))]
     let modifiers = Modifiers::CTRL | Modifiers::SHIFT;
     keyboard::Event::KeyPressed {
         key: Key::Character(key.into()),
@@ -213,43 +210,16 @@ fn press(key: Key, code: Option<Code>, modifiers: Modifiers, repeat: bool) -> ke
 pub(super) fn history_presses(repeat: bool) -> Vec<(keyboard::Event, micold_core::history::Dir)> {
     use keyboard::key::Named;
     use micold_core::history::Dir;
-    if cfg!(target_os = "macos") {
-        vec![
-            (
-                press(
-                    Key::Character("[".into()),
-                    Some(Code::BracketLeft),
-                    Modifiers::LOGO,
-                    repeat,
-                ),
-                Dir::Back,
-            ),
-            (
-                press(
-                    Key::Character("]".into()),
-                    Some(Code::BracketRight),
-                    Modifiers::LOGO,
-                    repeat,
-                ),
-                Dir::Forward,
-            ),
-            (
-                press(Key::Character("[".into()), None, Modifiers::LOGO, repeat),
-                Dir::Back,
-            ),
-        ]
-    } else {
-        vec![
-            (
-                press(Key::Named(Named::ArrowLeft), None, Modifiers::ALT, repeat),
-                Dir::Back,
-            ),
-            (
-                press(Key::Named(Named::ArrowRight), None, Modifiers::ALT, repeat),
-                Dir::Forward,
-            ),
-        ]
-    }
+    vec![
+        (
+            press(Key::Named(Named::ArrowLeft), None, Modifiers::ALT, repeat),
+            Dir::Back,
+        ),
+        (
+            press(Key::Named(Named::ArrowRight), None, Modifiers::ALT, repeat),
+            Dir::Forward,
+        ),
+    ]
 }
 
 #[test]
@@ -295,10 +265,6 @@ fn near_misses_of_the_back_and_forward_keys_are_not_app_chords() {
         assert_eq!(app_chord(event.clone()), None, "{event:?}");
     }
     // The other platform's form.
-    let other = if cfg!(target_os = "macos") {
-        press(left(), None, Modifiers::ALT, false)
-    } else {
-        press(bracket(), Some(Code::BracketLeft), Modifiers::LOGO, false)
-    };
+    let other = press(bracket(), Some(Code::BracketLeft), Modifiers::LOGO, false);
     assert_eq!(app_chord(other.clone()), None, "{other:?}");
 }

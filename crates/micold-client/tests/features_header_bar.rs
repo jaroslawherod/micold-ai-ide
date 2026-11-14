@@ -9,8 +9,8 @@ use micold_client::app::Message;
 use micold_client::app::State;
 use micold_client::features::composer::Msg as ComposerMsg;
 use micold_client::features::header_bar::{
-    HeaderBarModel, HeaderMenu, Msg, State as Menus, Status, CHANGES_LABEL_RANK, NO_USAGE_TEXT,
-    NO_USAGE_TOOLTIP, RING_TEXT_RANK, SHOW_RAW_EVENTS, WORKTREE_MENU_NAME,
+    HeaderBarModel, HeaderMenu, Msg, State as Menus, Status, NO_USAGE_TEXT, NO_USAGE_TOOLTIP,
+    SHOW_RAW_EVENTS, WORKTREE_MENU_NAME,
 };
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::structured_transcript::TranscriptMsg;
@@ -130,12 +130,6 @@ fn another_sessions_figures_never_show_for_the_shown_one() {
     let model = HeaderBarModel::of(&state).expect("shown");
     assert_eq!(model.meter.text, NO_USAGE_TEXT, "no leak from the first");
     assert_eq!(model.status, Status::Idle, "the new session is not running");
-}
-
-#[test]
-fn the_ring_text_hides_before_the_changes_label() {
-    assert_eq!(RING_TEXT_RANK, 0);
-    assert_eq!(CHANGES_LABEL_RANK, 1);
 }
 
 #[test]

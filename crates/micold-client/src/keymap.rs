@@ -236,12 +236,8 @@ pub fn switcher_chord_labels() -> (String, String) {
 
 /// The switcher chord as the running platform writes it, for the status bar's hint (feature 1124).
 pub fn switcher_chord_label() -> String {
-    let (other, mac) = switcher_chord_labels();
-    if cfg!(target_os = "macos") {
-        mac
-    } else {
-        other
-    }
+    let (other, _) = switcher_chord_labels();
+    other
 }
 
 /// The subset of terminal mode that affects key encoding.
@@ -380,11 +376,6 @@ fn is_primary_shift(mods: Mods) -> bool {
     if !mods.shift {
         return false;
     }
-    #[cfg(target_os = "macos")]
-    {
-        mods.logo && !mods.ctrl && !mods.alt
-    }
-    #[cfg(not(target_os = "macos"))]
     {
         mods.ctrl && !mods.logo && !mods.alt
     }
@@ -402,22 +393,6 @@ pub fn history_key(input: &KeyInput) -> Option<micold_core::history::Dir> {
         alt,
         logo,
     } = input.mods;
-    #[cfg(target_os = "macos")]
-    {
-        if !(logo && !shift && !ctrl && !alt) {
-            return None;
-        }
-        let physical = match input.physical {
-            PhysicalKey::Other => logical_physical(&input.key),
-            known => known,
-        };
-        match physical {
-            PhysicalKey::BracketLeft => Some(Dir::Back),
-            PhysicalKey::BracketRight => Some(Dir::Forward),
-            _ => None,
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
     {
         if !(alt && !shift && !ctrl && !logo) {
             return None;
@@ -443,12 +418,8 @@ pub fn history_key_labels(dir: micold_core::history::Dir) -> (String, String) {
 
 /// Back's or Forward's key as the running platform writes it.
 pub fn history_key_label(dir: micold_core::history::Dir) -> String {
-    let (other, mac) = history_key_labels(dir);
-    if cfg!(target_os = "macos") {
-        mac
-    } else {
-        other
-    }
+    let (other, _) = history_key_labels(dir);
+    other
 }
 
 /// Whether the press is the reserved focus-out chord (macOS `Cmd+Shift+E`, else `Ctrl+Shift+E`).
@@ -470,22 +441,23 @@ pub fn is_overview_chord(key: &Key, mods: Mods) -> bool {
 
 /// The Overview chord as the platform writes it, for tooltips and docs.
 pub fn overview_chord_label() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Cmd+Shift+O"
-    } else {
-        "Ctrl+Shift+O"
-    }
+    "Ctrl+Shift+O"
 }
 
 /// The new-terminal-instance chord as the platform writes it, for the "+"'s tooltip (feature 1126,
 /// R13).
 pub fn new_terminal_chord_label() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Cmd+Shift+T"
-    } else {
-        "Ctrl+Shift+T"
-    }
+    "Ctrl+Shift+T"
 }
+
+/// Whether the press is the New group chord (feature 1786, contract C6a; macOS `Cmd+Shift+G`, else
+/// `Ctrl+Shift+G`). Heard only while no terminal has the keyboard, like the full-screen chord.
+pub fn is_new_group_chord(key: &Key, mods: Mods) -> bool {
+    is_primary_shift_chord(key, mods, 'g')
+}
+
+/// The New group chord as Linux/Windows and macOS write it, for the shortcut sheet and docs.
+pub const NEW_GROUP_CHORD_LABELS: (&str, &str) = ("Ctrl+Shift+G", "Cmd+Shift+G");
 
 /// Whether the press is the Overview's full-screen chord (feature 970, FR-001, research R7; macOS
 /// `Cmd+Shift+F`, else `Ctrl+Shift+F`). Not in the terminal's reserved tier: the app hears it only
@@ -497,11 +469,7 @@ pub fn is_overview_full_screen_chord(key: &Key, mods: Mods) -> bool {
 
 /// The full-screen chord as the platform writes it, for the header's tooltip and docs.
 pub fn overview_full_screen_chord_label() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Cmd+Shift+F"
-    } else {
-        "Ctrl+Shift+F"
-    }
+    "Ctrl+Shift+F"
 }
 
 /// Pane chords (macOS `Cmd+Shift+D/H/W/Arrow`, else `Ctrl+Shift+D/H/W/Arrow`), built like
@@ -511,9 +479,6 @@ fn pane_action(key: &Key, mods: Mods) -> Option<PaneAction> {
     if !mods.shift {
         return None;
     }
-    #[cfg(target_os = "macos")]
-    let platform = mods.logo && !mods.ctrl && !mods.alt;
-    #[cfg(not(target_os = "macos"))]
     let platform = mods.ctrl && !mods.logo && !mods.alt;
     if !platform {
         return None;
@@ -539,9 +504,6 @@ fn copy_paste_action(key: &Key, mods: Mods) -> Option<KeyOutput> {
         Key::Char(c) => c.to_ascii_lowercase(),
         _ => return None,
     };
-    #[cfg(target_os = "macos")]
-    let matches = mods.logo && !mods.ctrl && !mods.alt && !mods.shift;
-    #[cfg(not(target_os = "macos"))]
     let matches = mods.ctrl && mods.shift && !mods.alt && !mods.logo;
     if !matches {
         return None;
@@ -705,11 +667,7 @@ fn function_key(n: u8, _mods: Mods) -> Option<String> {
 /// Whether the platform's primary modifier is held: Cmd (`logo`) on macOS, Ctrl elsewhere
 /// (#1274 contract K5).
 pub fn primary_held(mods: Mods) -> bool {
-    if cfg!(target_os = "macos") {
-        mods.logo
-    } else {
-        mods.ctrl
-    }
+    mods.ctrl
 }
 
 /// The review key map's view of a press (#1274 contract K5): the one character the press produced,

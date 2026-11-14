@@ -181,6 +181,10 @@ the Overview badge — inside its 43 dp at 640 and 1280 dp, in both schemes.
 
 Feature 1125 added the sidebar state `main-shell-sidebar-grouped`, which holds *Default* and one worktree per card state. Feature 1718 made that list flat: the same rows, in the stable order, with no group header.
 
+Feature 1786 re-recorded the fixture for its fourth more-menu item, **New group…**: the chip bar's
+more menu is 48 dp taller wherever a state draws it open. No recorded state holds a user group yet;
+the header's own geometry is `gates/sidebar_group_header_fits.rs`, laid out from the showcase pose.
+
 **The redesign's states, region by region.** The window redesign added each region's states with
 its own issue: the status bar's `status-bar-*` (#1124, twelve states); the sidebar's
 `main-shell-sidebar-grouped` and the chip bar at its narrowest, default and widest width,

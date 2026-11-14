@@ -13,43 +13,22 @@
 //! The rule is a function over its inputs, and two tests drive it against deliberately-broken
 //! manifests. Without those, this file would be a gate nobody had ever seen fail — which is the
 //! failure mode the whole feature exists to remove.
-//!
-//! # The macOS bundle (feature 028, FR-006)
-//!
-//! `scripts/macos-bundle.sh` composes `Contents/MacOS/` from a directory `cargo build` fills, and
-//! that directory holds three binaries: the two that ship and the showcase. So the same
-//! requirement arrives in a second shape, with a second way to get it wrong — a glob. `cp
-//! "$BIN_DIR"/* "$CONTENTS/MacOS/"` is shorter, obviously correct-looking, and ships the showcase
-//! to every macOS user.
-//!
-//! Three rules, for the three ways the bundle can be wrong: it must not name the showcase, it must
-//! name both binaries that ship (a bundle missing `micold-daemon` opens a window and then fails
-//! every session, because `daemon_binary()` looks for a sibling of `current_exe()`), and it must
-//! not glob into `Contents/MacOS/`. The third is the one that cannot be spotted by reading the
-//! produced bundle: a glob over a directory that happens to hold two files looks exactly like an
-//! explicit copy.
 
 #[path = "support/packaging.rs"]
 mod packaging;
 
-use packaging::{
-    basename, deb_assets, iss_file_entries, manifest_path, repo_root, rpm_assets, FONT_LICENCES,
-};
+use packaging::{deb_assets, manifest_path, repo_root, rpm_assets};
 use std::fs;
 use std::path::PathBuf;
 
 /// The showcase binary's name, as `Cargo.toml` declares it.
 const SHOWCASE_BIN: &str = "micold-showcase";
 
-/// The binaries the macOS bundle ships, and the only ones (contracts/bundle-layout.md).
+/// The binaries every package ships, and the only ones.
 const BUNDLED_BINS: &[&str] = &["micold-ai-ide", "micold-daemon"];
 
 fn desktop_path() -> PathBuf {
     repo_root().join("packaging/micold-ai-ide.desktop")
-}
-
-fn macos_bundle_path() -> PathBuf {
-    repo_root().join("scripts/macos-bundle.sh")
 }
 
 /// Whether a file's text names the showcase — by binary name or by build-output path.
@@ -98,58 +77,6 @@ fn violations(manifest: &str, desktop: &str, bin: &str) -> Vec<Violation> {
     out
 }
 
-/// Lines of a shell script that are not wholly a comment.
-///
-/// The rules below are about what the script *does*, and this file's own reasoning is written in
-/// that script's comments — so a comment explaining why globbing is forbidden must not read as a
-/// glob.
-fn shell_code(script: &str) -> impl Iterator<Item = &str> {
-    script
-        .lines()
-        .filter(|line| !line.trim_start().starts_with('#'))
-}
-
-/// The macOS half of the same requirement (FR-006).
-fn macos_violations(script: &str, showcase: &str, shipped: &[&str]) -> Vec<Violation> {
-    let mut out = Vec::new();
-
-    if shell_code(script).any(|line| line.contains(showcase)) {
-        out.push(Violation(format!(
-            "scripts/macos-bundle.sh names `{showcase}` outside a comment — the showcase is a \
-             development tool and MUST NOT reach an end user through an installation (FR-006)"
-        )));
-    }
-
-    for bin in shipped {
-        if !shell_code(script).any(|line| line.contains(bin)) {
-            out.push(Violation(format!(
-                "scripts/macos-bundle.sh never names `{bin}`, so it cannot be copying it \
-                 explicitly. `Contents/MacOS/` must hold exactly the shipped binaries: a missing \
-                 `micold-daemon` leaves `daemon_binary()` looking for a sibling that is not there, \
-                 and every session fails to start while the window opens normally"
-            )));
-        }
-    }
-
-    // A glob is how the showcase gets in without anyone naming it. Two shapes reach
-    // `Contents/MacOS/`: a wildcard on the destination side, and one on the source directory the
-    // binaries are copied from.
-    let globs: Vec<_> = shell_code(script)
-        .filter(|line| line.contains('*') && (line.contains("MacOS") || line.contains("BIN_DIR")))
-        .map(str::trim)
-        .collect();
-    if !globs.is_empty() {
-        out.push(Violation(format!(
-            "scripts/macos-bundle.sh copies into `Contents/MacOS/` with a wildcard:\n      {}\n    \
-             `cargo build` puts the showcase in the same directory as the two binaries that ship, \
-             so a glob ships it. The copy list stays explicit, one name at a time (FR-006)",
-            globs.join("\n      "),
-        )));
-    }
-
-    out
-}
-
 // ---------------------------------------------------------------------------------------------
 // The real files
 // ---------------------------------------------------------------------------------------------
@@ -192,7 +119,7 @@ fn the_manifest_declares_the_showcase_binary_but_does_not_ship_it() {
     );
 }
 
-/// The RPM is the same requirement in a third shape (issue #583): cargo-generate-rpm also ships
+/// The RPM is the same requirement in a second shape (issue #583): cargo-generate-rpm also ships
 /// only what `assets` lists, and ships *every* binary the crate builds when the list is absent.
 #[test]
 fn the_rpm_contains_no_showcase() {
@@ -312,323 +239,5 @@ fn both_packaging_artifacts_exist() {
         "{} not found — if packaging moved, this file's paths must move with it, or the exclusion \
          goes unchecked",
         desktop_path().display()
-    );
-}
-
-// ---------------------------------------------------------------------------------------------
-// The macOS bundle (feature 028)
-// ---------------------------------------------------------------------------------------------
-
-#[test]
-fn the_macos_bundle_contains_no_showcase() {
-    let script = fs::read_to_string(macos_bundle_path()).expect("read the macOS bundle script");
-
-    let found = macos_violations(&script, SHOWCASE_BIN, BUNDLED_BINS);
-    assert!(
-        found.is_empty(),
-        "the showcase would be bundled, or the bundle would be incomplete (FR-006):\n{}",
-        found
-            .iter()
-            .map(|v| format!("  {}", v.0))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-}
-
-/// A script shaped like the real one, reduced to the lines the rules look at.
-const HEALTHY_BUNDLE_SCRIPT: &str = r#"
-BINARIES=("micold-daemon" "micold-ai-ide")
-for bin in "${BINARIES[@]}"; do
-  cp "$BIN_DIR/$bin" "$CONTENTS/MacOS/$bin"
-done
-"#;
-
-#[test]
-fn the_healthy_bundle_script_passes() {
-    assert_eq!(
-        macos_violations(HEALTHY_BUNDLE_SCRIPT, SHOWCASE_BIN, BUNDLED_BINS),
-        vec![]
-    );
-}
-
-#[test]
-fn a_bundle_script_that_names_the_showcase_fails() {
-    let shipping =
-        format!("{HEALTHY_BUNDLE_SCRIPT}cp \"$BIN_DIR/micold-showcase\" \"$CONTENTS/MacOS/\"\n");
-    let found = macos_violations(&shipping, SHOWCASE_BIN, BUNDLED_BINS);
-    assert_eq!(
-        found.len(),
-        1,
-        "expected exactly one violation, got {found:?}"
-    );
-    assert!(
-        found[0].0.contains(SHOWCASE_BIN),
-        "the failure must name the binary: {}",
-        found[0].0
-    );
-}
-
-#[test]
-fn a_bundle_script_that_globs_fails() {
-    let globbing = "cp \"$BIN_DIR\"/* \"$CONTENTS/MacOS/\"\n";
-    let found = macos_violations(globbing, SHOWCASE_BIN, BUNDLED_BINS);
-    // The glob, plus both binaries no longer being named — which is exactly what a glob costs.
-    assert!(
-        found.iter().any(|v| v.0.contains("wildcard")),
-        "a wildcard copy into Contents/MacOS must fail: {found:?}"
-    );
-}
-
-#[test]
-fn a_bundle_script_that_drops_the_daemon_fails() {
-    let partial = "cp \"$BIN_DIR/micold-ai-ide\" \"$CONTENTS/MacOS/micold-ai-ide\"\n";
-    let found = macos_violations(partial, SHOWCASE_BIN, BUNDLED_BINS);
-    assert_eq!(
-        found.len(),
-        1,
-        "expected exactly one violation, got {found:?}"
-    );
-    assert!(
-        found[0].0.contains("micold-daemon"),
-        "the failure must name the missing binary: {}",
-        found[0].0
-    );
-}
-
-/// A comment may explain the glob rule without tripping it — otherwise the only way to document
-/// the reasoning would be to move it out of the file it is about.
-#[test]
-fn a_comment_is_not_a_glob() {
-    let commented =
-        format!("# never: cp \"$BIN_DIR\"/* \"$CONTENTS/MacOS/\"\n{HEALTHY_BUNDLE_SCRIPT}");
-    assert_eq!(
-        macos_violations(&commented, SHOWCASE_BIN, BUNDLED_BINS),
-        vec![]
-    );
-}
-
-#[test]
-fn the_macos_bundle_script_exists() {
-    assert!(
-        macos_bundle_path().is_file(),
-        "{} not found — if packaging moved, this file's paths must move with it, or the exclusion \
-         goes unchecked",
-        macos_bundle_path().display()
-    );
-}
-
-// ---------------------------------------------------------------------------------------------
-// The Windows installer (feature 030, FR-002, FR-012)
-// ---------------------------------------------------------------------------------------------
-
-/// What the Windows installer's `[Files]` may ship: exactly the app, its daemon and the static
-/// Linux daemons it copies to remote hosts and containers (feature 806, FR-009).
-const WINDOWS_SHIPPED: &[&str] = &[
-    "micold-ai-ide.exe",
-    "micold-daemon.exe",
-    "micold-daemon-linux-x86_64",
-    "micold-daemon-linux-aarch64",
-];
-
-/// The font licence set's destination in the installed app (feature 1260, research R5).
-const WINDOWS_LICENCE_DIR: &str = r"{app}\licenses\";
-
-/// The Inno Setup rule for `script`, the text of a `.iss` file.
-///
-/// Inno Setup copies whatever a `[Files]` `Source:` matches, so the showcase would reach users
-/// through a wildcard as easily as through its own name. Wildcards are therefore a violation on
-/// their own, whatever they happen to match on the build machine today.
-///
-/// `licences` (paths; their basenames) are the only other files the installer may ship, and only into a `DestDir` under
-/// `{app}\licenses\` (feature 1260, FR-008): a licence text is documentation, never something
-/// installed beside the executables.
-fn windows_violations(
-    script: &str,
-    bin: &str,
-    shipped: &[&str],
-    licences: &[&str],
-) -> Vec<Violation> {
-    let mut out = Vec::new();
-    let entries = iss_file_entries(script);
-    for name in shipped {
-        if !entries.iter().any(|(source, _)| basename(source) == *name) {
-            out.push(Violation(format!(
-                "packaging/windows/micold-ai-ide.iss does not ship `{name}` — the installed app \
-                 would start without it (FR-002)"
-            )));
-        }
-    }
-    for (source, dest_dir) in entries {
-        let is_licence = licences.iter().any(|l| basename(l) == basename(source))
-            && dest_dir.starts_with(WINDOWS_LICENCE_DIR);
-        if names_showcase(source, bin) {
-            out.push(Violation(format!(
-                "packaging/windows/micold-ai-ide.iss ships `{source}` — the showcase is a \
-                 development tool and MUST NOT reach an end user through an installation \
-                 (FR-012). Remove the entry; do not relax this check."
-            )));
-        } else if source.contains(['*', '?']) {
-            out.push(Violation(format!(
-                "packaging/windows/micold-ai-ide.iss ships `{source}` — a wildcard `Source:` ships \
-                 whatever matches on the build machine, which can include the showcase (FR-012). \
-                 Name each file."
-            )));
-        } else if !shipped.contains(&basename(source)) && !is_licence {
-            out.push(Violation(format!(
-                "packaging/windows/micold-ai-ide.iss ships `{source}` to `{dest_dir}`, which is \
-                 not one of {shipped:?}, nor one of the licence texts {licences:?} under \
-                 `{WINDOWS_LICENCE_DIR}` — the installer ships the app, its daemon and their \
-                 licences, and nothing else (FR-012)"
-            )));
-        }
-    }
-    out
-}
-
-const HEALTHY_ISS: &str = r#"
-[Setup]
-AppName=Micold AI IDE
-
-[Files]
-; the app and the daemon it spawns, nothing else
-Source: "{#BinDir}\micold-ai-ide.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RemoteDir}\micold-daemon-linux-x86_64"; DestDir: "{app}\remote"; Flags: ignoreversion
-Source: "{#RemoteDir}\micold-daemon-linux-aarch64"; DestDir: "{app}\remote"; Flags: ignoreversion
-"#;
-
-#[test]
-fn a_windows_installer_with_a_wildcard_source_fails() {
-    let wildcard = HEALTHY_ISS.replace(r"micold-daemon.exe", r"micold-*.exe");
-
-    let found = windows_violations(&wildcard, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert!(
-        found.iter().any(|v| v.0.contains("micold-*.exe")),
-        "a wildcard `Source:` must be reported by value, got {found:?}"
-    );
-}
-
-#[test]
-fn a_windows_installer_that_ships_the_showcase_fails() {
-    let shipping = HEALTHY_ISS.replace(
-        "\n; the app",
-        "\nSource: \"{#BinDir}\\micold-showcase.exe\"; DestDir: \"{app}\"; Flags: ignoreversion\n; the app",
-    );
-
-    let found = windows_violations(&shipping, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert!(
-        found.iter().any(|v| v.0.contains("micold-showcase.exe")),
-        "a `Source:` naming the showcase must be reported, got {found:?}"
-    );
-}
-
-#[test]
-fn a_windows_installer_without_the_daemon_fails() {
-    let without_daemon: String = HEALTHY_ISS
-        .lines()
-        .filter(|line| !line.contains("micold-daemon.exe"))
-        .map(|line| format!("{line}\n"))
-        .collect();
-
-    let found = windows_violations(
-        &without_daemon,
-        SHOWCASE_BIN,
-        WINDOWS_SHIPPED,
-        FONT_LICENCES,
-    );
-
-    assert!(
-        found.iter().any(|v| v.0.contains("micold-daemon.exe")),
-        "an installer that does not ship the daemon must be reported, got {found:?}"
-    );
-}
-
-#[test]
-fn a_windows_installer_that_ships_an_unlisted_file_fails() {
-    let extra = HEALTHY_ISS.replace(
-        "\n; the app",
-        "\nSource: \"{#BinDir}\\micold-debug.dll\"; DestDir: \"{app}\"; Flags: ignoreversion\n; the app",
-    );
-
-    let found = windows_violations(&extra, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert!(
-        found.iter().any(|v| v.0.contains("micold-debug.dll")),
-        "a `Source:` outside the shipped set must be reported, got {found:?}"
-    );
-}
-
-/// One `[Files]` line shipping the licence `file` to `dest_dir`, placed before the first comment.
-fn iss_with_licence(file: &str, dest_dir: &str) -> String {
-    HEALTHY_ISS.replace(
-        "\n; the app",
-        &format!(
-            "\nSource: \"{{#FontsDir}}\\{file}\"; DestDir: \"{dest_dir}\"; Flags: ignoreversion\n; the app"
-        ),
-    )
-}
-
-#[test]
-fn a_windows_installer_that_ships_a_font_licence_under_licenses_passes() {
-    let script = iss_with_licence("LICENSE-FiraMono-OFL.txt", r"{app}\licenses\fonts");
-
-    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert_eq!(
-        found,
-        vec![],
-        "a licence text under {{app}}\\licenses\\ is allowed"
-    );
-}
-
-#[test]
-fn a_windows_installer_that_ships_a_font_licence_beside_the_app_fails() {
-    let script = iss_with_licence("LICENSE-FiraMono-OFL.txt", "{app}");
-
-    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert!(
-        found
-            .iter()
-            .any(|v| v.0.contains("LICENSE-FiraMono-OFL.txt")),
-        "a licence text outside {{app}}\\licenses\\ must be reported, got {found:?}"
-    );
-}
-
-#[test]
-fn a_windows_installer_that_ships_an_unlisted_file_under_licenses_fails() {
-    let script = iss_with_licence("micold-debug.dll", r"{app}\licenses\fonts");
-
-    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert!(
-        found.iter().any(|v| v.0.contains("micold-debug.dll")),
-        "the licences directory is not a way around the allow-list, got {found:?}"
-    );
-}
-
-/// The committed Windows installer script (feature 030, A5).
-fn iss_path() -> PathBuf {
-    repo_root().join("packaging/windows/micold-ai-ide.iss")
-}
-
-#[test]
-fn the_windows_installer_contains_no_showcase() {
-    let script = fs::read_to_string(iss_path()).unwrap_or_else(|e| {
-        panic!("read {}: {e}", iss_path().display());
-    });
-
-    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED, FONT_LICENCES);
-
-    assert!(
-        found.is_empty(),
-        "the Windows installer would ship the wrong files (FR-012):\n{}",
-        found
-            .iter()
-            .map(|v| format!("  {}", v.0))
-            .collect::<Vec<_>>()
-            .join("\n")
     );
 }

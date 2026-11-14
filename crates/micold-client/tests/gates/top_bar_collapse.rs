@@ -26,8 +26,13 @@ struct Drawn {
 
 /// Lay the bar out at `width` and read what it draws, asserting no child overlaps or leaves it.
 fn bar_at(width: f32) -> Drawn {
+    bar_of(transcript_pane_insights(), width)
+}
+
+/// [`bar_at`] for a given state.
+fn bar_of(state: micold_client::app::State, width: f32) -> Drawn {
     let window = Size::new(width, 700.0);
-    let under = StateUnderTest::new(transcript_pane_insights());
+    let under = StateUnderTest::new(state);
     let (painted, records) =
         lay::painted_text_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
     let children: Vec<_> = records
@@ -106,4 +111,33 @@ fn the_ring_text_hides_first_then_the_changes_label_and_the_icon_stays() {
     }
     assert!(seen_text_hidden, "the ring's text hides by 640");
     assert!(seen_label_hidden, "the Changes label hides by 640");
+}
+
+/// The widest counts a branch ever shows (five-digit files, six-digit lines) keep the label whole
+/// beside the ring at the layout window and overlap nothing at the smallest one (the gate the
+/// header's own Changes button had before the header moved here, M4 review).
+#[test]
+fn the_widest_counts_fit_at_the_layout_window_and_the_smallest() {
+    let widest = micold_core::context_header::ChangeSummary {
+        files: 12_345,
+        added: 987_654,
+        removed: 876_543,
+    };
+    for width in [1280.0, 800.0] {
+        let mut state = transcript_pane_insights();
+        let location = state
+            .current_session_location()
+            .expect("a session is shown");
+        let project = state.workspace.active.clone().expect("a project is active");
+        state.changes.header.entry = Some((project, location));
+        state.changes.header.load = micold_client::features::changes::Load::Ready(widest);
+        let d = bar_of(state, width);
+        assert!(d.icon, "{width}: the Changes icon stays");
+        if width >= 1280.0 {
+            assert!(
+                d.label,
+                "{width}: the label with the widest counts is drawn"
+            );
+        }
+    }
 }

@@ -1071,11 +1071,7 @@ fn run_blocking(
         return Ended::NotStarted(format!("the folder {} does not exist", dir.display()));
     }
     let (vars, path) = state.setup_env_for(dir);
-    let platform = if cfg!(windows) {
-        ShellPlatform::Windows
-    } else {
-        ShellPlatform::Unix
-    };
+    let platform = ShellPlatform::Unix;
     let (program, args) = shell_line(platform, bash_on_path(&path), command);
     let mut cmd = Command::new(program);
     cmd.args(args).current_dir(dir).envs(vars);

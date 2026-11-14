@@ -20,20 +20,6 @@ fn test_endpoint(dir: &Path) -> Endpoint {
     }
 }
 
-/// A pipe name no other test or running daemon uses: the pipe namespace is machine-wide, so the temp
-/// dir's own unique name keys it.
-#[cfg(windows)]
-fn test_endpoint(dir: &Path) -> Endpoint {
-    let unique = dir
-        .file_name()
-        .expect("temp dir has a name")
-        .to_string_lossy();
-    Endpoint {
-        socket_path: format!(r"\\.\pipe\Micold.Test.{}.{unique}", std::process::id()).into(),
-        lock_path: dir.join("micold-daemon.pid"),
-    }
-}
-
 /// How long a restart may wait for the endpoint the previous daemon released. Generous for a slow CI
 /// runner; a leaked endpoint would otherwise hang the test instead of failing it.
 const REBIND_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);

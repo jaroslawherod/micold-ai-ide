@@ -62,18 +62,6 @@ fn slow_env_script(dir: &Path, sleeps: Duration) -> std::path::PathBuf {
     path
 }
 
-/// On Windows the environment-include script is PowerShell, dot-sourced.
-#[cfg(windows)]
-fn slow_env_script(dir: &Path, sleeps: Duration) -> std::path::PathBuf {
-    let path = dir.join("env-include.ps1");
-    std::fs::write(
-        &path,
-        format!("Start-Sleep -Milliseconds {}\r\n", sleeps.as_millis()),
-    )
-    .unwrap();
-    path
-}
-
 /// A catalog with one Regular-mode session at the project root, and environment-include enabled
 /// against `script` with a timeout comfortably longer than its sleep — so the resolution *waits*
 /// rather than being cut short, which is the case that parks the loop for real.

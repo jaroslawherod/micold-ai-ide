@@ -368,6 +368,28 @@ it's there, so a row that survived a filter it doesn't match is never unexplaine
 excluded worktree stays out of the list, and the exception disappears as soon as you move to a session
 somewhere your filters do allow. Adding it changes nothing about the filter chips on offer.
 
+### Your own groups
+
+You can make groups of your own in the sidebar, to keep the worktrees you think of together in one
+place. A group belongs to the project it was made in, and is kept across restarts.
+
+To make one, choose **New group…** from any of these:
+
+- the chip bar's **more** (⋯) menu;
+- the menu that opens when you right-click an empty part of the sidebar's list (below the last row);
+- the shortcut **Ctrl+Shift+G** (**Cmd+Shift+G** on macOS) while no terminal has the keyboard,
+  listed under **Sidebar** in the composer's shortcut sheet.
+
+A dialog asks for the group's name. Spaces around it are dropped. A blank name is refused, and so
+is a name another group of the project already has, whatever its capitals: the dialog says why and
+stays open so you can change it. **Cancel** or Escape closes it and makes nothing. You need a
+project open, but no worktree.
+
+The new group appears in the sidebar as a header row: its name (shortened with an ellipsis when it
+does not fit; point at it to read it whole), then how many rows it holds, or **empty**. A new group
+is empty. A group never stands for a state: a worktree keeps its group whatever its sessions are
+doing.
+
 ### Agent worktrees
 
 AI coding assistants create worktrees of their own inside your project, in the same
@@ -2384,19 +2406,12 @@ worktree). Nothing from the conversation itself is shown.
   nothing either; after a lost connection to the session service, a session that changed to
   waiting while it was away notifies you once.
 
-The notification is shown through each system's own facility, on **Linux**, **macOS** and
-**Windows**:
-
-- **Linux** needs a desktop notification service (every major desktop has one).
-- **macOS** asks for permission the first time the application shows a notification. Only the
-  installed application bundle can show them, not a bare binary
-  ([Installing on macOS](install-macos.md#notifications)).
-- **Windows** shows them only for an installed build, one set up with the installer, not for an exe
-  run from a folder ([Installing on Windows](install-windows.md#notifications)).
+The notification is shown through the desktop's notification service, which every major Linux
+desktop has.
 
 The system may ask you for permission, or withhold it: you may have refused, turned notifications off
-for the application, or have Do Not Disturb on. The two install pages say where to allow or turn them
-off. When nothing can be shown, because the permission is withheld, no service is running, or the
+for the application, or have Do Not Disturb on. Your desktop's notification settings are where to
+allow or turn them off. When nothing can be shown, because the permission is withheld, no service is running, or the
 system refuses it, nothing else changes: sessions and their activity dots work as before, so the dot
 still shows the state, no error appears in the application's window, and the failure is written to
 its log once.

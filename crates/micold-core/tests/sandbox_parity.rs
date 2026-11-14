@@ -120,7 +120,7 @@ fn worktrees_land_inside_the_mounted_project_at_the_same_path() {
         "{worktrees_root:?} must be inside the mounted project"
     );
 
-    if cfg!(not(windows)) {
+    {
         // The same absolute path on both sides, which is what makes the metadata agree.
         assert_eq!(project.host, project.container);
         assert!(worktrees_root.starts_with(&project.container));

@@ -38,10 +38,6 @@ zbus = { version = "5.19", default-features = false, features = ["async-io", "bl
 wayland-client = "0.31"
 wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-# Feature 039 (research R4): the desktop notification on macOS (`UNUserNotificationCenter`) and on
-# Windows (a WinRT toast). Each is a dependency of the client on its own system only.
-mac-usernotifications = "0.3.1"
-tauri-winrt-notification = "0.8.1"
 # Feature 686 (research K0): the Kubernetes API client, in `micold-client` only (never the daemon or
 # core). rustls on the `ring` backend (no OpenSSL, no C toolchain); `ws` for the port-forward tunnel.
 kube = { version = "4.2", default-features = false, features = ["client", "config", "rustls-tls", "ring", "ws"] }
@@ -64,50 +60,11 @@ similar = "3"
 # `Cargo.lock` (0.10.7, RustCrypto, MIT OR Apache-2.0), so it adds no crate.
 sha1 = "0.10"
 directories = "6.0.0"
-# Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`.
-iana-time-zone = "0.1"
 # Wire encoding for the client<->daemon protocol (plan W1): compact grid frames.
 postcard = { version = "1.1", features = ["use-std"] }
 # `kill(2)`/`process_group` for the environment-include script timeout (feature 011) and
 # `geteuid`/`setsid` for the daemon endpoint + detached spawn — one pin for both.
 libc = "0.2.189"
-# Windows Job Objects for the environment-include script timeout (`env_include`) — the counterpart
-# to `libc`'s `kill(2)`/`process_group` above, and used for exactly the same job: killing a timed-out
-# script's *whole* process tree rather than only its top-level process. Microsoft's own raw-binding
-# crate, MIT/Apache-2.0, already present transitively; the feature set below is the two modules this
-# needs and nothing else.
-windows-sys = { version = "0.61.2", features = [
-    "Win32_Foundation",
-    # Feature 030 (research R1, R2, R5): the user SID the pipe is keyed on and its protected DACL,
-    # the pid record's image check, and the pipe handle the ACL test inspects.
-    "Win32_Security",
-    "Win32_Security_Authorization",
-    "Win32_Storage_FileSystem",
-    # Feature 031: COM for `ShellExecuteW`'s shell extensions.
-    "Win32_System_Com",
-    # `SetConsoleCtrlHandler`: a session inherits working Ctrl-C however the daemon was launched.
-    "Win32_System_Console",
-    # Feature 041: `GetModuleHandleW` and `WNDCLASSW` (which names a GDI brush) for the service's
-    # hidden end-of-session window.
-    "Win32_Graphics_Gdi",
-    "Win32_System_LibraryLoader",
-    "Win32_System_JobObjects",
-    "Win32_System_Pipes",
-    "Win32_System_ProcessStatus",
-    # `GetTickCount64` for the suspend-inclusive clock (feature 028, research R3) — the Windows
-    # counterpart of Linux's `CLOCK_BOOTTIME`, and the reason no new dependency was needed.
-    "Win32_System_SystemInformation",
-    # Issue #877: `SystemTimeToTzSpecificLocalTime`, the local UTC offset at an instant (`local_time`).
-    "Win32_System_Time",
-    "Win32_System_Threading",
-    # Feature 031: `ShellExecuteW` and `SW_SHOWNORMAL`, the Windows link opener.
-    "Win32_UI_Shell",
-    "Win32_UI_WindowsAndMessaging",
-] }
-# Build-time only: compiles `packaging/windows/app-icon.rc` into the Windows exes, so Explorer and the
-# taskbar show the project icon (feature 030, FR-003, research R11, vetted there). A no-op for any
-# other target.
-embed-resource = "3"
 # --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
 # The shared framing codec lives in micold-core; the runtime + IPC live in the daemon/client.
 tokio = { version = "1.53", features = [
@@ -163,7 +120,7 @@ ttf-parser = "0.25.1"
 # `wayland-data-control` lets it read the clipboard on Wayland compositors without a focused surface.
 arboard = { version = "3", default-features = false, features = ["image-data", "wayland-data-control"] }
 # Feature 613 (research R7): the kind icons rasterised for the OS notification. Already in the build
-# through `iced_tiny_skia`; `png-format` adds the `png` encoder for the Windows and macOS icon files.
+# through `iced_tiny_skia`; `png-format` adds the `png` encoder.
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd", "png-format"] }
 # Feature 019 only, and dev-only. Reading back *drawn* text needs the concrete CPU renderer:
 # `iced::Renderer` is `fallback::Renderer<wgpu, tiny_skia>`, so naming its variants needs

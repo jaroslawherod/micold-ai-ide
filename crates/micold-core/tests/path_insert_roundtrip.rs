@@ -99,27 +99,3 @@ fn fish_reads_each_quoted_name_back_exactly() {
         }
     }
 }
-
-#[cfg(windows)]
-#[test]
-fn powershell_reads_each_quoted_name_back_exactly() {
-    for program in ["pwsh", "powershell"] {
-        let probe = Command::new(program)
-            .args(["-NoProfile", "-Command", "1"])
-            .output();
-        if probe.is_err() {
-            continue;
-        }
-        for name in AWKWARD_NAMES {
-            let q = quote(ShellKind::PowerShell, OsStr::new(name)).unwrap();
-            // Each name is written to stdout as UTF-8 so the comparison is exact.
-            let script = format!(
-                "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); \
-                 [Console]::Out.Write({q})"
-            );
-            let got = run(program, &["-NoProfile", "-Command"], &script);
-            assert_eq!(&got, name, "{program}: {q}");
-        }
-        return;
-    }
-}

@@ -41,22 +41,10 @@ const STATUS: i32 = 3;
 /// A script that fails, printing [`OUTPUT`], in a directory holding [`MARKER`], and succeeds in
 /// any other: the shape of a version-manager hook that only one project's configuration breaks.
 fn directory_dependent_script(dir: &Path) -> PathBuf {
-    let (name, body) = if cfg!(windows) {
-        (
-            "env-include.ps1",
-            format!(
-                "if (Test-Path '{MARKER}') {{ Write-Output '{OUTPUT}'; exit {STATUS} }}\r\n\
-                 $env:BUG454_OK = '1'\r\n"
-            ),
-        )
-    } else {
-        (
-            "env-include.sh",
-            format!(
-                "[ -f {MARKER} ] && {{ echo \"{OUTPUT}\"; exit {STATUS}; }}\nexport BUG454_OK=1\n"
-            ),
-        )
-    };
+    let (name, body) = (
+        "env-include.sh",
+        format!("[ -f {MARKER} ] && {{ echo \"{OUTPUT}\"; exit {STATUS}; }}\nexport BUG454_OK=1\n"),
+    );
     let script = dir.join(name);
     std::fs::write(&script, body).unwrap();
     script

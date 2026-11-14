@@ -4,6 +4,8 @@
 
 **Created**: 2026-10-02
 
+**Partly superseded**: 2026-11-14 by #1897 — Linux is the only supported platform. The macOS and Windows notification backends, the Windows Application User Model ID and Start-menu shortcut, and the macOS and Windows halves of FR-029 are removed; the Linux behaviour stands.
+
 **Status**: Closed 2026-10-04 — shipped in PRs #528, #539, #544, #554, #557, #558, #559, #560, #561, #562, #563
 
 **Input**: User description: "Implement GitHub issue #481 (https://github.com/jaroslawherod/micold-ai-ide/issues/481): Notify when a session needs attention and track unread sessions. When a session moves to awaiting input (turn ended, permission or idle prompt), show an OS desktop notification naming the project, worktree and session; clicking it focuses the window and switches to that session. Mark a session unread when it produces a turn the user has not viewed, and clear the mark when the user opens the session. Show an unread count on the project in the switcher. Suppress the notification when the session is the one currently focused. Settings: on/off for desktop notifications, and optionally per provider. Works in both the host and the sandboxed daemon runtime."

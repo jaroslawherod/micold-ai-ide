@@ -68,11 +68,6 @@ fn non_utf8_bash(name: &OsStr) -> Result<String, Unrepresentable> {
     Ok(out)
 }
 
-#[cfg(not(unix))]
-fn non_utf8_bash(_name: &OsStr) -> Result<String, Unrepresentable> {
-    Err(Unrepresentable)
-}
-
 /// File names that stress every quoting rule, shared with the real-shell round trip.
 pub const AWKWARD_NAMES: &[&str] = &[
     "plain.png",

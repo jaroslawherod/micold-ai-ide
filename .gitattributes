@@ -1,4 +1,4 @@
-# Line endings: LF everywhere, including in a Windows working tree.
+# Line endings: LF everywhere.
 #
 # A Windows runner checks out with `core.autocrlf=true` by default, and roughly thirty gates in
 # this suite are text scans over the repository's own sources -- `anatomy_call_sites.rs` truncates
@@ -11,9 +11,7 @@
 # would have to be maintained by whoever adds the thirty-first. One declaration instead. `eol=lf`
 # wins over `core.autocrlf`, so this holds regardless of how a contributor's git is configured, and
 # `text=auto` leaves git's own binary detection in charge of the .png and .ttf files below.
-#
-# The three-platform matrix is what pins it: drop this line and the Windows leg goes red again,
-# which is how it was found (feature 027, T115).
+# It was found on a Windows runner (feature 027, T115), before Linux became the only platform.
 * text=auto eol=lf
 
 # The recorded `gh api --include` answers (feature 040) keep the `\r\n` the HTTP header block is
@@ -87,11 +85,6 @@ specs/**      micold-docs
 # `specs/**`, which sets the attribute.
 /specs/028-client-managed-daemon/quickstart.md -micold-docs
 
-# Same reason, feature 028: `crates/micold-core/tests/macos_package_gate.rs` compares §B of this
-# quickstart against the macOS packaging step in `ci.yml`, so the file is a test input rather than
-# prose. Must stay after `specs/**`, which sets the attribute.
-/specs/028-macos-package/quickstart.md -micold-docs
-
 # Read by a test, so test inputs rather than documentation: the settings contracts show the
 # `settings.json` a user or a later feature copies, and
 # `crates/micold-core/tests/settings_contract_examples.rs` loads each example through the real store.
@@ -106,21 +99,6 @@ specs/**      micold-docs
 # Read by a test, so a test input rather than documentation: `crates/micold-core/tests/contract_example.rs` (#1723): its worked example frame must decode.
 /specs/orchestrator/contracts/routed-envelope.md -micold-docs
 
-# Read by a test, so a test input rather than documentation: this page states the macOS version
-# floor, and `crates/micold-core/tests/macos_minimum_version.rs` holds it equal to the
-# `LSMinimumSystemVersion` the operating system enforces. If it stayed documentation, moving the
-# floor in the prose would skip the whole pipeline -- so the one edit the gate exists to catch
-# would be the one edit it never sees. Must stay after `docs/**`, which sets the attribute.
-/docs/user-guide/install-macos.md -micold-docs
-
-# Read by a test, so a test input rather than documentation: `docs/daemon.md`, this page and
-# `crates/micold-core/src/logout_survival.rs` are the three places that answer "what happens when I
-# log out?" on macOS, and `crates/micold-core/tests/macos_logout_claims_agree.rs` requires the same
-# sentence in all three (feature 028, FR-032). The user guide above is already carved out for the
-# version floor; this is the same argument for the other page. Must stay after `docs/**`, which
-# sets the attribute.
-/docs/daemon.md -micold-docs
-
 # Read by a test, so a test input rather than documentation: this page's provider table must list
 # every `AiCli` variant, which `crates/micold-core/tests/provider_origin_docs.rs` checks (feature
 # 551, SC-005). If it stayed documentation, a provider added without a row would skip the pipeline
@@ -132,28 +110,25 @@ specs/**      micold-docs
 # (feature 1276, FR-004). Must stay after `docs/**`, which sets the attribute.
 /docs/user-guide/reviewing-changes.md -micold-docs
 
-# The download-page trust notice, appended to a release's body before it is published (feature
-# 028, SC-001). It is prose about the download, read only by the `publish` job at release time --
-# nothing in the build, the suite or the package opens it. Listed explicitly because `/*.md`
-# above matches the repository root only.
-/.github/release-notice-macos.md micold-docs
+# Read by a test, so a test input rather than documentation: `crates/micold-client/tests/
+# settings_sections.rs` names this page in its list of the places still allowed to use the
+# "Session service" title. (It used to be carved out for the macOS logout claim, removed in #1897.)
+# Must stay after `docs/**`, which sets the attribute.
+/docs/daemon.md -micold-docs
+
 # The packaging set (#952).
 #
-# `micold-packaging` marks paths that can change the shipped installer or how it is built. The
-# `windows-arm64-package` job of ci.yml (about 21 minutes, the pipeline's critical path) runs on a
-# pull request only when a change touches one of them -- or carries the `full-ci` label -- and
-# always on main pushes and the nightly schedule. A path is outside the set until declared; the
+# `micold-packaging` marks paths that can change the shipped packages or how they are built. No
+# ci.yml job is gated on it since the Windows ARM64 package job went with #1897. A path is outside
+# the set until declared; the
 # failure direction is "run it". Read by scripts/classify-change.sh (`packaging=` output), pinned by
 # scripts/tests/classify-change.test.sh. Later gates add their own attribute the same way.
 packaging/**                          micold-packaging
-scripts/windows-installer.sh          micold-packaging
-scripts/windows-install-smoke.sh      micold-packaging
 /Cargo.toml                           micold-packaging
 /Cargo.lock                           micold-packaging
 /.github/workflows/release.yml        micold-packaging
-# Inputs the installer build reads beside the set above: the .iss icon and licences, the scripts
-# windows-installer.sh calls, and the toolchain pins.
-/assets/icon/icon.ico                 micold-packaging
+# Inputs the package builds read beside the set above: the licences, the scripts they call, and
+# the toolchain pins.
 /LICENSE                              micold-packaging
 /assets/fonts/LICENSE*                micold-packaging
 /assets/fonts/PROVENANCE.md           micold-packaging
@@ -187,8 +162,6 @@ crates/micold-daemon/**               micold-daemon-runtime
 packaging/sandbox/**                  micold-daemon-runtime
 packaging/basic/**                    micold-daemon-runtime
 scripts/basic-image-hash.sh           micold-daemon-runtime
-# micold-core's build.rs reads the icon.
-/assets/icon/icon.ico                 micold-daemon-runtime
 # The container bring-up Settings uses, the connection actor that drives it, and their end-to-end
 # test (#1281).
 crates/micold-client/src/daemon.rs             micold-daemon-runtime

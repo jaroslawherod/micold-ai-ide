@@ -454,7 +454,7 @@ pub struct ProjectMount {
 impl ProjectMount {
     /// A writable mount for a registered project, at this platform's container path.
     pub fn project(host: impl Into<PathBuf>) -> Self {
-        Self::project_for(host, cfg!(windows))
+        Self::project_for(host, false)
     }
 
     /// A writable mount for a registered project, under a *named* platform's mapping.
@@ -738,10 +738,6 @@ pub fn host_identity() -> (u32, u32) {
         // SAFETY: `getuid`/`getgid` take no arguments and cannot fail.
         unsafe { (libc::getuid(), libc::getgid()) }
     }
-    #[cfg(not(unix))]
-    {
-        (0, 0)
-    }
 }
 
 /// Where the host's credentials live, so the mount set can be built without reading the world.
@@ -922,8 +918,6 @@ fn relink_one(live: &Path, delivered: &Path) -> Option<PathBuf> {
     }
     #[cfg(unix)]
     let linked = std::os::unix::fs::symlink(delivered, live);
-    #[cfg(not(unix))]
-    let linked = std::os::windows::fs::symlink_file(delivered, live);
     linked.ok().map(|()| live.to_path_buf())
 }
 
@@ -946,15 +940,7 @@ impl MountSet {
         home: &Path,
         secret: SecretMount,
     ) -> Self {
-        Self::build_for(
-            projects,
-            profile,
-            layout,
-            state_dir,
-            home,
-            secret,
-            cfg!(windows),
-        )
+        Self::build_for(projects, profile, layout, state_dir, home, secret, false)
     }
 
     /// [`MountSet::build`], under a *named* platform's path mapping rather than this one's.
@@ -1225,7 +1211,7 @@ impl MountSet {
                         layout
                             .paths_for(share)
                             .into_iter()
-                            .map(|host| path(&pathmap::map_for(host, cfg!(windows))))
+                            .map(|host| path(&pathmap::map_for(host, false)))
                             .collect::<Vec<_>>()
                     }))
                     // The git configuration is no share since #1530, but a container made before
@@ -1234,7 +1220,7 @@ impl MountSet {
                         layout
                             .git_config
                             .iter()
-                            .map(|host| path(&pathmap::map_for(host, cfg!(windows)))),
+                            .map(|host| path(&pathmap::map_for(host, false))),
                     )
                     .collect();
                 mounted
@@ -1272,7 +1258,7 @@ impl MountSet {
                 .iter()
                 .any(|c| c.share == CredentialShare::AiCliAuth && c.host == looked_for),
             Some(mounted) => {
-                let destination = pathmap::map_for(looked_for, cfg!(windows));
+                let destination = pathmap::map_for(looked_for, false);
                 mounted
                     .iter()
                     .any(|m| Path::new(m) == destination.as_path())

@@ -329,6 +329,17 @@ esc "$D/nl.json" "1" 1 "Which?
 second line"
 check "route add: a newline in a question keeps options and evidence" 0 'Which\? second line \| A: a // B: b \| A \| e' bash -c '"$0" route add --ledger "$1" 18 s-18 "$2" >/dev/null; "$0" route next --ledger "$1" | grep R18' "$SUP" "$L" "$D/nl.json"
 check "route compose: an unknown issue exits 2" 2 'no routing rows' rt compose 99
+# gate and the supervisor via (#1815 M2)
+check "route gate: category 2 is user-only" 0 '^user-only$' rt gate "2 Irreversible or external action"
+check "route gate: 3 and 4 are user-only" 0 '^user-only user-only$' bash -c '{ "$0" route gate --ledger "$1" 3; "$0" route gate --ledger "$1" "4 x"; } | paste -sd" " -' "$SUP" "$L"
+check "route gate: 1, 5 and 6 are judge" 0 '^judge judge judge$' bash -c '{ for c in 1 "5 Non-convergence" 6; do "$0" route gate --ledger "$1" "$c"; done; } | paste -sd" " -' "$SUP" "$L"
+check "route gate: an unknown category exits 2" 2 'category' rt gate 7
+check "route gate: an empty category exits 2" 2 'category' rt gate ""
+check "route gate: no argument exits 2" 2 'usage' rt gate
+check "route answer supervisor: state resolved" 0 '^resolved$' bash -c '"$0" route add --ledger "$1" 21 s-21 "$2" >/dev/null; "$0" route add --ledger "$1" 22 s-22 "$2" >/dev/null; "$0" route answer --ledger "$1" R21.Q1 supervisor ok && "$0" route table --ledger "$1" | awk -F"|" "/R21.Q1/ { gsub(/ /,\"\",\$3); print \$3 }"' "$SUP" "$L" "$E12"
+esc "$D/e23.json" "1 Product" 1 "Q1?" 2 "Q2?"
+check "route compose: mixed supervisor and user rows get no --by" 0 '^session s-23 resume 1. a 2. b$' bash -c '"$0" route add --ledger "$1" 23 s-23 "$2" >/dev/null; "$0" route answer --ledger "$1" R23.Q1 supervisor a; "$0" route answer --ledger "$1" R23.Q2 user b; "$0" route compose --ledger "$1" 23 | paste -sd" " -' "$SUP" "$L" "$D/e23.json"
+check "route compose: all-supervisor batch leads with --by supervisor once" 0 '^session s-23 resume --by supervisor 1. a 2. b$' bash -c '"$0" route answer --ledger "$1" R23.Q2 supervisor b; "$0" route compose --ledger "$1" 23 | paste -sd" " -' "$SUP" "$L"
 # sent / drop
 check "route sent: sets Sent on the issue's rows" 0 '^1$' bash -c '"$0" route sent --ledger "$1" 12 1700 && "$0" route table --ledger "$1" | grep -c "| 1700 |"' "$SUP" "$L"
 check "route sent: a bad epoch exits 2" 2 'epoch' rt sent 12 soon
@@ -342,7 +353,7 @@ ord() { local a="$1" b="$2" x y; x="$(RQ | grep -n -m1 -F -- "$a" | cut -d: -f1)
 check "skill has a Route questions section" 0 'Route questions' grep -n '^## Route questions' "$SKILL"
 check "route: collects each asking run's <n>.json" 0 '<scratch>/<n>.json' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n "<scratch>/<n>.json"' "$SKILL"
 order_ok() { ord "route add" "tasks/ask.md" && ord "tasks/ask.md" "PushNotification" && ord "PushNotification" "route state <key> asked" &&
-  ord "route state <key> asked" "AskUserQuestion" && ord "AskUserQuestion" "route answer" && ord "route answer" "route compose" &&
+  ord "route state <key> asked" "AskUserQuestion" && ord "AskUserQuestion" "route answer <key> user" && ord "route answer <key> user" "route compose" &&
   ord "route compose" "send_session_input" && ord "send_session_input" "route sent" && ord "route sent" "route drop" && echo ok; }
 check "route: steps in order add, banner, notification, asked, ask, answer, compose, sent, drop" 0 '^ok$' order_ok
 check "route: the notification text" 0 'need a decision' grep -nF '🛑 <issues> need a decision: <topic>' "$SKILL"
@@ -356,6 +367,18 @@ check "route: not_found drops the rows and reports the session lost" 0 'not_foun
 check "route: never names read_session_output" 1 '^$' grep -n 'read_session_output' "$SKILL"
 check "route: Report routes an asking run, stuck blocked lost stay reported" 0 'Route' bash -c 'awk "/^## Report/,/^## Route questions/" "$0" | grep -n "asking.*Route questions"' "$SKILL"
 check "route: Report still never answers a stuck or blocked run" 0 'Never' bash -c 'awk "/^## Report/,/^## Route questions/" "$0" | grep -n "Never unblock"' "$SKILL"
+
+# --- #1815 M2: resolve routine questions (SKILL step 2) ----------------------------------------
+rq_has() { local r; r="$(RQ)"; for w in "$@"; do printf '%s' "$r" | grep -qF -- "$w" || { echo "missing: $w"; return 1; }; done; echo ok; }
+check "route2: judges the subject by route gate, not the category label" 0 '^ok$' rq_has "route gate" "subject" "not the category label"
+check "route2: cites repo evidence in the answer" 0 '^ok$' rq_has "evidence" "route answer <key> supervisor"
+check "route2: no evidence goes to the user batch as pending" 0 '^ok$' rq_has "no evidence" "pending"
+check "route2: sends with resume --by supervisor" 0 '^ok$' rq_has "resume --by supervisor"
+check "route2: a route gate exit 2 goes to the user" 0 '^ok$' rq_has "exits 2" "user"
+check "route2: step 2 sits between Collect and Batch" 0 '^ok$' bash -c 'ord() { :; }; r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; a="$(printf "%s" "$r" | grep -n "^1\. \*\*Collect" | cut -d: -f1)"; b="$(printf "%s" "$r" | grep -n "route gate" | head -1 | cut -d: -f1)"; c="$(printf "%s" "$r" | grep -n "route next" | head -1 | cut -d: -f1)"; [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && echo ok' "$SKILL"
+check "route2: Batch with nothing pending still sends resolved, unsent issues" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; printf "%s" "$r" | grep "^3\. " | grep -qF "run steps 9 to 11" && echo ok' "$SKILL"
+check "route2: the follow-up batch goes back to step 3" 0 'back to step 3' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -o "back to step 3"' "$SKILL"
+check "route gate: works on a malformed ledger" 0 '^judge$' "$SUP" route gate --ledger "$D/bad.md" 1
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

@@ -7,10 +7,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1793
-- **Worktree branch**: feat/1793_feat-structured-view-header-in-one-row-status-and
+- **Worktree branch**: claude/project-thread-glip6q
 - **Started**: 2026-11-10
-- **Phase**: milestone M4 (in review)
-- **Next step**: orchestrator waits on CI and merges PR for M4
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1798 | M1 | merged | 1c675009f14aaf26035b3c593512a76365ad5009 |
 | #1827 | M2 | merged | cb41c216e778ce87dcc7379f7852f3ffa85fa3bf |
 | #1847 | M3 | merged | 747d325b504576e2bc43d96c2804e9ee430c09d7 |
-| #1869 | M4 | open | |
+| #1869 | M4 | merged | 36b210e7db1e31665044aa30b6e1abe8a55d88bc |
+| #1906 | Close | open | |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T012, T028 | full | Top bar ring, status, Changes (with collapse gate) | #1798 | merged |
 | M2 | T013–T016 | full | Worktree menu with raw events and view control | #1827 | merged |
 | M3 | T017–T020 | full | Single `+` menu | #1847 | merged |
-| M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | #1869 | in review |
+| M4 | T021–T027, T029, T031, T034, T035 | full | One-row header | #1869 | merged |
 
 ## Decisions
 
@@ -64,6 +65,10 @@ None. Plan review: round 1 CHANGES (3 MAJOR, fixed), round 2 (sonnet) CLEAN; sna
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+
+## Close
+
+TDD verify FAIL (`tdd/verification.md`, remediation T036-T044). Done in the close PR: T036, T037, T041, T043 (tests), T032/T033/T044 (visual pass, `visual-pass/`, quickstart results), one mutant (shell working dot). Open follow-ups: T038 (retro TDD evidence), T039 (ring clamp, exactly-one-hidden), T040 (FR-011 tabs shrink, unbuilt), T042 (exact meter text).
 
 ## Handover
 

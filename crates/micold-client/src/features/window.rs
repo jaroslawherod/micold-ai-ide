@@ -123,6 +123,8 @@ pub enum FieldId {
     RenameProjectName,
     /// The rename-worktree dialog's name field.
     RenameWorktreeName,
+    /// The user-group naming dialog's name field (feature 1786).
+    GroupName,
     /// The add-worktree form's optional ticket field.
     AddWorktreeTicket,
     /// The add-worktree form's branch-name field.

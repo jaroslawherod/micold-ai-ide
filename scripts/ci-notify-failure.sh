@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Tells somebody that `main` or the nightly run went red (#956).
 #
-# The macOS and Windows `Test (daemon)` steps run only after the merge, so a platform break
-# surfaces on `main`. CI's `ci-complete` job calls this from a step that runs when the gate failed
+# Some checks run only after the merge or on the nightly schedule, so a break can surface on `main`.
+# CI's `ci-complete` job calls this from a step that runs when the gate failed
 # on a push or schedule event. Needs `gh` with GH_TOKEN, and `pull-requests: write` plus
 # `issues: write` on the calling job.
 #
@@ -38,7 +38,7 @@ if [ "$EVENT" = push ]; then
   if [ -n "$pr" ]; then
     number="${pr%% *}"
     author="${pr#* }"
-    gh pr comment "$number" --repo "$REPO" --body "$(mention "$author"): CI went red on \`main\` after this merged (commit $SHA). The macOS and Windows daemon suites run only after the merge, so a platform break shows up here. Run: $RUN_URL"
+    gh pr comment "$number" --repo "$REPO" --body "$(mention "$author"): CI went red on \`main\` after this merged (commit $SHA). Some checks run only after the merge, so a break can show up here. Run: $RUN_URL"
     exit 0
   fi
 fi

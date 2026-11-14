@@ -2098,3 +2098,62 @@ pub fn edit_card<'a>(open: bool, on_toggle: Message, roles: Roles) -> Element<'a
 
 /// The posed Edit card's line counts.
 pub const EDIT_META: &str = "+12 \u{2212}3";
+
+/// A long group name, wider than the sidebar, for the header's truncation pose (feature 1786).
+pub const LONG_GROUP_NAME: &str = "Release candidates waiting on review from the platform team";
+
+/// A user group's header as the sidebar draws it: one row of the sidebar's list, at its density and
+/// label role (feature 1786, R7). `pub` so `tests/gates/sidebar_group_header_fits.rs` lays it out.
+pub fn group_header_row<'a>(
+    name: &str,
+    collapsed: bool,
+    count: usize,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let header = material::GroupHeader::new(name)
+        .on_toggle(Message::NoOp)
+        .collapsed(collapsed)
+        .count(count)
+        .roles(roles);
+    material::TreeView::new(vec![header.into()], roles)
+        .density(crate::features::sidebar::SIDEBAR_DENSITY)
+        .label_role(TypeRole::SidebarName)
+        .into()
+}
+
+/// `GroupHeader` — a user group's header with rows, collapsed with a long name, and empty
+/// (feature 1786, FR-002, FR-011).
+pub fn group_header<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "with rows",
+                group_header_row("Review", false, 3, roles),
+                roles,
+            ),
+            posed(
+                "collapsed, a long name",
+                group_header_row(LONG_GROUP_NAME, true, 12, roles),
+                roles,
+            ),
+            posed("empty", group_header_row("Later", false, 0, roles), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `DropMarker` — the line a drag draws where the row would land (feature 1786, FR-006).
+pub fn drop_marker<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "between two rows",
+            column![
+                group_header_row("Review", false, 1, roles),
+                material::DropMarker::new(roles),
+                group_header_row("Later", false, 0, roles),
+            ],
+            roles,
+        )],
+        Layout::FullWidth,
+    )
+}
