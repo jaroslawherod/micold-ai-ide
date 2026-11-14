@@ -29,10 +29,11 @@ case "$1 $2" in
     [ -f "$f" ] || { echo "no pull requests found" >&2; exit 1; }
     jq -r "$(q "$@")" "$f" ;;
   "pr merge")
-    n="$3"
+    n="$3"; echo "$*" >> "$F/gh.log"
     if [ -f "$F/merge-$n.fail" ]; then cat "$F/merge-$n.fail" >&2; exit 1; fi
     for k in "$F/pr-$n.json".*; do [ -f "$k" ] && rm -f "$k"; done
     cp "$F/pr-$n.merged.json" "$F/pr-$n.json" ;;
+  "pr comment") echo "$*" >> "$F/gh.log" ;;
   "pr list") [ -f "$F/pr-list.json" ] && jq -r "$(q "$@")" "$F/pr-list.json" || echo "" ;;
   "run list") jq -r "$(q "$@")" "$F/runs.json" ;;
   "run view") echo "error[E0308]: mismatched types" ;;

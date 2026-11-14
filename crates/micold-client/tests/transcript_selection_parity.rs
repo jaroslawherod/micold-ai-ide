@@ -530,7 +530,6 @@ impl Threaded {
             ctx,
             |_: TranscriptMsg| (),
             None,
-            None,
         ))
     }
 }

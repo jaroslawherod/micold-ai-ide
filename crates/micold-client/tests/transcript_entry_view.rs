@@ -382,10 +382,9 @@ fn rows_follow_the_toggle_and_the_hidden_count_completes_the_total() {
     assert!(on.iter().all(|r| matches!(r, Row::Entry(_))));
 
     let off = rows(Some(&t), false);
-    assert_eq!(
-        off[0],
-        Row::Hidden(4),
-        "the notice comes first (no omitted)"
+    assert!(
+        !off.iter().any(|r| matches!(r, Row::Empty)),
+        "hidden entries are the chip's to count, not a row"
     );
     let kept = off.iter().filter(|r| matches!(r, Row::Entry(_))).count();
     assert_eq!(kept, 2, "the error footer and the error orphan stay");
@@ -401,37 +400,22 @@ fn rows_follow_the_toggle_and_the_hidden_count_completes_the_total() {
     assert_eq!(order(&off), vec![3, 5], "in transcript order");
 }
 
-/// US2 scenario 4: the notice follows the omitted notice, and only exists while something is hidden.
+/// Feature 1793 (FR-010): the hidden count is no row of the view; the `N hidden` chip in the strip
+/// carries it, so omitted notices and entries are all the rows hold.
 #[test]
-fn the_hidden_notice_follows_omitted_and_exists_only_above_zero() {
+fn hidden_entries_add_no_row_to_the_view() {
     let mut t = Transcript::new();
     t.apply(7, &[unreadable(7, "x"), init(8)], false);
-    let off = rows(Some(&t), false);
-    assert_eq!(off, vec![Row::Omitted(7), Row::Hidden(2)]);
-    assert!(!rows(Some(&t), true)
-        .iter()
-        .any(|r| matches!(r, Row::Hidden(_))));
+    assert_eq!(rows(Some(&t), false), vec![Row::Omitted(7)]);
 
-    let mut only_errors = Transcript::new();
-    only_errors.apply(0, &[result(0, true)], false);
-    assert!(!rows(Some(&only_errors), false)
-        .iter()
-        .any(|r| matches!(r, Row::Hidden(_))));
-}
-
-/// Edge case: a transcript of only hidden entries shows the notice, not "No output yet".
-#[test]
-fn a_transcript_of_only_hidden_entries_shows_the_notice_not_empty() {
     let (state, session) = state_with(&[unreadable(0, "x"), init(1)]);
-    let off = rows(state.transcript(session), false);
-    assert_eq!(off, vec![Row::Hidden(2)]);
-    assert!(!off.contains(&Row::Empty));
+    assert!(rows(state.transcript(session), false).is_empty());
 }
 
-/// SC-002 as drawn: off, no raw text and "N events hidden" with a "Show" button; on, the
-/// summaries and no notice.
+/// SC-002 as drawn: off, no raw text and no notice in the view (the chip is the strip's); on, the
+/// summaries.
 #[test]
-fn the_view_paints_the_notice_off_and_the_summaries_on() {
+fn the_view_paints_no_raw_text_off_and_the_summaries_on() {
     let (state, session) = state_with(&[unreadable(0, "RAW LINE"), init(1)]);
     let cache = BlockCache::default();
     let paint = |show_raw: bool| -> Vec<String> {
@@ -447,8 +431,7 @@ fn the_view_paints_the_notice_off_and_the_summaries_on() {
         painted.into_iter().map(|p| p.content).collect()
     };
     let off = paint(false);
-    assert!(off.iter().any(|t| t == "2 events hidden"), "{off:?}");
-    assert!(off.iter().any(|t| t == "Show"), "{off:?}");
+    assert!(!off.iter().any(|t| t.contains("hidden")), "{off:?}");
     assert!(!off.iter().any(|t| t.contains("RAW LINE")));
     let on = paint(true);
     assert!(!on.iter().any(|t| t.contains("hidden")), "{on:?}");
@@ -473,57 +456,6 @@ fn live_and_resumed_transcripts_give_equal_rows() {
             "show_raw = {show_raw}"
         );
     }
-}
-
-/// Every distinct `ShowRawEvents` a click anywhere in the transcript view publishes.
-fn raw_events_sent(state: &State, session: SessionId, show_raw: bool) -> Vec<bool> {
-    let cache = BlockCache::default();
-    let ctx = micold_client::ui::transcript::RenderCtx {
-        show_raw,
-        ..support::transcript::ctx(&cache)
-    };
-    let insights = micold_client::features::structured_insights::State::default();
-    let view = micold_client::ui::transcript::view_with_insights(
-        state,
-        micold_client::ui::transcript::InsightsCtx {
-            state: &insights,
-            cli_running: false,
-            mode: micold_core::session::PermissionMode::Default,
-        },
-        session,
-        &BlockRenderers::PLAIN,
-        ctx,
-    );
-    let mut seen = Vec::new();
-    for m in support::layout::clicks_at(
-        view,
-        &renderer(),
-        support::layout::grid(iced::Rectangle::with_size(support::layout::WINDOW), 3.0),
-    ) {
-        if let TranscriptMsg::ShowRawEvents(on) = m {
-            if !seen.contains(&on) {
-                seen.push(on);
-            }
-        }
-    }
-    seen
-}
-
-/// FR-005 (F1): the header toggle asks for the opposite of what is showing.
-#[test]
-fn pressing_the_header_toggle_asks_for_the_opposite() {
-    // Only an error footer: nothing hidden, so no "Show" button; the toggle is the only sender.
-    let (state, session) = state_with(&[result(0, true)]);
-    assert_eq!(raw_events_sent(&state, session, false), vec![true]);
-    assert_eq!(raw_events_sent(&state, session, true), vec![false]);
-}
-
-/// FR-008 (F2): the hidden notice's "Show" button turns the toggle on.
-#[test]
-fn pressing_the_hidden_notice_show_button_turns_raw_events_on() {
-    let (state, session) = state_with(&[unreadable(0, "x"), init(1)]);
-    // Off: both the toggle and the Show button send `true`, nothing sends `false`.
-    assert_eq!(raw_events_sent(&state, session, false), vec![true]);
 }
 
 // ---- #1663: a user's turn is highlighted ----

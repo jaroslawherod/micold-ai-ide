@@ -12,6 +12,9 @@
 //! Behind `sandbox-real-runtime`: `mise run image && mise run test-sandbox`. CI's `container daemon
 //! end to end` job runs both on docker and on rootless podman (`MICOLD_TEST_RUNTIME`).
 
+#[path = "../../tests/daemon_bin/mod.rs"]
+mod daemon_bin;
+
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -214,15 +217,12 @@ async fn sandbox_real_a_container_daemon_added_in_the_form_gets_its_container() 
 }
 
 /// The `ssh` runner the app installs, copying this tree's `micold-daemon` build: the one the app
-/// ships beside itself, else the one `cargo build -p micold-daemon` put beside this test's
-/// `deps/` directory.
+/// ships beside itself, else the one `cargo build -p micold-daemon` put in this tree's target
+/// directory.
 fn ssh_runner() -> micold_core::ssh::SystemSsh {
     let mut ssh = crate::shell::daemons::system_ssh();
     if !ssh.own_daemon.is_file() {
-        let built = std::env::current_exe()
-            .ok()
-            .and_then(|exe| Some(exe.parent()?.parent()?.join("micold-daemon")));
-        if let Some(built) = built.filter(|p| p.is_file()) {
+        if let Some(built) = daemon_bin::built_daemon() {
             ssh.own_daemon = built;
         }
     }

@@ -106,10 +106,10 @@ jobs:
           cat "$out"
           if grep -qx 'pr_proven=true' "$out"; then
             echo 'pr_proven=true' >> "$GITHUB_OUTPUT"
-            echo 'test_os=["macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+            echo 'test_os=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
           else
             echo 'pr_proven=false' >> "$GITHUB_OUTPUT"
-            echo 'test_os=["ubuntu-latest","macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+            echo 'test_os=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
           fi
           sed -n 's/^pr_proven_reason=/PR-proven reason: /p' "$out" >> "$GITHUB_STEP_SUMMARY"
       - name: Summarise the verdict
@@ -203,6 +203,11 @@ jobs:
           path: target/remote-daemon/micold-daemon-linux-*
           retention-days: 7
 
+  # #1877: macOS and Windows are switched off in CI until main is green on them again (Linux only).
+  # The `test` matrix is Linux only (`test_os` in `classify`), and the macOS/Windows steps below
+  # stay in place but never run (their `runner.os` conditions are false). `windows-arm64-package`
+  # is disabled with `false &&`. The list of what to re-enable is docs/development/ci-pipeline.md,
+  # "Linux-only CI (#1877)".
   # Constitution Principle VI: Linux, macOS, and Windows. `fail-fast: false` so one platform's
   # failure still reports the others — the point of the matrix is seeing *which* platforms differ.
   test:
@@ -223,7 +228,7 @@ jobs:
       fail-fast: false
       matrix:
         # #959: the Ubuntu leg is dropped on a push its pull request proved (its full test ran there).
-        os: ${{ fromJSON(needs.classify.outputs.test_os || '["ubuntu-latest","macos-latest","windows-latest"]') }}
+        os: ${{ fromJSON(needs.classify.outputs.test_os || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -570,12 +575,13 @@ jobs:
     # then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
     # #959: lint may be skipped on a proven push, so the condition names its needs (see `test`).
     if: >-
-      ${{ !cancelled()
+      ${{ false && !cancelled()
       && needs.classify.result == 'success'
       && needs.lint.result != 'failure'
       && needs.linux-daemons.result == 'success'
       && needs.classify.outputs.docs_only != 'true'
       && (github.event_name != 'pull_request' || needs.classify.outputs.packaging == 'true') }}
+    # #1877: disabled (`false &&`), re-enable by removing it.
     runs-on: windows-11-arm
     defaults:
       run:

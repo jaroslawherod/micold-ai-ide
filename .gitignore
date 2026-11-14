@@ -43,3 +43,6 @@ __pycache__/
 
 # speckit-autopilot bug and chore runs keep their ledger local (flows/bug.md, flows/chore.md).
 /specs/quick/
+
+# The autopilot supervisor keeps its ledger local (specs/1813-supervisor-skill).
+/.autopilot/

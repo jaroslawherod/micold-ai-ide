@@ -69,12 +69,12 @@ fn the_errors_reach_the_daemons_view_model_and_a_valid_file_clears_them() {
 }
 
 /// What `from_entry` builds for each runtime from an entry with no file settings: the kind, the
-/// name and how the daemon listens (fixed until the delivery issues, 5-7), with the sandbox token path.
+/// name and how the daemon listens (fixed until the delivery issues, 5-7), with the mounted token path (`CONTAINER_TOKEN_PATH`, #1838).
 fn expected(entry: &DaemonEntry) -> (DaemonSettings, Kind) {
     let name = entry.name.as_str();
     let host = || DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto));
     let sandbox = || DaemonSettings {
-        client_token_file: Some("/run/micold/secrets/client-token".into()),
+        client_token_file: Some(micold_core::protocol::auth::CONTAINER_TOKEN_PATH.into()),
         ..DaemonSettings::new(name, Listen::Tcp("0.0.0.0:7000".parse().unwrap()))
     };
     match &entry.runtime {

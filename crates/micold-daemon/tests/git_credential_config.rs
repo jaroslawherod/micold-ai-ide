@@ -138,12 +138,12 @@ impl Setup {
     /// A host daemon's file with `tokens` as `(name, repos filter)`, each reading `<name>.tok`.
     fn config(&self, tokens: &[(&str, &[&str])]) -> PathBuf {
         let mut text = format!(
-            "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = \"{}\"\n",
+            "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = '{}'\n",
             self.path("data").display()
         );
         for (name, repos) in tokens {
             text.push_str(&format!(
-                "\n[[github.tokens]]\nname = \"{name}\"\ntoken_file = \"{}\"\nhost = \"{}\"\n",
+                "\n[[github.tokens]]\nname = \"{name}\"\ntoken_file = '{}'\nhost = \"{}\"\n",
                 self.path(&format!("{name}.tok")).display(),
                 self.base
             ));

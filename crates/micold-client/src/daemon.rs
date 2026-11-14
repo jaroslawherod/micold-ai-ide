@@ -2214,6 +2214,34 @@ mod tests {
         assert!(!config.contains(dir.path().to_str().unwrap()), "{config}");
     }
 
+    /// #1536 (I16-10): two session files with different content go to an SSH host under their own
+    /// names.
+    #[test]
+    fn ssh_delivery_sends_two_session_files_under_their_own_names() {
+        use crate::daemon_config_render::DaemonSettings;
+        use micold_core::daemon_config::{Listen, SocketSpec};
+        use micold_core::daemons::SessionFileSetting;
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = DaemonSettings::new("S", Listen::Socket(SocketSpec::Auto));
+        for (name, text) in [("a", "FIRST"), ("b", "SECOND")] {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            settings.extras.files.push(SessionFileSetting {
+                file: path,
+                target: format!(".{name}").into(),
+                mode: None,
+            });
+        }
+        let delivery = super::ssh_delivery(&settings).unwrap();
+        assert_eq!(
+            delivery.secrets,
+            vec![
+                ("session-file-0".to_string(), b"FIRST".to_vec()),
+                ("session-file-1".to_string(), b"SECOND".to_vec()),
+            ]
+        );
+    }
+
     use super::{
         actor_specs, reconnect_loop, ssh_attempt, stale_dev_image_advice, ConnectFailures, Dial,
         LinkLife, PumpEnd, RECONNECT_BACKOFF,

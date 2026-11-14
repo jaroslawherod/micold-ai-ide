@@ -34,8 +34,8 @@ fn a_container_session_started_over_ssh_keeps_its_git_setup_without_a_data_dir_v
         "daemon.toml",
         &format!(
             "schema = 1\n[daemon]\nname = \"c\"\nkind = \"container\"\n\
-             [listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = \"{}\"\n\
-             [[github.tokens]]\nname = \"gh\"\ntoken_file = \"{}\"\n",
+             [listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = '{}'\n\
+             [[github.tokens]]\nname = \"gh\"\ntoken_file = '{}'\n",
             client_token.display(),
             api_token.display()
         ),
