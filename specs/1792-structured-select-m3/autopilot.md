@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: claude/project-thread-q9zjol
 - **Started**: 2026-11-11
-- **Phase**: M3 PR open
-- **Next step**: orchestrator dispatches review B (conformance, sonnet) and the M3 visual pass (quickstart Part B steps 2, 3, 5, 6; no Agent tool in this unit, forked visual-pass got no args), then waits on CI and merges the M3 PR
+- **Phase**: M3 PR open (visual pass findings handled)
+- **Next step**: orchestrator runs review B round 2 (sonnet, fix diff from snapshot 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 back to 3ce8964c9) and a visual re-check of quickstart Part B step 5 on a fresh release build, then waits on CI and merges #1902
 
 ## Pull requests
 
@@ -33,12 +33,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 Polish T022–T023 (no code) is left to the close unit.
 
 M3 local gate (cloud): fmt, clippy core+workspace (`scripts/gate.sh`, stopped at missing cargo-nextest), doctests, `cargo clippy -p micold-client --all-targets -D warnings`, and `cargo test -p micold-client --no-fail-fast` green at 3a16d5d8a; other crates unchanged. CI is the gate of record.
+M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy core+workspace green, stopped at missing cargo-nextest (known); then `cargo test -p micold-client --lib` (1096), `--test layout_snapshot` (177, fixture regenerated for the longer Reduce motion note), `--test features_settings` (155), `cargo test -p micold-core --lib settings` green. CI is the gate of record.
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | M3 | `/model` or `/effort` sent while the options row is collapsed opened a picker with no visible trigger; with `expand` always built its menu would float over a zero-high row. | Opening a list with the row collapsed also expands the row, as a refusal does (1703 FR-012): `/model` (`open_model_picker`), `/effort` (`send_intent`), and a trigger press while the row collapses (effort, mode; review A F1). T017/T020 live in the shell (`shell/composer.rs`), not `features/composer.rs`: feature write isolation forbids one feature closing another's lists. | unit (M3) | `shell::composer::tests::a_list_opened_with_the_row_collapsed_opens_the_row`, `collapsing_the_options_row_closes_its_pickers`; research R3 (no hidden guard in `Expand::overlay`) |
+| D2 | M3 | Visual pass step 6: the row's open state is one window-wide flag (`composer_options_open`), so opening it in one session shows it open in another. Does FR-008 require per-session state? | No. FR-008 says each session's *animation* is independent; the spec's edge case adds "one's animation never moves another's"; research R3 (*Per-session independence (FR-008)*) and data-model record the app-wide flag from feature 1703 FR-009/FR-011 and put independence in the per-composer track. The pass saw no animation in the other session, so FR-008 holds. Per-session open state would change 1703's persisted model: a product request, not this feature's defect. | unit (M3) | spec.md FR-008 and Edge Cases; research.md R3; data-model.md; visual-pass-M3.md step 6; `two_sessions_keep_separate_tracks` |
 
 
 ## Review rounds
@@ -108,4 +110,5 @@ Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
 
+- Process: review B round 1's mutation check (`options_motion` mutated) ran while the visual-pass worker built its release client in the same worktree; the binary (21:36:03) carried the mutant, the revert came at 21:36:15, so step 5 failed on a mutated build. A mutation check and a build for a visual pass must not share a worktree at once. Evidence: visual-pass-M3.md, *Step 5 re-check*.
 - Parity test (M2) compares geometry only; colour, elevation and state-layer paint are not compared. T011 was green first run, T012 skipped.
