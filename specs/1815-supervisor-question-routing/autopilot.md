@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B | 2 | M3 | 51a7e4129d7156bc92772adbb40de6174165b538 | 8745964f7817a68fc5fec58ae6f5426683123000:51a7e4129d7156bc92772adbb40de6174165b538 | A CLEAN; B CHANGES (1 MAJOR: T018 wording) fixed, plan-drift exit 0 |
 | Review A | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
 | Review B | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
+| Review A | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 2 MAJOR (object shape of list_sessions; `default` parent), 2 MINOR (parent_state/live pick; is_caller fallback), all fixed |
+| Review B | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 1 MAJOR (T021 names supervisor-route.sh; plan-drift exit 0) fixed, 1 MINOR declined |
 
 ## Declined review findings
 
@@ -70,6 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | Review B 1 | F3 (no red-before-green evidence) | Tests and code were written in one commit; later milestones commit tests first. Noted, not retroactively splittable. |
 | M2 | Review A 1 | F3 (mixed batch By `user`; evidence kept out of the answer) | One escalation is answered by one `resume` and `answer.sh` writes one By per message, so a mixed batch is By `user`; FR-005 requires the evidence in the answer text. The `route gate` ordering part was fixed. |
 | all | Review tasks 1 | F2 (split T019 and T022 into test and edit tasks) | Test files are now named; splitting would renumber T020–T022 and every milestone range for no gain, as the failing test comes first within the task. |
+| M4 | Review B 1 | F2 (no tdd/cycle-log.md) | Light tier: no cycle log is required; the red-then-green run (13 of 282 cases failing before the implementation) is in the PR body. |
 
 ## Handover
 

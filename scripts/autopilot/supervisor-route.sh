@@ -165,15 +165,19 @@ route_target() {
     esac
   done
   [ -n "$f" ] && [ "$have" = 1 ] || die "usage: route target --sessions <file> --me <id>"
-  jq -e 'type == "array"' "$f" >/dev/null 2>&1 || die "unreadable session list $f"
-  jq -r --arg me "$me" '
-    def sid: (.ref // .id // "") | tostring;
+  local q='(if type == "object" then .sessions else . end)'
+  jq -e "$q | type == \"array\"" "$f" >/dev/null 2>&1 || die "unreadable session list $f"
+  # The row is --me's, else the is_caller row. The parent must be "known" when parent_state is given;
+  # of the sessions in the parent's worktree (default included) a live one is preferred over a failed one.
+  jq -r --arg me "$me" "$q"'
+    | def sid: (.ref // .id // "") | tostring;
     . as $all
-    | ([.[] | select(sid == $me)] | first // {}) as $r
+    | (([$all[] | select(sid == $me and $me != "")] | first) // ([$all[] | select(.is_caller == true)] | first) // {}) as $r
     | ($r.parent // "") as $p
-    | if ($p | type) != "string" or $p == "" or $p == "default" then "user"
-      else ([$all[] | select((.worktree // "") == $p and sid != $me) | sid] | first) as $t
-        | if $t == null or $t == "" then "user" else "parent " + $t end
+    | if ($p | type) != "string" or $p == "" or (($r.parent_state // "known") != "known") then "user"
+      else ([$all[] | select((.worktree // "") == $p and sid != ($r | sid))]
+            | sort_by(.lifecycle == "failed") | first | if . == null then "" else sid end) as $t
+        | if $t == "" then "user" else "parent " + $t end
       end' "$f"
 }
 
