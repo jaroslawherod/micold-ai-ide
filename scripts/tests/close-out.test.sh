@@ -72,6 +72,15 @@ verdict "several ledgers are exit 3 and are listed" 3 'autopilot-2\.md'
 check "not a worktree is exit 2" 2 'not a git worktree' "$VR" "$tmp"
 check "an unknown option is exit 2" 2 'unknown option' "$VR" --nope
 
+# --- review A: a PR only GitHub knows, several done ledgers, a failing run-status -------------------
+fresh; echo '[{"number":9}]' > "$d/fx/pr-list.json"; pr_json "$d/fx" 9 OPEN > "$d/fx/pr-9.json"
+notdone "the branch's open PR missing from the ledger is listed" 'PR #9 is OPEN'
+fresh; cp specs/042-x/autopilot.md specs/042-x/autopilot-2.md; git add -A; git commit -qm two; git push -q origin HEAD:main 2>/dev/null
+verdict "several done ledgers are exit 3 too" 3 'autopilot-2\.md'
+fresh; printf '#!/usr/bin/env bash\nexit 5\n' > "$tmp/rs-fail.sh"; chmod +x "$tmp/rs-fail.sh"
+check "a failing run-status.sh is NOT DONE, never a bare exit" 1 'run-status.sh failed \(exit 5\)' \
+  env AUTOPILOT_RUN_STATUS="$tmp/rs-fail.sh" "$VR" "$d/wt"
+
 # --- US1.4: the issue -------------------------------------------------------------------------------
 fresh; issue_json OPEN in-progress flow:feature > "$d/fx/issue-42.json"
 notdone "an open issue is listed" 'issue #42 is open'
