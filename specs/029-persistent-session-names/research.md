@@ -180,15 +180,18 @@ and the same read the existing pass already performs for a newly discovered id.
 
 ## R5 — Keeping a recorded name after the AI CLI's records go away (FR-008)
 
-**Decision**: Falls out of the design; no code defends it, and one test pins it.
+**Decision**: The recovery pass never clears a name; removal of a gone session is 026 FR-008a
+(BUG-1852), not this pass. Falls out of the design; no code in the recovery pass defends it, and one
+test pins it.
 
 **Rationale**: The recovery pass only ever *fills* a `Pending` label. Nothing in the design moves a
 label from `Named` back to `Pending`, and `read_title` returning `None` is a no-op rather than a
-clear. The pre-existing behaviour around a vanished conversation already agrees: a resume of a
-session whose transcript is gone is refused with a message naming the CLI (`state.rs:1218`), rather
-than silently starting fresh under the old id — the codebase's own note calls out that reusing the
-id would "put the user in an empty session wearing the old one's title". Keeping the name on the row
-while refusing to resume into it is the coherent pair.
+clear. A vanished conversation is handled elsewhere: a resume of a session whose transcript is
+gone is refused rather than silently starting fresh under the old id (the codebase's note: reusing
+the id would "put the user in an empty session wearing the old one's title"), and since BUG-1795 the
+refused session is removed, as is a gone one at startup (BUG-1852, 026 FR-008a), name included. The
+earlier pair "name kept while resume is refused" no longer holds; what holds is that the recovery
+pass and pruning never remove a `Named` session.
 
 The risk this creates is the one FR-005 guards: a name that is never revised. It is not real here,
 because the live path (R1/R2) keeps overwriting the record whenever the conversation is re-titled,
