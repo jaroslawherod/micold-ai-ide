@@ -10,6 +10,7 @@ mod drive_loop;
 mod frame_coalescing;
 mod framing;
 mod handshake_flow;
+mod link_pong_ignored;
 mod logging_sink;
 mod pane_terminals;
 mod presence_counting;

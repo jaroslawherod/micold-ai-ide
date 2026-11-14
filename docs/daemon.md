@@ -646,9 +646,12 @@ id, and closed. A session start sent over an accepted link is refused with
 `not hosted by the orchestrator`; a session list is empty. The wire shapes are in
 `specs/1724-orchestrator-registry-daemon-link/contracts/link.md`.
 
-This first step keeps the registry in memory and lists every linked daemon `online`; heartbeat,
-`offline`, `needs-update`, one live link per id and a registry that survives a restart follow in the
-same issue (#1724).
+The orchestrator pings each link with `LinkPing { nonce }` every 3 s when the link is idle; the
+daemon answers `LinkPong { nonce }` (protocol 81). Any frame counts as an answer. A link silent for
+9 s (checked every second) is listed `offline` with `last_seen` left at its last answer; the entry and
+its link stay, and the next frame of any kind brings it back `online` and advances `last_seen`. Other
+daemons are unaffected. The registry is still in memory; `needs-update`, one live link per id and a
+registry that survives a restart follow in the same issue (#1724).
 
 ## Finding the logs and recent errors
 
