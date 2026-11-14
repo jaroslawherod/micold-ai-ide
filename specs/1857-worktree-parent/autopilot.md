@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-isaz3e
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: review round 2 (orchestrator), then merge (CI)
+- **Next step**: merge (CI)
 
 ## Pull requests
 
@@ -58,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 2 | M1b | 24e28dc124ca0b39051ae6b826275be5f3d80fb7 | 2b7105f8e940df91f685cfc09e6da5c31dfa8fce:24e28dc124ca0b39051ae6b826275be5f3d80fb7 | CLEAN (round 2 sonnet on fix diff; worktree_parent 22 passed; 2 MINOR) |
 | A | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F6): F1 `ref` not `name`, F2 orphan scan on unfiltered list, F3 `--check` takes ref or path, F4 exit 2 on empty or bad rows, F5 8-column ledger refuses Parent, F6 relay text; all fixed test first (cycle-log M3); round 2 to run by orchestrator |
 | B | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F4): F1 cycle-log M3 section with red runs, F2 = A F6, F3 T026 reworded to comments, F4 drift-M3.md; all fixed; round 2 to run by orchestrator |
+| A | 2 | M3 | b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | 4aed8e5fc120550f00e3254472dd2fbadfc597d2:b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | CLEAN (round 2 sonnet on fix diff; ownership 39, supervisor 269 passed) |
+| B | 2 | M3 | b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | 4aed8e5fc120550f00e3254472dd2fbadfc597d2:b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | CLEAN (round 2 sonnet on fix diff) |
 
 ## Declined review findings
 
