@@ -2375,6 +2375,17 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         }
         // The orchestrator's heartbeat probe (#1724): only an orchestrator link answers it.
         DaemonMsg::LinkPing { .. } => {}
+        // A program copied with OSC 52 (#1720): the window showing that session puts it on the
+        // system clipboard.
+        DaemonMsg::ClipboardStore { session, content } if app.active_daemon() == Some(daemon) => {
+            if let Some(outcome) = micold_client::features::session::clipboard_store_outcome(
+                app.core.session.active,
+                session,
+                content,
+            ) {
+                follow_up = Task::batch([follow_up, crate::shell::clipboard::interpret(outcome)]);
+            }
+        }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }

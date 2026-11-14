@@ -1649,6 +1649,35 @@ fn context_menu_open_link(state: &mut crate::app::State) -> Vec<crate::features:
     link_activated(state, link)
 }
 
+/// What a program's OSC 52 clipboard store becomes in this window (#1720): the clipboard write
+/// when `session` is the one this window displays, nothing otherwise, so a background session
+/// cannot overwrite what the user copied.
+pub fn clipboard_store_outcome(
+    displayed: Option<SessionId>,
+    session: SessionId,
+    content: String,
+) -> Option<crate::features::Outcome> {
+    (displayed == Some(session)).then_some(crate::features::Outcome::ClipboardWrite(content))
+}
+
+#[cfg(test)]
+mod clipboard_store_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_displayed_session_may_write_the_clipboard() {
+        let shown = SessionId::new();
+        let other = SessionId::new();
+
+        assert!(matches!(
+            clipboard_store_outcome(Some(shown), shown, "hi".into()),
+            Some(crate::features::Outcome::ClipboardWrite(t)) if t == "hi"
+        ));
+        assert!(clipboard_store_outcome(Some(shown), other, "hi".into()).is_none());
+        assert!(clipboard_store_outcome(None, other, "hi".into()).is_none());
+    }
+}
+
 /// **Copy Link Address**: copy what the menu captured (contract link-opening §6 M4).
 ///
 /// The address the program printed or declared, whole: a soft-wrapped one is one address and a
