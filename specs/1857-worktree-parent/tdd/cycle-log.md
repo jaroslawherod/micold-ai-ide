@@ -39,3 +39,36 @@ Each edit reverted after the run; `-p micold-daemon --test mcp worktree_parent`:
 | `refresh_worktrees` never calls `reconcile_worktree_parents` (state.rs) | 2 FAILED: `the_first_refresh_mints_an_id_for_every_live_worktree_and_keeps_them`, `a_worktree_removed_outside_the_app_tombstones_its_children_at_the_next_refresh` |
 | session rows lose the parent (mcp/tools.rs `session_row`) | 1 FAILED: `session_rows_carry_the_worktrees_parent_independent_of_origin` |
 | `ops::delete_worktree` does not call `forget_worktree_parent` | survived (13 passed): the refresh that follows every delete reconciles the same way, so the explicit forget is an equivalent mutant at this surface; it keeps the maps current when the refresh is skipped |
+
+## Milestone M1b (T030-T032, #1858): red against origin/main, green on the branch
+
+Honest account: the M1b tests and the filter landed in one commit, so git history shows no
+red-before-green. This section records the red run after the fact. Method: copy `origin/main`'s
+`crates/micold-daemon/src/mcp/tools.rs` over the branch's, run each test of
+`tests/mcp/mcp_worktree_parent_visibility.rs` (`scripts/build-lock.sh cargo test -p micold-daemon
+--test mcp <name>`), restore the branch's file, run again.
+
+| Test | On origin/main's `tools.rs` | On the branch |
+|---|---|---|
+| `a_worktree_with_a_parent_lists_itself_its_parent_siblings_and_children` | FAILED: left `[A,B,C,P,X,Y,default]`, right `[A,B,C,P]` | passed |
+| `an_unparented_worktree_sees_itself_and_its_children` | FAILED: left `[A,B,C,P,X,Y,default]`, right `[X,Y]` | passed |
+| `a_default_caller_sees_everything` | passed (guard: the unrestricted caller is unchanged, so it cannot be red) | passed |
+| `every_tool_reports_an_out_of_scope_target_as_not_found` | FAILED: `get_session succeeded` for an out-of-scope session | passed |
+| `a_message_to_an_out_of_scope_session_is_refused_while_the_parent_is_reachable` | FAILED: left `conflict`, right `not_found` | passed |
+| `an_explicit_parent_outside_the_callers_set_is_invalid_input` | FAILED: `create_worktree succeeded` with `parent: default` | passed |
+| `list_branches_does_not_name_a_worktree_the_caller_cannot_see` | FAILED: `checked_out_in` left `"X"`, right `null` | passed |
+
+### FR-015, review B F4: the reason text names no hidden worktree (test first)
+
+Two tests added before the fix, red on the branch as it was:
+
+- `an_unavailable_reason_does_not_name_a_worktree_the_caller_cannot_see`: FAILED, `unavailable_reason`
+  for branch X seen by A was `'X' is already checked out in the worktree 'X'.`, expected
+  `'X' is already checked out in another worktree.`
+- `a_create_worktree_conflict_does_not_name_a_worktree_the_caller_cannot_see`: FAILED, the
+  `create_worktree` conflict message named worktree 'X' for A.
+
+Fix: `Scope::explain` (tools.rs) replaces the holder with generic wording when it is outside the
+scope; `describe_situation`, `describe_derived_collision`, `create_failure` and `list_branches` use
+it. After the fix: `-p micold-daemon --test mcp worktree_parent` 22 passed (both new tests green,
+the sibling case still named, `default` still sees the name).

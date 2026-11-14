@@ -113,6 +113,47 @@ pub fn credential(state: &DaemonState, session: SessionId) -> String {
         .credential_for(session)
 }
 
+/// [`credential`] for a session that sees every worktree and session of its project, as one in
+/// `default` does (spec 1857, FR-015): the caller's worktree becomes a child of `default` and the
+/// parent of all the others. For tests of a tool's behaviour that are not about what a caller may
+/// see.
+pub fn full_view_credential(state: &DaemonState, session: SessionId) -> String {
+    use micold_core::worktree_parent::ParentChoice;
+    let project = state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.sessions.iter().any(|s| s.id == session))
+        .expect("the session is in a project");
+    if let Some(own) = project
+        .sessions
+        .iter()
+        .find(|s| s.id == session)
+        .and_then(|s| s.worktree_dir.clone())
+    {
+        state.refresh_worktrees(&project.path);
+        let mut dirs: Vec<String> = state
+            .catalog_snapshot()
+            .projects
+            .into_iter()
+            .filter(|p| p.path == project.path)
+            .flat_map(|p| p.worktrees)
+            .map(|wt| wt.dir_name)
+            .collect();
+        // The caller first: recording a worktree gives it a fresh id, which unlinks its children.
+        dirs.sort_by_key(|dir| *dir != own);
+        for dir in dirs {
+            let parent = if dir == own {
+                ParentChoice::Default
+            } else {
+                ParentChoice::Worktree(own.clone())
+            };
+            state.record_worktree_parent(&project.path, &dir, Some(&parent));
+        }
+    }
+    credential(state, session)
+}
+
 /// A window connected to `state`: it receives every broadcast from now on.
 pub fn fake_window(
     state: &DaemonState,
