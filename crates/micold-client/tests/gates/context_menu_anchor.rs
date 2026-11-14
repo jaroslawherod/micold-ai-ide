@@ -74,6 +74,7 @@ const WORKTREE_COUNT: usize = 8;
 
 fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: PathBuf::from(PROJECT)
             .join(".claude/worktrees")

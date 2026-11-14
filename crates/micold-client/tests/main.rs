@@ -231,6 +231,7 @@ mod showcase_tab;
 mod sidebar_attention;
 mod sidebar_group_actions;
 mod sidebar_layout_store;
+mod sidebar_parent;
 mod sidebar_spawn_tree;
 mod sidebar_state;
 mod sidebar_state_icon;

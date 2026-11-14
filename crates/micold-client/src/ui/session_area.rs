@@ -483,6 +483,7 @@ mod tests {
             .push(Project::new(path.clone(), true, Availability::Available));
         state.workspace.active = Some(path.clone());
         state.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: "fix-1117_ci".into(),
             path: "/repo/.claude/worktrees/fix-1117_ci".into(),
             branch: Some("fix/1117_ci".into()),

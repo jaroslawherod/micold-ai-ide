@@ -11,6 +11,7 @@ use micold_core::worktree::{Worktree, WorktreeStatus};
 
 fn worktree(dir: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from("/repo").join(dir),
         branch: None,

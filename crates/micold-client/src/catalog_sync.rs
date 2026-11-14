@@ -383,6 +383,7 @@ pub fn reconcile_catalog(
                                 branch: w.branch.clone(),
                                 status: wire_to_worktree_status(w.status),
                                 included: w.included,
+                                parent: w.parent.clone(),
                             },
                         }
                     })

@@ -311,6 +311,7 @@ fn state_with_current_session() -> State {
     });
     state.workspace.active = Some(path.clone());
     state.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: "feat-a".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/a".to_string()),

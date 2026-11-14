@@ -2713,6 +2713,7 @@ impl DaemonState {
             Self::overlay_live_summaries(inner, &mut project.sessions);
             if let Some(discovered) = inner.worktrees.get(&project.path) {
                 let names = overrides.get(&project.path);
+                let parents = inner.catalog.worktree_parent_views(&project.path);
                 project.worktrees = discovered
                     .iter()
                     .map(|wt| WorktreeSnapshot {
@@ -2726,6 +2727,14 @@ impl DaemonState {
                         status: wire_worktree_status(wt.status),
                         path: wt.path.clone(),
                         included: wt.included,
+                        parent: parents.get(&wt.dir_name).map(|view| {
+                            view.label(|dir| {
+                                names
+                                    .and_then(|m| m.get(dir))
+                                    .cloned()
+                                    .unwrap_or_else(|| dir.to_string())
+                            })
+                        }),
                     })
                     .collect();
             }

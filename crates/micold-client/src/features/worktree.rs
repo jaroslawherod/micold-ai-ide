@@ -148,6 +148,9 @@ pub(crate) fn worktree_tags(worktree: &Worktree) -> Vec<Tag> {
     if worktree.status != WorktreeStatus::Valid {
         tags.push(Tag::Status(worktree.status));
     }
+    if let Some(parent) = &worktree.parent {
+        tags.push(Tag::Parent(parent.clone()));
+    }
     tags
 }
 

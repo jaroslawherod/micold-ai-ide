@@ -192,6 +192,7 @@ mod location_titles {
         });
         app.workspace.active = Some(project());
         app.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: DIR.into(),
             path: PathBuf::from(format!("/repo/.claude/worktrees/{DIR}")),
             branch: branch.map(str::to_string),
@@ -563,6 +564,7 @@ mod title_facts {
         });
         app.workspace.active = Some(project());
         app.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: DIR.into(),
             path: PathBuf::from(format!("/repo/.claude/worktrees/{DIR}")),
             branch: Some("claude/project-thread-7041o6".into()),

@@ -14,6 +14,7 @@ use crate::support;
 
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -438,6 +439,7 @@ fn default_sessions_are_attached_to_the_default_entry_only() {
 fn agent_worktree(hex: &str, status: WorktreeStatus) -> Worktree {
     let dir = format!("agent-{hex}");
     Worktree {
+        parent: None,
         dir_name: dir.clone(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("worktree-agent-{hex}")),
@@ -766,6 +768,7 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
     state.workspace.active = Some(path.clone());
     state.worktree.worktrees = vec![
         Worktree {
+            parent: None,
             dir_name: "feat-a".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
             branch: Some("feat/a".to_string()),
@@ -773,6 +776,7 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
             included: false,
         },
         Worktree {
+            parent: None,
             dir_name: "fix-b".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/fix-b"),
             branch: Some("fix/b".to_string()),
@@ -1192,7 +1196,7 @@ fn pressing_an_active_chip_clears_just_that_filter() {
         TagFilter::Untyped,
     )));
     assert_eq!(
-        state.sidebar.filters.iter().copied().collect::<Vec<_>>(),
+        state.sidebar.filters.iter().cloned().collect::<Vec<_>>(),
         [TagFilter::Type(ConventionalType::Fix)]
     );
 }

@@ -37,8 +37,8 @@ as it answers. One silent daemon does not change the others.
 ## A daemon that needs an update
 
 A daemon on a different protocol version cannot join. The orchestrator refuses it with a message that
-names both versions, for example `daemon box speaks protocol version 80; this orchestrator speaks
-81`, and lists it as `needs-update` with its own version and the orchestrator's. Update the daemon
+names both versions, for example `daemon box speaks protocol version 81; this orchestrator speaks
+82`, and lists it as `needs-update` with its own version and the orchestrator's. Update the daemon
 and let it link again: it then shows `online`. A daemon that is already linked and answering is never
 replaced by a refused one, and the other daemons keep their status.
 

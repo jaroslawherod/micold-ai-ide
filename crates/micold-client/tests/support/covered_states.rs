@@ -482,6 +482,7 @@ const LONG_NAME: &str = "feat-a-deliberately-long-worktree-name-that-crowds-its-
 
 fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: PathBuf::from(PROJECT)
             .join(".claude/worktrees")

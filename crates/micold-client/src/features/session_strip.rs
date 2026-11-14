@@ -1730,6 +1730,7 @@ pub(crate) mod tests {
     fn a_sessionless_locations_strip_is_its_review_alone() {
         let (mut state, _) = strip_fixture(0);
         state.worktree.worktrees = vec![micold_core::worktree::Worktree {
+            parent: None,
             dir_name: "z".into(),
             path: "/repo/.claude/worktrees/z".into(),
             branch: Some("z".into()),

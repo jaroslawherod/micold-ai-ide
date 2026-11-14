@@ -121,9 +121,9 @@ fn expanded_nodes_are_application_owned() {
 fn tag_filters_are_application_owned() {
     let mut state = State::default();
     let feature = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature.clone())));
     assert!(state.sidebar.filters.contains(&feature));
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature.clone())));
     assert!(!state.sidebar.filters.contains(&feature));
 }
 

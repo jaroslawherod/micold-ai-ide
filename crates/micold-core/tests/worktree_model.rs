@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 fn worktree(status: WorktreeStatus) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),

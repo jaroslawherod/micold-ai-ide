@@ -628,7 +628,7 @@ daemons are unaffected.
 
 A daemon whose protocol version differs from the orchestrator's, older or newer, is refused with
 `Refused { reason: "version_mismatch", orchestrator_version, daemon_version, message }`; the message
-names both numbers (`daemon <id> speaks protocol version 80; this orchestrator speaks 81`). Its id
+names both numbers (`daemon <id> speaks protocol version 81; this orchestrator speaks 82`). Its id
 is listed `needs-update`, and the record then carries `orchestrator_version` beside its own
 `protocol_version`. A daemon on the current number whose `Hello` carries another schema hash is
 refused at `Hello` and listed the same way. A refusal for the build (`BuildMismatch`) or for
