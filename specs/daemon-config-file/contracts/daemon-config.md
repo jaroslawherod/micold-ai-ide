@@ -305,7 +305,7 @@ log = "info"
 tcp = "127.0.0.1:7000"
 
 [auth]
-client_token_file = "/run/micold/secrets/client-token"
+client_token_file = "/run/micold/token"
 
 [ssh]
 dir = "/run/micold/ssh"
