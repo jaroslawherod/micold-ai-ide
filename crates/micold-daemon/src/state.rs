@@ -6517,6 +6517,8 @@ impl DaemonState {
     /// runtime. Runs exactly once, before the accept loop starts, so there is no other client to
     /// contend for the lock — the provider stat happening under the lock is safe here for that reason
     /// (unlike the steady-state paths, which must never block under the lock). Returns the count.
+    /// A `Named`/`Derived` session whose conversation is gone is not handled here: it is removed by
+    /// [`Self::remove_gone_sessions_at_startup`], which runs right after.
     pub fn present_interrupted_resumable_at_startup(&self) -> usize {
         // Per session, not per workspace (feature 026). Asking one provider about every session
         // means none of the other CLI's is ever presented as resumable — it reports no recorded
@@ -6535,6 +6537,75 @@ impl DaemonState {
                     None => false,
                 }
             })
+    }
+
+    /// FR-008a (BUG-1852): at service startup, remove every `Named`/`Derived` AI-CLI session whose
+    /// conversation is confirmed gone, through the same persisted removal as the start-time one.
+    /// `Pending` sessions are `prune_empty_sessions`'s, and a provider that mints its own ids is
+    /// never "gone" ([`Self::conversation_gone`], the predicate start-time removal uses).
+    ///
+    /// Destructive and durable, so ignorance removes nothing: a provider is judged only when its
+    /// conversation store exists and reads as a directory (an unmounted disk or a moved home is a
+    /// lost store, not lost conversations), and one whose every candidate (more than one) looks
+    /// gone at once is treated as a lost store too. Runs once before the accept loop, so no client
+    /// sees the intermediate list. **Blocking** (stats the store); the caller runs it off the async
+    /// runtime. Returns how many sessions were removed.
+    pub fn remove_gone_sessions_at_startup(&self) -> usize {
+        let mut by_provider: HashMap<AiCli, Vec<(SessionId, PathBuf, uuid::Uuid)>> = HashMap::new();
+        {
+            let inner = self.lock();
+            let sessions = inner.catalog.workspace().sessions.iter();
+            for (project, list) in sessions {
+                for s in list.iter().filter(|s| {
+                    !s.archived
+                        && s.mode == TerminalMode::AiCli
+                        && matches!(s.label, SessionLabel::Named(_) | SessionLabel::Derived(_))
+                }) {
+                    by_provider.entry(s.provider).or_default().push((
+                        s.id,
+                        s.location.cwd(project),
+                        s.resume_handle(),
+                    ));
+                }
+            }
+        }
+        let mut removed = 0;
+        for (cli, candidates) in by_provider {
+            let provider = cli.provider();
+            let store_readable = provider.config_dir().is_some_and(|config| {
+                std::fs::read_dir(provider.conversation_store_root(&config)).is_ok()
+            });
+            if !store_readable {
+                continue;
+            }
+            let gone: Vec<SessionId> = candidates
+                .iter()
+                .filter(|(_, cwd, handle)| Self::conversation_gone(provider, cwd, *handle))
+                .map(|(id, _, _)| *id)
+                .collect();
+            if gone.is_empty() {
+                continue;
+            }
+            if candidates.len() > 1 && gone.len() == candidates.len() {
+                tracing::warn!(
+                    cli = provider.command(),
+                    count = gone.len(),
+                    "every session of the provider looks gone at once; treating the store as lost, removing none"
+                );
+                continue;
+            }
+            for id in gone {
+                tracing::info!(
+                    session = %id.0,
+                    cli = provider.command(),
+                    "removing a session whose conversation is gone, at startup"
+                );
+                if self.remove_dead_session(id).is_some() {
+                    removed += 1;
+                }
+            }
+        }
+        removed
     }
 
     /// Phase one of the idle unwind: make every live session durable as `InterruptedResumable`

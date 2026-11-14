@@ -1858,6 +1858,10 @@ impl Catalog {
     /// the user typed, so that session had a conversation too. This filter stays `Pending`-only
     /// while the recovery passes widened to "not `Named`" (C6.2) — the two ask different questions:
     /// recovery asks whether a better name may exist, pruning asks whether anything was ever said.
+    ///
+    /// A `Named`/`Derived` session whose conversation is found gone (store readable, no record) is
+    /// removed by the separate startup pass `DaemonState::remove_gone_sessions_at_startup`
+    /// (026 FR-008a, BUG-1852), not by pruning: the filter stays `Pending`-only.
     pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf, AiCli)> {
         self.workspace
             .sessions

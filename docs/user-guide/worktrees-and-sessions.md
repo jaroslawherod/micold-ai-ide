@@ -1379,7 +1379,9 @@ that session once and the row takes the name the CLI is displaying, which is you
 "New session" even though you had talked in them, opening the project is enough — each one is
 looked up in its own CLI's records, once, and keeps the name it finds, or failing a name, the first
 thing you typed. A session whose conversation the CLI no longer has is removed from the list by
-itself when the app starts; while the conversation exists, nothing takes a name or a label away.
+itself when the app starts, but only when the CLI's records can be read and say so: with them
+missing or unreadable (a disk that is not mounted, a moved home folder), nothing is removed. While
+the conversation exists, nothing takes a name or a label away.
 
 **A session you are working in right now is no different.** Type your first prompt into a session
 the CLI has not named, and within a minute its row reads that prompt — you do not have to reopen
