@@ -58,7 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 | 1 | conformance | 18bc3ebc25f945817224ca706f2089e258172acd | 571a6f78f42446d00816ad36b6d4fbad107069fa:18bc3ebc25f945817224ca706f2089e258172acd | CHANGES (1 MAJOR fixed: drift-M1.md; 1 MINOR fixed: Verify line) |
 | Visual pass M1 | 1 | quickstart B1 | 18bc3ebc25f945817224ca706f2089e258172acd | — | PASS (screenshots /mnt/project-files/issue-1786/m1-*.png; header has no collapse glyph yet, M5) |
 | M2 diff (A, code-review high) | 1 | origin/main...HEAD | 1899fc214e2463840e7778e90ac0d3a0f6ff7164 | 70213a3cb713aa6253c12e0215a8276a1fa7d027:1899fc214e2463840e7778e90ac0d3a0f6ff7164 | CHANGES (4 fixed: stale menus survive Help, more menu and switcher; rename kept the menu under an open dialog; no-op rename wrote the store; duplicate menu code; 4 declined) |
-| Review B M2 | — | conformance | — | — | not run by this unit: the orchestrator dispatches it and the visual pass after return |
+| Review B M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CHANGES (2 MAJOR fixed: drift-M2.md, T040 names keyboard opener; 2 MINOR fixed) |
 
 ## Declined review findings
 
