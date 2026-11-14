@@ -80,6 +80,10 @@ impl Shared {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    pub(crate) fn now(&self) -> Instant {
+        self.clock.now()
+    }
+
     pub(crate) fn wall_secs(&self) -> u64 {
         self.clock.wall_secs()
     }

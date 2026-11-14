@@ -2809,6 +2809,9 @@ where
             ClientMsg::SetupOutputUnwatch { project, location } => {
                 state.setup(|runs, _| runs.unwatch(id, &project, &location));
             }
+            // The orchestrator's heartbeat answer (#1724): a daemon that hosts sessions has no use
+            // for it.
+            ClientMsg::LinkPong { .. } => {}
             // Any remaining unhandled control message is ignored.
             _ => {}
         }
