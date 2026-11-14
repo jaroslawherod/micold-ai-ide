@@ -16,7 +16,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 
 | id | behavior | traces | kind | state | test |
 |---|---|---|---|---|---|
-| A1 | New group with a valid name adds a header holding no worktree | US1-1, FR-001 | example | PENDING | tasks T011, T012 |
+| A1 | New group with a valid name adds a header holding no worktree | US1-1, FR-001 | example | DONE | tests/sidebar_group_actions.rs::a_valid_name_adds_a_header_holding_no_worktree_and_saves |
 | A2 | Renaming a group changes the header name and keeps its worktrees | US1-2, FR-002 | example | PENDING | tasks T020, T021 |
 | A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | PENDING | tasks T020, T021 |
 | A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | PENDING | tasks T011, T020 |
@@ -79,7 +79,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U28 | set_collapsed; Enter/Space on a header toggles; menu Collapse/Expand | FR-011 | example | PENDING | tasks T039, T040 |
 | U29 | reveal_ready expands the group holding the target | FR-017 | example | PENDING | tasks T039, T040 |
 | U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | PENDING | tasks T020, T021 |
-| U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | PENDING | tasks T011, T012 |
+| U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | DONE | tests/sidebar_group_actions.rs::new_group_is_on_the_more_menu_with_no_worktree_needed, no_project_open_offers_no_new_group, the_new_group_chord_is_primary_shift_g_and_on_the_shortcut_sheet (empty-area menu still open, T014) |
 
 ## Out of scope
 

@@ -212,6 +212,9 @@ pub enum Message {
     /// Everything the user can do to the sidebar (feature 028, FR-001). Ten variants moved
     /// behind this one; see [`crate::features::sidebar::Msg`].
     Sidebar(crate::features::sidebar::Msg),
+    /// The user's own sidebar groups (feature 1786); see
+    /// [`crate::features::sidebar_group_actions::Msg`].
+    SidebarGroups(crate::features::sidebar_group_actions::Msg),
 
     /// Escape was pressed with the terminal unfocused (feature 021, T034). The first of the three
     /// dismissal triggers to be reported the same way the third already was: as *what happened*,
@@ -449,6 +452,9 @@ pub struct State {
     pub worktree: crate::features::worktree::State,
     /// What the sidebar feature remembers -- see [`crate::features::sidebar::State`].
     pub sidebar: crate::features::sidebar::State,
+    /// What the user-group actions remember (feature 1786) -- see
+    /// [`crate::features::sidebar_group_actions::State`].
+    pub sidebar_groups: crate::features::sidebar_group_actions::State,
     /// What the session feature remembers -- see [`crate::features::session::State`].
     pub session: crate::features::session::State,
     /// What the daemons feature remembers -- see [`crate::features::daemons::State`].
@@ -1557,6 +1563,10 @@ impl State {
                 let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            Message::SidebarGroups(msg) => {
+                let outcomes = crate::features::sidebar_group_actions::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             // Feature 939: the transcript view's messages are the transcript feature's; the
             // scroll they ask for is the shell's (`shell/transcript.rs`), so here it is dropped.
             Message::Session(crate::features::session::Msg::Transcript(msg)) => {
@@ -2111,6 +2121,9 @@ pub fn interpret(
         Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
         Outcome::KeyboardRowLeft => state.keyboard_row_left(),
         Outcome::ProjectEntered => state.project_entered(),
+        Outcome::SidebarLayoutChanged { project, layout } => {
+            state.sidebar_layout_changed(project, layout)
+        }
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
         Outcome::FieldBlurred(field) => field_blurred(state, field),
@@ -2589,6 +2602,8 @@ fn field_blurred(state: &mut State, id: crate::features::window::FieldId) {
                 draft.required.leave(id);
             }
         }
+        // The group name's refusal is the error line the confirm sets, not a required mark.
+        F::GroupName => {}
         F::SettingsScrollback
         | F::SettingsEnvIncludeTimeout
         | F::SettingsLongTaskThreshold

@@ -123,6 +123,12 @@ pub enum Outcome {
     /// `default_expanded` is not keyed per project (unlike `expanded`, pruned by `dir_name`), so it
     /// would otherwise render in a project that never asked for it.
     ProjectEntered,
+    /// A user-group operation changed `project`'s sidebar layout (feature 1786): the root keeps it
+    /// and marks it unsaved, and the shell writes it to the store (research R9).
+    SidebarLayoutChanged {
+        project: std::path::PathBuf,
+        layout: micold_core::sidebar_layout::SidebarLayout,
+    },
     /// The user closed (or reopened) the row holding the current session (feature 024, I2).
     ///
     /// The sidebar owns the row and knows the twisty was clicked; whether that suppresses the
@@ -385,6 +391,7 @@ pub mod session_strip;
 pub mod settings;
 pub mod setup;
 pub mod sidebar;
+pub mod sidebar_group_actions;
 pub mod structured_insights;
 pub mod structured_transcript;
 pub mod transcript_rich;

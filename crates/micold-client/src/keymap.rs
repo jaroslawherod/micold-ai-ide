@@ -487,6 +487,15 @@ pub fn new_terminal_chord_label() -> &'static str {
     }
 }
 
+/// Whether the press is the New group chord (feature 1786, contract C6a; macOS `Cmd+Shift+G`, else
+/// `Ctrl+Shift+G`). Heard only while no terminal has the keyboard, like the full-screen chord.
+pub fn is_new_group_chord(key: &Key, mods: Mods) -> bool {
+    is_primary_shift_chord(key, mods, 'g')
+}
+
+/// The New group chord as Linux/Windows and macOS write it, for the shortcut sheet and docs.
+pub const NEW_GROUP_CHORD_LABELS: (&str, &str) = ("Ctrl+Shift+G", "Cmd+Shift+G");
+
 /// Whether the press is the Overview's full-screen chord (feature 970, FR-001, research R7; macOS
 /// `Cmd+Shift+F`, else `Ctrl+Shift+F`). Not in the terminal's reserved tier: the app hears it only
 /// while no terminal has the keyboard, which opening the Overview ensures (it moves the keyboard to

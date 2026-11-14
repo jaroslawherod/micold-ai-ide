@@ -300,7 +300,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-eight with `review_shortcut_sheet`, the Review tab's shortcut sheet (#1274).
     // Twenty-nine with `setup_output`, a location's setup output (feature 1289).
     // Thirty with `large_editor`, the draft's large editor (feature 1703).
-    const DIALOGS: usize = 30;
+    // Thirty-one with `group_naming`, the user-group naming dialog (feature 1786).
+    const DIALOGS: usize = 31;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

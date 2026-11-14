@@ -155,6 +155,9 @@ pub struct State {
     /// when the project is entered and saved after every committed group operation (R9). A
     /// project with no entry has no groups.
     pub layouts: BTreeMap<std::path::PathBuf, SidebarLayout>,
+    /// The projects whose held layout changed and is not yet written to the store; the shell
+    /// saves and clears them after the message that changed them (research R9).
+    pub layouts_unsaved: BTreeSet<std::path::PathBuf>,
 }
 
 /// A sidebar row named by what it shows, not by its position, so it survives the list arriving
@@ -298,13 +301,16 @@ pub enum MoreAction {
     AttachExisting,
     /// Open the Run in parallel dialog (feature 483).
     RunInParallel,
+    /// **New group…** (feature 1786, contract C6a).
+    NewGroup,
 }
 
 /// The more menu's items, top to bottom (contract S3).
-pub const MORE_MENU: [MoreAction; 3] = [
+pub const MORE_MENU: [MoreAction; 4] = [
     MoreAction::Refresh,
     MoreAction::AttachExisting,
     MoreAction::RunInParallel,
+    MoreAction::NewGroup,
 ];
 
 /// One item of the more menu as the view draws it: the header button's tooltip and enabled rule,
@@ -342,6 +348,8 @@ pub fn more_menu_items(project_active: bool, refreshing: bool) -> Vec<MoreMenuIt
                 MoreAction::RunInParallel => {
                     ("Run in parallel…", "Run in parallel…", project_active)
                 }
+                // Feature 1786 (C6a): needs a project, never a worktree.
+                MoreAction::NewGroup => ("New group…", "New group…", project_active),
             };
             MoreMenuItem {
                 action,
@@ -1896,6 +1904,13 @@ impl crate::app::State {
     /// The store's layout for `project` arrived (feature 1786): kept for the project, replacing
     /// whatever was held.
     pub fn sidebar_layout_loaded(&mut self, project: std::path::PathBuf, layout: SidebarLayout) {
+        self.sidebar.layouts.insert(project, layout);
+    }
+
+    /// A user-group operation changed `project`'s layout (feature 1786): kept, and marked for the
+    /// shell's save (research R9).
+    pub fn sidebar_layout_changed(&mut self, project: std::path::PathBuf, layout: SidebarLayout) {
+        self.sidebar.layouts_unsaved.insert(project.clone());
         self.sidebar.layouts.insert(project, layout);
     }
 

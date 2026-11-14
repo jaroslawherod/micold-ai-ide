@@ -63,3 +63,28 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   cards. Reconcile runs on a copy at every draw, so a worktree added or removed on disk shows at
   once (A28) without writing the file. T007's `reveal_ready` expanding a collapsed group (U29) and
   the header as a keyboard stop (U28) are M5 behaviours on the test list; not implemented here.
+
+## Cycle 4: A1, A4/A5 (create half), U31 creating a group (T011, T012, T013, part of T014)
+
+- test: `crates/micold-client/tests/sidebar_group_actions.rs` (8 tests, module of `tests/main.rs`)
+- red: `cargo check -p micold-client --tests` -> `E0432 unresolved import
+  micold_client::features::sidebar_group_actions`, `is_new_group_chord`; `E0599 no variant
+  NewGroup`, `Message::SidebarGroups`; `E0609 no field layouts_unsaved`, `sidebar_groups`
+  (17 errors). A compile red: the feature did not exist.
+- green: `features/sidebar_group_actions.rs` (`Msg::{New,TextChanged,Confirmed,Cancelled}`,
+  `NamingDraft{target: New, text, error}`, `refusal`, `GroupNamingDialog` surface), root
+  `Message::SidebarGroups`, `State.sidebar_groups`, `Outcome::SidebarLayoutChanged` applied by
+  `State::sidebar_layout_changed` (keeps it, marks `sidebar.layouts_unsaved`), shell
+  `shell/sidebar_layout.rs::after_update` (loads the active project's layout once, saves the
+  unsaved ones, `notify_error` on a failed save), `ui/group_naming.rs` over `rename_dialog`
+  (new `confirm` and `error` fields), `MoreAction::NewGroup`, `keymap::is_new_group_chord`
+  (Primary+Shift+G), the composer sheet's "Sidebar" group. `cargo test -p micold-client --test
+  main sidebar_group_actions` -> `8 passed; 0 failed`.
+- refactor: none
+- notes: whole `cargo test -p micold-client --tests --no-fail-fast` -> only
+  `layout_snapshot::the_layout_matches_the_committed_fixture` fails (T044 re-records it). Guard
+  tests updated for the new feature: features_sidebar/sidebar_state more-menu arrays, root
+  vocabulary 33, popover DIALOGS 31, keyboard-subscription EXEMPT, the interim
+  `sidebar.layouts` COMPONENT_LOCAL pin removed, new `tests/features_sidebar_group_actions.rs`.
+  The "Sidebar" sheet group is shown only on the sheet opened outside a Review tab:
+  with it, the Review sheet overflowed `review_tab_fits` at 640x480 by 8 px.

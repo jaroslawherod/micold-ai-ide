@@ -588,6 +588,7 @@ pub fn more_menu_items(state: &State) -> Vec<material::MenuItem<Message>> {
             MoreAction::Refresh => Icon::Refresh,
             MoreAction::AttachExisting => Icon::OpenProject,
             MoreAction::RunInParallel => Icon::AiCli,
+            MoreAction::NewGroup => Icon::Overview,
         };
         material::MenuItem {
             message: item
@@ -609,6 +610,9 @@ pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Mess
         MoreAction::Refresh => Message::Worktree(WorktreeMsg::RefreshRequested),
         MoreAction::AttachExisting => Message::Attach(crate::features::attach::Msg::Opened),
         MoreAction::RunInParallel => Message::Sidebar(SidebarMsg::RunInParallelRequested),
+        MoreAction::NewGroup => {
+            Message::SidebarGroups(crate::features::sidebar_group_actions::Msg::New)
+        }
     }
 }
 

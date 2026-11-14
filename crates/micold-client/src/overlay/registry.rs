@@ -363,6 +363,8 @@ register! {
     crate::features::daemons::DaemonFormDialog => crate::ui::daemon_form_dialog::dialog,
     // A daemon's details, read-only (feature 1092).
     crate::features::daemons::DaemonDetailsDialog => crate::ui::daemon_details_dialog::dialog,
+    // Feature 1786 (R6): the user-group naming dialog.
+    crate::features::sidebar_group_actions::GroupNamingDialog => crate::ui::group_naming::dialog,
     crate::features::sidebar::SidebarMoreMenu {
         displaces:
             crate::features::help::HelpMenu,

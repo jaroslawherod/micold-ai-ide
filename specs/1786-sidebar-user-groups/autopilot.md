@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-krubw0
 - **Started**: 2026-11-11
 - **Phase**: implement
-- **Next step**: milestone M1 continues from *Handover* (T008, T011–T017, T044, then verify and PR)
+- **Next step**: milestone M1 continues from *Handover* (T008, rest of T014, T015–T017, T044, then verify and PR)
 
 ## Pull requests
 
@@ -58,35 +58,30 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 (cloud thread, autopilot-unit dispatched from a cloud thread; the orchestrator fell back
-to nothing; no `mise`, no `gh`: cargo directly, GitHub through MCP) handed over at the context cap.
-Base: origin/main `fa0e41a7`; branch `claude/project-thread-krubw0`, two local commits, not pushed,
-no PR yet.
+M1 unit 2 (cloud thread; no `mise`, no `gh`, no Agent tool, so no subagent reviews or delegation
+from the unit: cargo directly, GitHub through MCP) handed over at the context cap. Base:
+origin/main `fa0e41a7`, not merged in yet; branch `claude/project-thread-krubw0`, pushed, no PR yet.
 
-- **Done (ticked)**: T001–T007, T009, T010. Core `micold-core/src/sidebar_layout.rs` (types,
-  `to_json`/`try_from_json`/`from_json`, `reconcile`, `create`, private `valid_name(name, except)`
-  ready for rename); store `layouts_path`/`load_layout`/`save_layout` on `JsonFileStore`,
-  `ProjectStore` defaults and `FakeProjectStore`; client `SidebarEntry::UserGroup(GroupHeaderNode
-  {id,name,collapsed,count})`, `sidebar::State.layouts: BTreeMap<PathBuf, SidebarLayout>`,
-  `State::sidebar_layout_loaded`, `State::sidebar_layout`, `layout_item`, `apply_layout`, applied in
-  `State::sidebar_list`. Evidence: `tdd/cycle-log.md` cycles 1–3.
-- **Next**: T008 (GroupHeader/DropMarker builders, `TypeRole::UserGroupHeader`), T011→T012
-  (`features/sidebar_group_actions.rs`; tests in new `tests/sidebar_group_actions.rs`, wire it as
-  `mod sidebar_group_actions;` in `tests/main.rs`, alphabetical), T013, T014, T015, T016, T017,
-  T044; then verify.md (review A, review B, visual pass), gate, PR.
-- **Open notes for the next unit**:
-  - `tests/root_state_is_shared.rs` has an interim `COMPONENT_LOCAL` pin for `sidebar.layouts`;
-    once a second module writes it (T012, or the shell's load on project entry) the test fails on
-    the stale pin: remove the entry then.
-  - `ui/sidebar.rs` `build_items` skips `SidebarEntry::UserGroup` (`=> continue`): T016 draws the
-    header there. `row_heights` counts a header as one one-line row; draw it at that height.
-  - The client tests are one executable (#1631): Verify commands are
-    `cargo test -p micold-client --test main <filter>`, not `--test sidebar_group_actions`.
-  - Nothing loads the layout from the store yet: the shell must call
-    `sidebar_layout_loaded(project, store.load_layout(project))` when a project is entered
-    (`Outcome::ProjectEntered`), and save after each committed operation (R9). Before saving, the
-    stored layout should be reconciled against the full (unfiltered) live list.
-  - T007's `reveal_ready` expand (U29) and header-as-stop (U28) are M5 on the test list.
+- **Done (ticked)**: T001–T007, T009–T013. Cycle 4 in `tdd/cycle-log.md`. `cargo test -p
+  micold-client --tests --no-fail-fast` is green except `layout_snapshot` (T044 re-records).
+- **T014 partly done**: "New group…" is on `more_menu_items` (`MoreAction::NewGroup`), the chord
+  Primary+Shift+G (`keymap::is_new_group_chord`, sent from `ui/mod.rs` app chords) and the
+  composer's shortcut sheet ("Sidebar" group, not on the Review tab's sheet: it overflowed
+  `review_tab_fits`). **Missing**: the sidebar empty-area menu (a new popover surface; add it to
+  `popover_displacement.rs` DISPLACES and the registry, as `SidebarMoreMenu`), then tick T014.
+- **Next**: T008 (GroupHeader/DropMarker builders, `TypeRole::UserGroupHeader`), rest of T014,
+  T015, T016 (`ui/sidebar.rs` `build_items` still `continue`s on `SidebarEntry::UserGroup`; draw
+  the header there at one one-line row height; "New group" button in the project header; routing
+  in main.rs is done: `Message::SidebarGroups` goes through `app.core.update` by the default arm,
+  check), T017, T044 (`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test
+  layout_snapshot`); then verify.md (review A, review B, visual pass), gate, PR.
+- **Open notes**:
+  - Load/save: `shell/sidebar_layout.rs::after_update` (called from `update` in main.rs) loads the
+    active project's layout once and saves `sidebar.layouts_unsaved`. It does not reconcile
+    against the full live list before saving (the held layout is saved as is); fine for create.
+  - `NamingTarget` has only `New`; M2 adds `Rename(id)`, M3 `NewAndMove(item)`.
+  - The `GroupNamingDialog` is not in `tests/overlay_registry.rs` `dialogs()` (that list is not
+    checked against the registry); add a row when convenient.
 
 ## Open escalation
 
