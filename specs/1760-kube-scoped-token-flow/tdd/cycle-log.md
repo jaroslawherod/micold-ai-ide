@@ -108,3 +108,14 @@ Append only. Newest last.
   added or the last removed changes no pod spec and recreates no pod; the test asserts the pod is
   kept and the only delete is the Secret's. The live revert check (T026, M3) is this behaviour's
   red evidence.
+
+## Cycle 8: U8 the draft field (T016, T017)
+
+- test: `crates/micold-client/tests/features_daemons_kube.rs`
+  `the_github_tokens_opt_in_maps_between_draft_and_settings` (the draft type is `KubeDraft`; the
+  draft tests live in this file, linked by `tests/main.rs`)
+- red: with `KubeDraft.github_tokens` added, set `false` in `of` and not mapped by `settings()`:
+  `scripts/build-lock.sh cargo test -p micold-client --test main features_daemons_kube`
+  -> panicked at line 39 `assert!(settings.github_tokens)`, `4 passed; 1 failed`
+- green: `of` reads it and `settings()` writes it: `--test main daemons` -> `226 passed; 0 failed`
+- refactor: none needed.

@@ -22,4 +22,4 @@ behavior names the task pair it covers. M3 adds the live acceptance behaviors.
 | U5 | `ProjectsDial` is the sorted lower-cased `owner/repo` set and is part of the dial identity | T010, T011 | FR-009 | DONE | `micold-client/src/daemon.rs` `tests::the_projects_dial_is_the_saved_repositories_and_part_of_the_identity` |
 | U6 | `kube_attempt`: off reads nothing; on, keys reach `secret_files` and entries `daemon.toml`; a bad token fails before any cluster call; sentinel absent from config, manifest, logs | T012, T013, T014 | FR-001, FR-002, FR-008 | DONE | `micold-client/tests/kube_daemon_github_tokens.rs` (3 tests) |
 | U7 | Token keys in `<name>-startup`: replaced, withdrawn, Secret deleted when empty, volume follows (characterization) | T015 | FR-010 | BASELINE | `micold-core/src/kube/start_tests.rs` `github_token_keys_are_replaced_withdrawn_and_removed_with_the_startup_secret` |
-| U8 | `KubeDaemonDraft.github_tokens` maps both ways | T016, T017 | FR-008 | PENDING | |
+| U8 | `KubeDaemonDraft.github_tokens` maps both ways | T016, T017 | FR-008 | DONE | `micold-client/tests/features_daemons_kube.rs` `the_github_tokens_opt_in_maps_between_draft_and_settings` |

@@ -25,6 +25,21 @@ fn a_draft_with_a_context_and_namespace_makes_settings_and_round_trips() {
     assert_eq!(KubeDraft::of(&settings).settings().unwrap(), settings);
 }
 
+/// #1760 (T016, FR-008): the GitHub tokens opt-in is off in a new draft, and a draft maps it to
+/// the settings and back, both ways.
+#[test]
+fn the_github_tokens_opt_in_maps_between_draft_and_settings() {
+    let mut draft = KubeDraft::new(&[]);
+    assert!(!draft.github_tokens);
+    draft.context = "prod".into();
+    draft.namespace = "dev".into();
+    assert!(!draft.settings().unwrap().github_tokens);
+    draft.github_tokens = true;
+    let settings = draft.settings().unwrap();
+    assert!(settings.github_tokens);
+    assert!(KubeDraft::of(&settings).github_tokens);
+}
+
 #[test]
 fn a_blank_context_is_refused_naming_it() {
     let error = KubeDraft::new(&[]).settings().unwrap_err();
