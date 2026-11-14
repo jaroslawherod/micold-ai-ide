@@ -531,6 +531,53 @@ mod container {
         }
     }
 
+    /// #1536 (I16-10): two session files with different content are delivered under their own
+    /// names, and each rendered path names its own file.
+    #[test]
+    fn two_session_files_are_delivered_under_their_own_names() {
+        use micold_core::daemons::{SessionExtras, SessionFileSetting};
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let file = |name: &str, text: &str, target: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            SessionFileSetting {
+                file: path,
+                target: target.into(),
+                mode: None,
+            }
+        };
+        let extras = SessionExtras {
+            files: vec![file("a", "FIRST", ".a"), file("b", "SECOND", ".b")],
+            ..Default::default()
+        };
+        deliver_container(
+            "box",
+            &profile(false),
+            Path::new("/home/jaro"),
+            &delivery,
+            None,
+            None,
+            &extras,
+        )
+        .unwrap();
+        for (name, body) in [("session-file-0", "FIRST"), ("session-file-1", "SECOND")] {
+            assert_eq!(
+                std::fs::read_to_string(delivery.secrets.join(name)).unwrap(),
+                body
+            );
+        }
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        assert!(
+            text.contains("/run/micold/secrets/session-file-0"),
+            "{text}"
+        );
+        assert!(
+            text.contains("/run/micold/secrets/session-file-1"),
+            "{text}"
+        );
+    }
+
     #[test]
     fn an_unreadable_script_stops_the_delivery_naming_it() {
         let dir = tempfile::tempdir().unwrap();
@@ -643,4 +690,48 @@ fn a_pods_extras_become_secret_items_and_the_rendered_paths_name_them() {
     std::fs::write(&key, [0xff, 0xfe]).unwrap();
     let err = pod_startup(&settings).unwrap_err();
     assert!(err.to_string().contains("ssh-key"), "{err}");
+}
+
+/// #1536 (I16-10): a pod's two session files become two secret keys of their own content.
+#[test]
+fn a_pods_two_session_files_are_two_secret_items() {
+    use micold_client::daemon_config_delivery::pod_startup;
+    use micold_core::daemons::SessionFileSetting;
+    let app = tempfile::tempdir().unwrap();
+    let mut settings = DaemonSettings::for_pod("Pod", "img:1", None, false);
+    for (name, text) in [("a", "FIRST"), ("b", "SECOND")] {
+        let path = app.path().join(name);
+        std::fs::write(&path, text).unwrap();
+        settings.extras.files.push(SessionFileSetting {
+            file: path,
+            target: format!(".{name}").into(),
+            mode: None,
+        });
+    }
+    let delivered = pod_startup(&settings).unwrap();
+    assert_eq!(
+        delivered.files,
+        vec![
+            ("session-file-0".to_string(), "FIRST".to_string()),
+            ("session-file-1".to_string(), "SECOND".to_string()),
+        ]
+    );
+}
+
+/// #1536 (I16-11): an extra over the pod limit stops the start naming it; one at the limit does
+/// not.
+#[test]
+fn a_pods_over_limit_extra_stops_the_start_naming_it() {
+    use micold_client::daemon_config_delivery::pod_startup;
+    let app = tempfile::tempdir().unwrap();
+    let ca = app.path().join("ca");
+    let mut settings = DaemonSettings::for_pod("Pod", "img:1", None, false);
+    settings.extras.ca_file = Some(ca.clone());
+
+    std::fs::write(&ca, vec![b'#'; 512 * 1024]).unwrap();
+    pod_startup(&settings).expect("a file at the limit is delivered");
+
+    std::fs::write(&ca, vec![b'#'; 512 * 1024 + 1]).unwrap();
+    let err = pod_startup(&settings).unwrap_err();
+    assert!(err.to_string().contains("ca.pem"), "{err}");
 }
