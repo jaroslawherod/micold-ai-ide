@@ -1,14 +1,14 @@
-# Autopilot ledger — #1858 worktree-parent M1, M1b
+# Autopilot ledger — #1858 worktree-parent M1, M1b; #1860 M3
 
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.
 
-- **Input**: Milestone M1b (Phase 3b: T030-T032, FR-015, FR-016, FR-017) of specs/1857-worktree-parent/tasks.md; M1 merged earlier; labels: enhancement, flow:feature
+- **Input**: Milestone M3 (#1860, Phase 7: T023-T026, T033) of specs/1857-worktree-parent/tasks.md; earlier: Milestone M1b (Phase 3b: T030-T032, FR-015, FR-016, FR-017) of specs/1857-worktree-parent/tasks.md; M1 merged earlier; labels: enhancement, flow:feature
 - **Kind**: feature
 - **Effort**: default
 - **Supervised**: no
-- **Issue**: #1858
-- **Worktree branch**: claude/project-thread-11hi7h
+- **Issue**: #1860 (M1, M1b: #1858)
+- **Worktree branch**: claude/project-thread-isaz3e
 - **Started**: 2026-11-13
 - **Phase**: milestones
 - **Next step**: merge (CI)
@@ -19,14 +19,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
-| #1912 | M1b | open (draft) | — |
+| #1912 | M1b | merged | 95fa459da7e2b4381424c66ba66f40454159a70b |
+| (pending) | M3 | open (draft) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
-| M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | in-review |
+| M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | merged |
+| M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | (pending) | in-review |
 
 ## Decisions
 

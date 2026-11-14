@@ -26,6 +26,21 @@ Before the first `next`, and for each issue whose `Touches` cell is empty (FR-00
 
 `supervisor.sh next` then holds a queued issue whose paths overlap a `starting` or `running` row or an earlier queued issue, whatever the cap; `supervisor.sh overlap <a> <b>` answers `yes` or `no` for two lists. Issues with the same `flow:*` label and no `Touches:` line or `specs/` path share that flow file, so they run one at a time: declare `Touches:` to avoid it. A held issue stays `queued` and is released once the earlier one is `done`, `failed`, `lost` or `skipped`.
 
+## Ownership
+
+A run is yours by its worktree's `parent`, never by its name or by what you remember. Worktree parents: `specs/1857-worktree-parent`.
+
+- **Create.** Leave `parent` out of the worktree call: the daemon records the creating worktree as the parent (`default` for a supervisor at the project root). Never pass another worktree's name.
+- **Record.** `ledger set <n> Parent <your worktree ref>` (`default` at the root, else your own worktree's directory name) beside `Worktree`, so a restart knows which runs are yours.
+- **List.** `list_worktrees` with `parent: <your ref>`, saved to `<scratch>/worktrees.json`; `scripts/autopilot/runs-of-parent.sh <your ref> < <scratch>/worktrees.json` prints your runs. A run's `Worktree` cell that is not in that list is not yours: do not map, start, stop, send to or interrupt it.
+- **Check before every act** on a run (`send_session_input`, `interrupt_session`, `stop_session`, `delete_worktree`): `runs-of-parent.sh <your ref> --check <worktree> --rows <scratch>/worktrees.json`. Exit 1 (another parent, no parent, or a removed parent): refuse, and say so in the ledger Note. Never act on a run of another parent or on one with none.
+- **Removed parent.** A run whose `parent_state` is `removed` is an orphan: `runs-of-parent.sh <your ref> --orphans` lists them. Report each to the person and never adopt it, even if it looks abandoned.
+- **Where the daemon helps.** A supervisor in its own worktree is limited by the daemon to its parent, siblings and children, and so is every worker it starts. A supervisor in `default` is not limited by the daemon, so this rule still applies to it in full: it sees every run and acts only on its own.
+
+### Relay
+
+A worker contacts only its parent (you) and its siblings: parent and siblings. Its questions and any message for another scope come to you, and you forward them up or down with your own `send_session_input` (FR-017). The supervisor never expects a worker to reach another supervisor's run,. Put this in the worker prompt: after `/speckit-autopilot #<n> supervised`, add the line `You can reach only your supervisor and your sibling runs. Send a question or a message for anyone else to your supervisor; it forwards it.`
+
 ## Start an issue
 
 For each issue `<n>` that `supervisor.sh next` prints, one at a time:
@@ -33,8 +48,8 @@ For each issue `<n>` that `supervisor.sh next` prints, one at a time:
 1. **Resource gate.** `scripts/autopilot/supervisor.sh gate` (it counts the `starting` and `running` rows of the ledger, so every start is written to the ledger before the next gate). `FAIL <check>`: start nothing more, report which check failed, retry at the next advance. `PASS`: go on.
 2. `gh issue view <n> --json state,title -q .state`. A closed or missing issue, or one that already has a worktree or a ledger of its own: `supervisor.sh ledger set <n> State skipped` and `ledger set <n> Note "<reason>"`; next issue.
 3. Write first: `ledger set <n> State starting`, `ledger set <n> Started <epoch seconds>`, `ledger set <n> Tries <tries + 1>`.
-4. `create_worktree` with `github_issue: <n>`; `ledger set <n> Worktree <path>`.
-5. `create_session` in that worktree with the prompt `/speckit-autopilot #<n> supervised`; `ledger set <n> Session <id>` and `ledger set <n> State running`.
+4. `create_worktree` with `github_issue: <n>` and no `parent` (*Ownership*); `ledger set <n> Worktree <path>` and `ledger set <n> Parent <your ref>`.
+5. `create_session` in that worktree with the prompt `/speckit-autopilot #<n> supervised` and the relay line of *Ownership*; `ledger set <n> Session <id>` and `ledger set <n> State running`.
 6. A failed create: leave the state, write the reason with `ledger set <n> Note "<reason>"`, and go on. Then `supervisor.sh retry <n>` (the `Tries` cell counts the start; it prints `queued`, or `failed` at 3 tries).
 
 ## Advance loop

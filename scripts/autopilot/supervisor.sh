@@ -5,7 +5,7 @@
 # Exit: 0 answered, 1 gate FAIL, 2 usage error or malformed ledger.
 # Contract: specs/1813-supervisor-skill/contracts/supervisor-cli.md (bash 3.2: no associative arrays)
 STATES="queued starting running done failed lost skipped"
-FIELDS="Issue State Touches Worktree Session Started Tries Note"
+FIELDS="Issue State Touches Worktree Session Started Tries Note Parent"
 LEDGER=".autopilot/supervisor.md"
 
 die() { echo "supervisor.sh: $*" >&2; exit 2; }
@@ -59,10 +59,10 @@ ledger_cmd() {
       {
         echo "# Autopilot supervisor ledger"
         echo "- **Owner**: $owner"; echo "- **Cap**: $cap"; echo "- **Grace**: $grace"; echo "- **Source**: $source"
-        echo; echo "| Issue | State | Touches | Worktree | Session | Started | Tries | Note |"
-        echo "|---|---|---|---|---|---|---|---|"
+        echo; echo "| Issue | State | Touches | Worktree | Session | Started | Tries | Note | Parent |"
+        echo "|---|---|---|---|---|---|---|---|---|"
         for n in "$@"; do
-          echo "| $n | queued | - |  |  |  | 0 |  |"
+          echo "| $n | queued | - |  |  |  | 0 |  |  |"
         done
       } > "$LEDGER" ;;
     owner)
