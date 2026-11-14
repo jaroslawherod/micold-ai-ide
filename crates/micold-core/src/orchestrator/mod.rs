@@ -3,6 +3,7 @@
 //! are tested exactly. The daemon crate (`micold-daemon::orchestrator`) wires them to a socket.
 
 pub mod announce;
+pub mod liveness;
 pub mod record;
 pub mod registry;
 
@@ -10,6 +11,7 @@ pub use announce::{
     decode_first_frame, FirstFrame, LinkAnnouncement, LinkQuery, LinkVerdict, RefuseReason,
     MAX_PREAMBLE_FRAME,
 };
+pub use liveness::Heartbeat;
 pub use record::{DaemonRecord, Health, TenantId};
 pub use registry::{Claim, ConfirmRefused, Confirmed, LinkAction, LinkToken, Registry, Snapshot};
 

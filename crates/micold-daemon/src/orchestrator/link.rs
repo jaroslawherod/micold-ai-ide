@@ -7,12 +7,12 @@ use std::sync::Arc;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::orchestrator::{
-    decode_first_frame, Claim, FirstFrame, LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason,
-    MAX_PREAMBLE_FRAME,
+    decode_first_frame, Claim, FirstFrame, LinkAction, LinkAnnouncement, LinkToken, LinkVerdict,
+    RefuseReason, MAX_PREAMBLE_FRAME,
 };
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
-use micold_core::protocol::keepalive::LIVENESS_DEADLINE;
+use micold_core::protocol::keepalive::{CHECK_INTERVAL, LIVENESS_DEADLINE};
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg};
 use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::settings::Settings;
@@ -149,7 +149,11 @@ where
             .await
             .map_err(io::Error::other);
     }
-    if shared.registry().confirm(link, shared.wall_secs()).is_err() {
+    if shared
+        .registry()
+        .confirm(link, shared.now(), shared.wall_secs())
+        .is_err()
+    {
         return Ok(());
     }
     framed
@@ -162,19 +166,88 @@ where
         .await
         .map_err(io::Error::other)?;
 
-    while let Some(frame) = framed.next().await {
-        match frame.map_err(io::Error::other)? {
-            Frame::Control(ClientMsg::Goodbye) => break,
-            Frame::Control(msg) => {
-                if let Some(answer) = query::not_hosted(&msg) {
-                    framed
-                        .send(Frame::Control(answer))
-                        .await
-                        .map_err(io::Error::other)?;
+    steady(shared, framed, link).await
+}
+
+/// Send one frame, giving up after the liveness deadline: a peer that keeps the socket open but
+/// stops reading must not stall the loop, or the timer would never mark it offline. `false` when
+/// the send failed or timed out.
+async fn send_bounded<S>(framed: &mut Framed<S, DaemonCodec>, msg: DaemonMsg) -> bool
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    matches!(
+        tokio::time::timeout(LIVENESS_DEADLINE, framed.send(Frame::Control(msg))).await,
+        Ok(Ok(()))
+    )
+}
+
+/// The steady state (contracts/link.md, step 4): every inbound frame is an answer, a timer sends
+/// `LinkPing` when the link is idle and marks the daemon `offline` when it has been silent past
+/// the deadline. After `Expired` the loop keeps reading, so a later frame brings the daemon back
+/// `online` on the same link. When the transport ends the loop lets the deadline run out first, so
+/// a drop is seen as silence and the record turns `offline` like any other.
+async fn steady<S>(
+    shared: &Shared,
+    mut framed: Framed<S, DaemonCodec>,
+    link: LinkToken,
+) -> io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let mut timer = tokio::time::interval(CHECK_INTERVAL);
+    timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut open = true;
+    let mut expired = false;
+    let mut nonce = 0_u64;
+    loop {
+        tokio::select! {
+            frame = framed.next(), if open => {
+                // A read error, like the end of the stream, is silence: the deadline runs out
+                // first, so the record turns `offline` and the loop ends after that.
+                let Some(Ok(frame)) = frame else {
+                    // Already reported offline: nothing is left to wait for.
+                    if expired {
+                        return Ok(());
+                    }
+                    open = false;
+                    continue;
+                };
+                expired = false;
+                if shared.registry().answered(link, shared.now(), shared.wall_secs()).0
+                    == LinkAction::Stale
+                {
+                    return Ok(());
+                }
+                match frame {
+                    Frame::Control(ClientMsg::Goodbye) => open = false,
+                    Frame::Control(msg) => {
+                        if let Some(answer) = query::not_hosted(&msg) {
+                            if !send_bounded(&mut framed, answer).await {
+                                open = false;
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+            _ = timer.tick() => {
+                let (action, _) = shared.registry().tick(link, shared.now());
+                match action {
+                    LinkAction::Stale => return Ok(()),
+                    LinkAction::Expired if !open => return Ok(()),
+                    LinkAction::Expired => expired = true,
+                    // Closed after the deadline had already run out: nothing is left to wait for.
+                    _ if !open && expired => return Ok(()),
+                    LinkAction::SendPing if open => {
+                        nonce += 1;
+                        if !send_bounded(&mut framed, DaemonMsg::LinkPing { nonce }).await {
+                            open = false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
-    Ok(())
 }
