@@ -406,12 +406,13 @@ The missing CLI is either absent or clearly marked unavailable, and cannot be ch
   restarts and is not rediscovered (FR-015). The reason is logged only: there is no warning row, no
   notice message and no manual "Remove" action. The daemon also removes such a session at startup:
   a `Named` or `Derived` session whose conversation is confirmed gone (a provider that assigns its
-  own ids, a config directory that resolves and reads as a directory, no recorded conversation) is removed the same way, before
+  own ids, a config directory that resolves and a transcript root under it (Claude: `<config>/projects/`) that exists and reads as a directory, no recorded conversation) is removed the same way, before
   the first client connects (BUG-1852). Ignorance is not evidence: an unresolvable config directory,
   a provider that mints its own ids (Pi), an unreadable store, a `Pending` session (handled by empty-session pruning,
   FR-007a) and a live session are never removed here. After a restart every listed session is
   running, startable, or one the application cannot tell is gone (Pi, an unresolvable config
-  directory, an unreadable store, or a provider whose every session looks gone at once).
+  directory, a missing or unreadable transcript root, or a provider whose every session looks gone
+  at once, more than one).
   **Bugfix**: 2026-11-10 — [BUG-1795](./bugs/BUG-1795.md), decided by user; startup removal of named
   sessions was dropped there by orchestrator default D3 (user unanswered) and added by
   [BUG-1852](./bugs/BUG-1852.md), which supersedes 029 FR-008 and 032 invariant 4 as far as a
