@@ -55,50 +55,11 @@ impl Hash for Key {
 /// worktree's own git dir and the common one live in the main checkout) by itself plus its `refs/`
 /// (R9). A git dir inside the entry (the Default entry's `.git`) is already under its watch.
 fn targets(root: &Path, git_dirs: &[PathBuf]) -> Vec<(PathBuf, RecursiveMode)> {
-    let mut targets = watched_tree(root);
+    let mut targets = vec![(root.to_path_buf(), RecursiveMode::Recursive)];
     for dir in git_dirs.iter().filter(|dir| !dir.starts_with(root)) {
         targets.push((dir.clone(), RecursiveMode::NonRecursive));
         targets.push((dir.join("refs"), RecursiveMode::Recursive));
     }
-    targets
-}
-
-/// `root` watched recursively, except the worktrees under `.claude/worktrees` (#1683): each has its
-/// own entry and watch, and the Default entry watching them too cost thousands of inotify watches
-/// and woke the window on every agent edit. With such a directory, `root` and `.claude` are watched
-/// by themselves and their other subdirectories recursively; a directory created later is not
-/// watched inside until the watch restarts.
-fn watched_tree(root: &Path) -> Vec<(PathBuf, RecursiveMode)> {
-    let worktrees = root.join(".claude").join("worktrees");
-    if !worktrees.is_dir() {
-        return vec![(root.to_path_buf(), RecursiveMode::Recursive)];
-    }
-    let subdirs = |dir: &Path| -> Vec<PathBuf> {
-        let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-            .map(|e| e.path())
-            .collect();
-        dirs.sort();
-        dirs
-    };
-    let claude = root.join(".claude");
-    let mut targets = vec![(root.to_path_buf(), RecursiveMode::NonRecursive)];
-    targets.extend(
-        subdirs(root)
-            .into_iter()
-            .filter(|d| *d != claude)
-            .map(|d| (d, RecursiveMode::Recursive)),
-    );
-    targets.push((claude.clone(), RecursiveMode::NonRecursive));
-    targets.extend(
-        subdirs(&claude)
-            .into_iter()
-            .filter(|d| *d != worktrees)
-            .map(|d| (d, RecursiveMode::Recursive)),
-    );
     targets
 }
 
@@ -287,43 +248,6 @@ pub(crate) fn counts(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    /// #1683: the Default entry holds every worktree under `.claude/worktrees`, each with its own
-    /// entry and watch; watching them again recursively cost thousands of inotify watches and woke
-    /// the window on every agent edit.
-    #[test]
-    fn the_default_entrys_watch_leaves_out_the_worktrees_under_it() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        for sub in ["src", ".claude/worktrees/a", ".claude/agents"] {
-            fs::create_dir_all(root.join(sub)).unwrap();
-        }
-        let got = targets(root, &[]);
-        let under_worktrees = |p: &Path| p.starts_with(root.join(".claude/worktrees"));
-        assert!(
-            !got.iter().any(|(p, mode)| *mode == RecursiveMode::Recursive
-                && (p == root || p == &root.join(".claude") || under_worktrees(p))),
-            "{got:?}"
-        );
-        for kept in ["src", ".claude/agents"] {
-            assert!(
-                got.contains(&(root.join(kept), RecursiveMode::Recursive)),
-                "{kept} stays watched: {got:?}"
-            );
-        }
-        assert!(got.contains(&(root.to_path_buf(), RecursiveMode::NonRecursive)));
-    }
-
-    #[test]
-    fn an_entry_without_worktrees_is_watched_recursively_as_before() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir_all(dir.path().join("src")).unwrap();
-        assert_eq!(
-            targets(dir.path(), &[]),
-            vec![(dir.path().to_path_buf(), RecursiveMode::Recursive)]
-        );
-    }
     use super::*;
     use notify::event::{AccessKind, AccessMode, CreateKind, MetadataKind, ModifyKind, RemoveKind};
 
