@@ -61,3 +61,14 @@ Append only. Newest last.
 - mutant: `a_read_set_never_prints_a_value` passed on the stub (empty set), so a mutant put the
   value into an entry's `name`: `test result: FAILED. 0 passed; 1 failed` at line 112; restored.
 - refactor: none needed.
+
+## Cycle 5: U5 `ProjectsDial` (T010; T011's field)
+
+- test: `crates/micold-client/src/daemon.rs` `tests::the_projects_dial_is_the_saved_repositories_and_part_of_the_identity`
+- red: with `Dial::Kubernetes.projects` set from a stub `ProjectsDial::of` returning nothing:
+  `scripts/build-lock.sh cargo test -p micold-client --lib daemon::tests::the_projects_dial`
+  -> `left: [] right: ["acme/app", "zed/repo"]`, `0 passed; 1 failed`
+- green: `of` parses each saved project's `remote` (lower-cased) with
+  `GithubRepo::from_remote_url` into a sorted set: `daemon::tests` -> `35 passed; 0 failed`
+- refactor: none needed. Carrying the dial to `kube_attempt`/`kube_reconnect` (rest of T011) is
+  wiring, done with U6.

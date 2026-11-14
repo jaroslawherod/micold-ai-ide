@@ -11,7 +11,7 @@
 //! the whole re-architecture rests on.
 
 use crate::features::connection::Msg as ConnectionMsg;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -253,7 +253,30 @@ pub enum Dial {
         /// The SSH key, signing key, CA file and session files, delivered in the startup secret
         /// (#1536); identity as for `startup`.
         extras: ExtrasDial,
+        /// The repositories of the daemon's saved projects, which pick the GitHub tokens the pod
+        /// receives (#1760, FR-009); identity as for `startup`.
+        projects: ProjectsDial,
     },
+}
+
+/// The repositories the `remote`s of a daemon's saved projects name, lower-cased, sorted and
+/// without repeats, as part of an actor's identity (#1760, research R3). A project with no remote,
+/// or one off GitHub, names none.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ProjectsDial(pub Vec<micold_core::github::GithubRepo>);
+
+impl ProjectsDial {
+    /// The repositories `projects`' remotes name.
+    pub fn of(projects: &[micold_core::daemons::ProjectSetting]) -> Self {
+        let repos: BTreeSet<_> = projects
+            .iter()
+            .filter_map(|p| p.remote.as_deref())
+            .filter_map(|remote| {
+                micold_core::github::GithubRepo::from_remote_url(&remote.to_ascii_lowercase())
+            })
+            .collect();
+        Self(repos.into_iter().collect())
+    }
 }
 
 /// A daemon's session extras as part of an actor's identity (#1536): the paths and keys; a changed
@@ -590,6 +613,7 @@ pub fn actor_specs_answered(
                             .map(|(settings, _)| settings.extras)
                             .unwrap_or_default(),
                     ),
+                    projects: ProjectsDial::of(&entry.file.projects),
                 },
                 _ => return None,
             };
@@ -943,6 +967,7 @@ async fn connect_and_pump(
                 drift,
                 startup,
                 extras,
+                projects: _,
             },
             _,
         ) => {
@@ -2377,6 +2402,45 @@ mod tests {
         ));
         states.insert(id, DaemonState::Unreachable { reason: "x".into() });
         assert!(actor_specs(&registry, &states, dir, None).is_empty());
+    }
+
+    /// #1760 T010: the projects dial is the saved projects' GitHub repositories, lower-cased,
+    /// sorted and once each, and a change of them changes the Kubernetes actor's identity.
+    #[test]
+    fn the_projects_dial_is_the_saved_repositories_and_part_of_the_identity() {
+        use micold_core::daemons::{FileSettings, ProjectSetting};
+        let project = |path: &str, remote: Option<&str>| ProjectSetting {
+            path: path.into(),
+            remote: remote.map(String::from),
+        };
+        let projects = [
+            project("/w/b", Some("git@github.com:Zed/Repo.git")),
+            project("/w/a", Some("https://github.com/acme/App")),
+            project("/w/c", None),
+            project("/w/d", Some("https://gitlab.com/x/y")),
+            project("/w/e", Some("https://github.com/ACME/app.git")),
+        ];
+        let dial = super::ProjectsDial::of(&projects);
+        let shown: Vec<String> = dial.0.iter().map(ToString::to_string).collect();
+        assert_eq!(shown, ["acme/app", "zed/repo"]);
+
+        let mut registry = DaemonRegistry::default();
+        let settings = micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
+        let id = registry
+            .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
+            .unwrap();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let dir = std::path::Path::new("/nonexistent");
+        let before = actor_specs(&registry, &states, dir, None);
+        let file = FileSettings {
+            projects: projects.to_vec(),
+            ..FileSettings::default()
+        };
+        registry.set_file(id, file).unwrap();
+        let after = actor_specs(&registry, &states, dir, None);
+        assert_ne!(before[0], after[0]);
+        assert!(matches!(&after[0].dial, Dial::Kubernetes { projects, .. } if *projects == dial));
     }
 
     /// The answer to the drift prompt is part of the actor's identity, so giving it restarts the
