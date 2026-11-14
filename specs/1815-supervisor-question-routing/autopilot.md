@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1815
-- **Worktree branch**: claude/project-thread-fy8cr5
+- **Worktree branch**: claude/project-thread-y16qre
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M2 (T011–T016, tier full), in a fresh cloud thread via `/speckit-autopilot resume`
+- **Next step**: M2 (T011–T016, tier full) on claude/project-thread-y16qre
 
 ## Pull requests
 
