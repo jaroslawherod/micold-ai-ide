@@ -31,3 +31,17 @@ Append only. Newest last.
 - green: `render` writes `key_str("host", &token.host)`: `github_tokens` -> `6 passed; 0 failed`,
   `daemon_config` -> `44 passed; 0 failed`
 - refactor: none needed (reuses `key_str`).
+
+## Cycle 3: U3 `select_tokens` (T006, T007)
+
+- test: `crates/micold-client/tests/daemon_config_delivery_pod_tokens.rs` (new, a `mod` of
+  `tests/main.rs`): `select_tokens_keeps_matching_and_unfiltered_tokens_in_settings_order`,
+  `select_tokens_with_no_project_returns_nothing`
+- red: with `select_tokens` a stub returning every token:
+  `scripts/build-lock.sh cargo test -p micold-client --test main daemon_config_delivery_pod`
+  -> `left: ["other", "owner", "any", "exact", "other-owner"] right: ["owner", "any", "exact"]`,
+  `0 passed; 2 failed`
+- green: filter by the new `token_choice::reaches` (the existing `specificity`, made public as a
+  bool): `2 passed; 0 failed`
+- refactor: none needed; reusing `specificity` keeps one matcher for the daemon's choice and the
+  client's selection.

@@ -7,9 +7,10 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::daemon_config_render::{self, DaemonSettings, StartupTable};
+use crate::daemon_config_render::{self, DaemonSettings, GithubTokenSetting, StartupTable};
 use micold_core::daemon_config::Kind;
 use micold_core::daemons::SessionExtras;
+use micold_core::github::GithubRepo;
 
 /// The script's file name beside the delivered configuration (host data dir; SSH `secrets/`).
 pub const SCRIPT_NAME: &str = "startup.sh";
@@ -376,6 +377,26 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
             .transpose()?,
         files: extras,
     })
+}
+
+/// The stored tokens a pod daemon receives (#1760, FR-009): those whose filter names one of the
+/// daemon's saved projects' repositories, and those with no filter (their reach is unknown here),
+/// in Settings order. No repository, no token.
+pub fn select_tokens(
+    tokens: Vec<GithubTokenSetting>,
+    repositories: &[GithubRepo],
+) -> Vec<GithubTokenSetting> {
+    use micold_core::scoped_credential::token_choice::{reaches, Filter};
+    tokens
+        .into_iter()
+        .filter(|token| {
+            let filter = Filter {
+                name: &token.name,
+                repos: &token.repos,
+            };
+            repositories.iter().any(|repo| reaches(&filter, repo))
+        })
+        .collect()
 }
 
 /// Removes `path` when it exists; whether it did.
