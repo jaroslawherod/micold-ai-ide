@@ -279,6 +279,8 @@ pub enum FieldId {
     /// Settings → Daemons: one allowed-credential checkbox in the Kubernetes form, by its place in `AllowedKind::all()`
     /// (feature 686; a number, so this file names no other feature).
     DaemonKubeAllowed(u8),
+    /// Settings → Daemons: the Kubernetes form's GitHub tokens opt-in (#1760).
+    DaemonKubeGithubTokens,
     /// Settings → Daemons: the Kubernetes form's kube context (feature 686).
     DaemonKubeContext,
     /// Settings → Daemons: the Kubernetes form's namespace (feature 686).

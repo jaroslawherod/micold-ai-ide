@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1760
-- **Worktree branch**: claude/project-thread-myub4h
+- **Worktree branch**: claude/project-thread-c875n9
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M2 (fresh cloud thread)
+- **Next step**: M2 PR (orchestrator: Review B, visual pass quickstart §B, CI, merge), then M3
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
-| M2 | T018–T019 | light | form tick and user guide | - | pending |
+| M2 | T018–T019 | light | form tick and user guide | pending PR | built, awaiting B, visual pass and CI |
 | M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
 ## Decisions
@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+2026-11-14 M2 unit (cloud, branch claude/project-thread-c875n9): previous PR #1914 merged at 17284c645186eeb705ba403c114ee757f3ea3d53. T018–T019 built: tick in the Credentials section after Allowed credentials, `Msg::GithubTokensToggled`, `FieldId::DaemonKubeGithubTokens`, geometry and reducer tests, user guide wording. Targeted tests, fmt, clippy (client, all targets) green. Review A (self, high, small diff): no findings. Still needed from the orchestrator: Review B (conformance, sonnet), the visual pass (quickstart §B), push/PR (gh unavailable; PR body at the unit's scratchpad pr-body-m2.md), CI, merge.
 2026-11-14 M1 orchestrator (cloud): Review A and B round 2 CLEAN at afc83aba8; PR #1914 squash-merged (17284c645186eeb705ba403c114ee757f3ea3d53) on green CI (all checks, incl. the real kube cluster job). main merged back into claude/project-thread-myub4h. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M2 milestone unit (T018–T019, Tier light, model sonnet) on this branch; previous PR #1914, merge SHA above.
 
 2026-11-14 M1 fix unit (cloud): Review A r1 (6 findings) and Review B r1 (2) acted on in c5fb01da7: all fixed but F4's retry behaviour (declined, see table). Targeted tests, fmt and clippy (core, client) green. PR body updated at the unit's scratchpad (outside the tree, Review B F2). Next: round 2 of A and B on the fix diff from snapshot 127f0833e:3c7c46c82, then open the M1 PR.
