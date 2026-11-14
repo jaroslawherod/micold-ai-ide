@@ -55,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 | 3 | M1 | d85c11e2d86f1483d7fea77719665d2beec3d849 | c6eec4d17d8f2c33413a5ae234d64920cd3608fe:d85c11e2d86f1483d7fea77719665d2beec3d849 | CLEAN (scoped, sonnet) |
 | Review A M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | pending (orchestrator, high) |
 | Review B M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | pending (orchestrator) |
+| Review A M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | CHANGES: 1 MAJOR, 3 MINOR, all fixed |
+| Review B M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | CHANGES: 1 MAJOR (drift-M2.md), fixed |
 
 ## Red runs
 
