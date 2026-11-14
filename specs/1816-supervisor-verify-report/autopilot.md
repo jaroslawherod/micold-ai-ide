@@ -7,7 +7,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1816
-- **Worktree branch**: claude/project-thread-i50nzc
+- **Worktree branch**: claude/project-thread-9puqm3
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
 - **Next step**: milestone M2 (T009–T012) in a fresh thread; M3, M4 wait on #1860
