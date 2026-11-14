@@ -63,16 +63,21 @@ const TOLERANCE: f32 = 0.5;
 /// drives the panel open and shows the same node come clean. A new entry means either a new
 /// clip-revealing wrapper, to be named here with its reason and an attribution test that drives it
 /// open, or a child escaping a parent that does not clip, which is a bug.
-///
-/// The second is a structured session's collapsed **session options row** (feature 1792 US3): the
-/// row is always built inside `expand`, so its track lives on, and collapsed it is a full-height
-/// row in a 0px reveal. `the_recorded_options_row_escape_is_its_reveal` opens it and shows the same
-/// node come clean.
-const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/1/0", OPTIONS_ROW_REVEAL];
+const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/1/0"];
 
-/// The session options row's reveal content under the structured composer, in the transcript
-/// states (see [`CLIP_REVEALED`]).
-const OPTIONS_ROW_REVEAL: &str = "0/0/0/1/1/1/0/0/1/0/0/1/0";
+/// A structured session's collapsed **session options row** (feature 1792 US3), the same
+/// mechanism as [`CLIP_REVEALED`] at a second site, held only in the transcript states and only
+/// past the bottom edge: the row is always built inside `expand`, so its track lives on, and
+/// collapsed it is a full-height row in a 0px reveal. `the_recorded_options_row_escape_is_its_reveal`
+/// opens it and shows the same node come clean.
+const OPTIONS_ROW_REVEAL: &[&str] = &["0/0/0/1/1/1/0/0/1/0/0/1/0"];
+
+/// Whether `escape` is the collapsed options row in a transcript state ([`OPTIONS_ROW_REVEAL`]).
+fn is_options_row_reveal(state: &str, escape: &lay::Escape) -> bool {
+    state.starts_with("session-transcript")
+        && OPTIONS_ROW_REVEAL.contains(&escape.child_path.as_str())
+        && escape.edge == "bottom"
+}
 
 /// The sidebar list's scroll content, which is taller than its viewport by design.
 ///
@@ -378,6 +383,8 @@ pub(crate) fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'
         Some("FOLDED_BODY_REVEAL")
     } else if is_drawer_rows_scroll(state, escape) {
         Some("DRAWER_ROWS_CONTENT")
+    } else if is_options_row_reveal(state, escape) {
+        Some("OPTIONS_ROW_REVEAL")
     } else {
         None
     }
@@ -423,6 +430,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(TRANSCRIPT_CONTENT)
         .chain(FOLDED_BODY_REVEAL)
         .chain(DRAWER_ROWS_CONTENT)
+        .chain(OPTIONS_ROW_REVEAL)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(
@@ -968,9 +976,9 @@ fn the_recorded_escapes_are_the_accordion_reveal() {
     }
 }
 
-/// The options row's entry in [`CLIP_REVEALED`] is the row's reveal (feature 1792): collapsed, the
-/// row escapes its 0px `expand`; opened (`composers.options_open`, the one input that drives that
-/// reveal), the same node is clean.
+/// [`OPTIONS_ROW_REVEAL`] is the row's reveal (feature 1792): collapsed, the row escapes its 0px
+/// `expand`; opened (`composers.options_open`, the one input that drives that reveal), the same node
+/// is clean. A freshly built `expand` starts settled at its target, so one pass sees each at rest.
 #[test]
 fn the_recorded_options_row_escape_is_its_reveal() {
     let covered = covered_states()
@@ -990,11 +998,13 @@ fn the_recorded_options_row_escape_is_its_reveal() {
         escaping_nodes(false)
             .iter()
             .any(|n| n == OPTIONS_ROW_REVEAL),
-        "the collapsed options row reports no escape, so its CLIP_REVEALED entry is attributed to \
+        "the collapsed options row reports no escape, so OPTIONS_ROW_REVEAL is attributed to \
          nothing"
     );
     assert!(
-        !escaping_nodes(true).iter().any(|n| n == OPTIONS_ROW_REVEAL),
+        !escaping_nodes(true)
+            .iter()
+            .any(|n| n == OPTIONS_ROW_REVEAL[0]),
         "the node escapes with the row open too, so it is not the row's reveal"
     );
 }

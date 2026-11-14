@@ -126,7 +126,8 @@ fn find<'p>(painted: &'p [Overflow], content: &str) -> &'p Overflow {
         })
 }
 
-/// The `content` drawn under the transcript (in the composer), else the first drawn anywhere.
+/// The `content` drawn under the transcript (in the composer); panics, listing what is drawn, when
+/// none is.
 ///
 /// Paint order is not screen order: a part drawn inside a reveal (`expand`, the session options
 /// row since feature 1792) paints on its own layer after the base, so a word the sidebar also
@@ -137,7 +138,16 @@ fn find_under<'p>(painted: &'p [Overflow], transcript: Rectangle, content: &str)
         .find(|p| {
             p.content == content && p.origin.y >= transcript.y + transcript.height - TOLERANCE
         })
-        .unwrap_or_else(|| find(painted, content))
+        .unwrap_or_else(|| {
+            panic!(
+                "`{content}` is drawn under the transcript {transcript:?}: {:?}",
+                painted
+                    .iter()
+                    .filter(|p| p.content == content)
+                    .map(|p| p.origin)
+                    .collect::<Vec<_>>()
+            )
+        })
 }
 
 /// `content` is drawn under the transcript and inside the window.

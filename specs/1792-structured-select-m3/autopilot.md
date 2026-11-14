@@ -64,6 +64,7 @@ Polish T022–T023 (no code) is left to the close unit.
 | re-review | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase resolution) |
 | B | 2 | M2 | a9db09bbb89f702d329e281fce2869adbfad06f9 | 13130c93e19f445a3233ed4aa9df7fc16d3c644d:7628262fce95c344ccb9eed01db1138e2da2a5fa | CLEAN |
 | A | 1 | M3 | d245eb1df9da42ec4c3b5a88dca23c1c76898d6a | 67aebd450ac5bb82028c55e0e6653cb953cb9e6f:d245eb1df9da42ec4c3b5a88dca23c1c76898d6a | CHANGES (code-review high, 9 findings: F1 mode list reopened mid-collapse fixed via `mode_menu_toggled` expanding the row; F7 fixture duplication, F8 test tidy, F9 doc wording fixed; F2-F6 declined, see Declined) |
+| A | 2 | M3 | ae63ff1dd6f18869900e941c0a8981aa42176d4d | fa8ff0157c91feea12ed5f4fcc6bf86b73a1b968:ae63ff1dd6f18869900e941c0a8981aa42176d4d | fix diff, code-review medium: no production bug; F1 exemption scoped to transcript states/bottom edge (own OPTIONS_ROW_REVEAL), F3/F4 find_under no longer falls back; F2 declined (a fresh `expand` starts settled at its target, Motion::initial); F5-F9 MINOR (persist test at shell level, helper for was_open/persist, single open-overlay rule, mid-collapse widget test, fixture panics without active project) left |
 
 ## Declined review findings
 
