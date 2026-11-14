@@ -394,7 +394,7 @@ check "reask: an unknown option exits 2" 2 'usage' "$SUP" route next --ledger "$
 "$SUP" route sent --ledger "$L3" 31 1000
 check "overdue: Sent older than the ceiling is listed" 0 '^31$' "$SUP" route overdue --ledger "$L3" --now 1700 --ceiling 600
 check "overdue: exactly at the ceiling is not overdue" 0 '^$' "$SUP" route overdue --ledger "$L3" --now 1600 --ceiling 600
-check "overdue: an empty Sent is never overdue" 0 '^31$' "$SUP" route overdue --ledger "$L3" --now 99999 --ceiling 1
+check "overdue: an empty Sent is never overdue" 0 '^31$' bash -c '"$0" route overdue --ledger "$1" --now 99999 --ceiling 1 | paste -sd" " -' "$SUP" "$L3"
 check "overdue: an issue listed once" 0 '^1$' bash -c '"$0" route overdue --ledger "$1" --now 1700 --ceiling 600 | wc -l | tr -d " "' "$SUP" "$L3"
 check "overdue: --now and --ceiling are required" 2 'usage' "$SUP" route overdue --ledger "$L3" --now 1700
 check "overdue: a non-numeric --now exits 2" 2 'epoch' "$SUP" route overdue --ledger "$L3" --now soon --ceiling 600
@@ -405,6 +405,8 @@ check "skill3: OVER makes no AskUserQuestion call" 0 '^ok$' sk_has "no \`AskUser
 check "skill3: the Cheaper line, verbatim" 0 'Cheaper' grep -nF 'Cheaper: /clear, then /autopilot-supervisor — it asks this again from the ledger.' "$SKILL"
 check "skill3: Restart re-asks with route next --reask, no banner or notification" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "route next --reask" "without a banner or notification"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
 check "skill3: Restart drops a session that left asking" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "route drop" "left \`asking\`"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: Restart checks the cap before asking, and loops in fours" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "context.py" "Cheaper:" "at most 4" "until every printed row is answered"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: an overdue report is noted once" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; printf "%s" "$r" | grep -qF "Note \"not accepting input\"" && echo ok' "$SKILL"
 check "skill3: Confirm names route overdue, reports, never re-sends" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; for w in "route overdue" "Watcher ceiling" "never re-sent" "not accepting input"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
 
 echo "supervisor: $cases case(s), $failures failure(s)"

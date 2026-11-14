@@ -5,7 +5,7 @@
 **Tasks**: T017–T019 · **Satisfies**: US3 scenarios 1–3, FR-008 (confirm, ceiling), FR-009, FR-010, FR-011, SC-003
 
 ## Agent review
-Pending.
+Round 1: A (4 findings) and B (3) CHANGES, all fixed in round 2 (reask loop in fours, OVER check on Restart, overdue noted once, test assertion, T018 names supervisor-route.sh). Light tier: no tdd/cycle-log.md; red-then-green was run in order (T017/T019 cases failed 16 of 267 before the implementation, 0 after).
 
 ## Local gate
 Cloud thread: no mise; CI is the gate. `supervisor.test.sh` passes. `autopilot.test.sh` shows one failure, "a 50-file diff lists every file", in code M3 does not touch (git push negotiation noise in this sandbox).
