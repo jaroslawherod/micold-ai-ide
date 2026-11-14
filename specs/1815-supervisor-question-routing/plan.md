@@ -59,8 +59,9 @@ rows with `awk -F'|'`, so `\|` would still split); existing `supervisor.sh` row 
 - [x] **IV. Local-First**: all state in a local file; works offline (no `gh` in any routing path).
 - [x] **V. Rust + iced**: N/A, no application code. Invalid routing states are rejected by
   `route state` the way `ledger set State` rejects unknown states.
-- [x] **VI. Cross-Platform**: bash 3.2 and `jq` only, as `supervisor.sh` today. Windows is out, as in
-  #1813 research D6.
+- [x] **VI. Cross-Platform**: bash 3.2 and `jq` only, as `supervisor.sh` today. Windows is out for these
+  autopilot shell tools, as for `supervisor.sh` itself (#1813 research D6 says the env overrides are
+  fixtures only); a justified scope limit, not an application feature.
 - [x] **VII. Documentation**: the skill text is the documentation; `speckit-autopilot/README.md`
   pointer line updated; `rules/supervised.md` and `tasks/ask.md`, `tasks/resume.md` updated in the
   same change. No user-guide page (tooling only).

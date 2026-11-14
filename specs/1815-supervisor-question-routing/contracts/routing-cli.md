@@ -38,5 +38,5 @@ compose` exits 0.
 `route answer ... parent`. A `not_found` refusal: `ledger set <issue> Note "<refusal>"`, then the
 question is asked of the user (Via `user`), never retried.
 
-## Downward send fails (not `not_found`)
-`send_session_input` errors: `ledger set <issue> Note "<error>"`, leave the rows `answered`, report the issue to the user, never retry in a loop (spec Edge Cases).
+## Downward send fails
+`send_session_input` refuses as `not_found` (the asking session is gone): `route drop <issue>` and report it lost. Any other error: `ledger set <issue> Note "<error>"`, leave the rows `answered`, report the issue to the user, never retry in a loop (spec Edge Cases).

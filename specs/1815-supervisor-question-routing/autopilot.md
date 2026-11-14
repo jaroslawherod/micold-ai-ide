@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | | pending |
 | M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | pending |
-| M3 | T017–T019 | light | context-cap survival: reask, drop, overdue | | pending |
+| M3 | T017–T019 | light | context-cap survival: reask, overdue | | pending |
 | M4 | T020–T022 | light | upward relay to a reported parent | | pending |
 
 ## Decisions

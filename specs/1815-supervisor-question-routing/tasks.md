@@ -29,12 +29,12 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: quickstart A2 (two-session fixture batch) and the `route` cases below.
 
-- [ ] T004 [P] [US1] Failing cases in `scripts/tests/supervisor.test.sh` for `route add` (one `R<issue>.Q<n>` per question written `pending`, free-text escalation gives `Q1`, re-add is a no-op so a restart never asks twice, a question containing `|` keeps State, Session and Answer in their cells) and `route next` (up to 4 `pending` rows, ascending issue then number, five questions give four then one, empty when none), per contracts/routing-cli.md.
-- [ ] T005 [P] [US1] Failing cases in `scripts/tests/supervisor.test.sh` for `route state` (accepts `pending|asked|answered|resolved`, exit 2 on unknown state or key), `route answer <key> user|parent <text>` (State `answered`, Answer set), `route compose <issue>` (first line `session <id>`, then `<n>. <answer>` per question, bare answer for a free-text escalation; exit 1 printing `missing: <n> ...` while any question has no answer, FR-008a; two issues answered, compose of one prints only that issue's answers and its own session, SC-004) and `route sent <issue> <epoch>`.
+- [ ] T004 [US1] Failing cases in `scripts/tests/supervisor.test.sh` for `route add` (one `R<issue>.Q<n>` per question written `pending`, free-text escalation gives `Q1`, re-add is a no-op so a restart never asks twice, a question containing `|` keeps State, Session and Answer in their cells) and `route next` (up to 4 `pending` rows, ascending issue then number, five questions give four then one, empty when none), per contracts/routing-cli.md.
+- [ ] T005 [US1] Failing cases in `scripts/tests/supervisor.test.sh` for `route state` (accepts `pending|asked|answered|resolved`, exit 2 on unknown state or key), `route answer <key> user|parent <text>` (State `answered`, Answer set), `route compose <issue>` (first line `session <id>`, then `<n>. <answer>` per question, bare answer for a free-text escalation; exit 1 printing `missing: <n> ...` while any question has no answer, FR-008a; two issues answered, compose of one prints only that issue's answers and its own session, SC-004) `route sent <issue> <epoch>` and `route drop <issue>` (removes only that issue's rows, `|` cells intact; a later `route add` for the same issue starts fresh).
 - [ ] T006 [US1] Implement `route add`, `route next`, `route state`, `route answer` in `scripts/autopilot/supervisor.sh` (or `supervisor-route.sh`) until T004 and the `state` and `answer` cases of T005 pass.
-- [ ] T007 [US1] Implement `route compose` (session first, held until every question of the issue is `answered` or `resolved`, exit 1 with `missing:`) and `route sent` in the same file until T005 passes.
+- [ ] T007 [US1] Implement `route compose` (session first, held until every question of the issue is `answered` or `resolved`, exit 1 with `missing:`), `route sent` and `route drop` in the same file until T005 passes.
 - [ ] T008 [P] [US1] Failing grep cases in `scripts/tests/autopilot.test.sh` over `.claude/skills/speckit-autopilot/tasks/ask.md` step 0 and `rules/supervised.md` (FR-006a): a supervised run writes its banner to its own ledger and sends no notification; an unsupervised run is unchanged. Then edit `ask.md` step 0 and add the one line on who notifies to `rules/supervised.md` until they pass.
-- [ ] T009 [US1] Failing grep cases in `scripts/tests/supervisor.test.sh` over `.claude/skills/autopilot-supervisor/SKILL.md` (steps in order: collect each `asking` run's `<n>.json` from the Restart step 3 and never name `read_session_output`; `route add`; send the banner of `tasks/ask.md` and one `PushNotification`; one `AskUserQuestion` of at most 4; `route answer`; `route compose` then `send_session_input` only on exit 0 and only to the printed session; `route sent`), then add the *Route questions* section and edit *Report* so an `asking` run is routed (FR-015; `stuck`, `blocked`, `lost` stay reported) until they pass.
+- [ ] T009 [US1] Failing grep cases in `scripts/tests/supervisor.test.sh` over `.claude/skills/autopilot-supervisor/SKILL.md` (steps in order: collect each `asking` run's `<n>.json` from the Restart step 3 and never name `read_session_output`; `route add`; send the banner of `tasks/ask.md` and one `PushNotification`; one `AskUserQuestion` of at most 4; `route answer`; `route compose` then `send_session_input` only on exit 0 and only to the printed session; `route sent`; after a `CHANGED` wake shows the run left `asking`, `route drop`; the banner carries the `#<issue>` prefix, unit `supervisor`, a `(Recommended)` first option with its evidence, and is answerable cold; a `compose` exit 1 re-asks only the missing question; more than 4 questions go in the next batch after the first answer), and rewrite the existing `Never answer` case so it matches the routed *Report*; then add the *Route questions* section and edit *Report* so an `asking` run is routed (FR-015; `stuck`, `blocked`, `lost` stay reported) until they pass.
 - [ ] T010 [US1] Add the pointer line to `.claude/skills/speckit-autopilot/README.md`, run `bash scripts/tests/supervisor.test.sh` and `bash scripts/tests/autopilot.test.sh`, and walk quickstart Part A2 by hand against the fixtures.
 
 **Checkpoint**: the two-session batch works end to end on fixtures.
@@ -45,11 +45,11 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: fixture escalations of a "never ask" kind and of each category; assert the route.
 
-- [ ] T011 [P] [US2] Failing cases in `scripts/tests/supervisor.test.sh` for `route gate <category>` (`user-only` for a category starting `2`, `3` or `4`; `judge` for `1`, `5`, `6`; exit 2 unknown) and for `route answer <key> supervisor <text>` (State `resolved`) with `route compose` printing the leading `--by supervisor` word only when every row of the issue is `resolved` by the supervisor.
+- [ ] T011 [US2] Failing cases in `scripts/tests/supervisor.test.sh` for `route gate <category>` (`user-only` for a category starting `2`, `3` or `4`; `judge` for `1`, `5`, `6`; exit 2 unknown) and for `route answer <key> supervisor <text>` (State `resolved`) with `route compose` printing the leading `--by supervisor` word only when every row of the issue is `resolved` by the supervisor.
 - [ ] T012 [P] [US2] Failing cases in `scripts/tests/autopilot.test.sh` for `answer.sh --by supervisor <ledger> <text>` (By cell holds `supervisor`; default stays `user`; exit codes 0, 2, 3 unchanged, per `specs/1812-supervisor-run-status/contracts/supervised-escalation.md`) and grep cases over `.claude/skills/speckit-autopilot/tasks/resume.md` (`resume --by supervisor <answer>` runs `answer.sh --by supervisor`; `resume <answer>` is By `user`).
 - [ ] T013 [US2] Implement `route gate` and the `supervisor` via of `route answer` and `route compose` in `scripts/autopilot/supervisor.sh` until T011 passes.
 - [ ] T014 [P] [US2] Add `--by <who>` (default `user`, written in the By cell of every row it adds) to `scripts/autopilot/answer.sh` and the `resume --by` pass-through to `.claude/skills/speckit-autopilot/tasks/resume.md` until T012 passes.
-- [ ] T015 [US2] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md (judge the subject by `route gate`, not the category label; cite repo evidence in Answer; no evidence goes to the user batch as `pending`; send with `resume --by supervisor`; a send that fails, not `not_found`, runs `ledger set <issue> Note`, leaves the rows `answered`, reports, and never retries in a loop), and edit the existing "Never answer" case to the new rule; then add steps 2 and the send-failure text to the *Route questions* section of `.claude/skills/autopilot-supervisor/SKILL.md` until they pass.
+- [ ] T015 [US2] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md (judge the subject by `route gate`, not the category label; cite repo evidence in Answer; no evidence goes to the user batch as `pending`; send with `resume --by supervisor`; a send that fails, not `not_found`, runs `ledger set <issue> Note`, leaves the rows `answered`, reports, and never retries in a loop; a `not_found` runs `route drop` and reports the session lost; a missing or unreadable category, where `route gate` exits 2, goes to the user), and edit the existing "Never answer" case to the new rule; then add steps 2 and the send-failure text to the *Route questions* section of `.claude/skills/autopilot-supervisor/SKILL.md` until they pass.
 - [ ] T016 [US2] Run both script tests and confirm US2 acceptance scenarios 1 to 5 by their fixtures (resolved question: one send, no `AskUserQuestion`; category 2, 3, 4 or a non-routine subject: user batch).
 
 **Checkpoint**: routine questions resolve without the user; `answer.sh --by` merged.
@@ -60,9 +60,9 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: run the routing step with the context check reporting `OVER`; no second prompt after restart.
 
-- [ ] T017 [P] [US3] Failing cases in `scripts/tests/supervisor.test.sh` for `route next --reask` (every `asked` row, no limit, ascending; no banner or notification text), `route drop <issue>` (removes only that issue's rows, `|` cells intact) and `route overdue --now <epoch> --ceiling <s>` (issues whose Sent is set and older than the ceiling; none when Sent is empty).
-- [ ] T018 [US3] Implement `route next --reask`, `route drop`, `route overdue` in `scripts/autopilot/supervisor.sh` until T017 passes.
-- [ ] T019 [US3] Failing grep cases over SKILL.md and edit it: step 3 context check sends the banners and the notification first, sets the rows `asked` with `route state`, and only then ends the turn on `OVER`; *Restart* calls `route next --reask` and re-asks without a banner or notification; a session that left `asking` gets `route drop` (FR-009); after the send a `CHANGED` wake showing the run left `asking` removes the rows, and still `asking` past the Watcher ceiling is listed by `route overdue` and reported, never re-sent.
+- [ ] T017 [US3] Failing cases in `scripts/tests/supervisor.test.sh` for `route next --reask` (every `asked` row, no limit, ascending; no banner or notification text), `route drop <issue>` (removes only that issue's rows, `|` cells intact) and `route overdue --now <epoch> --ceiling <s>` (issues whose Sent is set and older than the ceiling; none when Sent is empty).
+- [ ] T018 [US3] Implement `route next --reask` and `route overdue` in `scripts/autopilot/supervisor.sh` until T017 passes.
+- [ ] T019 [US3] Failing grep cases over SKILL.md and edit it: step 3 context check sends the banners and the notification first, sets the rows `asked` with `route state`, and only then ends the turn on `OVER`; *Restart* calls `route next --reask` and re-asks without a banner or notification; a session that left `asking` unanswered gets `route drop` (FR-009; the subcommand ships in M1); after the send a `CHANGED` wake showing the run left `asking` removes the rows, and still `asking` past the Watcher ceiling is listed by `route overdue` and reported, never re-sent.
 
 **Checkpoint**: SC-003 holds on fixtures.
 
@@ -72,7 +72,7 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: a session-list fixture with a `parent` field and one without.
 
-- [ ] T020 [P] [US4] Failing cases in `scripts/tests/supervisor.test.sh` for `route target --sessions <file> --me <id>` (`parent <id>` when that row has a non-empty `parent`; `user` when the field is empty or absent; exit 2 when the file is unreadable).
+- [ ] T020 [US4] Failing cases in `scripts/tests/supervisor.test.sh` for `route target --sessions <file> --me <id>` (`parent <id>` when that row has a non-empty `parent`; `user` when the field is empty or absent; exit 2 when the file is unreadable).
 - [ ] T021 [US4] Implement `route target` in `scripts/autopilot/supervisor.sh` until T020 passes.
 - [ ] T022 [US4] Failing grep cases over SKILL.md and edit it: step 6 sends the banner to the parent with `send_session_input`, holds the rows `asked` with Via `parent`, and records the reply with `route answer ... parent`; a `not_found` refusal runs `ledger set <issue> Note "<refusal>"` then asks the user (Via `user`), never retried (FR-012, FR-013); a top-tier supervisor asks the user.
 
@@ -84,7 +84,7 @@ Phase 1 → Phase 2 → US1 → US2 → US3 → US4 (US3 and US4 depend only on 
 
 ## Parallel opportunities
 
-T004 with T005 and T008; T011 with T012; T013 with T014 (different files).
+T008 with T004; T012 with T011; T013 with T014 (different files).
 
 ## Implementation Strategy
 
@@ -97,8 +97,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ### M1 — Batch routing core 🎯 MVP
 
 - **Tasks**: T001–T010
-- **Deliverable**: two `asking` fixture runs produce one batched question list, one notification and a per-session answer message; `supervisor.sh route add|next|state|answer|compose|sent|table` exist, the skill's *Route questions* section routes `asking` runs, and a supervised run no longer notifies on its own.
-- **Satisfies**: US1 acceptance scenarios 1–4; FR-001, FR-006, FR-006a, FR-007, FR-008, FR-008a, FR-011, FR-014, FR-015; SC-001, SC-004
+- **Deliverable**: two `asking` fixture runs produce one batched question list, one notification and a per-session answer message; `supervisor.sh route add|next|state|answer|compose|sent|drop|table` exist, the skill's *Route questions* section routes `asking` runs, and a supervised run no longer notifies on its own.
+- **Satisfies**: US1 acceptance scenarios 1–4; FR-001, FR-006, FR-006a, FR-007, FR-008 (send only to the asking session), FR-008a, FR-011, FR-014, FR-015; SC-001, SC-004
 - **Verify**: `bash scripts/tests/supervisor.test.sh` and `bash scripts/tests/autopilot.test.sh` print no FAIL; quickstart Part A2
 - **Depends on**: —
 - **Tier**: full
@@ -115,9 +115,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ### M3 — Survive the context cap
 
 - **Tasks**: T017–T019
-- **Deliverable**: `route next --reask`, `route drop` and `route overdue` exist; the skill sends banners before ending the turn on `OVER`, re-asks after restart and drops answered questions.
-- **Satisfies**: US3 acceptance scenarios 1–3; FR-009, FR-010, FR-011; SC-003
-- **Verify**: `bash scripts/tests/supervisor.test.sh` prints no FAIL (the `--reask`, `drop`, `overdue` and SKILL step 3 cases)
+- **Deliverable**: `route next --reask` and `route overdue` exist; the skill sends banners before ending the turn on `OVER`, re-asks after restart and drops answered questions.
+- **Satisfies**: US3 acceptance scenarios 1–3; FR-008 (confirm and ceiling), FR-009, FR-010, FR-011; SC-003
+- **Verify**: `bash scripts/tests/supervisor.test.sh` prints no FAIL (the `--reask`, `overdue` and SKILL step 3 cases)
 - **Depends on**: M1
 - **Tier**: light
 

@@ -73,7 +73,7 @@ first is answered with a cited evidence path and not batched, the second is batc
 **Acceptance Scenarios**:
 
 1. **Given** an escalation asking whether to fix a clippy warning in the flow's own code, **When**
-   the supervisor routes, **Then** it sends `resume <answer>` with the evidence it found and adds
+   the supervisor routes, **Then** it sends `resume --by supervisor <answer>` with the evidence it found and adds
    nothing to the user batch.
 2. **Given** a "never ask" escalation for which the repo holds no evidence, **When** the supervisor
    routes, **Then** it does not guess: the question goes to the user batch.
@@ -84,8 +84,9 @@ first is answered with a cited evidence path and not batched, the second is batc
    a *Never ask* item, **When** the supervisor routes, **Then** it never answers it itself,
    whatever the evidence.
 5. **Given** a resolved question, **When** it is answered, **Then** the supervisor ledger's row for
-   the issue records the question, the answer, `resolved by supervisor` and the evidence path, and
-   the worker's own ledger *Decisions* row has By `supervisor` with that evidence (not `user`).
+   the issue records the question, the answer, `resolved by supervisor` and the evidence path until
+   the run leaves `asking`, and the worker's own ledger *Decisions* row (the durable record) has By
+   `supervisor` with that evidence (not `user`).
 
 ---
 
@@ -228,9 +229,10 @@ question goes to the parent, or to the user, respectively.
 
 - No `asking` run: nothing to route; the supervisor says so.
 - An `asking` run with a free-text escalation (no `### Q<n>`): one question, first line.
-- A batch escalation (several `### Q<n>` in one run): all its questions go to the user, or all are
-  resolved; an answer line per question number, as `answer.sh` requires. If only some resolve, the
-  resolved ones are held until the rest are answered, and sent together.
+- A batch escalation (several `### Q<n>` in one run): an answer line per question number, as
+  `answer.sh` requires. Resolved questions are held until the rest are answered, and all are sent
+  together. A mixed batch is sent as `resume <answer>` (By `user`, one `answer.sh` call); only a
+  batch resolved entirely by the supervisor carries `--by supervisor`.
 - The user's answer misses a question number: the supervisor's pre-send check (FR-008a) catches it
   and re-asks only the missing question; nothing is sent until the answer is complete.
 - Two supervisors: the ledger owner check of #1813 applies; only the owner routes.
