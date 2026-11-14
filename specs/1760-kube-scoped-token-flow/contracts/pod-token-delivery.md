@@ -1,0 +1,8 @@
+# Contract: delivering tokens to a pod
+
+1. **select_tokens(store_tokens, repositories) -> Vec<GithubTokenSetting>**: keeps the Settings order; keeps a token when its `repos` is empty or any pattern matches any repository (`Exact` equal, `Owner` equal owner, case-insensitive); with no repositories returns nothing (FR-009). Two tokens reaching one repository both stay, order decides.
+2. **kube_attempt**, when `settings.github_tokens`: `select_tokens(GithubTokenSetting::from_store(PatStore::new(env.tokens.pat_root)), projects)` then `PodGithubTokens::read`; `pod_settings.github_tokens = entries`; `delivered.files` gains the token keys. Order: before `pod_startup`, so a bad token fails the start with `cannot deliver the GitHub token "<name>" to the pod: <reason>` and no cluster call is made. Opt-in off: nothing is read.
+3. **No value outside the file**: `render` takes entries (paths only); logs name the token, never the value; the manifest and ConfigMap carry no value; verified by a unit test scanning all three for a sentinel.
+4. **Lifecycle (FR-010)**: the keys live in `<name>-startup`, so: replaced by `startup_secret` at each start (`view.data != data` -> replace); a token deleted in Settings is absent from the next set and its key disappears; the Secret is deleted when no key remains; delete/Remove removes it with the pod's other secrets (existing lifecycle).
+5. **Platform**: the loose-mode refusal is new code on Unix; on Windows the file is read as stored (the PAT store writes it under the user profile; no new ACL check is added). The value is sent verbatim.
+6. **Projects**: `projects` are the saved projects' repositories (research R3); a runtime-added pod project does not count.
