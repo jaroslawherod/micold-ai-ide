@@ -78,6 +78,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review A | 1 | M6 | 617dba58e2c2632676ed27cdf65b7245a322615b | 9f8b399a5314ad8c02f6c244229215019acca3bc:617dba58e2c2632676ed27cdf65b7245a322615b | CHANGES: F1 BLOCKER (strace of connect calls added), F2 (probe asserts NetworkUnreachable and an outer loopback listener), F3 (scan covers dialing paths, self-probe allow-listed, docs reworded), F4 (named tests must run), F5 (char literals); round 2 pending |
 | Review B | 1 | M6 | 617dba58e2c2632676ed27cdf65b7245a322615b | 9f8b399a5314ad8c02f6c244229215019acca3bc:617dba58e2c2632676ed27cdf65b7245a322615b | CHANGES: F1 cycle-log M6 red/green added, F2 drift-M6.md added, F3 CI gate to confirm; no re-review of B needed |
 | Review A | 2 | M6 | 059be2672ce0f358268b70e65402b54a188b5e45 | 20fa6aa0b8a4a9348c71053dc8888e8ff0b5eeb6:059be2672ce0f358268b70e65402b54a188b5e45 | pending (orchestrator dispatches, scoped, sonnet) |
+| Review A | 2 | M6 | 059be2672ce0f358268b70e65402b54a188b5e45 | 20fa6aa0b8a4a9348c71053dc8888e8ff0b5eeb6:059be2672ce0f358268b70e65402b54a188b5e45 | CHANGES: F1 MAJOR netns proof skips silently in CI (fixed: strace in apt, apparmor sysctl, panic when CI set), F2 MINOR connect bound (fixed: exact addresses) |
+| Review A | 3 | M6 | db687910594ad7ed4920ee0c51037d13cb16aa80 | e437c697057e1cee88e69b1c9e7968cecc985690:db687910594ad7ed4920ee0c51037d13cb16aa80 | pending |
 
 ## Declined review findings
 
