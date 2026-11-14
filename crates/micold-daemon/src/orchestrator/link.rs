@@ -67,14 +67,18 @@ where
 {
     let claim = shared.registry().claim(&announcement, shared.now());
     let link = match claim {
-        Claim::Reserved { link, .. } => link,
+        Claim::Reserved { link, snapshot } => {
+            shared.save(Some(snapshot));
+            link
+        }
         Claim::Refused(reason) => return refuse(&mut framed, reason, &announcement).await,
-        Claim::NeedsUpdate { .. } => {
-            return refuse(&mut framed, RefuseReason::VersionMismatch, &announcement).await
+        Claim::NeedsUpdate { snapshot } => {
+            shared.save(Some(snapshot));
+            return refuse(&mut framed, RefuseReason::VersionMismatch, &announcement).await;
         }
     };
     let served = after_claim(&shared, framed, link, &announcement).await;
-    shared.registry().closed(link);
+    shared.update(|registry| registry.closed(link));
     served
 }
 
@@ -120,7 +124,7 @@ where
     // A reservation lasts at most the deadline: no `Hello` by then, or a closed connection,
     // releases it (`claim_failed(Dropped)`).
     let dropped = || {
-        shared.registry().claim_failed(link, ClaimFailure::Dropped);
+        shared.update(|registry| registry.claim_failed(link, ClaimFailure::Dropped));
     };
     let Ok(hello) = tokio::time::timeout(LIVENESS_DEADLINE, framed.next()).await else {
         dropped();
@@ -166,7 +170,7 @@ where
     };
     if let Err(reason) = handshake::evaluate_introduction(&intro, &expectation) {
         // Released before the refusal is written, so a listing read after it sees the outcome.
-        shared.registry().claim_failed(link, claim_failure(&reason));
+        shared.update(|registry| registry.claim_failed(link, claim_failure(&reason)));
         return framed
             .send(Frame::Control(DaemonMsg::Refused { reason }))
             .await
@@ -179,7 +183,7 @@ where
         .registry()
         .confirm(link, shared.now(), shared.wall_secs());
     match confirmed {
-        Ok(_) => {}
+        Ok(confirmed) => shared.save(Some(confirmed.snapshot)),
         Err(ConfirmRefused::Stale) => return Ok(()),
         Err(ConfirmRefused::AlreadyLinked) => {
             let detail = refusal_message(
@@ -256,7 +260,7 @@ where
     let mut nonce = 0_u64;
     let end = |open: &mut bool| {
         if std::mem::take(open) {
-            shared.registry().ended(link);
+            shared.update(|registry| registry.ended(link));
         }
     };
     loop {
@@ -273,9 +277,9 @@ where
                     continue;
                 };
                 expired = false;
-                if shared.registry().answered(link, shared.now(), shared.wall_secs()).0
-                    == LinkAction::Stale
-                {
+                let answered = shared
+                    .update(|registry| registry.answered(link, shared.now(), shared.wall_secs()));
+                if answered == LinkAction::Stale {
                     return Ok(());
                 }
                 match frame {
@@ -291,7 +295,7 @@ where
                 }
             }
             _ = timer.tick() => {
-                let (action, _) = shared.registry().tick(link, shared.now());
+                let action = shared.update(|registry| registry.tick(link, shared.now()));
                 match action {
                     LinkAction::Stale => return Ok(()),
                     LinkAction::Expired if !open => return Ok(()),

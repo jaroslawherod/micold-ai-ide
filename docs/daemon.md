@@ -674,8 +674,19 @@ id has no link. An accepted announcement *reserves* the id until its `Hello`: fo
 that time, or closes, releases the id with no record change. If a silent old link answers while a
 new link's reservation is pending, the old link keeps the id and the new one is closed. Claims are
 taken under one lock, so of two daemons claiming one id at the same moment exactly one is accepted.
-The registry is still in memory; a registry that survives a restart follows in the same issue
-(#1724).
+
+The registry is saved to `orchestrator/registry.json` under the data directory
+(`{ "version": 1, "daemons": [...] }`, owner-only) after every change, whole: it is written to a
+temporary file, synced and renamed over the old one, so a crash leaves the old registry or the new
+one, never part of either. Saves go through one saver that skips a snapshot older than the last one
+it wrote. A failed save is logged to stderr (`orchestrator registry <path> could not be saved:
+<reason>; the previous file is kept`); the registry in memory stays right, links keep working and
+the next change saves again. At start the file is loaded: an absent file is an empty registry, and
+every saved daemon is listed `offline` (a saved `needs-update` too) until it links again, when its
+record is updated in place. A file that cannot be read or parsed fails the start with exit status 1
+and `orchestrator registry <path> is unreadable: <reason>`; the file is left untouched. The
+orchestrator keeps no session state: sessions stay on their daemons, which keep running them while
+the orchestrator is down.
 
 ## Finding the logs and recent errors
 

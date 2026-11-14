@@ -13,7 +13,7 @@ use futures_util::{SinkExt, StreamExt};
 use interprocess::local_socket::tokio::{prelude::*, Stream};
 use interprocess::local_socket::{GenericFilePath, ToFsName};
 use micold_core::daemon_config::Kind;
-use micold_core::orchestrator::{LinkAnnouncement, LinkVerdict};
+use micold_core::orchestrator::{JsonRegistryStore, LinkAnnouncement, LinkVerdict};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg};
 use micold_core::protocol::routing::WireDaemonId;
@@ -65,9 +65,10 @@ impl Clock for TestClock {
     }
 }
 
-/// A running orchestrator on a socket in its own temp dir.
+/// A running orchestrator on a socket in its own temp dir, which is also its data directory: the
+/// registry is `<dir>/orchestrator/registry.json`.
 pub struct Orchestrator {
-    pub dir: tempfile::TempDir,
+    pub dir: Arc<tempfile::TempDir>,
     pub socket: PathBuf,
     pub clock: Arc<TestClock>,
     task: Mutex<Option<JoinHandle<std::io::Result<()>>>>,
@@ -75,17 +76,40 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     pub async fn start() -> Self {
-        let dir = tempfile::tempdir().expect("temp dir");
+        Self::start_in(Arc::new(tempfile::tempdir().expect("temp dir"))).await
+    }
+
+    /// An orchestrator in this process on `dir`, saving its registry there.
+    pub async fn start_in(dir: Arc<tempfile::TempDir>) -> Self {
         let socket = dir.path().join("orchestrator.sock");
         let clock = TestClock::new(1_700_000_000);
+        let store = Arc::new(JsonRegistryStore::in_data_dir(dir.path()));
         let task = tokio::spawn(micold_daemon::orchestrator::run_with(
             socket.clone(),
             Arc::clone(&clock) as Arc<dyn Clock>,
+            store,
         ));
+        Self::listening(dir, socket, clock, Some(task)).await
+    }
+
+    /// An orchestrator another process runs on `socket`, once it listens.
+    pub async fn external(dir: Arc<tempfile::TempDir>, socket: PathBuf) -> Self {
+        Self::listening(dir, socket, TestClock::new(0), None).await
+    }
+
+    async fn listening(
+        dir: Arc<tempfile::TempDir>,
+        socket: PathBuf,
+        clock: Arc<TestClock>,
+        task: Option<JoinHandle<std::io::Result<()>>>,
+    ) -> Self {
         let started = Instant::now();
         loop {
             if connect(&socket).await.is_some() {
                 break;
+            }
+            if let Some(task) = task.as_ref().filter(|task| task.is_finished()) {
+                panic!("the orchestrator ended before it listened: {task:?}");
             }
             assert!(
                 started.elapsed() < WITHIN,
@@ -97,8 +121,29 @@ impl Orchestrator {
             dir,
             socket,
             clock,
-            task: Mutex::new(Some(task)),
+            task: Mutex::new(task),
         }
+    }
+
+    /// Stop it, every link task with it, as a process exit would; the directory stays.
+    pub async fn stop(self) -> Arc<tempfile::TempDir> {
+        let task = self.task.lock().unwrap().take();
+        if let Some(task) = task {
+            task.abort();
+            let _ = task.await;
+        }
+        Arc::clone(&self.dir)
+    }
+
+    /// Stop it and start a new one on the same directory.
+    pub async fn restart(self) -> Self {
+        let dir = self.stop().await;
+        Self::start_in(dir).await
+    }
+
+    /// The registry file.
+    pub fn registry_file(&self) -> PathBuf {
+        JsonRegistryStore::in_data_dir(self.dir.path()).path()
     }
 
     /// Dial the orchestrator.
@@ -319,4 +364,39 @@ pub async fn record_when(
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+}
+
+/// Held by every test that spawns a child process and by every test that counts children:
+/// [`child_count`] sees the whole test process, so a count taken while another test's
+/// `micold-daemon orchestrator` runs would see that child.
+static CHILDREN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Take [`CHILDREN`] in an async test, for the whole test.
+pub async fn children_quiet() -> tokio::sync::MutexGuard<'static, ()> {
+    CHILDREN.lock().await
+}
+
+/// Take [`CHILDREN`] in a test without a runtime, for the whole test.
+pub fn children_quiet_blocking() -> tokio::sync::MutexGuard<'static, ()> {
+    CHILDREN.blocking_lock()
+}
+
+/// Children of every thread of this process: the orchestrator runs on tokio worker threads, and
+/// `/proc/<pid>/task/<pid>/children` lists only those of the main thread.
+#[cfg(target_os = "linux")]
+pub fn child_count() -> usize {
+    let me = std::process::id();
+    let Ok(tasks) = std::fs::read_dir(format!("/proc/{me}/task")) else {
+        return 0;
+    };
+    tasks
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.path().join("children")).ok())
+        .map(|children| children.split_whitespace().count())
+        .sum()
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn child_count() -> usize {
+    0
 }

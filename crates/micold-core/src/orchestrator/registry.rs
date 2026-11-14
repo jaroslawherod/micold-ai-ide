@@ -146,6 +146,26 @@ impl Registry {
         Self::default()
     }
 
+    /// The registry a restart starts from (FR-004): every saved record, listed `offline` with no
+    /// link until its daemon links again. A saved `needs-update` is `offline` too: the mismatch is
+    /// re-derived when the daemon relinks. Of two records with one id, the later wins.
+    pub fn restore(records: impl IntoIterator<Item = DaemonRecord>) -> Self {
+        let records = records
+            .into_iter()
+            .map(|record| {
+                let record = DaemonRecord {
+                    health: Health::Offline,
+                    ..record
+                };
+                (record.id.clone(), record)
+            })
+            .collect();
+        Self {
+            records,
+            ..Self::default()
+        }
+    }
+
     /// Take an announcement at `now`: reserve a link for its id, or refuse (FR-006, FR-007). A
     /// reservation (for at most [`LIVENESS_DEADLINE`]) or a live link refuses a rival
     /// `AlreadyLinked`, or `VersionMismatch` for a mismatched claim on a live id; neither changes a
@@ -1046,5 +1066,49 @@ mod tests {
         assert_eq!(health(&registry, "a"), (Health::Online, 101));
         assert_eq!(registry.tick(old_link, at(9)), (LinkAction::Stale, None));
         assert_eq!(health(&registry, "a"), (Health::Online, 101));
+    }
+
+    #[test]
+    fn restore_lists_every_saved_record_offline_with_no_link() {
+        let mut saved = Registry::new();
+        online(&mut saved, "a", 100);
+        let mut mismatched = ann("b", "B");
+        mismatched.protocol_version = PROTOCOL_VERSION - 1;
+        saved.claim(&mismatched, t0());
+        let before = saved.list();
+        assert_eq!(before[1].health, Health::NeedsUpdate);
+
+        let restored = Registry::restore(before.clone());
+        let after = restored.list();
+        assert!(
+            after.iter().all(|r| r.health == Health::Offline),
+            "{after:?}"
+        );
+        let unhealthy = |records: &[DaemonRecord]| {
+            records
+                .iter()
+                .map(|r| DaemonRecord {
+                    health: Health::Offline,
+                    ..r.clone()
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(after, unhealthy(&before));
+        // No link: a current-version claim on either id is reserved, and confirming it lists the
+        // record `online`.
+        let mut restored = restored;
+        for id in ["a", "b"] {
+            let (link, _) = reserve(&mut restored, &ann(id, id));
+            restored.confirm(link, t0(), 200).unwrap();
+        }
+        assert!(restored.list().iter().all(|r| r.health == Health::Online));
+        assert_eq!(restored.list().len(), 2);
+    }
+
+    #[test]
+    fn a_restored_registry_stamps_its_first_snapshot_after_zero() {
+        let mut restored = Registry::restore(Vec::new());
+        let (_, snapshot) = reserve(&mut restored, &ann("a", "A"));
+        assert!(snapshot.seq > 0);
     }
 }

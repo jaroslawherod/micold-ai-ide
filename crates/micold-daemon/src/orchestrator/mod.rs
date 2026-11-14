@@ -13,10 +13,13 @@ use std::time::Instant;
 
 use interprocess::local_socket::traits::tokio::Listener as _;
 use micold_core::endpoint::Endpoint;
-use micold_core::orchestrator::Registry;
+use micold_core::orchestrator::{JsonRegistryStore, Registry, RegistryStore, Snapshot};
 
 pub mod link;
 pub mod query;
+mod save;
+
+use save::{SaveQueue, SaveWorker};
 
 /// Which mode `micold-daemon` starts in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,14 +66,34 @@ impl Clock for SystemClock {
 pub struct Shared {
     registry: Mutex<Registry>,
     clock: Arc<dyn Clock>,
+    saves: Arc<SaveQueue>,
 }
 
 impl Shared {
-    fn new(clock: Arc<dyn Clock>) -> Self {
+    fn new(clock: Arc<dyn Clock>, registry: Registry, saves: Arc<SaveQueue>) -> Self {
         Self {
-            registry: Mutex::new(Registry::new()),
+            registry: Mutex::new(registry),
             clock,
+            saves,
         }
+    }
+
+    /// Hand the snapshot a mutating registry call returned, after the lock is released, to the
+    /// one saving thread, which writes the newest one it has and skips an older one. This never
+    /// waits for the disk. A failure is logged to stderr there: the registry in memory stays right
+    /// and the next change tries again (FR-004).
+    pub(crate) fn save(&self, snapshot: Option<Snapshot>) {
+        if let Some(snapshot) = snapshot {
+            self.saves.offer(snapshot);
+        }
+    }
+
+    /// Run a mutating registry call that returns `(answer, snapshot)`, then save the snapshot
+    /// with the lock released.
+    pub(crate) fn update<T>(&self, call: impl FnOnce(&mut Registry) -> (T, Option<Snapshot>)) -> T {
+        let (answer, snapshot) = call(&mut self.registry());
+        self.save(snapshot);
+        answer
     }
 
     /// The registry. The guard is never held across an `.await`.
@@ -98,10 +121,18 @@ fn endpoint() -> io::Result<Endpoint> {
     })
 }
 
-/// Run the orchestrator on the user's endpoint until the process is stopped.
+/// Run the orchestrator on the user's endpoint until the process is stopped, keeping its registry
+/// in `orchestrator/registry.json` under the data directory.
 pub async fn run() -> io::Result<()> {
     let endpoint = endpoint()?;
-    serve(endpoint, Arc::new(SystemClock)).await
+    let data_dir = micold_core::paths::data_dir().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "no data directory to keep the orchestrator registry in",
+        )
+    })?;
+    let store = Arc::new(JsonRegistryStore::in_data_dir(&data_dir));
+    serve(endpoint, Arc::new(SystemClock), store).await
 }
 
 /// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
@@ -117,16 +148,26 @@ pub fn main() -> io::Result<()> {
         .block_on(run())
 }
 
-/// Run the orchestrator on `socket` with `clock` (tests pass their own).
-pub async fn run_with(socket: PathBuf, clock: Arc<dyn Clock>) -> io::Result<()> {
+/// Run the orchestrator on `socket` with `clock` and `store` (tests pass their own).
+pub async fn run_with(
+    socket: PathBuf,
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+) -> io::Result<()> {
     let endpoint = Endpoint {
         lock_path: socket.with_extension("lock"),
         socket_path: socket,
     };
-    serve(endpoint, clock).await
+    serve(endpoint, clock, store).await
 }
 
-async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
+async fn serve(
+    endpoint: Endpoint,
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+) -> io::Result<()> {
+    // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
+    let registry = Registry::restore(store.load().map_err(io::Error::other)?);
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {
@@ -139,8 +180,14 @@ async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
             ))
         }
     };
-    let shared = Arc::new(Shared::new(clock));
+    // Declared before `links`, so dropped after them: when this future ends, the link tasks are
+    // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
+    // writes the registry file after that.
+    let (_saving, saves) = SaveWorker::start(store)?;
+    let shared = Arc::new(Shared::new(clock, registry, saves));
+    let mut links = tokio::task::JoinSet::new();
     loop {
+        while links.try_join_next().is_some() {}
         // One failed accept (a peer that left mid-accept, a full descriptor table) must not end
         // the registry and every link with it: log, back off, go on.
         let conn = match bound.listener.accept().await {
@@ -152,10 +199,126 @@ async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
             }
         };
         let shared = Arc::clone(&shared);
-        tokio::spawn(async move {
+        links.spawn(async move {
             if let Err(e) = link::serve_connection(shared, conn).await {
                 tracing::warn!(error = %e, "orchestrator connection ended with an error");
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use micold_core::daemon_config::Kind;
+    use micold_core::orchestrator::{DaemonRecord, StoreError};
+    use micold_core::protocol::routing::WireDaemonId;
+
+    use super::*;
+
+    /// A store whose every save waits for the gate to open (or close), then records the
+    /// `last_seen` of the snapshot it wrote: a slow disk under the orchestrator's control.
+    struct GatedStore {
+        gate: Mutex<mpsc::Receiver<()>>,
+        written: Mutex<Vec<u64>>,
+    }
+
+    impl RegistryStore for GatedStore {
+        fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
+            Ok(Vec::new())
+        }
+
+        fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
+            let _ = self.gate.lock().unwrap().recv();
+            self.written
+                .lock()
+                .unwrap()
+                .push(records.first().map_or(0, |record| record.last_seen));
+            Ok(())
+        }
+    }
+
+    fn gated() -> (Arc<GatedStore>, mpsc::Sender<()>) {
+        let (open, gate) = mpsc::channel();
+        let store = Arc::new(GatedStore {
+            gate: Mutex::new(gate),
+            written: Mutex::new(Vec::new()),
+        });
+        (store, open)
+    }
+
+    /// Snapshot `seq`, its one record last seen at `seq`, so the store shows which one it wrote.
+    fn snapshot(seq: u64) -> Snapshot {
+        let mut record = DaemonRecord::new(
+            WireDaemonId::new("a").unwrap(),
+            Kind::Host,
+            "A",
+            81,
+            BTreeSet::new(),
+            None,
+        );
+        record.last_seen = seq;
+        Snapshot {
+            seq,
+            records: vec![record],
+        }
+    }
+
+    #[test]
+    fn a_save_returns_while_the_store_is_still_writing() {
+        let (store, open) = gated();
+        let (_saving, saves) = SaveWorker::start(store).unwrap();
+        let shared = Arc::new(Shared::new(
+            Arc::new(SystemClock),
+            Registry::default(),
+            saves,
+        ));
+        let (returned, saved) = mpsc::channel();
+        let saving = Arc::clone(&shared);
+        std::thread::spawn(move || {
+            saving.save(Some(snapshot(1)));
+            let _ = returned.send(());
+        });
+        let result = saved.recv_timeout(Duration::from_secs(2));
+        drop(open);
+        assert!(result.is_ok(), "save blocked on the store's write");
+    }
+
+    #[test]
+    fn snapshots_handed_over_during_a_write_are_coalesced_to_the_newest() {
+        let (store, open) = gated();
+        let (saving, saves) =
+            SaveWorker::start(Arc::clone(&store) as Arc<dyn RegistryStore>).unwrap();
+        saves.offer(snapshot(1));
+        // The thread has taken 1 and waits in the store's write.
+        let started = std::time::Instant::now();
+        while saves.pending().snapshot.is_some() {
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "the write never started"
+            );
+            std::thread::yield_now();
+        }
+        for seq in [3, 2, 4] {
+            saves.offer(snapshot(seq));
+        }
+        drop(open);
+        drop(saving);
+        assert_eq!(*store.written.lock().unwrap(), [1, 4]);
+    }
+
+    #[test]
+    fn dropping_the_worker_writes_what_waits_and_then_nothing_more() {
+        let (store, open) = gated();
+        drop(open);
+        let (saving, saves) =
+            SaveWorker::start(Arc::clone(&store) as Arc<dyn RegistryStore>).unwrap();
+        saves.offer(snapshot(7));
+        drop(saving);
+        saves.offer(snapshot(8));
+        assert_eq!(*store.written.lock().unwrap(), [7]);
     }
 }
