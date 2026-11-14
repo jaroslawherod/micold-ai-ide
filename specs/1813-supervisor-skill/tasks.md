@@ -8,57 +8,57 @@ cases live in `scripts/tests/supervisor.test.sh`, so test tasks are never `[P]` 
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `/.autopilot/` to `.gitignore`
-- [ ] T002 Create `scripts/tests/supervisor.test.sh` skeleton (sources `scripts/tests/lib/autopilot-fixtures.sh`, `tmp`, pass/fail counters; model on `scripts/tests/run-status.test.sh`) with a case asserting `git check-ignore .autopilot/supervisor.md`
+- [x] T001 Add `/.autopilot/` to `.gitignore`
+- [x] T002 Create `scripts/tests/supervisor.test.sh` skeleton (sources `scripts/tests/lib/autopilot-fixtures.sh`, `tmp`, pass/fail counters; model on `scripts/tests/run-status.test.sh`) with a case asserting `git check-ignore .autopilot/supervisor.md`
 
 ## Phase 2: Foundational (the supervisor ledger)
 
-- [ ] T003 Add ledger test cases to `scripts/tests/supervisor.test.sh`: `ledger init` (creates, refuses an existing file), `ledger owner`, `ledger set/get` per cell, unknown `State` rejected, malformed ledger exits 2, `ledger table` is short
-- [ ] T004 Create `scripts/autopilot/supervisor.sh` with argument parsing and the `ledger init|owner|set|get|table` subcommands (bash 3.2, `jq`-free text handling of the markdown table, data-model.md)
+- [x] T003 Add ledger test cases to `scripts/tests/supervisor.test.sh`: `ledger init` (creates, refuses an existing file), `ledger owner`, `ledger set/get` per cell, unknown `State` rejected, malformed ledger exits 2, `ledger table` is short
+- [x] T004 Create `scripts/autopilot/supervisor.sh` with argument parsing and the `ledger init|owner|set|get|table` subcommands (bash 3.2, `jq`-free text handling of the markdown table, data-model.md)
 
 ## Phase 3: User Story 1 - Start a queue of issues under a cap (P1) 🎯 MVP
 
 **Independent test**: with fixtures, `next` admits at most cap minus occupied issues, in ascending order.
 
-- [ ] T005 [US1] Add `next` test cases to `scripts/tests/supervisor.test.sh`: three queued, cap 2 gives two lowest; `starting` and `running` occupy slots; `done|failed|lost|skipped` release; nothing printed when none (US1 1-2, SC-001, FR-008)
-- [ ] T006 [US1] Implement `supervisor.sh next` (cap and slots only; overlap is added in US3)
-- [ ] T007 [US1] Add skill-text test cases to `scripts/tests/supervisor.test.sh` (red before T008/T009): `.claude/skills/speckit-autopilot/SKILL.md` documents the trailing `supervised` argument and the literal `- **Supervised**: yes` line `supervised.sh` matches; `.claude/skills/autopilot-supervisor/SKILL.md` names the prompt `/speckit-autopilot #<n> supervised` and never names `read_session_output`
-- [ ] T008 [US1] Document the trailing `supervised` argument (writes the ledger's `- **Supervised**: yes` line) in `.claude/skills/speckit-autopilot/SKILL.md`
-- [ ] T009 [US1] Create `.claude/skills/autopilot-supervisor/SKILL.md`: *Build the queue* (list or `autopilot:queue`, sorted), *Start an issue* (`create_worktree` with `github_issue`, `create_session` prompt `/speckit-autopilot #<n> supervised`, ledger write before and after; a closed or missing issue, or one that already has a worktree or ledger, gets `ledger set <n> State skipped` with the reason in Note; a failed create is noted in Note; the tries counter and `failed` after 3 tries are enforced in M2, T014-T015), the advance loop (`next`, start, an empty queue says nothing to do, stop when no slot is occupied), finishing report
-- [ ] T010 [US1] Add a pointer to the supervisor skill in `.claude/skills/speckit-autopilot/README.md`
+- [x] T005 [US1] Add `next` test cases to `scripts/tests/supervisor.test.sh`: three queued, cap 2 gives two lowest; `starting` and `running` occupy slots; `done|failed|lost|skipped` release; nothing printed when none (US1 1-2, SC-001, FR-008)
+- [x] T006 [US1] Implement `supervisor.sh next` (cap and slots only; overlap is added in US3)
+- [x] T007 [US1] Add skill-text test cases to `scripts/tests/supervisor.test.sh` (red before T008/T009): `.claude/skills/speckit-autopilot/SKILL.md` links the trailing `supervised` argument and `rules/supervised.md` carries the literal `- **Supervised**: yes` line `supervised.sh` matches; `.claude/skills/autopilot-supervisor/SKILL.md` names the prompt `/speckit-autopilot #<n> supervised` and never names `read_session_output`
+- [x] T008 [US1] Document the trailing `supervised` argument (writes the ledger's `- **Supervised**: yes` line) in `.claude/skills/speckit-autopilot/rules/supervised.md`, linked from `SKILL.md` (at its line ceiling) and `flows/choose.md` (a supervised run never asks the Flow question)
+- [x] T009 [US1] Create `.claude/skills/autopilot-supervisor/SKILL.md`: *Build the queue* (list or `autopilot:queue`, sorted), *Start an issue* (`create_worktree` with `github_issue`, `create_session` prompt `/speckit-autopilot #<n> supervised`, ledger write before and after; a closed or missing issue, or one that already has a worktree or ledger, gets `ledger set <n> State skipped` with the reason in Note; a failed create is noted in Note; the tries counter and `failed` after 3 tries are enforced in M2, T014-T015), the advance loop (`next`, start, an empty queue says nothing to do, stop when no slot is occupied), finishing report
+- [x] T010 [US1] Add a pointer to the supervisor skill in `.claude/skills/speckit-autopilot/README.md`
 
 ## Phase 4: User Story 2 - Resource gate before every start (P1)
 
 **Independent test**: `gate` returns PASS or the first failing check for each fixture reading.
 
-- [ ] T011 [US2] Add `gate` test cases to `scripts/tests/supervisor.test.sh`: cap, memory below 4096 MiB, load above cores, PASS, failure order, readings from `AUTOPILOT_SUP_MEM_MIB|LOAD|CORES` (US2 1-4, SC-003)
-- [ ] T012 [US2] Implement `supervisor.sh gate` with Linux (`/proc/meminfo`, `nproc`) and macOS (`vm_stat`, `sysctl`) readers and `uptime` load
-- [ ] T013 [US2] Add the gate step to `.claude/skills/autopilot-supervisor/SKILL.md`: run `gate --running <occupied + starts so far>` before each `create_worktree`; on FAIL start nothing, report which check, retry next advance
+- [x] T011 [US2] Add `gate` test cases to `scripts/tests/supervisor.test.sh`: cap, memory below 4096 MiB, load above cores, PASS, failure order, readings from `AUTOPILOT_SUP_MEM_MIB|LOAD|CORES` (US2 1-4, SC-003)
+- [x] T012 [US2] Implement `supervisor.sh gate` with Linux (`/proc/meminfo`, `nproc`) and macOS (`vm_stat`, `sysctl`) readers and `uptime` load
+- [x] T013 [US2] Add the gate step to `.claude/skills/autopilot-supervisor/SKILL.md`: run `supervisor.sh gate` (it counts the ledger's occupied rows, each start is written before the next gate) before each `create_worktree`; on FAIL start nothing, report which check, retry next advance
 
 ## Phase 5: User Story 4 - A restarted supervisor resumes from its ledger (P1)
 
 **Independent test**: given run-status fixtures, `map` and `check-owner` reproduce each state and a restart starts nothing twice.
 
-- [ ] T014 [US4] Add test cases to `scripts/tests/supervisor.test.sh`: `map` per data-model.md table (done, dead-no-ledger within and past Grace, asking/stuck/blocked/waiting-ci/running, `--exit 2|3` gives `lost`), tries and `failed` after 3, `skipped` via `ledger set`, `check-owner` OWN/FREE/HELD, owner set after FREE (US4 1-4, SC-002, FR-011)
-- [ ] T015 [US4] Implement `supervisor.sh map` and `check-owner`, plus the tries counter rule
-- [ ] T016 [US4] Add watcher test cases to `scripts/tests/supervisor.test.sh`: exits `CHANGED <issue> <old> <new>` on a changed state and `CEILING` at the ceiling, stub run-status via `AUTOPILOT_RUN_STATUS`, `--interval 1 --ceiling 2`
-- [ ] T017 [US4] Create `scripts/autopilot/supervisor-watch.sh` (state-change or 10 minute exit, `AUTOPILOT_WATCH_CEILING`)
-- [ ] T018 [US4] Add *Restart*, *Report* (`asking`, `stuck`, `blocked`, `dead-no-ledger` runs, from the JSON `escalation`) and the background watcher via `run_in_background` to `.claude/skills/autopilot-supervisor/SKILL.md`, including the owner check at start (`check-owner`, then `ledger owner <id>` after `FREE`), `list_sessions` liveness for `lost`, and the `starting` row with empty cells recovery (FR-006, FR-009)
+- [x] T014 [US4] Add test cases to `scripts/tests/supervisor.test.sh`: `map` per data-model.md table (done, dead-no-ledger within and past Grace, asking/stuck/blocked/waiting-ci/running, `--exit 2|3` gives `lost`), tries and `failed` after 3, `skipped` via `ledger set`, `check-owner` OWN/FREE/HELD, owner set after FREE (US4 1-4, SC-002, FR-011)
+- [x] T015 [US4] Implement `supervisor.sh map` and `check-owner`, plus the tries counter rule
+- [x] T016 [US4] Add watcher test cases to `scripts/tests/supervisor.test.sh`: exits `CHANGED <issue> <old> <new>` on a changed state and `CEILING` at the ceiling, stub run-status via `AUTOPILOT_RUN_STATUS`, `--interval 1 --ceiling 2`
+- [x] T017 [US4] Create `scripts/autopilot/supervisor-watch.sh` (state-change or 10 minute exit, `AUTOPILOT_WATCH_CEILING`)
+- [x] T018 [US4] Add *Restart*, *Report* (`asking`, `stuck`, `blocked`, `dead-no-ledger` runs, from the JSON `escalation`) and the background watcher via `run_in_background` to `.claude/skills/autopilot-supervisor/SKILL.md`, including the owner check at start (`check-owner`, then `ledger owner <id>` after `FREE`), `list_sessions` liveness for `lost`, and the `starting` row with empty cells recovery (FR-006, FR-009)
 
 ## Phase 6: User Story 3 - Sequence issues that touch the same files (P2)
 
 **Independent test**: two issues with overlapping `Touches:` run one after the other even with cap room.
 
-- [ ] T019 [US3] Add test cases to `scripts/tests/supervisor.test.sh`: `touches` declared line, inferred from `flows` and spec paths, none; `overlap yes|no`; `touches` returns `none` for an issue with nothing inferable; `next` holds the later overlapping issue and releases it once the earlier is released (US3 1-3, FR-004)
-- [ ] T020 [US3] Implement `supervisor.sh touches` and `overlap`, and make `next` skip candidates overlapping an occupying row or an earlier pick
-- [ ] T021 [US3] Add the Touches step to `.claude/skills/autopilot-supervisor/SKILL.md` (read the issue body with `gh issue view`, run `touches`, store in the ledger; for `none`, write in Note that the issue is treated as disjoint)
+- [x] T019 [US3] Add test cases to `scripts/tests/supervisor.test.sh`: `touches` declared line, inferred from `flows` and spec paths, none; `overlap yes|no`; `touches` returns `none` for an issue with nothing inferable; `next` holds the later overlapping issue and releases it once the earlier is released (US3 1-3, FR-004)
+- [x] T020 [US3] Implement `supervisor.sh touches` and `overlap`, and make `next` skip candidates overlapping an occupying row or an earlier pick
+- [x] T021 [US3] Add the Touches step to `.claude/skills/autopilot-supervisor/SKILL.md` (read the issue body with `gh issue view`, run `touches`, store in the ledger; for `none`, write in Note that the issue is treated as disjoint)
 
 ## Phase 7: User Story 5 - Small supervisor context (P2)
 
 **Independent test**: grep cases over the skill text.
 
-- [ ] T022 [US5] Add skill-text test cases to `scripts/tests/supervisor.test.sh`: `run-status.sh --json` is the only run-state read and is named once per advance row (SC-004), the advance reports through `ledger table`, and `next` and `gate` agree on the slot count for the same fixture (US5, FR-007, FR-010)
-- [ ] T023 [US5] Fix `.claude/skills/autopilot-supervisor/SKILL.md` until the T022 cases pass and the advance output is the short `ledger table`
+- [x] T022 [US5] Add skill-text test cases to `scripts/tests/supervisor.test.sh`: `run-status.sh --json` is the only run-state read and is named once per advance row (SC-004), the advance reports through `ledger table`, and `next` and `gate` agree on the slot count for the same fixture (US5, FR-007, FR-010)
+- [x] T023 [US5] Fix `.claude/skills/autopilot-supervisor/SKILL.md` until the T022 cases pass and the advance output is the short `ledger table`
 
 ## Dependencies and order
 
@@ -110,3 +110,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `bash scripts/tests/supervisor.test.sh` (skill-text cases)
 - **Depends on**: M1, M2, M3
 - **Tier**: light
+
+## Phase 8: TDD remediation
+
+The TDD verdict is FAIL (`specs/1813-supervisor-skill/tdd/verification.md`). T025 and T027 are done. T024 (HIGH finding 1, retroactive red evidence only, no behaviour gap: the mutation sample caught 16 of 16), T026, T028, T029, T030 and T031 are deferred.
+
+- [ ] T024 [TDD F1] Record a retroactive red per behavior for the 8 TEST_AFTER behaviors (M1 T002/T003/T005/T007/T011, M1/M2/M3 review-fix rounds): in a scratch copy, break the behavior in `scripts/autopilot/supervisor.sh` / `supervisor-watch.sh`, show `bash scripts/tests/supervisor.test.sh` fails on the matching case, and write the results to `specs/1813-supervisor-skill/tdd/cycle-log.md` marked `retroactive`. Done when every behavior has a recorded failing case and the suite is green on the real source. **Deferred at close**: test-strength polish with no behaviour gap, left to a follow-up; residual risk recorded in `tdd/verification.md`.
+- [x] T025 [TDD F2] Tighten `scripts/tests/supervisor.test.sh:81`: the unoverridden-readings case ignores the gate exit code (a loaded host is not a failure) and requires `PASS`, `FAIL memory: <n> MiB free` or `FAIL load: load <n>`, so `unreadable` fails it. Proof: a mutant making `mem_mib` print nothing fails the suite (11 failures).
+- [ ] T026 [TDD F3] Run quickstart Part B (live `create_worktree`, `create_session`, `list_sessions`, `autopilot:queue`) and record the result in `specs/1813-supervisor-skill/autopilot.md`; until then US1.3/US1.4/US4.3/US5.2 stay text-verified only. **Deferred at close**: needs live MCP (`create_worktree`, `create_session`), not available in the cloud unit; residual risk recorded in `tdd/verification.md`.
+- [x] T027 [TDD F4] In `scripts/tests/supervisor.test.sh:260-266` replace the computed `want`/`gw`/exit-code expressions with literal table rows (occupied, next count, gate result). Proof: `bash scripts/tests/supervisor.test.sh` stays green and the `next-ignores-occupied` mutant still fails.
+- [ ] T028 [TDD F5] Bound the watcher test helper `chg` (`scripts/tests/supervisor.test.sh:143`) with an iteration limit so a regression fails instead of hanging, and drop wall-clock dependence of the `CEILING` cases (inject a clock or larger margins). Proof: the `ledger set` column+2 mutant makes the suite fail within 60 s. **Deferred at close**: test-strength polish with no behaviour gap, left to a follow-up; residual risk recorded in `tdd/verification.md`.
+- [ ] T029 [TDD F6] Reduce phrase-pinned skill-text cases (`:173`, `:244-258`) to the markers a rewording must keep (section headings and command names), or document them as the contract. Proof: `bash scripts/tests/supervisor.test.sh`. **Deferred at close**: test-strength polish with no behaviour gap, left to a follow-up; residual risk recorded in `tdd/verification.md`.
+- [ ] T030 [TDD F7] Add cases for an unreadable run-status in `supervisor-watch.sh` (`unreadable` state), a running row with no Worktree, `ledger init --grace/--source`. Proof: `bash scripts/tests/supervisor.test.sh`. **Deferred at close**: test-strength polish with no behaviour gap, left to a follow-up; residual risk recorded in `tdd/verification.md`.
+- [ ] T031 [TDD F8] Use the `nx` helper in `scripts/tests/supervisor.test.sh:49,51` and simplify the CRLF case at `:190`. Proof: `bash scripts/tests/supervisor.test.sh`. **Deferred at close**: test-strength polish with no behaviour gap, left to a follow-up; residual risk recorded in `tdd/verification.md`.

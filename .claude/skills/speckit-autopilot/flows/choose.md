@@ -34,7 +34,7 @@ Decide in this order. The command's own words win over labels; labels win over y
 
 ## When to ask
 
-Labels and text agree, or one flow plainly fits: do not ask. Ask **exactly once**, with one
+Labels and text agree, or one flow plainly fits: do not ask. A `supervised` run never asks here (no ledger exists yet, nobody watches): it takes the recommended flow and records it in the ledger ([../rules/supervised.md](../rules/supervised.md)). Otherwise ask **exactly once**, with one
 `AskUserQuestion` (header `Flow`), when:
 
 - labels disagree with each other (two `flow:*`, both `effort:*`, `bug` with `enhancement`);

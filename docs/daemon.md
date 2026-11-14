@@ -646,9 +646,47 @@ id, and closed. A session start sent over an accepted link is refused with
 `not hosted by the orchestrator`; a session list is empty. The wire shapes are in
 `specs/1724-orchestrator-registry-daemon-link/contracts/link.md`.
 
-This first step keeps the registry in memory and lists every linked daemon `online`; heartbeat,
-`offline`, `needs-update`, one live link per id and a registry that survives a restart follow in the
-same issue (#1724).
+The orchestrator pings each link with `LinkPing { nonce }` every 3 s when the link is idle; the
+daemon answers `LinkPong { nonce }` (protocol 81). Any frame counts as an answer. A link silent for
+9 s (checked every second) is listed `offline` with `last_seen` left at its last answer; the entry and
+its link stay, and the next frame of any kind brings it back `online` and advances `last_seen`. Other
+daemons are unaffected.
+
+A daemon whose protocol version differs from the orchestrator's, older or newer, is refused with
+`Refused { reason: "version_mismatch", orchestrator_version, daemon_version, message }`; the message
+names both numbers (`daemon <id> speaks protocol version 80; this orchestrator speaks 81`). Its id
+is listed `needs-update`, and the record then carries `orchestrator_version` beside its own
+`protocol_version`. A daemon on the current number whose `Hello` carries another schema hash is
+refused at `Hello` and listed the same way. A refusal for the build (`BuildMismatch`) or for
+authentication leaves the registry unchanged. A mismatch never overwrites an id that has a live link:
+the claim is refused and that record and link stay as they were. If the id's link is open but silent
+(`offline`), the silent link is closed and the record becomes `needs-update`. A `needs-update`
+daemon that links again on the current version becomes `online`.
+
+One daemon id has at most one live link (FR-007). A second link that claims an id whose link is
+open and answering is refused with `Refused { reason: "already_linked", ... }` (`a link for daemon
+<id> is already open`); the first link and its record are untouched. A claim is accepted, and
+replaces the old link once its `Hello` is confirmed, when the old link's transport has closed (at
+once: the id does not wait for the deadline, though the record still turns `offline` at it if no
+new link arrives), when the old link is open but silent (`offline`: it is then closed), or when the
+id has no link. An accepted announcement *reserves* the id until its `Hello`: for up to 9 s
+(`LIVENESS_DEADLINE`) a rival claim is refused `already_linked`, and a link that sends no `Hello` in
+that time, or closes, releases the id with no record change. If a silent old link answers while a
+new link's reservation is pending, the old link keeps the id and the new one is closed. Claims are
+taken under one lock, so of two daemons claiming one id at the same moment exactly one is accepted.
+
+The registry is saved to `orchestrator/registry.json` under the data directory
+(`{ "version": 1, "daemons": [...] }`, owner-only) after every change, whole: it is written to a
+temporary file, synced and renamed over the old one, so a crash leaves the old registry or the new
+one, never part of either. Saves go through one saver that skips a snapshot older than the last one
+it wrote. A failed save is logged to stderr (`orchestrator registry <path> could not be saved:
+<reason>; the previous file is kept`); the registry in memory stays right, links keep working and
+the next change saves again. At start the file is loaded: an absent file is an empty registry, and
+every saved daemon is listed `offline` (a saved `needs-update` too) until it links again, when its
+record is updated in place. A file that cannot be read or parsed fails the start with exit status 1
+and `orchestrator registry <path> is unreadable: <reason>`; the file is left untouched. The
+orchestrator keeps no session state: sessions stay on their daemons, which keep running them while
+the orchestrator is down.
 
 ## Finding the logs and recent errors
 

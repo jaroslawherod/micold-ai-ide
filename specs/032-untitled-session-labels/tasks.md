@@ -123,7 +123,7 @@ the title (US2 #3).
 
 ### Implementation for User Story 2
 
-- [X] T027 [US2] [A7] [A8] [A9] [U63] [U64] [U65] [U71] In `crates/micold-daemon/src/state.rs`, widen the candidates of `recover_session_names` and `recover_live_session_names` from `Pending` to "not `Named`" (C6.2); keep `prunable_session_cwds` in `crates/micold-daemon/src/catalog.rs` `Pending`-only and say why in its doc comment (a `Derived` session has a conversation; data-model invariant 4)
+- [X] T027 [US2] [A7] [A8] [A9] [U63] [U64] [U65] [U71] In `crates/micold-daemon/src/state.rs`, widen the candidates of `recover_session_names` and `recover_live_session_names` from `Pending` to "not `Named`" (C6.2); keep `prunable_session_cwds` in `crates/micold-daemon/src/catalog.rs` `Pending`-only and say why in its doc comment (a `Derived` session has a conversation; data-model invariant 4) _(Note, BUG-1852: a `Derived` label stays only while the session is listed; the session is removed when its conversation is found gone, 026 FR-008a.)_
 
 - [X] T043 [US2] [A7] [A8] [A9] Outer loop green: the US2 acceptance tests in `crates/micold-daemon/tests/untitled_session_labels.rs` pass with the full suite
 

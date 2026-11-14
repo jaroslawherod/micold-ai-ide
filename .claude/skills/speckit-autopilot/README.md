@@ -9,6 +9,10 @@
 /speckit-autopilot resume
 ```
 
+Many issues at once, under a cap and a resource gate: the `autopilot-supervisor` skill
+(`.claude/skills/autopilot-supervisor/SKILL.md`) starts one `/speckit-autopilot #<n> supervised`
+session per queued issue and records them in `.autopilot/supervisor.md`.
+
 You give one prompt or one GitHub issue. The agent picks the lightest flow that fits, does the
 work, reviews every artifact and diff itself, and merges to `main`. It asks you only for decisions
 that are yours (see [When you are asked](#when-you-are-asked)). When all PRs have merged, it closes
