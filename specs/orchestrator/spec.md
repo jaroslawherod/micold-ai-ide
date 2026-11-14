@@ -14,6 +14,11 @@ cloud and manage the sessions remotely. Daemons authenticate with mTLS; a daemon
 reference to the orchestrator and its credentials in its configuration. The web UI supports only the
 structured view: no xterm."
 
+> **Revised 2026-11-14.** Milestones M3–M5 (network API, sign-in, roles, web client, cloud
+> deployment) are revised by [`specs/1722-rn-client-k8s/`](../1722-rn-client-k8s/spec.md): a React
+> Native client for web and mobile, Material 3, GitHub and Google sign-in, three global roles, and a
+> Kubernetes deployment. Where the two differ, the revision wins.
+
 > **Planning only.** This feature produces a spec, milestones and GitHub issues, not code. Each issue
 > in `issues.md` is planned (plan, research, tasks) and implemented later in its own worktree with
 > `/speckit-autopilot #<issue>`. No source file changes on this branch.
