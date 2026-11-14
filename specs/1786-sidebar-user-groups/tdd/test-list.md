@@ -49,20 +49,20 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 
 | id | behavior | traces | kind | state | test |
 |---|---|---|---|---|---|
-| U1 | to_json/from_json round trip | FR-012 | example | PENDING | tasks T002, T003 |
-| U2 | Missing, corrupt, older or newer version loads empty without error | FR-018 | example | PENDING | tasks T002, T003 |
-| U3 | reconcile drops absent items | FR-018 | example | PENDING | tasks T002, T003 |
-| U4 | reconcile keeps a doubly-named item in the first group | C1, FR-005 | example | PENDING | tasks T002, T003 |
-| U5 | reconcile appends unknown live items to ungrouped in live order | C1 | example | PENDING | tasks T002, T003 |
+| U1 | to_json/from_json round trip | FR-012 | example | DONE | micold-core sidebar_layout::tests::a_layout_survives_its_own_json |
+| U2 | Missing, corrupt, older or newer version loads empty without error | FR-018 | example | DONE | micold-core sidebar_layout::tests::missing_unparseable_older_or_newer_text_loads_as_no_groups |
+| U3 | reconcile drops absent items | FR-018 | example | DONE | micold-core sidebar_layout::tests::reconcile_drops_items_no_longer_listed |
+| U4 | reconcile keeps a doubly-named item in the first group | C1, FR-005 | example | DONE | micold-core sidebar_layout::tests::reconcile_keeps_an_item_named_twice_in_the_first_group_only |
+| U5 | reconcile appends unknown live items to ungrouped in live order | C1 | example | DONE | micold-core sidebar_layout::tests::reconcile_appends_unknown_live_items_to_ungrouped_in_live_order |
 | U6 | Default is never stored (IsDefault) | FR-015 | example | PENDING | tasks T002, T003, T024, T025 |
-| U7 | save/load round trip, missing file empty | C7, SC-003 | example | PENDING | tasks T004, T005 |
-| U8 | corrupt file renamed .corrupt, empty layout loads | FR-018 | example | PENDING | tasks T004, T005 |
+| U7 | save/load round trip, missing file empty | C7, SC-003 | example | DONE | tests/sidebar_layout_store.rs::a_saved_layout_loads_back_after_a_restart, a_missing_file_loads_as_no_groups |
+| U8 | corrupt file renamed .corrupt, empty layout loads | FR-018 | example | DONE | tests/sidebar_layout_store.rs::a_corrupt_file_is_kept_aside_and_loads_as_no_groups |
 | U9 | sidebar_entries with empty layout equals the stable order | FR-013 | example | PENDING | tasks T006, T007 |
 | U10 | Entries order: Default, group headers with rows, ungrouped | C5 | example | PENDING | tasks T006, T007 |
 | U11 | Collapsed group hides rows, empty group keeps header, tag filter keeps stored order | C5, FR-017 | example | PENDING | tasks T006, T007 |
 | U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | PENDING | tasks T006, T007 |
-| U13 | create trims, ids monotonic and never reused | FR-004 | example | PENDING | tasks T009, T010 |
-| U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | PENDING | tasks T009, T010 |
+| U13 | create trims, ids monotonic and never reused | FR-004 | example | DONE | micold-core sidebar_layout::tests::create_trims_the_name_and_adds_an_empty_group_last, created_ids_grow_and_are_never_reused |
+| U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | DONE | micold-core sidebar_layout::tests::create_refuses_a_blank_name_and_changes_nothing, create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing |
 | U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | PENDING | tasks T018, T019 |
 | U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | PENDING | tasks T018, T019 |
 | U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | PENDING | tasks T024, T025 |

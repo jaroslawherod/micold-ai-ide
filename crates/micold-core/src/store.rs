@@ -26,6 +26,7 @@ use crate::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLocation,
     TerminalMode,
 };
+use crate::sidebar_layout::SidebarLayout;
 use crate::structured::effort::EffortChoice;
 use crate::structured::model::ModelChoice;
 use crate::workspace::Workspace;
@@ -167,6 +168,18 @@ pub trait ProjectStore {
     /// Delete a project's run groups when the project is forgotten (feature 483, W5). The
     /// default, for stores that persist nothing, has nothing to delete and succeeds.
     fn remove_runs(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
+    }
+
+    /// A project's sidebar layout (feature 1786, contract C7). The default, for stores that
+    /// persist nothing, is no groups.
+    fn load_layout(&self, _project_path: &Path) -> SidebarLayout {
+        SidebarLayout::default()
+    }
+
+    /// Persist a project's sidebar layout. The default, for stores that persist nothing, keeps
+    /// nothing and succeeds.
+    fn save_layout(&self, _project_path: &Path, _layout: &SidebarLayout) -> io::Result<()> {
         Ok(())
     }
 
@@ -1125,6 +1138,35 @@ impl JsonFileStore {
         write_atomic(&path, &file.to_json())
     }
 
+    /// A project's sidebar layout file (feature 1786): `layouts/<project id>.json` beside `runs/`.
+    /// `pub` so tests can find it.
+    pub fn layouts_path(&self, project_path: &Path) -> PathBuf {
+        let dir = match self.path.parent() {
+            Some(parent) => parent.join("layouts"),
+            None => PathBuf::from("layouts"),
+        };
+        dir.join(format!("{}.json", project_id(project_path)))
+    }
+
+    /// Load a project's sidebar layout (feature 1786, C7). Never fails: a missing file is no
+    /// groups; an unparseable or other-version one is kept aside as `<name>.corrupt` and no groups
+    /// load (FR-018).
+    pub fn load_layout(&self, project_path: &Path) -> SidebarLayout {
+        read_or_quarantine(
+            &self.layouts_path(project_path),
+            SidebarLayout::try_from_json,
+        )
+    }
+
+    /// Write a project's sidebar layout atomically (temp file, then rename).
+    pub fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
+        let path = self.layouts_path(project_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_atomic(&path, &layout.to_json())
+    }
+
     /// Delete a project's runs file (feature 483, W5). An already-absent file is success.
     pub fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
         match std::fs::remove_file(self.runs_path(project_path)) {
@@ -1331,6 +1373,14 @@ impl ProjectStore for JsonFileStore {
 
     fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
         JsonFileStore::remove_runs(self, project_path)
+    }
+
+    fn load_layout(&self, project_path: &Path) -> SidebarLayout {
+        JsonFileStore::load_layout(self, project_path)
+    }
+
+    fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
+        JsonFileStore::save_layout(self, project_path, layout)
     }
 
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
@@ -1631,6 +1681,8 @@ struct FakeStoreState {
     reviews: BTreeMap<PathBuf, ReviewFile>,
     /// Run groups per project, as `save_runs` left them.
     runs: BTreeMap<PathBuf, RunsFile>,
+    /// Sidebar layouts per project, as `save_layout` left them (feature 1786).
+    layouts: BTreeMap<PathBuf, SidebarLayout>,
 }
 
 impl FakeProjectStore {
@@ -1798,6 +1850,25 @@ impl ProjectStore for FakeProjectStore {
             .expect("fake lock")
             .runs
             .remove(project_path);
+        Ok(())
+    }
+
+    fn load_layout(&self, project_path: &Path) -> SidebarLayout {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .get(project_path)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .insert(project_path.to_path_buf(), layout.clone());
         Ok(())
     }
 }

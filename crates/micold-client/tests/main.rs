@@ -228,6 +228,7 @@ mod showcase_isolation;
 mod showcase_state;
 mod showcase_tab;
 mod sidebar_attention;
+mod sidebar_layout_store;
 mod sidebar_spawn_tree;
 mod sidebar_state;
 mod sidebar_state_icon;

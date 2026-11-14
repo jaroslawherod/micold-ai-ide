@@ -1,0 +1,452 @@
+//! The sidebar's user groups (feature 1786, data-model.md): which groups a project has, in which
+//! order, which worktrees and run groups each holds, and the order of the ungrouped rest.
+//!
+//! Render-free and pure: the client applies a [`SidebarLayout`] to its stable-order rows (feature
+//! 1718) and calls the operations here; the store keeps one per project in
+//! `layouts/<project id>.json` ([`crate::store::JsonFileStore::save_layout`]).
+//!
+//! Invariants (contract C1): an item is in exactly one list, either one group's `items` or
+//! `ungrouped`; the project root (Default) is never an item, and [`LayoutItem`] has no variant for
+//! it (FR-015); group names are trimmed, non-blank and unique case-insensitively (FR-004). No field
+//! names a session or card state, so no state can move a row (FR-013).
+//!
+//! The run-group state of feature 483 is a different thing and lives in
+//! [`crate::sidebar_groups`]; this module never reads it.
+
+use std::collections::HashSet;
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
+use crate::runs::GroupId;
+
+/// The only layout version this build writes and reads; any other loads as no groups (FR-018).
+pub const LAYOUT_VERSION: u32 = 1;
+
+/// A user group's identity: monotonic per layout and never reused, so a stale reference cannot
+/// name a newer group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct UserGroupId(pub u64);
+
+/// One sidebar row the layout can place: a worktree by its directory name, or a run group, which
+/// moves as one unit with its runs (FR-016). Default has no variant (FR-015).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LayoutItem {
+    /// A worktree row, by `dir_name` (research R2).
+    Worktree(String),
+    /// A run group's row (feature 483), by its id.
+    Run(GroupId),
+}
+
+/// A group the user created (data-model.md § UserGroup).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserGroup {
+    /// Never reused within a layout.
+    pub id: UserGroupId,
+    /// Trimmed, non-blank, unique case-insensitively (FR-004).
+    pub name: String,
+    /// Whether its rows are hidden under the header (FR-011).
+    #[serde(default)]
+    pub collapsed: bool,
+    /// Its members, in display order.
+    #[serde(default)]
+    pub items: Vec<LayoutItem>,
+}
+
+/// Where a dragged item or group lands (contract C3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropTarget {
+    /// Into a group's items at `index`.
+    Group {
+        /// The group.
+        id: UserGroupId,
+        /// Position among its items.
+        index: usize,
+    },
+    /// Into the ungrouped list at `index`.
+    Ungrouped {
+        /// Position among the ungrouped items.
+        index: usize,
+    },
+    /// Between group headers, for a dragged group: its new position among the groups.
+    GroupSlot {
+        /// Position among the groups.
+        index: usize,
+    },
+}
+
+/// Why an operation was refused; the layout is unchanged whenever one is returned (contract C2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutError {
+    /// The name is empty or only whitespace.
+    Blank,
+    /// Another group already has this name, compared trimmed and case-insensitively.
+    Duplicate,
+    /// No group has this id.
+    UnknownGroup,
+    /// The item is in no list.
+    UnknownItem,
+    /// The project root was offered as an item.
+    IsDefault,
+}
+
+impl fmt::Display for LayoutError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            LayoutError::Blank => "A group needs a name",
+            LayoutError::Duplicate => "A group with this name already exists",
+            LayoutError::UnknownGroup => "That group no longer exists",
+            LayoutError::UnknownItem => "That row is no longer in the sidebar",
+            LayoutError::IsDefault => "The project root cannot be put in a group",
+        })
+    }
+}
+
+impl std::error::Error for LayoutError {}
+
+/// Why stored text is not a layout this build reads: the store keeps such a file aside as
+/// `.corrupt` (FR-018), and [`SidebarLayout::from_json`] loads it as no groups.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutParseError(pub String);
+
+/// One project's sidebar layout (data-model.md § SidebarLayout).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SidebarLayout {
+    /// [`LAYOUT_VERSION`] when written by this build.
+    pub version: u32,
+    /// The id the next created group gets; only ever grows, so ids are never reused.
+    #[serde(default)]
+    pub next_id: u64,
+    /// The groups, in display order (FR-019).
+    #[serde(default)]
+    pub groups: Vec<UserGroup>,
+    /// The ungrouped items, in their saved order.
+    #[serde(default)]
+    pub ungrouped: Vec<LayoutItem>,
+}
+
+impl Default for SidebarLayout {
+    fn default() -> Self {
+        Self {
+            version: LAYOUT_VERSION,
+            next_id: 0,
+            groups: Vec::new(),
+            ungrouped: Vec::new(),
+        }
+    }
+}
+
+impl SidebarLayout {
+    /// The layout's JSON text.
+    pub fn to_json(&self) -> String {
+        let stored = SidebarLayout {
+            version: LAYOUT_VERSION,
+            ..self.clone()
+        };
+        serde_json::to_string_pretty(&stored).expect("a sidebar layout always serialises")
+    }
+
+    /// Parse stored text; an error for anything unparseable or of another version.
+    pub fn try_from_json(text: &str) -> Result<Self, LayoutParseError> {
+        let layout: SidebarLayout =
+            serde_json::from_str(text).map_err(|err| LayoutParseError(err.to_string()))?;
+        if layout.version != LAYOUT_VERSION {
+            return Err(LayoutParseError(format!(
+                "layout version {} is not {LAYOUT_VERSION}",
+                layout.version
+            )));
+        }
+        Ok(layout)
+    }
+
+    /// Parse stored text, never failing: anything [`Self::try_from_json`] refuses is no groups
+    /// (FR-018).
+    pub fn from_json(text: &str) -> Self {
+        Self::try_from_json(text).unwrap_or_default()
+    }
+
+    /// Whether the layout holds no group and no saved order, so applying it changes nothing.
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty() && self.ungrouped.is_empty()
+    }
+
+    /// Fit the layout to the rows the sidebar lists now, `live` in stable order (feature 1718):
+    /// drop every item not in `live`, keep an item named twice only where it is first met (groups
+    /// in order, then `ungrouped`), and append every live item the layout does not hold to
+    /// `ungrouped`, in live order (contract C1, FR-005, FR-018).
+    pub fn reconcile(&mut self, live: &[LayoutItem]) {
+        let listed: HashSet<&LayoutItem> = live.iter().collect();
+        let mut placed: HashSet<LayoutItem> = HashSet::new();
+        let mut keep = |item: &LayoutItem| listed.contains(item) && placed.insert(item.clone());
+        for group in &mut self.groups {
+            group.items.retain(&mut keep);
+        }
+        self.ungrouped.retain(&mut keep);
+        for item in live {
+            if keep(item) {
+                self.ungrouped.push(item.clone());
+            }
+        }
+    }
+
+    /// The group with `id`.
+    pub fn group(&self, id: UserGroupId) -> Option<&UserGroup> {
+        self.groups.iter().find(|group| group.id == id)
+    }
+
+    /// Create an empty group named `name`, trimmed, after the existing groups (FR-001, FR-004).
+    pub fn create(&mut self, name: &str) -> Result<UserGroupId, LayoutError> {
+        let name = self.valid_name(name, None)?;
+        let next = self
+            .groups
+            .iter()
+            .map(|group| group.id.0 + 1)
+            .max()
+            .unwrap_or(0)
+            .max(self.next_id);
+        let id = UserGroupId(next);
+        self.next_id = next + 1;
+        self.groups.push(UserGroup {
+            id,
+            name,
+            collapsed: false,
+            items: Vec::new(),
+        });
+        Ok(id)
+    }
+
+    /// `name` trimmed, or why it cannot name a group: blank, or already the name of a group other
+    /// than `except` (FR-004).
+    fn valid_name(&self, name: &str, except: Option<UserGroupId>) -> Result<String, LayoutError> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(LayoutError::Blank);
+        }
+        let folded = name.to_lowercase();
+        let taken = self
+            .groups
+            .iter()
+            .any(|group| Some(group.id) != except && group.name.trim().to_lowercase() == folded);
+        if taken {
+            return Err(LayoutError::Duplicate);
+        }
+        Ok(name.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn worktree(name: &str) -> LayoutItem {
+        LayoutItem::Worktree(name.to_string())
+    }
+
+    fn group(id: u64, name: &str, items: Vec<LayoutItem>) -> UserGroup {
+        UserGroup {
+            id: UserGroupId(id),
+            name: name.to_string(),
+            collapsed: false,
+            items,
+        }
+    }
+
+    fn sample() -> SidebarLayout {
+        SidebarLayout {
+            version: LAYOUT_VERSION,
+            next_id: 3,
+            groups: vec![
+                UserGroup {
+                    collapsed: true,
+                    ..group(
+                        1,
+                        "Work",
+                        vec![
+                            worktree("feat-a"),
+                            LayoutItem::Run(GroupId(Uuid::from_u128(7))),
+                        ],
+                    )
+                },
+                group(2, "Later", vec![]),
+            ],
+            ungrouped: vec![worktree("fix-b")],
+        }
+    }
+
+    #[test]
+    fn a_layout_survives_its_own_json() {
+        let layout = sample();
+        assert_eq!(
+            SidebarLayout::try_from_json(&layout.to_json()),
+            Ok(layout),
+            "groups, order, members and collapsed state all come back from the file (FR-012)"
+        );
+    }
+
+    #[test]
+    fn missing_unparseable_older_or_newer_text_loads_as_no_groups() {
+        let older = r#"{ "version": 0, "groups": [{ "id": 1, "name": "Old" }], "ungrouped": [] }"#;
+        let newer = r#"{ "version": 2, "groups": [{ "id": 1, "name": "New" }], "ungrouped": [] }"#;
+        for text in ["", "{ not json", r#"{ "groups": [] }"#, older, newer] {
+            assert!(
+                SidebarLayout::try_from_json(text).is_err(),
+                "{text:?} is not a layout this build reads, so the store keeps it aside"
+            );
+            assert_eq!(
+                SidebarLayout::from_json(text),
+                SidebarLayout::default(),
+                "{text:?} loads as no groups, without an error (FR-018)"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stored_item_of_no_known_kind_such_as_default_loads_as_no_groups() {
+        let text = r#"{ "version": 1, "groups": [{ "id": 1, "name": "W", "items": [{ "Default": null }] }], "ungrouped": [] }"#;
+        assert_eq!(
+            SidebarLayout::from_json(text),
+            SidebarLayout::default(),
+            "the project root is never an item, so a file naming it is not one this build wrote (FR-015)"
+        );
+    }
+
+    #[test]
+    fn reconcile_drops_items_no_longer_listed() {
+        let mut layout = sample();
+        layout.reconcile(&[worktree("feat-a")]);
+        assert_eq!(
+            layout.groups[0].items,
+            vec![worktree("feat-a")],
+            "the vanished run group leaves its group"
+        );
+        assert!(
+            layout.ungrouped.is_empty(),
+            "the vanished worktree leaves the ungrouped list (FR-018)"
+        );
+        assert_eq!(layout.groups.len(), 2, "an emptied group stays");
+    }
+
+    #[test]
+    fn reconcile_keeps_an_item_named_twice_in_the_first_group_only() {
+        let mut layout = SidebarLayout {
+            groups: vec![
+                group(1, "A", vec![worktree("x")]),
+                group(2, "B", vec![worktree("x"), worktree("y")]),
+            ],
+            ungrouped: vec![worktree("y")],
+            next_id: 3,
+            ..SidebarLayout::default()
+        };
+        layout.reconcile(&[worktree("x"), worktree("y")]);
+        assert_eq!(
+            layout.groups[0].items,
+            vec![worktree("x")],
+            "first group (group order) keeps it"
+        );
+        assert_eq!(
+            layout.groups[1].items,
+            vec![worktree("y")],
+            "the later copy is dropped (C1)"
+        );
+        assert!(
+            layout.ungrouped.is_empty(),
+            "an item already in a group is not also ungrouped"
+        );
+    }
+
+    #[test]
+    fn reconcile_appends_unknown_live_items_to_ungrouped_in_live_order() {
+        let mut layout = sample();
+        let run = LayoutItem::Run(GroupId(Uuid::from_u128(7)));
+        layout.reconcile(&[
+            worktree("new-2"),
+            worktree("feat-a"),
+            run.clone(),
+            worktree("fix-b"),
+            worktree("new-1"),
+        ]);
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("fix-b"), worktree("new-2"), worktree("new-1")],
+            "saved order first, then the rows the layout did not know, in stable order (C1)"
+        );
+        assert_eq!(
+            layout.groups[0].items,
+            vec![worktree("feat-a"), run],
+            "grouped rows stay put"
+        );
+    }
+
+    #[test]
+    fn create_trims_the_name_and_adds_an_empty_group_last() {
+        let mut layout = sample();
+        let id = layout
+            .create("  Review  ")
+            .expect("a fresh name is accepted");
+        let created = layout.groups.last().expect("a group was added");
+        assert_eq!(created.id, id);
+        assert_eq!(
+            created.name, "Review",
+            "the stored name is trimmed (FR-004)"
+        );
+        assert!(
+            created.items.is_empty() && !created.collapsed,
+            "a new group holds nothing and is open"
+        );
+    }
+
+    #[test]
+    fn created_ids_grow_and_are_never_reused() {
+        let mut layout = SidebarLayout::default();
+        let first = layout.create("One").expect("accepted");
+        let second = layout.create("Two").expect("accepted");
+        assert!(second > first, "ids grow");
+        layout.groups.retain(|g| g.id != second);
+        let third = layout.create("Three").expect("accepted");
+        assert!(
+            third > second,
+            "the id of a removed group is not handed out again"
+        );
+        let reloaded = SidebarLayout::from_json(&layout.to_json());
+        let mut reloaded = reloaded;
+        assert!(
+            reloaded.create("Four").expect("accepted") > third,
+            "the counter survives a restart"
+        );
+    }
+
+    #[test]
+    fn create_refuses_a_blank_name_and_changes_nothing() {
+        for name in ["", "   ", "\t\n"] {
+            let mut layout = sample();
+            assert_eq!(
+                layout.create(name),
+                Err(LayoutError::Blank),
+                "{name:?} is blank (FR-004)"
+            );
+            assert_eq!(
+                layout,
+                sample(),
+                "a refused create leaves the layout as it was (C2)"
+            );
+        }
+    }
+
+    #[test]
+    fn create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing() {
+        for name in ["Work", "work", "  WORK "] {
+            let mut layout = sample();
+            assert_eq!(
+                layout.create(name),
+                Err(LayoutError::Duplicate),
+                "{name:?} names \"Work\" again"
+            );
+            assert_eq!(
+                layout,
+                sample(),
+                "a refused create leaves the layout as it was (C2)"
+            );
+        }
+    }
+}

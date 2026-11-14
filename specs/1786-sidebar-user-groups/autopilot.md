@@ -8,22 +8,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1786
-- **Worktree branch**: feat/1786_feat-sidebar-let-the-user-create-groups
+- **Worktree branch**: claude/project-thread-krubw0
 - **Started**: 2026-11-11
-- **Phase**: tasks
-- **Next step**: wait for design PR #1848 to merge, then milestone M1
+- **Phase**: implement
+- **Next step**: milestone M1 (implement, verify, PR)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1848 | Design | open | … |
+| #1848 | Design | merged 2026-11-12 | 553474089e559f95557125168150c3a3abfdcc95 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T044 | full | Layout core, store, create a group | #… | pending |
+| M1 | T001–T017, T044 | full | Layout core, store, create a group | #… | in progress |
 | M2 | T018–T023 | full | Rename and delete a group | #… | pending |
 | M3 | T024–T028 | full | Move to group from the menu | #… | pending |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
