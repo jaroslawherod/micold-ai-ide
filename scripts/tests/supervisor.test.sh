@@ -242,9 +242,12 @@ check "skill notes a disjoint treatment for none" 0 'disjoint' grep -n -i 'treat
 
 # --- T022: small context (US5, FR-007, FR-010, SC-004) -----------------------------------------
 check "context: run-status.sh is named exactly once" 0 '^1$' bash -c 'grep -o "run-status\.sh" "$0" | wc -l | tr -d " "' "$SKILL"
-check "context: every run-status.sh read is --json" 0 '^0$' bash -c 'grep -o "run-status\.sh[^ ]*" "$0" | grep -vc -- "^run-status\.sh$" ; true' "$SKILL"
+check "context: every line naming run-status.sh has --json" 0 '^0$' bash -c 'grep "run-status\.sh" "$0" | grep -vc -- "--json"; true' "$SKILL"
 check "context: the one read is --json, per row of the mapping step" 0 'run-status.sh --json <dir>' bash -c 'awk "/^## Restart/,/^## Report/" "$0" | grep -n "run-status.sh --json <dir>"' "$SKILL"
-check "context: a read is written to a file, not into the context" 0 'j.json' grep -n 'run-status.sh --json <dir> > <scratch>/j.json' "$SKILL"
+check "context: a read is written to one file per issue" 0 '<scratch>/<n>.json' grep -n 'run-status.sh --json <dir> > <scratch>/<n>.json' "$SKILL"
+check "context: the report reads that issue's file, not run-status again" 0 '<scratch>/<n>.json' bash -c 'awk "/^## Report/,/^## Watcher/" "$0" | grep -n "<scratch>/<n>.json"' "$SKILL"
+check "context: the advance loop runs Report" 0 'Report' bash -c 'awk "/^## Advance loop/,/^## Restart/" "$0" | grep -n "\*Report\*"' "$SKILL"
+check "context: the watcher wake runs Report" 0 'Report' bash -c 'awk "/^## Watcher/,0" "$0" | grep -n "\*Report\*"' "$SKILL"
 check "context: no transcript or session output read is instructed" 1 '^$' grep -n -i 'read_session_output\|get_session_output\|session transcript.*read\|tail.*session' "$SKILL"
 check "context: the skill says never to read a transcript" 0 'never read a session' grep -n -i 'never read a session' "$SKILL"
 check "context: the ledger is read only through ledger table" 0 'only through `supervisor.sh ledger table`' grep -nF 'only through `supervisor.sh ledger table`' "$SKILL"

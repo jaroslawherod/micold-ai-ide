@@ -62,6 +62,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 1 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | CHANGES: 2 MAJOR (CRLF, globs), fixed; MINOR bullet key fixed |
 | Review B M3 | 1 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | CLEAN (MINOR flow-label note added to SKILL.md) |
 | Review A M3 | 2 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | 5433ce69c700d2689d8ce9926656b0d93aaa1af0:b3feeb311945de92fbe0cf6cfd91c22104879d6b | CLEAN (scoped, sonnet; 3 round-1 findings verified fixed, 1 MINOR empty Touches line, optional) |
+| Review A M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 2 MAJOR (Report never run by the advance, one j.json per run), 2 MINOR (vacuous --json case, drift note), fixed |
+| Review B M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 1 MAJOR (unplanned supervisor.sh, drift-M4.md), 3 MINOR (red run, vacuous case, MISSING note), fixed |
 
 ## Red runs
 
@@ -76,6 +78,8 @@ M3 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 
 M4 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 175 case(s), 2 failure(s)`.
 - T022 skill-text cases: `skill says never to read a transcript` and `the report does not read the session` fail with grep exit 1 (the phrases are absent or split over two lines in SKILL.md). The `run-status.sh` count, `ledger table` and slot-agreement cases already hold from M1-M3.
+- Empty-`Touches:` case (M3 MINOR, fixed in `supervisor.sh` in M4; unplanned, see `drift-M4.md`): before the fix `touches` on `Touches:` then `Touches: crates/z` printed `-` / `none` (exit 0, want `crates/z`).
+- Review A M4 r1 tests (before the fix, 179 cases, 4 failures): `a read is written to one file per issue`, `the report reads that issue's file`, `the advance loop runs Report`, `the watcher wake runs Report` (grep exit 1). The vacuous `--json` case was replaced by a line-based one that holds.
 
 ## Declined review findings
 
