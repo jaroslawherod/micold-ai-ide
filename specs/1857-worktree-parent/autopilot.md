@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-isaz3e
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: merge (CI)
+- **Next step**: review round 2 (orchestrator), then merge (CI)
 
 ## Pull requests
 
@@ -56,6 +56,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 1 | M1b | 7318d57 | (code-review skill, high, no subagent tool) | 7 findings: list_resumable_sessions and list_branches scoped, scope computed in the blocking closure, redundant retain removed, `Scope::unrestricted()`, list_branches test added; 2 declined |
 | B | 1 | M1b | f8a65aedc8a930ce6de6b90bf29bc8e2b6c8c5b7 | 091e3648b65b331889996323fab008ad31a1ba0d:9949424349adb1a57a7b6ce87a8d75e9634a9bb8 | CHANGES (F1-F4): all fixed (cycle-log red runs, drift-M1b.md, relay test states coverage, Scope::explain with red-first tests); round 2 to run by orchestrator |
 | B | 2 | M1b | 24e28dc124ca0b39051ae6b826275be5f3d80fb7 | 2b7105f8e940df91f685cfc09e6da5c31dfa8fce:24e28dc124ca0b39051ae6b826275be5f3d80fb7 | CLEAN (round 2 sonnet on fix diff; worktree_parent 22 passed; 2 MINOR) |
+| A | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F6): F1 `ref` not `name`, F2 orphan scan on unfiltered list, F3 `--check` takes ref or path, F4 exit 2 on empty or bad rows, F5 8-column ledger refuses Parent, F6 relay text; all fixed test first (cycle-log M3); round 2 to run by orchestrator |
+| B | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F4): F1 cycle-log M3 section with red runs, F2 = A F6, F3 T026 reworded to comments, F4 drift-M3.md; all fixed; round 2 to run by orchestrator |
 
 ## Declined review findings
 
@@ -72,7 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 (PR #1917) is implemented, gated by the shell suites and pushed. Reviews A and B are still owed: this unit has no Agent tool, so it could not dispatch a fresh-context reviewer. Next: dispatch Review A (high) and B (sonnet) on origin/main...HEAD, snapshot e28d2b573d7886379964e81963e6a7eba5c74673:74d639c67b6c0105e0c31269c83d3d7c72450938, fix findings, record rounds, then drop the "reviews not run" line from the PR body. autopilot.test.sh: 1 FAIL on this branch (facts: 50-file diff), 7 FAIL on origin/main (facts cases); all in review-facts, none touched by this Rust-free diff; environment git push negotiation errors in the sandbox.
+None.
 
 ## Open escalation
 
