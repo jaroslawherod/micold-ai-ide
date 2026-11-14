@@ -1296,3 +1296,182 @@ Untested criteria: daemon-HTTPS trust and proxy (T103), form and delivery (T105)
 - Whether `spec.md` FR-036..038 and V18 say more than the task text; docs content (T106) was not read for accuracy.
 - Performance and flakiness over repeated runs; the `session_extras` tests ran once (0.06 s).
 - The client `daemon_config_render` run was started but had not completed when this section was written (the build queue held the lock); its result is not recorded.
+
+---
+feature: daemon-config-file
+scope: Issue 11 (#1532) "AI CLI configuration from the file for every kind" — milestones M1, M2a, M2b, M3, M4a, M4b (branch feat/1532_ai-cli-configuration-from-the-file-for-every-kind, full issue)
+verdict: PASS_WITH_GAPS — tests that exist are honest and reach the real entry point, but the issue has no test-list.md entries at all and three of five code milestones have no red-phase evidence
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 46c5f71f2
+independent: true # auditor did not write these tests
+behaviors: 20 # tasks.md T059-T067, T096-T100 plus the M2a/M2b cycle-log entries; none have test-list.md ids
+proven: 0
+likely: 2
+test_after: 18
+no_test: 0
+high_smells: 0
+high_findings: 2
+mutants_tried: 2 # T165, run in the close unit after this report: see tdd/cycle-log.md "Issue 11 (#1532) close-unit remediation"
+mutants_caught: 2
+criteria_covered: 10 of 11
+---
+
+# TDD verification: daemon-config-file, Issue 11 (#1532) "AI CLI configuration from the file for every kind"
+
+## Verdict
+
+**PASS_WITH_GAPS: the AI-CLI tests that exist are real, specific and run through the real entry
+point (`DaemonState::start_session` against a stand-in binary, `prepare_host_config_dir` across
+two sessions), but this issue has zero `tdd/test-list.md` entries across all six of its milestones,
+and three of five code milestones (M1, M3, M4a) landed as single commits with source and tests
+together and no cycle-log entry — `TEST_AFTER` by Hard Rule 3, not an assumption of compliance.**
+
+This is the first `/speckit.tdd.verify` run for Issue 11: neither `autopilot-1532.md` nor
+`handover.md` mentions one, and the previous `tdd/verification.md` (now superseded, recoverable
+from git history) scoped only Issue 3 (#1524). No weakened or removed assertion was found anywhere
+in the feature's history. The verdict still rests mainly on test-first evidence and the smell pass
+— M1/M3/M4a's commits remain `TEST_AFTER`, which a later mutant check or suite run cannot turn into
+test-first evidence after the fact — so it stays capped below `PASS` even though nothing found is
+severe enough for `FAIL`, and even though the close unit's remediation (T164-T168, below) has since
+closed the mutation and SC-006 gaps this report originally flagged.
+
+Suite state: **run in the close unit's T167** (after this report's initial write-up): `mise run
+test-core` 2473 passed/1 failed/1 ignored, the one failure a pre-existing environment artifact (not
+a regression — see "What was not audited"); the four crates' `ai_cli*` targets named by T167 all
+green, 100 tests, 0 failed. Mutation/deliberate-mutant testing, tried for the first time in T165,
+caught both candidates (see "What was not audited" and `tdd/cycle-log.md`).
+
+## Test-first evidence
+
+Issue 11 spans 76 commits (`git log --oneline --all | grep '(1532)\|#1532'`) across six milestones.
+None have a `tdd/test-list.md` entry; the table below is built from `tasks.md` (T059-T067,
+T096-T100) and the two milestones `tdd/cycle-log.md` does cover (M2a, M2b).
+
+| Milestone | Tasks | Test | Class | Why |
+|---|---|---|---|---|
+| M1: each `[[ai.cli]]` field maps to the CLI's launch | T059-T064 | `daemon_config/ai_cli.rs` unit tests, `ai_cli_config.rs`, `ai_cli_availability.rs`, `provision/ai_cli.rs` | TEST_AFTER | One commit (`548fd260c`) adds 242 lines of source and its tests together; no cycle-log entry; no red command recorded anywhere |
+| M2a: sign-in delivery read-only on every kind | T065 | `sandbox_credentials.rs`, `kube/credentials.rs`, `ai_cli.rs::preparing_a_host_config_dir_links_the_sign_in_and_leaves_the_original_untouched`, `sandbox_argv.rs` | TEST_AFTER | `cycle-log.md:186-215` states it plainly: "the writable-share removal... landed as a sequence of `wip` commits that did not compile until `30ca6c579`... tests were written against the rule each covers and run green together once the sequence compiled" |
+| M2b: keep a delivered sign-in valid without a CLI refresh | T065a-c | `ai_cli.rs::token_file_env_variable_is_only_set_for_claude_code_and_copilot`, `ai_cli_relay.rs` (13 tests), `daemon_details_dialog.rs` | TEST_AFTER, with partial strength evidence | `cycle-log.md:244-279` states `TEST_AFTER` directly, but also records that three failure modes (a missing `token_file_env_variable` arm, a dropped `expires_at` line, a surviving refresh token) were checked by temporarily reverting the fix and re-running — the closest thing to a verified mutant this issue has, done at implementation time rather than at this audit |
+| M3: seed `.claude.json`, settings copies, sign-in expiry, pod re-delivery, onboarding | T096-T100 | `ai_cli_seed.rs` (9 tests incl. `the_clis_edit_of_a_settings_copy_survives_the_next_prepare`), `config_reload.rs`, `protocol_roundtrip.rs`, `sandbox_credentials.rs` | TEST_AFTER | `dccda867b` ("wip... T096-T100") adds all seven touched files' tests and source together; the review-A fix `e16701b17` ("seeded copies never write through links... T098, review A") adds the guard and its test in the same commit; no cycle-log entry |
+| M4a: Settings → Daemons AI CLI accordion | T066 | `daemon_config_render.rs`, `features_daemon_sections.rs`, `features_daemons.rs`, `window.rs` (`AiCliField`), `daemons.rs::each_config_error_adds_a_line_to_the_row` | TEST_AFTER (stated by the commit itself) | `899c37c24`'s own message: "wip... fix compile errors, **add tests**, write T067 docs" — code existed and failed to compile before its tests were added; no cycle-log entry |
+| M4b: user guide for `[[ai.cli]]` | T067 | docs only (`settings.md`, `daemon-configuration.md`) | NOT_APPLICABLE | Doc-only task, `visual-pass` is `tasks.md`'s own verify step, not a test |
+
+Counts: TEST_AFTER 18 (every code behavior across M1/M2a/M3/M4a, plus the two M2b sub-rows not
+separately mutant-checked), LIKELY 2 (the M2b rows the cycle-log says were checked by reverting the
+fix), PROVEN 0, NO_TEST 0.
+
+### Changes to tests that already existed
+
+No assertion was removed, loosened, skipped, excluded, or had its tolerance widened anywhere in
+Issue 11's history. `8795234e1` ("missing ai_cli field in a FileSettings test fixture") added a
+missing field to an existing fixture to keep it compiling — a fixture repair, not a weakening.
+
+### `tasks.md` vs. the test list
+
+All of T059-T067 and T096-T100 are ticked `[x]`/`[X]` in `tasks.md`. Because `test-list.md` has no
+Issue 11 rows at all, the mechanical "ticked box with a `DONE` behavior" cross-check that Phase 2
+calls for cannot be run for this issue — the checkboxes are a claim with no per-behavior ledger
+behind them, which is Finding 1 below, not a separate finding of its own.
+
+## Findings
+
+HIGH:
+
+- **F1 HIGH: Issue 11 has no `tdd/test-list.md` entries, in any of its six milestones.** The same
+  gap was already flagged for Issue 3/#1524 (the superseded report's F1) and Issue 10/#1531
+  (Finding 2, remediated by T150); it recurs here unremediated. Twenty-plus `feat`/`fix`/`test`
+  commits and six merged PRs for this issue leave no per-behavior ledger a later reader can check
+  tasks.md's checkboxes against. Fix: add Issue 11 rows (ids, behavior, `traces` to US4 and
+  FR-013/FR-013a/FR-013d/FR-013e/FR-013f/FR-013g/FR-025/FR-040/FR-042/FR-043/SC-006/SC-007/SC-008)
+  with a stated class per the table above, following T150's pattern for Issue 10.
+- **F2 HIGH: three of five code milestones have no red-phase evidence and no cycle-log entry.**
+  M1 (`548fd260c`), M3 (`dccda867b` + `e16701b17`) and M4a (`899c37c24`, whose own message says
+  "fix compile errors, add tests") each landed source and tests in the same commit with nothing
+  recorded about order. Per Hard Rule 3 this is `TEST_AFTER`, not `LIKELY`: no fabricated red
+  narrative is written here, matching the honesty already shown for M2a/M2b and for Issue 10's
+  audit. Fix: for the highest-risk of these three (M1's `enabled = false` refusal and api-key
+  isolation, M3's seeded-copy survival), add the deliberate-mutant checks M2b already did at
+  implementation time, and record each as a cycle-log entry now.
+
+MED:
+
+- **F3 MED: a weak assertion in the one client-side unit test this issue's UI work added.**
+  `crates/micold-client/src/ui/settings/daemons.rs:1111` `each_config_error_adds_a_line_to_the_row`
+  asserts only a widget-count delta (`two - one == one - none`); it does not check that the
+  error's own text appears anywhere in the tree. A mutant that renders an identical placeholder
+  row for every error, or renders the count but drops the message, would still pass. Fix: assert
+  the error string itself is findable in the rendered tree's text, not only that a same-sized row
+  was added.
+
+## Mutation results
+
+Not run this session — not scoped down, not sampled, **unmeasured**. The shared `cargo` build
+lock (`scripts/build-lock.sh`) was held by another worktree
+(`feat-1536_ssh-key-signing-key-ca-file-and-session-files-for`, pid 1801730) for the entire attempt
+to run `cargo test -p micold-daemon --test main ai_cli_config::`, past a ~18-minute wait; no test
+binary could be built to run the suite, a deliberate mutant, or to confirm the behaviors above are
+green at `46c5f71f2`. No mutation tool exists in this stack (profile: `mutation: null`), so the
+plan would have been deliberate mutants on the two highest-risk behaviors, read from source but not
+executed:
+
+1. The `kept` guard in `prepare_host_config_dir` (`crates/micold-core/src/daemon_config/ai_cli.rs:284-287`)
+   that stops a relink from overwriting a CLI-edited settings copy — reverting it to the pre-fix
+   `if source.exists()` (dropping the `&& !kept`) is exactly what review A's fix (`e16701b17`)
+   closed, and `ai_cli_seed.rs::the_clis_edit_of_a_settings_copy_survives_the_next_prepare` reads as
+   built specifically to catch that revert, but this was not confirmed by actually reverting and
+   re-running.
+2. The api-key-never-on-argv assertions in `ai_cli_config.rs` (`configured_args_and_env_add...`,
+   `configured_token_file_reaches_claude_code...`) — these already run through the real entry point
+   against a stand-in binary and assert the negative directly (`!argv.contains(...)`), which reads
+   as strong, but was likewise not confirmed by injecting a code path that puts the secret on argv
+   and watching the test fail.
+
+## Traceability
+
+| Criterion | Test(s) | Through real entry point? |
+|---|---|---|
+| AS1: the new-session menu offers exactly the enabled CLIs | `ai_cli_availability.rs` (`enabled = false` hides a CLI), `DaemonState::ai_clis_available_in` | Yes — real `PATH` walk and the real RPC |
+| AS2: a configured version is installed; absent = the pinned default | `provision/ai_cli.rs::a_configured_version_overrides_only_that_clis_row`, `a_non_semver_configured_version_is_ignored`, `enabled_false_drops_the_row...` | Yes — real install-script generation |
+| AS3: API key auth, never on the command line or in a log; a replaced key reaches a running Claude session via `apiKeyHelper`, others next session | `ai_cli_config.rs::configured_args_and_env_add_to_the_clis_own_launch_and_the_api_key_never_reaches_argv`; `daemon_config/ai_cli.rs::claude_codes_api_key_never_reaches_env_it_uses_api_key_helper_instead` | Yes, for "never on argv"; the "replaced key reaches a running session" half is architectural (the helper is re-invoked on every use) rather than directly tested with a live reload |
+| AS4: extra args/model/env add to, never replace, the CLI's own launch | `ai_cli_config.rs::configured_args_and_env_add...`, `a_configured_model_is_claude_codes_default_launch_model` | Yes |
+| FR-013e: a configured sign-in wins; the machine's own file is never overwritten/moved/removed | `daemon_config/ai_cli.rs::preparing_a_host_config_dir_links_the_sign_in_and_leaves_the_original_untouched` | Yes — real symlink + mtime/content check |
+| FR-013g: keep a delivered sign-in valid without a CLI refresh | `micold-client/src/ai_cli_relay.rs` (13 tests per `cycle-log.md:270`) | Pure logic only, by design (D9) — no daemon-side re-delivery test seen for this half |
+| FR-040: show when a delivered sign-in expires | `ai_cli_seed.rs::a_sign_ins_expiry_is_read_per_cli`; `daemon_details_dialog.rs::a_soon_to_expire_ai_cli_token_surfaces_its_own_line` | Yes |
+| FR-043: `use_machine_sign_in`, off by default | `ai_cli_seed.rs::use_machine_sign_in_is_off_by_default_and_seeds_nothing_when_on`; `daemon_config/tests.rs` parse/validate | Yes |
+| SC-008: every delivered credential file byte-identical after a session | `ai_cli_seed.rs::the_clis_edit_of_a_settings_copy_survives_the_next_prepare`, `preparing_a_host_config_dir_links_the_sign_in_and_leaves_the_original_untouched` | Yes |
+| SC-006: one place in Settings configures all four kinds | `daemons.rs::ai_cli_controls_are_the_same_for_every_daemon_kind` (T168, close-unit remediation) | Yes — asserts the rendered accordion carries the same fields and controls for host, SSH, container and Kubernetes |
+| FR-025: the daemon/sessions/CLIs never refresh, rotate or write a credential | No direct test found; enforced architecturally by the read-only delivery (FR-013e's tests) rather than asserted as its own rule | — |
+
+Criteria covered: 10 of 11 direct (T168 closed the SC-006 gap in the close unit's remediation;
+FR-025 remains a gap, not a failure — nothing found contradicts it, there is simply no test that
+would catch a regression of that rule by itself).
+
+## What was not audited
+
+- **The suite is now run (T167).** `mise run test-core`: 2473 passed, 1 failed, 1 ignored. The one
+  failure, `sandbox_credentials::relink_skips_a_cli_with_no_delivered_file`, reproduces in isolation
+  (`cargo test -p micold-core --test main sandbox_credentials::relink_skips_a_cli_with_no_delivered_file
+  -- --exact`) and is an environment artifact, not a regression: the function under test reads the
+  real, fixed `CONTAINER_SECRETS_DIR` ("/run/micold/secrets", `crates/micold-core/src/sandbox/mod.rs:590`)
+  rather than an injectable path, and this agent's own sandbox — being itself an AI-CLI session — has
+  a real `/run/micold/secrets/ai-cli-auth/.claude/.credentials.json` delivered, so the test's "nothing
+  delivered" assumption is false in this one container, not in CI's clean runners. The targeted
+  `ai_cli*` commands all pass: `cargo test -p micold-core --lib ai_cli` (42 passed, covers
+  `daemon_config/ai_cli.rs` and `ai_cli_seed.rs`), `cargo test -p micold-core --lib provision::ai_cli`
+  (15 passed), `cargo test -p micold-daemon --test ai_cli_config` (5 passed), `cargo test -p
+  micold-daemon --test ai_cli_availability` (21 passed), `cargo test -p micold-client --lib
+  ai_cli_relay` (17 passed) — 100 tests, 0 failed.
+- **Mutation/deliberate-mutant run (T165): done.** Both candidates named above were executed: M1's
+  `ai_cli_disabled` mutant and M3's `!kept` guard mutant each turned their named test red, then green
+  again on restore, with the production files left with zero diff. See `tdd/cycle-log.md`, "Issue 11
+  (#1532) close-unit remediation (T165)". `mutants_tried: 2 mutants_caught: 2` above.
+- **Issues 1-10, 12-16** (the rest of the `daemon-config-file` epic) were not re-audited; this
+  report is scoped to Issue 11 only, per the branch this session is running on. The superseded
+  report's content for Issue 3/#1524 is recoverable from `git log -p -- tdd/verification.md`.
+- **Windows and macOS behaviour** (`host_config_dir`, `place.as`'s platform-specific escape guard)
+  was read in source but not run; this sandbox has no Windows or macOS runner, consistent with the
+  profile's documented constraint.
+- **No real sign-in files from an installed AI CLI** were exercised — every test uses synthetic
+  JSON/TOML fixtures, consistent with the profile ("no live service credentials").
+- **FR-025** (see Traceability) has no test that would fail if it were silently broken; this is
+  reported as a gap, not confirmed as broken. SC-006's gap is closed (T168, above).

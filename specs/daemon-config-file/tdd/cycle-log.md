@@ -368,3 +368,28 @@ Reds are the mutants named in `tdd/verification.md`, "Remediation result (Issue 
   `a_key_path_with_a_space_stays_one_argument`, `the_ssh_command_needs_both_the_key_and_the_known_hosts`,
   `a_session_file_with_a_missing_source_or_a_bad_mode_is_reported`, `a_read_only_copy_already_there_is_replaced`,
   `a_secret_env_file_that_cannot_be_read_gives_no_proxy` (T155).
+
+## Issue 11 (#1532) close-unit remediation (T165): deliberate-mutant checks for M1 and M3
+
+`tdd/verification.md`'s Finding 2 (HIGH) asked for one deliberate-mutant check per milestone that
+landed source and tests together with no cycle-log entry (M1, M3, M4a); M1 and M3 are done here —
+M4a (`daemons.rs`) is covered by T166/T168's own strengthened assertions instead.
+
+- **M1** (`crates/micold-daemon/src/state.rs:1581`, `DaemonState::ai_cli_disabled`): reverted the
+  body to `let _ = which; false` (the "configuration never disables anything" mutant).
+  - red: `scripts/build-lock.sh cargo test -p micold-daemon --test ai_cli_config
+    a_disabled_cli_refuses_the_start_with_its_own_reason_not_not_on_path -- --exact` ->
+    `FAILED. 0 passed; 1 failed`; `scripts/build-lock.sh cargo test -p micold-daemon --test
+    ai_cli_availability a_cli_disabled_in_the_configuration_is_hidden_even_though_it_is_on_path --
+    --exact` -> `FAILED. 0 passed; 1 failed`. Both tests catch the mutant.
+  - restored the real body; green: both commands -> `ok. 1 passed; 0 failed` each.
+- **M3** (`crates/micold-core/src/daemon_config/ai_cli.rs:288`, the host-linked-extras relink
+  guard): dropped `&& !kept` from `if source.exists() && !kept`, so a seeded settings copy the CLI
+  has edited would be relinked over regardless.
+  - red: `scripts/build-lock.sh cargo test -p micold-core --lib
+    daemon_config::ai_cli_seed::tests::the_clis_edit_of_a_settings_copy_survives_the_next_prepare
+    -- --exact` -> `FAILED. 0 passed; 1 failed`. Caught.
+  - restored `&& !kept`; green: same command -> `ok. 1 passed; 0 failed`.
+
+Both reverts and restores were applied and confirmed with `git diff --stat` empty before and after
+each check; no production file carries any diff from this remediation.
