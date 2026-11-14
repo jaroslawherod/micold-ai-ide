@@ -139,3 +139,24 @@ Written at close from the merged tests (`TEST_AFTER`: no red run was recorded wh
 | I16-2a | A pod daemon's extras are keys of the startup secret and the rendered paths name its mount; a non-text source stops the start naming it | FR-036, FR-037, FR-038 | DONE |
 | I16-3a | An SSH host is sent the CA file and session files only; every extras path its file renders is one of the files sent | FR-037, FR-038 | DONE |
 | I16-2..I16-8 | The tdd-verify findings: the Settings mapping, session environment of C and K, the proxy and CA trust, the signed commit, the SSH command edges, the session-file edges (T151-T155) | FR-036, FR-037, FR-038 | DONE |
+
+## Test list: Issue 11 (#1532), milestones M1, M2a, M2b, M3, M4a
+
+TDD verification (`tdd/verification.md`, Finding 1) found all six of this issue's milestones missing from this file entirely; added after the fact, at close-unit audit — see the matching note in `cycle-log.md`. There is no genuine red-phase evidence for the M1/M3/M4a rows (`TEST_AFTER`); the two M2b rows marked `LIKELY` were checked at implementation time by reverting the fix and confirming each failed for the right reason (`cycle-log.md:244-279`), not at this audit.
+
+| ID | Behavior | Traces to | State |
+|---|---|---|---|
+| T059 | The new-session menu offers exactly the CLIs enabled for a daemon; `enabled = false` hides a CLI from `DaemonState::ai_clis_available_in` | US4, FR-013 | TEST_AFTER |
+| T060 | A configured version overrides only that CLI's row and is used for provisioning; an absent or non-semver version falls back to the build's pinned default | US4, FR-013 | TEST_AFTER |
+| T061 | A configured API key file never reaches argv or a log; Claude Code gets a replaced key via `apiKeyHelper` instead of env | US4, FR-013a | TEST_AFTER |
+| T062 | Configured extra launch arguments, model and environment add to the CLI's own launch, never replace or remove what the application passes | US4, FR-013 | TEST_AFTER |
+| T065 | Sign-in delivery is read-only on every kind: `prepare_host_config_dir` links a configured sign-in and leaves the machine's own sign-in file untouched, same rule enforced in the sandbox/Kubernetes credential paths | US4, FR-013e | TEST_AFTER |
+| T065a | `token_file` sets an env variable only for the CLIs that use one (Claude Code and Copilot), left unset for the others | US4, FR-013g | TEST_AFTER |
+| T065b | A delivered sign-in stays valid without a CLI refresh: `ai_cli_relay.rs`'s 13 tests, checked at implementation time by reverting the fix for a missing `token_file_env_variable` arm, a dropped `expires_at` line and a surviving refresh token | US4, FR-013g, FR-025 | LIKELY |
+| T065c | A soon-to-expire delivered AI CLI token surfaces its own line in the daemon details dialog | US4, FR-040 | LIKELY |
+| T096 | `.claude.json` and each CLI's settings files are seeded per kind from the configuration (`ai_cli_seed.rs`, 9 tests) | US4, FR-013 | TEST_AFTER |
+| T097 | The CLI's own edit to a seeded settings copy survives the next `prepare` call unoverwritten | US4, SC-008 | TEST_AFTER |
+| T098 | A sign-in's expiry is read per CLI and reflected before it lapses; seeded copies never write through a sign-in link (review-A fix, same commit as its test) | US4, FR-040 | TEST_AFTER |
+| T099 | `use_machine_sign_in` is off by default and seeds nothing when on, for the host/SSH kinds that have no configured sign-in | US4, FR-013e, FR-043 | TEST_AFTER |
+| T100 | A pod re-delivers its seeded configuration and credentials, and the protocol round-trips the same settings across a reload (`config_reload.rs`, `protocol_roundtrip.rs`, `sandbox_credentials.rs`) | US4, FR-013e, FR-025 | TEST_AFTER |
+| T066 | The Settings Daemons "AI CLI" accordion renders the same controls for host, SSH, container and Kubernetes kinds, and each config error adds its own line to the Daemons row | US4, SC-006, FR-013f | TEST_AFTER |
