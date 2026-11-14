@@ -8,23 +8,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1786
-- **Worktree branch**: claude/project-thread-krubw0
+- **Worktree branch**: claude/project-thread-1mosn7
 - **Started**: 2026-11-11
-- **Phase**: verify (M1 PR open)
-- **Next step**: wait on CI for #1905 and merge; then M2
+- **Phase**: milestones (M2)
+- **Next step**: implement M2 (T018–T023)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1848 | Design | merged 2026-11-12 | 553474089e559f95557125168150c3a3abfdcc95 |
-| #1905 | M1 | draft, CI pending | |
+| #1905 | M1 | merged 2026-11-14 | b479914eb6744a3691cd90d805b7547e24464392 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | PR open (draft) |
+| M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #… | pending |
 | M3 | T024–T028 | full | Move to group from the menu | #… | pending |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
