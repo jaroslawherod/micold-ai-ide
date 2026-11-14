@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-krubw0
 - **Started**: 2026-11-11
 - **Phase**: implement
-- **Next step**: milestone M1 (implement, verify, PR)
+- **Next step**: milestone M1 continues from *Handover* (T008, T011–T017, T044, then verify and PR)
 
 ## Pull requests
 
@@ -35,6 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D2 | implement M1 | Where is the layout applied? | In `State::sidebar_list` (the drawn list), not `sidebar_entries`: the Overview's cards walk `sidebar_entries` and must not lose a collapsed group's cards | agent-resolved | crates/micold-client/src/ui/overview.rs `cards` |
+| D3 | implement M1 | How are ids never reused across restarts? | A stored `next_id` counter in the layout file | agent-resolved | data-model.md § UserGroup `id` |
 
 ## Review rounds
 
@@ -56,8 +58,35 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 unit 1 (cloud thread, autopilot-unit dispatched from a cloud thread; the orchestrator fell back
+to nothing; no `mise`, no `gh`: cargo directly, GitHub through MCP) handed over at the context cap.
+Base: origin/main `fa0e41a7`; branch `claude/project-thread-krubw0`, two local commits, not pushed,
+no PR yet.
+
+- **Done (ticked)**: T001–T007, T009, T010. Core `micold-core/src/sidebar_layout.rs` (types,
+  `to_json`/`try_from_json`/`from_json`, `reconcile`, `create`, private `valid_name(name, except)`
+  ready for rename); store `layouts_path`/`load_layout`/`save_layout` on `JsonFileStore`,
+  `ProjectStore` defaults and `FakeProjectStore`; client `SidebarEntry::UserGroup(GroupHeaderNode
+  {id,name,collapsed,count})`, `sidebar::State.layouts: BTreeMap<PathBuf, SidebarLayout>`,
+  `State::sidebar_layout_loaded`, `State::sidebar_layout`, `layout_item`, `apply_layout`, applied in
+  `State::sidebar_list`. Evidence: `tdd/cycle-log.md` cycles 1–3.
+- **Next**: T008 (GroupHeader/DropMarker builders, `TypeRole::UserGroupHeader`), T011→T012
+  (`features/sidebar_group_actions.rs`; tests in new `tests/sidebar_group_actions.rs`, wire it as
+  `mod sidebar_group_actions;` in `tests/main.rs`, alphabetical), T013, T014, T015, T016, T017,
+  T044; then verify.md (review A, review B, visual pass), gate, PR.
+- **Open notes for the next unit**:
+  - `tests/root_state_is_shared.rs` has an interim `COMPONENT_LOCAL` pin for `sidebar.layouts`;
+    once a second module writes it (T012, or the shell's load on project entry) the test fails on
+    the stale pin: remove the entry then.
+  - `ui/sidebar.rs` `build_items` skips `SidebarEntry::UserGroup` (`=> continue`): T016 draws the
+    header there. `row_heights` counts a header as one one-line row; draw it at that height.
+  - The client tests are one executable (#1631): Verify commands are
+    `cargo test -p micold-client --test main <filter>`, not `--test sidebar_group_actions`.
+  - Nothing loads the layout from the store yet: the shell must call
+    `sidebar_layout_loaded(project, store.load_layout(project))` when a project is entered
+    (`Outcome::ProjectEntered`), and save after each committed operation (R9). Before saving, the
+    stored layout should be reconciled against the full (unfiltered) live list.
+  - T007's `reveal_ready` expand (U29) and header-as-stop (U28) are M5 on the test list.
 
 ## Open escalation
 
