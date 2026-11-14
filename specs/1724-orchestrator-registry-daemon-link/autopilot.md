@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: milestone M2
-- **Next step**: wait for M2 CI and merge, then M3
+- **Phase**: milestone M3
+- **Next step**: open the M3 PR (title/body in the scratchpad, pr-title-m3.md, pr-body-m3.md) and merge on green
 
 ## Pull requests
 
@@ -19,15 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
-| #1871 | M2 | open | |
+| #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
-| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | in review |
-| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
+| M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
+| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | pending open | reviews clean, gate run |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
@@ -63,6 +63,10 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | 1849 | dc4be4463cf3af17723b84edf3f7f83fce9f37ce | c2dde15b7b31e2f5255141b5a33838fd770ea022:dc4be4463cf3af17723b84edf3f7f83fce9f37ce | CLEAN: Verify 37+11 pass; MINOR drift note added |
 | Review A | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: 3 MINOR (send timeout, ignore-arm tests are guards, ping-reset assertion) not fixed |
 | Review B | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: F1 MAJOR (no red for T017-T022) declined, gap recorded in cycle-log, T022 waiver in drift-M2; heartbeat 4 pass; plan-drift clean; cadence note added |
+| Review A | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CLEAN: fixed F1 (Hello's version recorded), F2 (live-link and silent-link wire tests) |
+| Review B | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CHANGES: fixed F1 MAJOR (drift-M3.md), F2 (wire test), F3 (T027 text); round 2 pending on e606147c |
+| Review A | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN (declined MINOR: close the silent link right after the offline wait; FR-006 says the mismatched claim closes it) |
+| Review B | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN: F1-F3 fixed, no plan drift for M3, Verify 9 passed |
 
 ## Declined review findings
 
@@ -73,23 +77,19 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | M2 | Review A 1 | F4 snapshots discarded; F6 no dialer answers LinkPing | Saver lands in M5; the dialer is outside #1724 |
 | M2 | Review B 1 | F1 retroactive red; F2 vacuous arm tests | Already recorded in cycle-log and drift-M2; the heartbeat behaviours are covered by non-vacuous tests (two failed and were fixed in this round) |
 | tasks | analyze | F10 split T014/T010; F14 move T041 to M1; F16 dup note | Each task is one coherent file pair; the no-outbound proof needs the whole feature; T018/T021 mention is harmless |
+| M3 | Review A 1 | none declined | F1, F2 fixed; B F1 (drift-M3.md), F2 (wire test), F3 (T027 text) fixed |
+| M3 | Review A 2 | F1 assert closure right after the offline wait | FR-006: the mismatched claim closes a silent link; an offline link is not closed by silence alone, so closure after the refusal is the behaviour under test |
 
 ## Handover
 
-None.
+M3 (T026-T030) implemented, round-1 reviews fixed (see Review rounds), committed locally; scoped gate green. Previous PR #1871 merge SHA b05740e146295f8e3dde4b5fe2499359aef7d17a. Next: round-2 re-review of the fix diff, then full gate (CI is the gate in the cloud), PR.
+
+Older note: 
+M2 squash-merged 2026-11-14 as b05740e1 after main was merged in (issue 1863 fixed on main; all CI jobs green on 389f5e5d). Next thread: `/speckit-autopilot resume #1724`, which starts M3 (T026–T030, older-protocol daemon refused and listed needs-update) from this branch.
 
 ## Open escalation
 
-```
-- **Category**: 5 Non-convergence, blocked by work outside my flow (red main)
-- **Question**: PR 1871 (M2) is red only in jobs red on main too; merge it over them, or wait for main to be fixed?
-- **Options**:
-  1. Fix 1863 first on its own PR, then rerun 1871 (Recommended) - the container (docker, podman) and kubernetes real-runtime tests find micold-daemon by walking up from current_exe, which breaks under the rustc 1.100 test layout; same failure on main run 43358686770.
-  2. Merge 1871 over the red jobs - they do not touch M2 code (orchestrator link, registry, liveness, protocol).
-- **Recommended**: Fix 1863 first - keeps main green and the gate honest.
-- **Evidence**: run 43402845520: docker job sandbox_real.rs:364 "no micold-daemon build to copy into the container", kube_real_support/mod.rs:403; identical on main 43358686770 (podman, docker, kubernetes). Issue 1863 open. The sandbox against a real runtime job failed at sandbox_real_lifecycle.rs:243 (sandbox_real_no_outbound_still_resolves_names, DNS), a micold-core sandbox test M2 does not touch; main's run did not fail it, so likely a flake; rerun issued (gh run rerun 43402845520 --failed).
-- **Banner**: sent 2026-11-13
-```
+None. (The 2026-11-13 question on red main is settled: 1863 was fixed on main, option 1.)
 
 ## Follow-ups not done
 

@@ -10,6 +10,7 @@ use super::liveness::Heartbeat;
 use super::record::{DaemonRecord, Health};
 use crate::protocol::keepalive::KeepaliveAction;
 use crate::protocol::routing::WireDaemonId;
+use crate::protocol::version::PROTOCOL_VERSION;
 
 /// One accepted link, in memory only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -34,8 +35,29 @@ pub enum Claim {
         /// The registry after the call.
         snapshot: Snapshot,
     },
-    /// Refused.
+    /// Refused; no record changed.
     Refused(RefuseReason),
+    /// Refused for its protocol version, and the id is now listed `needs-update`.
+    NeedsUpdate {
+        /// The registry after the call.
+        snapshot: Snapshot,
+    },
+}
+
+/// Why a reserved link ended before it was confirmed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimFailure {
+    /// `Hello` named a protocol version or schema this build does not speak.
+    VersionMismatch {
+        /// The protocol version the `Hello` named: the one the record lists.
+        daemon_version: u32,
+    },
+    /// `Hello` came from another build of the same contract.
+    BuildMismatch,
+    /// `Hello` failed authentication.
+    AuthRejected,
+    /// No `Hello` came, or the connection closed.
+    Dropped,
 }
 
 /// A confirmed link.
@@ -67,6 +89,20 @@ pub enum LinkAction {
     Expired,
 }
 
+/// Where an id's link is, derived from the registry's tables. An id with no entry is `Closed`: it
+/// never linked, was restored, or its transport ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinkState {
+    /// The preamble was accepted and `Hello` is pending.
+    Reserved,
+    /// Confirmed and answering.
+    Live,
+    /// Confirmed, open, past its deadline: the record is `offline`.
+    Silent,
+    /// No link.
+    Closed,
+}
+
 /// The daemon registry.
 #[derive(Debug, Default)]
 pub struct Registry {
@@ -85,20 +121,95 @@ impl Registry {
         Self::default()
     }
 
-    /// Take an announcement: reserve a link for its id, or refuse. No record changes. A reserved
-    /// or live link refuses a rival (`AlreadyLinked`).
+    /// Take an announcement: reserve a link for its id, or refuse (FR-006, FR-007). A reserved or
+    /// live link refuses a rival `AlreadyLinked`, or `VersionMismatch` for a mismatched claim on a
+    /// live id; neither changes a record. A mismatched claim on an id with no live link is refused
+    /// and the id is recorded `needs-update`; a silent link on it is closed.
     pub fn claim(&mut self, announcement: &LinkAnnouncement) -> Claim {
-        if self.links.contains_key(&announcement.id) {
-            return Claim::Refused(RefuseReason::AlreadyLinked);
+        let mismatched = announcement.protocol_version != PROTOCOL_VERSION;
+        match (self.link_state(&announcement.id), mismatched) {
+            (LinkState::Reserved, _) | (LinkState::Live | LinkState::Silent, false) => {
+                Claim::Refused(RefuseReason::AlreadyLinked)
+            }
+            (LinkState::Live, true) => Claim::Refused(RefuseReason::VersionMismatch),
+            (LinkState::Silent | LinkState::Closed, true) => {
+                if let Some((token, _)) = self.links.remove(&announcement.id) {
+                    self.beats.remove(&token);
+                }
+                self.record_needs_update(announcement);
+                Claim::NeedsUpdate {
+                    snapshot: self.snapshot(),
+                }
+            }
+            (LinkState::Closed, false) => {
+                self.next_token += 1;
+                let link = LinkToken(self.next_token);
+                self.links
+                    .insert(announcement.id.clone(), (link, Some(announcement.clone())));
+                Claim::Reserved {
+                    link,
+                    snapshot: self.snapshot(),
+                }
+            }
         }
-        self.next_token += 1;
-        let link = LinkToken(self.next_token);
-        self.links
-            .insert(announcement.id.clone(), (link, Some(announcement.clone())));
-        Claim::Reserved {
-            link,
-            snapshot: self.snapshot(),
+    }
+
+    fn link_state(&self, id: &WireDaemonId) -> LinkState {
+        match self.links.get(id) {
+            None => LinkState::Closed,
+            Some((_, Some(_))) => LinkState::Reserved,
+            Some((token, None)) if self.beats.get(token).is_some_and(Heartbeat::is_silent) => {
+                LinkState::Silent
+            }
+            Some(_) => LinkState::Live,
         }
+    }
+
+    /// List `announced` as `needs-update`, keeping the last seen of the record it replaces.
+    fn record_needs_update(&mut self, announced: &LinkAnnouncement) {
+        let mut record = DaemonRecord::new(
+            announced.id.clone(),
+            announced.kind,
+            &announced.name,
+            announced.protocol_version,
+            announced.capabilities.clone(),
+            announced.tenant.as_deref(),
+        );
+        record.health = Health::NeedsUpdate;
+        record.last_seen = self
+            .records
+            .get(&announced.id)
+            .map_or(0, |earlier| earlier.last_seen);
+        self.records.insert(announced.id.clone(), record);
+    }
+
+    /// A reserved `link` ended without a confirmed `Hello`: the reservation is released. A
+    /// `VersionMismatch` lists the id `needs-update`, as a mismatched claim does; the other
+    /// reasons change no record. A token that is not a reservation is `Stale` and changes nothing,
+    /// so a live link's record is never touched.
+    pub fn claim_failed(
+        &mut self,
+        link: LinkToken,
+        reason: ClaimFailure,
+    ) -> (LinkAction, Option<Snapshot>) {
+        let reserved = self
+            .links
+            .iter()
+            .find(|(_, (token, pending))| *token == link && pending.is_some())
+            .map(|(id, _)| id.clone());
+        let Some(id) = reserved else {
+            return (LinkAction::Stale, None);
+        };
+        let (_, pending) = self.links.remove(&id).expect("found above");
+        let announced = pending.expect("filtered on a pending reservation");
+        let ClaimFailure::VersionMismatch { daemon_version } = reason else {
+            return (LinkAction::Idle, None);
+        };
+        self.record_needs_update(&LinkAnnouncement {
+            protocol_version: daemon_version,
+            ..announced
+        });
+        (LinkAction::Idle, Some(self.snapshot()))
     }
 
     /// A good `Hello` arrived on `link` at `now`: upsert the record `online`, last seen
@@ -229,6 +340,7 @@ mod tests {
     use super::*;
     use crate::daemon_config::Kind;
     use crate::orchestrator::record::Health;
+    use crate::protocol::version::PROTOCOL_VERSION;
 
     fn ann(id: &str, name: &str) -> LinkAnnouncement {
         LinkAnnouncement {
@@ -236,7 +348,7 @@ mod tests {
             id: WireDaemonId::new(id).unwrap(),
             kind: Kind::Host,
             name: name.to_owned(),
-            protocol_version: 81,
+            protocol_version: PROTOCOL_VERSION,
             capabilities: BTreeSet::new(),
             tenant: None,
         }
@@ -441,5 +553,185 @@ mod tests {
         assert_eq!(registry.tick(b, at(9)), (LinkAction::SendPing, None));
         assert_eq!(health(&registry, "a"), (Health::Offline, 100));
         assert_eq!(health(&registry, "b"), (Health::Online, 108));
+    }
+
+    fn old(id: &str) -> LinkAnnouncement {
+        LinkAnnouncement {
+            protocol_version: PROTOCOL_VERSION - 1,
+            ..ann(id, id)
+        }
+    }
+
+    fn newer(id: &str) -> LinkAnnouncement {
+        LinkAnnouncement {
+            protocol_version: PROTOCOL_VERSION + 1,
+            ..ann(id, id)
+        }
+    }
+
+    fn record(registry: &Registry, id: &str) -> DaemonRecord {
+        registry
+            .list()
+            .into_iter()
+            .find(|record| record.id.to_string() == id)
+            .unwrap()
+    }
+
+    #[test]
+    fn an_older_or_newer_claim_with_no_link_is_refused_and_recorded_needs_update() {
+        for announced in [old("a"), newer("a")] {
+            let mut registry = Registry::new();
+            let Claim::NeedsUpdate { snapshot } = registry.claim(&announced) else {
+                panic!("not recorded needs-update")
+            };
+            let listed = record(&registry, "a");
+            assert_eq!(listed.health, Health::NeedsUpdate);
+            assert_eq!(listed.protocol_version, announced.protocol_version);
+            assert_eq!(snapshot.records, registry.list());
+            // Nothing is reserved: the id is free for a current-version claim.
+            assert!(matches!(
+                registry.claim(&ann("a", "a")),
+                Claim::Reserved { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn a_mismatched_claim_on_a_live_id_changes_neither_record_nor_link() {
+        let mut registry = Registry::new();
+        let link = online(&mut registry, "a", 100);
+        let before = registry.list();
+        assert_eq!(
+            registry.claim(&old("a")),
+            Claim::Refused(RefuseReason::VersionMismatch)
+        );
+        assert_eq!(registry.list(), before);
+        assert_eq!(registry.answered(link, at(2), 102).0, LinkAction::Idle);
+        assert_eq!(health(&registry, "a"), (Health::Online, 102));
+    }
+
+    #[test]
+    fn a_mismatched_claim_on_a_silent_link_closes_it_and_records_needs_update() {
+        let mut registry = Registry::new();
+        let silent = online(&mut registry, "a", 100);
+        registry.tick(silent, at(9));
+        assert_eq!(health(&registry, "a"), (Health::Offline, 100));
+        assert!(matches!(
+            registry.claim(&old("a")),
+            Claim::NeedsUpdate { .. }
+        ));
+        assert_eq!(health(&registry, "a").0, Health::NeedsUpdate);
+        assert_eq!(registry.answered(silent, at(10), 110).0, LinkAction::Stale);
+        assert_eq!(registry.tick(silent, at(20)), (LinkAction::Stale, None));
+        assert_eq!(health(&registry, "a").0, Health::NeedsUpdate);
+    }
+
+    #[test]
+    fn a_mismatched_claim_on_a_reserved_id_is_already_linked() {
+        let mut registry = Registry::new();
+        reserve(&mut registry, &ann("a", "A"));
+        assert_eq!(
+            registry.claim(&old("a")),
+            Claim::Refused(RefuseReason::AlreadyLinked)
+        );
+        assert!(registry.list().is_empty());
+    }
+
+    #[test]
+    fn a_needs_update_daemon_that_relinks_on_the_current_version_is_online() {
+        let mut registry = Registry::new();
+        registry.claim(&old("a"));
+        let (link, _) = reserve(&mut registry, &ann("a", "a"));
+        registry.confirm(link, t0(), 50).unwrap();
+        assert_eq!(health(&registry, "a"), (Health::Online, 50));
+        assert_eq!(record(&registry, "a").protocol_version, PROTOCOL_VERSION);
+    }
+
+    #[test]
+    fn needs_update_keeps_the_last_seen_of_the_record_it_replaces() {
+        let mut registry = Registry::new();
+        let link = online(&mut registry, "a", 100);
+        registry.closed(link);
+        registry.claim(&old("a"));
+        assert_eq!(health(&registry, "a"), (Health::NeedsUpdate, 100));
+    }
+
+    #[test]
+    fn a_mismatched_claim_leaves_other_daemons_unchanged() {
+        let mut registry = Registry::new();
+        online(&mut registry, "b", 100);
+        let before = record(&registry, "b");
+        registry.claim(&old("a"));
+        assert_eq!(record(&registry, "b"), before);
+    }
+
+    #[test]
+    fn a_failed_reservation_for_the_version_records_needs_update_and_frees_the_id() {
+        let mut registry = Registry::new();
+        let (link, _) = reserve(&mut registry, &ann("a", "A"));
+        let (action, snapshot) =
+            registry.claim_failed(link, ClaimFailure::VersionMismatch { daemon_version: 70 });
+        assert_eq!(action, LinkAction::Idle);
+        assert_eq!(snapshot.unwrap().records, registry.list());
+        let listed = record(&registry, "a");
+        assert_eq!(listed.health, Health::NeedsUpdate);
+        assert_eq!(listed.name, "A");
+        assert_eq!(listed.protocol_version, 70, "the version the Hello named");
+        assert!(matches!(
+            registry.claim(&ann("a", "A")),
+            Claim::Reserved { .. }
+        ));
+    }
+
+    #[test]
+    fn a_failed_reservation_never_overwrites_a_live_record() {
+        let mut registry = Registry::new();
+        let live = online(&mut registry, "a", 100);
+        let before = registry.list();
+        for reason in [
+            ClaimFailure::VersionMismatch { daemon_version: 70 },
+            ClaimFailure::Dropped,
+        ] {
+            assert_eq!(
+                registry.claim_failed(live, reason),
+                (LinkAction::Stale, None)
+            );
+        }
+        assert_eq!(registry.list(), before);
+        assert_eq!(registry.answered(live, at(1), 101).0, LinkAction::Idle);
+    }
+
+    #[test]
+    fn build_mismatch_auth_rejected_and_dropped_change_no_record_and_release() {
+        for reason in [
+            ClaimFailure::BuildMismatch,
+            ClaimFailure::AuthRejected,
+            ClaimFailure::Dropped,
+        ] {
+            let mut registry = Registry::new();
+            let (link, _) = reserve(&mut registry, &ann("a", "A"));
+            assert_eq!(registry.claim_failed(link, reason).0, LinkAction::Idle);
+            assert!(registry.list().is_empty(), "{reason:?}");
+            assert!(matches!(
+                registry.claim(&ann("a", "A")),
+                Claim::Reserved { .. }
+            ));
+            assert_eq!(
+                registry.claim_failed(link, reason),
+                (LinkAction::Stale, None),
+                "a released token is stale"
+            );
+        }
+    }
+
+    #[test]
+    fn a_failed_reservation_leaves_an_existing_record_as_it_was() {
+        let mut registry = Registry::new();
+        let first = online(&mut registry, "a", 100);
+        registry.closed(first);
+        let before = registry.list();
+        let (link, _) = reserve(&mut registry, &ann("a", "A"));
+        registry.claim_failed(link, ClaimFailure::AuthRejected);
+        assert_eq!(registry.list(), before);
     }
 }
