@@ -106,5 +106,56 @@ snap() { ( cd "$d/wt" && sha256sum specs/042-x/autopilot.md; git rev-parse HEAD;
 before="$(snap)"; "$VR" "$d/wt" >/dev/null 2>&1; after="$(snap)"
 cases=$((cases + 1)); [ "$before" = "$after" ] || { failures=$((failures + 1)); echo "FAIL verifying changed the ledger, HEAD or tree"; }
 
+# --- US2, FR-006, FR-007, SC-004: follow-up.sh ----------------------------------------------------
+FU="$S/follow-up.sh"
+# fu <args...>: follow-up.sh on the current worktree against $SL.
+fu() { "$FU" "$d/wt" --supervisor-ledger "$SL" "$@"; }
+# count: the Follow-ups count of branch wt in $SL.
+count() { awk -F'|' '$2 ~ /^ wt $/ { gsub(/ /, "", $3); print $3 }' "$SL"; }
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+check "a live session gets SEND with the remaining lines" 0 '^SEND s1$' fu --session live --session-id s1
+check "SEND carries the message head" 0 '^Run not done\. Remaining:$' fu --session live --session-id s1
+check "SEND carries the remaining item" 0 '^- PR #7 is OPEN$' fu --session live --session-id s1
+cases=$((cases + 1)); [ "$(count)" = 3 ] || { failures=$((failures + 1)); echo "FAIL count after three follow-ups is $(count)"; }
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+check "a stopped session gets RESUME with the remaining lines" 0 '^RESUME s2$' fu --session stopped --session-id s2
+cases=$((cases + 1)); [ "$(count)" = 1 ] || { failures=$((failures + 1)); echo "FAIL RESUME did not count (got $(count))"; }
+check "RESUME has no message head" 0 '^NONE$' bash -c '! "$@" | grep -q "Run not done" && echo NONE' _ "$FU" "$d/wt" --supervisor-ledger "$d/r.md" --session stopped
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+check "an absent session id prints the action alone" 0 '^SEND$' fu --session live
+
+# cap: three counted follow-ups, then one ESCALATE, then HOLD
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+for i in 1 2 3; do fu --session live --session-id s1 >/dev/null; done
+check "the fourth call is ESCALATE with a category 5 banner" 0 '^- \*\*Category\*\*: 5 ' fu --session live
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+for i in 1 2 3; do fu --session live --session-id s1 >/dev/null; done
+check "ESCALATE is the first line at the cap" 0 '^ESCALATE$' bash -c '"$@" | head -1' _ "$FU" "$d/wt" --supervisor-ledger "$SL" --session live
+cases=$((cases + 1)); [ "$(grep -c '^### wt$' "$SL")" = 1 ] || { failures=$((failures + 1)); echo "FAIL not exactly one escalation block"; }
+check "the block names what remains" 0 'PR #7 is OPEN' grep -F 'PR #7 is OPEN' "$SL"
+check "after ESCALATE the next call is HOLD" 0 '^HOLD$' fu --session live --session-id s1
+check "HOLD sends nothing" 0 '^NONE$' bash -c '! "$@" | grep -q "^SEND" && echo NONE' _ "$FU" "$d/wt" --supervisor-ledger "$SL" --session live
+cases=$((cases + 1)); [ "$(grep -c '^### wt$' "$SL")" = 1 ] || { failures=$((failures + 1)); echo "FAIL HOLD wrote a second block"; }
+cases=$((cases + 1)); [ "$(count)" = 3 ] || { failures=$((failures + 1)); echo "FAIL count moved past the cap: $(count)"; }
+
+# SKIP: same remaining set and check id
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+fu --session live --session-id s1 --check c1 >/dev/null
+check "the same check id and remaining set is SKIP" 0 '^SKIP$' fu --session live --session-id s1 --check c1
+cases=$((cases + 1)); [ "$(count)" = 1 ] || { failures=$((failures + 1)); echo "FAIL SKIP counted: $(count)"; }
+check "a new check id sends again" 0 '^SEND s1$' fu --session live --session-id s1 --check c2
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+fu --session live --check c1 >/dev/null; echo x > new.txt
+check "a changed remaining set is not SKIP" 0 '^SEND$' fu --session live --check c1
+
+# DONE: VERIFIED after a follow-up, count unchanged
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+fu --session live --session-id s1 >/dev/null; pr_json "$d/fx" 7 MERGED > "$d/fx/pr-7.json"
+check "a run turned VERIFIED is DONE" 0 '^DONE$' fu --session live --session-id s1
+cases=$((cases + 1)); [ "$(count)" = 1 ] || { failures=$((failures + 1)); echo "FAIL DONE changed the count: $(count)"; }
+check "an unknown option is exit 2" 2 'unknown option' "$FU" --nope
+check "a missing ledger option is exit 2" 2 'supervisor-ledger' "$FU" "$d/wt" --session live
+check "two runs never share a count" 0 '^SEND$' bash -c 'cd "$2" && git switch -q -c other && echo "| wt | 3 | 1 | - |" >/dev/null && "$0" "$2" --supervisor-ledger "$3" --session live' "$FU" "$d" "$d/wt" "$SL"
+
 echo "close-out: $cases cases, $failures failed"
 [ "$failures" -eq 0 ]
