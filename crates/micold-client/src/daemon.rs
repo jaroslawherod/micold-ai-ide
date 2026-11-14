@@ -967,7 +967,7 @@ async fn connect_and_pump(
                 drift,
                 startup,
                 extras,
-                projects: _,
+                projects,
             },
             _,
         ) => {
@@ -986,7 +986,16 @@ async fn connect_and_pump(
             // A daemon that never connected is on its first start, which creates the pod if it
             // is missing: that is the user's Start, not a re-dial.
             let tried = if life.established {
-                kube_reconnect(env, name, &settings.0, startup.0.as_ref(), &extras.0, &sink).await
+                kube_reconnect(
+                    env,
+                    name,
+                    &settings.0,
+                    startup.0.as_ref(),
+                    &extras.0,
+                    &projects.0,
+                    &sink,
+                )
+                .await
             } else {
                 kube_attempt(
                     env,
@@ -994,6 +1003,7 @@ async fn connect_and_pump(
                     &settings.0,
                     startup.0.as_ref(),
                     &extras.0,
+                    &projects.0,
                     drift.0,
                     &sink,
                 )
@@ -1820,6 +1830,30 @@ pub struct KubeEnv {
     pub home: PathBuf,
     /// The cancel token of each Kubernetes daemon's start under way, by daemon name.
     pub cancels: std::sync::Mutex<BTreeMap<String, CancelToken>>,
+    /// Where a pod start that delivers GitHub tokens finds them (#1760).
+    pub tokens: PodTokenSource,
+}
+
+/// The GitHub token store a pod start reads when the daemon's `github_tokens` opt-in is on, and
+/// the forge the delivered entries name (#1760, research R5). The shell sets
+/// [`PodTokenSource::on_device`]; a test points it at its own store and a local forge.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PodTokenSource {
+    /// The PAT store's root; `None` delivers no token.
+    pub pat_root: Option<PathBuf>,
+    /// The `host` every delivered entry names; `None` is the daemon's default, `github.com`.
+    pub host: Option<String>,
+}
+
+impl PodTokenSource {
+    /// This device's PAT store, with no host (the daemon's default, `github.com`).
+    pub fn on_device() -> Self {
+        Self {
+            pat_root: micold_core::scoped_credential::pat_store::PatStore::on_device()
+                .map(|store| store.root().to_path_buf()),
+            host: None,
+        }
+    }
 }
 
 impl KubeEnv {
@@ -1838,6 +1872,7 @@ impl KubeEnv {
             keys_root,
             home,
             cancels: std::sync::Mutex::default(),
+            tokens: PodTokenSource::default(),
         }
     }
 }
@@ -1956,6 +1991,7 @@ pub async fn kube_reconnect(
     settings: &KubeSettings,
     startup: Option<&daemon_config_render::StartupTable>,
     extras: &micold_core::daemons::SessionExtras,
+    projects: &[micold_core::github::GithubRepo],
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeReconnectError> {
     use micold_core::kube::classify::PodGone;
@@ -1979,6 +2015,7 @@ pub async fn kube_reconnect(
         settings,
         startup,
         extras,
+        projects,
         DriftChoice::Keep,
         sink,
     )
@@ -1994,13 +2031,17 @@ pub const POD_SSH_USER: &str = "micold";
 /// SSH port with its host key pinned, then the shared copy, install and connect sequence over it.
 /// The relay returned must outlive the connection. A failure is the reason in the user's words and
 /// the attempt is already rolled back; a drift is [`KubeAttemptError::Drift`] unless `drift` says
-/// what to do about it. [`cancel_kube_start`] stops the attempt while it runs.
+/// what to do about it. [`cancel_kube_start`] stops the attempt while it runs. `projects` are the
+/// repositories of the daemon's saved projects, which pick the GitHub tokens the pod receives
+/// when `settings.github_tokens` is on (#1760).
+#[allow(clippy::too_many_arguments)]
 pub async fn kube_attempt(
     env: &KubeEnv,
     name: &str,
     settings: &KubeSettings,
     startup: Option<&daemon_config_render::StartupTable>,
     extras: &micold_core::daemons::SessionExtras,
+    projects: &[micold_core::github::GithubRepo],
     drift: DriftChoice,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeAttemptError> {

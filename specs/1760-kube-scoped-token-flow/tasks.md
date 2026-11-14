@@ -19,8 +19,8 @@
 - [X] T008 [P] Test: `PodGithubTokens::read` refuses an empty, non-UTF-8, over-`POD_FILE_LIMIT` file and, on Unix, a file with group/other bits, each error naming the token; `entries[i].token_file` ends with `files[i].0`; `Debug` shows no value (the value is a `SecretToken`, not a plain `String`), in `micold-client/src/daemon_config_delivery.rs`.
 - [X] T009 Implement `PodGithubTokens` (`entries`, `files`, `read`, the client-side Unix loose-mode check on token files as one `#[cfg(unix)]` helper, values held as `SecretToken`, `token_file` = `<STARTUP_ENV_MOUNT>/github-token-<n>`) in `micold-client/src/daemon_config_delivery.rs`.
 - [X] T010 [P] Test: `ProjectsDial` is the sorted, lower-cased `owner/repo` set from saved projects' `remote`, and a change of it changes the dial identity, in `micold-client/src/daemon.rs`.
-- [ ] T011 Add `Dial::Kubernetes.projects: ProjectsDial` and carry it to `kube_attempt` and `kube_reconnect`, in `micold-client/src/daemon.rs`.
-- [ ] T012 Add `KubeEnv.tokens: PodTokenSource { pat_root: Option<PathBuf>, host: Option<String> }`; production sets `PatStore::on_device()` and no host, in `micold-client/src/daemon.rs`.
+- [X] T011 Add `Dial::Kubernetes.projects: ProjectsDial` and carry it to `kube_attempt` and `kube_reconnect`, in `micold-client/src/daemon.rs`.
+- [X] T012 Add `KubeEnv.tokens: PodTokenSource { pat_root: Option<PathBuf>, host: Option<String> }`; production sets `PatStore::on_device()` and no host, in `micold-client/src/daemon.rs`.
 
 ## Phase 3: User Story 1 - A pod daemon gets the scoped token (P1) MVP
 
