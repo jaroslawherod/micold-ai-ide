@@ -6,6 +6,7 @@ pub mod announce;
 pub mod liveness;
 pub mod record;
 pub mod registry;
+pub mod store;
 
 pub use announce::{
     decode_first_frame, refusal_message, FirstFrame, LinkAnnouncement, LinkQuery, LinkVerdict,
@@ -16,6 +17,7 @@ pub use record::{DaemonRecord, Health, TenantId};
 pub use registry::{
     Claim, ClaimFailure, ConfirmRefused, Confirmed, LinkAction, LinkToken, Registry, Snapshot,
 };
+pub use store::{JsonRegistryStore, MemoryRegistryStore, RegistrySaver, RegistryStore, StoreError};
 
 /// The tenant a daemon that announces none belongs to.
 pub const DEFAULT_TENANT: &str = "default";

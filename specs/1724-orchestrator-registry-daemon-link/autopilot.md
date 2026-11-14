@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1724
-- **Worktree branch**: claude/project-thread-daw24a
+- **Worktree branch**: claude/project-thread-3cm73q
 - **Started**: 2026-11-11
-- **Phase**: milestone M4
-- **Next step**: open the M4 PR (pushed; scoped checks only, full gate left to CI); wait for CI, merge, then M5
+- **Phase**: milestone M5
+- **Next step**: M5 Review A round 2 (sonnet, scoped to the fix diff `review-snapshot.sh diff aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735`) on head d4cb49cb2; Review B does not re-run; then CI and merge of #1898
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
 | #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
 | #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
+| #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
-| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | reviewed, PR to open |
-| M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
+| M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
+| M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | in progress |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
@@ -70,6 +71,9 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN: F1-F3 fixed, no plan drift for M3, Verify 9 passed |
 | Review A | 1 | M4 | ac07209bf661c1bfbf127210d11ce041b8f82800 | 1e3b41175be72fc247fe7e2dc62334c6b02f8b44:a98b297aefbee75c4cd4df7282956739262a8837 | MINOR-ONLY: CLEAN, 3 MINOR fixed (F1 Refused after AlreadyLinked confirm, wire test red-first; F2 pong-time assertion; F3 shared record_when) |
 | Review B | 1 | M4 | ac07209bf661c1bfbf127210d11ce041b8f82800 | 1e3b41175be72fc247fe7e2dc62334c6b02f8b44:a98b297aefbee75c4cd4df7282956739262a8837 | CLEAN: 1 MINOR declined (T034 Dropped wire test); Verify one_link_per_id 5 passed, core orchestrator 69 passed, plan-drift clean |
+| Review A | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CHANGES: fixed F1 (CHILDREN lock), F2+F3 (one saving thread, coalesced, joined on stop; red-first unit test), F4 (list after stop); round 2 pending |
+| Review B | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CLEAN: core orchestrator 82 passed, daemon orchestrator 35 passed, no plan drift for M5 |
+| Review A | 2 | M5 | 35bd7e8cc4660bb44785f66a5ffa553f1c573127 | 276e72832ecb6c3d8857e2357901f971a0a38805:35bd7e8cc4660bb44785f66a5ffa553f1c573127 | CLEAN: round-1 fixes hold; 1 MINOR declined (save thread panic unlogged) |
 
 ## Declined review findings
 
@@ -83,10 +87,12 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | M3 | Review A 1 | none declined | F1, F2 fixed; B F1 (drift-M3.md), F2 (wire test), F3 (T027 text) fixed |
 | M3 | Review A 2 | F1 assert closure right after the offline wait | FR-006: the mismatched claim closes a silent link; an offline link is not closed by silence alone, so closure after the refusal is the behaviour under test |
 | M4 | Review B 1 | F1: T034's explicit `claim_failed(Dropped)` has no wire test that tells it from M3 | No wire-observable difference: `link()` calls `closed(link)` after every path, which releases the reservation the same way; the core unit test covers `Dropped` (cycle-log, M4) |
+| M5 | Review A 1 | none declined | F1 (CHILDREN lock), F2/F3 (saving thread, drift-M5), F4 (list after stop) fixed |
+| M5 | Review A 2 | F1 MINOR: a panic in the `orchestrator-save` thread goes unlogged (`let _ = thread.join()`) | The store returns errors and has no panicking path; follow-up noted |
 
 ## Handover
 
-None. (M4 started 2026-11-14 on `claude/project-thread-daw24a` from f94f183, after M3's merge 8bcf7894b91548a647319de47fecca688e0f74af.)
+None.
 
 ## Open escalation
 
@@ -94,4 +100,6 @@ None. (The 2026-11-13 question on red main is settled: 1863 was fixed on main, o
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- M5 re-review MINOR: log a join error of the `orchestrator-save` thread in `crates/micold-daemon/src/orchestrator/save.rs` `Drop` (a panic there would silently stop saving).
+- M4 re-review MINOR: the pre-steady handshake sends in `crates/micold-daemon/src/orchestrator/link.rs` (both `Refused`, `Welcome`) are unbounded, unlike `send_bounded` in the steady state; wrap them in one `LIVENESS_DEADLINE` timeout later.
+- Possibly flaky on CI (seen on PR #1895, passed on re-run): `sandbox_real_no_outbound_still_resolves_names` (outside DNS), `structured_permission::two_sessions_waiting_are_marked_separately`.
