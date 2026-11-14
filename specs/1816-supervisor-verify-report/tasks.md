@@ -19,7 +19,7 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 **Independent test**: `bash scripts/tests/close-out.test.sh` verdict cases.
 
 - [X] T003 [US1] Test: all merged, clean, issue closed with flow label, gives `VERIFIED`, exit 0 in `scripts/tests/close-out.test.sh` (US1.1, FR-001)
-- [X] T004 [US1] Tests: open PR, `UNKNOWN` PR, dirty tree, unmerged commit, phase not `done`, no ledger, no PRs, several ledgers, not a worktree each give `NOT DONE` with the data-model line, exit 1 / usage exit in `scripts/tests/close-out.test.sh` (US1.2, US1.3, FR-004)
+- [X] T004 [US1] Tests: open PR, `UNKNOWN` PR, dirty tree, unmerged commit, phase not `done`, no ledger, several ledgers, not a worktree each give `NOT DONE` with the data-model line, exit 1 / usage exit in `scripts/tests/close-out.test.sh` (US1.2, US1.3, FR-004)
 - [X] T005 [US1] Tests: issue open, `in-progress` left, `flow:` label missing, issue state `UNKNOWN` (no fixture) in `scripts/tests/close-out.test.sh` (US1.4, FR-003)
 - [X] T006 [US1] Tests: verifying from a second dirty clone reflects the target (US1.5); checksums of ledger, `HEAD`, `git status --porcelain` unchanged (FR-005) in `scripts/tests/close-out.test.sh`
 - [X] T007 [US1] Implement `scripts/autopilot/verify-run.sh` per `contracts/verify-run.md`: `run-status.sh --json <worktree>`, issue step via `gh issue view`, closed verdict pair, exit codes (FR-001..FR-005, FR-002)
