@@ -175,6 +175,10 @@ name = "dead_session_removed"
 path = "tests/dead_session_removed.rs"
 
 [[test]]
+name = "cleared_session_restart"
+path = "tests/cleared_session_restart.rs"
+
+[[test]]
 name = "daemon_stop"
 path = "tests/daemon_stop.rs"
 
