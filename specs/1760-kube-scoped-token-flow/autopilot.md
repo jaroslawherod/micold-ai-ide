@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-myub4h
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M1 reviews A and B (orchestrator), then the M1 PR
+- **Next step**: M1 round 2 of Review A (fix diff) and Review B (Verify) (orchestrator), then the M1 PR
 
 ## Pull requests
 
@@ -47,15 +47,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks analyze | 1 | tasks.md | - | - | 1 HIGH (arm C vs AS3) and 4 MEDIUM (task order, M1 docs vs M2 tick, mount vs home, test-first notes) fixed; prose/task-list only |
 | Tasks review | 1 | tasks.md, milestones | f8a94ddf6 | 893ed26f20eb272e8a1574de8cdaf6fe034c8fdd:f8a94ddf620220ccd11a592b6644bb6b2a5a3d57 | CHANGES: 1 MAJOR fixed (user-guide task T020 moved to M1), 2 MINOR fixed; prose/task-list only, no re-review |
 | Tasks review | 1 | tasks.md, milestones | 240eae3bb528e9fe0d018c9d4b501bcdbf124c8c | 893ed26f20eb272e8a1574de8cdaf6fe034c8fdd:f8a94ddf620220ccd11a592b6644bb6b2a5a3d57 | CHANGES: 1 MAJOR fixed, 2 MINOR fixed; prose/task-list only |
+| Review A (code-review high) | 1 | M1 | c5fb01da75a62b53009826c1d649440184d47587 | 127f0833ef54e6b40f7306db53653abf0ea414a0:3c7c46c82761f64a23599beeaab880b4ce202b67 | CHANGES: 3 MAJOR fixed (F1 key per token name, F2 SecretToken kept out of PodStartup, F3 no projects dial while off), 3 MINOR: F4 comment fixed and retry behaviour declined, F5 Secret total checked, F6 shared checks; round 2 pending |
+| Review B (conformance) | 1 | M1 | c5fb01da75a62b53009826c1d649440184d47587 | 127f0833ef54e6b40f7306db53653abf0ea414a0:3c7c46c82761f64a23599beeaab880b4ce202b67 | CHANGES: F1 MAJOR fixed (drift-M1.md), F2 MINOR fixed (PR body moved out of the tree); round 2 (Verify) pending |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | spec review r1 | F1 MAJOR: three open markers (FR-008..010) leave scope unsettled | They are the template's allowed three; the rubric sends each to clarify. FR-008 is escalated there. Fixed F2, F3, F4 (prose/edge case). |
+| M1 | Review A r1 | F4 MINOR (behaviour part): a token-read failure on an established link retries with back-off instead of a terminal StartFailed | The token file was readable when the link was made; a retry picks up a file the user fixes (chmod 600, a new token) with no action, and each failed attempt shows the reason naming the token. A terminal StartFailed would need a manual restart for a transient or fixed problem. The comment is corrected. |
 
 ## Handover
 
+2026-11-14 M1 fix unit (cloud): Review A r1 (6 findings) and Review B r1 (2) acted on in c5fb01da7: all fixed but F4's retry behaviour (declined, see table). Targeted tests, fmt and clippy (core, client) green. PR body updated at the unit's scratchpad (outside the tree, Review B F2). Next: round 2 of A and B on the fix diff from snapshot 127f0833e:3c7c46c82, then open the M1 PR.
 2026-11-14 M1 unit (cloud): previous PR #1870 merged at 55e614ed76ba667e09c0ac9649abc04114f93393. T001–T017 and T020 built test-first (tdd/test-list.md, tdd/cycle-log.md), committed and pushed on claude/project-thread-myub4h; PR body at specs/1760-kube-scoped-token-flow/pr-m1-body.md (uncommitted). Next: orchestrator runs Review A and B, the unit fixes findings, then the PR opens.
 2026-11-14: design PR #1870 squash-merged (55e614ed7) on green CI. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M1 milestone unit (T001–T017, T020) on this branch.
 
