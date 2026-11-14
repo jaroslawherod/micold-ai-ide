@@ -89,4 +89,22 @@ fn a_cleared_session_restarted_before_a_new_message_resumes_its_earlier_conversa
         "its earlier conversation is on disk, so the restart offers it for resume; got {:?}",
         row.lifecycle
     );
+
+    // And the resume continues that earlier conversation, not the empty one the hook named.
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(store.path().join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    );
+    catalog.present_interrupted_resumable(|id, _, _, _| id == session_id);
+    let handle = catalog
+        .workspace()
+        .find_session(session_id)
+        .map(|(_, s)| s.resume_handle())
+        .expect("listed");
+    assert_eq!(
+        handle, session_id.0,
+        "resumes the conversation from before the clear"
+    );
 }
