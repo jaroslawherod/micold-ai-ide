@@ -11,14 +11,14 @@ One row per question. Key `R<issue>.Q<n>` (free-text escalation: `Q1`).
 | Cell | Meaning |
 |---|---|
 | Key | `R<issue>.Q<n>` |
-| State | `pending` (collected, not asked) · `asked` (banner sent, answer awaited) · `answered` (user or parent answered; not yet sent, or sent and unconfirmed) · `resolved` (supervisor answered from repo evidence) |
+| State | `pending` (collected, banner not sent) · `asked` (banner and notification sent; answer awaited; the over-cap path stops here, and a restart re-asks these rows with `route next --reask`, sending no banner or notification again) · `answered` (user or parent answered; not yet sent, or sent and unconfirmed) · `resolved` (supervisor answered from repo evidence) |
 | Session | the asking session id (the only send target, SC-004) |
 | Via | `user` · `supervisor` · `parent` |
-| Question, Options, Rec, Evidence | single-line copies (`\|` escaped, newlines to spaces; options joined by ` // `) |
+| Question, Options, Rec, Evidence | single-line, pipe-free copies (`|` stored as `/`, newlines to spaces; options joined by ` // `) |
 | Answer | the answer text, evidence cited when `Via` is `supervisor` |
 | Sent | epoch seconds of the `send_session_input`, empty until sent |
 
-Transitions: `pending -> asked -> answered`; `pending -> resolved`; any state is removed by
+Transitions: `pending -> asked` (set when the banners and the notification go out, before the context check) `-> answered`; `pending -> resolved`; any state is removed by
 `route drop <issue>` (session left `asking`, or ended `lost`). `answered` and `resolved` rows of one
 issue are held until all its questions are one of the two, then sent together (`route compose`).
 After the send and a `CHANGED` wake showing the run left `asking`, the issue's rows are removed

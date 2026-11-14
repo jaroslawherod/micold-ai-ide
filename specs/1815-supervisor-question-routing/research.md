@@ -58,3 +58,14 @@
 - **Decision**: `tasks/ask.md` step 0, supervised: banner to the transcript, no `PushNotification`;
   the supervisor sends the one notification per batch (FR-006a, SC-001).
 - **Rejected**: suppressing in the supervisor (cannot, it does not control the worker).
+
+## D9. Rows stay `asked` across an over-cap stop
+- **Decision**: rows become `asked` when banners and notification go out; the OVER path ends the turn
+  there. `route next --reask` returns them on restart, so the prompt is made once and the notification
+  is never repeated (SC-001).
+- **Rejected**: leaving rows `pending` (would resend banner and notification); a separate `prompted`
+  flag (a second state dimension for no gain: re-asking an already-asked row is harmless).
+
+## D10. Pipe handling in Routing cells
+- **Decision**: store `|` as `/`; existing readers split on `|` and cannot honour `\|`.
+- **Rejected**: `\|` as in `answer.sh` (that file's cells are only read by humans and `answer.sh`'s own awk, which does not re-split rows).

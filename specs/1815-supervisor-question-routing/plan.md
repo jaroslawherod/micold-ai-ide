@@ -40,8 +40,8 @@ gate (`scripts/tests/*.test.sh`). Fixtures only: no `gh`, MCP or live session.
 
 **Performance Goals**: one prompt and one notification per batch (SC-001); no transcript reads.
 
-**Constraints**: bash 3.2 (no associative arrays); pipe-free ledger cells (`\|` escaping as in
-`answer.sh`); existing `supervisor.sh` row parsing must not see Routing rows (research D2).
+**Constraints**: bash 3.2 (no associative arrays); truly pipe-free Routing cells (`|` is stored as `/`, newlines as spaces: every reader here splits
+rows with `awk -F'|'`, so `\|` would still split); existing `supervisor.sh` row parsing must not see Routing rows (research D2).
 
 **Scale/Scope**: single-digit cap, so at most a few open questions; 4 per `AskUserQuestion`.
 
@@ -110,18 +110,19 @@ interface change).
 | FR-008 | `route state ... answered` + `route sent`; confirm on `CHANGED`; `route overdue` for the ceiling |
 | FR-008a | `route compose` exits 1 listing the missing question numbers |
 | FR-009 | SKILL step 1 on re-ask: `route drop <issue>` when the run is no longer `asking` |
-| FR-010 | SKILL step 3 (context check) + Routing rows holding the full question, options, recommendation |
-| FR-011 | Routing `State` column: `pending asked answered resolved` (data-model.md) |
+| FR-010 | SKILL step 3 (context check: banners and notification first, rows `asked`, then OVER ends the turn) + `route next --reask` on restart + Routing rows holding the full question, options, recommendation |
+| FR-011 | Routing `State` column: `pending asked answered resolved`; `route add` is idempotent and `route next --reask` returns `asked` rows, so no question is asked twice or lost (data-model.md) |
 | FR-012, FR-013 | `route target`; SKILL step 6; a `not_found` send is recorded with `route state` and asked of the user |
+| Downward send error (Edge Cases) | SKILL step 5: `ledger set <issue> Note`, rows stay `answered`, report, no retry loop (contracts/routing-cli.md) |
 | FR-015 | SKILL *Report* now routes `asking`; `stuck`, `blocked`, `lost` stay reported |
 
 ## Test strategy
 
 | Requirement | Layer |
 |---|---|
-| FR-003, FR-006, FR-008, FR-008a, FR-009 (drop), FR-011, FR-012 target | `supervisor.test.sh`: fixture escalation JSON and fixture session-list JSON, `route` outputs and exits |
+| FR-001 (batch and free-text `Q1`), FR-014 (re-add is a no-op), FR-003, FR-006, FR-008, FR-008a, FR-009 (drop), FR-011 (including `route next --reask`), FR-012 target | `supervisor.test.sh`: fixture escalation JSON and fixture session-list JSON, `route` outputs and exits; a question containing `|` keeps State, Session and Answer in place through `state`, `compose` and `drop`; `compose` prints `session <id>` first (SC-004) |
 | FR-005a | `autopilot.test.sh`: `answer.sh --by supervisor` writes `supervisor` in By; default stays `user`; exit codes unchanged |
-| FR-002, FR-004, FR-005, FR-007, FR-010, FR-013, FR-015 (LLM steps) | grep cases over SKILL, ask.md, resume.md: the sentence, the order, the forbidden phrases (no `read_session_output`, no re-send loop); quickstart A walks them by hand with a fake `send_session_input` |
+| FR-002, FR-004, FR-005, FR-007, FR-010, FR-013, FR-015 (LLM steps) | grep cases over SKILL (the collect step reads `<scratch>/<n>.json` and never names `read_session_output`; the send-failure Note step; the OVER step sends banners before it ends the turn), ask.md, resume.md: the sentence, the order, the forbidden phrases (no `read_session_output`, no re-send loop); quickstart A walks them by hand with a fake `send_session_input` |
 | FR-006a | `autopilot.test.sh` grep over ask.md step 0 |
 | SC-001..SC-004 | quickstart A (two-session fixture batch), plus `route compose` keyed-by-issue case for SC-004 |
 | Geometry gates, §B visual pass | none: no GUI |
