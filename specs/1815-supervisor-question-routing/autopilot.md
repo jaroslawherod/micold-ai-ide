@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 1 | plan | 2fb8d78017e17ab256129910edceaa365b11491e | 1ddc4daf07dab41e2627303773d39f3db679b3b8:2fb8d78017e17ab256129910edceaa365b11491e | CHANGES: 3 MAJOR, 3 MINOR, all fixed (round 2 pending) |
 | Review plan | 2 | plan | f776b812d17e464ba995cf3257722a28600bc394 | 6611638df9e715ff6514de81ce5b274a5a25e502:f776b812d17e464ba995cf3257722a28600bc394 | CLEAN |
 | Review tasks | 1 | tasks | 31a0ad5679de60b9819e52ace88fc5ae2d865e0a | 6d90bd6be35040bcf4ee9990b7bf877249f9b210:31a0ad5679de60b9819e52ace88fc5ae2d865e0a | CHANGES: 1 MAJOR (F1), 3 MINOR; fixed (F2 split declined), round 2 pending |
+| Review tasks | 2 | tasks | b511c1eb1a58470dce0d0a0897113cb619495f25 | 902c2d4b6c4d1d7b47ee7ddaf0ffdedb63fbfa41:b511c1eb1a58470dce0d0a0897113cb619495f25 | pending |
 
 ## Declined review findings
 
