@@ -174,6 +174,11 @@ pub struct KubeSettings {
     /// ([`Self::take_removed_git_credentials`], FR-003).
     #[serde(skip)]
     pub removed_git_credentials: bool,
+    /// Whether a pod start delivers the stored GitHub tokens matching this daemon's saved
+    /// projects into the pod's startup Secret (#1760 FR-008). Off by default; anyone who can
+    /// read Secrets in the namespace, and etcd, can read a delivered token.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub github_tokens: bool,
 }
 
 /// The stored shape of [`KubeSettings`]: `allowed` may name the items #1002 removed.
@@ -197,6 +202,8 @@ struct RawKubeSettings {
     storage_class: Option<String>,
     #[serde(default)]
     allowed: Vec<RawKubeCredential>,
+    #[serde(default)]
+    github_tokens: bool,
 }
 
 impl From<RawKubeSettings> for KubeSettings {
@@ -224,6 +231,7 @@ impl From<RawKubeSettings> for KubeSettings {
                 })
                 .collect(),
             removed_git_credentials,
+            github_tokens: raw.github_tokens,
         }
     }
 }
@@ -248,6 +256,7 @@ impl KubeSettings {
             storage_class: None,
             allowed: BTreeSet::new(),
             removed_git_credentials: false,
+            github_tokens: false,
         }
     }
 
@@ -754,5 +763,26 @@ mod tests {
         s.allowed
             .insert(KubeCredential::RegistryPull { auths: "/q".into() });
         assert!(s.validate().is_err());
+    }
+
+    /// #1760 FR-008 (T002): the GitHub tokens opt-in is off by default, round-trips, loads off
+    /// from a `daemons.json` saved before it existed, and is not written while off.
+    #[test]
+    fn the_github_tokens_opt_in_is_off_by_default_round_trips_and_is_omitted_when_off() {
+        let off = valid();
+        assert!(!off.github_tokens);
+        let saved = serde_json::to_value(&off).unwrap();
+        assert!(saved.get("github_tokens").is_none(), "{saved}");
+        let old: KubeSettings = serde_json::from_value(saved).unwrap();
+        assert!(!old.github_tokens);
+
+        let on = KubeSettings {
+            github_tokens: true,
+            ..valid()
+        };
+        let saved = serde_json::to_value(&on).unwrap();
+        assert_eq!(saved["github_tokens"], serde_json::json!(true));
+        let read: KubeSettings = serde_json::from_value(saved).unwrap();
+        assert_eq!(read, on);
     }
 }

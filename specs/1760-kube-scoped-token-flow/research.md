@@ -1,7 +1,7 @@
 # Research: Scoped token reaching a pod daemon (#1760)
 
 ## R1. Where does the token value travel?
-- **Decision**: a key `github-token-<n>` of the existing `<name>-startup` Secret, mounted read-only at `STARTUP_ENV_MOUNT`; the entry's `token_file` names that path. Via `PodStartup.files` into `StartRequest::secret_files` (already merged into the Secret by `startup_secret`).
+- **Decision**: a key `github-token-<token name, lower-case>` of the existing `<name>-startup` Secret, mounted read-only at `STARTUP_ENV_MOUNT`; the entry's `token_file` names that path. Via `PodStartup.files` into `StartRequest::secret_files` (already merged into the Secret by `startup_secret`).
 - **Why**: same pattern as `env_file`, SSH/CA extras; replaced/deleted/labelled/removed by existing code (FR-010 for free); Secret never in pod spec env (FR-002).
 - **Rejected**: a Secret per token (new names, lifecycle, RBAC, more drift); an env var (leaks into sessions, FR-005); the ConfigMap (not a secret; would sit in the rendered `daemon.toml` neighbourhood); a new wire message (#1530 retired them).
 

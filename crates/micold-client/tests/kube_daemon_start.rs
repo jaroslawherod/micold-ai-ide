@@ -116,6 +116,7 @@ async fn a_pods_start_delivers_the_script_and_env_file_and_refuses_an_unreadable
         &settings(),
         Some(&startup),
         &Default::default(),
+        &[],
         DriftChoice::Ask,
         &sink,
     )
@@ -142,6 +143,7 @@ async fn a_pods_start_delivers_the_script_and_env_file_and_refuses_an_unreadable
         &settings(),
         Some(&gone),
         &Default::default(),
+        &[],
         DriftChoice::Ask,
         &sink,
     )
@@ -171,6 +173,7 @@ async fn a_cluster_start_delivers_the_ca_file_through_the_startup_secret() {
         &settings(),
         None,
         &extras,
+        &[],
         DriftChoice::Ask,
         &sink,
     )
@@ -254,6 +257,7 @@ async fn a_drifted_pod_is_reported_typed_and_the_choice_continues_the_start() {
         &changed,
         None,
         &Default::default(),
+        &[],
         DriftChoice::Ask,
         &sink,
     )
@@ -268,6 +272,7 @@ async fn a_drifted_pod_is_reported_typed_and_the_choice_continues_the_start() {
         &changed,
         None,
         &Default::default(),
+        &[],
         DriftChoice::Keep,
         &sink,
     )
@@ -370,6 +375,7 @@ mod install {
                 &settings,
                 None,
                 &extras,
+                &[],
                 DriftChoice::Ask,
                 &sink
             ),

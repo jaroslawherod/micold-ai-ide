@@ -59,24 +59,21 @@ pub fn check_files(text: &str, origin: &str, config: &DaemonConfig) -> Vec<Confi
     // V14: a secret must be owner-only.
     let secrets = secret_entries(config);
     for (key, path) in secrets {
-        match super::resolved::mode_of(path) {
-            Some(Some(mode)) if mode & 0o077 != 0 => {
-                let severity = if sandbox {
-                    Severity::Error
-                } else {
-                    Severity::Warning
-                };
-                push(
-                    "V14",
-                    &key,
-                    severity,
-                    format!(
-                        "`{key}`: secret file {} has mode {mode:04o}; it must be owner-only (0600)",
-                        path.display()
-                    ),
-                );
-            }
-            _ => {}
+        if let Some(mode) = super::resolved::readable_by_others(path) {
+            let severity = if sandbox {
+                Severity::Error
+            } else {
+                Severity::Warning
+            };
+            push(
+                "V14",
+                &key,
+                severity,
+                format!(
+                    "`{key}`: secret file {} has mode {mode:04o}; it must be owner-only (0600)",
+                    path.display()
+                ),
+            );
         }
     }
 
