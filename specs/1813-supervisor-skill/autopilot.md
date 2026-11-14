@@ -58,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | M2 | a6b47dde3e2d0cd38c646518923d0f1597a95089 | 57d4fd80ad63c2c15d6948227164676e10f22d0d:a6b47dde3e2d0cd38c646518923d0f1597a95089 | CHANGES: 1 MAJOR (drift-M2.md), fixed |
 | Review A M2 | 2 | M2 | 65f3c5c54e06942a0c097dc61725d4e619230b18 | 256c7c859e5fb9cfc28f374abe306c9ab5c51110:65f3c5c54e06942a0c097dc61725d4e619230b18 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed, 1 MINOR wording) |
 | Review B M2 | 2 | M2 | 65f3c5c54e06942a0c097dc61725d4e619230b18 | 256c7c859e5fb9cfc28f374abe306c9ab5c51110:65f3c5c54e06942a0c097dc61725d4e619230b18 | CLEAN (scoped, sonnet) |
+| Review A M3 | 1 | M3 | 3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | pending |
 
 ## Red runs
 
