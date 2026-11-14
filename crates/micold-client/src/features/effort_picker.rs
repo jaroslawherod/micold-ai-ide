@@ -212,8 +212,6 @@ impl crate::app::State {
         let support = self.effort_support_of(session);
         let current = self.effort_choice(session);
         self.effort_picker.open(session, support.as_ref(), &current);
-        // `/effort` with the row collapsed: the menu needs its trigger (feature 1792 D1).
-        self.composers.expand_options();
     }
 
     /// A press on `session`'s trigger: open its picker, or close it when open.

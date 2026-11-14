@@ -187,7 +187,7 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::LargeEditorRequested(session) => {
             return crate::shell::large_editor::update(app, LargeEditorMsg::Requested(session));
         }
-        Msg::OptionsToggled(_) => app.core.options_toggled(),
+        Msg::OptionsToggled(_) => options_toggled(app),
         Msg::AttachPickerClosed(session) => app.core.composers.attach_picker_closed(session),
         Msg::AttachPicked { session, paths } => {
             if app.core.composers.attach_picked(session, paths.len()) {
@@ -207,7 +207,14 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
             follow = true;
         }
         Msg::ModelPickerClosed(session) => app.core.composers.palette.close_picker(session),
-        Msg::EffortPickerToggled(session) => app.core.effort_picker_toggled(session),
+        Msg::EffortPickerToggled(session) => {
+            app.core.effort_picker_toggled(session);
+            // Pressed while the row collapses (its trigger takes clicks until it is gone): the
+            // list brings the row back rather than floating over nothing (feature 1792 D1).
+            if app.core.effort_picker.picker(session).is_some() {
+                app.core.composers.expand_options();
+            }
+        }
         Msg::EffortPickerMoved { session, direction } => {
             app.core.effort_picker_moved(session, direction);
             follow = true;
@@ -268,6 +275,19 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
         return micold_client::ui::picker_highlight_into_view();
     }
     Task::none()
+}
+
+/// Show or hide the session options row. Hiding it closes every model, effort and permission list
+/// its controls hold open, as their `*Closed` messages do: `expand` still floats a child's menu at
+/// zero height (feature 1792 research R3, contract §2). One row serves the window, so every
+/// session's lists close.
+fn options_toggled(app: &mut App) {
+    app.core.composers.options_toggled();
+    if !app.core.composers.options_open {
+        app.core.composers.palette.close_pickers();
+        app.core.effort_picker.close_all();
+        app.core.permission_prompts.close_mode_menus();
+    }
 }
 
 /// Whether `session`'s effort list, open before a message (`was_open`), is closed after it.
@@ -563,6 +583,117 @@ mod tests {
             .insert(path.clone(), vec![session]);
         app.core.workspace.active = Some(path);
         (app, rx, id)
+    }
+
+    /// Feature 1792 T017 (research R3, contract §2): collapsing the options row closes any open
+    /// model, effort or permission list. `expand` floats a child's menu even at zero height, so a
+    /// list left open would hang over a row that is no longer there.
+    #[test]
+    fn collapsing_the_options_row_closes_its_pickers() {
+        let (mut app, _rx, s) = app_with_session();
+        let _ = update(&mut app, Msg::OptionsToggled(s));
+        assert!(app.core.composers.options_open, "the first toggle opens it");
+        let _ = update(&mut app, Msg::ModelPickerRequested(s));
+        let _ = update(&mut app, Msg::EffortPickerToggled(s));
+        app.core.permission_prompts.toggle_mode_menu(s, 0);
+        assert!(
+            app.core.composers.palette.picker(s).is_some(),
+            "model list open"
+        );
+        assert!(
+            app.core.effort_picker.picker(s).is_some(),
+            "effort list open"
+        );
+        assert!(
+            app.core.permission_prompts.mode_menu(s).is_some(),
+            "mode list open"
+        );
+
+        let _ = update(&mut app, Msg::OptionsToggled(s));
+        assert!(
+            !app.core.composers.options_open,
+            "the second toggle collapses it"
+        );
+        assert!(
+            app.core.composers.palette.picker(s).is_none(),
+            "model list closed"
+        );
+        assert!(
+            app.core.effort_picker.picker(s).is_none(),
+            "effort list closed"
+        );
+        assert!(
+            app.core.permission_prompts.mode_menu(s).is_none(),
+            "mode list closed"
+        );
+    }
+
+    /// Feature 1792 D1: `/model` or `/effort` sent with the row collapsed opens the list *and*
+    /// the row, so the list has its trigger; so does a press on a trigger while the row collapses
+    /// (review A M3 F1), and the row's state is written each time.
+    #[test]
+    fn a_list_opened_with_the_row_collapsed_opens_the_row() {
+        use micold_client::features::permission_prompts::Msg as PromptsMsg;
+        use micold_core::settings::FakeSettingsStore;
+        let (mut app, _rx, s) = app_with_session();
+        let store = std::sync::Arc::new(FakeSettingsStore::new());
+        app.caps = app.caps.clone().with_settings(store.clone());
+        let written = |store: &FakeSettingsStore| {
+            store
+                .saves()
+                .last()
+                .is_some_and(|x| x.composer_options_open)
+        };
+        let collapse = |app: &mut App| {
+            if app.core.composers.options_open {
+                let _ = update(app, Msg::OptionsToggled(s));
+            }
+            assert!(!app.core.composers.options_open);
+        };
+
+        app.core.composers.edited(s, "/model".to_string(), (0, 6));
+        let _ = update(&mut app, Msg::SendRequested(s));
+        assert!(
+            app.core.composers.palette.picker(s).is_some(),
+            "/model opens its list"
+        );
+        assert!(
+            app.core.composers.options_open && written(&store),
+            "/model opens the row"
+        );
+
+        collapse(&mut app);
+        app.core.composers.edited(s, "/effort".to_string(), (0, 7));
+        let _ = update(&mut app, Msg::SendRequested(s));
+        assert!(
+            app.core.effort_picker.picker(s).is_some(),
+            "/effort opens its list"
+        );
+        assert!(
+            app.core.composers.options_open && written(&store),
+            "/effort opens the row"
+        );
+
+        collapse(&mut app);
+        let _ = update(&mut app, Msg::EffortPickerToggled(s));
+        assert!(
+            app.core.composers.options_open && written(&store),
+            "the effort trigger"
+        );
+
+        collapse(&mut app);
+        let _ = crate::shell::permission_prompts::update(
+            &mut app,
+            PromptsMsg::ModeMenuToggled {
+                session: s,
+                current: 0,
+            },
+        );
+        assert!(app.core.permission_prompts.mode_menu(s).is_some());
+        assert!(
+            app.core.composers.options_open && written(&store),
+            "the mode trigger"
+        );
     }
 
     /// Feature 1703 FR-011, FR-012: a toggle and a refusal that opens the row both write it.

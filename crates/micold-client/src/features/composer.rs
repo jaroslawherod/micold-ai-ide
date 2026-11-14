@@ -1097,29 +1097,6 @@ impl crate::app::State {
         }
     }
 
-    /// Show or hide the session options row. Hiding it closes every model, effort and permission
-    /// picker its controls hold open, as their `*Closed` messages would: `expand` still floats a
-    /// child's menu at zero height (feature 1792 research R3, contract §2). One row serves the
-    /// window, so every session's pickers close.
-    pub fn options_toggled(&mut self) {
-        self.composers.options_toggled();
-        if !self.composers.options_open {
-            self.composers.palette.close_pickers();
-            self.effort_picker.close_all();
-            self.permission_prompts.close_mode_menus();
-        }
-    }
-
-    /// A press on `session`'s permission trigger: open its mode list, or close it. Opened while
-    /// the row is collapsing (its trigger still takes clicks until it is gone), it opens the row
-    /// again, as `/model` does (feature 1792 D1).
-    pub fn mode_menu_toggled(&mut self, session: SessionId, current: usize) {
-        self.permission_prompts.toggle_mode_menu(session, current);
-        if self.permission_prompts.mode_menu(session).is_some() {
-            self.composers.expand_options();
-        }
-    }
-
     /// Open `session`'s model picker (FR-014, FR-018).
     pub fn open_model_picker(&mut self, session: SessionId) {
         let current = self.model_choice(session);
@@ -1185,6 +1162,10 @@ impl crate::app::State {
                 self.composers.clear_notice(session);
                 self.composers.replace_text(session, String::new(), (0, 0));
                 self.open_effort_picker(session);
+                // `/effort` with the row collapsed: the list needs its trigger (feature 1792 D1).
+                if self.effort_picker.picker(session).is_some() {
+                    self.composers.expand_options();
+                }
                 SendIntent::Nothing
             }
             Classified::Effort(Ok(choice)) => SendIntent::SetEffort(choice),
@@ -1368,84 +1349,6 @@ pub(crate) mod tests {
             .or_default()
             .push(session);
         id
-    }
-
-    /// Feature 1792 T017 (research R3, contract §2): collapsing the options row closes any open
-    /// model, effort or permission picker. `expand` floats a child's menu even at zero height, so
-    /// a picker left open would hang over a row that is no longer there.
-    #[test]
-    fn collapsing_the_options_row_closes_its_pickers() {
-        let (mut state, s) = structured_state();
-        state.options_toggled();
-        assert!(
-            state.composers.options_open,
-            "the first toggle opens the row"
-        );
-        state.open_model_picker(s);
-        state.open_effort_picker(s);
-        state.permission_prompts.toggle_mode_menu(s, 0);
-        assert!(
-            state.composers.palette.picker(s).is_some(),
-            "model picker open"
-        );
-        assert!(
-            state.effort_picker.picker(s).is_some(),
-            "effort picker open"
-        );
-        assert!(
-            state.permission_prompts.mode_menu(s).is_some(),
-            "mode list open"
-        );
-
-        state.options_toggled();
-        assert!(
-            !state.composers.options_open,
-            "the second toggle collapses it"
-        );
-        assert!(
-            state.composers.palette.picker(s).is_none(),
-            "model picker closed"
-        );
-        assert!(
-            state.effort_picker.picker(s).is_none(),
-            "effort picker closed"
-        );
-        assert!(
-            state.permission_prompts.mode_menu(s).is_none(),
-            "mode list closed"
-        );
-    }
-
-    /// Review A M3 F1: the permission trigger still takes a click while the row collapses; the
-    /// list it opens brings the row back rather than floating over nothing.
-    #[test]
-    fn a_mode_list_opened_while_collapsing_opens_the_row_again() {
-        let (mut state, s) = structured_state();
-        state.options_toggled();
-        state.options_toggled();
-        assert!(!state.composers.options_open);
-        state.mode_menu_toggled(s, 0);
-        assert!(state.permission_prompts.mode_menu(s).is_some());
-        assert!(state.composers.options_open, "the row opens with its list");
-        state.mode_menu_toggled(s, 0);
-        assert!(
-            state.permission_prompts.mode_menu(s).is_none(),
-            "a second press closes it"
-        );
-    }
-
-    /// Feature 1792 decision D1: `/model` or `/effort` sent while the row is collapsed opens the
-    /// picker *and* the row, so the menu has its trigger to hang from.
-    #[test]
-    fn a_picker_opened_by_command_opens_the_options_row() {
-        let (mut state, s) = structured_state();
-        state.open_model_picker(s);
-        assert!(state.composers.options_open, "/model opens the row");
-        state.composers.palette.close_picker(s);
-        state.options_toggled();
-        assert!(!state.composers.options_open);
-        state.open_effort_picker(s);
-        assert!(state.composers.options_open, "/effort opens the row");
     }
 }
 

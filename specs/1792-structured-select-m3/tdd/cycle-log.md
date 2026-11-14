@@ -29,3 +29,13 @@ T019 (`around_options`, `options_motion` in `ui/composer.rs`), T020 (`State::opt
 behaviour: arrival is read at the end height exactly (the decelerating tail spends its last
 frames within half a pixel), and the open row adds at least one keyboard stop (the pose's model
 trigger), not two. All 9 pass.
+
+### Moved to the shell (feature write isolation)
+
+`tests/main.rs` `feature_write_isolation` refused the composer feature writing the effort and
+permission features' state, so the collapse's close-all and the reopen-on-press moved into the
+shell (`shell/composer.rs` `options_toggled`, the `EffortPickerToggled` arm,
+`shell/permission_prompts.rs` `ModeMenuToggled`). T017's test moved with them, driven through
+`update` now: `shell::composer::tests::collapsing_the_options_row_closes_its_pickers` and
+`a_list_opened_with_the_row_collapsed_opens_the_row` (D1 plus review A F1, row state written each
+time). Red evidence for both is the features-level red above; the moved tests ran green at once.

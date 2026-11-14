@@ -35,7 +35,7 @@ Polish T022–T023 (no code) is left to the close unit.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D1 | M3 | `/model` or `/effort` sent while the options row is collapsed opened a picker with no visible trigger; with `expand` always built its menu would float over a zero-high row. | Opening a picker by command also expands the row (`open_model_picker`, `open_effort_picker` call `expand_options`), as a refusal does (1703 FR-012). | unit (M3) | `features::composer::tests::a_picker_opened_by_command_opens_the_options_row`; research R3 (no hidden guard in `Expand::overlay`) |
+| D1 | M3 | `/model` or `/effort` sent while the options row is collapsed opened a picker with no visible trigger; with `expand` always built its menu would float over a zero-high row. | Opening a list with the row collapsed also expands the row, as a refusal does (1703 FR-012): `/model` (`open_model_picker`), `/effort` (`send_intent`), and a trigger press while the row collapses (effort, mode; review A F1). T017/T020 live in the shell (`shell/composer.rs`), not `features/composer.rs`: feature write isolation forbids one feature closing another's lists. | unit (M3) | `shell::composer::tests::a_list_opened_with_the_row_collapsed_opens_the_row`, `collapsing_the_options_row_closes_its_pickers`; research R3 (no hidden guard in `Expand::overlay`) |
 
 
 ## Review rounds

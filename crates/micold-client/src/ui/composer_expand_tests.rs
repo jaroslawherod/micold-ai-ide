@@ -40,7 +40,7 @@ fn composer(state: &State, session: SessionId) -> Element<'_, String> {
 }
 
 fn height(m: &Mounted<'_>) -> f32 {
-    m.node.size().height
+    m.node.bounds().height
 }
 
 /// Frame ticks from `*clock` ms (after the mount's origin) for `span`, one per frame: the ms since
@@ -181,7 +181,7 @@ fn two_sessions_keep_separate_tracks() {
     let pair = |state| pair(state, a, b);
     let heights = |m: &Mounted<'_>| {
         let c = m.node.children();
-        (c[0].size().height, c[1].size().height)
+        (c[0].bounds().height, c[1].bounds().height)
     };
     let full = heights(&Mounted::new_in(pair(&open), WIDE)).0;
 
@@ -227,7 +227,7 @@ fn click(m: &mut Mounted<'_>, at: Point) -> Vec<String> {
 
 /// Every message a click anywhere on the composer, on a 12 px grid, publishes.
 fn clicks_everywhere(m: &mut Mounted<'_>) -> Vec<String> {
-    let size = m.node.size();
+    let size = m.node.bounds();
     let mut published = Vec::new();
     let mut y = 2.0;
     while y < size.height {
@@ -286,7 +286,7 @@ fn row_height(state: &State, session: SessionId, room: Size) -> f32 {
             &renderer,
             &layout::Limits::new(Size::ZERO, inner),
         )
-        .size()
+        .bounds()
         .height
 }
 
