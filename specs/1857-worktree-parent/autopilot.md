@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-11hi7h
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: review B round 2 (orchestrator), then merge (CI)
+- **Next step**: merge (CI)
 
 ## Pull requests
 
@@ -53,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | A | 1 | M1b | 7318d57 | (code-review skill, high, no subagent tool) | 7 findings: list_resumable_sessions and list_branches scoped, scope computed in the blocking closure, redundant retain removed, `Scope::unrestricted()`, list_branches test added; 2 declined |
 | B | 1 | M1b | f8a65aedc8a930ce6de6b90bf29bc8e2b6c8c5b7 | 091e3648b65b331889996323fab008ad31a1ba0d:9949424349adb1a57a7b6ce87a8d75e9634a9bb8 | CHANGES (F1-F4): all fixed (cycle-log red runs, drift-M1b.md, relay test states coverage, Scope::explain with red-first tests); round 2 to run by orchestrator |
+| B | 2 | M1b | 24e28dc124ca0b39051ae6b826275be5f3d80fb7 | 2b7105f8e940df91f685cfc09e6da5c31dfa8fce:24e28dc124ca0b39051ae6b826275be5f3d80fb7 | CLEAN (round 2 sonnet on fix diff; worktree_parent 22 passed; 2 MINOR) |
 
 ## Declined review findings
 
