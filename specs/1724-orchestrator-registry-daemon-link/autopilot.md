@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
 - **Phase**: milestone M3
-- **Next step**: orchestrator dispatches the scoped round-2 re-review (A and B) on the M3 fix diff, then continues the unit for the full gate and the PR (title/body in the scratchpad, pr-title-m3.md)
+- **Next step**: open the M3 PR (title/body in the scratchpad, pr-title-m3.md, pr-body-m3.md) and merge on green
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
-| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | implemented, awaiting review |
+| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | pending open | reviews clean, gate run |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
@@ -65,6 +65,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: F1 MAJOR (no red for T017-T022) declined, gap recorded in cycle-log, T022 waiver in drift-M2; heartbeat 4 pass; plan-drift clean; cadence note added |
 | Review A | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CLEAN: fixed F1 (Hello's version recorded), F2 (live-link and silent-link wire tests) |
 | Review B | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CHANGES: fixed F1 MAJOR (drift-M3.md), F2 (wire test), F3 (T027 text); round 2 pending on e606147c |
+| Review A | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN (declined MINOR: close the silent link right after the offline wait; FR-006 says the mismatched claim closes it) |
+| Review B | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN: F1-F3 fixed, no plan drift for M3, Verify 9 passed |
 
 ## Declined review findings
 
@@ -76,6 +78,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | M2 | Review B 1 | F1 retroactive red; F2 vacuous arm tests | Already recorded in cycle-log and drift-M2; the heartbeat behaviours are covered by non-vacuous tests (two failed and were fixed in this round) |
 | tasks | analyze | F10 split T014/T010; F14 move T041 to M1; F16 dup note | Each task is one coherent file pair; the no-outbound proof needs the whole feature; T018/T021 mention is harmless |
 | M3 | Review A 1 | none declined | F1, F2 fixed; B F1 (drift-M3.md), F2 (wire test), F3 (T027 text) fixed |
+| M3 | Review A 2 | F1 assert closure right after the offline wait | FR-006: the mismatched claim closes a silent link; an offline link is not closed by silence alone, so closure after the refusal is the behaviour under test |
 
 ## Handover
 
