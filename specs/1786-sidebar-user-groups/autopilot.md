@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1786
 - **Worktree branch**: claude/project-thread-krubw0
 - **Started**: 2026-11-11
-- **Phase**: implement
-- **Next step**: milestone M1 continues from *Handover* (T008, rest of T014, T015–T017, T044, then verify and PR)
+- **Phase**: verify (M1 PR open)
+- **Next step**: wait on CI for #1905 and merge; then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1848 | Design | merged 2026-11-12 | 553474089e559f95557125168150c3a3abfdcc95 |
+| #1905 | M1 | draft, CI pending | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T044 | full | Layout core, store, create a group | #… | in progress |
+| M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | PR open (draft) |
 | M2 | T018–T023 | full | Rename and delete a group | #… | pending |
 | M3 | T024–T028 | full | Move to group from the menu | #… | pending |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
@@ -67,30 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2 (cloud thread; no `mise`, no `gh`, no Agent tool, so no subagent reviews or delegation
-from the unit: cargo directly, GitHub through MCP) handed over at the context cap. Base:
-origin/main `fa0e41a7`, not merged in yet; branch `claude/project-thread-krubw0`, pushed, no PR yet.
-
-- **Done (ticked)**: T001–T007, T009–T013. Cycle 4 in `tdd/cycle-log.md`. `cargo test -p
-  micold-client --tests --no-fail-fast` is green except `layout_snapshot` (T044 re-records).
-- **T014 partly done**: "New group…" is on `more_menu_items` (`MoreAction::NewGroup`), the chord
-  Primary+Shift+G (`keymap::is_new_group_chord`, sent from `ui/mod.rs` app chords) and the
-  composer's shortcut sheet ("Sidebar" group, not on the Review tab's sheet: it overflowed
-  `review_tab_fits`). **Missing**: the sidebar empty-area menu (a new popover surface; add it to
-  `popover_displacement.rs` DISPLACES and the registry, as `SidebarMoreMenu`), then tick T014.
-- **Next**: T008 (GroupHeader/DropMarker builders, `TypeRole::UserGroupHeader`), rest of T014,
-  T015, T016 (`ui/sidebar.rs` `build_items` still `continue`s on `SidebarEntry::UserGroup`; draw
-  the header there at one one-line row height; "New group" button in the project header; routing
-  in main.rs is done: `Message::SidebarGroups` goes through `app.core.update` by the default arm,
-  check), T017, T044 (`UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test
-  layout_snapshot`); then verify.md (review A, review B, visual pass), gate, PR.
-- **Open notes**:
-  - Load/save: `shell/sidebar_layout.rs::after_update` (called from `update` in main.rs) loads the
-    active project's layout once and saves `sidebar.layouts_unsaved`. It does not reconcile
-    against the full live list before saving (the held layout is saved as is); fine for create.
-  - `NamingTarget` has only `New`; M2 adds `Rename(id)`, M3 `NewAndMove(item)`.
-  - The `GroupNamingDialog` is not in `tests/overlay_registry.rs` `dialogs()` (that list is not
-    checked against the registry); add a row when convenient.
+M1 unit 3 finished M1: all of T001–T017 and T044 are ticked. Review A ran in round 1 (4 fixed, 6 declined, see the tables above). Review B and the visual pass were not run: the cloud unit had no Agent tool, and the environment has no xdotool, sway or grim. origin/main was merged in at 45383389c, the branch is pushed, and draft PR #1905 is open. The PR author is the reviewer, so a review request was refused. Four micold-core permission tests fail only as root in the container: settings_refuses_save_over_failed_read, settings_write_is_logged, and two in worktree_leftovers.
 
 ## Open escalation
 
