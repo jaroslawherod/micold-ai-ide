@@ -141,6 +141,14 @@ question goes to the parent, or to the user, respectively.
 4. **Given** a supervisor in `default` (top tier), **When** it cannot answer, **Then** it asks the
    user directly.
 
+## Clarifications
+
+### Session 2026-11-14
+
+- Q: What is the "Watcher ceiling" of FR-008? → A: the `CEILING` exit of `supervisor-watch.sh`, 10 minutes by default, set by `AUTOPILOT_WATCH_CEILING`. _(agent-resolved: .claude/skills/autopilot-supervisor/SKILL.md#Watcher)_
+- Q: Where does the recommended option of a user-bound question come from? → A: the worker's own escalation, which already lists a `(Recommended)` option first in the `tasks/ask.md` banner format; the supervisor forwards it and adds no option of its own. _(agent-resolved: .claude/skills/speckit-autopilot/tasks/ask.md)_
+- Q: Does a user answer relayed to a session carry By `supervisor`? → A: no; FR-005a already fixes it: By `user` for relayed answers, `supervisor` only for answers the supervisor resolved. _(agent-resolved: spec.md#FR-005a)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements

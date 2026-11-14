@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: spec
-- **Next step**: clarify unit
+- **Next step**: plan unit (clarify done: 1 round, 3 agent-resolved, no escalation)
 
 ## Pull requests
 
