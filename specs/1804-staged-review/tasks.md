@@ -57,8 +57,8 @@ description: "Tasks: staged review for speckit-autopilot"
 
 Cannot finish in a PR from this feature: it needs the next three code-diff reviews after this change merges. Tracked by a follow-up issue (see the ledger); the close unit does not wait for it.
 
-- [ ] T016 [US3] After merge, run the staged flow in shadow beside the single-agent review on the next three milestone or chore code-diff reviews; create `specs/1804-staged-review/shadow.md` with one row per PR (findings of each, parity adjudication, cache-read tokens of each) per `data-model.md`
-- [ ] T017 [US3] Record the Decision section in `shadow.md` with the numbers (FR-012, FR-013, SC-001, SC-002, SC-005) and change the three skill files: staged default and shadow dropped, or shadow removed and the finding recorded
+- [x] T016 [US3] After merge, run the staged flow in shadow beside the single-agent review on the next three milestone or chore code-diff reviews; create `specs/1804-staged-review/shadow.md` with one row per PR (findings of each, parity adjudication, cache-read tokens of each) per `data-model.md` (done in #1808: see `shadow.md`)
+- [x] T017 [US3] Record the Decision section in `shadow.md` with the numbers (FR-012, FR-013, SC-001, SC-002, SC-005) and change the three skill files: staged default and shadow dropped, or shadow removed and the finding recorded (done in #1808: decision is not to switch, see `shadow.md`)
 
 ## Dependencies
 

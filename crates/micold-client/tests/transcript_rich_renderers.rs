@@ -522,6 +522,28 @@ fn the_lazy_key_changes_with_the_stamp_and_only_then() {
     assert_eq!(frame(&cache), 0, "and not again");
 }
 
+/// #1683: laying out a transcript shapes each text once, in the element that draws it: no
+/// selectable wrapper shapes paragraphs of its own before the pointer presses on it.
+#[test]
+fn laying_out_a_transcript_shapes_no_selectable_paragraph() {
+    use micold_material::selectable_text::paragraph_builds;
+    let session = SessionId::new();
+    let lines = turns();
+    let (mut state, cache) = replayed(session, &lines);
+    open_every_card(&mut state, session);
+    let before = paragraph_builds();
+    let mut mounted = Mounted::new(ROOM);
+    mounted.frame(
+        view_of(&state, session, &BlockRenderers::RICH, &cache),
+        Vec::new(),
+    );
+    assert_eq!(
+        paragraph_builds(),
+        before,
+        "no selectable shapes text in layout"
+    );
+}
+
 /// The `Copy` targets `lines`' view (every card unfolded) sends: by a press on each painted copy
 /// glyph, then by Enter and by Space on each keyboard focus stop.
 fn copy_targets(lines: &[String]) -> [Vec<String>; 3] {

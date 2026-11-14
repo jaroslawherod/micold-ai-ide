@@ -178,14 +178,18 @@ fn project_files(sources: &Path, project: &Path) {
     git(project, &["worktree", "add", "-q", "-b", SECOND, &worktree]);
 }
 
-/// Run `cmd` in `dir`; fail with the tail of its output unless it succeeds. The success word is
+/// Run `cmd` in `dir`, up to three tries ten seconds apart (the installs fetch from GitHub and
+/// package registries, which fail transiently, #1787); fail with the tail of its output unless
+/// one succeeds. The success word is
 /// typed split, so the shell's echo of the command cannot match it.
 async fn install(term: &mut Terminal<'_>, dir: &Path, what: &str, cmd: &str) {
     let out = term
         .run_within(
             &format!(
-                "(cd '{}' && {cmd}) >/tmp/self-install.log 2>&1 && echo IN\"STALL-OK\" \
-                 || {{ tail -n 20 /tmp/self-install.log; echo INSTALL-FAILED; }}",
+                "ok=; for try in 1 2 3; do \
+                 (cd '{}' && {cmd}) >/tmp/self-install.log 2>&1 && {{ ok=1; break; }}; sleep 10; \
+                 done; if [ -n \"$ok\" ]; then echo IN\"STALL-OK\"; \
+                 else tail -n 20 /tmp/self-install.log; echo INSTALL-FAILED; fi",
                 dir.display()
             ),
             INSTALL_BOUND,

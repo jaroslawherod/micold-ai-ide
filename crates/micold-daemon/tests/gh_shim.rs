@@ -28,12 +28,12 @@ impl Setup {
     /// A host daemon's configuration file with `tokens` as `(name, host, repos filter)`.
     fn config(&self, tokens: &[(&str, &str, &[&str])]) -> PathBuf {
         let mut text = format!(
-            "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = \"{}\"\n",
+            "schema = 1\n\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = '{}'\n",
             self.path("data").display()
         );
         for (name, host, repos) in tokens {
             text.push_str(&format!(
-                "\n[[github.tokens]]\nname = \"{name}\"\ntoken_file = \"{}\"\nhost = \"{host}\"\n",
+                "\n[[github.tokens]]\nname = \"{name}\"\ntoken_file = '{}'\nhost = \"{host}\"\n",
                 self.path(&format!("{name}.tok")).display(),
             ));
             if !repos.is_empty() {

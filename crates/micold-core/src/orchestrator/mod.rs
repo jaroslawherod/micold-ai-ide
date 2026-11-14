@@ -3,15 +3,21 @@
 //! are tested exactly. The daemon crate (`micold-daemon::orchestrator`) wires them to a socket.
 
 pub mod announce;
+pub mod liveness;
 pub mod record;
 pub mod registry;
+pub mod store;
 
 pub use announce::{
-    decode_first_frame, FirstFrame, LinkAnnouncement, LinkQuery, LinkVerdict, RefuseReason,
-    MAX_PREAMBLE_FRAME,
+    decode_first_frame, refusal_message, FirstFrame, LinkAnnouncement, LinkQuery, LinkVerdict,
+    RefuseReason, MAX_PREAMBLE_FRAME,
 };
+pub use liveness::Heartbeat;
 pub use record::{DaemonRecord, Health, TenantId};
-pub use registry::{Claim, ConfirmRefused, Confirmed, LinkAction, LinkToken, Registry, Snapshot};
+pub use registry::{
+    Claim, ClaimFailure, ConfirmRefused, Confirmed, LinkAction, LinkToken, Registry, Snapshot,
+};
+pub use store::{JsonRegistryStore, MemoryRegistryStore, RegistrySaver, RegistryStore, StoreError};
 
 /// The tenant a daemon that announces none belongs to.
 pub const DEFAULT_TENANT: &str = "default";

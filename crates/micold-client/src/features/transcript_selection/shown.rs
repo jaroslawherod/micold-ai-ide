@@ -10,7 +10,7 @@ use micold_core::structured::insights::figures::{turn_details, turn_figures, EST
 use micold_core::structured::insights::TurnUsage;
 use micold_core::structured::transcript::{
     footer_figures, format_duration, format_turns, CommandChip, Outcome, RawReason, ToolStatus,
-    TurnFooter,
+    TurnFooter, SUMMARY_MAX_CHARS,
 };
 
 /// What an empty transcript says (FR-006).
@@ -201,12 +201,19 @@ pub fn command_chip_description(chip: &CommandChip) -> String {
 pub fn subagent_notice_text(count: u64) -> String {
     format!("{} not shown", subagent_count(count))
 }
-/// The first line of `text` that holds anything: a folded thinking card's summary.
+/// The first line of `text` that holds anything, cut to [`SUMMARY_MAX_CHARS`]: a folded thinking
+/// card's summary. The header ellipsizes it to its width anyway; uncut, a 100 KB line was shaped
+/// whole for every prefix the ellipsis tried (#1683).
 pub fn first_line(text: &str) -> &str {
-    text.lines()
+    let line = text
+        .lines()
         .map(str::trim)
         .find(|l| !l.is_empty())
-        .unwrap_or("")
+        .unwrap_or("");
+    match line.char_indices().nth(SUMMARY_MAX_CHARS) {
+        Some((end, _)) => &line[..end],
+        None => line,
+    }
 }
 /// The line naming a user message's pictures, in order (FR-030); `None` without any.
 pub fn attachments_line(names: &[String]) -> Option<String> {
@@ -472,6 +479,17 @@ mod summary_tests {
         let bare = footer_summary(&footer(Outcome::Error, None, None));
         assert_eq!((bare.title.as_str(), bare.failed), ("Turn failed", true));
         assert!(bare.facts.is_empty());
+    }
+
+    /// #1683: a folded card's summary is cut to `SUMMARY_MAX_CHARS`, so a 100 KB one-line thinking
+    /// block is not shaped whole (and again per candidate) to ellipsize its header.
+    #[test]
+    fn a_first_line_is_capped_at_the_summary_length() {
+        let long = format!("  {}", "é".repeat(100_000));
+        let line = first_line(&long);
+        assert_eq!(line.chars().count(), SUMMARY_MAX_CHARS);
+        assert!(line.chars().all(|c| c == 'é'), "trimmed, cut on a char");
+        assert_eq!(first_line("\n  short \nnext"), "short");
     }
 
     #[test]

@@ -30,7 +30,7 @@ Green is the gate. What each gate is watching, for this feature:
 | `micold-daemon/tests/session_name_persistence.rs` | `drain_signals` reports each title change **once** and reports nothing while the title is unchanged (C9, C10) |
 | `micold-daemon/tests/session_name_recovery.rs` | a known session labelled `Pending` whose provider records hold a name gets it, without the session being started (US2, FR-006, SC-004) |
 | `micold-daemon/tests/session_name_recovery.rs` | the recovered name is persisted, so a second pass recovers `0` and a catalog reload still has it (FR-007, C18, C19) |
-| `micold-daemon/tests/session_name_recovery.rs` | a `Named` session is skipped — including one whose transcript has since been **deleted**, which keeps its name (FR-008, C15, US3) |
+| `micold-daemon/tests/session_name_recovery.rs` | a `Named` session is skipped — including one whose transcript has since been **deleted**, which keeps its name through the recovery pass; it is removed at startup, with its name, when its conversation is found gone (026 FR-008a; FR-008, C15, US3) |
 | `micold-daemon/tests/session_name_recovery.rs` | a session with no name anywhere stays `Pending` and writes nothing; an unreadable or empty record is a `None`, never an error and never a wrong name (FR-004, C17) |
 | `micold-daemon/tests/session_name_recovery.rs` | each session is asked **its own** provider — a Copilot session's name is not looked for in `claude`'s store (C16), and a provider with no `config_dir()` does not suppress the other (C20) |
 | `micold-daemon/tests/activity_pipeline.rs` | unchanged and still green: the OSC-0 title still becomes the live session title, glyph-stripped, and the spinner edge is still separate evidence (research R1 — this feature must not disturb it) |
