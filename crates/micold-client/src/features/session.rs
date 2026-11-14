@@ -842,6 +842,17 @@ impl crate::app::State {
             .unwrap_or(&[])
     }
 
+    /// How many shell instances the current session has: what an entry that opens one changes.
+    pub fn active_shell_count(&self) -> usize {
+        let Some(id) = self.session.active else {
+            return 0;
+        };
+        self.active_sessions()
+            .iter()
+            .find(|s| s.id == id)
+            .map_or(0, |s| s.shells.len())
+    }
+
     /// Make `next` the current session — the one write to `active_session` the whole application
     /// goes through, bar one (feature 024, contract §3.0).
     ///

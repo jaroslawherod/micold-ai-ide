@@ -467,27 +467,12 @@ pub fn disclosure_card<'a>(
                 roles,
             ),
             posed(
-                "the session bar: context meter with its threshold, and the session totals",
-                session_bar_sample(BarPose::Normal, roles),
-                roles,
-            ),
-            posed(
-                "the session bar near compaction: icon and words, not colour alone",
-                session_bar_sample(BarPose::Warning, roles),
-                roles,
-            ),
-            posed(
-                "the session bar before the first reply",
-                session_bar_sample(BarPose::NoData, roles),
-                roles,
-            ),
-            posed(
-                "the session bar with a background task running, its list unfolded",
+                "the slim row of the transcript body with a background task running, its list unfolded",
                 session_bar_sample(BarPose::Running, roles),
                 roles,
             ),
             posed(
-                "the session bar of a session in Bypass: its label, icon and words (#942)",
+                "the slim row of a session in Bypass: its label, icon and words (#942)",
                 session_bar_sample(BarPose::Bypass, roles),
                 roles,
             ),
@@ -544,37 +529,19 @@ fn insights_sample<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Mess
         .into()
 }
 
-/// Which session bar a pose shows (feature 944, T042).
+/// Which slim row a pose shows (feature 944, T042; feature 1793, R6).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BarPose {
-    Normal,
-    Warning,
-    NoData,
     Running,
     Bypass,
 }
 
-/// A structured session's bar (feature 944, X1) as `pose` says, its figures from the same view
-/// model the transcript pane draws.
+/// The slim first row of a structured session's body (feature 1793, R6) as `pose` says, from the
+/// same view model the transcript pane draws.
 fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> {
-    use crate::ui::transcript::{
-        meter_view, running_text, session_bar, task_status, SessionBarView, TaskRow,
-    };
+    use crate::ui::transcript::{meter_view, session_bar, task_status, SessionBarView, TaskRow};
     use micold_core::structured::insights::{ContextState, Task, TaskKind, TaskState};
 
-    let measured = |used: u64, warning| ContextState::Measured {
-        used,
-        window: 1_000_000,
-        // Whole and rounded half up, as the core's reading is.
-        percent: (used + 5_000) / 10_000,
-        threshold: Some(800_000),
-        warning,
-    };
-    let context = match pose {
-        BarPose::Normal | BarPose::Running | BarPose::Bypass => measured(37_141, false),
-        BarPose::Warning => measured(812_400, true),
-        BarPose::NoData => ContextState::NoData,
-    };
     let task = Task {
         task_id: "sample".into(),
         tool_use_id: None,
@@ -587,10 +554,11 @@ fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> 
     };
     let running = pose == BarPose::Running;
     let view = SessionBarView {
-        meter: meter_view(&context),
-        totals: (pose != BarPose::NoData).then(|| "$0.1400 est. · 3 turns".to_owned()),
+        // The row draws only the tasks; the meter and the totals are the top bar's.
+        meter: meter_view(&ContextState::NoData),
+        totals: None,
         totals_details: Vec::new(),
-        running: running_text(usize::from(running)),
+        running: None,
         tasks: if running {
             vec![TaskRow {
                 kind: crate::ui::transcript::kind_icon(task.kind),
@@ -607,6 +575,7 @@ fn session_bar_sample(pose: BarPose, roles: Roles) -> Element<'static, Message> 
         micold_core::session::PermissionMode::Default
     };
     session_bar::bar(&view, samples::TRANSCRIPT_SESSION, running, mode, roles)
+        .expect("each pose has something to show")
         .map(Message::Transcript)
 }
 

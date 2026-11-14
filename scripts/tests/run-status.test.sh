@@ -67,7 +67,8 @@ fresh
 check "a path outside any worktree is exit 2" 2 'not a git worktree' "$RS" "$tmp"
 check "an unknown option is exit 2" 2 'unknown option' "$RS" --nope
 rs_ledger 4-milestones; LEDGER=specs/043-y/bugs/BUG-1.autopilot.md rs_ledger 2-clarify
-check "two open ledgers are exit 3 and each is listed" 3 'autopilot.md.*|BUG-1.autopilot.md' "$RS" --json .
+check "two open ledgers are exit 3 and name the feature ledger" 3 'specs/042-x/autopilot\.md' "$RS" --json .
+check "two open ledgers are exit 3 and name the bug ledger" 3 'specs/043-y/bugs/BUG-1\.autopilot\.md' "$RS" --json .
 check "two open ledgers list the first" 3 'specs/042-x/autopilot.md' "$RS" .
 check "two open ledgers list the second" 3 'specs/043-y/bugs/BUG-1.autopilot.md' "$RS" .
 fresh
@@ -212,6 +213,12 @@ fresh; rs_ledger 3-design 10; pr_json "$d/fx" 10 OPEN > "$d/fx/pr-10.json"
 echo "PR 10 STATE OPEN DWELL 5000 LIMIT 3600 STUCK ACTION escalate" > "$d/fx/prstate-10"
 pr_json "$d/fx" 11 OPEN > "$d/fx/pr-11.json"; rs_ledger 3-design 10 11
 jc "several open PRs: any STUCK makes the run stuck" '.state' '^stuck$'
+
+# --- a `quick` ledger is the chore flow (data-model flow) --------------------------------------
+fresh; rs_ledger 4-milestones; sed -i 's/^- \*\*Kind\*\*: feature/- **Kind**: quick/' specs/042-x/autopilot.md
+jc "a quick Kind reports as the chore flow" '.flow' '^chore$'
+fresh; rs_ledger 4-milestones
+jc "a feature Kind is reported unchanged" '.flow' '^feature$'
 
 # --- shape and safety --------------------------------------------------------------------------
 fresh; ESC="$SINGLE"; rs_ledger 3-design 10; pr_json "$d/fx" 10 OPEN > "$d/fx/pr-10.json"

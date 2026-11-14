@@ -8,9 +8,10 @@ use crate::features::composer::Msg as ComposerMsg;
 use crate::features::session::{switch_entries, Msg as SessionMsg};
 use crate::features::session_strip::session_working;
 use crate::features::structured_transcript::TranscriptMsg;
+use crate::ui::transcript::running_text;
 use micold_core::context_header::changes_label;
 use micold_core::format::group_digits;
-use micold_core::session::{SessionId, SessionKind};
+use micold_core::session::{SessionId, SessionKind, SessionLifecycle};
 use micold_core::structured::insights::ContextState;
 use micold_core::structured::transcript::{format_cost, format_turns};
 
@@ -110,6 +111,10 @@ impl MeterText {
         if totals.turns_counted > 0 {
             lines.push(format!("Turns: {}", format_turns(totals.turns_counted)));
         }
+        let cli_running = session
+            .and_then(|id| state.workspace.find_session(id))
+            .is_some_and(|(_, s)| s.lifecycle == SessionLifecycle::Running);
+        lines.extend(running_text(insights.running_background(cli_running)));
         if warning {
             lines.push("Near compaction".to_string());
         }
@@ -269,9 +274,15 @@ pub enum HeaderMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorktreeMenu;
 
+impl WorktreeMenu {
+    /// Its surface id, named by the surfaces it displaces.
+    pub const ID: crate::overlay::SurfaceId =
+        crate::overlay::SurfaceId::new("header_worktree_menu");
+}
+
 crate::floating_surface!(
     WorktreeMenu,
-    id: crate::overlay::SurfaceId::new("header_worktree_menu"),
+    id: Self::ID,
     layer: Popover,
     cancelled_by: Message::HeaderBar(Msg::Dismissed),
 );
@@ -281,6 +292,29 @@ impl crate::overlay::registry::Registered for WorktreeMenu {
         // The flag alone: the bar draws the menu only where a top-bar model exists, and a
         // selection change closes it (`follow`), so a stale flag is never drawn.
         (state.header_bar.menu == HeaderMenu::Worktree).then_some(WorktreeMenu)
+    }
+}
+
+/// The `+` menu of the tab row as a floating surface: a popover, so Escape or an outside click
+/// closes it (FR-013).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlusMenu;
+
+impl PlusMenu {
+    /// Its surface id, named by the surfaces it displaces.
+    pub const ID: crate::overlay::SurfaceId = crate::overlay::SurfaceId::new("header_plus_menu");
+}
+
+crate::floating_surface!(
+    PlusMenu,
+    id: Self::ID,
+    layer: Popover,
+    cancelled_by: Message::HeaderBar(Msg::Dismissed),
+);
+
+impl crate::overlay::registry::Registered for PlusMenu {
+    fn open_in(state: &App) -> Option<Self> {
+        (state.header_bar.menu == HeaderMenu::Plus).then_some(PlusMenu)
     }
 }
 
@@ -307,7 +341,10 @@ pub struct State {
     /// The open menu.
     pub menu: HeaderMenu,
     /// The selection the menu was opened under; a different one closes it.
-    under: Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+    under: (
+        Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+        usize,
+    ),
 }
 
 impl State {
@@ -325,15 +362,17 @@ impl State {
         }
     }
 
-    /// Close the menu once the selection is not the one it was opened under (a selection change
-    /// closes it); remember the selection otherwise.
+    /// Close the menu once the selection, or the shell count of the active session (an entry that
+    /// opened a shell), is not what it was opened under; remember them otherwise.
     pub fn follow(
         &mut self,
         selection: Option<(micold_core::session::SessionLocation, Option<SessionId>)>,
+        shells: usize,
     ) {
-        if self.under != selection {
+        let key = (selection, shells);
+        if self.under != key {
             self.menu = HeaderMenu::None;
-            self.under = selection;
+            self.under = key;
         }
     }
 }

@@ -94,6 +94,18 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          touched (#1532, FR-013d)",
     ),
     (
+        "session_strip",
+        "header_bar",
+        "Msg::Toggled(HeaderMenu::Plus) — the strip's `+` opens the header menu the header bar owns, \
+         so the press names the one message that toggles it (feature 1793)",
+    ),
+    (
+        "session_strip",
+        "structured_transcript",
+        "TranscriptMsg::ShowRawEvents(true) — the `N hidden` chip sends the one message the raw-events \
+         setting is chosen by, and reads the transcript's hidden count (feature 1793)",
+    ),
+    (
         "header_bar",
         "composer",
         "Msg::SwitchRequested — the worktree menu's Structured / Terminal control sends the one \

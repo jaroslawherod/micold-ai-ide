@@ -45,7 +45,7 @@ its detail.
 
 By default the transcript leaves out the session start, the unrecognised or unreadable entries, a
 tool result without its call, and the footer of a turn that succeeded. Turn **Show raw events** on
-in the bar above the transcript, or in the worktree **⋮** menu in the top bar (see
+with the **N hidden** chip at the end of the header row above the transcript, or in the worktree **⋮** menu in the top bar (see
 *The worktree menu* below), to see them as the summary lines described above.
 
 - The switch is off by default and applies to every structured session in the window at once.
@@ -67,6 +67,11 @@ of actions for the selected worktree or session. The app menu (the other **⋮**
   Other CLIs have one view, so the control is not shown.
 - Escape, or a press outside the menu, closes it; so does selecting another worktree or session.
 
+The tab row has one **+**, named *Add session or terminal*, in place of the two add icons and the
+**Open in terminal** button that used to sit there. It opens a menu with **Another session** and
+**Terminal**; Escape or a press outside closes it. Switching a session to the terminal is **Terminal**
+in the worktree menu above.
+
 ## Status, Changes and context in the top bar
 
 With a worktree or session selected, the top bar shows, before the settings button and the app
@@ -74,7 +79,7 @@ menu and in this order:
 
 1. **Context meter**: a small ring with the share of the context window used and the session's cost,
    for example `8% · $1.28`. Hover the ring for the tokens used out of the window, the cost and the
-   number of turns. The ring turns to the warning colour near compaction. A session with no usage
+   number of turns and the number of running background tasks. The ring turns to the warning colour near compaction. A session with no usage
    yet shows an empty ring and no cost.
 2. **Status**: `Working` while the session's process is running, `Idle` otherwise (starting,
    stopped, failed or exited).
@@ -85,6 +90,22 @@ None of these show on the Overview.
 
 When the window is narrow the bar gives way in order: the ring's text hides first (the ring and the
 tooltip, which still carries the cost, stay), then the **Changes** label hides and its icon stays.
+
+## The header row
+
+The session area has one 40 px row above the transcript. It holds the session tabs, which scroll
+sideways when they do not fit, and at the end of the row the restart control (shown only for a stopped
+session), the split buttons and the **N hidden** chip. The former title row, the `running` status text
+and the status cluster are gone: status, the ring and **Changes** are in the top bar.
+
+- A session tab shows an activity dot only while that session is working. A failed or exited session
+  shows no dot.
+- The **N hidden** chip (named "N hidden events, show") appears only while events are hidden; pressing
+  it shows the raw events. With none hidden it is absent.
+- The old session bar (meter, totals and the raw-events row) is removed. The list of background tasks
+  and the mode label sit in a slim first row of the transcript, only when there is something to show.
+- In a narrow window the tabs scroll sideways, and **+**, restart, the split buttons and the chip stay
+  reachable.
 
 ## The hidden-events notice
 

@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1748 | design: M1 milestone cut | merged | 3dafe3fdeff78991721162255acdeb460c724f98 |
 | #1756 | M1 | merged | f6c8a1c6604e7ed460df121db260504a7c161a7c |
 | #1844 | M2 | merged | 8d86299527ffd3011afd845c30a8f28b76029cee |
-| (close) | close: tdd-verify remediation T164-T167, spec Status | open | |
+| (close) | close: tdd-verify remediation T169-T172, spec Status | open | |
 
 ## Milestones
 
@@ -60,7 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. Close unit done: tdd-verify re-run with mutation pass (53 mutants), I16-9..I16-16 closed by tests (T164-T167), spec Status set, review CLEAN, full gate green; close PR opened.
+None. Close unit done: tdd-verify re-run with mutation pass (53 mutants), I16-9..I16-16 closed by tests (T169-T172), spec Status set, review CLEAN, full gate green; close PR opened.
 
 
 ## Open escalation

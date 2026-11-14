@@ -203,7 +203,10 @@ fn a_session_tab_has_a_close_control() {
 fn the_marks_slot_is_reserved_rather_than_pushed_when_stopped() {
     let body = member_body(&area_source());
     assert_eq!(
-        body.matches(".leading(mark(").count(),
+        body.matches(".leading(mark(").count()
+            + body
+                .matches(".leading(ActivityBadge::for_emphasis(")
+                .count(),
         2,
         "both kinds of tab must always build their leading slot (FR-012c, research R4)"
     );
@@ -287,12 +290,14 @@ fn each_strip_member_sends_its_s5_message() {
                 Message::Session(SessionMsg::ShellInstanceSelected(main, shell))
             ),
             (
-                MemberKey::Plus,
-                Message::Session(SessionMsg::ShellInstanceOpenRequested)
-            ),
-            (
                 MemberKey::Session(other),
                 Message::Session(SessionMsg::Selected(other))
+            ),
+            (
+                MemberKey::Plus,
+                Message::HeaderBar(micold_client::features::header_bar::Msg::Toggled(
+                    micold_client::features::header_bar::HeaderMenu::Plus
+                ))
             ),
         ]
     );
@@ -302,10 +307,9 @@ fn each_strip_member_sends_its_s5_message() {
         Some(SessionLocation::Default),
         "New session starts another session here"
     );
-    let src = area_source();
-    let strip = body_from(&src, "pub(crate) fn strip<'a>(");
+    // The `+` menu's first entry runs **Start another session…** for the shown location.
     assert!(
-        strip.contains("SessionMsg::AdditionalRequested(at)") && strip.contains("Icon::AddSession"),
-        "New session runs **Start another session…** for the shown location (US2 sc. 3)"
+        strip_rules_source().contains("SessionMsg::AdditionalRequested(location)"),
+        "the + menu's New session runs **Start another session…** for the shown location (US2 sc. 3)"
     );
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1812
 - **Worktree branch**: feat/1812_autopilot-supervisor-m1-machine-readable-run
 - **Started**: 2026-11-10
-- **Phase**: milestones
-- **Next step**: M2 PR merges, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1819 | design (spec, plan, tasks) | merged | 5e90aef10191fe1b8f8801e63355c8a244a5eef0 |
 | #1823 | M1 | merged | acc28c34cd44b5d3eafac49cec605878b4007433 |
-| #1830 | M2 | open | |
+| #1830 | M2 | merged | 8753adb2d4b25d900aa2b6558d07843712a158af |
+| #1850 | close | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T019 | full | run-status.sh and its per-state tests (US1 + US3) | #1823 | merged |
-| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #1830 | in-review |
+| M2 | T015–T018, T020–T024 | full | supervised escalation: supervised.sh, answer.sh, skill prose (US2) | #1830 | merged |
 
 ## Decisions
 
@@ -47,6 +48,8 @@ US3 (tests only) is folded into M1 (rule 7, tests travel with code); US2 is M2 (
 | Review B M1 | 1 |  |  | 59b1a52a21d668ef829e1b47d88795cf30ca715a:5e90aef10191fe1b8f8801e63355c8a244a5eef0 | CLEAN (1 MINOR fixed, ledger only) |
 | Review A M2 | 1 | 1830 | 49b48e92353d057accb2a2641f2c1e58a1411b09 | 5f2bf79f69c45300ea1fc1034b8ed571fdf77627:49b48e92353d057accb2a2641f2c1e58a1411b09 | CLEAN (3 MINOR left: answer.sh double message, unknown batch number, no lock; re-review on current head) |
 | Review A M2 | 2 | 1830 | d9cc520954bec73e975512f2f920ec1043cbd53d | f1a0b9ca0a981182c4f482814f7dd4034314549a:d9cc520954bec73e975512f2f920ec1043cbd53d | CLEAN (merge of origin/main; conflict in autopilot.test.sh kept both sides) |
+| Review close | 1 | close | d2ecabb4e462968cb2a6a75e82f63e85eeba7f7d | 899d90a1216c0c0f21d68de2a166abb3b6eed3fa:8753adb2d4b25d900aa2b6558d07843712a158af | CLEAN (2 MINOR: ledger fixed, live-run note declined) |
+| Review close | 2 | 1850 | a1bc9eba31b02c79c663e1f91f783069ceb5f6bf | 899d90a1216c0c0f21d68de2a166abb3b6eed3fa:8753adb2d4b25d900aa2b6558d07843712a158af | CLEAN (head d2ecabb4e reviewed; later commits ledger-only) |
 
 ## Declined review findings
 
@@ -57,7 +60,7 @@ US3 (tests only) is folded into M1 (rule 7, tests travel with code); US2 is M2 (
 
 ## Handover
 
-M2 PR #1830 is open and reviewed (Review A re-run on the current head: CLEAN). Next: the orchestrator merges.
+None. M2 merged; close PR is the last.
 
 ## Open escalation
 

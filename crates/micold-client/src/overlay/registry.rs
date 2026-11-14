@@ -268,9 +268,15 @@ register! {
     crate::features::changes::FullReplyDialog => crate::ui::changes::reply_dialog,
     // Feature 1270: the review bar's overflow menu closes nothing by opening (R8).
     crate::features::changes::ReviewOverflowMenu,
-    // Feature 1793: the top bar's worktree menu closes nothing by opening; the app menu's backdrop
-    // already keeps two popovers from being open at once.
-    crate::features::header_bar::WorktreeMenu,
+    // Feature 1793: the top bar's worktree menu and the tab row's `+` menu are one `HeaderMenu`
+    // value, so opening either closes the other; the app menu's backdrop already keeps either from
+    // being open with it.
+    crate::features::header_bar::WorktreeMenu {
+        displaces: crate::features::header_bar::PlusMenu,
+    },
+    crate::features::header_bar::PlusMenu {
+        displaces: crate::features::header_bar::WorktreeMenu,
+    },
     // #1274: the Review tab's shortcut sheet (FR-012, research R8).
     crate::features::changes::ShortcutSheet => crate::ui::shortcut_sheet::dialog,
     crate::features::help::AboutDialog => crate::ui::about::dialog,

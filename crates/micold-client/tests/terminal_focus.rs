@@ -977,11 +977,18 @@ fn a_strip_press_leaves_focus_where_the_bar_control_left_it() {
     );
     let model = StripModel::of(&base).expect("a session is shown");
     let pane = PaneLayout::single().focused();
+    // The "+" opens a menu, which takes the keyboard as any menu does (feature 1793); its terminal
+    // entry is the former "+" press and is checked in its place.
     let mut presses: Vec<(String, Message)> = model
         .members
         .iter()
+        .filter(|m| !matches!(m.key(), MemberKey::Plus))
         .map(|m| (format!("{:?}", m.key()), m.press()))
         .collect();
+    presses.push((
+        "+ menu: Terminal".into(),
+        Message::Session(SessionMsg::ShellInstanceOpenRequested),
+    ));
     presses.extend(
         model
             .members

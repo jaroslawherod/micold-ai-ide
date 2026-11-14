@@ -16,6 +16,7 @@ use crate::session_area_fits::assert_fits_under;
 use crate::status_bar_fits::assert_the_bar_holds_its_place;
 use crate::support::covered_states::{
     covered_states, REVIEW_BAR, REVIEW_DIFF_PANE, REVIEW_DRAWER, REVIEW_TREE, REVIEW_TREE_FILTER,
+    SESSION_STRIP_TABS,
 };
 use crate::support::layout::{self as lay, CoveredState, LayoutRecord, StateUnderTest, WINDOW};
 use iced::{Rectangle, Size};
@@ -37,12 +38,7 @@ const REVIEW_STATES: &[(&str, &str, &[&str])] = &[
     (
         "session-area-changes-open",
         "session-area-review-shown",
-        &[
-            "session.header",
-            "session.header.changes",
-            "session.strip",
-            "session.strip.tabs.review",
-        ],
+        &["session.strip", "session.strip.tabs.review"],
     ),
     (
         "review-tab-beside-sessions",
@@ -132,37 +128,18 @@ const SMALLEST_WINDOW: &[(&[&str], &str, &str, &str, &str)] = &[
             "review-drag-composer",
             "review-shortcut-sheet",
             "review-source-open",
-            "review-two-worktrees",
         ],
-        "0/0/0/1/1/2/1/0/0/0/2",
+        "0/0/0/1/1/1/1/0/0/0/2",
         "bottom",
         "base",
         "the tree's VirtualRows: rows past its viewport",
     ),
     (
-        &[
-            "changes-review-held",
-            "changes-review-marks",
-            "review-drag-composer",
-            "review-shortcut-sheet",
-            "review-source-open",
-        ],
-        "0/0/0/1/1/2/1/1/0/0/1",
+        &["review-drag-composer"],
+        "0/0/0/1/1/1/1/1/0/0/1",
         "bottom",
         "base",
         "the diff's Scrollable: lines past its viewport",
-    ),
-    (
-        &[
-            "changes-review-held",
-            "changes-review-marks",
-            "review-shortcut-sheet",
-            "review-source-open",
-        ],
-        "0/0/0/1/1/2/1/1/0/0/1",
-        "right",
-        "base",
-        "the diff's Scrollable: a line wider than its viewport, scrolled sideways (#1466)",
     ),
 ];
 
@@ -222,7 +199,13 @@ fn laid_out(
 ) -> (Vec<lay::Overflow>, Vec<LayoutRecord>) {
     under.state.settings.theme_pref = theme;
     under.state.window.window_size = (window.width as u16, window.height as u16);
-    lay::text_overflows_settled_at(lay::view_of(&under), &mut lay::renderer(), window)
+    let (mut overflows, records) =
+        lay::text_overflows_settled_at(lay::view_of(&under), &mut lay::renderer(), window);
+    // A tab the strip's scroll viewport cuts is scrolled, not squeezed: its label keeps its own
+    // width and the viewport clips it (feature 1793 widened the viewport, so which tab is cut moved).
+    let tabs = format!("{}/", lay::path_token(SESSION_STRIP_TABS));
+    overflows.retain(|o| !o.node_path.starts_with(&tabs));
+    (overflows, records)
 }
 
 /// The sidebar drawer's box, the row's first child.

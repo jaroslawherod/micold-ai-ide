@@ -637,6 +637,18 @@ check "context hook tells a prep unit in another worktree to hand over" 0 '24000
 check "context hook ignores a missing transcript" 0 '^$' chook nope
 check "ask.md skips AskUserQuestion over the cap" 0 'do not call' grep -A3 'Restart small' "$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"
 
+# Supervised escalation prose (US2 AC1-AC3, FR-010, FR-011b, FR-013, SC-003): tasks/ask.md and tasks/resume.md.
+AK="$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"; RM="$ROOT/.claude/skills/speckit-autopilot/tasks/resume.md"
+check "ask.md: a supervised run asks through supervised.sh" 0 '^ok$' bash -c "grep -q 'supervised.sh <ledger>' '$AK' && grep -q 'exits 0' '$AK' && echo ok"
+check "ask.md: supervised sends banner and notification, no AskUserQuestion, ends the turn" 0 '^ok$' bash -c "grep -A3 'Supervised?' '$AK' | grep -qi 'no .AskUserQuestion' && grep -A3 'Supervised?' '$AK' | grep -qi 'end the turn' && echo ok"
+check "ask.md: no ledger or not supervised keeps asking as before" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$AK' | grep -qi 'No ledger yet or not supervised: ask as below' && echo ok"
+check "ask.md: the answer returns as resume <answer>" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$AK' && echo ok"
+check "ask.md: supervised, answer.sh records the answer" 0 '^ok$' bash -c "grep -q 'answer.sh. records the answer' '$AK' && echo ok"
+check "resume.md: resume <answer> calls answer.sh then continues" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$RM' && grep -q 'answer.sh <ledger>' '$RM' && grep -qi 'apply the answer' '$RM' && echo ok"
+check "resume.md: a refused batch is relayed and a repeat is ignored" 0 '^ok$' bash -c "grep -q 'Exit 2' '$RM' && grep -q 'ignored: no open escalation' '$RM' && echo ok"
+check "resume.md: resume alone re-sends the banner and ends the turn" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$RM' | grep -qi 'resume. alone.*banner again and end the turn' && echo ok"
+check "resume.md: run-status.sh reports the run as asking" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$RM' | grep -q 'run-status.sh --json. reports a run as .asking. with the question' && echo ok"
+
 # The same hook: after three requests in a row that each made one read-only call, it says to batch.
 tuse() {  # tuse <id> <context> <tool json>...
   local id="$1" ctx="$2"; shift 2; local blocks; blocks="$(IFS=,; echo "$*")"
@@ -919,25 +931,9 @@ check "answer: a prose Decisions section gets a table" 0 '^\| D1 \|' "$A" "$l" "
 check "answer: that table has its header" 0 '^\| # \| Phase ' bash -c "grep '^| #' '$l'"
 check "answer: a blank line ends that table" 0 '^$' bash -c "grep -B1 '^## Open escalation' '$l' | head -1"
 
-# Staged review flow: the three skill files describe it (FR-004..007, FR-010, FR-011, FR-013 wording).
-R="$ROOT/.claude/agents/autopilot-reviewer.md"
+# Code diffs use the single-agent review; the staged flow was dropped (specs/1804-staged-review/shadow.md).
 RV="$ROOT/.claude/skills/speckit-autopilot/tasks/review.md"
-RR="$ROOT/.claude/skills/speckit-autopilot/tasks/review-rounds.md"
-check "staged: review.md limits the plan to 6 probes" 0 '^ok$' bash -c "grep -qi 'at most 6 probes' '$RV' && echo ok"
-check "staged: review.md limits a probe's evidence to 40 lines" 0 '^ok$' bash -c "grep -qi 'at most 40 lines' '$RV' && echo ok"
-check "staged: review.md runs one worker per probe in one message on haiku" 0 '^ok$' bash -c "grep -qi 'one .autopilot-worker. per probe' '$RV' && grep -q 'haiku' '$RV' && echo ok"
-check "staged: an unanswered probe is never CLEAN" 0 '^ok$' bash -c "grep -qF 'UNANSWERED: <reason>' '$RV' && grep -qi 'never .CLEAN.' '$RV' && echo ok"
-check "staged: facts script failure falls back to the single-agent review" 0 '^ok$' bash -c "grep -qi 'facts script fails' '$RV' && grep -qi 'single-agent review' '$RV' && echo ok"
-check "staged: a verdict that needs more reading falls back" 0 '^ok$' bash -c "grep -qi 'needs more reading' '$RV' && echo ok"
-check "staged: the unit re-checks the snapshot after stage 4" 0 '^ok$' bash -c "grep -qi 'after stage 4' '$RV' && grep -qi 'stale' '$RV' && echo ok"
-check "staged: token accounting sums plan, workers and verdict" 0 '^ok$' bash -c "grep -qi 'plan.*workers.*verdict' '$RV' && echo ok"
-check "staged: review.md says whether the unit passes --lcov" 0 '^ok$' bash -c "grep -q -- '--lcov' '$RV' && echo ok"
-check "staged: shadow mode and shadow.md are described" 0 '^ok$' bash -c "grep -qi 'shadow mode' '$RV' && grep -q 'shadow.md' '$RV' && echo ok"
-check "staged: artifact reviews stay single-agent" 0 '^ok$' bash -c "grep -qi 'artifact reviews' '$RV' && echo ok"
-check "staged: rounds 2+ use --base-snapshot" 0 '^ok$' bash -c "grep -q -- '--base-snapshot' '$RR' && echo ok"
-check "staged: round limit counts the single-agent verdict in shadow mode" 0 '^ok$' bash -c "grep -qi 'single-agent verdict' '$RR' && grep -qi 'round.limit' '$RR' && echo ok"
-check "staged: a stale snapshot discards the staged result" 0 '^ok$' bash -c "grep -qi 'discards the staged result' '$RR' && echo ok"
-check "staged: the reviewer agent names the stage roles" 0 '^ok$' bash -c "grep -q 'Stage roles' '$R' && grep -qi 'plan stage reads only' '$R' && echo ok"
+check "review.md: code diffs use the single-agent review and point to shadow.md" 0 '^ok$' bash -c "grep -qi 'single-agent review' '$RV' && grep -q 'shadow.md' '$RV' && echo ok"
 
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

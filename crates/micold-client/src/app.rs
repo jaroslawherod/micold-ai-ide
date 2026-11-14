@@ -1619,7 +1619,8 @@ impl State {
             self.follow_header();
             // A selection change closes an open header menu (feature 1793, data-model.md).
             let selection = self.shown_location().map(|l| (l, self.session.active));
-            self.header_bar.follow(selection);
+            let shells = self.active_shell_count();
+            self.header_bar.follow(selection, shells);
         }
     }
 

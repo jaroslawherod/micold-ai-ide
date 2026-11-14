@@ -57,6 +57,18 @@ fn the_meter_carries_the_percent_cost_and_a_tooltip_with_tokens_cost_and_turns()
     assert!(meter.warning, "the recording sits above its threshold");
 }
 
+/// T034 (R6, FR-012): the session bar's running count lives in the ring's tooltip.
+#[test]
+fn the_ring_tooltip_carries_the_running_background_task_count() {
+    let model = HeaderBarModel::of(&transcript_pane_insights()).expect("shown");
+    assert!(
+        model.meter.tooltip.contains("1 background task running"),
+        "{:?}",
+        model.meter.tooltip
+    );
+    assert_eq!(model.meter.accessible, model.meter.tooltip);
+}
+
 #[test]
 fn a_session_with_no_usage_shows_the_empty_state_and_invents_no_cost() {
     let state = title_bar_crowded();
@@ -153,15 +165,15 @@ fn a_selection_change_closes_the_open_menu() {
     let here = Some((SessionLocation::Worktree("a".into()), None));
     let there = Some((SessionLocation::Worktree("b".into()), None));
     let mut menus = Menus::default();
-    menus.follow(here.clone());
+    menus.follow(here.clone(), 0);
     menus.update(Msg::Toggled(HeaderMenu::Worktree));
-    menus.follow(here);
+    menus.follow(here, 0);
     assert_eq!(
         menus.menu,
         HeaderMenu::Worktree,
         "the same selection keeps it"
     );
-    menus.follow(there);
+    menus.follow(there, 0);
     assert_eq!(menus.menu, HeaderMenu::None, "another selection closes it");
 }
 
@@ -279,4 +291,14 @@ fn escape_closes_the_open_worktree_menu() {
     state.header_bar.update(Msg::Toggled(HeaderMenu::Worktree));
     let escape = micold_client::overlay::registry::escape(&state);
     assert_eq!(escape, Some(Message::HeaderBar(Msg::Dismissed)));
+}
+
+#[test]
+fn escape_closes_the_open_plus_menu() {
+    let mut state = transcript_pane_insights();
+    state.header_bar.update(Msg::Toggled(HeaderMenu::Plus));
+    assert_eq!(
+        micold_client::overlay::registry::escape(&state),
+        Some(Message::HeaderBar(Msg::Dismissed))
+    );
 }

@@ -440,6 +440,10 @@ async fn with_the_kind_or_the_master_switch_off_nothing_is_sent() {
 async fn without_focus_the_first_reporting_window_gets_the_notice() {
     let (service, _live) = Service::copilot(None);
     let mut first = connect(&service.state, "first").await;
+    // The service sends `Welcome` before it registers the connection and numbers it, so `connect`
+    // returning does not fix the order. A round trip does: the `Pong` is answered from the
+    // registered connection. Without it `second` can be numbered lower than `first`.
+    let _ = notices(&mut first).await;
     let mut second = connect(&service.state, "second").await;
     reports(&mut second, false, None).await;
     reports(&mut first, false, None).await;

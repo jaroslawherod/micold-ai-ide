@@ -15,3 +15,11 @@ Prerequisites: `jq`, `git`, `gh` authenticated (steps 1-2 only for the live chec
 5. Full gate before pushing: `mise run gate`.
 
 No visual pass: there is no UI.
+
+## Results (close, 2026-11-12)
+
+1. `run-status.test.sh`: 113 cases, 0 failures. `autopilot.test.sh`: 338 cases, 0 failures.
+2. Live `run-status.sh --json`: `state` running, `supervised` false; 2.3 s (SC-005, under 5 s).
+3. Read-only: the hash of every `specs/*/autopilot.md` is identical before and after the call.
+4. Escalation: covered by the `supervised.sh` and `answer.sh` cases of `autopilot.test.sh` (asking state, answer row in *Decisions*, section back to `None.`).
+5. Full gate: left to CI, see the PR body.

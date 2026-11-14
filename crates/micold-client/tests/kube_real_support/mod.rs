@@ -8,6 +8,9 @@
 
 pub mod services;
 
+#[path = "../daemon_bin/mod.rs"]
+mod daemon_bin;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -388,24 +391,18 @@ impl KeyGen for SshKeygen {
     }
 }
 
-/// This workspace's `micold-daemon`, built beside the test executable (`mise run test-kube` builds
-/// it first); `MICOLD_DAEMON_BIN` overrides.
+/// This workspace's `micold-daemon` build (`mise run test-kube` builds it first);
+/// `MICOLD_DAEMON_BIN` overrides.
 pub fn daemon_binary() -> PathBuf {
     if let Some(p) = std::env::var_os("MICOLD_DAEMON_BIN") {
         return PathBuf::from(p);
     }
-    let exe = std::env::current_exe().expect("the test executable");
-    let bin = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target dir")
-        .join("micold-daemon");
-    assert!(
-        bin.exists(),
-        "build micold-daemon first (cargo build -p micold-daemon): {}",
-        bin.display()
-    );
-    bin
+    daemon_bin::built_daemon().unwrap_or_else(|| {
+        panic!(
+            "build micold-daemon first; none above {:?}",
+            std::env::current_exe()
+        )
+    })
 }
 
 /// One client: its key directory and the environment a Kubernetes start needs, wired to the live

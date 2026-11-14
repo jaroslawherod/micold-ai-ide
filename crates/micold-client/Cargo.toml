@@ -222,6 +222,10 @@ name = "composer_large_draft"
 path = "tests/composer_large_draft.rs"
 
 [[test]]
+name = "daemon_bin_lookup"
+path = "tests/daemon_bin_lookup.rs"
+
+[[test]]
 name = "daemon_config_delivery_host_env"
 path = "tests/daemon_config_delivery_host_env.rs"
 
