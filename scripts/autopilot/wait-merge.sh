@@ -4,12 +4,17 @@
 # Usage: wait-merge.sh <pr> [--no-merge|--squash]
 #   --squash   squash-merge instead of rebase-merge
 #   --no-merge stop at green and merge nothing (the verdict guard is skipped)
+# Tooling-only diffs: when `ci complete` is red, the diff is autopilot tooling only (diff-class.sh) and a green
+# local gate (scripts/gate.sh / `mise run gate`) is recorded for the head's tree, the merge proceeds with
+# `--admin`, after SKIPPED-CI is printed, written to <log-dir>/pr-<pr>-skipped-checks.txt and commented on the
+# PR. The caller records it in the ledger and the epic checklist. Any product change keeps the full CI requirement.
 # Before any merge it runs verdict-guard.sh: a head whose approved review covers another head is refused.
 # Runs for as long as CI does, so start it detached and wait on its last line (see SKILL.md).
 #
 # Last line, and exit code:
 #   MERGED <pr> <merge-sha>          0  merged (or already merged)
 #   GREEN <pr>                       0  green, --no-merge given
+#   SKIPPED-CI <pr> <head> <checks>  printed before MERGED when a red CI was bypassed (tooling-only diff, local gate green)
 #   RED <pr> <run-id> <log-file>     1  failed checks listed above it; failing log tail in <log-file>
 #   CHECKLESS <pr> <reason>          3  no check at all after AUTOPILOT_CHECKLESS_AFTER seconds;
 #                                       reason: conflicting | action_required <run-ids> | no-run
@@ -92,6 +97,33 @@ while :; do
   tick "waiting for a newer run on the same head"
 done
 
+# A red `ci complete` may be bypassed only for a tooling-only diff whose head tree a green local gate
+# recorded. Never silent: the skipped checks are printed, written to a file and commented on the PR.
+admin=""; skipped=""
+tooling_bypass() {
+  local self head tree stamps names
+  self="$(dirname "${BASH_SOURCE[0]}")"
+  head="$(view headRefOid .headRefOid 2>/dev/null)"; [ -n "$head" ] || return 1
+  git fetch -q origin "$(view headRefName .headRefName)" 2>/dev/null || return 1
+  [ "$(git rev-parse FETCH_HEAD 2>/dev/null)" = "$head" ] || return 1
+  "$self/diff-class.sh" "$pr" "$head" 2>&1 | tail -n 1 | grep -q '^TOOLING ' || return 1
+  tree="$(git rev-parse "$head^{tree}" 2>/dev/null)" || return 1
+  stamps="$(git rev-parse --git-path autopilot-gate-ok)"
+  grep -qxF "$tree" "$stamps" 2>/dev/null || return 1
+  names="$( { view statusCheckRollup ".statusCheckRollup[] | $bad | .name"
+              view statusCheckRollup '.statusCheckRollup[] | select(.context != null and (.state=="FAILURE" or .state=="ERROR")) | .context'
+              echo "ci complete"; } | paste -sd, -)"
+  skipped="SKIPPED-CI $pr $head $names"; skipped_names="$names"
+  return 0
+}
+# Announced only once the merge went through, so a failed merge leaves no false record.
+announce_skip() {
+  [ -n "$skipped" ] || return 0
+  echo "$skipped"
+  echo "$skipped" >"$logdir/pr-$pr-skipped-checks.txt"
+  gh pr comment "$pr" --body "Merged past red CI: tooling-only diff, local gate green. Skipped checks: $skipped_names. Record it in the run ledger and the epic checklist." >/dev/null 2>&1 || true
+}
+
 if [ "$conclusion" != SUCCESS ]; then
   bad='select(.name != null and .name != "ci complete" and (.conclusion // "") != ""
               and ([.conclusion] | inside(["SUCCESS","SKIPPED","NEUTRAL"]) | not))'
@@ -104,8 +136,12 @@ if [ "$conclusion" != SUCCESS ]; then
     | grep -oE 'runs/[0-9]+' | head -1 | cut -d/ -f2)"
   out="$logdir/pr-$pr-failed.log"
   if [ -n "$run" ]; then gh run view "$run" --log-failed 2>&1 | tail -200 >"$out"; else : >"$out"; fi
-  echo "RED $pr ${run:-none} $out"
-  exit 1
+  if [ "$merge" -eq 1 ] && tooling_bypass; then
+    admin=--admin
+  else
+    echo "RED $pr ${run:-none} $out"
+    exit 1
+  fi
 fi
 
 [ "$merge" -eq 0 ] && { echo "GREEN $pr"; exit 0; }
@@ -123,11 +159,11 @@ esac
 if [ -z "${head:-}" ]; then
   echo "VERDICT-REFUSED $pr reviewed none current unknown re-review: guard gave no head ($glast)"; exit 7
 fi
-if ! err="$(gh pr merge "$pr" "$method" --match-head-commit "$head" 2>&1)"; then
-  [ "$(view state .state)" = MERGED ] && { merged_line; exit 0; }
+if ! err="$(gh pr merge "$pr" "$method" ${admin:+"$admin"} --match-head-commit "$head" 2>&1)"; then
+  [ "$(view state .state)" = MERGED ] && { announce_skip; merged_line; exit 0; }
   echo "MERGE-FAILED $pr $(echo "$err" | grep -v '^\s*$' | head -1)"
   exit 4
 fi
-[ "$(view state .state)" = MERGED ] && { merged_line; exit 0; }
+[ "$(view state .state)" = MERGED ] && { announce_skip; merged_line; exit 0; }
 echo "MERGE-FAILED $pr state is $(view state .state) after merge"
 exit 4

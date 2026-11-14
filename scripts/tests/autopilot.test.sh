@@ -230,6 +230,61 @@ wm; pr_json "$d/fx" 5 OPEN > "$d/fx/pr-5.json"
 echo '[{"databaseId":91,"conclusion":"action_required","headSha":"old"}]' > "$d/fx/runs.json"
 check "wait-merge: ignores approvals pending on an older head" 3 '^CHECKLESS 5 no-run' "$S/wait-merge.sh" 5
 
+# --- diff-class.sh and the tooling-only merge past a red CI ---------------------------------------
+files_json() { # files_json <fx> <path...>: the PR's changed files, on every view of pr-5
+  local f p arr='[]'; for p in "${@:2}"; do arr="$(jq -c --arg p "$p" '. + [{"path":$p}]' <<<"$arr")"; done
+  for f in "$1"/pr-5.json*; do jq --argjson a "$arr" '.files = $a' "$f" > "$f.x" && mv "$f.x" "$f"; done
+}
+cls() { wm; pr_json "$d/fx" 5 OPEN COMPLETED FAILURE > "$d/fx/pr-5.json"; files_json "$d/fx" "$@"; }
+cls .claude/skills/speckit-autopilot/tasks/ci.md scripts/autopilot/wait-merge.sh scripts/tests/autopilot.test.sh docs/x.md specs/quick/a.md
+check "diff-class: autopilot tooling only" 0 '^TOOLING 5' "$S/diff-class.sh" 5
+cls scripts/autopilot/wait-merge.sh crates/micold-core/src/lib.rs
+check "diff-class: a crates/ file makes it product" 1 '^PRODUCT 5 crates/micold-core/src/lib.rs' "$S/diff-class.sh" 5
+cls scripts/tests/other.test.sh
+check "diff-class: a suite of another script is product" 1 '^PRODUCT 5 scripts/tests/other.test.sh' "$S/diff-class.sh" 5
+cls .github/workflows/ci.yml
+check "diff-class: CI config is product" 1 '^PRODUCT 5 ' "$S/diff-class.sh" 5
+cls docs/../crates/a.rs
+check "diff-class: a path with .. is product" 1 '^PRODUCT 5 ' "$S/diff-class.sh" 5
+cls
+check "diff-class: an empty file list is product" 1 '^PRODUCT 5 no changed files' "$S/diff-class.sh" 5
+wm; pr_json "$d/fx" 5 OPEN > "$d/fx/pr-5.json"; jq 'del(.files)' "$d/fx/pr-5.json" > "$d/fx/x" && mv "$d/fx/x" "$d/fx/pr-5.json"
+check "diff-class: a missing file list is product" 1 '^PRODUCT 5 ' "$S/diff-class.sh" 5
+
+# Red CI, merge_ready pushes the head: the fixture head becomes the real one so the gate stamp can name its tree.
+bypass_case() { # bypass_case <stamp: yes|no> <path...>
+  local stamp="$1"; shift; cls "$@"; merge_ready
+  local head; head="$(git rev-parse wt)"
+  for f in "$d/fx"/pr-5.json*; do sed "s/\"1111111111111111111111111111111111111111\"/\"$head\"/" "$f" > "$f.x" && mv "$f.x" "$f"; done
+  pr_json "$d/fx" 5 MERGED COMPLETED FAILURE > "$d/fx/pr-5.merged.json"
+  [ "$stamp" = yes ] && git rev-parse 'wt^{tree}' >> "$(git rev-parse --git-path autopilot-gate-ok)"
+  true
+}
+bypass_case yes scripts/autopilot/wait-merge.sh docs/a.md
+check "wait-merge: tooling diff, red CI, green local gate merges with --admin" 0 '^SKIPPED-CI 5 [0-9a-f]{40} build \+ test,ci complete
+MERGED 5 abc123' "$S/wait-merge.sh" 5
+check "wait-merge: the bypass merge used --admin" 0 'pr merge 5 --rebase --admin --match-head-commit' cat "$d/fx/gh.log"
+check "wait-merge: the skipped checks are recorded in a file" 0 'build \+ test,ci complete' cat "$d/pr-5-skipped-checks.txt"
+check "wait-merge: the skipped checks are commented on the PR" 0 'pr comment 5 .*Skipped checks' cat "$d/fx/gh.log"
+bypass_case no scripts/autopilot/wait-merge.sh
+check "wait-merge: tooling diff without a recorded local gate stays red" 1 '^RED 5 ' "$S/wait-merge.sh" 5
+check "wait-merge: no bypass without a local gate leaves no skip record" 0 '^ok$' bash -c "! test -e '$d/pr-5-skipped-checks.txt' && echo ok"
+bypass_case yes scripts/autopilot/wait-merge.sh crates/micold-core/src/lib.rs
+check "wait-merge: a crates/ diff stays red despite a green local gate" 1 '^RED 5 ' "$S/wait-merge.sh" 5
+bypass_case yes scripts/autopilot/wait-merge.sh
+check "wait-merge: --no-merge never bypasses" 1 '^RED 5 ' "$S/wait-merge.sh" 5 --no-merge
+bypass_case yes docs/a.md; echo "msg" > "$d/fx/merge-5.fail"
+check "wait-merge: a failed --admin merge prints MERGE-FAILED" 4 '^MERGE-FAILED 5 ' "$S/wait-merge.sh" 5
+check "wait-merge: a failed --admin merge leaves no skip record" 0 '^ok$' bash -c "! test -e '$d/pr-5-skipped-checks.txt' && echo ok"
+# A rename lists only the new path in `gh pr view`; the local diff of the head must still count the deletion.
+cls docs/a.md; merge_ready; mkdir -p crates; echo x > crates/old.rs; git add crates/old.rs; git commit -qm c; git push -q origin wt
+head="$(git rev-parse wt)"; for f in "$d/fx"/pr-5.json*; do sed "s/\"1111111111111111111111111111111111111111\"/\"$head\"/" "$f" > "$f.x" && mv "$f.x" "$f"; done
+check "diff-class: a local diff file outside the tooling paths makes it product" 1 '^PRODUCT 5 crates/old.rs' "$S/diff-class.sh" 5 "$head"
+wm; pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json"; files_json "$d/fx" crates/a.rs
+pr_json "$d/fx" 5 MERGED COMPLETED SUCCESS > "$d/fx/pr-5.merged.json"; merge_ready
+check "wait-merge: a crates/ diff merges on green CI without --admin" 0 '^MERGED 5 abc123' "$S/wait-merge.sh" 5
+check "wait-merge: a green merge does not use --admin" 0 '^ok$' bash -c "! grep -q admin '$d/fx/gh.log' && echo ok"
+
 # --- brief.py ---------------------------------------------------------------------------------
 d="$(mktemp -d "$tmp/brief.XXXX")"; mkdir -p "$d/f"
 cat > "$d/f/spec.md" <<'MD'
