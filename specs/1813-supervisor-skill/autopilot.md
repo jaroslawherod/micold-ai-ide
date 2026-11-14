@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-87zjfg
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M3 (review)
-- **Next step**: review A (high) and B on the M3 diff, then open the M3 PR
+- **Phase**: M3 (PR)
+- **Next step**: wait on the M3 PR CI, squash-merge, then hand over to M4
 
 ## Pull requests
 
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 2 | M2 | 65f3c5c54e06942a0c097dc61725d4e619230b18 | 256c7c859e5fb9cfc28f374abe306c9ab5c51110:65f3c5c54e06942a0c097dc61725d4e619230b18 | CLEAN (scoped, sonnet) |
 | Review A M3 | 1 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | CHANGES: 2 MAJOR (CRLF, globs), fixed; MINOR bullet key fixed |
 | Review B M3 | 1 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | CLEAN (MINOR flow-label note added to SKILL.md) |
+| Review A M3 | 2 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | 5433ce69c700d2689d8ce9926656b0d93aaa1af0:b3feeb311945de92fbe0cf6cfd91c22104879d6b | CLEAN (scoped, sonnet; 3 round-1 findings verified fixed, 1 MINOR empty Touches line, optional) |
 
 ## Red runs
 
