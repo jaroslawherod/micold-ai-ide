@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1760
-- **Worktree branch**: test/1760_scoped-token-step-11-assert-the-credential-flow-in
+- **Worktree branch**: claude/project-thread-myub4h
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M1 (fresh cloud thread)
+- **Next step**: M1 reviews A and B (orchestrator), then the M1 PR
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | - | pending |
+| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | pending-review | built, pushed, awaiting reviews |
 | M2 | T018–T019 | light | form tick and user guide | - | pending |
 | M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+2026-11-14 M1 unit (cloud): previous PR #1870 merged at 55e614ed76ba667e09c0ac9649abc04114f93393. T001–T017 and T020 built test-first (tdd/test-list.md, tdd/cycle-log.md), committed and pushed on claude/project-thread-myub4h; PR body at specs/1760-kube-scoped-token-flow/pr-m1-body.md (uncommitted). Next: orchestrator runs Review A and B, the unit fixes findings, then the PR opens.
 2026-11-14: design PR #1870 squash-merged (55e614ed7) on green CI. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M1 milestone unit (T001–T017, T020) on this branch.
 
 2026-11-14 takeover (cloud thread): main merged in; plan re-checked against #1838/PR #1886. That fix changed only the daemon's client-token default (`CONTAINER_TOKEN_PATH` = `/run/micold/token`); this plan's GitHub token files live under `STARTUP_ENV_MOUNT` (`/run/micold/secrets/startup`, unchanged on main) and all anchors it names (`kube_attempt`, `POD_FILE_LIMIT`, `PodStartup`, `StartRequest::secret_files`, `GithubTokenSetting::from_store`, `KubeEnv`, `parse_token_file`) still exist. No spec/plan change needed.
@@ -68,4 +69,5 @@ None.
 
 ## Follow-ups not done
 
+- Spec prose (tasks.md T020, data-model, plan, research R2) calls the store `daemons.json`; there is no such file: the daemon registry is the `daemons` list of `settings.json`. The user guide (T020) names `settings.json`; the spec artifacts were left as they are.
 - docs/user-guide/sandboxed-daemon.md promises a sandbox pushes with a pasted token, but no client code delivers `[[github.tokens]]` to a container (deliver_container) either; separate follow-up.
