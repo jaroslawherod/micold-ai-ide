@@ -533,8 +533,15 @@ fn laying_out_a_transcript_shapes_no_selectable_paragraph() {
     open_every_card(&mut state, session);
     let before = paragraph_builds();
     let mut mounted = Mounted::new(ROOM);
-    mounted.frame(view_of(&state, session, &BlockRenderers::RICH, &cache), Vec::new());
-    assert_eq!(paragraph_builds(), before, "no selectable shapes text in layout");
+    mounted.frame(
+        view_of(&state, session, &BlockRenderers::RICH, &cache),
+        Vec::new(),
+    );
+    assert_eq!(
+        paragraph_builds(),
+        before,
+        "no selectable shapes text in layout"
+    );
 }
 
 /// The `Copy` targets `lines`' view (every card unfolded) sends: by a press on each painted copy

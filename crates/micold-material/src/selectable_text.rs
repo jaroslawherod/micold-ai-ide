@@ -973,8 +973,15 @@ mod tests {
         let at = Point::new(2.3 * a, 1.5 * h);
         assert_eq!(offsets(&m.press(at)), vec![7 + 2]);
         release(&mut m, at);
-        assert_eq!(paragraph_builds(), before + 3, "a press shapes each hard line");
-        assert_eq!(offsets(&m.press(Point::new(1.2 * a, 2.5 * h))), vec![14 + 1]);
+        assert_eq!(
+            paragraph_builds(),
+            before + 3,
+            "a press shapes each hard line"
+        );
+        assert_eq!(
+            offsets(&m.press(Point::new(1.2 * a, 2.5 * h))),
+            vec![14 + 1]
+        );
         assert_eq!(paragraph_builds(), before + 3, "and only once");
     }
 
