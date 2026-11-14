@@ -12,8 +12,9 @@
 //!    that socket) and to nothing else, so the orchestrator never dialled a daemon at any address.
 //!
 //! Scope: Linux only (a namespace and `strace` have no counterpart on macOS or Windows; the source
-//! scan in `no_outbound.rs` covers every platform). Each part skips, saying why, where the tool or
-//! unprivileged user namespaces are unavailable (a locked-down container or CI runner).
+//! scan in `no_outbound.rs` covers every platform). Each part skips with a `::warning::` line where
+//! the tool or unprivileged user namespaces are unavailable locally, and fails when `CI` is set:
+//! CI installs `strace` and lifts the AppArmor user-namespace restriction, so it must run there.
 
 #![cfg(target_os = "linux")]
 
@@ -42,6 +43,16 @@ fn can_run(tool: &[&str]) -> bool {
         .args(&tool[1..])
         .output()
         .is_ok_and(|o| o.status.success())
+}
+
+/// A tool this proof needs is missing. Locally that skips, loudly; in CI (`CI` set) it fails, so a
+/// runner that lacks `strace` or user namespaces cannot turn the proof into a silent pass.
+fn unavailable(why: &str) {
+    assert!(
+        std::env::var_os("CI").is_none(),
+        "the FR-008 netns proof cannot run in CI: {why}"
+    );
+    eprintln!("::warning::SKIPPED the FR-008 netns proof: {why}");
 }
 
 fn text(output: &Output) -> String {
@@ -88,9 +99,9 @@ fn link_and_heartbeat_pass_with_outbound_connections_blocked() {
     // The child-count tests need this process to have no children, so they and this test take turns.
     let _quiet = children_quiet_blocking();
     if !can_run(&["unshare", "-rn", "true"]) {
-        eprintln!(
-            "skipped: `unshare -rn` is unavailable here (no unprivileged user namespaces), so \
-             outbound connections cannot be blocked. FR-008 stays covered by no_outbound.rs."
+        unavailable(
+            "`unshare -rn` is unavailable here (no unprivileged user namespaces), so outbound \
+             connections cannot be blocked. FR-008 stays covered by no_outbound.rs.",
         );
         return;
     }
@@ -114,9 +125,9 @@ fn the_orchestrator_connects_to_nothing_but_its_own_socket() {
         "trace=connect",
         "true",
     ]) {
-        eprintln!(
-            "skipped: `strace` under `unshare -rn` is unavailable here, so the connect calls \
-             cannot be traced. The pass-in-a-namespace test and no_outbound.rs still run."
+        unavailable(
+            "`strace` under `unshare -rn` is unavailable here, so the connect calls cannot be \
+             traced. The pass-in-a-namespace test and no_outbound.rs still run.",
         );
         return;
     }
@@ -150,16 +161,25 @@ fn the_orchestrator_connects_to_nothing_but_its_own_socket() {
         .iter()
         .filter(|l| !l.contains("orchestrator.sock") && !l.contains("sin_port=htons("))
         .collect();
-    let tcp: Vec<_> = connects
+    // The namespace probe is this test binary's own deliberate TCP connect, to TEST-NET-1 and to the
+    // loopback listener: the only IP destinations allowed. The orchestrator made no other.
+    let ip_strangers: Vec<_> = connects
         .iter()
-        .filter(|l| l.contains("sin_port=htons("))
+        .filter(|l| l.contains("sin_port=htons(") || l.contains("sin6_port=htons("))
+        .filter(|l| {
+            !l.contains("inet_addr(\"192.0.2.1\")")
+                && !(l.contains("inet_addr(\"127.0.0.1\")")
+                    && l.contains(&format!("sin_port=htons({port})")))
+        })
         .collect();
     assert!(
         strangers.is_empty(),
         "connect to a stranger:\n{strangers:#?}"
     );
-    // Only the two probe connects (loopback and TEST-NET-1) are IP; the orchestrator made none.
-    assert!(tcp.len() <= 2, "IP connects beyond the probe's:\n{tcp:#?}");
+    assert!(
+        ip_strangers.is_empty(),
+        "IP connects beyond the probe's:\n{ip_strangers:#?}"
+    );
 }
 
 /// Run only inside the namespace: proves the block is real, so the passing tests mean something.
