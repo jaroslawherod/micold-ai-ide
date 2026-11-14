@@ -16,7 +16,7 @@ behavior names the task pair it covers. M3 adds the live acceptance behaviors.
 | ID | Behavior | Tasks | Traces to | State | Test |
 |---|---|---|---|---|---|
 | U1 | `KubeSettings.github_tokens` off by default, round-trips, old JSON loads off, omitted when off | T002, T003 | FR-008 | DONE | `micold-core/src/kube/settings.rs` `the_github_tokens_opt_in_is_off_by_default_round_trips_and_is_omitted_when_off` |
-| U2 | `GithubTokenSetting.host` rendered only when `Some`; no value in the rendered config | T004, T005 | FR-001, FR-002 | PENDING | |
+| U2 | `GithubTokenSetting.host` rendered only when `Some`; no value in the rendered config | T004, T005 | FR-001, FR-002 | DONE | `micold-client/tests/github_tokens_reach.rs` `a_token_host_is_rendered_only_when_set_and_no_value_is_rendered` |
 | U3 | `select_tokens` order, `Exact`/`Owner` case-insensitive, empty `repos` only with a project, none without projects | T006, T007 | FR-009 | PENDING | |
 | U4 | `PodGithubTokens::read` refuses empty, non-UTF-8, oversize, loose-mode files naming the token; paths pair with keys; `Debug` shows no value | T008, T009 | FR-001, FR-002 | PENDING | |
 | U5 | `ProjectsDial` is the sorted lower-cased `owner/repo` set and is part of the dial identity | T010, T011 | FR-009 | PENDING | |

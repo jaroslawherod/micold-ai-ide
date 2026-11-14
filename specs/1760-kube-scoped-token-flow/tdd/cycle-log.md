@@ -18,3 +18,16 @@ Append only. Newest last.
 - green: `RawKubeSettings.github_tokens` carried through `From`:
   `cargo test -p micold-core --lib kube::` -> `test result: ok. 157 passed; 0 failed`
 - refactor: none needed.
+
+## Cycle 2: U2 the token's `host` (T004, T005)
+
+- test: `crates/micold-client/tests/github_tokens_reach.rs`
+  `a_token_host_is_rendered_only_when_set_and_no_value_is_rendered` (beside the other
+  `[[github.tokens]]` render tests, linked by `tests/main.rs`; the task named the source file, the
+  render tests of this struct live here)
+- red: with `GithubTokenSetting.host` added and `render` not writing it:
+  `scripts/build-lock.sh cargo test -p micold-client --test main github_tokens_reach`
+  -> `left: 0 right: 1` (`text.matches("host = ").count()`), `5 passed; 1 failed`
+- green: `render` writes `key_str("host", &token.host)`: `github_tokens` -> `6 passed; 0 failed`,
+  `daemon_config` -> `44 passed; 0 failed`
+- refactor: none needed (reuses `key_str`).

@@ -12,8 +12,8 @@
 
 - [X] T002 [P] Test: `KubeSettings.github_tokens` defaults off, round-trips, an old JSON without the key loads off, omitted from JSON when off, in `micold-core/src/kube/settings.rs`.
 - [X] T003 Add `KubeSettings.github_tokens: bool` (`#[serde(default, skip_serializing_if = "std::ops::Not::not")]`, Raw, `new()`) in `micold-core/src/kube/settings.rs`.
-- [ ] T004 [P] Test: `GithubTokenSetting.host` renders `host = "..."` only when `Some`; the value never appears in the rendered config, in `micold-client/src/daemon_config_render.rs`.
-- [ ] T005 Add `host: Option<String>` to `GithubTokenSetting` (`from_store` leaves `None`) in `micold-client/src/daemon_config_render.rs`.
+- [X] T004 [P] Test: `GithubTokenSetting.host` renders `host = "..."` only when `Some`; the value never appears in the rendered config, in `micold-client/src/daemon_config_render.rs`.
+- [X] T005 Add `host: Option<String>` to `GithubTokenSetting` (`from_store` leaves `None`) in `micold-client/src/daemon_config_render.rs`.
 - [ ] T006 [P] Test: `select_tokens` keeps Settings order, matches `Exact`/`Owner` case-insensitively, keeps an empty-`repos` token only with at least one repository, returns nothing with no repositories (FR-009), in `micold-client/src/daemon_config_delivery.rs`.
 - [ ] T007 Implement `select_tokens` in `micold-client/src/daemon_config_delivery.rs`.
 - [ ] T008 [P] Test: `PodGithubTokens::read` refuses an empty, non-UTF-8, over-`POD_FILE_LIMIT` file and, on Unix, a file with group/other bits, each error naming the token; `entries[i].token_file` ends with `files[i].0`; `Debug` shows no value (the value is a `SecretToken`, not a plain `String`), in `micold-client/src/daemon_config_delivery.rs`.
