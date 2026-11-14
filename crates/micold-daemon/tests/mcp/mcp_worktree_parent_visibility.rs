@@ -194,7 +194,10 @@ async fn a_message_to_an_out_of_scope_session_is_refused_while_the_parent_is_rea
         "not_found"
     );
     // The parent is in scope (FR-017): the call gets past the scope and fails only because the
-    // fixture's sessions run no process; the real relay is covered by `mcp_cross_session`.
+    // fixture's sessions run no process. A successful send needs a running terminal process, which
+    // only the sandbox of `mcp_cross_session` provides, and there delivery to an in-scope session
+    // is tested (`at_auto_the_text_is_typed_into_s2_and_submitted`); this test owns the scope
+    // check, so the refusal category differs from `not_found` and that is all it asserts.
     assert_eq!(
         f.error_category(A, "send_session_input", to(P)).await,
         "conflict"
@@ -251,4 +254,54 @@ async fn list_branches_does_not_name_a_worktree_the_caller_cannot_see() {
     );
     let from_default = f.call(DEFAULT, "list_branches", json!({})).await;
     assert_eq!(checked_out(&from_default, "X"), "X");
+}
+
+/// FR-015: the reason a branch is unavailable names its holder only when the caller may see it.
+#[tokio::test]
+async fn an_unavailable_reason_does_not_name_a_worktree_the_caller_cannot_see() {
+    let f = Fixture::new().await;
+    let reason_of = |out: &Value, branch: &str| {
+        out["branches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["name"] == branch)
+            .unwrap_or_else(|| panic!("no branch {branch}: {out}"))["unavailable_reason"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let from_a = f.call(A, "list_branches", json!({})).await;
+    assert_eq!(
+        reason_of(&from_a, "B"),
+        "'B' is already checked out in the worktree 'B'.",
+        "a sibling is named"
+    );
+    assert_eq!(
+        reason_of(&from_a, "X"),
+        "'X' is already checked out in another worktree.",
+        "an unrelated worktree is not"
+    );
+    let from_default = f.call(DEFAULT, "list_branches", json!({})).await;
+    assert_eq!(
+        reason_of(&from_default, "X"),
+        "'X' is already checked out in the worktree 'X'."
+    );
+}
+
+#[tokio::test]
+async fn a_create_worktree_conflict_does_not_name_a_worktree_the_caller_cannot_see() {
+    let f = Fixture::new().await;
+    let args = json!({"branch": "X", "mode": "existing_local"});
+    let from_a = f.err(A, "create_worktree", args.clone()).await;
+    assert_eq!(from_a["category"], "conflict", "{from_a}");
+    assert_eq!(
+        from_a["message"], "'X' is already checked out in another worktree.",
+        "{from_a}"
+    );
+    let from_default = f.err(DEFAULT, "create_worktree", args).await;
+    assert_eq!(
+        from_default["message"], "'X' is already checked out in the worktree 'X'.",
+        "{from_default}"
+    );
 }

@@ -15,7 +15,7 @@
 //! no-op request never shows a prompt.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use micold_core::git::parse_remote_list;
@@ -432,13 +432,21 @@ fn read_call(
 /// What a caller may see and address (spec 1857, FR-015): its own worktree, its parent, its
 /// siblings and its direct children, by worktree ref. `None` is everything: a caller in `default`.
 /// A removed parent links no one.
-struct Scope(Option<BTreeSet<String>>);
+struct Scope {
+    visible: Option<BTreeSet<String>>,
+    /// The paths of the worktrees outside the scope, so an error that names the holder of a branch
+    /// can leave out one the caller cannot see.
+    hidden: Vec<PathBuf>,
+}
 
 impl Scope {
     /// Everything: for the row of what the caller itself just made or changed, which may be a
     /// child of a sibling, and so outside its scope.
     fn unrestricted() -> Self {
-        Self(None)
+        Self {
+            visible: None,
+            hidden: Vec::new(),
+        }
     }
 
     fn new(
@@ -452,7 +460,7 @@ impl Scope {
             .find(|s| s.id == caller)
             .and_then(|s| s.worktree_dir.as_deref())
         else {
-            return Self(None);
+            return Self::unrestricted();
         };
         let known = |dir: &str| {
             parents
@@ -469,11 +477,38 @@ impl Scope {
                 .filter(|dir| known(dir).is_some_and(|p| p == own || Some(p) == parent))
                 .cloned(),
         );
-        Self(Some(set))
+        let hidden = project
+            .worktrees
+            .iter()
+            .filter(|wt| !set.contains(&wt.dir_name))
+            .map(|wt| wt.path.clone())
+            .collect();
+        Self {
+            visible: Some(set),
+            hidden,
+        }
     }
 
     fn allows(&self, worktree: &str) -> bool {
-        self.0.as_ref().is_none_or(|set| set.contains(worktree))
+        self.visible
+            .as_ref()
+            .is_none_or(|set| set.contains(worktree))
+    }
+
+    /// [`BlockReason::explain`], without the holder when it is a worktree outside the scope
+    /// (spec 1857, FR-015): the project's own root is `default`, which a restricted caller may not
+    /// see either.
+    fn explain(&self, reason: &BlockReason, branch: &str) -> String {
+        let hidden = match reason {
+            BlockReason::CheckedOutAt { path } => self.hidden.contains(path),
+            BlockReason::CheckedOutInProjectRoot => !self.allows(WorktreeRef::DEFAULT),
+            BlockReason::CheckedOutOutsideApp { .. } => false,
+        };
+        if hidden {
+            format!("'{branch}' is already checked out in another worktree.")
+        } else {
+            reason.explain(branch)
+        }
     }
 
     fn allows_session(&self, session: &SessionSummary) -> bool {
@@ -1128,7 +1163,7 @@ async fn create_derived_worktree(
             };
             return Err(OpError::new(
                 ErrorCategory::Conflict,
-                describe_derived_collision(&names.branch, &situation, branch_taken),
+                describe_derived_collision(&scope, &names.branch, &situation, branch_taken),
             ));
         }
         Some(Err(e)) => {
@@ -1147,6 +1182,7 @@ async fn create_derived_worktree(
         state,
         caller,
         &who,
+        &scope,
         &project.path,
         names.clone(),
         CreateMode::NewBranch,
@@ -1383,7 +1419,7 @@ async fn create_literal_worktree(
         Some(Ok(situation)) => {
             return Err(OpError::new(
                 ErrorCategory::Conflict,
-                describe_situation(&branch, &situation),
+                describe_situation(&scope, &branch, &situation),
             ))
         }
         Some(Err(e)) => {
@@ -1402,6 +1438,7 @@ async fn create_literal_worktree(
         state,
         caller,
         &who,
+        &scope,
         &project.path,
         names,
         mode,
@@ -1425,6 +1462,7 @@ async fn create_with_optional_session(
     state: &Arc<DaemonState>,
     caller: SessionId,
     who: &Caller,
+    scope: &Scope,
     project: &Path,
     names: DerivedNames,
     mode: CreateMode,
@@ -1436,7 +1474,7 @@ async fn create_with_optional_session(
         let dir_name = names.dir_name.clone();
         let setup = ops::create_worktree(state, project.to_path_buf(), names, mode, None)
             .await
-            .map_err(create_failure)?;
+            .map_err(|failure| create_failure(scope, failure))?;
         state.record_worktree_parent(project, &dir_name, parent);
         return Ok(Some(serde_json::json!({ "setup": setup_word(setup) })));
     };
@@ -1483,7 +1521,7 @@ async fn create_with_optional_session(
     }
     let (session, typed, setup) = created.map_err(|failure| match failure {
         ops::WorktreeStartFailure::CliUnavailable(why) => OpError::service_error(why),
-        ops::WorktreeStartFailure::Create(failure) => create_failure(failure),
+        ops::WorktreeStartFailure::Create(failure) => create_failure(scope, failure),
         ops::WorktreeStartFailure::Session { dir_name, error } => OpError::service_error(format!(
             "worktree \"{dir_name}\" was created, but its session could not be: {error}; it has \
              no session, and create_session starts one"
@@ -2066,7 +2104,7 @@ fn checked_dir_name(name: &str) -> Result<String, OpError> {
 }
 
 /// The pre-flight's situation in the dialog's words, with the mode that fits it (US2 s2).
-fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
+fn describe_situation(scope: &Scope, branch: &str, situation: &BranchSituation) -> String {
     match situation {
         BranchSituation::Free => {
             format!("branch '{branch}' does not exist yet; use mode new_branch to create it")
@@ -2080,7 +2118,7 @@ fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
              of them as remote, or new_branch to start a fresh branch",
             remotes.join(", ")
         ),
-        BranchSituation::Blocked { branch, reason } => reason.explain(branch),
+        BranchSituation::Blocked { branch, reason } => scope.explain(reason, branch),
         BranchSituation::DirectoryTaken { dir } => explain_directory_taken(dir).to_string(),
     }
 }
@@ -2089,6 +2127,7 @@ fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
 /// retry with `branch` and `mode` `existing_local` or `track_remote`. A taken directory with a
 /// free branch keeps the dialog's own text; the branch wins when both are taken.
 fn describe_derived_collision(
+    scope: &Scope,
     branch: &str,
     situation: &BranchSituation,
     branch_taken: bool,
@@ -2103,7 +2142,7 @@ fn describe_derived_collision(
                 remotes.join(", ")
             )
         }
-        BranchSituation::Blocked { reason, .. } => reason.explain(branch),
+        BranchSituation::Blocked { reason, .. } => scope.explain(reason, branch),
         _ => format!("Branch '{branch}' already exists."),
     };
     format!(
@@ -2114,13 +2153,13 @@ fn describe_derived_collision(
 }
 
 /// A create the shared operation refused or could not complete.
-fn create_failure(failure: ops::CreateFailure) -> OpError {
+fn create_failure(scope: &Scope, failure: ops::CreateFailure) -> OpError {
     match failure {
         ops::CreateFailure::NotARepository => {
             OpError::invalid_input("this project is not a git repository, so it has no worktrees")
         }
         ops::CreateFailure::Create(CreateError::BranchInUse { branch, reason }) => {
-            OpError::new(ErrorCategory::Conflict, reason.explain(&branch))
+            OpError::new(ErrorCategory::Conflict, scope.explain(&reason, &branch))
         }
         ops::CreateFailure::Create(CreateError::SituationChanged) => OpError::new(
             ErrorCategory::Conflict,
@@ -2311,7 +2350,7 @@ impl Context<'_> {
                         BranchOrigin::Remote { .. } => "remote",
                     },
                     "checked_out_in": checked_out_in,
-                    "unavailable_reason": c.blocked_by.as_ref().map(|r| r.explain(&c.name)),
+                    "unavailable_reason": c.blocked_by.as_ref().map(|r| self.scope.explain(r, &c.name)),
                 })
             })
             .collect();

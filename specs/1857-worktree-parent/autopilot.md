@@ -77,6 +77,5 @@ None.
 
 ## Follow-ups not done
 
-- `list_branches` and `create_worktree` error text (`BlockReason::explain`) can still name a worktree outside the caller's scope in `unavailable_reason`; only `checked_out_in` is filtered.
 - Tests that exercise tool behaviour use `full_view_credential` (tests/support/mcp.rs) or default callers; scope handling per tool is covered by `mcp_worktree_parent_visibility` only.
 - Record the parent inside the create path (review A F1/F2): closes the window where a new worktree is visible without its link and a concurrent child of it can be tombstoned.
