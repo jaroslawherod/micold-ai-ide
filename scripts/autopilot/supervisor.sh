@@ -136,7 +136,7 @@ touches_cmd() {
   done
   [ -n "$body" ] && [ -f "$body" ] || die "touches needs an issue body file"
   local key='^[[:space:]]*([-*][[:space:]]+)?\**[Tt]ouches\**:\**[[:space:]]*'
-  decl="$(tr -d '\r' < "$body" | grep -m1 -E "$key" | sed -E "s/$key//" | tr ' ,' '\n\n' | sed '/^$/d' | paste -sd, -)"
+  decl="$(tr -d '\r' < "$body" | { grep -E "$key" || true; } | sed -E "s/$key//" | sed -n '/[^[:space:]]/{p;q;}' | tr ' ,' '\n\n' | sed '/^$/d' | paste -sd, -)"
   if [ -n "$decl" ]; then echo "$decl"; echo declared >&2; return 0; fi
   out="$( { grep -oE 'specs/[0-9]+-[A-Za-z0-9._-]+' "$body" || true
             for l in $labels; do case "$l" in flow:?*) echo ".claude/skills/speckit-autopilot/flows/${l#flow:}.md" ;; esac; done

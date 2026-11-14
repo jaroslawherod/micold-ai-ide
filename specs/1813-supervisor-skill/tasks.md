@@ -57,8 +57,8 @@ cases live in `scripts/tests/supervisor.test.sh`, so test tasks are never `[P]` 
 
 **Independent test**: grep cases over the skill text.
 
-- [ ] T022 [US5] Add skill-text test cases to `scripts/tests/supervisor.test.sh`: `run-status.sh --json` is the only run-state read and is named once per advance row (SC-004), the advance reports through `ledger table`, and `next` and `gate` agree on the slot count for the same fixture (US5, FR-007, FR-010)
-- [ ] T023 [US5] Fix `.claude/skills/autopilot-supervisor/SKILL.md` until the T022 cases pass and the advance output is the short `ledger table`
+- [x] T022 [US5] Add skill-text test cases to `scripts/tests/supervisor.test.sh`: `run-status.sh --json` is the only run-state read and is named once per advance row (SC-004), the advance reports through `ledger table`, and `next` and `gate` agree on the slot count for the same fixture (US5, FR-007, FR-010)
+- [x] T023 [US5] Fix `.claude/skills/autopilot-supervisor/SKILL.md` until the T022 cases pass and the advance output is the short `ledger table`
 
 ## Dependencies and order
 

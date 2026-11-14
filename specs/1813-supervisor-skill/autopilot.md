@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ln1h9s
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M4 (implement)
-- **Next step**: dispatch the M4 milestone unit (T022–T023, tier light: model sonnet)
+- **Phase**: M4 (review)
+- **Next step**: orchestrator runs Review A (high) and Review B (conformance, sonnet) on the M4 head, opens the PR
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
 | M2 | T014–T018 | full | resume from ledger, report, watcher | #1888 | merged |
 | M3 | T019–T021 | full | overlap sequencing | #1889 | merged |
-| M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
+| M4 | T022–T023 | light | small-context skill-text proofs | #… | implemented, in review |
 
 ## Decisions
 
@@ -73,6 +73,9 @@ M2 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 M3 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 149 case(s), 29 failure(s)`.
 - T019 touches/overlap cases: `unknown subcommand touches|overlap` (exit 2, want 0), failing for the missing subcommands; `next` hold cases fail because `next` ignores Touches.
 - T021 skill-text cases: grep exit 1 (no *Touches* section, `gh issue view <n> --json body`, `supervisor.sh touches`, `ledger set <n> Touches`, "treated as disjoint" in SKILL.md).
+
+M4 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 175 case(s), 2 failure(s)`.
+- T022 skill-text cases: `skill says never to read a transcript` and `the report does not read the session` fail with grep exit 1 (the phrases are absent or split over two lines in SKILL.md). The `run-status.sh` count, `ledger table` and slot-agreement cases already hold from M1-M3.
 
 ## Declined review findings
 

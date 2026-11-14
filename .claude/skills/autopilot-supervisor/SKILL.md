@@ -9,8 +9,7 @@ user-invocable: true
 
 Run at the project root. Decisions come from `scripts/autopilot/supervisor.sh` (pure, reads the
 ledger `.autopilot/supervisor.md`); you do the effects: `gh`, `create_worktree`, `create_session`.
-Keep your context small: read the ledger only through `supervisor.sh ledger table`, and never read
-a session's transcript.
+Keep your context small: read the ledger only through `supervisor.sh ledger table`, and never read a session's transcript.
 
 ## Build the queue
 
@@ -56,7 +55,7 @@ A ledger already exists: continue from it, never rebuild the queue.
 
 ## Report
 
-For each run the mapping left `running` whose run-status JSON state is `asking`, `stuck` or `blocked`, and for each `lost` row (a `dead-no-ledger` run past Grace is reported through its `lost` row), tell the person the issue, the state and why, from the JSON `escalation` (its `banner` and `questions` for `asking` and `blocked`) or the reason. A `dead-no-ledger` run within Grace counts as `running`: no alarm. Never answer a question, unblock or restart such a run yourself; the person decides. Finish with `supervisor.sh ledger table`.
+For each run the mapping left `running` whose run-status JSON state is `asking`, `stuck` or `blocked`, and for each `lost` row (a `dead-no-ledger` run past Grace is reported through its `lost` row), tell the person the issue, the state and why, from the JSON `escalation` (its `banner` and `questions` for `asking` and `blocked`) or the reason, without reading the session. A `dead-no-ledger` run within Grace counts as `running`: no alarm. Never answer a question, unblock or restart such a run yourself; the person decides. Finish with `supervisor.sh ledger table`.
 
 ## Watcher
 
