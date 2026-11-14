@@ -24,13 +24,6 @@ Everything it reads is re-read on every later call: batch independent probes int
 Each unit is a fresh subagent that reads [rules/unit.md](rules/unit.md) and the task files its
 flow lists. Overview for humans: [README.md](README.md).
 
-## Supervised argument
-
-A trailing `supervised` argument (`/speckit-autopilot #<n> supervised`, as the `autopilot-supervisor`
-skill starts a run) marks the run as supervised: when the ledger is created, write the literal line
-`- **Supervised**: yes` under **Kind**. `scripts/autopilot/supervised.sh` matches that line, and an
-escalation then ends the turn instead of blocking on a question. Drop the word before routing.
-
 ## Route
 
 First `scripts/autopilot/preflight.sh`, before any fetch or claim. `PREFLIGHT-FAILED`: stop and tell the
@@ -40,7 +33,7 @@ the worktree is clean.
 | When | Read |
 |---|---|
 | The argument is `resume` | [tasks/resume.md](tasks/resume.md) |
-| Any other argument: `#<n>` or an issue URL (`gh issue view <n> --json title,body,labels`), `<flow> [high\|low] #<n>`, or text. Choose the flow and the effort from the command, the labels and the text | [flows/choose.md](flows/choose.md), then only the chosen one of [flows/bug.md](flows/bug.md), [flows/bugfix.md](flows/bugfix.md), [flows/feature.md](flows/feature.md), [flows/chore.md](flows/chore.md) |
+| Any other argument (a trailing `supervised` also: [rules/supervised.md](rules/supervised.md)): `#<n>` or an issue URL (`gh issue view <n> --json title,body,labels`), `<flow> [high\|low] #<n>`, or text. Choose the flow and the effort from the command, the labels and the text | [flows/choose.md](flows/choose.md), then only the chosen one of [flows/bug.md](flows/bug.md), [flows/bugfix.md](flows/bugfix.md), [flows/feature.md](flows/feature.md), [flows/chore.md](flows/chore.md) |
 | The flow is chosen: claim or open the issue, write the labels back | [tasks/issue.md](tasks/issue.md) |
 | The session is a cloud thread | [rules/cloud.md](rules/cloud.md) |
 | Starting a unit, and when it returns | [tasks/dispatch.md](tasks/dispatch.md) |

@@ -7,6 +7,7 @@ set -uo pipefail
 SUP="$S/supervisor.sh"
 SKILL="$ROOT/.claude/skills/autopilot-supervisor/SKILL.md"
 AUTO="$ROOT/.claude/skills/speckit-autopilot/SKILL.md"
+SUPMD="$ROOT/.claude/skills/speckit-autopilot/rules/supervised.md"
 cd "$tmp" || exit 1
 
 # --- helpers -----------------------------------------------------------------------------------
@@ -83,7 +84,7 @@ unset AUTOPILOT_SUP_MEM_MIB AUTOPILOT_SUP_LOAD AUTOPILOT_SUP_CORES
 
 # --- T007: skill text (supervised marker) ------------------------------------------------------
 check "speckit-autopilot documents the supervised argument" 0 'supervised' grep -n -i 'trailing `supervised`' "$AUTO"
-check "speckit-autopilot names the literal ledger line" 0 'Supervised\*\*: yes' grep -nF -- '- **Supervised**: yes' "$AUTO"
+check "speckit-autopilot names the literal ledger line" 0 'Supervised\*\*: yes' grep -nF -- "- **Supervised**: yes" "$SUPMD"
 check "the literal line is the one supervised.sh matches" 0 'Supervised\*\*: yes' grep -nF -- '- **Supervised**: yes' "$S/supervised.sh"
 check "supervisor skill names the supervised prompt" 0 'speckit-autopilot #<n> supervised' grep -nF -- '/speckit-autopilot #<n> supervised' "$SKILL"
 check "supervisor skill never reads a transcript" 1 '^$' grep -n 'read_session_output' "$SKILL"
