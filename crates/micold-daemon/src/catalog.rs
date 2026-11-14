@@ -2021,7 +2021,18 @@ impl Catalog {
                 // The conversation a resume would continue (#943 FR-005a), not always the id.
                 let handle = SessionId::from_uuid(session.resume_handle());
                 if !is_resumable(handle, &cwd, TerminalMode::AiCli, session.provider) {
-                    continue;
+                    // A `/clear` followed by a restart before anything was typed (#1853): the CLI
+                    // writes a conversation's transcript on its first message, so the one the
+                    // hook named has none, while the one before the clear does. Resume that,
+                    // rather than leave a row whose fresh start the CLI refuses (its id is in use).
+                    // In memory only, like the lifecycle; a later hook or write keeps it.
+                    if session.conversation.is_some()
+                        && is_resumable(session.id, &cwd, TerminalMode::AiCli, session.provider)
+                    {
+                        session.conversation = None;
+                    } else {
+                        continue;
+                    }
                 }
                 if session.mode != TerminalMode::AiCli {
                     tracing::warn!(
