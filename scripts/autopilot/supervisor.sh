@@ -94,22 +94,15 @@ ledger_cmd() {
   esac
 }
 
-# norm_path <p>: strip a leading ./, a trailing glob (/**, /*) and trailing slashes.
+# norm_path <p>: strip a leading ./ and everything from the first path component that holds a glob
+# character (* ? [), then trailing slashes. A bare glob normalises to the empty path (whole repo).
 norm_path() {
-  local p="$1"
-  p="${p#./}"
-  while :; do
-    case "$p" in
-      */\*\*) p="${p%/**}" ;;
-      */\*) p="${p%/*}" ;;
-      */) p="${p%/}" ;;
-      *) break ;;
-    esac
-  done
+  local p="${1#./}"
+  p="$(printf '%s' "$p" | sed -E 's#(^|/)[^/]*[*?[].*$##; s#/+$##')"
   echo "$p"
 }
 # overlap_yes <touches-a> <touches-b>: success when any path equals, or contains, one of the other's.
-overlap_yes() {
+ov_lists() {
   local a b x y IFS=,
   for a in $1; do
     [ -n "$a" ] && [ "$a" != "-" ] || continue
@@ -117,12 +110,14 @@ overlap_yes() {
     for b in $2; do
       [ -n "$b" ] && [ "$b" != "-" ] || continue
       y="$(norm_path "$b")"
+      [ -n "$x" ] && [ -n "$y" ] || return 0
       case "$x/" in "$y"/*) return 0 ;; esac
       case "$y/" in "$x"/*) return 0 ;; esac
     done
   done
   return 1
 }
+overlap_yes() { local r; set -f; ov_lists "$@"; r=$?; set +f; return "$r"; }
 overlap_cmd() {
   [ $# -eq 2 ] || die "usage: overlap <touches-a> <touches-b>"
   if overlap_yes "$1" "$2"; then echo yes; else echo no; fi
@@ -140,7 +135,8 @@ touches_cmd() {
     esac
   done
   [ -n "$body" ] && [ -f "$body" ] || die "touches needs an issue body file"
-  decl="$(grep -m1 -i '^ *Touches:' "$body" | sed 's/^ *[Tt][Oo][Uu][Cc][Hh][Ee][Ss]: *//' | tr ' ,' '\n\n' | sed '/^$/d' | paste -sd, -)"
+  local key='^[[:space:]]*([-*][[:space:]]+)?\**[Tt]ouches\**:\**[[:space:]]*'
+  decl="$(tr -d '\r' < "$body" | grep -m1 -E "$key" | sed -E "s/$key//" | tr ' ,' '\n\n' | sed '/^$/d' | paste -sd, -)"
   if [ -n "$decl" ]; then echo "$decl"; echo declared >&2; return 0; fi
   out="$( { grep -oE 'specs/[0-9]+-[A-Za-z0-9._-]+' "$body" || true
             for l in $labels; do case "$l" in flow:?*) echo ".claude/skills/speckit-autopilot/flows/${l#flow:}.md" ;; esac; done

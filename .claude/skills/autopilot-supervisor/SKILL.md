@@ -25,7 +25,7 @@ Before the first `next`, and for each issue whose `Touches` cell is empty (FR-00
 2. `scripts/autopilot/supervisor.sh touches <scratch>/body-<n>.md --labels "<names>"` prints the paths (declared `Touches:` line first, else inferred from `flow:*` labels and `specs/<dir>` paths) and `declared`, `inferred` or `none` on stderr. Store them: `ledger set <n> Touches <paths>`.
 3. `none` (prints `-`): `ledger set <n> Note "no touched files declared or inferable: treated as disjoint"`.
 
-`supervisor.sh next` then holds a queued issue whose paths overlap a `starting` or `running` row or an earlier queued issue, whatever the cap; `supervisor.sh overlap <a> <b>` answers `yes` or `no` for two lists. A held issue stays `queued` and is released once the earlier one is `done`, `failed`, `lost` or `skipped`.
+`supervisor.sh next` then holds a queued issue whose paths overlap a `starting` or `running` row or an earlier queued issue, whatever the cap; `supervisor.sh overlap <a> <b>` answers `yes` or `no` for two lists. Issues with the same `flow:*` label and no `Touches:` line or `specs/` path share that flow file, so they run one at a time: declare `Touches:` to avoid it. A held issue stays `queued` and is released once the earlier one is `done`, `failed`, `lost` or `skipped`.
 
 ## Start an issue
 

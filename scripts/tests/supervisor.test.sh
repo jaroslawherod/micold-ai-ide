@@ -184,6 +184,10 @@ check "touches: a declared line wins" 0 '^crates/a,docs/x.md$' bash -c '"$0" tou
 check "touches: declared is named on stderr" 0 '^declared$' bash -c '"$0" touches "$1" 2>&1 >/dev/null' "$SUP" "$B"
 printf 'Touches: crates/a docs/x.md\n' > "$B"
 check "touches: space separated paths" 0 '^crates/a,docs/x.md$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+printf 'Touches: crates/a, docs/x.md\r\n' > "$B"
+check "touches: a CRLF body loses the carriage return" 0 '^crates/a,docs/x.md$' bash -c '"$0" touches "$1" 2>/dev/null | od -c | grep -c "\\\\r" | grep -qx 0 && "$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+printf -- '- **Touches:** crates/a\n' > "$B"
+check "touches: a bulleted bold key is recognised" 0 '^crates/a$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
 printf 'see specs/1813-supervisor-skill/spec.md and\nspecs/1813-supervisor-skill/tasks.md\n' > "$B"
 check "touches: spec paths are inferred" 0 '^specs/1813-supervisor-skill$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
 check "touches: inference is named on stderr" 0 '^inferred$' bash -c '"$0" touches "$1" 2>&1 >/dev/null' "$SUP" "$B"
@@ -199,6 +203,10 @@ check "overlap: any pair of the lists" 0 '^yes$' "$SUP" overlap docs/x.md,crates
 check "overlap: a name prefix is not containment" 0 '^no$' "$SUP" overlap crates/a crates/ab
 check "overlap: disjoint paths" 0 '^no$' "$SUP" overlap crates/a docs
 check "overlap: a trailing glob is its directory" 0 '^yes$' "$SUP" overlap 'crates/a/**' crates/a/x.rs
+check "overlap: a file glob overlaps a file in its directory" 0 '^yes$' "$SUP" overlap 'crates/a/src/*.rs' crates/a/src/lib.rs
+check "overlap: a glob component overlaps by its parent" 0 '^yes$' "$SUP" overlap 'crates/*/Cargo.toml' crates/a/Cargo.toml
+check "overlap: a glob stays out of other directories" 0 '^no$' "$SUP" overlap 'crates/a/src/*.rs' docs/x.md
+check "overlap: a bare glob is the whole repo" 0 '^yes$' "$SUP" overlap '*' docs/x.md
 check "overlap: none overlaps nothing" 0 '^no$' "$SUP" overlap - crates/a
 check "overlap: none against none" 0 '^no$' "$SUP" overlap - -
 check "overlap: missing argument is a usage error" 2 'usage' "$SUP" overlap a
