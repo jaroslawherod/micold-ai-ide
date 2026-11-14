@@ -1,9 +1,9 @@
-# Proposed issue changes for the React Native client and Kubernetes revision
+# Proposed issue changes for the web client and Kubernetes revision
 
-**Created 2026-11-14.** Not applied: jaro approves this list first, then the changes are made to the
-GitHub issues of epic #1722 (bodies, titles, "blocked by" relations, milestones M3–M5). Labels as in
-`specs/orchestrator/issues.md`: `flow:feature` (or `flow:chore`) plus `effort:high` or `effort:low`.
-Every body ends with the common footer:
+**Created 2026-11-14, revision 2** (after jaro's answers). Not applied: jaro approves this list first,
+then the changes are made to the GitHub issues of epic #1722 (bodies, titles, "blocked by"
+relations, milestones). Labels as in `specs/orchestrator/issues.md`: `flow:feature` (or
+`flow:chore`) plus `effort:high` or `effort:low`. Every body ends with the common footer:
 
 > Plan: `specs/orchestrator/` and `specs/1722-rn-client-k8s/` (spec.md, plan.md). Implement test-first
 > in its own worktree (`/speckit-autopilot #<this>`).
@@ -14,26 +14,35 @@ PR titles follow the project rule: `#<issue>: <issue title>`.
 
 | Issue | Action | New title |
 |---|---|---|
-| #1724–#1727, #1729–#1731 | keep | unchanged |
+| #1724–#1727, #1729–#1731 | keep | unchanged (#1724's M5 lands on the `RegistryStore` trait; N16 adds Postgres behind it) |
 | #1732 | update | feat: JSON-over-WebSocket client API with generated TypeScript types and JSON Schema, origin checks, resume |
-| #1733 | replace (rewrite body and title) | feat: sign-in with GitHub and Google through the orchestrator, invites, bootstrap code, short-lived tokens |
-| #1734 | update | feat: roles owner/operator/viewer, user management, audit log |
-| #1735 | replace | feat: React Native (Expo) client scaffold for web and Android, Material 3 theme, sign-in, sidebar and overview |
-| #1736 | update | feat: client — live structured transcript, read-only |
-| #1737 | update | feat: client — composer: send, paste, permission prompts, slash commands, model/effort/permission pickers |
-| #1738 | update | feat: client — worktree and structured-session lifecycle; terminal sessions listed but not openable |
-| #1739 | update | feat: client — attention list, in-app and local notifications, quick switcher |
-| #1740 | replace | feat: Kubernetes deployment — orchestrator image, Helm chart, ingress, TLS passthrough for daemon links, secrets as files |
-| #1741 | update | feat: the desktop app connects to a remote orchestrator after GitHub or Google sign-in |
+| #1733 | replace | feat: always-authenticated access — GitHub and Google sign-in, invites, bootstrap code, local access link |
+| #1734 | update | feat: roles owner/operator/viewer, user management, append-only audit log |
+| #1735 | replace | feat: React Native (Expo) web client scaffold, Material 3 theme from the tokens, sign-in, sidebar and overview |
+| #1736 | update | feat: web client — live structured transcript, read-only |
+| #1737 | update | feat: web client — composer: send, paste, permission prompts, slash commands, model/effort/permission pickers |
+| #1738 | update | feat: web client — worktree and structured-session lifecycle; terminal sessions listed and stoppable |
+| #1739 | update | feat: web client — attention list, browser notifications, quick switcher, keyboard navigation |
+| #1740 | replace | feat: Kubernetes deployment — orchestrator image, Helm chart, Gateway API, LoadBalancer for daemon links, PostgreSQL, secrets as files |
+| #1741 | close as not planned | the desktop app is retired instead (N13) |
 | #1742 | update | feat: health, readiness and metrics endpoints, rate limits, bandwidth caps, graceful shutdown |
-| N1 | new | chore: amend the constitution for a React Native client and Linux-only desktop |
+| N1 | new | chore: constitution 2.0.0 — the web client replaces iced; Linux-only daemons; PostgreSQL for network deployments |
 | N2 | new | feat: `micold-tokens-ts` — the design tokens as a generated TypeScript theme |
-| N3 | new | feat: client — users, invites and roles; daemons list and revoke (owner) |
+| N3 | new | feat: web client — users, invites, roles, signed-in browsers; daemons list, enrollment and revoke (owner) |
 | N4 | new | feat: web client image and its place in the Helm chart |
-| N5 | new | feat: client — changes and diff review, read-only |
-| N6 | new | feat: client — PR and Jira status, history, plan usage |
-| N7 | new | chore: mobile release — Android signed builds, iOS via EAS Build, store listings (after Q4) |
-| N8 | new, optional | feat: client — terminal view (only if Q1 = yes) |
+| N5 | new | feat: web client — changes and diff review |
+| N6 | new | feat: web client — PR and Jira status, history and runs, plan usage, setup output, sandbox status |
+| N7 | future | feat: native mobile app from the same code base (not before jaro's go-ahead) |
+| N9 | new | feat: local mode — the orchestrator serves the web client on loopback with a one-time access link; user service unit |
+| N10 | new | feat: Claude credentials per daemon — API key or provider file, sign-in state shown in the client; no Claude login in Micold |
+| N11 | new | feat: daemon provisioning moves into the orchestrator (container, SSH host, Kubernetes pod) |
+| N12 | new | feat: web client — secret settings (GitHub, Jira, environment), Kubernetes view, large editor |
+| N13 | new | chore: retire the iced desktop app (remove `micold-client`, `micold-material`, packaging, docs) |
+| N14 | future | feat: structured adapters for Codex, Copilot, Pi and OpenCode (Q-B) |
+| N15 | future | feat: several orchestrator replicas — Postgres link directory and replica-to-replica forwarding |
+| N16 | new | feat: PostgreSQL store for the orchestrator (sqlx, migrations, store traits; SQLite for local mode) |
+
+The earlier N8 (terminal view) is dropped: structured view only.
 
 ## Updated and replaced issues
 
@@ -45,40 +54,40 @@ PR titles follow the project rule: `#<issue>: <issue title>`.
   `micold-protocol-schema` binary writing `packages/protocol/schema.json`, and TypeScript generated
   from it (`packages/protocol/src/index.generated.ts`); `mise run protocol-schema` regenerates, the
   gate fails on drift. Each `ClientMsg` variant is classified `Read` or `Change` in one table with an
-  exhaustiveness test (used by #1734). Localhost only unless configured; `Origin` allow-list; 20 s
-  ping; resume by sequence after reconnect. The plan decides whether sidebar grouping and order are
-  sent computed or ported with shared test vectors.
+  exhaustiveness test (used by #1734). `Origin` allow-list; 20 s ping; resume by sequence after
+  reconnect; routing through a `LinkDirectory` trait (in-process now, FR-046). The plan decides
+  whether sidebar grouping and order are sent computed or ported with shared test vectors.
 - **Acceptance**: drift check fails on a stale schema; a test client lists daemons and reads a
   structured session; a reconnect resumes with no gap or duplicate; a foreign `Origin` is refused;
   every variant is classified.
 
 ### #1733 — replace
 
-- **Milestone**: M3 · **Depends on**: #1732, #1724 (M5 store) · **Covers**: FR-018R, FR-031, FR-032, FR-033, FR-037
-- **Body**: The orchestrator brokers sign-in with GitHub (OAuth 2.0, identity from `/user` keyed on
-  the numeric id) and Google (OIDC, keyed on `sub`); it holds the provider client secrets as mounted
-  files. Clients use authorization code + PKCE against the orchestrator with allow-listed redirect
-  URIs (web origin, the reverse-domain scheme `io.github.jaroslawherod.micold:/` per RFC 8252,
-  desktop loopback). It issues EdDSA access tokens (15 min, key set with `kid`) and rotating, hashed
-  refresh tokens (30 days); the access token goes in the socket's first frame, never the URL. Only
-  invited identities sign in (Google: `email_verified` only); the first owner binds with a one-time
-  bootstrap code (24 h, from a pre-created Secret or generated, logged and written to the volume;
-  `bootstrap-code --reset` CLI). Users, identities, invites, bootstrap and refresh tokens live in
-  SQLite behind a new `AuthStore` trait with forward-only migrations. `/auth/*` is rate limited.
-  Local socket clients stay owner without sign-in. No password exists.
-- **Acceptance**: against a fake provider, GitHub and Google sign-in yield tokens; an uninvited
-  identity is refused and not stored; the bootstrap code works once; an expired access token is
-  refused and refresh works; a removed user's refresh fails and open sockets close; `config check`
-  validates providers and redirect URIs; no secret in logs or `Debug`.
+- **Milestone**: M3 · **Depends on**: #1732, N16 · **Covers**: FR-018R, FR-031, FR-032, FR-033R, FR-037R
+- **Body**: Every API request is authenticated. On a network deployment the orchestrator brokers
+  sign-in with GitHub (OAuth 2.0, keyed on the numeric user id) and Google (OIDC, keyed on `sub`,
+  `email_verified` required for invite matching), holding provider client secrets as mounted files.
+  The client uses authorization code + PKCE against the orchestrator with allow-listed redirect URIs.
+  EdDSA access tokens (15 min, key set with `kid`) in memory and in the socket's first frame, never
+  the URL; rotating, hashed refresh tokens (30 days) in an `HttpOnly` cookie scoped to `/auth`. Only
+  invited identities sign in; the first owner binds with a one-time bootstrap code (24 h; from a
+  pre-created Secret, or generated, logged and stored hashed; `bootstrap-code --reset`). On loopback
+  only, access is through a one-time local access link (N9 serves it). Binding a non-loopback
+  address without a provider is refused. Users, identities, invites and tokens are stored through
+  `AuthStore` (N16). `/auth/*` is rate limited. No password exists.
+- **Acceptance**: no request succeeds without a token (SC-013); GitHub and Google sign-in work
+  against a fake provider; an uninvited identity is refused and not stored; the bootstrap code works
+  once; refresh works and a removed user's refresh fails and sockets close; `config check` validates
+  providers, redirect URIs and the bind rule; no secret in logs or `Debug`.
 
 ### #1734 — update
 
-- **Milestone**: M3 · **Depends on**: #1733 (no longer #1727) · **Covers**: FR-019R, FR-020
+- **Milestone**: M3 · **Depends on**: #1733 · **Covers**: FR-019R, FR-020
 - **Body**: One global role per user: owner, operator, viewer (viewer default), enforced before
-  routing with the classification table of #1732 and the action table of `plan.md`. Audit every
-  changing action, sign-in, refusal, invite and role change (actor, target, outcome; never typed
-  text) in SQLite, owner-readable through the API. MCP actions from #1727 are audited with the
-  session as actor once #1727 lands. Per-daemon grants deferred.
+  routing with #1732's classification table. Audit every changing action, sign-in, refusal, invite
+  and role change (actor, target, outcome; never typed text) in an append-only Postgres table (no
+  `UPDATE`/`DELETE` grant), owner-readable through the API. MCP actions from #1727 are audited with
+  the session as actor once #1727 lands. Per-daemon grants deferred.
 - **Acceptance**: a viewer reads and every changing action is refused; an operator cannot manage
   users or read the audit; every changing action writes one entry with no typed text; a role
   downgrade applies to an open socket on its next message; a socket closes when its access token
@@ -87,75 +96,79 @@ PR titles follow the project rule: `#<issue>: <issue title>`.
 ### #1735 — replace
 
 - **Milestone**: M4a · **Depends on**: N1, N2, #1732, #1733 · **Covers**: FR-021R, FR-022, FR-034,
-  FR-035, FR-037, FR-041
-- **Body**: Expo (managed, Expo Router) TypeScript app in `apps/client/` with `react-native-web`;
-  pnpm workspace with `packages/protocol/`; a first-start screen for the orchestrator URL (FR-041); Node and pnpm pinned in `mise.toml`; tasks `client-test`,
-  `client-web`, `client-android`. Paper v5 theme from N2's tokens, Roboto and Fira Mono. Sign-in
-  screen (configured providers only), secure token storage, socket client with reconnect. Sidebar and
-  overview grid matching the desktop layout, stable order with per-row state (#1718), one column
-  below 600 px. CI: lint, typecheck, Jest, web export, Android debug build, Playwright smoke, bundle
-  check for no terminal emulator (SC-007).
-- **Acceptance**: web and Android builds sign in and list projects, worktrees and sessions of every
-  daemon; a state change updates the indicator, not the position; screenshots at 1280, 800 and
-  390 px in light and dark pass a visual pass against the desktop's.
+  FR-035, FR-037R
+- **Body**: Expo (managed, Expo Router) TypeScript app in `apps/client/` with `react-native-web`, web
+  target only; pnpm workspace with `packages/protocol/`; Node and pnpm pinned in `mise.toml`; tasks
+  `client-test`, `client-web`. Paper v5 theme from N2's tokens, Roboto and Fira Mono. Sign-in page
+  (configured providers only), socket client with reconnect. Sidebar and overview grid matching
+  today's layout, stable order with per-row state (#1718), stacked below 600 px. Spike first: render
+  a long transcript and a diff with Paper on the web and record the result, so a gap shows before the
+  rest is built. CI: lint, typecheck, Jest, web export, Playwright smoke, bundle check for no terminal
+  emulator (SC-007).
+- **Acceptance**: the web client signs in and lists projects, worktrees and sessions of every daemon;
+  a state change updates the indicator, not the position; screenshots at 1280, 800 and 390 px in
+  light and dark pass a visual pass against the iced app's.
 
 ### #1736, #1737, #1738 — update
 
-Bodies as in `specs/orchestrator/issues.md` entries 14–16, with: "web client" becomes "client (web
-and Android)"; FlashList virtualization and a large-transcript load test (#1736); image paste on
-web and an image picker on mobile (#1737); confirmations as the desktop's (#1738). Milestone M4b.
-Each one's end-to-end test runs on Playwright and on Maestro. Covers: #1736 FR-023, #1737 FR-024,
-#1738 FR-025.
+Bodies as in `specs/orchestrator/issues.md` entries 14–16, with: "web client" built from
+`apps/client/`; Claude Code structured sessions first; FlashList virtualization and a
+large-transcript load test (#1736); text and image paste (#1737); terminal sessions listed with
+state and stoppable, never rendered (#1738, FR-045). Milestone M4b. Each one's end-to-end test runs
+on Playwright. Covers: #1736 FR-023, #1737 FR-024, #1738 FR-025, FR-045.
 
 ### #1739 — update
 
 - **Milestone**: M4b · **Depends on**: #1736 · **Covers**: FR-026, FR-036
-- **Body**: the attention list and in-app snackbars as on the desktop; browser notifications on web
-  and `expo-notifications` local notifications on mobile while the app runs; the quick switcher
-  (Ctrl/Cmd+K on web, a search screen on mobile). Remote push out of scope (Q3).
+- **Body**: the attention list and in-app snackbars as in the iced app; browser notifications while a
+  tab is open; the quick switcher and command palette (Ctrl/Cmd+K); keyboard navigation and the
+  shortcut sheet (#803). Remote push out of scope.
 
 ### #1740 — replace
 
-- **Milestone**: M5 · **Depends on**: #1730, #1734, #1742, N4 · **Covers**: FR-027R, FR-038, FR-039
+- **Milestone**: M5 · **Depends on**: #1730, #1734, #1742, N4, N16 · **Covers**: FR-027R, FR-038, FR-039
 - **Body**: Orchestrator image (distroless, non-root, read-only root, amd64+arm64, cosign-signed, on
-  GHCR) and Helm chart `deploy/helm/micold`: StatefulSet (1 replica) + PVC, Services (API 8080, link
-  8443, ops 9090), Gateway API `HTTPRoute` (primary) and a classic `Ingress` template, link on a
-  `LoadBalancer` Service by default or TLS passthrough (`TLSRoute`) as an option, `ReadWriteOncePod`
-  volume and `/tmp` `emptyDir`, cert-manager `Certificate`, Secrets mounted as files, ConfigMap with
-  checksum restart, NetworkPolicies (egress 443 outside cluster CIDRs), optional ServiceMonitor,
-  bootstrap code from a pre-created Secret or the volume, in-cluster daemon StatefulSet example,
-  compose example. Docs: install, OAuth app setup, backup of the volume and the CA key, upgrade.
-- **Acceptance**: the kind CI job installs the chart, signs in through a fake provider, enrolls a
-  daemon pod and drives a structured session through the ingress (SC-010); a pod delete loses
-  nothing and clients are back within 30 s (SC-011); `helm lint` and `kubeconform` pass; no secret
-  in `helm get values`, env or logs.
+  GHCR) and Helm chart `deploy/helm/micold`: orchestrator Deployment (`replicas: 1`, `Recreate`, no
+  volume, `/tmp` `emptyDir`), database URL from `database.existingSecret` (optional CloudNativePG
+  `Cluster` for demos and CI), Services (API 8080, link 8443 as `LoadBalancer` by default, ops
+  9090), Gateway API `HTTPRoute` (primary) and a classic `Ingress` template, optional TLS passthrough
+  (`TLSRoute`) for the link, cert-manager `Certificate`, Secrets mounted as files (OAuth client
+  secrets, signing key set, CA key), ConfigMap with checksum restart, NetworkPolicies (egress to the
+  database, DNS and 443 outside cluster CIDRs), optional ServiceMonitor, bootstrap code from a
+  pre-created Secret or generated, in-cluster daemon StatefulSet example, compose example (with
+  Postgres). Docs: install, OAuth app setup, database and CA key backup, upgrade.
+- **Acceptance**: the kind CI job (Envoy Gateway, CloudNativePG) installs the chart, signs in through
+  a fake provider, enrolls a daemon pod and drives a structured session through the gateway
+  (SC-010); a pod delete loses nothing and clients are back within 30 s (SC-011); `helm lint` and
+  `kubeconform` pass; no secret in `helm get values`, env or logs.
 
-### #1741 — update
+### #1741 — close as not planned
 
-- **Depends on**: #1733 · **Covers**: FR-028 · **Body**: as before, sign-in through the system browser with a loopback
-  redirect and PKCE; tokens in the OS keyring.
+The desktop app is retired (N13), so it never needs to reach a remote orchestrator. Close with a
+link to this plan.
 
 ### #1742 — update
 
-- **Milestone**: M5 · **Depends on**: #1732 (no longer #1740) · **Covers**: FR-029R, FR-038
-- **Body**: ops port with `/healthz`, `/readyz` (store, CA, listeners), `/metrics` (Prometheus);
-  per-client rate limits and per-daemon bandwidth caps; graceful SIGTERM (readiness off, reconnect
-  notice, flush, exit).
-- **Acceptance**: readiness is false until the store opens; SIGTERM ends within 30 s with clients
-  reconnecting; metrics report links, clients, bytes, refusals; a client over its limit is slowed or
-  refused, others are not.
+- **Milestone**: M5 · **Depends on**: #1732 · **Covers**: FR-029R, FR-038
+- **Body**: ops port with `/healthz`, `/readyz` (database reachable and migrated, CA, listeners),
+  `/metrics` (Prometheus); per-client rate limits and per-daemon bandwidth caps (per replica, behind
+  a trait); graceful SIGTERM (readiness off, reconnect notice, finish in-flight writes, exit).
+- **Acceptance**: readiness is false until the database is migrated; SIGTERM ends within 30 s with
+  clients reconnecting; metrics report links, clients, bytes, refusals; a client over its limit is
+  slowed or refused, others are not.
 
 ## New issues
 
-### N1 — chore: amend the constitution for a React Native client and Linux-only desktop
+### N1 — chore: constitution 2.0.0
 
 - **Milestone**: M3 · **Depends on**: — · **Labels**: `flow:chore`, `effort:low`
-- **Body**: Constitution 2.0.0: Principle IV gains an explicit, opt-in remote-deployment clause (a
-  remote orchestrator keeps its own store on its volume; the desktop stays offline-capable); Principle V allows a TypeScript + React Native client that talks only
-  to the orchestrator's network API with generated types; VI scoped to Linux for the desktop (#1897)
-  and web, Android, iOS for the client; VIII applies to the client's own component library in React's
-  idiom; Technology constraints (GUI, Persistence, Distribution) updated. Owner approval required
-  (Governance).
+- **Body**: Principle V replaced: the UI is one TypeScript + React Native client talking only to the
+  orchestrator's API through generated types; Rust for core, daemons and orchestrator; iced retired
+  (jaro approved, 2026-11-14). IV amended: local mode works offline on one machine with no external
+  service; an opt-in network deployment uses PostgreSQL and GitHub/Google sign-in. VI rewritten:
+  daemons and orchestrator on Linux (#1897), the client on current Chromium, Firefox and Safari.
+  VIII's builder-API clause becomes "typed props, React idiom". Technology constraints (GUI,
+  Persistence, Distribution) updated.
 
 ### N2 — feat: `micold-tokens-ts`
 
@@ -164,35 +177,83 @@ Each one's end-to-end test runs on Playwright and on Maestro. Covers: #1736 FR-0
   `apps/client/src/theme/tokens.generated.ts` (colour roles light and dark, type scale, shape,
   elevation, motion, state layers); unit tests like `tokens/css.rs`; drift check in the gate.
 
-### N3 — feat: client — users, invites, roles; daemons list and revoke
+### N3 — feat: web client — users, invites, roles; daemons
 
 - **Milestone**: M4b · **Depends on**: #1734, #1735 · **Covers**: FR-032, FR-036
 - **Body**: Owner screens to invite by GitHub login or Google email with a role, change roles, remove
-  users, read the audit log, list signed-in devices and sign one out; list daemons with state,
-  create enrollment tokens, revoke.
+  users, link a second identity, read the audit log, list signed-in browsers and sign one out; list
+  daemons with state and Claude sign-in state, create enrollment tokens, revoke.
 
 ### N4 — feat: web client image and Helm values
 
-- **Milestone**: M5 · **Depends on**: #1735
-- **Covers**: FR-027R · **Body**: Static image of the web export behind an unprivileged static server with CSP and cache
+- **Milestone**: M5 · **Depends on**: #1735 · **Covers**: FR-027R
+- **Body**: Static image of the web export behind an unprivileged static server with CSP and cache
   headers; Deployment, Service, PodDisruptionBudget and optional HPA in the chart.
 
-### N5 — feat: client — changes and diff review, read-only
+### N5 — feat: web client — changes and diff review
 
-- **Milestone**: M6 · **Depends on**: #1736 · **Covers**: FR-040 · **Body**: the desktop's Changes view (file tree,
-  filters, diffs) on wide screens; file list then diff on phones.
+- **Milestone**: M6 · **Depends on**: #1736 · **Covers**: FR-040
+- **Body**: the iced app's Changes view (file tree, filters, diffs, reviewed marks), then review
+  replies; stacked on narrow screens.
 
-### N6 — feat: client — PR and Jira status, history, plan usage
+### N6 — feat: web client — PR and Jira status, history, plan usage, setup, sandbox
 
-- **Milestone**: M6 · **Depends on**: #1735 · **Covers**: FR-040 · **Body**: the desktop's PR and Jira chips, history
-  and runs lists, and plan usage, read from the daemons.
+- **Milestone**: M6 · **Depends on**: #1735 · **Covers**: FR-040
+- **Body**: PR and Jira chips, history and parallel runs, plan usage, setup output and sandbox status,
+  read from the daemons.
 
-### N7 — chore: mobile release
+### N9 — feat: local mode
 
-- **Milestone**: M6 · **Depends on**: #1739, Q4 · **Body**: signed Android release builds on Linux
-  CI; iOS through EAS Build if approved; store listings, privacy text, deep-link domains.
+- **Milestone**: M4a · **Depends on**: #1733, #1735 · **Covers**: FR-021R, FR-033R
+- **Body**: `micold-daemon orchestrator --serve-web` binds 127.0.0.1, serves the web bundle from the
+  API's origin, prints a one-time access link, and exchanges it for an owner session cookie. A
+  systemd user unit starts it on login. Stores on SQLite through N16's traits (Q-F).
 
-### N8 — feat: client — terminal view (optional)
+### N10 — feat: Claude credentials per daemon
 
-- **Depends on**: Q1 = yes, #1737 · **Body**: xterm.js on web and in a WebView on mobile, fed by the
-  orchestrator relaying terminal output; SC-007 removed.
+- **Milestone**: M4b · **Depends on**: #1735 · **Covers**: FR-043
+- **Body**: The daemon configuration names an Anthropic API key file or Bedrock, Vertex or Foundry
+  credentials (secret by file path); the daemon passes them to the Claude Code process it starts.
+  Otherwise Claude Code uses the user's own sign-in done in unmodified Claude Code on that daemon.
+  The daemon reports its Claude state (`claude auth status`); the client shows it and links to the
+  docs. Micold offers no Claude login and never collects, stores or relays a Claude credential; the
+  docs quote Anthropic's terms and point to Anthropic for edge cases.
+
+### N11 — feat: daemon provisioning in the orchestrator
+
+- **Milestone**: M7 · **Depends on**: #1726, #1734 · **Covers**: FR-044
+- **Body**: Move `micold_core::provision` (806) and the Kubernetes runtime (686) behind a
+  `Provisioner` trait in the orchestrator: local container, SSH host, Kubernetes pod. Owner-only
+  actions in the web client (add, start, stop, remove). The pod provisioner uses a ServiceAccount
+  with a namespaced Role in one sessions namespace, off by default in the chart.
+
+### N12 — feat: web client — secret settings, Kubernetes view, large editor
+
+- **Milestone**: M7 · **Depends on**: #1734, #1735 · **Covers**: FR-044
+- **Body**: GitHub and Jira tokens and environment settings written through the orchestrator to the
+  daemon that uses them, never read back in full; the Kubernetes live view; the large editor.
+
+### N13 — chore: retire the iced desktop app
+
+- **Milestone**: M7 · **Depends on**: N5, N6, N11, N12 (and Q-B's answer) · **Labels**: `flow:chore`,
+  `effort:high` · **Covers**: FR-044, SC-014
+- **Body**: After one release with the web client as the default, remove `crates/micold-client`,
+  `crates/micold-material`, the iced dependency, AppImage/deb packaging, desktop notifications and
+  their docs; keep the tokens in `micold-core`. Close #1741.
+
+### N16 — feat: PostgreSQL store for the orchestrator
+
+- **Milestone**: M3 · **Depends on**: #1724 (M5 `RegistryStore` trait) · **Covers**: FR-042, FR-046
+- **Body**: `sqlx` with `PgPool`; migrations in `crates/micold-daemon/migrations/` applied on start,
+  forward only, refusing a newer schema; `RegistryStore`, `AuthStore`, `AuditStore` traits with
+  in-memory (tests), PostgreSQL and SQLite (local mode) implementations; `tenant_id` on every table;
+  `database.url_file` and `database.ca_file` in the orchestrator config; a one-shot import of
+  `registry.json`; CI runs the store tests against a Postgres service container and the migration
+  chain from every released schema.
+- **Acceptance**: the registry, users and audit survive a restart on Postgres and on SQLite; a newer
+  schema is refused naming both versions; no private key is ever written to the database.
+
+### N7, N14, N15 — future
+
+Kept as placeholders so the plan names them: native mobile app (N7), structured adapters for other
+providers (N14), several orchestrator replicas (N15). None is created until jaro asks.

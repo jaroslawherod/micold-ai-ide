@@ -1,94 +1,121 @@
-# Plan: React Native client for web and mobile, and the orchestrator on Kubernetes
+# Plan: a React Native web client that replaces the desktop app, and the orchestrator on Kubernetes
 
-**Date**: 2026-11-14 | **Spec**: [spec.md](spec.md) | **Issues**: [issues.md](issues.md) |
-**Epic**: #1722 (revises its M3–M5; base plan `specs/orchestrator/`)
+**Date**: 2026-11-14 (revision 2, after jaro's answers) | **Spec**: [spec.md](spec.md) |
+**Issues**: [issues.md](issues.md) | **Epic**: #1722 (revises its M3–M5; base plan `specs/orchestrator/`)
 
 ## Summary
 
-The desktop iced app stays. A second client, written once in TypeScript with React Native (Expo and
-`react-native-web`), runs in browsers, on Android and on iOS. It talks only to the orchestrator, over
-the JSON-over-WebSocket API of #1732, whose TypeScript types are generated from the Rust protocol.
-Its Material 3 theme is generated from the same tokens as the desktop app, and its screens follow
-the desktop layout. Users sign in with GitHub or Google through the orchestrator (no passwords), and
-get one of three roles. The orchestrator ships as an image plus a Helm chart built for Kubernetes:
-one stateful replica with a volume, a stateless web image, an ingress for web and API, TLS
-passthrough for daemon mTLS links, secrets as files, and health, readiness and metrics endpoints.
+The Micold user interface moves to the web. One TypeScript client, written with React Native (Expo
+and `react-native-web`) so that a mobile app can be added later from the same code, runs in the
+browser and, once it reaches parity, **replaces the iced desktop app** (jaro, 2026-11-14). Rust stays
+for everything that is not UI: `micold-core`, the daemons and the orchestrator.
+
+The client offers the **structured view only** and supports **Claude Code first**. It talks only to
+the orchestrator, over the JSON-over-WebSocket API of #1732 with TypeScript types generated from the
+Rust protocol. Its Material 3 theme is generated from the same tokens as today's desktop app, and its
+screens follow today's desktop layout.
+
+Because the web interface may be published on a network, **every access needs authentication**:
+GitHub or Google sign-in through the orchestrator on a network deployment, and a one-time local
+access link on a loopback-only one. Three global roles control what a signed-in user can do. The
+Claude credentials that sessions use never pass through the web client or the orchestrator (see
+[Claude credentials](#claude-credentials)).
+
+The orchestrator ships as an image plus a Helm chart built for Kubernetes: one replica in v1 with its
+state in PostgreSQL, designed so that it can scale out later ([Scalability path](#scalability-path)), a
+stateless web image, Gateway API routing, mTLS daemon links on their own Service, secrets as files,
+and health, readiness and metrics endpoints.
 
 ## Architecture
 
 ```text
- Browser / Android / iOS                       Kubernetes cluster (owner's)
- ┌───────────────────────┐   HTTPS   ┌──────────────────────────────────────────────────────────┐
- │ apps/client (Expo RN) │──────────▶│ Ingress  micold.example.com                              │
- │  - screens, M3 theme  │           │   /            → Service web  → Deployment web (static)  │
- │  - @micold/protocol   │   WSS     │   /api, /auth  → Service orch → StatefulSet orchestrator │
- │    (generated TS)     │──────────▶│                                   (1 replica, PVC)       │
- └───────────────────────┘           │ TLS passthrough link.micold.example.com                  │
-                                     │   → Service orch-link :8443 (mTLS, no termination)       │
- Desktop app (iced) ─ local socket ──│   (local orchestrator, or remote after sign-in, #1741)   │
-                                     │ Service orch-ops :9090 /healthz /readyz /metrics (no ing)│
- GitHub OAuth / Google OIDC ◀────────│ orchestrator brokers sign-in, holds client secrets       │
-                                     │                                                          │
- Daemons anywhere ─ mTLS WSS link ──▶│ link host        In-cluster daemon pods ─ Service DNS ──▶│
- (laptop, SSH host, container)       └──────────────────────────────────────────────────────────┘
+ Browser (web client;                          Kubernetes cluster (owner's)
+ mobile later)                     ┌──────────────────────────────────────────────────────────┐
+ ┌───────────────────────┐  HTTPS  │ Gateway  micold.example.com                              │
+ │ apps/client (Expo RN, │────────▶│   /            → Service web  → Deployment web (static)  │
+ │  web build)           │  WSS    │   /api, /auth  → Service orch → Deployment orchestrator  │
+ │  - M3 theme (tokens)  │────────▶│                          (1 replica now) ──▶ PostgreSQL  │
+ │  - @micold/protocol   │         │ Service orch-link :8443 (LoadBalancer, mTLS untouched)   │
+ └───────────────────────┘         │ Service orch-ops  :9090 /healthz /readyz /metrics        │
+                                   │                                                          │
+ GitHub OAuth / Google OIDC ◀──────│ orchestrator: sign-in broker, roles, audit, router       │
+                                   │                                                          │
+ Daemons anywhere ─ mTLS link ────▶│ orch-link        In-cluster daemon pods ─ Service DNS ──▶│
+ (laptop, SSH host, container)     └──────────────────────────────────────────────────────────┘
+   each daemon runs Claude Code with the owner's own Claude credentials (never via the client)
+
+ Local use (no cluster): `micold-daemon orchestrator --serve-web` on 127.0.0.1, the same web bundle,
+ opened through a one-time local access link; daemons as today.
 ```
 
 - **Sessions stay in the daemons** (unchanged rule of `specs/orchestrator/`). The orchestrator is a
   router plus the owner of the registry, CA, users, invites, refresh tokens and audit log.
 - **The client never reaches a daemon**; every request goes through the orchestrator, which
   authorizes it by role and audits it.
-- **Local use is unchanged**: the desktop app starts a local orchestrator and talks over the local
-  socket with no sign-in (FR-033).
+- **No unauthenticated access**, also on a laptop: a loopback-only orchestrator still requires the
+  local access link (FR-033R), because any local process or user can reach a loopback port.
 
 ### Client (`apps/client/`)
 
 | Concern | Choice |
 |---|---|
-| Framework | Expo SDK (managed workflow) with Expo Router; `react-native-web` for the browser build |
+| Framework | Expo SDK (managed workflow) with Expo Router; `react-native-web`; **only the web target is built now**. Native targets stay possible because the code is React Native; platform files (`*.web.tsx`) only where the web needs them |
 | Language | TypeScript, `strict` |
 | Material 3 | `react-native-paper` v5 (MD3 components and theme) for the base components; Micold-specific components (transcript cards, session strip, overview card, diff view) in `apps/client/src/components/`, one shared library (Principle VIII applied to the client) |
 | Theme | `apps/client/src/theme/tokens.generated.ts`, produced by a new `micold-tokens-ts` binary beside `micold-tokens-css` (`crates/micold-core/src/bin/`), read into a Paper `MD3Theme` for light and dark; Roboto and Fira Mono from `assets/fonts/` |
 | Protocol | `packages/protocol/` (`@micold/protocol`): TS types + JSON Schema generated from the Rust types (see #1732 below), and a small hand-written client: socket, reconnect with backoff, resume by sequence, request/response correlation |
 | State | Zustand stores per feature (sessions, transcript, composer, attention), fed by the socket; no server cache library, since the socket pushes state |
 | Lists | `@shopify/flash-list` for the transcript and long lists (virtualized; the desktop's large-transcript CPU issue #1683 is the warning) |
-| Markdown and code | `react-native-markdown-display` plus a highlighter on web; plain monospace on native at first |
-| Auth | `expo-auth-session` (PKCE, system browser) against the orchestrator; `expo-secure-store` on native, an `HttpOnly` cookie on web |
-| Notifications | in-app snackbar and attention list everywhere; `expo-notifications` local notifications while the app runs; browser `Notification` on web |
-| Tests | Jest + React Native Testing Library (units), Playwright against the web build (end to end), Maestro against an Android emulator (end to end) |
-| Builds | web: `expo export --platform web` into a static image; Android: Gradle (`expo prebuild`) on Linux CI; iOS: EAS Build (hosted macOS), see Q4 |
+| Markdown and code | `react-native-markdown-display` plus a syntax highlighter |
+| Auth | Authorization code + PKCE against the orchestrator; refresh token in an `HttpOnly` cookie, access token in memory only |
+| Notifications | In-app snackbar and attention list; browser `Notification` while a tab is open |
+| Tests | Jest + React Native Testing Library (units), Playwright against the web build (end to end, keyboard navigation included) |
+| Builds | `expo export --platform web` into a static bundle: served by the orchestrator in local mode and by the web image on Kubernetes |
 
-The workspace uses pnpm; versions are pinned and managed through `mise` (`node`, `pnpm` tools), so
-`mise run client-test`, `client-web`, `client-android` join the existing tasks.
+The workspace uses pnpm; Node and pnpm are pinned in `mise.toml`, so `mise run client-test` and
+`mise run client-web` join the existing tasks.
 
 ### Feature parity matrix
 
-jaro: "Initially assume similar features and look as current rust ui". Inventory from
-`crates/micold-client/src/`; v1 means the first M4 release.
+jaro: "Initially assume similar features and look as current rust ui", then "the web interface will
+replace rust" and "structured view only". So every desktop surface either moves to the web client or
+is dropped on purpose; nothing stays desktop-only once the iced app is retired. Inventory from
+`crates/micold-client/src/`.
 
-| Desktop surface (module) | Client | Notes |
+| Desktop surface (module) | Web client | Notes |
 |---|---|---|
 | Sidebar: projects, worktrees, sessions, groups (`ui/sidebar.rs`, `micold-core/src/sidebar_groups.rs`) | v1 | Grouping and stable order come from `micold-core` rules; the orchestrator sends them computed or the rule is ported with shared test vectors (decided in #1732's plan) |
-| Overview grid of cards (`ui/overview.rs`, `ui/material/overview_card.rs`) | v1 | One column on phones |
-| Structured transcript, insights, subagent threads, usage (`ui/transcript/`) | v1 | |
-| Composer, paste, attachments (`ui/composer.rs`) | v1 | Image paste on web; picker on mobile |
+| Overview grid of cards (`ui/overview.rs`, `ui/material/overview_card.rs`) | v1 | One column below 600 px |
+| Structured transcript, insights, subagent threads, usage (`ui/transcript/`) | v1 | Claude Code first |
+| Composer, paste, attachments (`ui/composer.rs`) | v1 | Text and image paste |
 | Permission prompts and ask-user answers (`ui/transcript/permission.rs`) | v1 | |
 | Mode, model and effort pickers (`ui/mode_control.rs`) | v1 | |
-| Confirmations (`ui/confirm_*.rs`) | v1 | Only those of actions the client offers |
+| Confirmations (`ui/confirm_*.rs`) | v1 | Those of the actions the client offers |
 | Worktree create, rename, delete (`ui/worktree_form.rs`) | v1 | GitHub and Jira issue filters in v1.1 |
-| Session start, stop; session strip (`features/session_strip.rs`) | v1 | Structured sessions; terminal sessions listed only (Q1) |
-| Attention and notifications (`features/attention.rs`) | v1 | Foreground only (no remote push, Q3) |
-| Quick switcher (`ui/quick_switcher.rs`) | v1 | Ctrl/Cmd+K on web, search screen on mobile |
-| Appearance settings (light, dark, system) | v1 | Per device |
-| Changes and diff review (`ui/changes.rs`, `ui/material/diff_view.rs`, `review_*`) | v1.1 | Read-only first; review replies later |
+| Session start, stop; session strip (`features/session_strip.rs`) | v1 | Structured Claude Code sessions; see "Terminal sessions" below |
+| Attention and notifications (`features/attention.rs`) | v1 | While a tab is open |
+| Quick switcher, command palette (`ui/quick_switcher.rs`, `features/command_palette.rs`) | v1 | Ctrl/Cmd+K |
+| Keyboard navigation (#803), shortcut sheet | v1 | Same shortcuts where the browser allows |
+| Appearance settings (light, dark, system) | v1 | Per browser |
+| Users, invites, roles, audit (new) | v1 | Owner only |
+| Daemons list, enrollment token, revoke (`features/daemons.rs`) | v1 | |
+| Changes and diff review (`ui/changes.rs`, `ui/material/diff_view.rs`, `review_*`) | v1.1 | Read-only first, then review replies |
 | PR status, Jira status chips (`features/pr_status.rs`, `features/jira_status.rs`) | v1.1 | Read from the daemon; tokens stay on the daemon |
-| History and parallel runs (`features/history.rs`, `features/runs.rs`) | v1.1 | |
+| History and parallel runs (`features/history.rs`, `features/runs.rs`, `ui/parallel_dialog.rs`) | v1.1 | |
 | Plan usage (`features/plan_usage.rs`) | v1.1 | |
-| Users, invites, roles, audit (new) | v1 | Owner only; web first |
-| Daemons list and revoke (`features/daemons.rs`) | v1 | List, state, revoke, enrollment token; creating container, SSH or pod daemons stays desktop-only |
-| Terminal view (`ui/terminal.rs`) | Q1 | Out by default (epic: structured only) |
-| Settings: environment, terminal, GitHub and Jira tokens, project setup | desktop only | Secrets and host paths belong to the machine running the daemon |
-| Large editor, sandbox status, setup output, Kubernetes live view | desktop only | Revisit after v1.1 |
-| Keyboard navigation (#803) | v1 on web | Same shortcuts where the browser allows |
+| Setup output, project setup (`features/setup.rs`) | v1.1 | Streamed from the daemon |
+| Sandbox status (`features/sandbox.rs`) | v1.1 | |
+| Settings: environment, GitHub and Jira tokens, project | v2 (before retirement) | Edited through the orchestrator, stored on the daemon that uses them, never shown back in full; owner only |
+| Daemon provisioning: add container, SSH and pod daemons, start them (`features/daemons_kube.rs`, `features/daemons_start.rs`, `micold_core::provision`) | v2 (before retirement) | Moves from the desktop app to the orchestrator: see [Retiring the iced client](#retiring-the-iced-client) |
+| Kubernetes live view (`kube/`) | v2 | Through the orchestrator's provisioner |
+| Large editor (`ui/large_editor.rs`) | v2 | |
+| Terminal view (`ui/terminal.rs`), terminal settings | **dropped** | Structured view only (jaro). See below |
+
+**Terminal sessions.** Without a terminal view, a terminal session has no UI once the iced app is
+gone. The client lists existing terminal sessions with their state and lets the user stop them, and
+starts only structured sessions. Today the structured mode exists for Claude Code (features 938–944),
+so "Claude Code first" and "structured only" agree; other providers (Codex, Copilot, Pi, OpenCode)
+need a structured adapter each before the web client can drive them (Q-B).
 
 ### Network API (#1732, revised)
 
@@ -118,11 +145,10 @@ orchestrator ──(4) redirect to client redirect_uri with a one-time orchestra
 client ──(5) POST /auth/token (code + code_verifier) ──▶ access token (15 min) + refresh token
 ```
 
-- Redirect URIs: the web origin (`https://micold.example.com/auth/done`), the app scheme
-  (`io.github.jaroslawherod.micold:/auth/done`) for Android and iOS, and `http://127.0.0.1:<port>/` for the desktop app
-  (#1741). The orchestrator keeps an allow-list of them.
-- Native redirect: a reverse-domain private-use scheme (RFC 8252 §7.1), since a self-hosted server
-  cannot use universal or app links on the owner's own domain.
+- Redirect URIs: the web origin (`https://micold.example.com/auth/done`), in an allow-list. A
+  native app later adds a reverse-domain private-use scheme (RFC 8252 §7.1).
+- Local mode: no provider; the one-time local access link ([Local mode](#local-mode-no-cluster))
+  yields the same cookie and tokens for the owner.
 - Socket authentication: browsers cannot set headers on a WebSocket, so every client sends the
   access token in the socket's first frame (never in the URL). The orchestrator keeps the user table
   in memory and checks the role on every message, so a role change applies at once; the socket
@@ -134,12 +160,8 @@ client ──(5) POST /auth/token (code + code_verifier) ──▶ access token 
   file, a new key is added beside the old one, and the old one keeps verifying until its tokens
   expire (Helm alone cannot rotate a key; the docs give the steps).
 - Google: invites match an email only when `email_verified` is true.
-- Storage: users, identities, invites, bootstrap code and refresh-token hashes in a SQLite file on
-  the orchestrator volume, behind a new `AuthStore` trait (with an in-memory implementation for
-  tests), shaped like the `RegistryStore` that #1724's M5 plans. Principle IV allows SQLite; the
-  registry JSON file stays as #1724 ships it. Schema migrations run forward on start, the store
-  refuses a newer schema than it knows, and the chart's upgrade notes say to snapshot the volume
-  first.
+- Storage: users, identities, invites, bootstrap code and refresh-token hashes in PostgreSQL
+  behind an `AuthStore` trait ([Storage](#storage-postgresql)).
 - Provider setup is the owner's: a GitHub OAuth App and/or a Google OAuth client; either may be
   absent, and the client shows only the configured buttons.
 
@@ -160,41 +182,144 @@ The client hides what the role cannot do; the orchestrator refuses it regardless
 | Concern | Design |
 |---|---|
 | Images | `ghcr.io/jaroslawherod/micold-orchestrator` (the `micold-daemon` binary, `orchestrator` subcommand; distroless `cc` base, UID 65532, read-only root FS) and `ghcr.io/jaroslawherod/micold-web` (static bundle behind a small static server, e.g. `nginx-unprivileged`). Multi-arch amd64 and arm64, built and signed (cosign) by the release workflow |
-| Workloads | orchestrator: StatefulSet, `replicas: 1`, PVC `ReadWriteOncePod` (falls back to `ReadWriteOnce` where the CSI driver lacks it; 1 GiB default) at `/var/lib/micold`, an `emptyDir` at `/tmp` because the root filesystem is read-only; web: Deployment, 2 replicas, HPA optional, PodDisruptionBudget. The volume must be block or local storage: SQLite on NFS is unsupported and the docs say so |
-| State | On the PVC: registry JSON (#1724), CA key and certs (#1729), SQLite for users, invites, tokens and audit. Nothing about sessions. Backup: a documented `kubectl cp` of the volume, or a VolumeSnapshot; CA key backup is the one that matters (losing it means every daemon re-enrolls) |
-| Why one replica | Each daemon holds one link to one orchestrator and routing state is in memory; two replicas would need a link directory and replica-to-replica forwarding. Deferred (Q5); the store traits keep a Postgres store possible |
+| Workloads | orchestrator: Deployment, `replicas: 1` in v1, no volume (state in PostgreSQL), an `emptyDir` at `/tmp` because the root filesystem is read-only, `strategy: Recreate` while `replicas` is 1 so two orchestrators never hold daemon links at once; web: Deployment, 2 replicas, HPA optional, PodDisruptionBudget |
+| State | PostgreSQL (bring your own, or CloudNativePG; the chart takes `database.existingSecret` with the URL): registry, enrollments, users, invites, refresh-token hashes, audit. The CA private key and the signing key set are Secrets. Nothing about sessions. Backup: the database's backups plus the CA key Secret (losing the CA key means every daemon re-enrolls) |
+| Why one replica | Each daemon holds one link to one orchestrator and the link directory is in memory in v1; more replicas need the Postgres `LinkDirectory` and replica-to-replica forwarding ([Scalability path](#scalability-path)) |
 | Ingress | One host for web and API: `/` → web, `/api`, `/auth` → orchestrator with WebSocket idle timeouts raised. Gateway API `HTTPRoute` is the primary path (ingress-nginx is retired upstream, best-effort maintenance ended March 2026); a classic `Ingress` template stays for other controllers (Traefik, HAProxy, cloud ones), with their timeout annotations documented |
 | Daemon links | mTLS must reach the orchestrator untouched. Default: a `LoadBalancer` Service on 8443 (works on every cloud and with MetalLB). Option: TLS passthrough through a Gateway `TLSRoute` (experimental channel in many implementations) or a controller's passthrough mode, whose prerequisites (for example a controller flag) the chart cannot set and the docs list. Terminating TLS at the ingress and forwarding the client certificate in a header is rejected (spoofable once anything else can reach the Service) |
 | TLS | cert-manager `Certificate` for the web/API host (issuer is a chart value); the link host serves the orchestrator's own CA-signed certificate (#1729), which daemons pin |
-| Secrets | Kubernetes Secrets mounted as files under `/run/secrets/micold/` (GitHub and Google client secrets, JWT signing key, optional CA key import); the orchestrator config names them by path (#1521 rule). Works with External Secrets / Sealed Secrets unchanged. The bootstrap code is either taken from a Secret the owner created before install (`bootstrap.existingSecret`), or generated by the orchestrator, printed to its log and written to `/var/lib/micold/bootstrap-code` (`kubectl exec … cat`); no Job and no Kubernetes API access is needed |
-| Config | A ConfigMap with the orchestrator TOML (public URL, allowed origins, redirect URIs, providers, limits); a checksum annotation restarts the pod on change |
-| Probes | `startupProbe` and `readinessProbe` on `/readyz` (store opened, CA loaded, listeners bound), `livenessProbe` on `/healthz` (event loop responsive), all on the ops port 9090, which no ingress routes |
+| Secrets | Kubernetes Secrets mounted as files under `/run/secrets/micold/` (GitHub and Google client secrets, JWT signing key, optional CA key import); the orchestrator config names them by path (#1521 rule). Works with External Secrets / Sealed Secrets unchanged. The bootstrap code is either taken from a Secret the owner created before install (`bootstrap.existingSecret`), or generated by the orchestrator on first start against an empty database, printed to its log and stored only as a hash; `micold-daemon orchestrator bootstrap-code --reset` (run with `kubectl exec`) issues a new one. No Job and no Kubernetes API access is needed |
+| Config | A ConfigMap with the orchestrator TOML (public URL, allowed origins, redirect URIs, providers, limits, `database.url_file`); a checksum annotation restarts the pod on change |
+| Probes | `startupProbe` and `readinessProbe` on `/readyz` (database reachable and migrated, CA loaded, listeners bound), `livenessProbe` on `/healthz` (event loop responsive), all on the ops port 9090, which no ingress routes |
 | Metrics | `/metrics` (Prometheus text): links online/offline, clients by kind, messages and bytes per daemon, auth refusals, rate-limit hits; optional ServiceMonitor |
-| Shutdown | SIGTERM: readiness fails, links and clients told to reconnect, store flushed, exit; `terminationGracePeriodSeconds: 30`; the StatefulSet replaces the pod in place, so the volume never has two writers. On node loss the pod stays `Terminating` until force-deleted: documented, and a risk below |
-| Network | NetworkPolicies: web pod accepts from ingress only; orchestrator accepts 8080 from ingress, 8443 from anywhere (daemons), 9090 from the monitoring namespace; egress to DNS and to 443 outside the cluster CIDRs (standard NetworkPolicy has no hostnames; Cilium or Calico FQDN policies for GitHub and Google are optional values) |
+| Shutdown | SIGTERM: readiness fails, links and clients told to reconnect, in-flight writes finished, exit; `terminationGracePeriodSeconds: 30`. With no volume, a lost node only delays the replacement pod by the eviction timeout |
+| Network | NetworkPolicies: web pod accepts from ingress only; orchestrator accepts 8080 from ingress, 8443 from anywhere (daemons), 9090 from the monitoring namespace; egress to the database, to DNS and to 443 outside the cluster CIDRs (standard NetworkPolicy has no hostnames; Cilium or Calico FQDN policies for GitHub and Google are optional values) |
 | Security | `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, all capabilities dropped, `seccompProfile: RuntimeDefault`; no service account token mounted |
-| In-cluster daemons | A documented example StatefulSet for a standing daemon (spec 686's image) that enrolls with a token Secret and links to `micold-orchestrator-link.<ns>.svc:8443` (FR-039). The desktop app's pod runtime (686) keeps working and may link through the external host |
-| Scaling | Vertical for the orchestrator (requests 100m/128Mi, limits a chart value; tens of daemons and clients per replica); horizontal for web |
-| Local and compose | A `docker compose` file for one machine stays as a small example (FR-027 of the base plan), generated from the same config |
-| CI | A `kind` job: build both images, `helm install` with Envoy Gateway as the Gateway API implementation, a pre-created bootstrap Secret and a fake OAuth provider (a small OIDC mock in the test), enroll a daemon pod, run the Playwright smoke test through the gateway; `helm lint` and `kubeconform` on every chart change |
+| In-cluster daemons | A documented example StatefulSet for a standing daemon (spec 686's image) that enrolls with a token Secret and links to `micold-orchestrator-link.<ns>.svc:8443` (FR-039). Daemon pods created by the orchestrator's pod provisioner (N11) link the same way |
+| Scaling | Vertical for the orchestrator in v1 (requests 100m/128Mi, limits a chart value; tens of daemons and clients per replica); horizontal later ([Scalability path](#scalability-path)); horizontal for web now |
+| Local and compose | A `docker compose` file (orchestrator, web, Postgres) for one server stays as a small example; plain local mode needs neither (SQLite, Q-F) |
+| CI | A `kind` job: build both images, `helm install` with Envoy Gateway as the Gateway API implementation, CloudNativePG for the database, a pre-created bootstrap Secret and a fake OAuth provider (a small OIDC mock in the test), enroll a daemon pod, run the Playwright smoke test through the gateway; `helm lint` and `kubeconform` on every chart change |
+
+### Claude credentials
+
+jaro asked that the user log in to Claude to get a token that is passed to the orchestrator, the
+daemons and the sessions. Anthropic's terms do not allow that design. The Claude Code
+[legal and compliance page](https://code.claude.com/docs/en/legal-and-compliance) (read 2026-11-14)
+says: "Anthropic does not permit third-party developers to offer Claude.ai login into their own
+applications, or to route requests through Free, Pro, or Max plan credentials on behalf of their
+users. Moreover, developers may not collect, store, or intermediate Claude.ai credentials or session
+tokens — sign-in to a Claude account must complete through Anthropic's own flow." It also says the
+Claude Code binary must not be modified and must keep its own sign-in methods.
+
+So Micold neither offers "Sign in with Claude" nor carries a Claude token from the browser through
+the orchestrator. Two routes stay open, and the plan supports both (Q-A):
+
+| Route | How | Billing |
+|---|---|---|
+| **API key or cloud provider** (clearly permitted) | The owner puts an Anthropic API key (Claude Console), or Amazon Bedrock / Google Vertex / Microsoft Foundry credentials, into a file named by the daemon's configuration (#1521: secrets by file path); on Kubernetes, a Secret mounted only into daemon pods. The daemon passes it to the Claude Code process it starts. The orchestrator and the web client never read it | Per token, to the key owner |
+| **The user's own Claude subscription** | The user signs in to the **unmodified Claude Code** on each daemon through Claude Code's own flow (for example `claude` → `/login` over SSH or `kubectl exec`, once per daemon volume). The token stays in Claude Code's own store on that daemon; Micold never collects, stores or relays it. The web client only shows whether a daemon's Claude Code is signed in, from `claude auth status` | The user's plan |
+
+Not chosen: storing a `claude setup-token` value in the orchestrator and handing it to daemons. That
+is Micold storing and relaying a subscription token, which the terms rule out. Whether a token the
+user writes into their own daemon's secret file is acceptable is unclear from the page; the docs will
+point to Anthropic's sales contact for that case rather than recommend it.
+
+### Local mode (no cluster)
+
+`micold-daemon orchestrator --serve-web` binds 127.0.0.1, serves the web bundle from the same origin
+as the API, and prints a one-time local access link (`http://127.0.0.1:<port>/?access=<code>`), as
+Jupyter does. Opening it exchanges the code for a session cookie and an owner session. GitHub and
+Google sign-in are needed only when the orchestrator is bound to a non-loopback address, and binding
+one without them configured is refused by `config check`. A user service unit
+(`micold-orchestrator.service`, systemd user) replaces "the desktop app starts the orchestrator".
+
+### Retiring the iced client
+
+The web client replaces the iced app only after the v2 rows of the parity matrix ship. Until then
+the iced app stays in maintenance (bug fixes, no new features), so a user is never left without a
+way to create or provision a daemon. What moves:
+
+- **Daemon provisioning** moves from the desktop app (`micold_core::provision`, feature 806, and the
+  Kubernetes runtime of spec 686) into the orchestrator, behind a `Provisioner` trait: local
+  container, SSH host, Kubernetes pod. This reverses the base spec's "out of scope: the orchestrator
+  provisioning daemons". On Kubernetes, the pod provisioner needs a ServiceAccount with a namespaced
+  Role (pods, PVCs, Secrets in one sessions namespace). It is off by default; standing daemons from
+  the chart's example need no Kubernetes API access.
+- **Settings that hold secrets** (GitHub and Jira tokens, environment) are written through the
+  orchestrator to the daemon that uses them and never read back in full.
+- **Notifications** become browser notifications; desktop notifications (`shell/desktop_notify/`)
+  go with the iced app.
+- **Removal**: one chore deletes `crates/micold-client`, `crates/micold-material`, the iced
+  dependency, the AppImage/deb packaging and their docs, after a release in which the web client is
+  the default. The design tokens stay in `micold-core` (they feed the web theme and the docs site).
+
+### Storage: PostgreSQL
+
+jaro (2026-11-14): "make orchestrator use some relational db as storage, assume postgresql".
+
+- **One relational store** for everything the orchestrator owns: daemon registry, enrollment tokens,
+  certificate serials and revocations, users, identities, invites, bootstrap code, refresh-token
+  hashes, audit log, and (from M7) provisioned-daemon records. Every table carries `tenant_id`.
+- **Rust side**: `sqlx` (async, compile-time-checked queries, `PgPool`), migrations in
+  `crates/micold-daemon/migrations/` applied on start by `sqlx::migrate!`, forward only; the
+  orchestrator refuses a database whose schema is newer than it knows. Stores stay behind traits
+  (`RegistryStore`, `AuthStore`, `AuditStore`) with an in-memory implementation for unit tests and a
+  Postgres one tested against a real Postgres in CI (a service container).
+- **#1724's JSON registry file** is replaced: its M5 ("registry survives a restart") lands on the
+  `RegistryStore` trait as planned, and the Postgres implementation follows in #1733's milestone; a
+  one-shot import reads an existing `registry.json`.
+- **Secrets stay out of the database**: the CA private key and the token signing key set are files
+  (Kubernetes Secrets); the database holds only certificate serials, hashes and public data.
+- **Audit log** is append-only (no `UPDATE`/`DELETE` grant for the orchestrator's role on that table;
+  retention by a scheduled partition drop the owner configures).
+- **Connection**: `database.url_file` in the orchestrator config (a file holding the URL with its
+  password, #1521 rule) and `database.ca_file` for TLS to the server; pool size a config value.
+- **On Kubernetes**: bring your own Postgres (managed cloud database, or an operator such as
+  CloudNativePG in the cluster); the chart takes an existing Secret with the URL and, for kind CI
+  and demos only, can install a CloudNativePG `Cluster`. The orchestrator then needs **no volume**:
+  it becomes a Deployment, which is the main step of the [Scalability path](#scalability-path).
+- **Local mode**: see Q-F. Recommendation: a local Postgres is not required; the same traits get a
+  SQLite implementation (`sqlx` supports both) for the loopback-only orchestrator, so the
+  offline, single-machine case keeps working with no server process (Principle IV).
+- **Backup**: the database's own backups (managed service, or CloudNativePG's scheduled backups);
+  the CA key Secret backed up separately.
+
+### Scalability path
+
+v1 runs one orchestrator replica (jaro: "initially yes but we should keep in mind to make it
+scalable"). These choices keep the way to several replicas open:
+
+- **State in PostgreSQL**: every replica shares the one database, so no replica owns state.
+- **No session state in the orchestrator**: sessions stay in daemons, so a replica holds only
+  connections, which are cheap to rebuild.
+- **Stateless tokens**: access tokens are JWTs any replica can verify with the shared key set;
+  refresh tokens live in Postgres.
+- **A link directory seam**: routing goes through a `LinkDirectory` trait ("which replica holds the
+  link of daemon D"). v1's implementation is in-process. A later one keeps the directory in Postgres
+  or Redis and forwards a request to the replica holding the link (replica-to-replica over the
+  internal Service); clients reconnect anywhere and resume by sequence. Postgres `LISTEN/NOTIFY`
+  is enough for that directory at this scale, so no Redis is needed.
+- **Rate limits** are per replica in v1; the same trait boundary allows a shared counter later.
+- **What scaling changes on Kubernetes**: `replicas` above 1 on the Deployment, a headless Service
+  for replica-to-replica forwarding, a PodDisruptionBudget, and the `LinkDirectory` Postgres
+  implementation. v1 already runs as a Deployment with no volume, `replicas: 1`.
 
 ## Constitution Check
 
 | Principle | Status |
 |---|---|
-| I. Test-First | Kept: each client issue is TDD with Jest/RNTL, Playwright and Maestro; Rust parts as today |
+| I. Test-First | Kept: each client issue is TDD with Jest/RNTL and Playwright; Rust parts as today |
 | II. Multi-Session | Kept: sessions stay in daemons; the client shows many sessions; input serialized by the daemon |
 | III. Worktree Integration | Kept: worktree actions are the daemon's existing ones, routed |
-| IV. Local-First (NON-NEGOTIABLE) | **Amended**, not broken in spirit: the desktop app and local orchestrator still work offline with no sign-in, and sessions stay on the daemon's machine. But "all application state on the local filesystem" and "no separate server process" (Technology constraints, Persistence) do not hold for an opt-in remote orchestrator on a cluster volume, or for a mobile client. N1 adds an explicit, opt-in remote-deployment clause |
-| V. Rust + iced Stack | **Violated** by a TypeScript/React Native client. Needs an amendment (MAJOR bump, 2.0.0): "the desktop application is Rust + iced; a remote client for web and mobile MAY be TypeScript + React Native, talking only to the orchestrator's network API with generated types; no other GUI framework". Proposed as issue N1, before any client code |
-| VI. Cross-Platform Parity | Text is out of date after #1897 (Linux only). The amendment scopes it: the desktop app targets Linux; the client targets web, Android and iOS, with iOS gated on Q4 |
-| VII. Documentation | Kept: user guide pages for the client, sign-in, roles and the Helm chart in the same changes; the chart's `values.yaml` documented and checked |
-| VIII. Reusable UI Components | Applied to the client: one component library in `apps/client/src/components/`; the builder-API clause is iced-specific and the amendment says the client follows React's own idiom (typed props) instead |
+| IV. Local-First (NON-NEGOTIABLE) | **Amended**: local mode still works offline on one machine with no external service (loopback orchestrator on SQLite, local access link, daemons as today). An opt-in network deployment stores its state in PostgreSQL and uses GitHub or Google for sign-in. N1 adds that clause |
+| V. Rust + iced Stack | **Replaced** (jaro approved, 2026-11-14): the UI is one TypeScript + React Native client talking only to the orchestrator's API through generated types; Rust stays for core, daemons and orchestrator; iced is retired with the desktop app. MAJOR bump, issue N1 |
+| VI. Cross-Platform Parity | Rewritten by N1: daemons and orchestrator on Linux (#1897); the client on current Chromium, Firefox and Safari; native mobile later |
+| VII. Documentation | Kept: user guide pages for the client, sign-in, roles, local mode and the Helm chart in the same changes |
+| VIII. Reusable UI Components | Applied to the client: one component library in `apps/client/src/components/`; the builder-API clause (iced idiom) becomes "typed props, React idiom" |
 
-"Technology, Storage & Licensing Constraints" is amended with Principles IV, V and VI: GUI (iced for
-the desktop, React Native for the remote client), Persistence (an opt-in remote orchestrator may keep
-its own store on its volume) and Distribution (Linux desktop builds, web bundle, Android and, after
-Q4, iOS).
+"Technology, Storage & Licensing Constraints" is amended with them: GUI (React Native web client),
+Persistence (an opt-in network orchestrator stores its state in PostgreSQL; local mode in SQLite) and Distribution
+(Linux binaries for daemon and orchestrator, the web bundle, container images).
 
 ## Milestones and dependencies
 
@@ -205,91 +330,98 @@ Done: #1723, #1728; #1724 M1–M4 merged (M5 store, M6 pending). Open in M1/M2: 
 |---|---|---|---|---|
 | **M1** (unchanged) | Local orchestrator | #1724, #1725, #1726, #1727 | — | in progress |
 | **M2** (unchanged) | mTLS daemons anywhere | #1729, #1730, #1731 | #1724, #1728 | 4–6 weeks |
-| **M3 — Network API, sign-in, roles** | Authorized JSON API, GitHub/Google sign-in, roles, audit | N1 (constitution), #1732 (revised), #1733 (replaced), #1734 (revised) | #1726 (routing); #1733 on #1724's M5 store; #1734 no longer waits for #1727 | 4–6 weeks |
-| **M4a — Client foundation** | Expo app on web and Android, M3 theme, sign-in, sidebar and overview, CI | N2 (tokens to TS), #1735 (replaced) | N1, #1732, #1733 | 3–4 weeks |
-| **M4b — Structured sessions** | Transcript, composer, prompts, pickers, lifecycle, attention, quick switcher, users screen | #1736, #1737, #1738, #1739 (revised), N3 (admin screens) | M4a, #1734 | 5–7 weeks |
-| **M5 — Kubernetes** | Images, Helm chart, gateway and link Service, probes, metrics, kind CI | #1742 (revised, first), #1740 (replaced), N4 (web image) | #1742 on #1732; #1740 on #1730 (mTLS link), #1734, #1742, N4; N4 on #1735 | 3–4 weeks |
-| **M5b** | Desktop app against a remote orchestrator | #1741 (revised: loopback PKCE) | #1733 | 1–2 weeks |
-| **M6 — Parity v1.1 and mobile release** | Changes review, PR/Jira chips, history, plan usage; store builds | N5, N6, N7 (mobile release) | M4b; N7 on Q4 | 4–6 weeks |
-| **Optional** | Terminal view in the client | N8 | Q1 = yes; M4b | 2–3 weeks |
+| **M3 — Network API, storage, auth, roles** | PostgreSQL store, authorized JSON API, GitHub/Google sign-in, local access link, roles, audit | N1 (constitution), N16 (PostgreSQL store), #1732 (revised), #1733 (replaced), #1734 (revised) | #1726 (routing); N16 on #1724's M5 trait; #1733 on N16 | 5–7 weeks |
+| **M4a — Client foundation** | Expo web app, M3 theme, sign-in, sidebar and overview, local mode serving, CI | N2 (tokens to TS), #1735 (replaced), N9 (local mode) | N1, #1732, #1733 | 3–4 weeks |
+| **M4b — Structured Claude Code sessions** | Transcript, composer, prompts, pickers, lifecycle, attention, quick switcher, admin screens, Claude credentials status | #1736, #1737, #1738, #1739, N3, N10 | M4a, #1734 | 5–7 weeks |
+| **M5 — Kubernetes** | Images, Helm chart, gateway and link Service, probes, metrics, kind CI | #1742 (first), #1740 (replaced), N4 (web image) | #1742 on #1732; #1740 on #1730, #1734, #1742, N4; N4 on #1735 | 3–4 weeks |
+| **M6 — Parity v1.1** | Changes review, PR/Jira chips, history and runs, plan usage, setup output, sandbox status | N5, N6 | M4b | 4–6 weeks |
+| **M7 — Parity v2 and retirement** | Provisioning in the orchestrator, secret settings, Kubernetes view, large editor; then the iced app removed | N11, N12, N13 | M6; N13 on N11, N12 | 5–8 weeks |
+| **Later** | Native mobile app; structured adapters for other providers; HA orchestrator | N7, N14, N15 | jaro's go-ahead | — |
 
 ```text
 #1724 ─▶ #1725 ─▶ #1726 ─┬─▶ #1727
                          └─▶ #1732 ─▶ #1733 ─▶ #1734
-#1724 (M5 store) ─▶ #1733      #1732 ─▶ #1742
+#1724 (M5 store trait) ─▶ N16 ─▶ #1733      #1732 ─▶ #1742
 #1728 ✓ ─▶ #1729 ─▶ #1730 ─▶ #1731
-N1, N2, #1732, #1733 ─▶ #1735
-#1734, #1735 ─▶ N3
-#1735 ─▶ #1736 ─▶ #1737 ;  #1736 ─▶ #1739 ─▶ N7 ;  #1735 ─▶ #1738
+N1, N2, #1732, #1733 ─▶ #1735 ─▶ N9
+#1734, #1735 ─▶ N3 ;  #1735 ─▶ N10
+#1735 ─▶ #1736 ─▶ #1737 ;  #1736 ─▶ #1739 ;  #1735 ─▶ #1738
 #1736 ─▶ N5 ;  #1735 ─▶ N6 ;  #1735 ─▶ N4
 #1730, #1734, #1742, N4 ─▶ #1740
+#1726, #1734 ─▶ N11 ;  #1734 ─▶ N12 ;  N5, N6, N11, N12 ─▶ N13
 ```
 
 M4a and M2 can run in parallel once #1732 and #1733 land; M5 can start on #1742 as soon as #1732
-exists. The critical path is #1724 → #1725 → #1726 → #1732 → #1733 → #1735 → #1736 → #1737.
+exists. The critical path is #1724 → #1725 → #1726 → #1732 → #1733 → #1735 → #1736 → #1737, then
+M6 and M7 to retirement.
 
 ## Research and rejected alternatives
 
 | Decision | Chosen | Rejected, and why |
 |---|---|---|
-| RN setup | Expo managed + Expo Router + `react-native-web` | Bare React Native CLI (no web story, more native config to own); separate React web app + RN app (two codebases, against the request); Flutter (not React Native); Tauri/iced on mobile (iced has no production mobile target) |
-| M3 components | `react-native-paper` v5 | Tamagui or NativeWind (not Material 3); hand-built components only (months of work Paper already covers); Material Web components (web only) |
-| Theme source | Generate from `micold-core` tokens | Paper's own `MD3LightTheme` with a seed (drifts from the desktop, ignores our shape and type scale) |
-| Schema | `schemars` → JSON Schema → TS | `ts-rs`/`specta` (TS only, no schema for validation in tests and tooling); hand-kept types (drift, rejected in the base spec) |
-| Wire | JSON over WebSocket | gRPC-web (needs a proxy, no gain for a pushed event stream); postcard in WASM (base spec rejected it) |
-| Auth broker | Orchestrator brokers GitHub/Google, issues its own tokens | Client talks to providers directly (provider tokens in the app, GitHub has no ID token to verify); a separate IdP such as Dex or Keycloak (one more stateful service to run, overkill for one owner); oauth2-proxy at the ingress (cannot express roles or reach WebSocket per-message authorization, and breaks the native apps' PKCE flow) |
-| Local owner account | Replaced by bootstrap code + GitHub/Google | Password account (a password store to secure, reset flows, brute-force limits) |
-| Permissions | Three global roles | Per-daemon grants now (more UI and tests for a single-owner tool; deferred with tenant id kept) |
-| State on K8s | One replica + PVC (SQLite + JSON files) | Postgres now (another dependency for every self-hoster); several replicas now (needs cross-replica routing) |
-| Web serving | Separate static image | Bundle served by the orchestrator (couples releases, makes the stateful pod serve static files, base FR-021) — kept possible for the local orchestrator via a flag later |
-| Daemon mTLS through ingress | TLS passthrough or LoadBalancer | Ingress terminates and forwards the client certificate in a header (spoofable from inside the cluster) |
+| Client stack | Expo + `react-native-web`, web target only for now | Plain React web app (simpler and fewer web gaps, but a mobile app later would mean a second codebase; jaro asked for React Native); Flutter (not React Native); keeping iced and adding a web client (two UIs to keep in step, now unneeded) |
+| M3 components | `react-native-paper` v5 | Tamagui or NativeWind (not Material 3); hand-built components only; Material Web components (web only, would block mobile later) |
+| Theme source | Generate from `micold-core` tokens | Paper's own `MD3LightTheme` with a seed (drifts from today's look, ignores our shape and type scale) |
+| Schema | `schemars` → JSON Schema → TS | `ts-rs`/`specta` (TS only, no schema for validation in tests and tooling); hand-kept types (drift) |
+| Wire | JSON over WebSocket | gRPC-web (needs a proxy, no gain for a pushed event stream); postcard in WASM |
+| Network sign-in | Orchestrator brokers GitHub and Google, issues its own tokens | Client talks to providers directly; a separate IdP (Dex, Keycloak: one more stateful service); oauth2-proxy at the gateway (no roles, no per-message WebSocket authorization) |
+| Claude login as the app's sign-in | Not offered | Not permitted by Anthropic's terms (see [Claude credentials](#claude-credentials)) |
+| Local access | One-time local access link on loopback | No auth on loopback (any local process could drive sessions); GitHub/Google even locally (breaks offline use, Principle IV) |
+| Permissions | Three global roles | Per-daemon grants now (deferred, tenant id kept) |
+| Storage | PostgreSQL (jaro), `sqlx`, behind store traits; SQLite for local mode | JSON files and SQLite on a PVC (no path to several replicas); an ORM such as Diesel or SeaORM (sync API or more layers than the queries need); Redis for the link directory (Postgres `LISTEN/NOTIFY` is enough) |
+| Replicas | One in v1, Deployment with no volume | Several now (needs the link directory first) |
+| Web serving | Orchestrator serves the bundle in local mode; a separate static image on Kubernetes | One way only (local mode would need a second server, or the stateful pod would serve static files in the cluster) |
+| Daemon mTLS through the gateway | LoadBalancer by default, TLS passthrough as an option | Gateway terminates and forwards the client certificate in a header (spoofable from inside the cluster) |
 
 ## Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Constitution V and VI must change | Blocks all client work | N1 first, small, owner-approved |
-| Two UI stacks to keep in step | Parity drifts; double work for each feature | Generated protocol and theme; shared rule vectors from `micold-core` (sorting, grouping) checked in both test suites; parity matrix in the docs, updated per feature |
-| `react-native-web` and Paper gaps (focus rings, keyboard navigation, hover, text selection in long transcripts) | Web feels less native than the desktop | Platform files where needed; Playwright keyboard tests; spike in #1735 |
-| Large transcripts on phones | Jank, memory | FlashList virtualization, server-side page of history plus live tail, a load test with the transcript that caused #1683 |
-| iOS builds need macOS | No iOS app from Linux CI | EAS Build (hosted), or web-only on iOS as a PWA (Q4) |
-| App store review and accounts | Release delay, cost (Apple $99/yr, Google $25) | Q4; web and sideloaded Android first |
-| Single orchestrator replica | Downtime during upgrades (seconds); on node loss, down until the pod is force-deleted | Sessions keep running in daemons; clients resume by sequence; node-loss runbook in the docs; HA deferred (Q5) |
-| Ingress controllers differ (passthrough, WebSocket timeouts); ingress-nginx retired upstream | Chart works on one cluster, not another | Gateway API first, classic `Ingress` template second, link on a `LoadBalancer` by default, kind CI with Envoy Gateway |
+| Constitution IV, V and VI must change | Blocks all client work | N1 first (approved in principle by jaro) |
+| Replacing the desktop app before parity | Users lose provisioning, settings or review | Iced app in maintenance until M7's parity rows ship; retirement is its own issue (N13) |
+| Terminal sessions lose their UI | Codex, Copilot, Pi and OpenCode users, and anyone relying on a terminal session, cannot work in the web client | Claude Code first; terminal sessions listed and stoppable; structured adapters for other providers (N14, Q-B) before the iced app goes, or an explicit decision to drop them |
+| `react-native-web` and Paper gaps (focus rings, keyboard navigation, hover, text selection in long transcripts, diff view) | Web feels less capable than the iced app | Platform files where needed; Playwright keyboard tests; spike in #1735 to check the transcript and a diff view before committing |
+| Large transcripts in the browser | Jank, memory | FlashList virtualization, server-side page of history plus live tail, a load test with the transcript that caused #1683 |
+| Claude credential policy | A design that relays Claude tokens would break Anthropic's terms | No Claude login in Micold; API key or the user's own sign-in in unmodified Claude Code per daemon |
+| Single orchestrator replica | Downtime during upgrades (seconds); on node loss, down until the pod is force-deleted | Sessions keep running in daemons; clients resume by sequence; node-loss runbook; [Scalability path](#scalability-path) |
+| Gateways differ (passthrough, WebSocket timeouts); ingress-nginx retired upstream | Chart works on one cluster, not another | Gateway API first, classic `Ingress` template second, link on a `LoadBalancer` by default, kind CI with Envoy Gateway |
 | Google refuses redirect URIs on private domains | No Google sign-in on a `.lan` deployment | Documented; GitHub works; a public web host name |
-| SQLite on a network filesystem | Corrupt store | Docs require block or local storage |
+| Postgres is one more service for self-hosters | Harder first install | Bring-your-own (managed DB or CloudNativePG); the chart can install a demo CloudNativePG cluster; local mode needs none |
+| Schema migrations on upgrade | A failed or newer migration blocks start | Forward-only migrations tested in CI from every released schema; refuse a newer schema; docs say to back up first |
+| Pod provisioner needs Kubernetes API access | A compromised orchestrator can create pods | Off by default; a namespaced Role limited to one sessions namespace; NetworkPolicies |
 | The orchestrator reads all traffic | A compromised cluster sees code and prompts | Documented; E2E encryption stays future work; audit log; NetworkPolicies |
-| OAuth misconfiguration by self-hosters | Cannot sign in | `micold-daemon orchestrator config check` validates providers and redirect URIs; docs with screenshots for creating both OAuth apps |
+| OAuth misconfiguration by self-hosters | Cannot sign in | `config check` validates providers and redirect URIs; docs for creating both OAuth apps |
 | `ClientMsg` is large (~76 variants) and grows | Unclassified or unhandled variants on the client | Authorization table with an exhaustiveness test; generated discriminated unions with `never` checks in TS |
+
+## Owner decisions (2026-11-14)
+
+1. Constitution amendment: **yes**, and the web interface **replaces** the Rust UI.
+2. **Structured view only**; no terminal view.
+3. The web interface may be published on a network, so access **always requires authentication**;
+   Claude Code is supported first. (The "log in to Claude and pass the token" part is replaced by
+   the [Claude credentials](#claude-credentials) design, see Q-A.)
+4. **Web only** for now; the mobile app is future work.
+5. **One orchestrator replica** for now, designed to scale later.
 
 ## Open questions for jaro
 
-1. **Q1 — Terminal view**: you asked for the same features as the desktop app; the epic said
-   structured only. Recommendation: structured only in v1 (no xterm.js), terminal sessions listed
-   with state; a terminal view (xterm.js on web, xterm.js in a WebView on mobile) as optional issue N8
-   after v1.
-2. **Q2 — Local owner account**: I replaced it with GitHub/Google plus a one-time bootstrap code, and
-   kept "no sign-in over the local socket". Keep a password account for air-gapped self-hosting?
-   Recommendation: no.
-3. **Q3 — Mobile push**: out of v1 (foreground and local notifications only). Add Expo push
-   (APNs/FCM through Expo's service, which sees notification text) or self-run FCM later?
-   Recommendation: later, with notification text limited to "a session needs you".
-4. **Q4 — iOS and stores**: build iOS with EAS Build (hosted macOS) and publish to the App Store and
-   Play Store, or ship web + sideloaded Android first? Recommendation: web + Android APK first, stores
-   in M6.
-5. **Q5 — High availability**: one orchestrator replica with a volume in v1. Is a few seconds of
-   reconnect during an upgrade acceptable? Recommendation: yes; HA with Postgres later if needed.
-6. **Q6 — Per-daemon grants**: dropped to three global roles for "basic permissions". OK?
-7. **Q7 — Where the code lives**: `apps/client/` and `packages/protocol/` in this repository (pnpm
-   workspace, own CI jobs). Recommendation: same repository, so generated files and the Rust types
-   change in one PR.
-8. **Q8 — Android dynamic colour**: use the wallpaper colours (Material You) on Android 12+, or always
-   the desktop seed `#6750A4`? Recommendation: the desktop seed, so every client looks the same.
-9. **Q9 — Linked identities**: may one person attach both a GitHub and a Google identity to one user?
-   Recommendation: yes, from their own profile screen after sign-in.
-10. **Q10 — Names**: the image namespace (`ghcr.io/jaroslawherod/…`), the app id
-    (`io.github.jaroslawherod.micold`) and, if stores are approved, the publisher account.
+- **Q-A — Claude credentials**: Micold cannot offer a Claude login or relay a Claude token (Anthropic's
+  terms). Support both an API key / cloud provider credential per daemon and the user's own sign-in
+  in unmodified Claude Code on each daemon? Recommendation: both, with the API key route as the
+  default on Kubernetes.
+- **Q-B — Other providers and terminal sessions**: when the iced app is retired, do Codex, Copilot,
+  Pi and OpenCode get structured adapters first (N14), or are they dropped from the product until
+  they have one? Recommendation: keep the iced app in maintenance until at least the providers you
+  use have adapters.
+- **Q-C — Password-free sign-in**: GitHub and Google for network access, the local access link for
+  loopback, no password account. OK?
+- **Q-D — Per-daemon grants**: three global roles for "basic permissions". OK?
+- **Q-F — Local mode storage**: PostgreSQL for every network deployment. For the loopback-only
+  local mode, SQLite through the same traits (no server to run), or Postgres everywhere (one code
+  path, but a local Postgres to install)? Recommendation: SQLite locally.
+- **Q-E — Names**: the image namespace (`ghcr.io/jaroslawherod/…`) and the public host name pattern
+  in the chart's examples.
 
-Also planned without a question (say if you disagree): an owner screen listing signed-in devices
-with sign-out per device (N3), and accessibility to WCAG 2.2 AA on web with screen-reader labels on
-every control (in each client issue's acceptance).
+Also planned without a question (say if you disagree): an owner screen listing signed-in browsers
+with sign-out per browser (N3), linking a GitHub and a Google identity to one user, and
+accessibility to WCAG 2.2 AA with screen-reader labels on every control.
