@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1816_autopilot-supervisor-m5-verify-handoff-and-report
 - **Started**: 2026-11-12
 - **Phase**: tasks
-- **Next step**: open design PR, then milestone M1
+- **Next step**: merge design PR #1867, then milestone M1 (M1, M2 not blocked; M3, M4 wait on #1860)
 
 ## Pull requests
 
@@ -30,6 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | tasks | How does the #1857 parent scope added to the issue on 2026-11-14 fit the design? | FR-016: report and safe list select runs via `runs-of-parent.sh`; verifier and follow-up take one named run, so M1, M2 are not blocked by #1860; M3, M4 gain T020, T021 and depend on #1860 | agent | issue #1816 body, #1860 body |
 
 ## Review rounds
 

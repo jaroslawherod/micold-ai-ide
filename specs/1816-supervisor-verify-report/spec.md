@@ -170,6 +170,12 @@ fully clean verified one is listed; with the opt-in off nothing is removed.
   safe-to-remove list, with fixture ledgers and fixture GitHub answers.
 - **FR-015**: The supervisor's rules MUST document this close-out step in a rules file, so the
   supervisor skill (#1813) can load it.
+- **FR-016** *(added 2026-11-14, #1857/#1860)*: The report (FR-008) and the safe-to-remove list
+  (FR-011) MUST cover only runs whose worktree parent is the supervisor's own worktree, selected
+  with #1860's `scripts/autopilot/runs-of-parent.sh`; a run with another parent, or none, is never
+  reported or listed as removable, and the report names each run's parent. The verifier (FR-001)
+  and the follow-up (FR-006) act on one run the caller names and do not select runs, so they need
+  no parent data; the supervisor passes them only its own runs.
 
 ### Key Entities
 

@@ -43,12 +43,15 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 - [ ] T013 [US3] Tests: two verified runs give one entry each (issue, PRs, decisions agent/user, interventions, tokens); open-PR run only under Not done; escalated section; no interventions/tokens give `none` / `unknown`; zero runs and absent supervisor ledger give empty sections, exit 0 and a run that regresses after being reported done appears under Not done (US3.1..3, edge case, FR-008..FR-010, SC-002) in `scripts/tests/close-out.test.sh`
 - [ ] T014 [US3] Implement `scripts/autopilot/close-out-report.sh` per `contracts/close-out-report.md`, classifying each run via `verify-run.sh` (FR-004) (markdown on stdout, `--supervisor-ledger`, `--no-live-sessions`), sourcing `supervisor-ledger.sh`
 
+- [ ] T020 [US3] Tests and implementation: `close-out-report.sh` takes its runs from `runs-of-parent.sh` (#1860), leaves out runs of another parent or none, and names each run's parent (FR-016) in `scripts/tests/close-out.test.sh`
+
 **Checkpoint**: one command reports many runs; unmerged runs never appear as completed.
 
 ## Phase 6: User Story 4 - Worktrees safe to remove are listed, not removed (P2)
 
 - [ ] T015 [US4] Tests: clean verified is `SAFE`; dirty, unmerged commit, live session, not verified, no session list, several ledgers, not a worktree are `KEEP <reason>`; opt-in off gives zero `REMOVE`, opt-in on gives `REMOVE` only for SAFE; the report's Safe to remove section lists them; text guard: script has no worktree removal command and no `rm` (US4.1..4, FR-011..FR-013, SC-005) in `scripts/tests/close-out.test.sh`
 - [ ] T016 [US4] Implement `scripts/autopilot/safe-to-remove.sh` per `contracts/close-out-report.md`; wire its section into `close-out-report.sh`
+- [ ] T021 [US4] Tests and implementation: `safe-to-remove.sh` lists only runs of the supervisor's own parent; a run of another parent is never `SAFE` or `REMOVE` (FR-016) in `scripts/tests/close-out.test.sh`
 - [ ] T017 [US4] Test: the rules file names the four scripts (FR-015) in `scripts/tests/close-out.test.sh`
 - [ ] T018 [US4] Write `.claude/skills/speckit-autopilot/rules/supervisor-close-out.md` (verify, follow-up, report, safe list; supervisor makes the Micold calls) and a close-out scenario in `.claude/skills/speckit-autopilot/tests/pressure-scenarios.md`
 - [ ] T019 [US4] List the other three scripts and the rules file in `.claude/skills/speckit-autopilot/README.md`
@@ -57,7 +60,7 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 
 ## Dependencies
 
-T001 first. Each test task precedes its implementation (T003-T006 before T007, T009-T010 before T011-T012, T013 before T014, T015 before T016, T017 before T018). T014 needs T011. T016 needs T011.
+T001 first. Each test task precedes its implementation (T003-T006 before T007, T009-T010 before T011-T012, T013 before T014, T015 before T016, T017 before T018). T014 needs T011. T016 needs T011. T020 needs T014 and #1860 merged; T021 needs T016 and #1860 merged. M1 and M2 do not depend on #1860.
 
 ## Implementation Strategy
 
@@ -87,18 +90,18 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M3 — Close-out report
 
-- **Tasks**: T013–T014
+- **Tasks**: T013–T014, T020
 - **Deliverable**: `scripts/autopilot/close-out-report.sh` writes one markdown report over many runs, with completed, not done and escalated sections.
 - **Satisfies**: US3 acceptance scenarios 1–3; FR-008, FR-009, FR-010, SC-002
 - **Verify**: `bash scripts/tests/close-out.test.sh` (report cases)
-- **Depends on**: M1, M2
+- **Depends on**: M1, M2; #1860 (`runs-of-parent.sh`)
 - **Tier**: full
 
 ### M4 — Safe-to-remove list and close-out rules
 
-- **Tasks**: T015–T019
+- **Tasks**: T015–T019, T021
 - **Deliverable**: `scripts/autopilot/safe-to-remove.sh` lists SAFE / KEEP worktrees (REMOVE requests only on opt-in, never removing), and `rules/supervisor-close-out.md` documents the whole close-out step.
 - **Satisfies**: US4 acceptance scenarios 1–4; FR-011, FR-012, FR-013, FR-014, FR-015, SC-005
 - **Verify**: `bash scripts/tests/close-out.test.sh` (safe-list and rules cases); quickstart "By hand" last two commands
-- **Depends on**: M1, M2, M3
+- **Depends on**: M1, M2, M3; #1860
 - **Tier**: full
