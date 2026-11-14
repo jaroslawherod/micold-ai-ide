@@ -84,6 +84,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | M6 | 3d8863f988462297dc567c43a5e20a0eaa36b741 | 3d8863f988462297dc567c43a5e20a0eaa36b741 | CHANGES: F1 MAJOR ci.yml missing from drift-M6.md (fixed) |
 | Review A | 4 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | pending |
 | Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | pending |
+| Review A | 4 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: scoped, drift-M6 row only; PR #1908 |
+| Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: ci.yml recorded in drift-M6, plan-drift exits 0; PR #1908 |
 
 ## Declined review findings
 
