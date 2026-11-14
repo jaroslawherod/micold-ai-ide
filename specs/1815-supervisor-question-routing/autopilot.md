@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M3 (T017–T019, tier light) on claude/project-thread-ovjkmi
+- **Next step**: M3 implemented (T017–T019); Review A and B round 1, then PR
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
 | M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | #1907 | merged |
-| M3 | T017–T019 | light | context-cap survival: reask, overdue | | pending |
+| M3 | T017–T019 | light | context-cap survival: reask, overdue | | implemented, review due |
 | M4 | T020–T022 | light | upward relay to a reported parent | | pending |
 
 ## Decisions
@@ -68,7 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-2026-11-14: M2 PR #1907 squash-merged (b3ec7f88) after Review A and B round 2 CLEAN and green CI; origin/main merged into claude/project-thread-y16qre. Next thread starts M3 (T017–T019, tier light: unit model sonnet) on its own harness branch: merge claude/project-thread-y16qre in and set Worktree branch. Cloud: no mise, gh unauthenticated (GitHub MCP for PR/merge, REST `gh api` for check-runs), units have no Agent tool (orchestrator dispatches reviewers), CI is the gate, never rebase or force-push, squash-merge. Units commit pr-title.txt/pr-body.md under the spec dir.
+None.
 
 ## Open escalation
 

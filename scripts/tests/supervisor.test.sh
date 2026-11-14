@@ -380,5 +380,32 @@ check "route2: Batch with nothing pending still sends resolved, unsent issues" 0
 check "route2: the follow-up batch goes back to step 3" 0 'back to step 3' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -o "back to step 3"' "$SKILL"
 check "route gate: works on a malformed ledger" 0 '^judge$' "$SUP" route gate --ledger "$D/bad.md" 1
 
+# --- #1815 M3: context-cap survival (route next --reask, route overdue, SKILL text) -----------
+L3="$D/m3.md"; "$SUP" ledger init --ledger "$L3" --owner s-1 --cap 3 --source x 31 32 >/dev/null
+esc "$D/m3a.json" "1 Product" 1 "Qa1?" 2 "Qa2?" 3 "Qa3?"
+esc "$D/m3b.json" "1 Product" 1 "Qb1?" 2 "Qb2?" 3 "Qb3?"
+"$SUP" route add --ledger "$L3" 31 s-31 "$D/m3a.json" >/dev/null; "$SUP" route add --ledger "$L3" 32 s-32 "$D/m3b.json" >/dev/null
+for k in R32.Q1 R31.Q2 R31.Q1 R32.Q2 R31.Q3; do "$SUP" route state --ledger "$L3" "$k" asked; done
+check "reask: every asked row, no limit, ascending" 0 '^R31.Q1 R31.Q2 R31.Q3 R32.Q1 R32.Q2$' bash -c '"$0" route next --ledger "$1" --reask | cut -d" " -f1 | paste -sd" " -' "$SUP" "$L3"
+check "reask: carries the question, options, rec and evidence" 0 '^R31.Q1 \| Qa1\? \| A: a // B: b \| A \| e$' bash -c '"$0" route next --ledger "$1" --reask | head -1' "$SUP" "$L3"
+check "reask: prints no banner or notification text" 1 '^$' bash -c '"$0" route next --ledger "$1" --reask | grep -E "Cheaper|need a decision|banner"' "$SUP" "$L3"
+check "reask: leaves pending rows out" 0 '^0$' bash -c '"$0" route next --ledger "$1" --reask | grep -c "R32.Q3"; true' "$SUP" "$L3"
+check "reask: an unknown option exits 2" 2 'usage' "$SUP" route next --ledger "$L3" --bogus
+"$SUP" route sent --ledger "$L3" 31 1000
+check "overdue: Sent older than the ceiling is listed" 0 '^31$' "$SUP" route overdue --ledger "$L3" --now 1700 --ceiling 600
+check "overdue: exactly at the ceiling is not overdue" 0 '^$' "$SUP" route overdue --ledger "$L3" --now 1600 --ceiling 600
+check "overdue: an empty Sent is never overdue" 0 '^31$' "$SUP" route overdue --ledger "$L3" --now 99999 --ceiling 1
+check "overdue: an issue listed once" 0 '^1$' bash -c '"$0" route overdue --ledger "$1" --now 1700 --ceiling 600 | wc -l | tr -d " "' "$SUP" "$L3"
+check "overdue: --now and --ceiling are required" 2 'usage' "$SUP" route overdue --ledger "$L3" --now 1700
+check "overdue: a non-numeric --now exits 2" 2 'epoch' "$SUP" route overdue --ledger "$L3" --now soon --ceiling 600
+sk_has() { local r; r="$(RQ)"; for w in "$@"; do printf '%s' "$r" | grep -qF -- "$w" || { echo "missing: $w"; return 1; }; done; echo ok; }
+check "skill3: OVER ends the turn after banners, notification and asked" 0 '^ok$' bash -c 'ord() { :; }; r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; a="$(printf "%s" "$r" | grep -n -m1 "OVER" | cut -d: -f1)"; b="$(printf "%s" "$r" | grep -n -m1 "route state <key> asked" | cut -d: -f1)"; [ -n "$a" ] && [ "$a" -gt "$b" ] && printf "%s" "$r" | grep "OVER" | grep -qF "end the turn" && echo ok' "$SKILL"
+check "skill3: names the context check" 0 '^ok$' sk_has "AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py" "OVER"
+check "skill3: OVER makes no AskUserQuestion call" 0 '^ok$' sk_has "no \`AskUserQuestion\`"
+check "skill3: the Cheaper line, verbatim" 0 'Cheaper' grep -nF 'Cheaper: /clear, then /autopilot-supervisor — it asks this again from the ledger.' "$SKILL"
+check "skill3: Restart re-asks with route next --reask, no banner or notification" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "route next --reask" "without a banner or notification"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: Restart drops a session that left asking" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "route drop" "left \`asking\`"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: Confirm names route overdue, reports, never re-sends" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; for w in "route overdue" "Watcher ceiling" "never re-sent" "not accepting input"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
