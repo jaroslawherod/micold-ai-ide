@@ -7,21 +7,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1816
-- **Worktree branch**: feat/1816_autopilot-supervisor-m5-verify-handoff-and-report
+- **Worktree branch**: claude/project-thread-i50nzc
 - **Started**: 2026-11-12
-- **Phase**: tasks
-- **Next step**: merge design PR #1867, then milestone M1 (M1, M2 not blocked; M3, M4 wait on #1860)
+- **Phase**: 4-milestones
+- **Next step**: milestone M1 implemented; reviews A and B pending (cloud: prompts in scratchpad 1816-m1), then open the M1 PR; M2 next (M3, M4 wait on #1860)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1867 | design | merged | 749d63f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | verify-run.sh verdict | | pending |
+| M1 | T001–T008 | full | verify-run.sh verdict | | in progress |
 | M2 | T009–T012 | full | follow-up.sh and cap | | pending |
 | M3 | T013–T014 | full | close-out-report.sh | | pending |
 | M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
