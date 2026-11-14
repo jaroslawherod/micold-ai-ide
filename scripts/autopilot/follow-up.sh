@@ -46,15 +46,16 @@ remaining="$(sed 1d <<<"$out")"
 hash="$(printf '%s\n' "$remaining" | cksum | cut -d' ' -f1)"
 
 read -r count rowhash rowcheck <<<"$(sl_followup_row "$sled" "$branch")"
+case "$count" in ''|*[!0-9]*) count=0 ;; esac
 if [ "$count" -ge "$CAP" ]; then
   if sl_escalation_exists "$sled" "$branch"; then echo HOLD; exit 0; fi
   banner="- **Category**: 5 Non-convergence
 - **Question**: Run $branch is still NOT DONE after $CAP follow-ups; how should it proceed?
 - **Options**:
   1. Take over the run by hand (Recommended) — the supervisor stops sending follow-ups
-  2. Reset the follow-up count and let the supervisor try $CAP more
+  2. Reset and try $CAP more — run scripts/autopilot/supervisor-ledger.sh followup-reset <ledger> $branch
 - **Recommended**: Take over the run by hand — $CAP follow-ups did not converge it
-- **Evidence**: follow-ups sent: $count; remaining:
+- **Evidence**: follow-ups sent: $count (last check id: $rowcheck, remaining-set hash: $rowhash); each sent the message 'Run not done. Remaining:' plus the remaining lines below, or a resume request; still remaining:
 $(sed 's/^/  /' <<<"$remaining")"
   sl_escalation_write "$sled" "$branch" <<<"$banner"
   echo ESCALATE

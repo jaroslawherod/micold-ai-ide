@@ -120,7 +120,7 @@ cases=$((cases + 1)); [ "$(count)" = 3 ] || { failures=$((failures + 1)); echo "
 fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
 check "a stopped session gets RESUME with the remaining lines" 0 '^RESUME s2$' fu --session stopped --session-id s2
 cases=$((cases + 1)); [ "$(count)" = 1 ] || { failures=$((failures + 1)); echo "FAIL RESUME did not count (got $(count))"; }
-check "RESUME has no message head" 0 '^NONE$' bash -c '! "$@" | grep -q "Run not done" && echo NONE' _ "$FU" "$d/wt" --supervisor-ledger "$d/r.md" --session stopped
+check "RESUME has no message head" 0 '^OK$' bash -c 'o="$("$@")" || exit 1; [ "$(head -1 <<<"$o")" = "RESUME" ] && ! grep -q "Run not done" <<<"$o" && echo OK' _ "$FU" "$d/wt" --supervisor-ledger "$d/r.md" --session stopped
 fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
 check "an absent session id prints the action alone" 0 '^SEND$' fu --session live
 
@@ -134,7 +134,7 @@ check "ESCALATE is the first line at the cap" 0 '^ESCALATE$' bash -c '"$@" | hea
 cases=$((cases + 1)); [ "$(grep -c '^### wt$' "$SL")" = 1 ] || { failures=$((failures + 1)); echo "FAIL not exactly one escalation block"; }
 check "the block names what remains" 0 'PR #7 is OPEN' grep -F 'PR #7 is OPEN' "$SL"
 check "after ESCALATE the next call is HOLD" 0 '^HOLD$' fu --session live --session-id s1
-check "HOLD sends nothing" 0 '^NONE$' bash -c '! "$@" | grep -q "^SEND" && echo NONE' _ "$FU" "$d/wt" --supervisor-ledger "$SL" --session live
+check "HOLD sends nothing" 0 '^OK$' bash -c 'o="$("$@")" || exit 1; [ "$o" = "HOLD" ] && echo OK' _ "$FU" "$d/wt" --supervisor-ledger "$SL" --session live
 cases=$((cases + 1)); [ "$(grep -c '^### wt$' "$SL")" = 1 ] || { failures=$((failures + 1)); echo "FAIL HOLD wrote a second block"; }
 cases=$((cases + 1)); [ "$(count)" = 3 ] || { failures=$((failures + 1)); echo "FAIL count moved past the cap: $(count)"; }
 
@@ -155,7 +155,26 @@ check "a run turned VERIFIED is DONE" 0 '^DONE$' fu --session live --session-id 
 cases=$((cases + 1)); [ "$(count)" = 1 ] || { failures=$((failures + 1)); echo "FAIL DONE changed the count: $(count)"; }
 check "an unknown option is exit 2" 2 'unknown option' "$FU" --nope
 check "a missing ledger option is exit 2" 2 'supervisor-ledger' "$FU" "$d/wt" --session live
-check "two runs never share a count" 0 '^SEND$' bash -c 'cd "$2" && git switch -q -c other && echo "| wt | 3 | 1 | - |" >/dev/null && "$0" "$2" --supervisor-ledger "$3" --session live' "$FU" "$d" "$d/wt" "$SL"
+printf '## Follow-ups\n\n| Run | Count | Remaining hash | Check |\n|---|---|---|---|\n| wt | 3 | 1 | - |\n' > "$d/seed.md"
+check "two runs never share a count" 0 '^SEND$' bash -c 'cd "$2" && git switch -q -c other && "$0" "$2" --supervisor-ledger "$3" --session live' "$FU" "$d/wt" "$d/wt" "$d/seed.md"
+
+# reset: back to 0, block removed, three more rounds, ESCALATE again
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+for i in 1 2 3; do fu --session live >/dev/null; done; fu --session live >/dev/null
+"$S/supervisor-ledger.sh" followup-reset "$SL" wt
+cases=$((cases + 1)); [ "$(count)" = 0 ] && ! grep -q '^### wt$' "$SL" || { failures=$((failures + 1)); echo "FAIL reset left count $(count) or the block"; }
+for i in 1 2 3; do fu --session live >/dev/null; done
+check "after a reset and three more rounds the run escalates again" 0 '^ESCALATE$' bash -c '"$@" | head -1' _ "$FU" "$d/wt" --supervisor-ledger "$SL" --session live
+cases=$((cases + 1)); [ "$(grep -c '^### wt$' "$SL")" = 1 ] || { failures=$((failures + 1)); echo "FAIL not one block after re-escalation"; }
+
+# a padded row is still the run's row; a non-numeric count reads as 0
+fresh; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; SL="$d/sup.md"
+printf '## Follow-ups\n\n| Run | Count | Remaining hash | Check |\n|---|---|---|---|\n|  wt  | 1 | 5 | - |\n' > "$SL"
+fu --session live >/dev/null; fu --session live >/dev/null
+cases=$((cases + 1)); [ "$(grep -c 'wt' "$SL")" = 1 ] || { failures=$((failures + 1)); echo "FAIL a padded row was not replaced"; }
+check "a padded row's count reaches the cap" 0 '^ESCALATE$' fu --session live
+printf '## Follow-ups\n\n| Run | Count | Remaining hash | Check |\n|---|---|---|---|\n| wt |  |  |  |\n' > "$SL"
+check "an empty count reads as 0" 0 '^SEND$' fu --session live
 
 echo "close-out: $cases cases, $failures failed"
 [ "$failures" -eq 0 ]

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9puqm3
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: M2 implemented and pushed; orchestrator dispatches Review A (session model) and Review B (sonnet, conformance) on M2, then opens the PR from scratchpad pr-title.md / pr-body.md; M3, M4 wait on #1860
+- **Next step**: M2 review round 1 fixed and pushed; orchestrator runs round 2 (sonnet) if wanted, then opens the PR from scratchpad pr-title.md / pr-body.md; M3, M4 wait on #1860
 
 ## Pull requests
 
@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M1 | 48ae431f513a090ba0c9ef22726015a5f2e8ab7e | a7b5c63f4353827b85efd13bd60d2ffd644d82e4:48ae431f513a090ba0c9ef22726015a5f2e8ab7e | CHANGES (F1 drift-M1.md, F2 cycle-log, F3 T004 fixed) |
 | Review A | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | CLEAN (1 MINOR declined) |
 | Review B | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | CLEAN |
+| Review A | 1 | M2 | 733b29cb33318483b3015ab4353f5c29e254bcfb | 62fb0a7eddc5e9ab87abad102eace4a605e662de:733b29cb33318483b3015ab4353f5c29e254bcfb | CHANGES (F1, F2 MAJOR, F3-F5 MINOR fixed) |
+| Review B | 1 | M2 | 733b29cb33318483b3015ab4353f5c29e254bcfb | 62fb0a7eddc5e9ab87abad102eace4a605e662de:733b29cb33318483b3015ab4353f5c29e254bcfb | CLEAN (MINORs: F4/F5 as A, drift-M2.md added) |
 
 ## Declined review findings
 
