@@ -53,35 +53,19 @@ fn gated_script(dir: &Path) -> Gated {
         b"#!/bin/sh\n",
     )
     .unwrap();
-    let (name, body) = if cfg!(windows) {
-        (
-            "env-include.ps1",
-            format!(
-                "$v = (Get-Content -Path '{marker}' -Raw).Trim()\r\n\
-                 Add-Content -Path '{runs}' -Value run\r\n\
-                 while (-not (Test-Path '{gate}')) {{ Start-Sleep -Milliseconds 20 }}\r\n\
-                 if ($v -eq 'new') {{ $env:PATH = '{bin};' + $env:PATH }}\r\n",
-                runs = runs.display(),
-                marker = marker.display(),
-                gate = gate.display(),
-                bin = bin.path().display(),
-            ),
-        )
-    } else {
-        (
-            "env-include.sh",
-            format!(
-                "v=$(cat '{marker}')\n\
+    let (name, body) = (
+        "env-include.sh",
+        format!(
+            "v=$(cat '{marker}')\n\
                  echo run >> '{runs}'\n\
                  while [ ! -e '{gate}' ]; do sleep 0.02; done\n\
                  if [ \"$v\" = new ]; then export PATH=\"{bin}:$PATH\"; fi\n",
-                runs = runs.display(),
-                marker = marker.display(),
-                gate = gate.display(),
-                bin = bin.path().display(),
-            ),
-        )
-    };
+            runs = runs.display(),
+            marker = marker.display(),
+            gate = gate.display(),
+            bin = bin.path().display(),
+        ),
+    );
     let script = dir.join(name);
     std::fs::write(&script, body).unwrap();
     Gated {

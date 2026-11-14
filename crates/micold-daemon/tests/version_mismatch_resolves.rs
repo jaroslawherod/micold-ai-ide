@@ -65,15 +65,6 @@ async fn a_stale_daemon_is_stopped_and_replaced_without_the_user_finding_a_proce
 
     let endpoint = micold_core::endpoint::resolve().expect("resolve isolated endpoint");
 
-    // On Windows the endpoint is the signed-in user's real one, and everything below stops
-    // whatever daemon serves it. A live one there is the user's, with their sessions in it, so
-    // fail before touching it rather than kill it (review A F3 on #332).
-    #[cfg(windows)]
-    assert!(
-        connect(&endpoint, "probe").await.unwrap().is_none(),
-        "precondition: no daemon may be running on this user's endpoint; close the app first"
-    );
-
     // Nothing to stop yet, and asking is not an error. This is the state the flow lands in when
     // the user clicks the action twice, or when the stale daemon exited on its own between the
     // refusal and the click — the remedy has to be a no-op there, not a failure to report.

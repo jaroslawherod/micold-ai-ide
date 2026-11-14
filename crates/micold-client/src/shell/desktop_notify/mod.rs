@@ -11,10 +11,6 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "windows")]
-mod windows;
 
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
@@ -64,19 +60,6 @@ fn received() -> BoxStream<'static, NotifierEvent> {
     }
 }
 
-/// The kind icons as files, written once per run under the data directory (feature 613, I6). A
-/// failure is logged here, once, and leaves no paths: the notifications are shown without icons.
-/// Linux passes the pixels in the request instead and never asks for these.
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn icon_files() -> &'static IconFiles {
-    static FILES: OnceLock<IconFiles> = OnceLock::new();
-    FILES.get_or_init(|| {
-        // The data directory as `shell/startup.rs` resolves it.
-        let dir = micold_core::paths::data_dir();
-        icon_files_in(dir.as_deref())
-    })
-}
-
 /// The kind icons written under `data_dir`; none, logged, when there is no such directory or it
 /// cannot be written.
 #[cfg_attr(target_os = "linux", allow(dead_code))]
@@ -103,34 +86,6 @@ fn icon_files_in(data_dir: Option<&Path>) -> IconFiles {
 #[cfg(target_os = "linux")]
 pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
     Box::new(linux::Notifier::new(events))
-}
-
-/// The notifier of the system this client was built for: the notification centre. It reports a
-/// click on `events`.
-#[cfg(target_os = "macos")]
-pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
-    Box::new(macos::Notifier::new(events, icon_files()))
-}
-
-/// The notifier of the system this client was built for: a toast. It reports a click on `events`.
-#[cfg(target_os = "windows")]
-pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
-    Box::new(windows::Notifier::new(events, icon_files()))
-}
-
-/// The sample notification the macOS and Windows backends' tests share.
-#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
-fn notification(
-    title: &str,
-    body: &str,
-) -> micold_client::features::attention::DesktopNotification {
-    micold_client::features::attention::DesktopNotification {
-        kind: micold_core::attention::NotificationKind::NeedsPermission,
-        title: title.to_string(),
-        body: body.to_string(),
-        project: std::path::PathBuf::from("/repo"),
-        session: micold_core::session::SessionId::new(),
-    }
 }
 
 #[cfg(test)]

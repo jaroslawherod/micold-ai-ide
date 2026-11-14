@@ -78,21 +78,14 @@ pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
 
 /// Resolve the platform's default interactive shell command (feature 010, research R3;
 /// contracts/shell-process.md). Pure and argument-driven — the impure `std::env::var("SHELL")`
-/// / `std::env::var("COMSPEC")` reads happen at the call site, not here, so this is testable
+/// read happens at the call site, not here, so this is testable
 /// under `--no-default-features` without touching process env. An empty env value is treated
 /// the same as absent (the convention every `AiCliProvider::config_dir` follows).
-pub fn default_shell_command(shell_env: Option<&str>, comspec_env: Option<&str>) -> String {
-    if cfg!(windows) {
-        comspec_env
-            .filter(|s| !s.is_empty())
-            .unwrap_or("cmd.exe")
-            .to_string()
-    } else {
-        shell_env
-            .filter(|s| !s.is_empty())
-            .unwrap_or("/bin/sh")
-            .to_string()
-    }
+pub fn default_shell_command(shell_env: Option<&str>) -> String {
+    shell_env
+        .filter(|s| !s.is_empty())
+        .unwrap_or("/bin/sh")
+        .to_string()
 }
 
 impl crate::path_insert::ShellKind {
@@ -116,7 +109,6 @@ impl crate::path_insert::ShellKind {
             "fish" => ShellKind::Fish,
             "pwsh" | "powershell" => ShellKind::PowerShell,
             "cmd" => ShellKind::Cmd,
-            _ if cfg!(windows) => ShellKind::Cmd,
             _ => ShellKind::Posix,
         }
     }
@@ -234,11 +226,7 @@ mod shell_kind_tests {
 
     #[test]
     fn an_unknown_shell_is_the_platform_default() {
-        let expected = if cfg!(windows) {
-            ShellKind::Cmd
-        } else {
-            ShellKind::Posix
-        };
+        let expected = ShellKind::Posix;
         assert_eq!(ShellKind::detect("/opt/weird/nushell-ish"), expected);
         assert_eq!(ShellKind::detect(""), expected);
     }

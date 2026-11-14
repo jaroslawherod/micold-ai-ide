@@ -62,7 +62,7 @@ pub(crate) fn location_nodes(state: &State) -> Vec<(SessionLocation, LocationNod
                     }
                 }
             }
-            SidebarEntry::Group(_) => {}
+            SidebarEntry::Group(_) | SidebarEntry::UserGroup(_) => {}
         }
     }
     nodes

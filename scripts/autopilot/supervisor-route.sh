@@ -60,11 +60,33 @@ rkeys() {
 }
 
 route_next() {
-  [ $# -eq 0 ] || die "usage: route next"
-  local k
-  rkeys pending | head -n 4 | while read -r k; do
+  local st=pending lim=4 k
+  case "${1:-}" in
+    '') ;;
+    --reask) [ $# -eq 1 ] || die "usage: route next [--reask]"; st=asked; lim=1000000 ;;
+    *) die "usage: route next [--reask]" ;;
+  esac
+  rkeys "$st" | head -n "$lim" | while read -r k; do
     printf '%s | %s | %s | %s | %s\n' "$k" "$(rget "$k" 5)" "$(rget "$k" 6)" "$(rget "$k" 7)" "$(rget "$k" 8)"
   done
+}
+
+# route overdue --now <epoch> --ceiling <s>: issues whose Sent is set and older than the ceiling (FR-008).
+route_overdue() {
+  local now="" ceil=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --now) [ $# -ge 2 ] || die "usage: route overdue --now <epoch> --ceiling <s>"; now="$2"; shift 2 ;;
+      --ceiling) [ $# -ge 2 ] || die "usage: route overdue --now <epoch> --ceiling <s>"; ceil="$2"; shift 2 ;;
+      *) die "usage: route overdue --now <epoch> --ceiling <s>" ;;
+    esac
+  done
+  [ -n "$now" ] && [ -n "$ceil" ] || die "usage: route overdue --now <epoch> --ceiling <s>"
+  isnum "$now" || die "route overdue: --now is epoch seconds"
+  isnum "$ceil" || die "route overdue: --ceiling is seconds"
+  rrows | awk -F'|' -v now="$now" -v c="$ceil" '{
+    k = $2; s = $11; gsub(/ /, "", k); gsub(/ /, "", s)
+    if (s ~ /^[0-9]+$/ && now - s > c) { i = k; sub(/^R/, "", i); sub(/\..*/, "", i); print i } }' | sort -n -u
 }
 
 route_state() {
@@ -78,6 +100,16 @@ route_answer() {
   local key="$1" via="$2" st=answered; shift 2
   case "$via" in user|parent) ;; supervisor) st=resolved ;; *) die "route answer: via is user, parent or supervisor" ;; esac
   rset "$key" 4 "$via"; rset "$key" 9 "$*"; rset "$key" 2 "$st"
+}
+
+# route gate <category>: user-only for an escalation category 2, 3 or 4, judge for 1, 5 or 6 (FR-003).
+route_gate() {
+  [ $# -eq 1 ] || die "usage: route gate <category>"
+  case "$1" in
+    [234]|[234][!0-9]*) echo user-only ;;
+    [156]|[156][!0-9]*) echo judge ;;
+    *) die "route gate: unknown or missing category: $1" ;;
+  esac
 }
 
 # rissue <issue>: the keys of one issue, ascending.
@@ -123,11 +155,13 @@ route_table() { awk '/^## Routing$/ { f = 1; next } f && /^## / { f = 0 } f && N
 
 route_cmd() {
   local sub="${1:-}"; [ $# -gt 0 ] && shift
+  [ "$sub" = gate ] && { route_gate "$@"; return; }
   need_ledger
   case "$sub" in
     add) route_add "$@" ;; next) route_next "$@" ;; state) route_state "$@" ;;
-    answer) route_answer "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
+    answer) route_answer "$@" ;; gate) route_gate "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
+    overdue) route_overdue "$@" ;;
     drop) route_drop "$@" ;; table) route_table ;;
-    *) die "usage: route add|next|state|answer|compose|sent|drop|table" ;;
+    *) die "usage: route add|next|state|answer|gate|compose|sent|overdue|drop|table" ;;
   esac
 }

@@ -112,7 +112,13 @@ impl Sandbox {
     }
 
     async fn call(&self, tool: &str, args: Value) -> Value {
-        call_ok(self.addr, &credential(&self.state, sid(3)), tool, args).await
+        call_ok(
+            self.addr,
+            &full_view_credential(&self.state, sid(3)),
+            tool,
+            args,
+        )
+        .await
     }
 
     async fn session_in(&self, worktree: &str, extra: Value) -> Value {

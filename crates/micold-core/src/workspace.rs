@@ -81,6 +81,14 @@ pub struct Workspace {
     /// Written by the **client** through [`crate::store::ProjectStore::save_issue_source`], like
     /// [`Self::bindings`].
     pub issue_sources: BTreeMap<PathBuf, crate::jira::IssueProvider>,
+    /// The stable id of each worktree (spec 1857, FR-014): project path, then worktree `dir_name`.
+    /// Written by the **daemon**; absent for a project that predates the feature until its first
+    /// worktree refresh.
+    pub worktree_ids: BTreeMap<PathBuf, BTreeMap<String, crate::worktree::WorktreeId>>,
+    /// The parent link of each child worktree (spec 1857), keyed by project path, then by the
+    /// child's id. A worktree with no entry has no parent.
+    pub worktree_parents:
+        BTreeMap<PathBuf, BTreeMap<crate::worktree::WorktreeId, crate::worktree::ParentLink>>,
 }
 
 impl Workspace {
@@ -164,6 +172,8 @@ impl Workspace {
         self.issue_sources.remove(&path);
         // Feature 491: so do its daemon bindings.
         self.bindings.remove(&path);
+        self.worktree_ids.remove(&path);
+        self.worktree_parents.remove(&path);
         if self.active.as_ref() == Some(&path) {
             self.active = None;
         }

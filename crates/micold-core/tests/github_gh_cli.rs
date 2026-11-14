@@ -158,41 +158,6 @@ fn write_executable(path: &Path, script: &str) {
     );
 }
 
-/// Write the stub into `dir` and return its path.
-#[cfg(windows)]
-fn stub(dir: &Path, then: Then) -> PathBuf {
-    copy_fixtures(dir);
-    let tail = match then {
-        Then::PrintPage => "type \"%~dp0page.json\"",
-        Then::Hang => "ping -n 6 127.0.0.1 >nul",
-        Then::NotLoggedIn => "type \"%~dp0login.stderr\" 1>&2\r\nexit /b 4",
-        Then::PartialSearch => "type \"%~dp0partial.json\"\r\nexit /b 1",
-        Then::ListNotFound => "type \"%~dp0not_found.json\"\r\nexit /b 1",
-        Then::RateLimitedAnswer => "type \"%~dp0rate_limited.json\"\r\nexit /b 1",
-        Then::OddAnswer => "type \"%~dp0odd.json\"\r\nexit /b 1",
-        Then::SamlRefused => {
-            "type \"%~dp0saml.json\"\r\ntype \"%~dp0saml.stderr\" 1>&2\r\nexit /b 1"
-        }
-        Then::FailWithoutJson => "type \"%~dp0unknown.stderr\" 1>&2\r\nexit /b 1",
-        Then::SearchPage => "type \"%~dp0search.json\"",
-        Then::SearchRejected => "type \"%~dp0rejected.json\"\r\nexit /b 1",
-        Then::LabelsPage => "type \"%~dp0labels.json\"",
-        Then::MilestonesPage => "type \"%~dp0milestones.json\"",
-        Then::PeoplePage => "type \"%~dp0people.json\"",
-    };
-    let script = format!(
-        "@echo off\r\n\
-         echo %*> \"%~dp0args.txt\"\r\n\
-         (echo GH_PROMPT_DISABLED=%GH_PROMPT_DISABLED%& echo GH_NO_UPDATE_NOTIFIER=%GH_NO_UPDATE_NOTIFIER%& echo NO_COLOR=%NO_COLOR%& echo CLICOLOR=%CLICOLOR%)> \"%~dp0env.txt\"\r\n\
-         if defined GH_DEBUG (echo GH_DEBUG=%GH_DEBUG%>> \"%~dp0env.txt\") else (echo GH_DEBUG=unset>> \"%~dp0env.txt\")\r\n\
-         cd > \"%~dp0cwd.txt\"\r\n\
-         {tail}\r\n"
-    );
-    let path = dir.join("gh.cmd");
-    std::fs::write(&path, script).unwrap();
-    path
-}
-
 /// Set in the child copy of this test binary that [`in_child`] starts.
 const CHILD_VAR: &str = "MICOLD_TEST_CHILD";
 
@@ -255,18 +220,9 @@ fn gh_cli_runs_gh_as_specified() {
 
     let expected = list_args(&repo(), Some("CUR"));
     let args = recorded(dir.path(), "args.txt");
-    if cfg!(unix) {
+    {
         let got: Vec<&str> = args.lines().collect();
         assert_eq!(got, expected, "exactly `list_args`, nothing more (FR-025)");
-    } else {
-        // The Windows stub records a batch-file command line, which doubles an embedded `"`.
-        for arg in expected.iter().filter(|a| !a.starts_with("query=")) {
-            let recorded_form = arg.replace('"', "\"\"");
-            assert!(
-                args.contains(recorded_form.as_str()),
-                "{arg} was passed: {args}"
-            );
-        }
     }
 }
 
@@ -289,7 +245,7 @@ fn gh_cli_sets_the_gh_environment() {
     }
     // `cmd` cannot tell an empty variable from an unset one, so the Windows stub cannot record
     // GH_PAGER's empty value; the `Command` that sets it is the same on every OS.
-    if cfg!(unix) {
+    {
         assert!(
             env.lines().any(|l| l == "GH_PAGER="),
             "GH_PAGER is set, and empty, so gh never pages: {env}"
@@ -379,7 +335,7 @@ fn a_partial_response_is_parsed() {
         "the search hit is returned although gh exited 1"
     );
     let args = recorded(dir.path(), "args.txt");
-    if cfg!(unix) {
+    {
         let got: Vec<&str> = args.lines().collect();
         assert_eq!(
             got,
@@ -471,21 +427,12 @@ fn blocked_search() -> ScopedSearch {
 /// The recorded arguments are exactly `expected`; on Windows, by containment.
 fn assert_args(dir: &Path, expected: &[String]) {
     let args = recorded(dir, "args.txt");
-    if cfg!(unix) {
+    {
         let got: Vec<&str> = args.lines().collect();
         assert_eq!(
             got, expected,
             "exactly these arguments, nothing more (FR-024)"
         );
-    } else {
-        // The Windows stub records a batch-file command line, which doubles an embedded `"`.
-        for arg in expected.iter().filter(|a| !a.starts_with("query=")) {
-            let recorded_form = arg.replace('"', "\"\"");
-            assert!(
-                args.contains(recorded_form.as_str()),
-                "{arg} was passed: {args}"
-            );
-        }
     }
 }
 

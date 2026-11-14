@@ -53,17 +53,6 @@ fn endless_ticks() -> CommandBuilder {
     cmd
 }
 
-/// `cmd` has no `sleep`; `ping -n 2` to loopback waits about a second between ticks.
-#[cfg(windows)]
-fn endless_ticks() -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.args([
-        "/c",
-        "for /l %i in (0,0,1) do @(echo tick& ping -n 2 127.0.0.1 >nul)",
-    ]);
-    cmd
-}
-
 /// Poll `cond` until true or `timeout` elapses; returns whether it became true.
 fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + timeout;

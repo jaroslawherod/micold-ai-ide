@@ -408,7 +408,7 @@ pub fn link_context(
         .unwrap_or(micold_core::sandbox::CONTAINER_NAME);
     micold_core::link::LinkContext {
         host_names: state.session.host_names.clone(),
-        windows_host: cfg!(windows),
+        windows_host: false,
         // `Some` exactly while the sandbox reports locations, which is exactly while a container is
         // up (U134). A container path then translates through what that container really shares, and
         // one outside every location reports as not reachable rather than opening this machine's own

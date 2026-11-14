@@ -132,6 +132,11 @@ impl State {
         self.open.remove(&session);
     }
 
+    /// Close every session's picker (the options row that holds them collapsed, feature 1792).
+    pub fn close_all(&mut self) {
+        self.open.clear();
+    }
+
     /// The arrows in `session`'s picker.
     pub fn step(&mut self, session: SessionId, direction: Direction) {
         if let Some(picker) = self.open.get_mut(&session) {

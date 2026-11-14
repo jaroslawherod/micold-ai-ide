@@ -31,14 +31,6 @@ fn sh(script: &str) -> CommandBuilder {
     cmd.arg(script);
     cmd
 }
-/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
-#[cfg(windows)]
-fn sh(script: &str) -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/c");
-    cmd.arg(script);
-    cmd
-}
 
 fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
     let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
@@ -86,14 +78,6 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     // concurrently.
     #[cfg(unix)]
     std::env::set_var("SHELL", "/bin/false");
-    #[cfg(windows)]
-    let crashing_shell = tempfile::tempdir().unwrap();
-    #[cfg(windows)]
-    {
-        let script = crashing_shell.path().join("false.cmd");
-        std::fs::write(&script, "@exit 1\r\n").unwrap();
-        std::env::set_var("COMSPEC", &script);
-    }
 
     let project = tempfile::tempdir().unwrap();
     let (state, id) = state_with_regular_session(project.path());

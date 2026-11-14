@@ -55,37 +55,3 @@ mod unix {
         assert_eq!(mode(&path), 0o600);
     }
 }
-
-#[cfg(windows)]
-mod windows {
-    use super::file_security::read_dacl;
-    use super::*;
-
-    #[test]
-    fn the_written_file_has_a_protected_dacl_for_the_current_user_only() {
-        let root = tempfile::tempdir().unwrap();
-        let dir = root.path().join("mcp");
-        let path = write_owner_only(&dir, "a.json", CONTENT).unwrap();
-        assert_eq!(std::fs::read(&path).unwrap(), CONTENT);
-        let dacl = read_dacl(&path);
-        assert!(dacl.protected, "the binding file's DACL must be protected");
-        assert_eq!(dacl.ace_count, 1, "exactly one ACE");
-        assert!(
-            dacl.first_ace_allows_current_user,
-            "the one ACE must allow the current user"
-        );
-    }
-
-    #[test]
-    fn rewriting_keeps_the_owner_only_dacl() {
-        let root = tempfile::tempdir().unwrap();
-        let dir = root.path().join("mcp");
-        write_owner_only(&dir, "a.json", b"first").unwrap();
-        let path = write_owner_only(&dir, "a.json", CONTENT).unwrap();
-        assert_eq!(std::fs::read(&path).unwrap(), CONTENT);
-        let dacl = read_dacl(&path);
-        assert!(dacl.protected);
-        assert_eq!(dacl.ace_count, 1);
-        assert!(dacl.first_ace_allows_current_user);
-    }
-}

@@ -90,21 +90,6 @@ pub fn relay(
 
 /// The shell Claude Code itself runs a status-line command with (research R4).
 pub fn user_shell(command: &str) -> Command {
-    #[cfg(windows)]
-    {
-        // The release daemon is a GUI-subsystem program: a console child would flash a window on
-        // every status-line refresh.
-        use micold_core::process::no_window;
-        if let Some(bash) = git_bash() {
-            let mut c = Command::new(bash);
-            no_window(&mut c).arg("-c").arg(command);
-            return c;
-        }
-        let mut c = Command::new("powershell");
-        no_window(&mut c).args(["-NoProfile", "-Command", command]);
-        c
-    }
-    #[cfg(not(windows))]
     {
         let mut c = Command::new("sh");
         micold_core::process::no_window(&mut c)
@@ -112,28 +97,6 @@ pub fn user_shell(command: &str) -> Command {
             .arg(command);
         c
     }
-}
-
-/// `CLAUDE_CODE_GIT_BASH_PATH`, else the `bash.exe` of the Git for Windows that `git.exe` on
-/// `PATH` belongs to.
-#[cfg(windows)]
-fn git_bash() -> Option<std::path::PathBuf> {
-    if let Some(path) = std::env::var_os("CLAUDE_CODE_GIT_BASH_PATH") {
-        return Some(path.into());
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path).find_map(|dir| {
-        if !dir.join("git.exe").is_file() {
-            return None;
-        }
-        // `Git\cmd\git.exe` sits beside `Git\bin\bash.exe`; `Git\bin\git.exe` beside `bash.exe`.
-        [
-            dir.join("bash.exe"),
-            dir.parent()?.join("bin").join("bash.exe"),
-        ]
-        .into_iter()
-        .find(|bash| bash.is_file())
-    })
 }
 
 /// Run the user's command with `input` on its stdin and copy its stdout to `stdout` as it arrives.

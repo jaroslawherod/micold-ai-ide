@@ -3,6 +3,8 @@
 This page describes release **{{MICOLD_VERSION}}**. Every published version of the site describes the
 release it was published from, so the downloads below are the ones that release actually ships.
 
+Linux is the only supported platform. macOS and Windows support was dropped in #1897.
+
 ## Linux (Debian, Ubuntu and derivatives)
 
 Each release carries a `.deb` built natively for the two architectures the project publishes:
@@ -40,32 +42,11 @@ Each release also carries an `.rpm` for `x86_64` and `aarch64`, with the same co
 [Installing on Fedora, RHEL and openSUSE](user-guide/install-rpm.md) has the downloads and the
 `dnf` and `zypper` commands.
 
-## Windows
-
-Each release carries a per-user installer for the two architectures Windows runs on:
-
-| Architecture | Download |
-|---|---|
-| Intel/AMD (`x64`) | [micold-ai-ide-{{MICOLD_VERSION}}-x64-setup.exe](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-ai-ide-{{MICOLD_VERSION}}-x64-setup.exe) |
-| Arm (`ARM64`) | [micold-ai-ide-{{MICOLD_VERSION}}-arm64-setup.exe](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-ai-ide-{{MICOLD_VERSION}}-arm64-setup.exe) |
-
-Run it; it installs for your account without administrator rights and adds a Start menu entry. The
-installer is not code-signed, so SmartScreen stops the first run: click **More info**, then **Run
-anyway**. [Installing on Windows](user-guide/install-windows.md) walks through it, and covers
-upgrading, removing, and what the package cannot do — including PCs where Smart App Control is on.
-
-## macOS
-
-Each release carries one disk image, `MicoldAIIDE-<version>-universal.dmg`, that runs natively on both
-Apple silicon and Intel Macs with macOS 15 or later. [Installing on macOS](user-guide/install-macos.md)
-covers downloading, installing, and the permissions macOS asks about.
-
 ## Build from source
 
-On any platform, you can build the application yourself. You need
+On Linux, you can build the application yourself. You need
 [Rust](https://www.rust-lang.org/tools/install) (the version in `rust-toolchain.toml`, which `rustup`
-installs for you) and `git`. On Windows, also install the *Desktop development with C++* workload
-from the Visual Studio Build Tools — the linker comes from there.
+installs for you) and `git`.
 
 ```console
 $ git clone --branch {{MICOLD_TAG}} https://github.com/jaroslawherod/micold-ai-ide.git

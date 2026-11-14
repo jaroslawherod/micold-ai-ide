@@ -114,7 +114,7 @@ static CONTAINER_HOME: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLoc
 /// call wins.
 pub fn install_container_home(host_home: Option<&Path>) {
     let _ = CONTAINER_HOME
-        .set(host_home.map(|home| micold_core::sandbox::pathmap::map_for(home, cfg!(windows))));
+        .set(host_home.map(|home| micold_core::sandbox::pathmap::map_for(home, false)));
 }
 
 /// The AI CLI packages a container daemon's provisioning installs, when a process replaced the

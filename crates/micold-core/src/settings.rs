@@ -70,13 +70,7 @@ fn default_env_include_timeout_secs() -> u64 {
 /// call site (`default_env_include_script_path_string`), not here.
 pub fn default_env_include_path(home: Option<&Path>) -> PathBuf {
     let base = home.unwrap_or_else(|| Path::new(""));
-    if cfg!(windows) {
-        base.join("Documents")
-            .join("WindowsPowerShell")
-            .join("profile.ps1")
-    } else {
-        base.join(".bashrc")
-    }
+    base.join(".bashrc")
 }
 
 fn default_env_include_script_path_string() -> String {
@@ -244,8 +238,9 @@ pub struct Settings {
     /// How the app selects its theme.
     #[serde(default)]
     pub theme: ThemePreference,
-    /// Whether the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
-    /// expansion (feature 1299) switch in one step instead of animating. Off by default; a file
+    /// Whether the Overview's full-screen zoom (feature 970, FR-008), Overview card focus and
+    /// expansion (feature 1299) and the composer's session options row (feature 1792, FR-013)
+    /// switch in one step instead of animating. Off by default; a file
     /// written before the key existed reads as off. The operating system's reduced-motion
     /// preference is not read.
     #[serde(default)]

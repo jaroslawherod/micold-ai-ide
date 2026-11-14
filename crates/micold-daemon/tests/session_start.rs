@@ -202,11 +202,6 @@ fn a_daemon_spawned_session_sees_env_include_resolved_variables() {
         "env-include-script.sh",
         "export BUG003_MARKER=daemon_env_include_works\n",
     );
-    #[cfg(windows)]
-    let (script_name, script) = (
-        "env-include-script.ps1",
-        "$env:BUG003_MARKER = 'daemon_env_include_works'\r\n",
-    );
     let script_path = project.path().join(script_name);
     std::fs::File::create(&script_path)
         .unwrap()
@@ -238,8 +233,6 @@ fn a_daemon_spawned_session_sees_env_include_resolved_variables() {
     // `cmd` expands `%NAME%` and takes Enter as a carriage return.
     #[cfg(unix)]
     let echo_marker: &[u8] = b"echo SEEN:$BUG003_MARKER\n";
-    #[cfg(windows)]
-    let echo_marker: &[u8] = b"echo SEEN:%BUG003_MARKER%\r";
     state.session_input(id, 0, echo_marker);
     assert!(
         wait_until(Duration::from_secs(5), || visible_text(&live)
@@ -729,18 +722,6 @@ fn write_stub(dir: &Path, command: &str, log: &Path, body: &str) {
     )
     .unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-/// A `.cmd` beside the command name, which `PATHEXT` resolves. `echo(` rather than `echo ` so an
-/// invocation with no arguments logs an empty line instead of `ECHO is off.`.
-#[cfg(windows)]
-fn write_stub(dir: &Path, command: &str, log: &Path, body: &str) {
-    let body = body.replace('\n', "\r\n");
-    std::fs::write(
-        dir.join(format!("{command}.cmd")),
-        format!("@echo off\r\necho(%*>>\"{}\"\r\n{body}\r\n", log.display()),
-    )
-    .unwrap();
 }
 
 impl Drop for StubOnPath {
@@ -1376,10 +1357,9 @@ impl Drop for ImageReference<'_> {
 enum Include {
     /// Off: a session gets only the service's own `PATH`.
     Off,
-    /// On, with a script of this body: `unix` is sourced by `bash`, `windows` by PowerShell.
+    /// On, with a script of this body, sourced by `bash`.
     Script {
         unix: &'static str,
-        windows: &'static str,
         timeout_secs: u64,
     },
 }
@@ -1387,21 +1367,18 @@ enum Include {
 /// A script that exits with an error, so nothing it would add is applied.
 const SCRIPT_FAILS: Include = Include::Script {
     unix: "exit 3\n",
-    windows: "exit 3\r\n",
     timeout_secs: 30,
 };
 
 /// A script that succeeds and leaves `PATH` alone: applied, and the CLI is still not there.
 const SCRIPT_LACKS_THE_CLI: Include = Include::Script {
     unix: "export F037_UNRELATED=1\n",
-    windows: "$env:F037_UNRELATED = '1'\r\n",
     timeout_secs: 30,
 };
 
 /// A script that sleeps past a 1 s timeout.
 const SCRIPT_TIMES_OUT: Include = Include::Script {
     unix: "sleep 5\n",
-    windows: "Start-Sleep -Seconds 5\r\n",
     timeout_secs: 1,
 };
 
@@ -1424,18 +1401,9 @@ fn include_settings(store: &Path, include: &Include) -> Settings {
             env_include_enabled: false,
             ..Settings::default()
         },
-        Include::Script {
-            unix,
-            windows,
-            timeout_secs,
-        } => {
-            let (name, body) = if cfg!(windows) {
-                ("env-include-script.ps1", windows)
-            } else {
-                ("env-include-script.sh", unix)
-            };
-            let script = store.join(name);
-            std::fs::write(&script, body).unwrap();
+        Include::Script { unix, timeout_secs } => {
+            let script = store.join("env-include-script.sh");
+            std::fs::write(&script, unix).unwrap();
             Settings {
                 env_include_enabled: true,
                 env_include_script_path: script.to_string_lossy().into_owned(),
@@ -1909,14 +1877,6 @@ fn a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing(
         "env-include-script.sh",
         format!("export PATH=\"{}:$PATH\"\n", session_bin.path().display()),
     );
-    #[cfg(windows)]
-    let (script_name, script) = (
-        "env-include-script.ps1",
-        format!(
-            "$env:PATH = '{};' + $env:PATH\r\n",
-            session_bin.path().display()
-        ),
-    );
     let script_path = store.path().join(script_name);
     std::fs::write(&script_path, script).unwrap();
     JsonFileSettingsStore::at(store.path().join("settings.json"))
@@ -2026,11 +1986,6 @@ fn a_restart_after_the_script_is_fixed_sources_it_again_and_starts() {
     // The user does what the sentence said: the script now works and puts the CLI on `PATH`.
     #[cfg(unix)]
     let fixed = format!("export PATH=\"{}:$PATH\"\n", session_bin.path().display());
-    #[cfg(windows)]
-    let fixed = format!(
-        "$env:PATH = '{};' + $env:PATH\r\n",
-        session_bin.path().display()
-    );
     std::fs::write(&settings.env_include_script_path, fixed).unwrap();
 
     let restarted = state.start_session(id, LaunchMode::Resume);

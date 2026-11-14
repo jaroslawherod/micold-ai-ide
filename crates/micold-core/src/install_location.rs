@@ -97,7 +97,7 @@ const VOLUMES: &str = "Volumes";
 
 /// Classify where an executable is running from.
 pub fn classify(executable: &Path) -> InstallLocation {
-    classify_on(executable, cfg!(target_os = "macos"))
+    classify_on(executable, false)
 }
 
 /// The boot path's question: `classify(current_exe())`, [`InstallLocation::Installed`] on error.

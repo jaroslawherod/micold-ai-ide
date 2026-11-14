@@ -90,7 +90,7 @@ pub fn merge_with_term(vars: &[(String, String)]) -> Vec<(String, String)> {
 /// (feature 031, FR-006, contracts/session-terminal-identity.md §1).
 ///
 /// Keys compare exactly when `keys_case_insensitive` is false and ASCII case-insensitively when it
-/// is true; callers pass `cfg!(windows)`, so core never reads the host OS.
+/// is true; callers pass `false`, so core never reads the host OS.
 pub fn is_inherited_terminal_identity(key: &str, value: &str, keys_case_insensitive: bool) -> bool {
     let is = |name: &str| {
         if keys_case_insensitive {
@@ -127,11 +127,7 @@ fn remove_inherited_terminal_identity(
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
 ) {
     for (key, value) in inherited {
-        if is_inherited_terminal_identity(
-            &key.to_string_lossy(),
-            &value.to_string_lossy(),
-            cfg!(windows),
-        ) {
+        if is_inherited_terminal_identity(&key.to_string_lossy(), &value.to_string_lossy(), false) {
             cmd.env_remove(key);
         }
     }
@@ -146,7 +142,6 @@ const BASELINE_UNAVAILABLE: &str =
     "the timeout expired while establishing the baseline environment, before the script was \
      sourced — raise the env-include timeout";
 
-#[cfg(not(windows))]
 fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {
     // Deliberately reuses `attempt_env`'s exact wrapper (sourcing `/dev/null`, a guaranteed-empty
     // no-op) rather than a bare `env -0`: bash tail-call-optimizes a `-c` script whose last
@@ -173,7 +168,6 @@ fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>>
     }
 }
 
-#[cfg(not(windows))]
 fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
     run_bounded(bash_command(path, cwd, std::env::vars_os()), timeout)
 }
@@ -181,7 +175,6 @@ fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
 /// The Unix include shell, shared by `baseline_env` and `attempt_env`, with every variable of
 /// `inherited` that names another terminal removed (feature 031, contract
 /// session-terminal-identity §3).
-#[cfg(not(windows))]
 fn bash_command(
     path: &Path,
     cwd: &Path,
@@ -221,18 +214,6 @@ fn bash_command(
     cmd
 }
 
-#[cfg(windows)]
-fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {
-    match run_bounded(
-        powershell_baseline_command(cwd, std::env::vars_os()),
-        budget,
-    ) {
-        RunOutcome::Exited { stdout, .. } => Some(parse_env_dump(&stdout)),
-        // See the Unix branch: `None` rather than an empty map (BUG-003).
-        _ => None,
-    }
-}
-
 /// The Windows baseline shell, with `inherited`'s terminal identity removed (contract §3). Built on
 /// every OS so the removal is testable here; only Windows runs it.
 #[cfg(any(windows, test))]
@@ -254,14 +235,6 @@ fn powershell_baseline_command(
          [Console]::Out.Write(\"$($_.Key)=$($_.Value)`0\") }",
     );
     cmd
-}
-
-#[cfg(windows)]
-fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
-    run_bounded(
-        powershell_attempt_command(path, cwd, std::env::vars_os()),
-        timeout,
-    )
 }
 
 /// The Windows include shell, with `inherited`'s terminal identity removed (contract §3). Built on
@@ -551,11 +524,6 @@ fn os_from_bytes(bytes: &[u8]) -> OsString {
     std::os::unix::ffi::OsStringExt::from_vec(bytes.to_vec())
 }
 
-#[cfg(not(unix))]
-fn os_from_bytes(bytes: &[u8]) -> OsString {
-    OsString::from(String::from_utf8_lossy(bytes).into_owned())
-}
-
 /// Hands whole lines to a callback, per stream, as the bytes arrive; the unfinished line of a
 /// stream is handed over by [`Self::finish`].
 struct LineSplitter<F: FnMut(Stream, &str)> {
@@ -606,7 +574,6 @@ impl<F: FnMut(Stream, &str)> LineSplitter<F> {
 /// the shell as data in its environment and are assigned without evaluation), dumps the
 /// environment, sources the script, and dumps it again from an `EXIT` trap so a script that calls
 /// `exit` is still diffed. `$1` is the script, `$2` the after dump, `$3` the before dump.
-#[cfg(not(windows))]
 const POSIX_WRAPPER: &str = r#"_micold_script=$1; _micold_dump=$2; _micold_before=$3; set --
 _micold_i=0
 while :; do
@@ -622,7 +589,6 @@ env -0 >"$_micold_before"
 trap '_micold_status=$?; env -0 >"$_micold_dump"; exit "$_micold_status"' EXIT
 . "$_micold_script""#;
 
-#[cfg(not(windows))]
 fn script_command(
     script: &Path,
     shell: &Path,
@@ -638,56 +604,6 @@ fn script_command(
         .arg(script)
         .arg(dump)
         .arg(before);
-    for (i, (name, value)) in extra_env.iter().enumerate() {
-        cmd.env(format!("MICOLD_XN{i}"), name)
-            .env(format!("MICOLD_XV{i}"), value);
-    }
-    cmd
-}
-
-/// The PowerShell wrapper: the pairs become PowerShell variables (not environment variables), the
-/// environment is written before and after dot-sourcing the script, and the script's exit status
-/// is the run's.
-#[cfg(windows)]
-const POWERSHELL_WRAPPER: &str = r#"
-$i = 0
-while ($true) {
-  $n = [Environment]::GetEnvironmentVariable("MICOLD_XN$i")
-  if (-not $n) { break }
-  Set-Variable -Name $n -Value ([Environment]::GetEnvironmentVariable("MICOLD_XV$i"))
-  Remove-Item "Env:MICOLD_XN$i", "Env:MICOLD_XV$i"
-  $i++
-}
-function Dump($path) {
-  $text = ([Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)`0" }) -join ''
-  [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))
-}
-Dump $env:MICOLD_RUN_BEFORE
-$global:LASTEXITCODE = 0
-try { . $env:MICOLD_RUN_SCRIPT } catch { [Console]::Error.WriteLine($_.Exception.Message); Dump $env:MICOLD_RUN_DUMP; exit 1 }
-$status = if ($LASTEXITCODE) { $LASTEXITCODE } else { 0 }
-Dump $env:MICOLD_RUN_DUMP
-exit $status
-"#;
-
-#[cfg(windows)]
-fn script_command(
-    script: &Path,
-    shell: &Path,
-    dump: &Path,
-    before: &Path,
-    extra_env: &[(String, String)],
-) -> Command {
-    let mut cmd = Command::new(shell);
-    remove_inherited_terminal_identity(&mut cmd, std::env::vars_os());
-    crate::process::no_window(&mut cmd);
-    cmd.arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-Command")
-        .arg(POWERSHELL_WRAPPER)
-        .env("MICOLD_RUN_SCRIPT", script)
-        .env("MICOLD_RUN_DUMP", dump)
-        .env("MICOLD_RUN_BEFORE", before);
     for (i, (name, value)) in extra_env.iter().enumerate() {
         cmd.env(format!("MICOLD_XN{i}"), name)
             .env(format!("MICOLD_XV{i}"), value);
@@ -906,13 +822,10 @@ mod terminal_identity_tests {
         ];
         let cwd = Path::new(".");
         // The bash builder only exists where it runs; the PowerShell ones are built everywhere.
-        #[cfg(not(windows))]
         let bash = Some((
             "bash",
             bash_command(Path::new("/dev/null"), cwd, inherited()),
         ));
-        #[cfg(windows)]
-        let bash = None;
         let builders = [
             (
                 "powershell baseline",
@@ -942,11 +855,7 @@ mod run_and_diff_tests {
     use std::time::Instant;
 
     fn shell() -> PathBuf {
-        PathBuf::from(if cfg!(windows) {
-            "powershell.exe"
-        } else {
-            "/bin/sh"
-        })
+        PathBuf::from("/bin/sh")
     }
 
     fn run(
@@ -955,9 +864,7 @@ mod run_and_diff_tests {
         extra: &[(String, String)],
     ) -> (ScriptRun, Vec<(Stream, String)>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
-        let script = dir
-            .path()
-            .join(if cfg!(windows) { "s.ps1" } else { "s.sh" });
+        let script = dir.path().join("s.sh");
         std::fs::write(&script, body).unwrap();
         let mut seen = Vec::new();
         let result = run_and_diff(&script, &shell(), dir.path(), timeout, extra, |s, l| {
@@ -973,19 +880,6 @@ mod run_and_diff_tests {
             .map(|(_, v)| v.to_string_lossy().into_owned())
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn a_powershell_script_s_env_assignment_is_captured_and_the_timeout_ends_the_job() {
-        let (result, _, _dir) = run("$env:FOO = 'bar'", Duration::from_secs(30), &[]);
-        assert_eq!(result.end, ScriptEnd::Exited(0));
-        assert_eq!(export_of(&result, "FOO").as_deref(), Some("bar"));
-        let started = Instant::now();
-        let (result, _, _dir) = run("Start-Sleep -Seconds 30", Duration::from_secs(1), &[]);
-        assert_eq!(result.end, ScriptEnd::TimedOut);
-        assert!(started.elapsed() < Duration::from_secs(10));
-    }
-
-    #[cfg(not(windows))]
     mod posix {
         use super::*;
 

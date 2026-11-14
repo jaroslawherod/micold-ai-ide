@@ -512,6 +512,8 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     // Feature 1101: the statuses follow the Jira switch and connection, and the project's open
     // read starts once its worktrees are known. Here because both come from many messages.
     let task = Task::batch([task, shell::jira_refresh::after_update(app)]);
+    // Feature 1786 (R9): the active project's group layout is loaded once, and saved when changed.
+    shell::sidebar_layout::after_update(app);
     // A daemon added to or removed from the registry by this message is tracked (or forgotten) in
     // the same step, so the subscription that follows dials exactly the registry (feature 491).
     app.sync_links();

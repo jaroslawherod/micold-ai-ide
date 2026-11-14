@@ -100,11 +100,23 @@ impl Fixture {
     }
 
     async fn ok(&self, caller: u128, tool: &str, args: Value) -> Value {
-        call_ok(self.addr, &credential(&self.state, sid(caller)), tool, args).await
+        call_ok(
+            self.addr,
+            &full_view_credential(&self.state, sid(caller)),
+            tool,
+            args,
+        )
+        .await
     }
 
     async fn err(&self, caller: u128, tool: &str, args: Value) -> Value {
-        call_err(self.addr, &credential(&self.state, sid(caller)), tool, args).await
+        call_err(
+            self.addr,
+            &full_view_credential(&self.state, sid(caller)),
+            tool,
+            args,
+        )
+        .await
     }
 }
 

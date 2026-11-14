@@ -147,11 +147,7 @@ fn defaults_for_tokens_clis_and_startup() {
     assert_eq!(startup.on_failure, OnFailure::Refuse);
     assert_eq!(startup.run, RunPolicy::EveryStart);
     assert!(startup.export_env);
-    let shell = if cfg!(windows) {
-        "powershell.exe"
-    } else {
-        "/bin/sh"
-    };
+    let shell = "/bin/sh";
     assert_eq!(startup.shell, PathBuf::from(shell));
 }
 

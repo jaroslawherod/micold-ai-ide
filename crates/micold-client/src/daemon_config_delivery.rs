@@ -519,8 +519,3 @@ fn set_owner_only(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
 }
-
-#[cfg(windows)]
-fn set_owner_only(_path: &Path) -> io::Result<()> {
-    Ok(())
-}

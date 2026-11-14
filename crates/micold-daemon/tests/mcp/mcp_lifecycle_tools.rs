@@ -29,6 +29,7 @@ use micold_core::protocol::messages::{
 };
 use micold_core::session::{AiCli, SessionId, SessionLifecycle, TerminalMode};
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+use micold_core::worktree_parent::ParentChoice;
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
 
@@ -122,15 +123,20 @@ impl Fixture {
         ];
         #[cfg(unix)]
         let stub = claude_stub.then(|| self::claude_stub(store.path()));
-        #[cfg(not(unix))]
-        let stub = {
-            let _ = claude_stub;
-            None
-        };
         let state = state_over(
             vec![(project.path().to_path_buf(), true, sessions)],
             store.path(),
         );
+        // The caller's worktree `b` is a child of `default` and the parent of `c` and `d`, so
+        // the caller sees every worktree and session below (spec 1857, FR-015).
+        state.refresh_worktrees(project.path());
+        for (dir, parent) in [
+            ("b", ParentChoice::Default),
+            ("c", ParentChoice::Worktree("b".into())),
+            ("d", ParentChoice::Worktree("b".into())),
+        ] {
+            state.record_worktree_parent(project.path(), dir, Some(&parent));
+        }
         let addr = serve_tool_server(&state, store.path().join("mcp")).await;
         Self {
             state,

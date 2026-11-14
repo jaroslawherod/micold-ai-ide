@@ -36,6 +36,9 @@ pub type SharedTerm = Arc<FairMutex<Term<DaemonListener>>>;
 /// both write to the one PTY master, so both hold this.
 pub type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
+/// The largest OSC 52 store sent on to the windows (#1720), well under the protocol's frame limit.
+pub const MAX_CLIPBOARD_STORE: usize = 1024 * 1024;
+
 /// Signals the framer and supervisor read out-of-band from the VT stream: a change count raised on
 /// every content change (each viewer compares it with the count it last framed at — T032), the
 /// latest OSC-0 title (T047), a rung-bell edge, and the child's reported exit code (`Event::ChildExit`).
@@ -49,6 +52,9 @@ pub struct VtSignals {
     /// (stripped) [`Self::title`].
     spinner: Arc<AtomicBool>,
     title: Arc<Mutex<Option<String>>>,
+    /// The latest OSC 52 store the program asked for since the last drain, decoded (#1720). Latest
+    /// wins: a clipboard holds one value.
+    clipboard: Arc<Mutex<Option<String>>>,
     child_exit: Arc<Mutex<Option<i32>>>,
     /// How many reads of output the process has produced so far. `create_session` watches it for
     /// the output-settled readiness rule (feature 034, FR-017): a CLI that names no ready signal
@@ -88,6 +94,14 @@ impl VtSignals {
     /// call. The activity drain feeds this to the FSM as `SpinnerObserved` (Working-only, H1a).
     pub fn take_spinner(&self) -> bool {
         self.spinner.swap(false, Ordering::AcqRel)
+    }
+
+    /// Take the pending OSC 52 clipboard store, if the program asked for one since the last call.
+    pub fn take_clipboard(&self) -> Option<String> {
+        self.clipboard
+            .lock()
+            .expect("clipboard lock poisoned")
+            .take()
     }
 
     /// The most recent OSC-0 title reported by the process, if any (already glyph-stripped — T047).
@@ -232,7 +246,25 @@ impl EventListener for DaemonListener {
             Event::Wakeup | Event::MouseCursorDirty | Event::CursorBlinkingChange => {
                 self.signals.mark_dirty();
             }
-            // Clipboard, exit-request and the rest are not daemon concerns here.
+            // OSC 52 store (#1720): kept for the supervisor tick to send to the window showing the
+            // session. The selection buffer is the same text for our purposes. Reads
+            // (`ClipboardLoad`) are never answered: a program cannot read the user's clipboard.
+            // A store larger than [`MAX_CLIPBOARD_STORE`] is dropped: it would not fit one control
+            // frame, and a failed send closes the window's link.
+            Event::ClipboardStore(_, text) if text.len() > MAX_CLIPBOARD_STORE => {
+                tracing::warn!(
+                    len = text.len(),
+                    "OSC 52 clipboard store too large, dropped"
+                );
+            }
+            Event::ClipboardStore(_, text) => {
+                *self
+                    .signals
+                    .clipboard
+                    .lock()
+                    .expect("clipboard lock poisoned") = Some(text);
+            }
+            // Exit-request and the rest are not daemon concerns here.
             _ => {}
         }
     }

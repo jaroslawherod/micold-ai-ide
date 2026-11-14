@@ -423,8 +423,6 @@ fn sandbox_real_a_file_written_inside_belongs_to_the_host_user() {
         );
         assert_eq!(meta.gid(), gid);
     }
-    #[cfg(not(unix))]
-    let _ = (meta, uid, gid);
 }
 
 impl Fixture {

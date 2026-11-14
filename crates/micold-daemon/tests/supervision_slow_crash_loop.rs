@@ -51,14 +51,6 @@ fn sh(script: &str) -> CommandBuilder {
     cmd.arg(script);
     cmd
 }
-/// `cmd /c` reads `exit <status>` the same way, which is all this script does on Windows.
-#[cfg(windows)]
-fn sh(script: &str) -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/c");
-    cmd.arg(script);
-    cmd
-}
 
 /// Make the platform shell, which every respawn runs, one that lives about a second and exits 1.
 /// On Unix that is `SHELL`, pointed at a script. On Windows it is `COMSPEC`, pointed at this test
@@ -74,26 +66,6 @@ fn shell_that_fails_after_a_second(bin: &Path) {
         std::fs::write(&slow_failure, "#!/bin/sh\nsleep 1\nexit 1\n").unwrap();
         std::fs::set_permissions(&slow_failure, std::fs::Permissions::from_mode(0o755)).unwrap();
         std::env::set_var("SHELL", &slow_failure);
-    }
-    #[cfg(windows)]
-    {
-        let _ = bin;
-        std::env::set_var(SLOW_FAILURE_ROLE, "1");
-        std::env::set_var("COMSPEC", std::env::current_exe().unwrap());
-    }
-}
-
-/// Set in the environment a Windows respawn inherits, so this binary, started as `COMSPEC` with no
-/// arguments, runs its one test as the slow failure instead of as the test.
-#[cfg(windows)]
-const SLOW_FAILURE_ROLE: &str = "MICOLD_TEST_SLOW_FAILURE";
-
-/// This process is a respawned shell, not the test: live about a second, then exit 1.
-#[cfg(windows)]
-fn fail_after_a_second_if_respawned() {
-    if std::env::var_os(SLOW_FAILURE_ROLE).is_some() {
-        std::thread::sleep(Duration::from_secs(1));
-        std::process::exit(1);
     }
 }
 
@@ -165,9 +137,6 @@ fn later(reading: Uptime, by: Duration) -> Uptime {
 
 #[test]
 fn a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed() {
-    #[cfg(windows)]
-    fail_after_a_second_if_respawned();
-
     // Every respawn is a shell that comes up, lives a second, and exits 1 — BUG-004's `claude
     // --resume` with nothing to resume, minus the CLI.
     let bin = tempfile::tempdir().unwrap();

@@ -21,13 +21,6 @@ pub fn host() -> Option<String> {
         })
 }
 
-#[cfg(windows)]
-pub fn host() -> Option<String> {
-    iana_time_zone::get_timezone()
-        .ok()
-        .filter(|zone| !zone.is_empty())
-}
-
 /// A `TZ` value that names a zone: `Europe/Berlin`, `:Europe/Berlin`, or a path into a zoneinfo
 /// directory. A POSIX rule (`CET-1CEST,M3.5.0,M10.5.0/3`) names no zone, so it gives `None`.
 #[cfg_attr(not(unix), allow(dead_code))]

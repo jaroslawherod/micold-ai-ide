@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Decisions of the autopilot supervisor skill, reproducible from fixtures: the supervisor ledger
 # (.autopilot/supervisor.md) and the start gate and queue. Prints; never calls gh or MCP.
-# Usage: supervisor.sh <ledger init|owner|set|get|table | next | touches | overlap | gate | map | retry | check-owner | route add|next|state|answer|compose|sent|drop|table> [--ledger <file>] ...
+# Usage: supervisor.sh <ledger init|owner|set|get|table | next | touches | overlap | gate | map | retry | check-owner | route add|next|state|answer|gate|compose|sent|drop|table> [--ledger <file>] ...
 # Exit: 0 answered, 1 gate FAIL, 2 usage error or malformed ledger.
 # Contract: specs/1813-supervisor-skill/contracts/supervisor-cli.md (bash 3.2: no associative arrays)
 STATES="queued starting running done failed lost skipped"

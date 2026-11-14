@@ -474,6 +474,9 @@ pub const REVIEW_GROUP: &str = "Review";
 /// The title of the sheet's group of the structured composer's keys (#1464 FR-010).
 pub const COMPOSER_GROUP: &str = "Composer";
 
+/// The shortcut sheet's sidebar group's title (feature 1786, contract C6a).
+pub const SIDEBAR_GROUP: &str = "Sidebar";
+
 /// The structured composer's keys on the sheet (#1464 FR-010): `(Linux/Windows form, macOS form,
 /// what it does)`. The attach chord is `composer::is_attach_key`.
 pub const COMPOSER_KEYS: [(&str, &str, &str); 2] = [
@@ -538,19 +541,26 @@ pub fn sheet_model(single_keys: bool, review: bool) -> SheetModel {
         title: COMPOSER_GROUP,
         rows: COMPOSER_KEYS
             .iter()
-            .map(|&(other, mac, text)| {
-                (
-                    if cfg!(target_os = "macos") {
-                        mac
-                    } else {
-                        other
-                    }
-                    .to_owned(),
-                    text,
-                )
-            })
+            .map(|&(other, _, text)| (other.to_owned(), text))
             .collect(),
     });
+    // Feature 1786 (C6a): the sidebar's New group chord, on the sheet opened outside a Review
+    // tab; the Review tab's sheet is already as tall as its smallest window allows.
+    if !review {
+        let (other, mac) = crate::keymap::NEW_GROUP_CHORD_LABELS;
+        groups.push(SheetGroup {
+            title: SIDEBAR_GROUP,
+            rows: vec![(
+                if cfg!(target_os = "macos") {
+                    mac
+                } else {
+                    other
+                }
+                .to_owned(),
+                "New group",
+            )],
+        });
+    }
     SheetModel {
         groups,
         note: (review && !single_keys).then_some(SINGLE_KEYS_OFF_NOTE),
@@ -574,12 +584,8 @@ fn history_rows() -> [(String, &'static str); 2] {
 
 /// `row`'s key in the running platform's form (contract K4).
 fn platform_label(row: &ReviewKey) -> String {
-    let (other, mac) = row.labels();
-    if cfg!(target_os = "macos") {
-        mac
-    } else {
-        other
-    }
+    let (other, _) = row.labels();
+    other
 }
 
 /// The tooltip of **Send review (n)** (FR-013), naming the send chord.
@@ -614,20 +620,17 @@ pub fn hunk_controls(view: &OpenView) -> bool {
 mod tests {
     use super::*;
 
-    /// #1464 T026 (FR-010): the sheet groups "Review" (only with a Review view) and "Composer".
+    /// #1464 T026 (FR-010): the sheet groups "Review" (only with a Review view), "Composer", and
+    /// without a Review view "Sidebar" (feature 1786).
     #[test]
     fn the_sheet_groups_review_only_with_a_review_view_and_always_the_composer() {
         let titles = |model: &SheetModel| model.groups.iter().map(|g| g.title).collect::<Vec<_>>();
         let with_review = sheet_model(true, true);
         assert_eq!(titles(&with_review), [REVIEW_GROUP, COMPOSER_GROUP]);
         let alone = sheet_model(false, false);
-        assert_eq!(titles(&alone), [COMPOSER_GROUP]);
+        assert_eq!(titles(&alone), [COMPOSER_GROUP, SIDEBAR_GROUP]);
         assert_eq!(alone.note, None, "the note is about the Review keys");
-        let (attach, large) = if cfg!(target_os = "macos") {
-            ("Cmd+Shift+A", "Cmd+Shift+M")
-        } else {
-            ("Ctrl+Shift+A", "Ctrl+Shift+M")
-        };
+        let (attach, large) = ("Ctrl+Shift+A", "Ctrl+Shift+M");
         // Feature 1703 FR-005, SC-006: the large editor's chord, next to Add attachment.
         assert_eq!(
             alone.rows_of(COMPOSER_GROUP),

@@ -131,12 +131,6 @@ fn open_path(
 #[cfg(target_os = "linux")]
 const HOST_PLATFORM: micold_core::link::runnable::HostPlatform =
     micold_core::link::runnable::HostPlatform::Linux;
-#[cfg(target_os = "macos")]
-const HOST_PLATFORM: micold_core::link::runnable::HostPlatform =
-    micold_core::link::runnable::HostPlatform::MacOs;
-#[cfg(windows)]
-const HOST_PLATFORM: micold_core::link::runnable::HostPlatform =
-    micold_core::link::runnable::HostPlatform::Windows;
 
 /// What this machine can say about the file, without opening it.
 fn facts_for(
@@ -151,13 +145,6 @@ fn facts_for(
         use std::os::unix::fs::PermissionsExt;
         meta.permissions().mode() & 0o111 != 0
     };
-    // Windows has no execute bit; there the extension decides (FR-013).
-    #[cfg(windows)]
-    let any_exec_bit = false;
-    // A macOS bundle the Finder knows only by what it holds; the extension list is core's.
-    #[cfg(target_os = "macos")]
-    let is_bundle = kind == Kind::Dir && path.join("Contents/Info.plist").exists();
-    #[cfg(not(target_os = "macos"))]
     let is_bundle = {
         let _ = path;
         false
@@ -171,11 +158,6 @@ fn facts_for(
 
 /// The `%PATHEXT%` entries this machine runs, empty off Windows (FR-013).
 fn pathext() -> Vec<String> {
-    #[cfg(windows)]
-    {
-        micold_core::provider::pathext()
-    }
-    #[cfg(not(windows))]
     Vec::new()
 }
 
@@ -272,12 +254,6 @@ mod tests {
                 .expect("set the execute bit");
             path
         }
-        #[cfg(windows)]
-        {
-            let path = dir.join(format!("{stem}.bat"));
-            std::fs::write(&path, b"@echo off\n").expect("write the runnable file");
-            path
-        }
     }
 
     /// Every kind of file this OS runs, as real files inside `dir` (SC-007, FR-013).
@@ -306,61 +282,6 @@ mod tests {
             "flatpakref",
             "run",
         ];
-        #[cfg(target_os = "macos")]
-        let extensions: &[&str] = &[
-            "app",
-            "command",
-            "terminal",
-            "tool",
-            "pkg",
-            "mpkg",
-            "jar",
-            "workflow",
-            "action",
-            "scpt",
-            "applescript",
-            "webloc",
-            "fileloc",
-            "inetloc",
-            "url",
-            "shortcut",
-        ];
-        #[cfg(windows)]
-        let extensions: &[&str] = &[
-            "exe",
-            "com",
-            "bat",
-            "cmd",
-            "ps1",
-            "psm1",
-            "vbs",
-            "vbe",
-            "js",
-            "jse",
-            "wsf",
-            "wsh",
-            "hta",
-            "scr",
-            "pif",
-            "cpl",
-            "msc",
-            "msi",
-            "msp",
-            "reg",
-            "lnk",
-            "url",
-            "jar",
-            "appref-ms",
-            "application",
-            "appx",
-            "msix",
-            "chm",
-            "inf",
-            "scf",
-            "settingcontent-ms",
-            "library-ms",
-            "search-ms",
-        ];
         for (index, extension) in extensions.iter().enumerate() {
             // A distinct stem per entry, and mixed case on one of them, so an extension that only
             // matches lowercase fails here.
@@ -368,30 +289,6 @@ mod tests {
             let path = dir.join(format!("{stem}.{extension}"));
             std::fs::write(&path, b"x").expect("write a runnable file");
             kinds.push(path);
-        }
-        #[cfg(target_os = "macos")]
-        {
-            // A folder is runnable on macOS only as a bundle, by its extension or by what it holds
-            // (FR-013's Folders bullet, U146).
-            for extension in [
-                "app",
-                "bundle",
-                "framework",
-                "plugin",
-                "kext",
-                "prefPane",
-                "appex",
-                "xpc",
-            ] {
-                let bundle = dir.join(format!("Bundled.{extension}"));
-                std::fs::create_dir_all(bundle.join("Contents")).expect("create a bundle");
-                kinds.push(bundle);
-            }
-            // U146: a bundle the Finder knows only by what it holds.
-            let plain = dir.join("Plain");
-            std::fs::create_dir_all(plain.join("Contents")).expect("create a directory");
-            std::fs::write(plain.join("Contents/Info.plist"), b"<plist/>").expect("write a plist");
-            kinds.push(plain);
         }
         kinds
     }

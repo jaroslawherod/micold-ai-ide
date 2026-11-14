@@ -441,11 +441,7 @@ mod tests {
     /// process and captures its output. Uses a command every supported platform ships.
     #[test]
     fn system_runner_captures_a_real_process() {
-        let (program, args) = if cfg!(windows) {
-            ("cmd", os(&["/C", "echo micold"]))
-        } else {
-            ("echo", os(&["micold"]))
-        };
+        let (program, args) = ("echo", os(&["micold"]));
         let out = SystemRunner
             .run(OsStr::new(program), &args)
             .expect("spawn a process every platform has");
@@ -456,11 +452,7 @@ mod tests {
     /// A process silent for longer than the progress indicator may stand still (SC-004, C-8).
     /// `docker load` without a terminal is one: it prints nothing until the import is over.
     fn silent_then_done() -> (&'static str, Vec<OsString>) {
-        if cfg!(windows) {
-            ("cmd", os(&["/C", "ping -n 4 127.0.0.1 >NUL & echo done"]))
-        } else {
-            ("sh", os(&["-c", "sleep 3; echo done"]))
-        }
+        ("sh", os(&["-c", "sleep 3; echo done"]))
     }
 
     /// Issue #790: a 2 GiB import went 10.5 s with one report, at the end. Streaming must keep

@@ -15,14 +15,14 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 
 ## Phase 1: Setup (M1)
 
-- [ ] T001 Add the types `WorktreeId` (uuid newtype), `ParentRef` (`Default` | `Worktree(WorktreeId)`) and `ParentState` (`Known` | `Removed`) in `crates/micold-core/src/worktree.rs` with serde forms from `contracts/storage-parent.md`
+- [x] T001 Add the types `WorktreeId` (uuid newtype), `ParentRef` (`Default` | `Worktree(WorktreeId)`) and `ParentState` (`Known` | `Removed`) in `crates/micold-core/src/worktree.rs` with serde forms from `contracts/storage-parent.md`
 
 ## Phase 2: Foundational (M1; blocks every story)
 
-- [ ] T002 [P] Add failing store tests in `crates/micold-core/src/store.rs` (test module): `worktree_ids` and `worktree_parents` round-trip; both omitted when empty; a file without them loads empty; the legacy-catalog fallback leaves them empty
-- [ ] T003 Add `worktree_ids: BTreeMap<String, WorktreeId>` and `worktree_parents: BTreeMap<WorktreeId, ParentLink {parent, removed, last_name}>` to the per-project state in `crates/micold-core/src/store.rs`, `#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]`, no schema bump (`data-model.md`); T002 goes green
-- [ ] T004 [P] Add failing catalog tests in `crates/micold-daemon/tests/` (new `worktree_parent_catalog.rs`): first catalog refresh mints an id for every live worktree and keeps ids across refreshes and renames; reconcile sets `removed` on links whose target id has no live worktree; `Default` links are never removed
-- [ ] T005 Implement id minting and the reconcile pass in `crates/micold-daemon/src/catalog.rs` next to the `origin` resolution (`catalog.rs:2336`); persist through the store; T004 goes green
+- [x] T002 [P] Add failing store tests in `crates/micold-core/src/store.rs` (test module): `worktree_ids` and `worktree_parents` round-trip; both omitted when empty; a file without them loads empty; the legacy-catalog fallback leaves them empty
+- [x] T003 Add `worktree_ids: BTreeMap<String, WorktreeId>` and `worktree_parents: BTreeMap<WorktreeId, ParentLink {parent, removed, last_name}>` to the per-project state in `crates/micold-core/src/store.rs`, `#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]`, no schema bump (`data-model.md`); T002 goes green
+- [x] T004 [P] Add failing catalog tests in `crates/micold-daemon/tests/` (new `worktree_parent_catalog.rs`): first catalog refresh mints an id for every live worktree and keeps ids across refreshes and renames; reconcile sets `removed` on links whose target id has no live worktree; `Default` links are never removed
+- [x] T005 Implement id minting and the reconcile pass in `crates/micold-daemon/src/catalog.rs` next to the `origin` resolution (`catalog.rs:2336`); persist through the store; T004 goes green
 
 **Checkpoint**: ids and tombstones exist; nothing is exposed yet.
 
@@ -31,26 +31,26 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 **Goal**: `create_worktree` records the parent; `list_worktrees` returns it and filters by it.
 **Independent test**: `quickstart.md` Part A steps 1-3.
 
-- [ ] T006 [P] [US1] Add failing schema tests in `crates/micold-core/tests/mcp_tools_catalog.rs`: `create_worktree` and `list_worktrees` accept an optional `parent` string; unknown extra args still refused
-- [ ] T007 [P] [US1] Add failing daemon tests in `crates/micold-daemon/tests/mcp_worktree_parent.rs` (new): root session creates -> `parent: "default"`; session in `W` creates -> `"W"`; explicit `parent` overrides; explicit unknown or non-live parent -> `invalid_input` and no worktree or id created; unresolvable caller -> created unparented; app-created worktree has no parent; `list_worktrees` `parent` filter returns direct children only, `default` valid, unknown name -> empty list
-- [ ] T008 [US1] Extend the tool schemas and `create_worktree_request` in `crates/micold-core/src/mcp/tools.rs` (`parent` input on both tools; result and row fields `parent`, `parent_state`); T006 green
-- [ ] T009 [US1] In `crates/micold-daemon/src/mcp/tools.rs` resolve the caller's worktree via `resolve_caller` (R4), validate an explicit parent (R5) before any git work, and record the link and a fresh id (R3) in `create_literal_worktree` and `create_derived_worktree`; `list_worktrees` returns and filters by parent; T007 green
-- [ ] T010 [US1] Document `parent`, its default, the override and the filter in `docs/user-guide/agent-tools.md` (new section after "Creating a worktree from a type, ticket and name")
+- [x] T006 [P] [US1] Add failing schema tests in `crates/micold-core/tests/mcp_tools_catalog.rs`: `create_worktree` and `list_worktrees` accept an optional `parent` string; unknown extra args still refused
+- [x] T007 [P] [US1] Add failing daemon tests in `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs` (new): root session creates -> `parent: "default"`; session in `W` creates -> `"W"`; explicit `parent` overrides; explicit unknown or non-live parent -> `invalid_input` and no worktree or id created; unresolvable caller -> created unparented; app-created worktree has no parent; `list_worktrees` `parent` filter returns direct children only, `default` valid, unknown name -> empty list
+- [x] T008 [US1] Extend the tool schemas and `create_worktree_request` in `crates/micold-core/src/mcp/tools.rs` (`parent` input on both tools; result and row fields `parent`, `parent_state`); T006 green
+- [x] T009 [US1] In `crates/micold-daemon/src/mcp/tools.rs` resolve the caller's worktree via `resolve_caller` (R4), validate an explicit parent (R5) before any git work, and record the link and a fresh id (R3) in `create_literal_worktree` and `create_derived_worktree`; `list_worktrees` returns and filters by parent; T007 green
+- [x] T010 [US1] Document `parent`, its default, the override and the filter in `docs/user-guide/agent-tools.md` (new section after "Creating a worktree from a type, ticket and name")
 
 ## Phase 3b: Visibility by parent (M1; FR-015, FR-016)
 
-- [ ] T030 [P] [US1] Add failing tests in `crates/micold-daemon/tests/mcp_worktree_parent_visibility.rs` (new): from a worktree `A` with parent `P` and sibling `B`, child `C` of `A`, and an unrelated `X`: `list_worktrees`/`list_sessions` return exactly `A`, `P`, `B`, `C`; `get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `stop_session`, `create_session`, `rename_worktree`, `delete_worktree` on `X` or on `default` -> `not_found`; an unparented caller sees itself and its children; a message to an out-of-scope session is refused while the same message sent to the parent succeeds (relay, FR-017); a `default` caller sees all; explicit `parent` outside the set (including `default` from a non-root caller) -> `invalid_input`
-- [ ] T031 [US1] Implement one visibility filter in `crates/micold-daemon/src/mcp/tools.rs` (beside `resolve_caller`) computed from the parent links in the catalog (`crates/micold-daemon/src/catalog.rs`), applied by every tool of `contracts/mcp-parent.md`; T030 green
-- [ ] T032 [US1] Document the visibility rule and the relay through the parent (FR-017) in `docs/user-guide/agent-tools.md` (extend "What it can see" and "Reading and typing into other sessions")
+- [x] T030 [P] [US1] Add failing tests in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_visibility.rs` (new module of the `mcp` binary, D1): from a worktree `A` with parent `P` and sibling `B`, child `C` of `A`, and an unrelated `X`: `list_worktrees`/`list_sessions` return exactly `A`, `P`, `B`, `C`; `get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `stop_session`, `create_session`, `rename_worktree`, `delete_worktree` on `X` or on `default` -> `not_found`; an unparented caller sees itself and its children; a message to an out-of-scope session is refused while the same message sent to the parent succeeds (relay, FR-017); a `default` caller sees all; explicit `parent` outside the set (including `default` from a non-root caller) -> `invalid_input`
+- [x] T031 [US1] Implement one visibility filter in `crates/micold-daemon/src/mcp/tools.rs` (beside `resolve_caller`) computed from the parent links in the catalog (`crates/micold-daemon/src/catalog.rs`), applied by every tool of `contracts/mcp-parent.md`; T030 green
+- [x] T032 [US1] Document the visibility rule and the relay through the parent (FR-017) in `docs/user-guide/agent-tools.md` (extend "What it can see" and "Reading and typing into other sessions")
 
 ## Phase 4: User Story 2 and User Story 3 - Survives renames and restarts; removed parent (Priority: P1/P2) (M1)
 
 **Independent test**: `quickstart.md` Part A steps 4-5.
 
-- [ ] T011 [P] [US2] Add failing tests in `crates/micold-daemon/tests/mcp_worktree_parent.rs`: rename the parent -> children still resolve, not removed; daemon restart (reload store) -> parent unchanged; project folder relocated and reopened -> parent unchanged (reuse the relocation fixtures of the per-project state tests in `crates/micold-core/src/store.rs`)
-- [ ] T012 [P] [US3] Add failing tests in the same file: delete the parent through the tool and through the app op -> children `parent_state: "removed"`, `parent` keeps the last name, no error; recreate a worktree with the deleted name -> fresh id, no children adopted; delete a child -> its link and id entries dropped; parent removed outside the app -> removed at the next reconcile; deleting an unrelated worktree changes nothing for a `default` child
-- [ ] T013 [US3] In `crates/micold-daemon/src/ops.rs` (`delete_worktree`, `rename_worktree` untouched) tombstone children and drop the deleted worktree's own entries; keep `last_name` current on each reconcile; T011 and T012 green
-- [ ] T014 [US3] Document the removed state and the same-name residual (research R3) in `docs/user-guide/agent-tools.md`
+- [x] T011 [P] [US2] Add failing tests in `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs`: rename the parent -> children still resolve, not removed; daemon restart (reload store) -> parent unchanged; project folder relocated and reopened: no relocation fixture exists for per-project state (it is keyed by project path), so this is covered by the store round-trip tests and the daemon restart test (drift-M1.md)
+- [x] T012 [P] [US3] Add failing tests in the same file: delete the parent through the tool and through the app op -> children `parent_state: "removed"`, `parent` keeps the last name, no error; recreate a worktree with the deleted name -> fresh id, no children adopted; delete a child -> its link and id entries dropped; parent removed outside the app -> removed at the next reconcile; deleting an unrelated worktree changes nothing for a `default` child
+- [x] T013 [US3] In `crates/micold-daemon/src/ops.rs` (`delete_worktree`, `rename_worktree` untouched) tombstone children and drop the deleted worktree's own entries; keep `last_name` current on each reconcile; T011 and T012 green
+- [x] T014 [US3] Document the removed state and the same-name residual (research R3) in `docs/user-guide/agent-tools.md`
 
 ## Phase 5: User Story 4 - Sidebar hierarchy (Priority: P2) (M2, blocked by M1)
 
@@ -64,9 +64,9 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 
 ## Phase 6: User Story 5 - Sessions report the parent (Priority: P3) (M1)
 
-- [ ] T020 [P] [US5] Add failing tests in `crates/micold-daemon/tests/mcp_worktree_parent.rs`: `list_sessions` and `get_session` rows carry the worktree's parent fields; none for `default` or an unparented worktree; `origin`/`origin_state` unchanged and independent (FR-011)
-- [ ] T021 [US5] Add the fields in `session_row` (`crates/micold-daemon/src/mcp/tools.rs:2161`) and `get_session`; T020 green
-- [ ] T022 [US5] Document the session fields and their independence from `origin` in `docs/user-guide/agent-tools.md` ("Sub-agent runs" neighbourhood)
+- [x] T020 [P] [US5] Add failing tests in `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs`: `list_sessions` and `get_session` rows carry the worktree's parent fields; none for `default` or an unparented worktree; `origin`/`origin_state` unchanged and independent (FR-011)
+- [x] T021 [US5] Add the fields in `session_row` (`crates/micold-daemon/src/mcp/tools.rs:2161`) and `get_session`; T020 green
+- [x] T022 [US5] Document the session fields and their independence from `origin` in `docs/user-guide/agent-tools.md` ("Sub-agent runs" neighbourhood)
 
 ## Phase 7: Supervisor integration (M3, blocked by M1; FR-013)
 

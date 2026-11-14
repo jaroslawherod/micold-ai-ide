@@ -193,40 +193,6 @@ fn host_offset(secs: i64) -> Option<i32> {
     i32::try_from(tm.tm_gmtoff).ok()
 }
 
-#[cfg(windows)]
-fn host_offset(secs: i64) -> Option<i32> {
-    use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
-    use windows_sys::Win32::System::Time::{
-        FileTimeToSystemTime, SystemTimeToFileTime, SystemTimeToTzSpecificLocalTime,
-    };
-    // FILETIME counts 100 ns ticks from 1601-01-01.
-    const TICKS_PER_SEC: i64 = 10_000_000;
-    const EPOCH_DIFF_SECS: i64 = 11_644_473_600;
-    let ticks = u64::try_from((secs + EPOCH_DIFF_SECS).checked_mul(TICKS_PER_SEC)?).ok()?;
-    let as_filetime = |t: u64| FILETIME {
-        dwLowDateTime: t as u32,
-        dwHighDateTime: (t >> 32) as u32,
-    };
-    let utc_ft = as_filetime(ticks);
-    // SAFETY: zeroed SYSTEMTIME/FILETIME are valid plain structs; each call reads and writes only
-    // through the pointers given, and a null zone means the zone currently in effect.
-    unsafe {
-        let mut utc: SYSTEMTIME = std::mem::zeroed();
-        let mut local: SYSTEMTIME = std::mem::zeroed();
-        let mut local_ft: FILETIME = std::mem::zeroed();
-        if FileTimeToSystemTime(&utc_ft, &mut utc) == 0
-            || SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) == 0
-            || SystemTimeToFileTime(&local, &mut local_ft) == 0
-        {
-            return None;
-        }
-        let local_ticks =
-            (u64::from(local_ft.dwHighDateTime) << 32) | u64::from(local_ft.dwLowDateTime);
-        let diff = (local_ticks as i64 - ticks as i64) / TICKS_PER_SEC;
-        i32::try_from(diff).ok()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

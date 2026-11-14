@@ -57,7 +57,9 @@ the app is running.
 Off by default. Turn it on and the Overview's [full-screen](overview.md#full-screen) zoom switches
 in one step: the sidebar goes or returns and the cards take their new places in the next frame, with
 no sliding. The focus outline of an Overview card, and the shadow of an expanded card, also appear
-and disappear at once instead of easing in and out over 150 ms. Other animations in the app are
+and disappear at once instead of easing in and out over 150 ms. In a structured session the
+[session options](structured-input.md#session-options) row shows and hides in one step instead of
+growing and collapsing over 300 ms. Other animations in the app are
 unchanged. Like the other settings it applies when you press **Save** and is discarded by
 **Cancel**. The operating system's reduced-motion setting is not read.
 
@@ -288,24 +290,18 @@ notifications carry: a raised hand for **Needs permission**, a circled exclamati
 finished**. In a notification the icon is drawn in white on a coloured rounded square, so it stands
 out on a light and a dark desktop alike.
 
-- **Linux**: the notification shows the icon in place of the app's, on desktops whose notification
-  service shows images (GNOME, KDE Plasma and most others do).
-- **Windows**: the toast shows the icon in place of the app's logo.
-- **macOS**: the notification always shows the app's own icon; the kind's icon is attached to it
-  and shows on its right side, or larger when you expand the notification.
+The notification shows the icon in place of the app's, on desktops whose notification service
+shows images (GNOME, KDE Plasma and most others do).
 
-Where a system shows no icon from the app, the notification is still shown, and its title names
+Where a desktop shows no icon from the app, the notification is still shown, and its title names
 the kind: *needs permission*, *stopped with an error*, *finished a long task* or *finished its
-turn*. Windows and macOS need the icons as files: the app writes them to `notification-icons/`
-beside the settings file ([Where settings are stored](#where-settings-are-stored)) once each time
-it runs. If it cannot, it notes that once and shows the notifications without icons.
+turn*.
 
 The operating system's own permission is separate. With the switch on, the system can still
 withhold notifications: you refused the permission, turned notifications off for the app in the
 system's settings, or have Do Not Disturb on. With the switch off, the app asks the system for
-nothing, whatever the system would allow. Where each system keeps its setting is on
-[Installing on macOS](install-macos.md#notifications) and
-[Installing on Windows](install-windows.md#notifications).
+nothing, whatever the system would allow. Where that setting lives depends on your desktop
+environment.
 
 ### Claude plan usage
 

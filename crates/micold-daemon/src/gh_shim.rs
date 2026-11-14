@@ -139,33 +139,6 @@ fn unix_shim(daemon: &Path, bin_dir: &Path) -> String {
     )
 }
 
-/// The Windows shim: a `gh.cmd` batch file. `for /f` over the `gh-token` output takes its two lines
-/// (token, host); `GH_TOKEN`/`GH_HOST` are set only when one came back and only where unset. A
-/// batch file cannot replace the process image, so it calls the real `gh` (found once `bin_dir` is
-/// stripped back out of `PATH`) and forwards its exit code (T057).
-fn windows_shim(daemon: &Path, bin_dir: &Path) -> String {
-    format!(
-        "@echo off\r\n\
-         rem Written by micold-daemon; do not edit (#1531).\r\n\
-         setlocal enabledelayedexpansion\r\n\
-         set \"n=0\"\r\n\
-         for /f \"usebackq delims=\" %%L in (`\"{daemon}\" gh-token --cwd \"%CD%\" 2^>nul`) do (\r\n\
-         \tset /a n+=1\r\n\
-         \tif !n! == 1 set \"gh_token_out=%%L\"\r\n\
-         \tif !n! == 2 set \"gh_host_out=%%L\"\r\n\
-         )\r\n\
-         if defined gh_token_out (\r\n\
-         \tif not defined GH_TOKEN set \"GH_TOKEN=%gh_token_out%\"\r\n\
-         \tif not defined GH_HOST set \"GH_HOST=%gh_host_out%\"\r\n\
-         )\r\n\
-         set \"PATH=%PATH:{bin_dir};=%\"\r\n\
-         gh %*\r\n\
-         exit /b %ERRORLEVEL%\r\n",
-        daemon = daemon.display(),
-        bin_dir = bin_dir.display(),
-    )
-}
-
 /// `path` quoted for a POSIX shell: single-quoted, with an embedded `'` escaped the way git's own
 /// `write_grant`/`helper_command` do elsewhere in this crate.
 fn shell_quote(path: &Path) -> String {
@@ -173,16 +146,13 @@ fn shell_quote(path: &Path) -> String {
 }
 
 /// The shim file(s) for this platform under `bin_dir` (created if missing), naming `daemon` (this
-/// process's own executable) inside them. Unix: `gh`, mode `0755`. Windows: `gh.cmd`. Write-if-
+/// process's own executable) inside them. `gh`, mode `0755`. Write-if-
 /// changed, so a session spawn that finds the content already right touches nothing. Returns
 /// `bin_dir`, for the caller to put first on the session's `PATH`.
 pub fn write_shim(bin_dir: &Path, daemon: &Path) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(bin_dir)?;
-    let (name, content): (&str, String) = if cfg!(windows) {
-        ("gh.cmd", windows_shim(daemon, bin_dir))
-    } else {
-        ("gh", unix_shim(daemon, bin_dir))
-    };
+    let name = "gh";
+    let content = unix_shim(daemon, bin_dir);
     let file = bin_dir.join(name);
     let changed = std::fs::read_to_string(&file).ok().as_deref() != Some(content.as_str());
     if changed {
@@ -272,18 +242,6 @@ mod tests {
         assert!(script.contains(": \"${GH_TOKEN:=$token}\""));
         assert!(script.contains(": \"${GH_HOST:=$host}\""));
         assert!(script.contains("exec \"$real_gh\" \"$@\""));
-    }
-
-    #[test]
-    fn the_windows_shim_forwards_the_real_ghs_exit_code() {
-        let script = windows_shim(
-            Path::new(r"C:\micold\micold-daemon.exe"),
-            Path::new(r"C:\data\bin"),
-        );
-        assert!(script.contains("gh %*"));
-        assert!(script.contains("exit /b %ERRORLEVEL%"));
-        assert!(script.contains("if not defined GH_TOKEN"));
-        assert!(script.contains("if not defined GH_HOST"));
     }
 
     /// T151 (#1531, Finding 3): `write_shim`'s doc comment promises write-if-changed — "a session
