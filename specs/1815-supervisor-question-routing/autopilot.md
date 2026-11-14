@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-do55sf
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
-- **Phase**: close
-- **Next step**: close unit (all milestones merged)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1907 | M2 routine questions from repo evidence | merged (squash) | b3ec7f88ce399a4f178b0a9a8a4d869434e788cb |
 | #1911 | M3 context-cap survival | merged (squash) | 9721aedb923006f0625fd368aa1f7e485fde9841 |
 | #1916 | M4 upward relay | merged (squash) | d996a8d24ab09d325e2520ac5a43cc234c1b9faf |
+| close | close-out (this PR; number set at open) | open | |
 
 ## Milestones
 
@@ -87,4 +88,4 @@ None.
 
 ## Follow-ups not done
 
-- Close unit: extend the `route target` row in contracts/routing-cli.md with the M4 round-1 rules (object-shaped list, is_caller fallback, parent_state known, `default` via worktree lookup, live over failed). Review B M4 round 2 MINOR.
+None.
