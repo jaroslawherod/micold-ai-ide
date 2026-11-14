@@ -8,8 +8,7 @@ Append only. Newest last.
   unmerged commit, open phase, no ledger, no PRs (verified), several open ledgers, not a worktree,
   issue open / in-progress / flow label missing / UNKNOWN, second-clone isolation, read-only checksums.
 - red: the same file run with `scripts/autopilot/verify-run.sh` removed → `close-out: 22 cases, 21 failed`
-  (the one pass is the "not a worktree" case, which fails as exit 127 text-match only by chance of
-  the usage text). Evidence kept in the session scratchpad (`red1.log`).
+  (the lone pass is a usage-error case that passes without the script). Evidence kept in the session scratchpad (`red1.log`).
 - green: `verify-run.sh` added (T007) → `close-out: 22 cases, 0 failed`.
 
 ## Cycle 2 — review A F1, F2, F3 (ledger-less open PR, several done ledgers, run-status failure)
