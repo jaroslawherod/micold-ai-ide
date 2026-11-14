@@ -72,7 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 (PR #1917) is implemented, gated by the shell suites and pushed. Reviews A and B are still owed: this unit has no Agent tool, so it could not dispatch a fresh-context reviewer. Next: dispatch Review A (high) and B (sonnet) on origin/main...HEAD, snapshot e28d2b573d7886379964e81963e6a7eba5c74673:74d639c67b6c0105e0c31269c83d3d7c72450938, fix findings, record rounds, then drop the "reviews not run" line from the PR body. autopilot.test.sh: 1 FAIL on this branch (facts: 50-file diff), 7 FAIL on origin/main (facts cases); all in review-facts, none touched by this Rust-free diff; environment git push negotiation errors in the sandbox.
 
 ## Open escalation
 
