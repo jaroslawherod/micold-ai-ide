@@ -10,7 +10,7 @@ use crate::ui::material::test_support::{renderer, roles, Mounted, FRAME_MS};
 use iced::advanced::widget::operation::focusable;
 use iced::advanced::{layout, mouse};
 use iced::widget::text;
-use iced::{Element, Event, Point, Size};
+use iced::{Element, Event, Length, Point, Size};
 use micold_core::tokens::motion::duration;
 
 use super::*;
@@ -334,4 +334,53 @@ fn grow(closed: &State, open: &State, s: SessionId, room: Size) -> f32 {
         .expect("frames ran")
         .1;
     end - shut
+}
+
+/// Height of a fixed-size part, so the sums below are exact.
+const PART: f32 = 20.0;
+/// Height of the stand-in options row.
+const ROW: f32 = 30.0;
+
+/// `around_options` with `above`/`below` fixed-size parts and a row `ROW` high, at `open`.
+fn around(above: usize, below: usize, open: bool) -> f32 {
+    let (state, _) = posed(open, true);
+    let part = || -> Element<'_, Message> { Space::new().height(PART).width(Length::Fill).into() };
+    let options: Element<'_, Message> = Space::new().height(ROW).width(Length::Fill).into();
+    let el = around_options(
+        (0..above).map(|_| part()).collect(),
+        options,
+        (0..below).map(|_| part()).collect(),
+        &state,
+    );
+    let el: Element<'_, String> = el.map(|m| format!("{m:?}"));
+    let m = Mounted::new_in(el, WIDE);
+    height(&m)
+}
+
+/// T024 (FR-008): a collapsed row leaves the composer as tall as without it, with a part above,
+/// below, both or neither; open, it adds the room it needs on each side that has a part.
+#[test]
+fn the_collapsed_row_adds_no_gap_whichever_parts_surround_it() {
+    let gap = spacing::SM;
+    // (above, below, height without the row)
+    for (above, below, bare) in [
+        (0, 0, 0.0),
+        (1, 0, PART),
+        (0, 1, PART),
+        (1, 1, 2.0 * PART + gap),
+    ] {
+        let shut = around(above, below, false);
+        assert!(
+            (shut - bare).abs() <= TOLERANCE,
+            "{above} above, {below} below: collapsed {shut}, bare {bare}"
+        );
+        let full = around(above, below, true);
+        // The row brings one gap whenever a part is there (the other travels outside the reveal
+        // when both are).
+        let expected = bare + ROW + if above + below > 0 { gap } else { 0.0 };
+        assert!(
+            (full - expected).abs() <= TOLERANCE,
+            "{above} above, {below} below: open {full}, expected {expected}"
+        );
+    }
 }

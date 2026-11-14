@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1792
 - **Worktree branch**: claude/project-thread-hyfws4
 - **Started**: 2026-11-11
-- **Phase**: close
-- **Next step**: close unit: polish T022–T023, speckit-tdd-verify, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1842 | M1 | merged | 7628262fce95c344ccb9eed01db1138e2da2a5fa |
 | #1851 | M2 | merged (2026-11-12) | bd4e5970c23446123021f819fd9543caadf9c46f |
 | #1902 | M3 | merged (2026-11-14) | aa9968e9ae1f6988b5b9325e00afddc91e40254f |
+| (close PR, number in the PR) | Close | open | |
 
 ## Milestones
 
@@ -79,6 +80,8 @@ M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy c
 | B | 2 | M3 | 64c99464d08f6210785fd53dde78255d812c2980 | 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 | CHANGES (F1 MAJOR three settings paths unrecorded in drift-M3.md; F2 MINOR step 5 visual re-check due) |
 | B | 3 | M3 | 16e8a681667d58af49025c849a82d254bf358403 | 6083dd1716343295c327e0fb1ae3a691a75b0e52:16e8a681667d58af49025c849a82d254bf358403 | CLEAN (docs-only fix diff 64c99464d..16e8a6816, sonnet: drift recorded, step 5 PASS on clean build) |
 
+- Close review (code-review medium via the Skill tool, no Agent tool in this cloud unit; not a fresh autopilot-reviewer): 10 findings. Fixed: chevron pairing in composer_fits (distinct nearest chevron per label), ROW constant, focus test no longer sends Tab, cycle-log wording on the focus/pressed proof, T026/T023 tick text, verification.md remediation addendum. Declined: spec Status line (close.md requires it; open follow-ups are listed below); drift-M3.md wording kept (the audit found no changed paths in containment.rs). Test and doc fixes only.
+
 ## Declined review findings
 
 - M2 review A+B F1 (MAJOR, paint-level colour/state-layer comparison): declined; the parity test is geometry only and says so. menu_panel and row_surface are shared functions both controls call; a draw dump is out of proportion for a test-only milestone.
@@ -114,6 +117,9 @@ None. <or, one question:>
 Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
+
+- Close unit: speckit-tdd-verify verdict FAIL (tdd/verification.md). Cleared in the close PR: findings 1, 3, 7, 10, 2 in part. Open: 4 and 5 (T029 mutation checks of `reduce_motion` and `close_pickers`), 6 (T027 paint-level menu parity), 8 (T030 split eager tests), 9 (magic values, partly), 11; and a surviving M1 mutant (disabled chevron colour).
+- Close unit, not done from the cloud: close or narrow #1765 with a link to #1842/#1851/#1902 (spec Assumptions); `mise run duplication`; `branch-start.sh` refused (gh unauthenticated), the branch was already on the merged base.
 
 - Process: review B round 1's mutation check (`options_motion` mutated) ran while the visual-pass worker built its release client in the same worktree; the binary (21:36:03) carried the mutant, the revert came at 21:36:15, so step 5 failed on a mutated build. A mutation check and a build for a visual pass must not share a worktree at once. Evidence: visual-pass-M3.md, *Step 5 re-check*.
 - Parity test (M2) compares geometry only; colour, elevation and state-layer paint are not compared. T011 was green first run, T012 skipped.

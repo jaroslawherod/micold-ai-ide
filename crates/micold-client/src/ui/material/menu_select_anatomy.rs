@@ -213,3 +213,27 @@ fn an_empty_option_list_opens_no_menu() {
     let mut some = plain(true, false);
     assert!(some.floats(), "a list with rows should float its menu");
 }
+
+/// FR-002, US1 scenario 2: pressing the trigger paints a layer of its own, not the hover one.
+#[test]
+fn pressing_the_trigger_paints_a_layer_other_than_hover() {
+    let mut f = plain(false, false);
+    let at_centre = centre(&f);
+    let over = pixels(&mut f, mouse::Cursor::Available(at_centre));
+    f.press(at_centre);
+    let held = pixels(&mut f, mouse::Cursor::Available(at_centre));
+    let y = f.container().height as u32 / 2;
+    assert_ne!(at(&over, 2, y), at(&held, 2, y), "pressed looks like hover");
+}
+
+/// FR-002, US1 scenario 2 (deviation in `research.md`, M1): the trigger shows the button's
+/// keyboard ring when it takes focus, since no focus signal reaches the filled field's layer.
+#[test]
+fn keyboard_focus_on_the_trigger_draws_a_ring() {
+    use iced::advanced::widget::operation::focusable;
+    let mut f = plain(false, false);
+    let rest = pixels(&mut f, mouse::Cursor::Unavailable);
+    f.drive(focusable::focus_next::<()>());
+    let focused = pixels(&mut f, mouse::Cursor::Unavailable);
+    assert_ne!(rest.0, focused.0, "a focused trigger draws nothing new");
+}

@@ -1114,9 +1114,25 @@ fn the_model_and_permission_selectors_share_one_trigger_on_one_line() {
         ys.iter().all(|y| (y - ys[0]).abs() < 0.5),
         "the selectors' labels are on different lines: {ys:?}"
     );
-    let chevrons = painted.iter().filter(|p| p.content == "\u{e5cf}").count();
-    assert!(
-        chevrons >= 3,
-        "{chevrons} select chevrons for three selectors"
-    );
+    // Each selector's label has its own chevron: the nearest one to its right on the same line,
+    // and no two labels share one.
+    let chevrons: Vec<iced::Point> = painted
+        .iter()
+        .filter(|p| p.content == "\u{e5cf}")
+        .map(|p| p.origin)
+        .collect();
+    let mut taken = Vec::new();
+    for label in ["Model:", &format!("{MODE_LABEL}:")] {
+        let at = find(&painted, label).origin;
+        let own = chevrons
+            .iter()
+            .filter(|c| c.x > at.x && (c.y - at.y).abs() < 8.0)
+            .min_by(|a, b| a.x.total_cmp(&b.x))
+            .unwrap_or_else(|| panic!("no select chevron beside `{label}`"));
+        assert!(
+            !taken.contains(&own.x.to_bits()),
+            "`{label}` shares a chevron"
+        );
+        taken.push(own.x.to_bits());
+    }
 }

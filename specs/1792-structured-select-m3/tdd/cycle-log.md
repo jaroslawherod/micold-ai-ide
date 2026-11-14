@@ -44,3 +44,26 @@ time). Red evidence for both is the features-level red above; the moved tests ra
 
 - `under_reduce_motion_the_row_switches_in_one_step`: mutated `options_motion` (`ui/composer.rs`) to ignore `reduce_motion` (`if false && state.settings.reduce_motion`). `cargo test -p micold-client --lib under_reduce_motion_the_row_switches_in_one_step` FAILED (panic at `composer_expand_tests.rs:124`). Mutation reverted with `git checkout`; the pin is real.
 - `a_collapsed_rows_controls_are_not_reachable`: accepted pin. The hidden guard it pins lives in `expand` in the shared `micold-material` crate (`animation.rs`), outside this feature's files; mutating it would rebuild another crate for a pre-existing widget behaviour. Its open-row half proves the probes reach the controls (the test fails if they stop doing so).
+
+## M1 (T002–T010), after the fact (close unit)
+
+No red was recorded for M1: its tests were written after the implementation (review B round 1
+said so). Each was re-proved by a deliberate mutant instead, run by the close unit. Command:
+`scripts/build-lock.sh cargo test -p micold-client --lib -- menu_select_anatomy`.
+
+| Mutant | Result |
+|---|---|
+| `menu_select.rs` trigger press guard `(!s.disabled).then_some(..)` to `Some(..)` | red: `a_disabled_trigger_looks_disabled_and_ignores_the_pointer` |
+| `menu_select.rs` `list_open = s.open && !s.rows.is_empty()` to `s.open` | red: `an_empty_option_list_opens_no_menu` |
+| `select_trigger.rs` hover layer: `.disabled(t.disabled)` to `.disabled(true)` | red: `hovering_the_trigger_shades_its_container`, `an_open_trigger_thickens_its_indicator_as_a_select_does`, `a_disabled_trigger_looks_disabled_and_ignores_the_pointer` |
+| `select_trigger.rs` disabled chevron colour branch removed | SURVIVES: no test reads the chevron's colour when disabled (follow-up) |
+
+Not re-proved: trigger geometry and long-value ellipsis (covered by their tests, mutants not run).
+
+## Close unit additions (T024, T025, T028)
+
+| Test | Proof |
+|---|---|
+| `the_collapsed_row_adds_no_gap_whichever_parts_surround_it` (`composer_expand_tests.rs`) | red under `let between = false;` and under `gap(under)` to `gap(false)` in `around_options` (the two survivors of the tdd-verify), green restored |
+| `pressing_the_trigger_paints_a_layer_other_than_hover`, `keyboard_focus_on_the_trigger_draws_a_ring` (`menu_select_anatomy.rs`) | red when the press, resp. the focus step, is removed from the test (shows the test can fail; no product-code mutant was run for these two), green restored. They check that the paint changes, not that it equals `Select`'s: the trigger shows the button's ring, not the field's focus layer (research.md, M1) |
+| `the_model_and_permission_selectors_share_one_trigger_on_one_line` (`composer_fits.rs`) | now asserts a chevron beside each named label; effort stays unnamed (it is offered only for some models) |
