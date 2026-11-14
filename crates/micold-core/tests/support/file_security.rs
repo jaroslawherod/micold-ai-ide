@@ -1,6 +1,6 @@
-//! Read back what protects a file: the mode bits on Unix, the DACL on Windows. Included with
-//! `#[path]` by `owner_only.rs` (core), `mcp_binding_file_mode.rs` and `windows_pipe_acl.rs`
-//! (daemon); each uses a different part, so unused items are expected.
+//! Read back what protects a file: its mode bits. Included with `#[path]` by `owner_only.rs`
+//! (core) and `mcp_binding_file_mode.rs` (daemon); each uses a different part, so unused items
+//! are expected.
 #![allow(dead_code)]
 
 #[cfg(unix)]

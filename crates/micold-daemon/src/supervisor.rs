@@ -590,14 +590,8 @@ impl SupervisedChild {
     }
 
     /// Terminate and reap the child (FR-015a / session close). Terminates the child's whole process
-    /// tree first — its process group on Unix, its job object on Windows — so processes the session
-    /// started don't orphan (FR-036, T061), then kills and reaps the direct child.
-    ///
-    /// On Windows `child.kill()` is `portable-pty`'s, whose killer reports `TerminateProcess`
-    /// inverted (research R3.4). `Child::kill` discards that result in 0.9.0, which is the only
-    /// reason the `?` in [`Supervised::terminate`] is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
-    /// and the process really gone — so an upgrade that starts propagating it fails a test rather
-    /// than every session close.
+    /// tree first — its process group — so processes the session started don't orphan (FR-036,
+    /// T061), then kills and reaps the direct child.
     ///
     /// The tree is terminated under the child's lock, so it cannot be racing a reap that would free
     /// the pid it signals through. A second `kill()` — the drop after a session close — finds the

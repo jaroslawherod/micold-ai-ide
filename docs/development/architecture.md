@@ -123,7 +123,7 @@ service may run in a container, so the flow is split by who can know what.
 | A session changed to awaiting input | the session service only (it runs while no window is open) | `DaemonState::note_activity`, `crates/micold-daemon/src/state.rs` |
 | Which session each window has in view | the window; the service keeps the last report per connection | `micold_core::attention::in_view`, `ClientMsg::WindowView` |
 | Which window raises the notification | the service decides, once per event | `AttentionClaim`, `AttentionGranted` |
-| The system notification and its click | the window process that raised it | `crates/micold-client/src/shell/desktop_notify/` (`linux.rs`, `macos.rs`, `windows.rs`) |
+| The system notification and its click | the window process that raised it | `crates/micold-client/src/shell/desktop_notify/` (`linux.rs`) |
 | Which window shows the clicked session | the service | `SessionReveal`, `RevealSession`, `micold_core::attention::resolve_reveal` |
 
 **View report.** A window derives `in_view` with a pure function: the window is focused, no screen

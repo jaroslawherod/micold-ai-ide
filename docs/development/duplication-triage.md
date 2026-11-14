@@ -137,7 +137,6 @@ needs T2's `support/conn.rs`; T5 needs T2.
 | C13 | `shell/issues.rs:183-226` | Both loaded-handlers snapshot `issue_description_request()`, update the form, then `newly_awaited_descriptions` + `start_issue_descriptions`. | 3 | `update_then_follow(app, msg)`. | 10 | low |
 | C14 | `keymap.rs:188-221` | `is_release_chord` / `is_new_terminal_chord` identical but for the letter. | 2 | `is_primary_shift_chord(key, mods, letter)`. | 20 | low |
 | C15 | `crates/micold-client/build.rs` vs `micold-daemon/build.rs` (both removed in #1897) | Byte-identical 18-line build scripts. | **4 leave** | Sharing needs a build-dependency crate for 18 lines; the two crates' build steps may diverge. | 0 | - |
-| C16 | `shell/desktop_notify/macos.rs:256-269`, `windows.rs:132-145` | The `notification(title, body)` test fixture copied into both OS test modules; the other hit is a `use` block. | 6 | Shared sample-notification fixture; leave imports. | 12 | low |
 | C17 | `shell/workspace.rs` (7 pairs), `shell/startup.rs:499-529 vs 633-683` | Test code: `Workspace` setup and the `RepoRootQuery` pull-and-reply sequence. The two 2-line "not a repo" refuse branches in production stay. | 6 | `here_workspace()` helper in startup tests; `ask_repo_root(app, rx)` in workspace tests. | 40 | low |
 | C18 | `features/session.rs` (7 pairs) | `arm_tab_reveal; focus_terminal` tail and `if let Some(session)` head. | **4 leave** | Each mutates different session fields with its own commentary; a helper saves about 3 lines per fn. | 0 | - |
 
