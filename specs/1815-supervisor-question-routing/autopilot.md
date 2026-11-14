@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-0lx36q
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
-- **Phase**: plan
-- **Next step**: plan review round 2 (reviewer pending), then tasks unit
+- **Phase**: tasks
+- **Next step**: speckit-analyze, tasks review (orchestrator dispatches), gate, PR text
 
 ## Pull requests
 
@@ -23,6 +23,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | | pending |
+| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | pending |
+| M3 | T017–T019 | light | context-cap survival: reask, drop, overdue | | pending |
+| M4 | T020–T022 | light | upward relay to a reported parent | | pending |
 
 ## Decisions
 
