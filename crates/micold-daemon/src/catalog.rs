@@ -1813,6 +1813,10 @@ impl Catalog {
             if let Err(err) = store.store.remove_runs(path) {
                 tracing::warn!(project = %path.display(), %err, "failed to remove the run groups");
             }
+            // Feature 1786: its sidebar layout (user groups) goes with it.
+            if let Err(err) = store.store.remove_layout(path) {
+                tracing::warn!(project = %path.display(), %err, "failed to remove the sidebar layout");
+            }
             // Feature 1289 (T038): its setup records and logs go with it.
             if let Some(files) = store.store.setup_files() {
                 if let Err(err) = files.remove_setup(path, None) {

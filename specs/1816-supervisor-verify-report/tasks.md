@@ -6,8 +6,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `scripts/tests/close-out.test.sh` skeleton: source `scripts/tests/lib/autopilot-fixtures.sh`, a fixture repo writer (bare origin + clone + run ledger), `check` summary; picked up by `mise run gate`
-- [ ] T002 [P] Extend `scripts/tests/lib/autopilot-fixtures.sh` with a ledger writer and `issue-<n>.json` support in the `gh` stub only if missing (grep first; reuse otherwise)
+- [X] T001 Create `scripts/tests/close-out.test.sh` skeleton: source `scripts/tests/lib/autopilot-fixtures.sh`, a fixture repo writer (bare origin + clone + run ledger), `check` summary; picked up by `mise run gate`
+- [X] T002 [P] Extend `scripts/tests/lib/autopilot-fixtures.sh` with a ledger writer and `issue-<n>.json` support in the `gh` stub only if missing (grep first; reuse otherwise)
 
 ## Phase 2: Foundational
 
@@ -18,12 +18,12 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 **Goal**: `verify-run.sh <worktree>` prints `VERIFIED` or `NOT DONE` plus remaining lines; read-only.
 **Independent test**: `bash scripts/tests/close-out.test.sh` verdict cases.
 
-- [ ] T003 [US1] Test: all merged, clean, issue closed with flow label, gives `VERIFIED`, exit 0 in `scripts/tests/close-out.test.sh` (US1.1, FR-001)
-- [ ] T004 [US1] Tests: open PR, `UNKNOWN` PR, dirty tree, unmerged commit, phase not `done`, no ledger, no PRs, several ledgers, not a worktree each give `NOT DONE` with the data-model line, exit 1 / usage exit in `scripts/tests/close-out.test.sh` (US1.2, US1.3, FR-004)
-- [ ] T005 [US1] Tests: issue open, `in-progress` left, `flow:` label missing, issue state `UNKNOWN` (no fixture) in `scripts/tests/close-out.test.sh` (US1.4, FR-003)
-- [ ] T006 [US1] Tests: verifying from a second dirty clone reflects the target (US1.5); checksums of ledger, `HEAD`, `git status --porcelain` unchanged (FR-005) in `scripts/tests/close-out.test.sh`
-- [ ] T007 [US1] Implement `scripts/autopilot/verify-run.sh` per `contracts/verify-run.md`: `run-status.sh --json <worktree>`, issue step via `gh issue view`, closed verdict pair, exit codes (FR-001..FR-005, FR-002)
-- [ ] T008 [US1] Add `verify-run.sh` to the script list in `.claude/skills/speckit-autopilot/README.md`
+- [X] T003 [US1] Test: all merged, clean, issue closed with flow label, gives `VERIFIED`, exit 0 in `scripts/tests/close-out.test.sh` (US1.1, FR-001)
+- [X] T004 [US1] Tests: open PR, `UNKNOWN` PR, dirty tree, unmerged commit, phase not `done`, no ledger, several ledgers, not a worktree each give `NOT DONE` with the data-model line, exit 1 / usage exit in `scripts/tests/close-out.test.sh` (US1.2, US1.3, FR-004)
+- [X] T005 [US1] Tests: issue open, `in-progress` left, `flow:` label missing, issue state `UNKNOWN` (no fixture) in `scripts/tests/close-out.test.sh` (US1.4, FR-003)
+- [X] T006 [US1] Tests: verifying from a second dirty clone reflects the target (US1.5); checksums of ledger, `HEAD`, `git status --porcelain` unchanged (FR-005) in `scripts/tests/close-out.test.sh`
+- [X] T007 [US1] Implement `scripts/autopilot/verify-run.sh` per `contracts/verify-run.md`: `run-status.sh --json <worktree>`, issue step via `gh issue view`, closed verdict pair, exit codes (FR-001..FR-005, FR-002)
+- [X] T008 [US1] Add `verify-run.sh` to the script list in `.claude/skills/speckit-autopilot/README.md`
 
 **Checkpoint**: a run is verified by one command from any worktree.
 

@@ -764,6 +764,8 @@ impl PtySession {
         };
         let config = Config {
             scrolling_history: scrollback_lines,
+            // Stores only: a program may put text on the clipboard (#1720), never read it.
+            osc52: alacritty_terminal::term::Osc52::OnlyCopy,
             ..Config::default()
         };
         let mut term = Term::new(config, &dims, listener);

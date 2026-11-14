@@ -81,18 +81,40 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "worktree_menu",
             "run_group_menu",
             "overview_card_menu",
+            "sidebar_empty_menu",
         ],
     ),
     // The two context menus replace each other. A panel popover open elsewhere in the window is
     // unaffected by a right-click in the sidebar.
     (
         "worktree_menu",
-        &["project_menu", "run_group_menu", "overview_card_menu"],
+        &[
+            "project_menu",
+            "run_group_menu",
+            "overview_card_menu",
+            "sidebar_empty_menu",
+        ],
     ),
     // Feature 483's run group row menu is a third row menu and replaces the other two.
     (
         "run_group_menu",
-        &["project_menu", "worktree_menu", "overview_card_menu"],
+        &[
+            "project_menu",
+            "worktree_menu",
+            "overview_card_menu",
+            "sidebar_empty_menu",
+        ],
+    ),
+    // Feature 1786's sidebar empty-area menu is a context menu like the row menus: it and they
+    // replace each other (C6a).
+    (
+        "sidebar_empty_menu",
+        &[
+            "project_menu",
+            "worktree_menu",
+            "run_group_menu",
+            "overview_card_menu",
+        ],
     ),
     // Feature 972's card menu acts on a location as the row menus do, so it and the four row menus
     // plus the start menu replace each other: one context menu at a time (R2, FR-014).
@@ -104,6 +126,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "run_group_menu",
             "session_menu",
             "session_start_menu",
+            "sidebar_empty_menu",
         ],
     ),
     // The session menu closed nothing until feature 972: it closes the card menu, and nothing else.
@@ -193,6 +216,9 @@ fn opener(id: &str) -> Message {
                 micold_client::features::header_bar::HeaderMenu::Plus,
             ))
         }
+        "sidebar_empty_menu" => Message::SidebarGroups(
+            micold_client::features::sidebar_group_actions::Msg::EmptyAreaMenuOpened((70, 70)),
+        ),
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -300,7 +326,8 @@ fn every_popover_is_in_the_table() {
     // Twenty-eight with `review_shortcut_sheet`, the Review tab's shortcut sheet (#1274).
     // Twenty-nine with `setup_output`, a location's setup output (feature 1289).
     // Thirty with `large_editor`, the draft's large editor (feature 1703).
-    const DIALOGS: usize = 30;
+    // Thirty-one with `group_naming`, the user-group naming dialog (feature 1786).
+    const DIALOGS: usize = 31;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

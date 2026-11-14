@@ -736,7 +736,9 @@ fn a_current_session_in_the_project_root_opens_the_default_row() {
         .into_iter()
         .any(|entry| match entry {
             SidebarEntry::Default(node) => node.expanded,
-            SidebarEntry::Worktree(_) | SidebarEntry::Group(_) => false,
+            SidebarEntry::Worktree(_) | SidebarEntry::Group(_) | SidebarEntry::UserGroup(_) => {
+                false
+            }
         });
     assert!(
         default_open,
@@ -1193,4 +1195,219 @@ fn pressing_an_active_chip_clears_just_that_filter() {
         state.sidebar.filters.iter().copied().collect::<Vec<_>>(),
         [TagFilter::Type(ConventionalType::Fix)]
     );
+}
+
+/// Feature 1786 (T006, contract C5): the drawn list applies the project's user-group layout to
+/// the stable order; with no layout it is the stable order unchanged.
+mod user_groups {
+    use super::{Message, SidebarEntry, SidebarMsg, State, TagFilter};
+    use crate::support::sidebar_fixture::{deliver, listed, run_group, state_with_active};
+    use micold_client::features::navigation::location_order;
+    use micold_client::features::sidebar::{row_heights, row_index, RowRef};
+    use micold_core::naming::ConventionalType;
+    use micold_core::session::SessionLocation;
+    use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroup, UserGroupId};
+    use std::path::PathBuf;
+
+    const PROJECT: &str = "/repo";
+
+    fn item(dir: &str) -> LayoutItem {
+        LayoutItem::Worktree(dir.into())
+    }
+
+    fn layout(
+        groups: Vec<(&str, bool, Vec<LayoutItem>)>,
+        ungrouped: Vec<LayoutItem>,
+    ) -> SidebarLayout {
+        SidebarLayout {
+            next_id: groups.len() as u64,
+            groups: groups
+                .into_iter()
+                .zip(0u64..)
+                .map(|((name, collapsed, items), id)| UserGroup {
+                    id: UserGroupId(id),
+                    name: name.into(),
+                    collapsed,
+                    items,
+                })
+                .collect(),
+            ungrouped,
+            ..SidebarLayout::default()
+        }
+    }
+
+    fn state(dirs: &[&str], layout: SidebarLayout) -> State {
+        let mut state = state_with_active();
+        deliver(&mut state, dirs.iter().map(|d| listed(d)).collect());
+        state.sidebar_layout_loaded(PathBuf::from(PROJECT), layout);
+        state
+    }
+
+    /// The drawn list as words: `Default`, `[name]` for a header, a worktree's `dir_name`, `run:name`.
+    fn shape(state: &State) -> Vec<String> {
+        state
+            .sidebar_list()
+            .iter()
+            .map(|entry| match entry {
+                SidebarEntry::Default(_) => "Default".to_string(),
+                SidebarEntry::Worktree(node) => node.worktree.dir_name.clone(),
+                SidebarEntry::Group(group) => format!("run:{}", group.name),
+                SidebarEntry::UserGroup(header) => format!("[{}]", header.name),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn with_no_layout_the_drawn_list_is_the_stable_order() {
+        let state = state(&["a", "b"], SidebarLayout::default());
+        assert_eq!(
+            state.sidebar_list(),
+            state.sidebar_entries(),
+            "no group, no change (U9)"
+        );
+        assert_eq!(shape(&state), ["Default", "a", "b"]);
+    }
+
+    #[test]
+    fn groups_come_after_default_with_their_rows_then_the_ungrouped_rows() {
+        let state = state(
+            &["a", "b", "c", "d"],
+            layout(
+                vec![("Work", false, vec![item("c"), item("a")])],
+                vec![item("d")],
+            ),
+        );
+        assert_eq!(
+            shape(&state),
+            ["Default", "[Work]", "c", "a", "d", "b"],
+            "Default first, the group's rows in stored order, saved ungrouped order, then rows the \
+             layout does not know in stable order (C5)"
+        );
+    }
+
+    #[test]
+    fn a_collapsed_group_keeps_its_header_and_hides_its_rows_and_an_empty_group_keeps_its_header() {
+        let state = state(
+            &["a", "b"],
+            layout(
+                vec![("Work", true, vec![item("a")]), ("Empty", false, vec![])],
+                vec![],
+            ),
+        );
+        assert_eq!(shape(&state), ["Default", "[Work]", "[Empty]", "b"]);
+        let headers: Vec<_> = state
+            .sidebar_list()
+            .into_iter()
+            .filter_map(|e| match e {
+                SidebarEntry::UserGroup(h) => Some((h.name, h.collapsed, h.count)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            headers,
+            [
+                ("Work".to_string(), true, 1),
+                ("Empty".to_string(), false, 0)
+            ],
+            "a header says whether it is collapsed and how many rows it holds"
+        );
+    }
+
+    #[test]
+    fn a_tag_filter_hides_grouped_rows_and_keeps_their_stored_order() {
+        let stored = layout(
+            vec![(
+                "Work",
+                false,
+                vec![item("fix-b"), item("feat-a"), item("fix-c")],
+            )],
+            vec![],
+        );
+        let mut state = state(&["feat-a", "fix-b", "fix-c"], stored.clone());
+        state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+            TagFilter::Type(ConventionalType::Fix),
+        )));
+        assert_eq!(shape(&state), ["Default", "[Work]", "fix-b", "fix-c"]);
+        state.update(Message::Sidebar(SidebarMsg::FiltersCleared));
+        assert_eq!(
+            shape(&state),
+            ["Default", "[Work]", "fix-b", "feat-a", "fix-c"],
+            "the hidden row comes back at its stored place (FR-017)"
+        );
+    }
+
+    #[test]
+    fn a_run_group_sits_in_a_user_group_as_one_unit() {
+        let mut state = state_with_active();
+        deliver(&mut state, vec![listed("a"), listed("r1"), listed("r2")]);
+        let runs = run_group(9, "Race", &["r1", "r2"]);
+        let run_id = runs.id;
+        state.runs.groups = vec![runs];
+        state.sidebar_layout_loaded(
+            PathBuf::from(PROJECT),
+            layout(vec![("Work", false, vec![LayoutItem::Run(run_id)])], vec![]),
+        );
+        assert_eq!(
+            shape(&state),
+            ["Default", "[Work]", "run:Race", "a"],
+            "FR-016"
+        );
+    }
+
+    #[test]
+    fn row_metrics_count_headers_and_navigation_skips_them() {
+        let state = state(
+            &["a", "b"],
+            layout(vec![("Work", false, vec![item("b")])], vec![]),
+        );
+        let rows = state.sidebar_list();
+        assert_eq!(
+            row_heights(&rows).len(),
+            4,
+            "Default, header, b, a: one height each"
+        );
+        assert_eq!(
+            row_index(
+                &rows,
+                &RowRef::Location(SessionLocation::Worktree("b".into()))
+            ),
+            Some(2),
+            "the header is a drawn row, so the member below it is row 2"
+        );
+        assert_eq!(
+            row_index(
+                &rows,
+                &RowRef::Location(SessionLocation::Worktree("a".into()))
+            ),
+            Some(3)
+        );
+        assert_eq!(
+            location_order(&state),
+            [
+                SessionLocation::Default,
+                SessionLocation::Worktree("b".into()),
+                SessionLocation::Worktree("a".into()),
+            ],
+            "the location chords walk the drawn order and skip the header (FR-017)"
+        );
+    }
+
+    #[test]
+    fn a_worktree_added_while_running_is_ungrouped_and_a_removed_one_leaves_its_group() {
+        let mut state = state(
+            &["a", "b"],
+            layout(vec![("Work", false, vec![item("a")])], vec![item("b")]),
+        );
+        deliver(&mut state, vec![listed("b"), listed("c")]);
+        assert_eq!(
+            shape(&state),
+            ["Default", "[Work]", "b", "c"],
+            "a is gone from its group and c lands among the ungrouped (A28)"
+        );
+        let header = state.sidebar_list().into_iter().find_map(|e| match e {
+            SidebarEntry::UserGroup(h) => Some(h.count),
+            _ => None,
+        });
+        assert_eq!(header, Some(0), "the emptied group keeps its header");
+    }
 }

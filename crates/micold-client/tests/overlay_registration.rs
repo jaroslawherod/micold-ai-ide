@@ -72,6 +72,9 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
             anchor: (10, 10),
         })
     }),
+    ("sidebar_groups.empty_menu", "sidebar_empty_menu", |s| {
+        s.sidebar_groups.empty_menu = Some((40, 300))
+    }),
     ("worktree.menu_open", "worktree_menu", |s| {
         s.worktree.menu_open = Some(micold_client::features::worktree::WorktreeMenu {
             dir_name: "feature-x".to_string(),
@@ -362,9 +365,10 @@ fn the_guard_is_actually_looking_at_something() {
     );
     assert_eq!(
         POPOVERS.len(),
-        10,
+        11,
         "feature 021's seven FR-007 names, plus the terminal tab menu (`012` BUG-005, FR-010b), \
-         feature 026's `session_start_menu` and feature 972's `overview_card_menu`. A shorter list is a guard that has stopped covering \
+         feature 026's `session_start_menu`, feature 972's `overview_card_menu` and feature 1786's \
+         `sidebar_empty_menu`. A shorter list is a guard that has stopped covering \
          them; growing it is what adding a popover looks like, and the number moves in the same \
          diff as the entry."
     );

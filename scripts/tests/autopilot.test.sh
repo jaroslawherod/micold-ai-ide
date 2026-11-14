@@ -988,6 +988,17 @@ sed -i '/^## Open escalation/,$d' "$l"; printf '## Open escalation\n\n%s\n' "$ON
 check "answer: a prose Decisions section gets a table" 0 '^\| D1 \|' "$A" "$l" "SQLite"
 check "answer: that table has its header" 0 '^\| # \| Phase ' bash -c "grep '^| #' '$l'"
 check "answer: a blank line ends that table" 0 '^$' bash -c "grep -B1 '^## Open escalation' '$l' | head -1"
+# --by <who> (#1815 FR-005a)
+l="$d/by.md"; esc_ledger "$l" "$ONE"
+check "answer --by supervisor: the By cell holds supervisor" 0 '^\| D3 \| milestones \| Which store\? \| Postgres \| supervisor \|' "$A" --by supervisor "$l" "Postgres"
+l="$d/by2.md"; esc_ledger "$l" "$BATCH"
+check "answer --by supervisor: a batch writes it on every row" 0 '^2$' bash -c "'$A' --by supervisor '$l' \$'1. SQLite\n2. 80' >/dev/null; grep -c '| supervisor |' '$l'"
+l="$d/by3.md"; esc_ledger "$l" "$ONE"
+check "answer --by: no open escalation still exits 3" 3 '^ignored' "$A" --by supervisor "$d/none.md" "x"
+l="$d/by4.md"; esc_ledger "$l" "$BATCH"
+check "answer --by: a bad batch still exits 2" 2 'missing answer' "$A" --by supervisor "$l" '1. a'
+check "answer --by: without a value is a usage error" 2 'usage' "$A" --by
+check "resume.md: resume --by supervisor runs answer.sh --by supervisor" 0 '^ok$' bash -c "grep -q 'resume --by supervisor' '$RM' && grep -q 'answer.sh --by supervisor' '$RM' && echo ok"
 
 # Code diffs use the single-agent review; the staged flow was dropped (specs/1804-staged-review/shadow.md).
 RV="$ROOT/.claude/skills/speckit-autopilot/tasks/review.md"

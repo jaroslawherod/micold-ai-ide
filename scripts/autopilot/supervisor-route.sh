@@ -80,6 +80,16 @@ route_answer() {
   rset "$key" 4 "$via"; rset "$key" 9 "$*"; rset "$key" 2 "$st"
 }
 
+# route gate <category>: user-only for an escalation category 2, 3 or 4, judge for 1, 5 or 6 (FR-003).
+route_gate() {
+  [ $# -eq 1 ] || die "usage: route gate <category>"
+  case "$1" in
+    [234]|[234][!0-9]*) echo user-only ;;
+    [156]|[156][!0-9]*) echo judge ;;
+    *) die "route gate: unknown or missing category: $1" ;;
+  esac
+}
+
 # rissue <issue>: the keys of one issue, ascending.
 rissue() { rkeys - | awk -v p="R$1.Q" 'index($0, p) == 1'; }
 
@@ -123,11 +133,12 @@ route_table() { awk '/^## Routing$/ { f = 1; next } f && /^## / { f = 0 } f && N
 
 route_cmd() {
   local sub="${1:-}"; [ $# -gt 0 ] && shift
+  [ "$sub" = gate ] && { route_gate "$@"; return; }
   need_ledger
   case "$sub" in
     add) route_add "$@" ;; next) route_next "$@" ;; state) route_state "$@" ;;
-    answer) route_answer "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
+    answer) route_answer "$@" ;; gate) route_gate "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
     drop) route_drop "$@" ;; table) route_table ;;
-    *) die "usage: route add|next|state|answer|compose|sent|drop|table" ;;
+    *) die "usage: route add|next|state|answer|gate|compose|sent|drop|table" ;;
   esac
 }

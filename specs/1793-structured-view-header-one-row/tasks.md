@@ -63,8 +63,8 @@ Delivered inside M1 and M4 (tests travel with the code): no separate milestone.
 
 ## Phase 7: Polish
 
-- [ ] T032 Quickstart Part B visual pass at wide and narrow widths, evidence saved in `specs/1793-structured-view-header-one-row/` (`visual-pass` skill; FR-014)
-- [ ] T033 Tick tasks and record results in `specs/1793-structured-view-header-one-row/quickstart.md`
+- [x] T032 Quickstart Part B visual pass at wide and narrow widths, evidence saved in `specs/1793-structured-view-header-one-row/` (`visual-pass` skill; FR-014)
+- [x] T033 Tick tasks and record results in `specs/1793-structured-view-header-one-row/quickstart.md`
 
 ## Dependencies and Order
 
@@ -117,3 +117,17 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 T032 and T033 (quickstart Part B visual pass, FR-014, and bookkeeping) change no code and are left to the close unit.
+
+## Phase 8: TDD remediation
+
+Source: `tdd/verification.md` (verdict FAIL, audited at `fa0e41a73`). The feature is not done until T036 to T038 are cleared.
+
+- [x] T036 [US2] (finding 1, HIGH) Restore the widest-counts gate for the top bar's Changes button: a test in `crates/micold-client/tests/gates/top_bar_collapse.rs` that lays the bar out with a wide `Changes` count label (the removed `the_widest_counts_fit_at_the_layout_window`, `747d325b5:crates/micold-client/tests/gates/session_area_fits.rs:843`) at 1280 and 800 px, asserting no overlap and the label unsqueezed. Proof: `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot top_bar`
+- [x] T037 [US2] [US3] [US1] (finding 2, HIGH) Add press-through-the-view tests for the controls that now only have model-level tests: the top bar's Changes button (`ui/toolbar.rs:352`) sends `ReviewChangesRequested` for the shown location, also while the Review tab is shown (the removed `pressing_changes_*` tests); the `+` sends `HeaderBar(Toggled(Plus))`; the worktree `⋮` sends `Toggled(Worktree)`; the `N hidden` chip sends `ShowRawEvents(true)`. Use `support::layout::clicks_at` as `session_area_stability.rs` did. Proof: `scripts/build-lock.sh cargo test -p micold-client --test main session_area_stability features_header_bar features_session_strip`
+- [ ] T038 (finding 3, HIGH) Record the TDD evidence the loop skipped: write `tdd/test-list.md` and `tdd/cycle-log.md` for the 13 test tasks from the merged history, stating plainly that T021 and T029 were written after the code (`34e0d624b` before `954b83e5d`) and that M1 to M3 order is unverifiable (shallow clone, graft `08028266f`). For future milestones, commit each test before its code. Proof: `/speckit-tdd-verify` rerun reports no `NO_TEST` and the ledger matches
+- [ ] T039 (finding 4, MED; shell-working dot pinned in close, ring clamp and exactly-one-hidden still open) Pin the three surviving mutants with tests: a Regular-mode session with a running shell shows the dot (`session_strip.rs:75`); a ring ratio above 1.0 clamps to 1.0 (`header_bar.rs:94`); exactly one hidden event shows `1 hidden` (`session_strip.rs:437`). Proof: `scripts/build-lock.sh cargo test -p micold-client --test main features_header_bar features_session_strip`, then re-apply each mutant by hand and see a failure
+- [ ] T040 [US5] (finding 5, MED) Gate tabs shrinking before they scroll (FR-011) in `crates/micold-client/tests/gates/header_row_fits.rs`, then untick T029 and T031 until it exists or the spec drops the clause. Proof: `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot header_row_fits`
+- [x] T041 [US1] (finding 6, MED) Test the activity dot with two sessions, one working and one idle, in `crates/micold-client/tests/features_session_strip.rs:166`. Proof: `scripts/build-lock.sh cargo test -p micold-client --test main features_session_strip`
+- [ ] T042 [US2] (finding 7, MED) Assert exact meter text and tooltip lines from `HeaderBarModel` for the spec's example (84,671 of 1,000,000 tokens, `8% · $1.28`), and the tokens-only, percent-without-cost and near-compaction branches, in `crates/micold-client/tests/features_header_bar.rs:36`. Proof: `scripts/build-lock.sh cargo test -p micold-client --test main features_header_bar`
+- [x] T043 (findings 8, 9, MED) Delete `the_ring_text_hides_before_the_changes_label` (`features_header_bar.rs:135`) and replace the `starts_with("12") || len() >= 10` check in `header_row_fits.rs:144` with the exact `{n} hidden` text. Proof: `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot header_row_fits`
+- [x] T044 (FR-014) Do T032 and T033, the quickstart Part B visual pass, with the evidence saved in this directory. Proof: the evidence files exist and T032 and T033 are ticked

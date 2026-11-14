@@ -143,8 +143,9 @@ fn the_hidden_chip_fits_at_none_a_few_and_past_a_thousand() {
         let chip = StripModel::of(&state).expect("a strip").hidden;
         if extra > 1_000 {
             let text = chip.as_ref().expect("a chip").text.clone();
+            let n = text.strip_suffix(" hidden").expect("`N hidden`");
             assert!(
-                text.starts_with("12") || text.len() >= 10,
+                n.parse::<usize>().expect("a number") > 1_000,
                 "{text}: a count past 1000"
             );
         }
@@ -195,4 +196,32 @@ fn the_chip_stays_at_the_strips_end_beside_many_tabs() {
             "{what}: the chip {chip:?} ends the strip {strip:?}, after the tab region {tabs:?}"
         );
     });
+}
+
+/// FR-010: pressing the `N hidden` chip turns raw events on.
+#[test]
+fn pressing_the_hidden_chip_shows_the_raw_events() {
+    use crate::support::layout as lay;
+    use micold_client::app::Message;
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_client::features::structured_transcript::TranscriptMsg;
+    let under = || {
+        let mut state = hidden_events(3);
+        state.sidebar.width = SIDEBAR;
+        StateUnderTest::new(state).panes(micold_core::pane_layout::PaneLayout::single())
+    };
+    let strip =
+        rect(at(&records_of(under(), WINDOW), &[SESSION_AREA, &[0]].concat()).expect("the strip"));
+    let shown = under();
+    let sent = lay::clicks_at(
+        lay::view_of(&shown),
+        &lay::renderer(),
+        lay::grid(strip, 4.0),
+    );
+    assert!(
+        sent.contains(&Message::Session(SessionMsg::Transcript(
+            TranscriptMsg::ShowRawEvents(true)
+        ))),
+        "{sent:?}"
+    );
 }

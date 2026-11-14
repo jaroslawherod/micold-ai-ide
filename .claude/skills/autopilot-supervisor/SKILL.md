@@ -62,15 +62,16 @@ For each run the mapping left `running` whose run-status JSON state is `stuck` o
 For every `running` row whose `<scratch>/<n>.json` state is `asking` (never a transcript), in this order:
 
 1. **Collect.** From that file's JSON `escalation` (`category`, `banner`, `questions`): `scripts/autopilot/supervisor.sh route add <n> <session id> <scratch>/<n>.json`. It writes one `R<n>.Q<k>` row per question as `pending` and is a no-op for rows already there, so a restart never asks twice.
-2. **Batch.** `supervisor.sh route next` prints up to 4 `pending` questions, ascending issue then number. Nothing printed: stop.
-3. **Banner.** For each question send the banner of `.claude/skills/speckit-autopilot/tasks/ask.md` with unit `supervisor`: first line prefixed `#<issue>`, a `(Recommended)` first option with its evidence, written so the person can answer it cold.
-4. **Notify.** One `PushNotification` (load it with `ToolSearch("select:PushNotification")`), text `🛑 <issues> need a decision: <topic>`.
-5. **Mark.** `supervisor.sh route state <key> asked` for each row of the batch, after the banners and the notification and before the question call (a restart never asks twice).
-6. **Ask.** One `AskUserQuestion` of at most 4 questions in ascending issue order, each prefixed `#<issue>`. More than 4 questions: the rest go in the next batch after the first answer (back to step 2). A single question goes alone, at once.
-7. **Record.** `supervisor.sh route answer <key> user "<answer>"` per answer.
-8. **Send.** `supervisor.sh route compose <issue>`. Exit 0: its first line is `session <id>`; `send_session_input` the remaining lines as one message (they already begin with `resume`) only to that session, never to another. Exit 1 prints `missing: <n> ...`: ask the person again for only the missing question, then compose again.
-9. **Mark sent.** `supervisor.sh route sent <issue> <epoch seconds>`.
-10. **Confirm.** After a `CHANGED` wake shows the run left `asking`, `supervisor.sh route drop <issue>` (the worker's *Decisions* holds the record).
+2. **Resolve.** For each `pending` row, judge its subject, not the category label, against `.claude/skills/speckit-autopilot/rules/escalation.md` *Never ask about these*. `supervisor.sh route gate "<category>"` prints `user-only` (category 2, 3 or 4: never answer it, whatever the evidence; go on to step 3) or `judge` (category 1, 5 or 6). On `judge`, a subject that matches a *Never ask* item overrides the label: look for the answer in the repo (`rules/escalation.md`, the flow's spec, plan and ledger, the failing command's own output) and, with evidence, `supervisor.sh route answer <key> supervisor "<answer> (evidence: <path or command>)"`; the row becomes `resolved` and stays out of the user batch. A subject that matches no *Never ask* item, or one with no evidence, is never guessed: the row stays `pending` and goes to the user batch. A `route gate` that exits 2 (a missing or unreadable category) goes to the user too.
+3. **Batch.** `supervisor.sh route next` prints up to 4 `pending` questions, ascending issue then number. Nothing printed: run steps 9 to 11 for each issue whose `route table` rows are all `resolved` or `answered` with an empty Sent cell (a run the supervisor resolved entirely, or a restart), then stop.
+4. **Banner.** For each question send the banner of `.claude/skills/speckit-autopilot/tasks/ask.md` with unit `supervisor`: first line prefixed `#<issue>`, a `(Recommended)` first option with its evidence, written so the person can answer it cold.
+5. **Notify.** One `PushNotification` (load it with `ToolSearch("select:PushNotification")`), text `🛑 <issues> need a decision: <topic>`.
+6. **Mark.** `supervisor.sh route state <key> asked` for each row of the batch, after the banners and the notification and before the question call (a restart never asks twice).
+7. **Ask.** One `AskUserQuestion` of at most 4 questions in ascending issue order, each prefixed `#<issue>`. More than 4 questions: the rest go in the next batch after the first answer (back to step 3). A single question goes alone, at once.
+8. **Record.** `supervisor.sh route answer <key> user "<answer>"` per answer.
+9. **Send.** `supervisor.sh route compose <issue>`. Exit 0: its first line is `session <id>`; `send_session_input` the remaining lines as one message (they already begin with `resume`, or `resume --by supervisor` when the supervisor resolved every question) only to that session, never to another. Exit 1 prints `missing: <n> ...`: ask the person again for only the missing question, then compose again.
+10. **Mark sent.** `supervisor.sh route sent <issue> <epoch seconds>`.
+11. **Confirm.** After a `CHANGED` wake shows the run left `asking`, `supervisor.sh route drop <issue>` (the worker's *Decisions* holds the record).
 
 A send that fails with `not_found` (the session is gone): `route drop <issue>` and report the session lost. Any other failure: `supervisor.sh ledger set <n> Note "<error>"`, leave the rows `answered`, report the issue, and never retry in a loop.
 
