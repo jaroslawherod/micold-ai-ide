@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: claude/project-thread-3cm73q
 - **Started**: 2026-11-11
-- **Phase**: milestone M5
-- **Next step**: M5 Review A round 2 (sonnet, scoped to the fix diff `review-snapshot.sh diff aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735`) on head d4cb49cb2; Review B does not re-run; then CI and merge of #1898
+- **Phase**: milestone M6
+- **Next step**: dispatch the M6 milestone unit (T041–T043)
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
 | #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
 | #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
+| #1898 | M5 | merged | da60fabfaa8264ac0b74d9b9deee5865339b694f |
 
 ## Milestones
 
@@ -92,7 +93,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-None.
+M5 squash-merged 2026-11-14 as da60fabf (PR #1898). CI: all jobs green on 8f2c9a7b first run. Review A round 1 CHANGES (2 MAJOR, 2 MINOR, all fixed in d4cb49cb), round 2 scoped (sonnet) CLEAN with 1 MINOR declined; Review B round 1 CLEAN. origin/main merged into the branch after the merge. Cloud thread branch: `claude/project-thread-3cm73q`. Next thread: `/speckit-autopilot resume #1724`, which starts M6 (T041–T043, no-outbound proof, quickstart recorded) from this branch, then the close unit.
 
 ## Open escalation
 
@@ -100,6 +101,7 @@ None. (The 2026-11-13 question on red main is settled: 1863 was fixed on main, o
 
 ## Follow-ups not done
 
+- jaro (2026-11-14, web client planning thread): the orchestrator should use a relational database for storage, assume PostgreSQL. M5's persistence is behind the `RegistryStore` trait (`crates/micold-core/src/orchestrator/store.rs`), held as `Arc<dyn RegistryStore>`; the JSON store is built only at `crates/micold-daemon/src/orchestrator/mod.rs` (`JsonRegistryStore::in_data_dir`), so a Postgres store can replace it. Not in #1724's scope.
 - M5 re-review MINOR: log a join error of the `orchestrator-save` thread in `crates/micold-daemon/src/orchestrator/save.rs` `Drop` (a panic there would silently stop saving).
 - M4 re-review MINOR: the pre-steady handshake sends in `crates/micold-daemon/src/orchestrator/link.rs` (both `Refused`, `Welcome`) are unbounded, unlike `send_bounded` in the steady state; wrap them in one `LIVENESS_DEADLINE` timeout later.
 - Possibly flaky on CI (seen on PR #1895, passed on re-run): `sandbox_real_no_outbound_still_resolves_names` (outside DNS), `structured_permission::two_sessions_waiting_are_marked_separately`.
