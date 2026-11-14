@@ -39,3 +39,8 @@ shell (`shell/composer.rs` `options_toggled`, the `EffortPickerToggled` arm,
 `update` now: `shell::composer::tests::collapsing_the_options_row_closes_its_pickers` and
 `a_list_opened_with_the_row_collapsed_opens_the_row` (D1 plus review A F1, row state written each
 time). Red evidence for both is the features-level red above; the moved tests ran green at once.
+
+## Review B round 1 F2: mutation checks for the two pins that passed red-less
+
+- `under_reduce_motion_the_row_switches_in_one_step`: mutated `options_motion` (`ui/composer.rs`) to ignore `reduce_motion` (`if false && state.settings.reduce_motion`). `cargo test -p micold-client --lib under_reduce_motion_the_row_switches_in_one_step` FAILED (panic at `composer_expand_tests.rs:124`). Mutation reverted with `git checkout`; the pin is real.
+- `a_collapsed_rows_controls_are_not_reachable`: accepted pin. The hidden guard it pins lives in `expand` in the shared `micold-material` crate (`animation.rs`), outside this feature's files; mutating it would rebuild another crate for a pre-existing widget behaviour. Its open-row half proves the probes reach the controls (the test fails if they stop doing so).

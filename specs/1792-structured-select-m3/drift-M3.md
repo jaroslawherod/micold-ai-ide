@@ -1,0 +1,10 @@
+Drift M3: the paths below are not named by tasks.md for M3 (or are named but untouched); each is deliberate and was checked against `git diff bd4e5970c...HEAD`.
+- `crates/micold-client/src/ui/composer_expand_tests.rs` — UNPLANNED: the new T013/T016 tests live in this sibling file (`#[path]` module of `ui/composer.rs`, 337 lines) so `composer.rs` stays under its size budget; tasks.md names `composer.rs` tests.
+- `crates/micold-client/src/features/command_palette.rs` — UNPLANNED: adds `close_pickers()` (clears the open model pickers), the close-all helper T017 needs when the options row collapses.
+- `crates/micold-client/src/features/effort_picker.rs` — UNPLANNED: adds `close_all()`, same T017 helper for the effort picker.
+- `crates/micold-client/src/features/permission_prompts.rs` — UNPLANNED: adds `close_mode_menus()`, same T017 helper for the mode list.
+- `crates/micold-client/src/shell/permission_prompts.rs` — UNPLANNED: a `ModeMenuToggled` press while the row collapses reopens the row (`expand_options` + persisted state) instead of floating the list over nothing (ledger decision D1).
+- `crates/micold-client/tests/fixtures/layout_snapshot.txt` — UNPLANNED: regenerated, as the hidden options row adds layout nodes to the composer (child paths shift), so the snapshot changes with it.
+- `crates/micold-client/tests/gates/containment.rs` — UNPLANNED: `OPTIONS_ROW_REVEAL` exempts the collapsed row's full-height track inside its 0px reveal (the `CLIP_REVEALED` mechanism at a second site, transcript states, bottom edge only), plus the shifted recorded child paths.
+- `crates/micold-client/tests/gates/composer_fits.rs` — UNPLANNED: `find_under` picks the word drawn under the transcript (the reveal paints on its own layer, so the sidebar's "Default" was found first); `header_height` became `strip_height` after feature 1793.
+- `drawer_flags_tests.rs` — MISSING by design: only the style reference for T013's tests (named in its description); the tests are in `composer_expand_tests.rs`.

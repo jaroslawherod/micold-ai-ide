@@ -43,6 +43,8 @@ M3 local gate (cloud): fmt, clippy core+workspace (`scripts/gate.sh`, stopped at
 
 ## Review rounds
 
+- M3 review B round 1: snapshot 2c11ee0509c3bd615ba1b2c1fa5f7f2afe653373:f11b1b9df547bb3f3365719e356d1174cc01bfca — CHANGES (F1 MAJOR drift unrecorded: drift-M3.md added; F2 MINOR mutation checks recorded). Fixes are docs only, checked against the findings.
+
 - M2 review A+B round 1: snapshot bdbecb1122a12e455a4771a21711c319a8022b73:7628262fce95c344ccb9eed01db1138e2da2a5fa — CHANGES (F1 declined; F2, F3 fixed in the test; F4 mutation proof done: +8px marker height turned it red). Round 2 snapshot 13130c93e19f445a3233ed4aa9df7fc16d3c644d:7628262fce95c344ccb9eed01db1138e2da2a5fa.
 
 - tasks review round 1: snapshot 199ca061a9e675043e43796afbe22d627936dd42:0923e2cbffbbdc6215eb213142a9ae51bb4c669d — CHANGES (F1 MAJOR checklist ticked, 2 with waiver; F2 MAJOR paths added to T014-T018; F3 MINOR M2 note). Fixes are artifact text only (paths, ticks); checked against the findings, no new round. speckit-analyze: no CRITICAL/HIGH; C1-C7 MEDIUM fixed.
@@ -68,6 +70,7 @@ M3 local gate (cloud): fmt, clippy core+workspace (`scripts/gate.sh`, stopped at
 | B | 2 | M2 | a9db09bbb89f702d329e281fce2869adbfad06f9 | 13130c93e19f445a3233ed4aa9df7fc16d3c644d:7628262fce95c344ccb9eed01db1138e2da2a5fa | CLEAN |
 | A | 1 | M3 | d245eb1df9da42ec4c3b5a88dca23c1c76898d6a | 67aebd450ac5bb82028c55e0e6653cb953cb9e6f:d245eb1df9da42ec4c3b5a88dca23c1c76898d6a | CHANGES (code-review high, 9 findings: F1 mode list reopened mid-collapse fixed via `mode_menu_toggled` expanding the row; F7 fixture duplication, F8 test tidy, F9 doc wording fixed; F2-F6 declined, see Declined) |
 | A | 2 | M3 | ae63ff1dd6f18869900e941c0a8981aa42176d4d | fa8ff0157c91feea12ed5f4fcc6bf86b73a1b968:ae63ff1dd6f18869900e941c0a8981aa42176d4d | fix diff, code-review medium: no production bug; F1 exemption scoped to transcript states/bottom edge (own OPTIONS_ROW_REVEAL), F3/F4 find_under no longer falls back; F2 declined (a fresh `expand` starts settled at its target, Motion::initial); F5-F9 MINOR (persist test at shell level, helper for was_open/persist, single open-overlay rule, mid-collapse widget test, fixture panics without active project) left |
+| B | 1 | M3 | f11b1b9df547bb3f3365719e356d1174cc01bfca | 2c11ee0509c3bd615ba1b2c1fa5f7f2afe653373:f11b1b9df547bb3f3365719e356d1174cc01bfca | CHANGES (F1 MAJOR drift unrecorded: drift-M3.md added; F2 MINOR mutation checks recorded; docs-only fixes) |
 
 ## Declined review findings
 
