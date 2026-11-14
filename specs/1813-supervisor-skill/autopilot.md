@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-87zjfg
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M3 (implement)
-- **Next step**: dispatch the M3 milestone unit (T019–T021)
+- **Phase**: M3 (review)
+- **Next step**: review A (high) and B on the M3 diff, then open the M3 PR
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
 | M2 | T014–T018 | full | resume from ledger, report, watcher | #1888 | merged |
-| M3 | T019–T021 | full | overlap sequencing | #… | pending |
+| M3 | T019–T021 | full | overlap sequencing | #… | in review |
 | M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
 
 ## Decisions
@@ -65,6 +65,10 @@ M2 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 - T014 map, retry, skipped, check-owner cases: `unknown subcommand map|retry|check-owner` (exit 2, want 0/1), failing for the missing subcommands.
 - T016 watcher cases: `supervisor-watch.sh: No such file or directory` (exit 127), failing for the missing script.
 - T018 skill-text cases: grep exit 1 (no *Restart*, `check-owner`, `supervisor.sh map`, `retry`, `list_sessions`, `run_in_background`, `supervisor-watch.sh` in SKILL.md).
+
+M3 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 149 case(s), 29 failure(s)`.
+- T019 touches/overlap cases: `unknown subcommand touches|overlap` (exit 2, want 0), failing for the missing subcommands; `next` hold cases fail because `next` ignores Touches.
+- T021 skill-text cases: grep exit 1 (no *Touches* section, `gh issue view <n> --json body`, `supervisor.sh touches`, `ledger set <n> Touches`, "treated as disjoint" in SKILL.md).
 
 ## Declined review findings
 

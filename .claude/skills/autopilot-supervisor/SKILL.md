@@ -15,7 +15,17 @@ a session's transcript.
 ## Build the queue
 
 1. Issues named in the arguments, or `gh issue list --label autopilot:queue --state open --limit 1000 --json number -q '.[].number'`; sort ascending.
-2. `scripts/autopilot/supervisor.sh ledger init --owner <this session id> --cap <N> --source "<label autopilot:queue | issues ...>" <issues...>` (default cap 3). It refuses when a ledger exists: that is a restart, see *Restart*.
+2. `scripts/autopilot/supervisor.sh ledger init --owner <this session id> --cap <N> --source "<label autopilot:queue | issues ...>" <issues...>` (default cap 3), then run *Touches* for every issue. It refuses when a ledger exists: that is a restart, see *Restart*.
+
+## Touches
+
+Before the first `next`, and for each issue whose `Touches` cell is empty (FR-004):
+
+1. `gh issue view <n> --json body,labels -q '.body' > <scratch>/body-<n>.md`, and the label names with `-q '[.labels[].name] | join(" ")'`.
+2. `scripts/autopilot/supervisor.sh touches <scratch>/body-<n>.md --labels "<names>"` prints the paths (declared `Touches:` line first, else inferred from `flow:*` labels and `specs/<dir>` paths) and `declared`, `inferred` or `none` on stderr. Store them: `ledger set <n> Touches <paths>`.
+3. `none` (prints `-`): `ledger set <n> Note "no touched files declared or inferable: treated as disjoint"`.
+
+`supervisor.sh next` then holds a queued issue whose paths overlap a `starting` or `running` row or an earlier queued issue, whatever the cap; `supervisor.sh overlap <a> <b>` answers `yes` or `no` for two lists. A held issue stays `queued` and is released once the earlier one is `done`, `failed`, `lost` or `skipped`.
 
 ## Start an issue
 

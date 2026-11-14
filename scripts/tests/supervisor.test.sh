@@ -177,5 +177,57 @@ check "skill does not answer or restart a reported run" 0 'Never answer' grep -n
 check "skill starts the watcher in the background" 0 'run_in_background' grep -n 'run_in_background' "$SKILL"
 check "skill names the watcher script" 0 'supervisor-watch.sh' grep -n 'supervisor-watch.sh' "$SKILL"
 
+# --- T019: touches, overlap, next holds overlapping issues ------------------------------------
+B="$tmp/body.md"
+printf 'Intro\nTouches: crates/a, docs/x.md\nspecs/9-x/spec.md\n' > "$B"
+check "touches: a declared line wins" 0 '^crates/a,docs/x.md$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+check "touches: declared is named on stderr" 0 '^declared$' bash -c '"$0" touches "$1" 2>&1 >/dev/null' "$SUP" "$B"
+printf 'Touches: crates/a docs/x.md\n' > "$B"
+check "touches: space separated paths" 0 '^crates/a,docs/x.md$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+printf 'see specs/1813-supervisor-skill/spec.md and\nspecs/1813-supervisor-skill/tasks.md\n' > "$B"
+check "touches: spec paths are inferred" 0 '^specs/1813-supervisor-skill$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+check "touches: inference is named on stderr" 0 '^inferred$' bash -c '"$0" touches "$1" 2>&1 >/dev/null' "$SUP" "$B"
+printf 'nothing to see\n' > "$B"
+check "touches: a flow label is inferred" 0 'flows/bug.md' bash -c '"$0" touches "$1" --labels "enhancement flow:bug" 2>/dev/null' "$SUP" "$B"
+check "touches: nothing inferable prints -" 0 '^-$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+check "touches: nothing inferable says none" 0 '^none$' bash -c '"$0" touches "$1" 2>&1 >/dev/null' "$SUP" "$B"
+check "touches: a missing body file is a usage error" 2 'body' "$SUP" touches "$tmp/none.md"
+check "overlap: equal paths" 0 '^yes$' "$SUP" overlap a/b.rs a/b.rs
+check "overlap: a directory contains a file" 0 '^yes$' "$SUP" overlap crates/a crates/a/src/x.rs
+check "overlap: containment works both ways" 0 '^yes$' "$SUP" overlap crates/a/src/x.rs crates/a
+check "overlap: any pair of the lists" 0 '^yes$' "$SUP" overlap docs/x.md,crates/a crates/a/y.rs
+check "overlap: a name prefix is not containment" 0 '^no$' "$SUP" overlap crates/a crates/ab
+check "overlap: disjoint paths" 0 '^no$' "$SUP" overlap crates/a docs
+check "overlap: a trailing glob is its directory" 0 '^yes$' "$SUP" overlap 'crates/a/**' crates/a/x.rs
+check "overlap: none overlaps nothing" 0 '^no$' "$SUP" overlap - crates/a
+check "overlap: none against none" 0 '^no$' "$SUP" overlap - -
+check "overlap: missing argument is a usage error" 2 'usage' "$SUP" overlap a
+tset() { "$SUP" ledger set --ledger "$L" "$1" Touches "$2" >/dev/null; }
+mk 3 12 14 15; tset 12 crates/a; tset 14 crates/a/src; tset 15 docs
+check "next: starts the earlier, holds the later overlapping one" 0 '^12 15$' nx
+st 12 running
+check "next: holds while the earlier one is running" 0 '^15$' nx
+st 12 starting
+check "next: holds while the earlier one is starting" 0 '^15$' nx
+for s in done failed lost skipped; do
+  st 12 "$s"
+  check "next: $s releases the held issue" 0 '^14 15$' nx
+done
+mk 3 12 14 15; st 12 running
+check "next: an empty Touches cell is disjoint" 0 '^14 15$' nx
+tset 14 -
+check "next: a - Touches cell is disjoint" 0 '^14 15$' nx
+mk 3 12 14 15; tset 12 shared; tset 14 shared; tset 15 shared
+check "next: three overlapping issues start one" 0 '^12$' nx
+mk 3 12 14 15; tset 12 a; tset 14 b; tset 15 a,b
+check "next: a later issue overlapping two earlier ones is held" 0 '^12 14$' nx
+
+# --- T021: skill text (touches step) -----------------------------------------------------------
+check "skill has a Touches section" 0 '## Touches' grep -n '^## Touches' "$SKILL"
+check "skill reads the issue body with gh issue view" 0 'gh issue view' grep -n 'gh issue view <n> --json body' "$SKILL"
+check "skill runs touches" 0 'supervisor.sh touches' grep -n 'supervisor.sh touches' "$SKILL"
+check "skill stores touches in the ledger" 0 'ledger set <n> Touches' grep -n 'ledger set <n> Touches' "$SKILL"
+check "skill notes a disjoint treatment for none" 0 'disjoint' grep -n -i 'treated as disjoint' "$SKILL"
+
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
