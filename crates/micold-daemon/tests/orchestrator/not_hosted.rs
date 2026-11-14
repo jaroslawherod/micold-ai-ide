@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind};
 use micold_core::session::AiCli;
 
-use crate::support::{announcement, child_count, FakeDaemon, Orchestrator};
+use crate::support::{announcement, child_count, children_quiet, FakeDaemon, Orchestrator};
 
 #[tokio::test]
 async fn a_session_start_is_refused_not_hosted() {
@@ -50,6 +50,7 @@ async fn a_session_list_is_empty() {
 
 #[tokio::test]
 async fn no_child_process_is_spawned() {
+    let _quiet = children_quiet().await;
     let orchestrator = Orchestrator::start().await;
     let mut link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
     link.send(ClientMsg::Goodbye).await;

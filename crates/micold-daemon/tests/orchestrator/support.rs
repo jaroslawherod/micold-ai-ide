@@ -366,6 +366,21 @@ pub async fn record_when(
     }
 }
 
+/// Held by every test that spawns a child process and by every test that counts children:
+/// [`child_count`] sees the whole test process, so a count taken while another test's
+/// `micold-daemon orchestrator` runs would see that child.
+static CHILDREN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Take [`CHILDREN`] in an async test, for the whole test.
+pub async fn children_quiet() -> tokio::sync::MutexGuard<'static, ()> {
+    CHILDREN.lock().await
+}
+
+/// Take [`CHILDREN`] in a test without a runtime, for the whole test.
+pub fn children_quiet_blocking() -> tokio::sync::MutexGuard<'static, ()> {
+    CHILDREN.blocking_lock()
+}
+
 /// Children of every thread of this process: the orchestrator runs on tokio worker threads, and
 /// `/proc/<pid>/task/<pid>/children` lists only those of the main thread.
 #[cfg(target_os = "linux")]

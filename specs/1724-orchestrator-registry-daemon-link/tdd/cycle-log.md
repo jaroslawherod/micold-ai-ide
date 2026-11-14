@@ -128,3 +128,19 @@ unreadable-file settings tests that fail only as root (the gate runs them unpriv
 - Green (daemon): `link.rs` saves every returned snapshot after the lock is released
   (`Shared::update`/`save`, failure to stderr); `serve` keeps link tasks in a `JoinSet` so a stopped
   orchestrator leaves none writing behind it. `--test orchestrator` 35 passed.
+
+### M5 review fixes (round 1, Review A F1–F4)
+
+- Red (F2): `orchestrator::tests::a_save_returns_while_the_store_is_still_writing` (daemon lib)
+  against cb8173dc6's `Shared::save`, with a store whose write waits on a gate: 0 passed, 1 failed
+  ("save blocked on the store's write") — the write and its fsync ran on the caller's thread.
+- Green (F2, F3): `orchestrator/save.rs`: one `orchestrator-save` thread, fed through `SaveQueue`
+  (`offer` keeps only the newest waiting snapshot, never touches the disk); `SaveWorker`'s drop
+  closes the queue, writes what waits and joins. `serve` owns it after its `JoinSet`. Two more unit
+  tests: coalescing (`[1, 4]` written for 1, then 3, 2, 4 during the write) and drop (writes 7,
+  then nothing). Daemon lib `orchestrator::tests` 3 passed.
+- F1: no deterministic red (a race between parallel test threads); `CHILDREN` lock in
+  `support.rs` held by the two process-spawning tests and the two child-counting ones.
+- F4: `the_orchestrator_keeps_no_session_state_to_lose` lists the directory after `stop()`, which
+  now waits for the last save.
+- `--test orchestrator` 35 passed in 6 runs out of 6; fmt and both clippy runs `-D warnings` clean.

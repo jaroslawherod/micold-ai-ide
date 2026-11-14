@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
-use crate::support::{announcement, child_count, record_when, FakeDaemon, Orchestrator, WITHIN};
+use crate::support::{
+    announcement, child_count, children_quiet, children_quiet_blocking, record_when, FakeDaemon,
+    Orchestrator, WITHIN,
+};
 
 fn online(record: &Value) -> bool {
     record["health"] == "online"
@@ -65,6 +68,7 @@ async fn a_relink_after_a_restart_updates_the_record_and_does_not_duplicate_it()
 
 #[tokio::test]
 async fn the_orchestrator_keeps_no_session_state_to_lose() {
+    let _quiet = children_quiet().await;
     // The fake daemon's sessions live with it, never with the orchestrator: a restart in between
     // leaves them as they were, and the orchestrator's state is the registry file alone.
     let daemon_dir = tempfile::tempdir().unwrap();
@@ -78,16 +82,20 @@ async fn the_orchestrator_keeps_no_session_state_to_lose() {
     let _link = FakeDaemon::link(&restarted, &announcement("box")).await;
     record_when(&restarted, "box", online).await;
 
+    assert_eq!(child_count(), 0);
+    // Listed once stopped: the stop waits for the last save, so no write is half done.
+    let registry_dir = restarted.registry_file().parent().unwrap().to_owned();
+    let _dir = restarted.stop().await;
+
     assert_eq!(
         std::fs::read(&sessions).unwrap(),
         br#"[{"id":"s1","state":"running"}]"#
     );
-    let kept: Vec<_> = std::fs::read_dir(restarted.registry_file().parent().unwrap())
+    let kept: Vec<_> = std::fs::read_dir(registry_dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert_eq!(kept, ["registry.json"]);
-    assert_eq!(child_count(), 0);
 }
 
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
@@ -118,6 +126,7 @@ fn registry_file(dir: &Path) -> std::path::PathBuf {
 #[cfg(unix)]
 #[test]
 fn a_corrupt_registry_fails_the_start_naming_the_file_and_leaves_it() {
+    let _quiet = children_quiet_blocking();
     let dir = tempfile::tempdir().unwrap();
     let file = registry_file(dir.path());
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -150,6 +159,7 @@ impl Drop for Killed {
 async fn a_failed_save_is_logged_to_stderr_and_links_keep_working() {
     use std::io::BufRead as _;
 
+    let _quiet = children_quiet().await;
     let dir = Arc::new(tempfile::tempdir().unwrap());
     // The temporary file every save writes first cannot be created, so every save fails.
     let blocked = registry_file(dir.path()).with_file_name(".registry.json.tmp");
