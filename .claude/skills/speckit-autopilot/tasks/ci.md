@@ -28,9 +28,9 @@ When the PR's diff touches only autopilot tooling (`.claude/skills/**`, `.claude
 the diff is `TOOLING` and the head's tree is in the local gate stamp (`autopilot-gate-ok`). It prints
 `SKIPPED-CI <n> <head> <checks>` before `MERGED`, writes `$AUTOPILOT_LOG_DIR/pr-<n>-skipped-checks.txt`
 and comments on the PR. **Record every skipped check** in the ledger (*Decisions*) and, for an epic, in
-its checklist. Without a recorded gate for the head, run the gate first. Any change under `crates/`,
-`.github/` or other product code keeps the full CI requirement: its red `ci complete` is `RED`, handled
-above. `--no-merge` never bypasses; branch protection is never bypassed any other way.
+its checklist. No recorded gate for the head: run the gate first. Any change under `crates/`, `.github/`
+or other product code keeps the full CI requirement (`RED`, above). Branch protection is never bypassed
+any other way.
 
 ## A PR with no checks
 
