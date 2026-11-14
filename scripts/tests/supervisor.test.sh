@@ -80,7 +80,18 @@ check "failure order: cap first" 1 '^FAIL cap' env AUTOPILOT_SUP_MEM_MIB=1 AUTOP
 check "failure order: memory before load" 1 '^FAIL memory' env AUTOPILOT_SUP_MEM_MIB=1 AUTOPILOT_SUP_LOAD=99 "$SUP" gate --ledger "$L"
 check "the machine is read without overrides" 0 '^(PASS|FAIL (memory|load))' env -u AUTOPILOT_SUP_MEM_MIB -u AUTOPILOT_SUP_LOAD -u AUTOPILOT_SUP_CORES "$SUP" gate --ledger "$L" --cap 9
 check "gate without a cap is a usage error" 2 'cap' "$SUP" gate --ledger "$D/none.md"
+check "gate: a non-numeric --running fails" 1 '^FAIL' gt --running abc
+check "gate: a non-numeric --cap fails" 1 '^FAIL' gt --cap abc
+check "gate: a non-numeric memory reading fails" 1 '^FAIL memory' env AUTOPILOT_SUP_MEM_MIB=x "$SUP" gate --ledger "$L"
+check "gate: a non-numeric load fails" 1 '^FAIL load' env AUTOPILOT_SUP_LOAD=abc "$SUP" gate --ledger "$L"
+check "gate: an option without a value is a usage error, not a hang" 2 'needs a value' timeout 5 "$SUP" gate --cap
+check "init: an option without a value is a usage error" 2 'needs a value' timeout 5 "$SUP" ledger init --ledger "$D/x.md" --cap
 unset AUTOPILOT_SUP_MEM_MIB AUTOPILOT_SUP_LOAD AUTOPILOT_SUP_CORES
+D2="$(mktemp -d "$tmp/c.XXXXXX")"
+check "init: a bad issue number leaves no ledger" 2 'issue numbers' "$SUP" ledger init --ledger "$D2/s.md" --owner o --cap 1 --source x 12 ab
+check "init: no partial file after the failure" 2 'No such file' ls "$D2/s.md"
+check "init: duplicate issue numbers are rejected" 2 'duplicate' "$SUP" ledger init --ledger "$D2/s.md" --owner o --cap 1 --source x 12 12
+check "init: works after a rejected attempt" 0 '^$' "$SUP" ledger init --ledger "$D2/s.md" --owner o --cap 1 --source x 12
 
 # --- T007: skill text (supervised marker) ------------------------------------------------------
 check "speckit-autopilot documents the supervised argument" 0 'supervised' grep -n -i 'trailing `supervised`' "$AUTO"
@@ -88,7 +99,7 @@ check "speckit-autopilot names the literal ledger line" 0 'Supervised\*\*: yes' 
 check "the literal line is the one supervised.sh matches" 0 'Supervised\*\*: yes' grep -nF -- '- **Supervised**: yes' "$S/supervised.sh"
 check "supervisor skill names the supervised prompt" 0 'speckit-autopilot #<n> supervised' grep -nF -- '/speckit-autopilot #<n> supervised' "$SKILL"
 check "supervisor skill never reads a transcript" 1 '^$' grep -n 'read_session_output' "$SKILL"
-check "supervisor skill runs the gate before create_worktree" 0 'gate --running' grep -nF -- 'gate --running' "$SKILL"
+check "supervisor skill runs the gate before create_worktree" 0 'supervisor.sh gate' bash -c 'g=$(grep -n "supervisor.sh gate" "$0" | head -1 | cut -d: -f1); w=$(grep -n "create_worktree. with" "$0" | head -1 | cut -d: -f1); [ "$g" -lt "$w" ] && grep -n "supervisor.sh gate" "$0"' "$SKILL"
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

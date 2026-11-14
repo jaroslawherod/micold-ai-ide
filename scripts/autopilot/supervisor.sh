@@ -42,6 +42,7 @@ ledger_cmd() {
     init)
       local owner="" cap="" grace=600 source=""
       while [ $# -gt 0 ]; do
+        case "$1" in --owner|--cap|--grace|--source) [ $# -ge 2 ] || die "$1 needs a value" ;; esac
         case "$1" in
           --owner) owner="$2"; shift 2 ;; --cap) cap="$2"; shift 2 ;;
           --grace) grace="$2"; shift 2 ;; --source) source="$2"; shift 2 ;;
@@ -50,14 +51,17 @@ ledger_cmd() {
       done
       [ -e "$LEDGER" ] && die "ledger exists: $LEDGER"
       case "$cap" in ''|*[!0-9]*) die "ledger init needs --cap <number>" ;; esac
+      local n; for n in "$@"; do
+        case "$n" in ''|*[!0-9]*) die "issue numbers only: $n" ;; esac
+      done
+      [ "$(printf '%s\n' "$@" | sort | uniq -d | wc -l | tr -d ' ')" = 0 ] || die "duplicate issue numbers"
       mkdir -p "$(dirname "$LEDGER")"
       {
         echo "# Autopilot supervisor ledger"
         echo "- **Owner**: $owner"; echo "- **Cap**: $cap"; echo "- **Grace**: $grace"; echo "- **Source**: $source"
         echo; echo "| Issue | State | Touches | Worktree | Session | Started | Tries | Note |"
         echo "|---|---|---|---|---|---|---|---|"
-        local n; for n in "$@"; do
-          case "$n" in ''|*[!0-9]*) die "issue numbers only: $n" ;; esac
+        for n in "$@"; do
           echo "| $n | queued | - |  |  |  | 0 |  |"
         done
       } > "$LEDGER" ;;
@@ -118,6 +122,7 @@ cores() {
 gate_cmd() {
   local cap="" running="" minmem=4096 maxload=""
   while [ $# -gt 0 ]; do
+    case "$1" in --cap|--running|--min-mem-mib|--max-load) [ $# -ge 2 ] || die "$1 needs a value" ;; esac
     case "$1" in
       --cap) cap="$2"; shift 2 ;; --running) running="$2"; shift 2 ;;
       --min-mem-mib) minmem="$2"; shift 2 ;; --max-load) maxload="$2"; shift 2 ;;
@@ -132,9 +137,14 @@ gate_cmd() {
   fi
   [ -n "$cap" ] || die "gate needs --cap or a ledger with a Cap"
   [ -n "$running" ] || running=0
+  isnum() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
+  isnum "$cap" && isnum "$running" || { echo "FAIL cap: unreadable cap or running ($cap, $running)"; return 1; }
   if [ "$running" -ge "$cap" ]; then echo "FAIL cap: $running running, cap $cap"; return 1; fi
   local m l; m="$(mem_mib)"; l="$(load1)"; [ -n "$maxload" ] || maxload="$(cores)"
+  isnum "$minmem" && isnum "$m" || { echo "FAIL memory: unreadable ('$m', min '$minmem')"; return 1; }
   if [ "$m" -lt "$minmem" ]; then echo "FAIL memory: $m MiB free, need $minmem"; return 1; fi
+  isfloat() { case "$1" in ''|*[!0-9.]*|*.*.*|.) return 1 ;; esac; }
+  isfloat "$l" && isfloat "$maxload" || { echo "FAIL load: unreadable ('$l', max '$maxload')"; return 1; }
   if awk -v l="$l" -v m="$maxload" 'BEGIN { exit !(l > m) }'; then echo "FAIL load: load $l above $maxload"; return 1; fi
   echo PASS
 }
