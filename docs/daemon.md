@@ -688,6 +688,13 @@ and `orchestrator registry <path> is unreadable: <reason>`; the file is left unt
 orchestrator keeps no session state: sessions stay on their daemons, which keep running them while
 the orchestrator is down.
 
+The orchestrator opens no outbound connection (FR-008): daemons dial it and it dials nothing. Two
+tests hold that: a source scan (`tests/orchestrator/no_outbound.rs`, every platform) fails on a
+whole-word `connect`, `Stream::connect` or `open_pipe` under the orchestrator's source directories, and
+a Linux run (`tests/orchestrator/netns.rs`) re-executes the link and heartbeat tests under
+`unshare -rn`, a network namespace with no interface up. That run skips, saying why, where
+unprivileged user namespaces are unavailable.
+
 ## Finding the logs and recent errors
 
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two

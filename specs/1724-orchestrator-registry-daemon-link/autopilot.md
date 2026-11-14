@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1724
-- **Worktree branch**: claude/project-thread-3cm73q
+- **Worktree branch**: claude/project-thread-430lii
 - **Started**: 2026-11-11
 - **Phase**: milestone M6
-- **Next step**: dispatch the M6 milestone unit (T041–T043)
+- **Next step**: M6 implemented and committed; Review A and B, then PR (orchestrator opens it)
 
 ## Pull requests
 
@@ -32,8 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
-| M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | in progress |
-| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
+| M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | merged |
+| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | in progress |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
 
