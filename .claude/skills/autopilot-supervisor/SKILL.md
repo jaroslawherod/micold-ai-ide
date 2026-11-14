@@ -68,7 +68,7 @@ For every `running` row whose `<scratch>/<n>.json` state is `asking` (never a tr
 5. **Mark.** `supervisor.sh route state <key> asked` for each row of the batch, after the banners and the notification and before the question call (a restart never asks twice).
 6. **Ask.** One `AskUserQuestion` of at most 4 questions in ascending issue order, each prefixed `#<issue>`. More than 4 questions: the rest go in the next batch after the first answer (back to step 2). A single question goes alone, at once.
 7. **Record.** `supervisor.sh route answer <key> user "<answer>"` per answer.
-8. **Send.** `supervisor.sh route compose <issue>`. Exit 0: its first line is `session <id>`; `send_session_input` the remaining lines (`resume <answer>`) only to that session, never to another. Exit 1 prints `missing: <n> ...`: ask the person again for only the missing question, then compose again.
+8. **Send.** `supervisor.sh route compose <issue>`. Exit 0: its first line is `session <id>`; `send_session_input` the remaining lines as one message (they already begin with `resume`) only to that session, never to another. Exit 1 prints `missing: <n> ...`: ask the person again for only the missing question, then compose again.
 9. **Mark sent.** `supervisor.sh route sent <issue> <epoch seconds>`.
 10. **Confirm.** After a `CHANGED` wake shows the run left `asking`, `supervisor.sh route drop <issue>` (the worker's *Decisions* holds the record).
 

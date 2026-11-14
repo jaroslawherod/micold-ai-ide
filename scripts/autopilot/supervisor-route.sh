@@ -42,7 +42,7 @@ route_add() {
   while [ "$n" -lt "$count" ]; do
     line="$(jq -r --argjson i "$n" '.questions[$i] | [(.number // ($i + 1) | tostring), (.question // ""),
       ([(.options // [])[] | (.label // "") + (if (.description // "") != "" then ": " + .description else "" end)] | join(" // ")),
-      (.recommendation // ""), (.evidence // "")] | join("\u001f")' "$3")"
+      (.recommendation // ""), (.evidence // "")] | map(tostring | gsub("[\n\r]"; " ")) | join("\u001f")' "$3")"
     local num qq oo rr ee; IFS=$'\037' read -r num qq oo rr ee <<< "$line"
     if ! rhas "R$1.Q$num"; then
       printf '| R%s.Q%s | pending | %s |  | %s | %s | %s | %s |  |  |\n' "$1" "$num" "$(rcell "$2")" \
@@ -96,9 +96,11 @@ route_compose() {
   echo "session $(rget "$(echo "$keys" | head -n 1)" 3)"
   set -- $keys
   for k in "$@"; do
+    # a single question is answered bare (no ### Q<n> batch), as answer.sh expects
     n="${k#*.Q}"
-    if [ $# -eq 1 ] && [ -z "$(rget "$k" 6)" ]; then body="$(rget "$k" 9)"; else body="$n. $(rget "$k" 9)"; fi
+    if [ $# -eq 1 ]; then body="$(rget "$k" 9)"; else body="$n. $(rget "$k" 9)"; fi
     if [ "$first" = 1 ] && [ "$allsup" = 1 ]; then body="--by supervisor $body"; fi
+    if [ "$first" = 1 ]; then body="resume $body"; fi
     first=0; echo "$body"
   done
 }

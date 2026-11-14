@@ -45,11 +45,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 2 | plan | f776b812d17e464ba995cf3257722a28600bc394 | 6611638df9e715ff6514de81ce5b274a5a25e502:f776b812d17e464ba995cf3257722a28600bc394 | CLEAN |
 | Review tasks | 1 | tasks | 31a0ad5679de60b9819e52ace88fc5ae2d865e0a | 6d90bd6be35040bcf4ee9990b7bf877249f9b210:31a0ad5679de60b9819e52ace88fc5ae2d865e0a | CHANGES: 1 MAJOR (F1), 3 MINOR; fixed (F2 split declined), round 2 pending |
 | Review tasks | 2 | tasks | b511c1eb1a58470dce0d0a0897113cb619495f25 | 902c2d4b6c4d1d7b47ee7ddaf0ffdedb63fbfa41:b511c1eb1a58470dce0d0a0897113cb619495f25 | CLEAN |
+| Review A | 1 | M1 | 376190a4be97904b43a9e7f016686821aac73982 | 2bd106940fdee380edb76ad2873a20ad878779dd:376190a4be97904b43a9e7f016686821aac73982 | CHANGES: 1 MAJOR, 2 MINOR; all fixed (round 2 pending) |
+| Review B | 1 | M1 | 376190a4be97904b43a9e7f016686821aac73982 | 2bd106940fdee380edb76ad2873a20ad878779dd:376190a4be97904b43a9e7f016686821aac73982 | CHANGES: 2 MAJOR, 1 MINOR; fixed or declined with reasons (round 2 pending) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | Review A 1 | F1 (carry a batch flag so a batch of one gets `1.`) | run-status JSON cannot tell a batch of one from a single; bare for one question is the answer.sh single shape, and a batch escalation always has 2+ questions. Fixed by dropping the Options test, not by a flag. |
+| M1 | Review B 1 | F1 (drift-M1.md) | contracts/routing-cli.md and data-model.md are references cited by T003/T004, not files the milestone creates: false positive. |
+| M1 | Review B 1 | F2 (`facts: a 50-file diff` failure) | Flaky and environmental (git push negotiation in the container); untouched code; autopilot.test.sh passed 348/0 on re-runs with and without this diff. CI decides. |
+| M1 | Review B 1 | F3 (no red-before-green evidence) | Tests and code were written in one commit; later milestones commit tests first. Noted, not retroactively splittable. |
 | all | Review tasks 1 | F2 (split T019 and T022 into test and edit tasks) | Test files are now named; splitting would renumber T020–T022 and every milestone range for no gain, as the failing test comes first within the task. |
 
 ## Handover

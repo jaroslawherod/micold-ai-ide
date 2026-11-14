@@ -318,12 +318,16 @@ check "route answer: via must be known" 2 'via' rt answer R12.Q1 nobody x
 check "route answer: sets answered" 0 '^answered$' bash -c '"$0" route answer --ledger "$1" R12.Q1 user "Option A" && "$0" route table --ledger "$1" | awk -F"|" "/R12.Q1/ { gsub(/ /,\"\",\$3); print \$3 }"' "$SUP" "$L"
 check "route answer: a pipe keeps the cells" 0 '^answered\|s-17\|user$' bash -c '"$0" route answer --ledger "$1" R17.Q1 user "x|y" && "$0" route table --ledger "$1" | awk -F"|" "/R17.Q1/ { gsub(/ /,\"\",\$3); gsub(/ /,\"\",\$4); gsub(/ /,\"\",\$5); print \$3 \"|\" \$4 \"|\" \$5 }"' "$SUP" "$L"
 # compose
-check "route compose: a free-text answer is bare, session first" 0 '^session s-16 Fix it$' bash -c '"$0" route answer --ledger "$1" R16.Q1 user "Fix it" && "$0" route compose --ledger "$1" 16 | paste -sd" " -' "$SUP" "$L"
+check "route compose: a free-text answer is bare, session first" 0 '^session s-16 resume Fix it$' bash -c '"$0" route answer --ledger "$1" R16.Q1 user "Fix it" && "$0" route compose --ledger "$1" 16 | paste -sd" " -' "$SUP" "$L"
 check "route compose: exit 1 with missing while a question has no answer" 1 '^missing: 3 4 5$' bash -c '"$0" route answer --ledger "$1" R15.Q1 user a1; "$0" route answer --ledger "$1" R15.Q2 user a2; "$0" route compose --ledger "$1" 15' "$SUP" "$L"
 for n in 3 4 5; do rt answer R15.Q$n user "a$n"; done
-check "route compose: one line per question" 0 '^session s-15 1. a1 2. a2 3. a3 4. a4 5. a5$' bash -c '"$0" route compose --ledger "$1" 15 | paste -sd" " -' "$SUP" "$L"
-check "route compose: only that issue's session and answer" 0 '^session s-12 1. Option A$' bash -c '"$0" route compose --ledger "$1" 12 | paste -sd" " -' "$SUP" "$L"
-check "route compose: a supervisor-resolved issue leads with --by supervisor" 0 '^session s-14 --by supervisor 1. ok$' bash -c '"$0" route answer --ledger "$1" R14.Q1 supervisor ok && "$0" route compose --ledger "$1" 14 | paste -sd" " -' "$SUP" "$L"
+check "route compose: one line per question" 0 '^session s-15 resume 1. a1 2. a2 3. a3 4. a4 5. a5$' bash -c '"$0" route compose --ledger "$1" 15 | paste -sd" " -' "$SUP" "$L"
+check "route compose: only that issue's session and answer" 0 '^session s-12 resume Option A$' bash -c '"$0" route compose --ledger "$1" 12 | paste -sd" " -' "$SUP" "$L"
+check "route compose: a supervisor-resolved issue leads with --by supervisor" 0 '^session s-14 resume --by supervisor ok$' bash -c '"$0" route answer --ledger "$1" R14.Q1 supervisor ok && "$0" route compose --ledger "$1" 14 | paste -sd" " -' "$SUP" "$L"
+check "route compose: a single question with options is bare too" 0 '^session s-12 resume Option A$' bash -c '"$0" route compose --ledger "$1" 12 | paste -sd" " -' "$SUP" "$L"
+esc "$D/nl.json" "1" 1 "Which?
+second line"
+check "route add: a newline in a question keeps options and evidence" 0 'Which\? second line \| A: a // B: b \| A \| e' bash -c '"$0" route add --ledger "$1" 18 s-18 "$2" >/dev/null; "$0" route next --ledger "$1" | grep R18' "$SUP" "$L" "$D/nl.json"
 check "route compose: an unknown issue exits 2" 2 'no routing rows' rt compose 99
 # sent / drop
 check "route sent: sets Sent on the issue's rows" 0 '^1$' bash -c '"$0" route sent --ledger "$1" 12 1700 && "$0" route table --ledger "$1" | grep -c "| 1700 |"' "$SUP" "$L"
