@@ -235,7 +235,7 @@ question goes to the parent, or to the user, respectively.
 
 ## Out of Scope
 
-- Answering escalations of category 1 to 6 itself.
+- Answering any escalation whose subject is not in `rules/escalation.md` *Never ask about these*, and any category 2, 3 or 4 escalation, whatever the evidence.
 - The daemon's `parent` field and visibility rule (#1873, #1858); only the conditional use of
   them.
 - Starting sessions, the queue and the gate (#1813); status derivation (#1812).
