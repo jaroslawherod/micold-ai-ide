@@ -29,7 +29,7 @@ sidebar UI, M3 supervisor integration. Design only here; no code is written by t
 
 **Performance Goals**: listing adds one map lookup per worktree; reconcile is O(worktrees) on the existing catalog refresh
 
-**Constraints**: local-first, additive on-disk change readable by older builds (unknown fields ignored); parent is advisory, never a permission (FR-012)
+**Constraints**: local-first, additive on-disk change readable by older builds (unknown fields ignored); parent drives caller visibility (FR-015); no other permission changes (FR-012)
 
 **Scale/Scope**: tens of worktrees per project
 

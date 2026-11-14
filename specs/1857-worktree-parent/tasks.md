@@ -37,6 +37,12 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 - [ ] T009 [US1] In `crates/micold-daemon/src/mcp/tools.rs` resolve the caller's worktree via `resolve_caller` (R4), validate an explicit parent (R5) before any git work, and record the link and a fresh id (R3) in `create_literal_worktree` and `create_derived_worktree`; `list_worktrees` returns and filters by parent; T007 green
 - [ ] T010 [US1] Document `parent`, its default, the override and the filter in `docs/user-guide/agent-tools.md` (new section after "Creating a worktree from a type, ticket and name")
 
+## Phase 3b: Visibility by parent (M1; FR-015, FR-016)
+
+- [ ] T030 [P] [US1] Add failing tests in `crates/micold-daemon/tests/mcp_worktree_parent_visibility.rs` (new): from a worktree `A` with parent `P` and sibling `B`, child `C` of `A`, and an unrelated `X`: `list_worktrees`/`list_sessions` return exactly `A`, `P`, `B`, `C`; `get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `stop_session`, `create_session`, `rename_worktree`, `delete_worktree` on `X` or on `default` -> `not_found`; an unparented caller sees itself and its children; a `default` caller sees all; explicit `parent` outside the set (including `default` from a non-root caller) -> `invalid_input`
+- [ ] T031 [US1] Implement one visibility filter in `crates/micold-daemon/src/mcp/tools.rs` (beside `resolve_caller`) computed from the parent links in the catalog (`crates/micold-daemon/src/catalog.rs`), applied by every tool of `contracts/mcp-parent.md`; T030 green
+- [ ] T032 [US1] Document the visibility rule in `docs/user-guide/agent-tools.md` (extend "What it can see" and "Reading and typing into other sessions")
+
 ## Phase 4: User Story 2 and User Story 3 - Survives renames and restarts; removed parent (Priority: P1/P2) (M1)
 
 **Independent test**: `quickstart.md` Part A steps 4-5.
@@ -68,7 +74,7 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 
 - [ ] T023 [P] Add failing fixture cases in `scripts/tests/` (new `supervisor-ownership.test.sh`): from a stubbed `list_worktrees` JSON with runs of two parents, the ownership helper selects only the supervisor's own runs and refuses a run with another parent or none, including a run whose parent is `removed`
 - [ ] T024 Add `scripts/autopilot/runs-of-parent.sh` (reads worktree rows as JSON on stdin and a parent ref; prints own runs); T023 green
-- [ ] T025 Write the ownership rule in `.claude/skills/speckit-autopilot/rules/ownership.md` (or the supervisor skill's rules once #1813 lands): create worktrees with the default parent, list runs by `parent`, record `parent` per run in the supervisor ledger, never act on another parent's run, treat a `removed` parent as an orphan to report, not to adopt
+- [ ] T025 Write the ownership rule (a supervisor in `default` is not limited by FR-015, so the rule still applies to it; one in its own worktree is limited by the daemon) in `.claude/skills/speckit-autopilot/rules/ownership.md` (or the supervisor skill's rules once #1813 lands): create worktrees with the default parent, list runs by `parent`, record `parent` per run in the supervisor ledger, never act on another parent's run, treat a `removed` parent as an orphan to report, not to adopt
 - [ ] T026 Update #1813, #1814 and #1816 issue bodies and the epic #1817 (see Phase 8)
 
 ## Phase 8: Polish and tracking

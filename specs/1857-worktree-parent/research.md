@@ -36,4 +36,6 @@
 - **Decision**: direct children only; `default` valid. A supervisor needs only its own children.
 
 ## R10 Supervisor scoping
-- **Decision**: advisory. The supervisor skill lists worktrees with `parent = <its worktree>` and refuses any action on a run with another parent or none; the ledger records the parent for each run. Enforced in the skill's rule (M3), not by the daemon (FR-012).
+- **Decision** (revised 2026-11-14): enforced visibility. For a caller not in `default`, every tool resolves sessions and worktrees only inside {self, parent, siblings, direct children}; others are `not_found`. A caller in `default` is unrestricted. The existing per-operation policy (`check_policy`, `mcp/tools.rs`) stays; the visibility check runs first in `resolve_caller`'s result so each tool shares one filter, and an invisible target is indistinguishable from a missing one (as for another project's). A supervisor in `default` still scopes itself by `parent` through its skill rule (M3) and records the parent per run in its ledger.
+- **Why children are included**: parent and siblings alone would let a worker reach its supervisor but not the reverse, and a supervisor must read, nudge and interrupt its runs.
+- **Alternatives**: siblings only (a supervisor loses its runs); advisory only (workers can touch the user's sessions).
