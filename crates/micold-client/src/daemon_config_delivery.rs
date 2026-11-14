@@ -402,7 +402,7 @@ pub fn select_tokens(
 
 /// The selected tokens read for a pod (#1760, FR-001): `entries` render as `[[github.tokens]]`
 /// naming each token at the startup Secret's mount, and `files` are the Secret's keys and values.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PodGithubTokens {
     pub entries: Vec<GithubTokenSetting>,
     pub files: Vec<(String, SecretToken)>,

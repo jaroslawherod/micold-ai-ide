@@ -72,3 +72,25 @@ Append only. Newest last.
   `GithubRepo::from_remote_url` into a sorted set: `daemon::tests` -> `35 passed; 0 failed`
 - refactor: none needed. Carrying the dial to `kube_attempt`/`kube_reconnect` (rest of T011) is
   wiring, done with U6.
+
+## Cycle 6: U6 the pod start delivers the tokens (T013, T014; T011/T012 structural before it)
+
+- structural commit first: `kube_attempt`/`kube_reconnect` take `projects`, `KubeEnv.tokens:
+  PodTokenSource` (default none; the shell sets `PodTokenSource::on_device()`). No behaviour.
+- tests: `crates/micold-client/tests/kube_daemon_github_tokens.rs` (new, a `mod` of `tests/main.rs`,
+  beside the other `FakeCluster` start tests; the task named `daemon.rs` tests, the start tests over
+  a fake cluster live here): `with_the_opt_in_off_no_token_is_read_or_delivered`,
+  `with_the_opt_in_on_the_matching_token_reaches_the_secret_and_daemon_toml`,
+  `a_bad_token_fails_the_start_before_any_cluster_call`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test main kube_daemon_github_tokens`
+  -> `left: [] right: ["github-token-0"]` (no key in the startup Secret) and the bad-token test
+  panicked at `expect_err`: `1 passed; 2 failed`
+- green, first run: `31 passed; 1 failed`: the bad-token test emptied the token file, and
+  `PatStore::list` skips a file it cannot parse (`warning: the GitHub token file ... could not be
+  read`), so the token was never selected. Test corrected (not the code): the bad file is a
+  loose-mode one (`0644`, listed by the store, refused by `PodGithubTokens::read`), the test
+  `#[cfg(unix)]`; the off test uses the same file. Then `kube_daemon` -> `32 passed; 0 failed`.
+- mutant: the off test passed before the wiring, so a mutant ignored the opt-in
+  (`settings.github_tokens || true`): `FAILED. 2 passed; 1 failed` at line 117; restored.
+- refactor: `PodGithubTokens` derives `Default` for the off path; the selection is one helper,
+  `pod_github_tokens`, called before the keys and the cluster connect.

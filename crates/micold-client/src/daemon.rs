@@ -2023,6 +2023,29 @@ pub async fn kube_reconnect(
     .map_err(KubeReconnectError::Attempt)
 }
 
+/// The stored GitHub tokens a pod start delivers (#1760): none unless the daemon's
+/// `github_tokens` opt-in is on; then those of `source`'s store that match `projects`, read for the
+/// startup Secret and naming `source.host`. A token the pod cannot take is the start's failure.
+fn pod_github_tokens(
+    source: &PodTokenSource,
+    settings: &KubeSettings,
+    projects: &[micold_core::github::GithubRepo],
+) -> Result<crate::daemon_config_delivery::PodGithubTokens, KubeAttemptError> {
+    use crate::daemon_config_delivery::{select_tokens, PodGithubTokens};
+    let store = match (&source.pat_root, settings.github_tokens) {
+        (Some(root), true) => micold_core::scoped_credential::pat_store::PatStore::new(root),
+        _ => return Ok(PodGithubTokens::default()),
+    };
+    let mut selected = select_tokens(
+        daemon_config_render::GithubTokenSetting::from_store(&store),
+        projects,
+    );
+    for token in &mut selected {
+        token.host.clone_from(&source.host);
+    }
+    PodGithubTokens::read(selected).map_err(|e| KubeAttemptError::Failed(e.to_string()))
+}
+
 /// The account the pod's SSH server logs this client in as: the basic image's passwd entry for
 /// the pod's uid (`packaging/basic/Containerfile`). sshd refuses any other name.
 pub const POD_SSH_USER: &str = "micold";
@@ -2051,6 +2074,9 @@ pub async fn kube_attempt(
     };
     let fail =
         |f: micold_core::kube::classify::KubeFailure| KubeAttemptError::Failed(f.to_string());
+    // Read before anything else, so a token the pod cannot take stops the start before any call
+    // reaches the cluster (#1760, contract §2). Off reads nothing.
+    let tokens = pod_github_tokens(&env.tokens, settings, projects)?;
     let image = settings.pod_image();
     let (context, namespace) = (&settings.context.0, &settings.namespace.0);
     let names = micold_core::kube::names::ResourceNames::new(context, namespace, name);
@@ -2086,8 +2112,16 @@ pub async fn kube_attempt(
     );
     pod_settings.startup = startup.cloned();
     pod_settings.extras = extras.clone();
-    let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
+    pod_settings.github_tokens = tokens.entries;
+    let mut delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
+    // The values only ever go into the startup Secret; `daemon.toml` names their files.
+    delivered.files.extend(
+        tokens
+            .files
+            .into_iter()
+            .map(|(key, value)| (key, value.expose().to_string())),
+    );
     let config = crate::daemon_config_render::prepare(
         &delivered.settings,
         micold_core::daemon_config::Kind::Kubernetes,

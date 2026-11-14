@@ -158,6 +158,7 @@ mod keymap;
 mod known_projects_overflow;
 mod known_projects_reflow;
 mod kube_daemon_failures;
+mod kube_daemon_github_tokens;
 mod kube_daemon_reconnect;
 mod kube_daemon_start;
 mod layout_apparatus;
