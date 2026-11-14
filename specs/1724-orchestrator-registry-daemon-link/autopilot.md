@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
-- **Phase**: milestone M3
-- **Next step**: open the M3 PR (title/body in the scratchpad, pr-title-m3.md, pr-body-m3.md) and merge on green
+- **Phase**: milestone M4
+- **Next step**: dispatch the M4 milestone unit (T031–T035)
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
 | #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
+| #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
-| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | pending open | reviews clean, gate run |
+| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
@@ -82,10 +83,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-M3 (T026-T030) implemented, round-1 reviews fixed (see Review rounds), committed locally; scoped gate green. Previous PR #1871 merge SHA b05740e146295f8e3dde4b5fe2499359aef7d17a. Next: round-2 re-review of the fix diff, then full gate (CI is the gate in the cloud), PR.
-
-Older note: 
-M2 squash-merged 2026-11-14 as b05740e1 after main was merged in (issue 1863 fixed on main; all CI jobs green on 389f5e5d). Next thread: `/speckit-autopilot resume #1724`, which starts M3 (T026–T030, older-protocol daemon refused and listed needs-update) from this branch.
+M3 squash-merged 2026-11-14 as 8bcf7894 (PR #1892, all CI jobs green on baeae6ef; reviews A and B clean in round 2). origin/main merged into the branch after the merge. Cloud thread pushed to `claude/project-thread-k0fxqv`, not the feat/ branch. Next thread: `/speckit-autopilot resume #1724`, which starts M4 (T031–T035, one live link per daemon id, reservation expiry) from this branch.
 
 ## Open escalation
 
