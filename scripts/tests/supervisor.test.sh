@@ -78,7 +78,7 @@ check "load equal to cores passes" 0 '^PASS$' env AUTOPILOT_SUP_LOAD=8.00 "$SUP"
 check "--max-load overrides" 1 '^FAIL load' "$SUP" gate --ledger "$L" --max-load 1
 check "failure order: cap first" 1 '^FAIL cap' env AUTOPILOT_SUP_MEM_MIB=1 AUTOPILOT_SUP_LOAD=99 "$SUP" gate --ledger "$L" --running 2
 check "failure order: memory before load" 1 '^FAIL memory' env AUTOPILOT_SUP_MEM_MIB=1 AUTOPILOT_SUP_LOAD=99 "$SUP" gate --ledger "$L"
-check "the machine is read without overrides" 0 '^(PASS|FAIL (memory|load))' env -u AUTOPILOT_SUP_MEM_MIB -u AUTOPILOT_SUP_LOAD -u AUTOPILOT_SUP_CORES "$SUP" gate --ledger "$L" --cap 9
+check "the machine is read without overrides" 0 '^(PASS|FAIL (memory|load): [0-9])' env -u AUTOPILOT_SUP_MEM_MIB -u AUTOPILOT_SUP_LOAD -u AUTOPILOT_SUP_CORES "$SUP" gate --ledger "$L" --cap 9
 check "gate without a cap is a usage error" 2 'cap' "$SUP" gate --ledger "$D/none.md"
 check "gate: a non-numeric --running fails" 1 '^FAIL' gt --running abc
 check "gate: a non-numeric --cap fails" 1 '^FAIL' gt --cap abc
@@ -260,9 +260,9 @@ mk 3 12 14 15 16 17
 for occ in 0 1 2 3; do
   for i in 12 14 15; do st "$i" queued; done
   [ "$occ" -ge 1 ] && st 12 running; [ "$occ" -ge 2 ] && st 14 starting; [ "$occ" -ge 3 ] && st 15 running
-  want=$((3 - occ)); gw=PASS; [ "$want" -eq 0 ] && gw=FAIL
+  case "$occ" in 0) want=3 gw=PASS gx=0 ;; 1) want=2 gw=PASS gx=0 ;; 2) want=1 gw=PASS gx=0 ;; 3) want=0 gw=FAIL gx=1 ;; esac
   check "slots: $occ occupied, cap 3: next prints $want" 0 "^$want\$" bash -c 'AUTOPILOT_SUP_MEM_MIB=8000 "$0" next --ledger "$1" | wc -l | tr -d " "' "$SUP" "$L"
-  check "slots: $occ occupied: gate agrees ($gw)" "$([ "$gw" = PASS ] && echo 0 || echo 1)" "^$gw" env AUTOPILOT_SUP_MEM_MIB=8000 AUTOPILOT_SUP_LOAD=1 AUTOPILOT_SUP_CORES=8 "$SUP" gate --ledger "$L"
+  check "slots: $occ occupied: gate agrees ($gw)" "$gx" "^$gw" env AUTOPILOT_SUP_MEM_MIB=8000 AUTOPILOT_SUP_LOAD=1 AUTOPILOT_SUP_CORES=8 "$SUP" gate --ledger "$L"
 done
 
 echo "supervisor: $cases case(s), $failures failure(s)"

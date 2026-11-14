@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-12
 
-**Status**: Draft
+**Status**: Closed 2026-11-14 — shipped in PRs #1865, #1885, #1888, #1889, #1890 and the close PR
 
 **Input**: User description: "autopilot supervisor M2: supervisor skill that queues issues and starts sessions (issue #1813)"
 

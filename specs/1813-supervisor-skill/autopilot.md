@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lzkl7
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: close
-- **Next step**: dispatch the close unit (session model)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1888 | M2 | merged | 7f4a47735 |
 | #1889 | M3 | merged | f6805eb68 |
 | #1890 | M4 | merged | c924cb06d |
+| (orchestrator opens) | Close | open | |
 
 ## Milestones
 
@@ -91,4 +92,4 @@ M4 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 
 ## Handover
 
-M4 merged in #1890 (squash c924cb06d) on 2026-11-14. Next: a fresh cloud thread runs `/speckit-autopilot resume #1813` and dispatches the close unit (session model; it runs `speckit-tdd-verify`). That thread works on its own `claude/...` branch: merge this handover commit's branch into it, then set the **Worktree branch** line above to it. Carried optional MINOR: Review A M2 round 2, SKILL.md Restart step 2 wording. Setup as before: units run as `autopilot-unit` and return "dispatch review"; the orchestrator runs reviews as `autopilot-reviewer` subagents, records verdicts with record-verdict.sh, opens the PR and squash-merges via GitHub MCP on green (`ci complete` check via `gh api` REST). `scripts/gate.sh` still stops on the cloud-only red `a_signed_commit_succeeds_with_the_delivered_key`; run `scripts/tests/*.test.sh` by hand and treat CI as the gate.
+None.
