@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1813
-- **Worktree branch**: claude/project-thread-ln1h9s
+- **Worktree branch**: claude/project-thread-2lzkl7
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M4 (PR)
-- **Next step**: wait on the M4 PR CI, squash-merge on green, then the close unit
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1885 | M1 | merged | 2084ae6eb |
 | #1888 | M2 | merged | 7f4a47735 |
 | #1889 | M3 | merged | f6805eb68 |
+| #1890 | M4 | merged | c924cb06d |
+| #1891 | Close | open | |
 
 ## Milestones
 
@@ -30,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
 | M2 | T014–T018 | full | resume from ledger, report, watcher | #1888 | merged |
 | M3 | T019–T021 | full | overlap sequencing | #1889 | merged |
-| M4 | T022–T023 | light | small-context skill-text proofs | #… | implemented, in review |
+| M4 | T022–T023 | light | small-context skill-text proofs | #1890 | merged |
 
 ## Decisions
 
@@ -66,6 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 1 MAJOR (unplanned supervisor.sh, drift-M4.md), 3 MINOR (red run, vacuous case, MISSING note), fixed |
 | Review A M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed) |
 | Review B M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; plan-drift clean) |
+| Review close | 1 | close | 03760652a14c137cfcef727c2af334482393d05f | 6764353ce73e1537e4a42c6091fbcc1070a6fb55:03760652a14c137cfcef727c2af334482393d05f | CHANGES: 1 MAJOR (T025 case exit code), 2 MINOR (follow-ups, tasks intro), fixed |
+| Review close | 2 | close | 0c281abda420bf2aa81aaa5758cf2d2b445ef37d | 0a93ca5a98714d37dfdabf8a2504362eda08177f:0c281abda420bf2aa81aaa5758cf2d2b445ef37d | CLEAN (scoped, sonnet; 3 round-1 findings verified fixed) |
 
 ## Red runs
 
@@ -88,17 +92,12 @@ M4 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
-## Handover
-
-M3 merged in #1889 (squash f6805eb68) on 2026-11-14. Next: a fresh cloud thread runs `/speckit-autopilot resume #1813` and dispatches the M4 milestone unit (T022–T023, tier light, `model: "sonnet"`). That thread works on its own `claude/...` branch: merge this handover commit's branch into it, then set the **Worktree branch** line above to it. Carried optional MINORs: Review A M3 round 2, a body with an empty `Touches:` line before a populated one takes the empty one (grep -m1); Review A M2 round 2, SKILL.md Restart step 2 wording. Reviews ran as `autopilot-reviewer` subagents dispatched by the orchestrator; the orchestrator opened the PR and squash-merged via GitHub MCP. `scripts/gate.sh` still stops on the cloud-only red `a_signed_commit_succeeds_with_the_delivered_key`; units ran `scripts/tests/*.test.sh` by hand and CI was green.
-
-## Open escalation
-
-None.
-
 ## Follow-ups not done
 
 - Full gate: all green except `micold-daemon session_extras::tests::a_signed_commit_succeeds_with_the_delivered_key` (signing, cloud env; no Rust touched). `scripts/tests/*.test.sh` ran individually, all green.
 - T008: the supervised argument text lives in `rules/supervised.md` (SKILL.md is at its 60-line ceiling), linked from SKILL.md's route table.
+- Deferred TDD remediation (tasks.md Phase 8): T024, T026, T028, T029, T030, T031.
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+## Handover
+
+None.
