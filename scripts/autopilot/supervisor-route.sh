@@ -153,15 +153,44 @@ route_drop() {
 
 route_table() { awk '/^## Routing$/ { f = 1; next } f && /^## / { f = 0 } f && NF { print }' "$LEDGER"; }
 
+# route target --sessions <list_sessions JSON> --me <id>: `parent <id>` or `user` (FR-012). Reads
+# only the daemon's `parent` (a worktree name) of the row `--me`, mapped to a session of that worktree.
+route_target() {
+  local f="" me="" have=0
+  while [ $# -gt 0 ]; do
+    case "$1" in --sessions|--me) [ $# -ge 2 ] || die "usage: route target --sessions <file> --me <id>" ;; esac
+    case "$1" in
+      --sessions) f="$2"; shift 2 ;; --me) me="$2"; have=1; shift 2 ;;
+      *) die "usage: route target --sessions <file> --me <id>" ;;
+    esac
+  done
+  [ -n "$f" ] && [ "$have" = 1 ] || die "usage: route target --sessions <file> --me <id>"
+  local q='(if type == "object" then .sessions else . end)'
+  jq -e "$q | type == \"array\"" "$f" >/dev/null 2>&1 || die "unreadable session list $f"
+  # The row is --me's, else the is_caller row. The parent must be "known" when parent_state is given;
+  # of the sessions in the parent's worktree (default included) a live one is preferred over a failed one.
+  jq -r --arg me "$me" "$q"'
+    | def sid: (.ref // .id // "") | tostring;
+    . as $all
+    | (([$all[] | select(sid == $me and $me != "")] | first) // ([$all[] | select(.is_caller == true)] | first) // {}) as $r
+    | ($r.parent // "") as $p
+    | if ($p | type) != "string" or $p == "" or (($r.parent_state // "known") != "known") then "user"
+      else ([$all[] | select((.worktree // "") == $p and sid != ($r | sid))]
+            | sort_by(.lifecycle == "failed") | first | if . == null then "" else sid end) as $t
+        | if $t == "" then "user" else "parent " + $t end
+      end' "$f"
+}
+
 route_cmd() {
   local sub="${1:-}"; [ $# -gt 0 ] && shift
   [ "$sub" = gate ] && { route_gate "$@"; return; }
+  [ "$sub" = target ] && { route_target "$@"; return; }
   need_ledger
   case "$sub" in
     add) route_add "$@" ;; next) route_next "$@" ;; state) route_state "$@" ;;
     answer) route_answer "$@" ;; gate) route_gate "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
     overdue) route_overdue "$@" ;;
     drop) route_drop "$@" ;; table) route_table ;;
-    *) die "usage: route add|next|state|answer|gate|compose|sent|overdue|drop|table" ;;
+    *) die "usage: route add|next|state|answer|gate|compose|sent|overdue|target|drop|table" ;;
   esac
 }
