@@ -11,19 +11,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-myub4h
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M1 round 2 of Review A (fix diff) and Review B (Verify) (orchestrator), then the M1 PR
+- **Next step**: M2 (fresh cloud thread)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
+| #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | pending-review | built, pushed, awaiting reviews |
+| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
 | M2 | T018–T019 | light | form tick and user guide | - | pending |
 | M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
@@ -60,6 +61,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | Review A r1 | F4 MINOR (behaviour part): a token-read failure on an established link retries with back-off instead of a terminal StartFailed | The token file was readable when the link was made; a retry picks up a file the user fixes (chmod 600, a new token) with no action, and each failed attempt shows the reason naming the token. A terminal StartFailed would need a manual restart for a transient or fixed problem. The comment is corrected. |
 
 ## Handover
+
+2026-11-14 M1 orchestrator (cloud): Review A and B round 2 CLEAN at afc83aba8; PR #1914 squash-merged (17284c645186eeb705ba403c114ee757f3ea3d53) on green CI (all checks, incl. the real kube cluster job). main merged back into claude/project-thread-myub4h. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M2 milestone unit (T018–T019, Tier light, model sonnet) on this branch; previous PR #1914, merge SHA above.
 
 2026-11-14 M1 fix unit (cloud): Review A r1 (6 findings) and Review B r1 (2) acted on in c5fb01da7: all fixed but F4's retry behaviour (declined, see table). Targeted tests, fmt and clippy (core, client) green. PR body updated at the unit's scratchpad (outside the tree, Review B F2). Next: round 2 of A and B on the fix diff from snapshot 127f0833e:3c7c46c82, then open the M1 PR.
 2026-11-14 M1 unit (cloud): previous PR #1870 merged at 55e614ed76ba667e09c0ac9649abc04114f93393. T001–T017 and T020 built test-first (tdd/test-list.md, tdd/cycle-log.md), committed and pushed on claude/project-thread-myub4h; PR body kept out of the tree (orchestrator scratchpad). Next: orchestrator runs Review A and B, the unit fixes findings, then the PR opens.
