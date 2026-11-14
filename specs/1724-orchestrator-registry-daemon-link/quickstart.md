@@ -27,8 +27,8 @@ Part A
   (`settings_refuses_save_over_failed_read::a_save_over_an_unreadable_file...`,
   `a_directory_that_cannot_be_emptied_names_what_survived`) are permission tests that cannot fail
   under the container's root user; neither touches the orchestrator.
-- `cargo test -p micold-daemon --test orchestrator`: 39 passed, three runs in a row, including
-  `no_outbound` and `netns` (the `unshare -rn` run executed, not skipped).
+- `cargo test -p micold-daemon --test orchestrator`: 40 passed, including `no_outbound` and
+  `netns` (the `unshare -rn` and `strace` runs executed, not skipped).
 - `cargo fmt --check` and `cargo clippy -p micold-daemon --all-targets -D warnings` clean. `mise` is
   not installed here: CI runs `mise run gate`.
 

@@ -144,3 +144,19 @@ unreadable-file settings tests that fail only as root (the gate runs them unpriv
 - F4: `the_orchestrator_keeps_no_session_state_to_lose` lists the directory after `stop()`, which
   now waits for the last save.
 - `--test orchestrator` 35 passed in 6 runs out of 6; fmt and both clippy runs `-D warnings` clean.
+
+## M6 — No outbound connections, proven (T041–T043)
+
+- T041 red: with `let _ = std::os::unix::net::UnixStream::connect("/tmp/not-a-daemon.sock");` injected
+  into `serve` (`orchestrator/mod.rs:169`), `no_outbound::the_orchestrator_source_opens_no_outbound_connection`
+  failed: `mod.rs:169: connect` (FR-008). Green: injection removed, the scan passes over every file
+  in both directories. The scanner has its own test (calls, comments, strings, char literals,
+  `connect_*`, dialing module paths, the allowed `singleton::acquire`).
+- T042 red: the same injection made `netns::the_orchestrator_connects_to_nothing_but_its_own_socket`
+  fail with `connect to a stranger: connect(9, {sa_family=AF_UNIX, sun_path="/tmp/not-a-daemon.sock"}...)`,
+  the link and heartbeat tests inside `unshare -rn` still passing, which is why the trace is needed:
+  a namespace blocks IP, not a filesystem socket (Review A round 1 F1). Green: injection removed,
+  the trace holds only connects to `orchestrator.sock`. `outbound_connections_are_blocked_in_the_namespace`
+  asserts `NetworkUnreachable` for `192.0.2.1` and a failed connect to an outer loopback listener.
+- Review fixes round 1: A F1 (strace), F2 (probe), F3 (scan of dialing paths, docs reworded to "never
+  dials a daemon"), F4 (named tests must run), F5 (char literals).

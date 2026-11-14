@@ -70,7 +70,7 @@ and carries on; the last good file is kept.
 Asking the orchestrator to start a session is refused with `not hosted by the orchestrator`, and its
 session list is empty. Sessions stay on your daemons.
 
-It never connects out to a daemon: each daemon dials it, so a firewall or network setting that blocks
-outbound connections from the orchestrator's host changes nothing.
+It never dials a daemon: each daemon dials it, so a firewall or network setting that blocks outbound
+connections from the orchestrator's host changes nothing.
 
 Technical detail: [the daemon page](../daemon.md#orchestrator-mode-1724).

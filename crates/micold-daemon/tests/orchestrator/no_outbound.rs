@@ -1,6 +1,9 @@
 //! FR-008: the orchestrator never dials a daemon. Daemons dial it, so nothing under the orchestrator's
-//! source may call `connect`, `Stream::connect` or `open_pipe` (the client side of a local socket or a
-//! Windows pipe). This is the source-level half of the proof; `netns.rs` is the runtime half.
+//! source may call `connect`, `Stream::connect`, `open_pipe`, `dial` or a `connect_*` helper (the client
+//! side of a local socket or a Windows pipe), or reach a module that dials. The one allowed route to a
+//! dial is `crate::singleton::acquire`, which probes the orchestrator's *own* socket to see whether
+//! another orchestrator holds it: a self-probe, not a daemon. This is the source-level half of the
+//! proof; `netns.rs` is the runtime half.
 
 use std::path::{Path, PathBuf};
 
@@ -12,7 +15,20 @@ const SCANNED: [&str; 2] = [
 
 /// Calls that open a connection. Matched as whole words, so `Stream::connect` is caught by `connect`
 /// and `disconnect` or `connected` are not.
-const FORBIDDEN: [&str; 3] = ["connect", "Stream::connect", "open_pipe"];
+const FORBIDDEN: [&str; 4] = ["connect", "Stream::connect", "open_pipe", "dial"];
+
+/// Prefixes of identifiers that dial (`connect_daemon`, `connect_to`): matched at a word start.
+const FORBIDDEN_PREFIXES: [&str; 1] = ["connect_"];
+
+/// Modules that dial, so any path into them is forbidden, except the allow-listed items below.
+const FORBIDDEN_PATHS: [&str; 3] = [
+    "micold_core::connect",
+    "crate::remote",
+    "crate::singleton::",
+];
+
+/// The self-probe: `crate::singleton::acquire` and its result type (see the module doc).
+const ALLOWED_PATHS: [&str; 2] = ["crate::singleton::acquire", "crate::singleton::Acquisition"];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -66,6 +82,10 @@ fn code_only(source: &str) -> String {
                     i += 1;
                 }
             }
+        } else if c == '\'' && char_literal_len(&b, i).is_some() {
+            let len = char_literal_len(&b, i).unwrap();
+            out.extend(std::iter::repeat_n(' ', len));
+            i += len;
         } else if c == '"' || (c == 'r' && matches!(next, Some('"' | '#')) && raw_start(&b, i)) {
             let hashes = if c == 'r' {
                 b[i + 1..].iter().take_while(|&&h| h == '#').count()
@@ -98,6 +118,18 @@ fn code_only(source: &str) -> String {
     out
 }
 
+/// The length of the char literal starting at `i` (`'x'`, `'"'`, `'\n'`, `'\u{1F600}'`), or `None` when
+/// the quote opens a lifetime.
+fn char_literal_len(b: &[char], i: usize) -> Option<usize> {
+    match (b.get(i + 1)?, b.get(i + 2)) {
+        ('\\', _) => (i + 3..b.len().min(i + 14))
+            .find(|&j| b[j] == '\'')
+            .map(|j| j + 1 - i),
+        (_, Some('\'')) => Some(3),
+        _ => None,
+    }
+}
+
 /// Whether the `r` at `i` opens a raw string (`r"` or `r#…#"`) rather than ending an identifier.
 fn raw_start(b: &[char], i: usize) -> bool {
     let after = b[i + 1..].iter().find(|&&h| h != '#');
@@ -128,16 +160,42 @@ fn whole_word_lines(code: &str, word: &str) -> Vec<usize> {
     lines
 }
 
+/// Line numbers where an identifier starts with `prefix`.
+fn prefix_lines(code: &str, prefix: &str) -> Vec<usize> {
+    code.lines()
+        .enumerate()
+        .filter(|(_, line)| {
+            line.match_indices(prefix)
+                .any(|(at, _)| !line[..at].chars().next_back().is_some_and(is_word_char))
+        })
+        .map(|(n, _)| n + 1)
+        .collect()
+}
+
+/// Line numbers of a forbidden module path that is not one of the allowed ones.
+fn path_lines(code: &str, path: &str) -> Vec<usize> {
+    code.lines()
+        .enumerate()
+        .filter(|(_, line)| {
+            line.match_indices(path)
+                .any(|(at, _)| !ALLOWED_PATHS.iter().any(|ok| line[at..].starts_with(ok)))
+        })
+        .map(|(n, _)| n + 1)
+        .collect()
+}
+
 fn violations(source: &str) -> Vec<(usize, &'static str)> {
     let code = code_only(source);
-    let mut found: Vec<_> = FORBIDDEN
-        .iter()
-        .flat_map(|word| {
-            whole_word_lines(&code, word)
-                .into_iter()
-                .map(|l| (l, *word))
-        })
-        .collect();
+    let mut found = Vec::new();
+    for word in FORBIDDEN {
+        found.extend(whole_word_lines(&code, word).into_iter().map(|l| (l, word)));
+    }
+    for prefix in FORBIDDEN_PREFIXES {
+        found.extend(prefix_lines(&code, prefix).into_iter().map(|l| (l, prefix)));
+    }
+    for path in FORBIDDEN_PATHS {
+        found.extend(path_lines(&code, path).into_iter().map(|l| (l, path)));
+    }
     found.sort();
     found
 }
@@ -177,6 +235,27 @@ fn the_scan_catches_a_call_and_ignores_comments_strings_and_longer_words() {
     );
     let bad_method = "fn f() { sock.connect(addr); }";
     assert_eq!(violations(bad_method), [(1, "connect")]);
+    assert_eq!(
+        violations("fn f() { connect_daemon(); dial(); }"),
+        [(1, "connect_"), (1, "dial")]
+    );
+    assert_eq!(
+        violations("use crate::remote::x; use crate::singleton::probe;"),
+        [(1, "crate::remote"), (1, "crate::singleton::")]
+    );
+    assert_eq!(
+        violations("crate::singleton::acquire(&e); crate::singleton::Acquisition::Bound(b);"),
+        []
+    );
+    // A `'"'` is a char, not the start of a string that would hide the call after it.
+    assert_eq!(
+        violations("let q = '\"'; sock.connect(a);"),
+        [(1, "connect")]
+    );
+    assert_eq!(
+        violations("fn f<'a>(x: &'a str) { connect(x) }"),
+        [(1, "connect")]
+    );
 
     let fine = concat!(
         "// connect here\n",

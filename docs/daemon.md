@@ -688,12 +688,15 @@ and `orchestrator registry <path> is unreadable: <reason>`; the file is left unt
 orchestrator keeps no session state: sessions stay on their daemons, which keep running them while
 the orchestrator is down.
 
-The orchestrator opens no outbound connection (FR-008): daemons dial it and it dials nothing. Two
-tests hold that: a source scan (`tests/orchestrator/no_outbound.rs`, every platform) fails on a
-whole-word `connect`, `Stream::connect` or `open_pipe` under the orchestrator's source directories, and
-a Linux run (`tests/orchestrator/netns.rs`) re-executes the link and heartbeat tests under
-`unshare -rn`, a network namespace with no interface up. That run skips, saying why, where
-unprivileged user namespaces are unavailable.
+The orchestrator never dials a daemon (FR-008): daemons dial it. Its one connect is a start-up probe
+of its own socket (`singleton::acquire`), to refuse a second orchestrator on the same path. Three tests
+hold that. A source scan (`tests/orchestrator/no_outbound.rs`, every platform) fails on a whole-word
+`connect`, `Stream::connect`, `open_pipe` or `dial`, a `connect_*` helper, or a path into a dialing
+module under the orchestrator's source directories, allowing only that probe. On Linux
+(`tests/orchestrator/netns.rs`) the link and heartbeat tests re-run under `unshare -rn`, a network
+namespace with no interface up, and again under `strace -e trace=connect`, which must show a connect to
+`orchestrator.sock` and to nothing else. Those runs skip, saying why, where unprivileged user
+namespaces or `strace` are unavailable.
 
 ## Finding the logs and recent errors
 
