@@ -21,10 +21,10 @@ These tools only read. None of them changes anything.
 | Tool | What it answers |
 |---|---|
 | `whoami` | Which session is asking, its project, the worktree it runs in, and its AI CLI |
-| `list_worktrees` | The project's worktrees as the sidebar lists them: `default` (the project folder itself) first, then each worktree with its branch, its health (`clean`, `missing` or `prunable`), whether the application created it, and how many sessions it hosts |
+| `list_worktrees` | The project's worktrees as the sidebar lists them: `default` (the project folder itself) first, then each worktree with its branch, its health (`clean`, `missing` or `prunable`), whether the application created it, how many sessions it hosts and, for one an assistant created, its `parent` and `parent_state`. `parent` narrows the list to one worktree's direct children |
 | `list_branches` | Every local and remote-tracking branch, the worktree it is checked out in, and, when a new worktree could not use it, the same explanation the new-worktree dialog gives |
-| `list_sessions` | The project's sessions with their label, AI CLI, state, activity and worktree. The calling session is marked. A session that another session started also names that session (`origin`) and whether it still exists (`origin_state`: `known` or `removed`); sessions you started carry neither. It can be narrowed to one worktree |
-| `get_session` | One session. A session that failed to start includes the reason; a session another session started names it in `origin` and `origin_state` |
+| `list_sessions` | The project's sessions with their label, AI CLI, state, activity and worktree. The calling session is marked. A session that another session started also names that session (`origin`) and whether it still exists (`origin_state`: `known` or `removed`); sessions you started carry neither. A session in a worktree that has a parent also carries `parent` and `parent_state` (see [Which worktree created this one](#which-worktree-created-this-one-parent)), whichever session started it. It can be narrowed to one worktree |
+| `get_session` | One session. A session that failed to start includes the reason; a session another session started names it in `origin` and `origin_state`; both tools give the worktree's `parent` and `parent_state` too |
 | `list_resumable_sessions` | Sessions the AI CLIs recorded for this project that the application does not list yet, newest first, with the worktree each ran in and whether it can be resumed (`resumable` or `unresumable`, with the reason). It takes `limit` (1 to 200, 50 unless given), `offset` and an optional `worktree`. It only reads (so a Default session may call it), and it touches none of the CLIs' files. `total` counts at most the 200 newest sessions, and `provider` names the AI CLI by its tool name, such as `claude_code`. Resuming one is done in the app |
 | `read_session_output` | The most recent lines of another session's terminal, as plain text: 200 lines unless the assistant asks for a different number, and never more than 2,000. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
 
@@ -142,6 +142,30 @@ project folder is kept separate from the worktrees that exist, and an assistant 
 with that reason. It can still list everything and create,
 start, stop and delete sessions.
 
+#### Which worktree created this one (`parent`)
+
+Each worktree an assistant creates records the worktree whose session created it, its parent: a
+session in worktree `W` makes `W` the parent, and a session in the project folder makes `default`
+the parent. `create_worktree` takes an optional `parent` to name another: `default` or the folder
+name of a worktree of this project. A parent that is neither is refused with `invalid_input`, and
+nothing is created. If the calling session's own worktree cannot be found, the new worktree has no
+parent. A worktree you create in the app, or one that existed before this feature, has none, and
+nothing in the app or the tools changes a parent after the worktree is created.
+
+`list_worktrees` shows `parent` and `parent_state` on every worktree that has one (both are left
+out otherwise). `parent_state` is `known`, or `removed` once the parent worktree was deleted; then
+`parent` keeps the parent's last name. Pass `parent` to `list_worktrees` to list only that
+worktree's direct children (`default` is allowed; a name that is not a worktree gives an empty
+list). The parent is a label for finding runs, not a permission: it changes what a session may do
+to no worktree.
+
+A parent follows its worktree through a rename of either one and through a restart of the app.
+Deleting a parent, in the app or with `delete_worktree`, does not delete or change its children:
+they report `parent_state: "removed"`. They are not handed to a worktree created later under the
+same name; that is a new worktree with no children. One residual case: a worktree removed and
+re-added under the same name outside the app (with `git`) between two refreshes of the list looks
+like the same worktree, so its children keep it as their parent.
+
 ### Requests that wait for you
 
 These tools stop or remove something, so each request waits until you allow it:
@@ -207,6 +231,11 @@ Which sessions the app can tell are agent work depends on the AI CLI:
 | Claude Code started with `claude --bg` | Not covered: not reported through these events |
 
 The app never guesses from a worktree's name, its branch or when it appeared.
+
+`origin` and `parent` are separate: `origin` says which session started a session, and `parent`
+says which worktree created a worktree. A session reports its own `origin` and, from its worktree,
+the `parent`; neither is worked out from the other, so a session that was resumed or cleared keeps
+the `parent` of its worktree.
 
 ### The first prompt
 

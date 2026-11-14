@@ -153,7 +153,7 @@ fn the_read_tools_parse_their_arguments() {
     assert_eq!(parse_call("whoami", &json!({})).unwrap(), Operation::Whoami);
     assert_eq!(
         parse_call("list_worktrees", &json!({})).unwrap(),
-        Operation::ListWorktrees
+        Operation::ListWorktrees { parent: None }
     );
     assert_eq!(
         parse_call("list_branches", &json!({})).unwrap(),
@@ -214,6 +214,7 @@ fn create_worktree(branch: &str, name: Option<&str>, mode: CreateMode) -> Operat
         name: name.map(str::to_string),
         mode,
         start: None,
+        parent: None,
     })
 }
 
@@ -224,6 +225,7 @@ fn derived(type_: Option<ConventionalType>, ticket: Option<&str>, name: Option<&
         name: name.map(str::to_string),
         github_issue: None,
         start: None,
+        parent: None,
     })
 }
 
@@ -1222,4 +1224,40 @@ fn the_prompt_tool_is_not_a_catalog_tool() {
         .unwrap()
         .iter()
         .any(|tool| tool["name"] == "permission_prompt"));
+}
+
+/// Spec 1857 (FR-002, FR-008): `parent` is an optional worktree ref on both tools; other unknown
+/// arguments are still refused.
+#[test]
+fn create_worktree_and_list_worktrees_accept_an_optional_parent() {
+    assert_eq!(
+        parse_call("list_worktrees", &json!({"parent": "w"})).unwrap(),
+        Operation::ListWorktrees {
+            parent: Some(WorktreeRef::Named("w".into()))
+        }
+    );
+    assert_eq!(
+        parse_call("list_worktrees", &json!({"parent": "default"})).unwrap(),
+        Operation::ListWorktrees {
+            parent: Some(WorktreeRef::Default)
+        }
+    );
+    let Operation::CreateWorktree(request) =
+        parse_call("create_worktree", &json!({"branch": "b", "parent": "w"})).unwrap()
+    else {
+        panic!("not a create")
+    };
+    assert_eq!(request.parent(), Some(&WorktreeRef::Named("w".into())));
+    let Operation::CreateWorktree(derived) = parse_call(
+        "create_worktree",
+        &json!({"name": "x", "parent": "default"}),
+    )
+    .unwrap() else {
+        panic!("not a create")
+    };
+    assert_eq!(derived.parent(), Some(&WorktreeRef::Default));
+    let message = invalid("list_worktrees", json!({"parentt": "w"}));
+    assert!(message.contains("parentt"), "{message}");
+    invalid("create_worktree", json!({"branch": "b", "parent": 3}));
+    invalid("list_worktrees", json!({"parent": ""}));
 }
