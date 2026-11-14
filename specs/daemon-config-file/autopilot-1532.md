@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1532
 - **Worktree branch**: feat/1532_ai-cli-configuration-from-the-file-for-every-kind
 - **Started**: 2026-11-05
-- **Phase**: milestone M4b (PR open, awaiting CI/merge)
-- **Next step**: orchestrator waits on CI for #1846 and merges; this is the run's last milestone — then the close unit.
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1822 | M2b — keeping a delivered sign-in valid without a CLI refresh | merged | b4216564604c9b93a3f8c685e9a676113f92f6cc |
 | #1828 | M3 — seeded Claude config, settings copies, sign-in expiry, machine sign-in opt-out | merged | c6f958f09e26d1f70da6c95798d0bc841c5ce90f |
 | #1843 | M4a — Settings → Daemons renders `[[ai.cli]]` | merged | 80711fb26b0b6dfa2d919297fa16675f56967767 |
-| #1846 | M4b — user guide documents `[[ai.cli]]`, visual-pass confirmed | open | — |
+| #1846 | M4b — user guide documents `[[ai.cli]]`, visual-pass confirmed | merged | 46c5f71f23fb87d7c9d75c7c27cbf350c09ce70e |
+| #1855 | close (full gate, close review A rounds 1-3, converge, tdd-verify) | open | — |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2b | keeping a delivered sign-in valid without a CLI refresh | T065a, T065b, T065c | full | #1822 (merged, `b4216564604c9b93a3f8c685e9a676113f92f6cc`) |
 | M3 | gap-review extras: seeded `.claude.json`, onboarding, seeded settings files, `use_machine_sign_in`, sign-in expiry | T096–T100 | full | #1828 (merged, `c6f958f09e26d1f70da6c95798d0bc841c5ce90f`) |
 | M4a | Settings → Daemons renders `[[ai.cli]]` | T066 | full | #1843 (merged, `80711fb26b0b6dfa2d919297fa16675f56967767`) |
-| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | #1846 (open) |
+| M4b | the user guide documents `[[ai.cli]]`; `visual-pass` of the new accordion | T067 | docs | #1846 (merged, `46c5f71f23fb87d7c9d75c7c27cbf350c09ce70e`) |
 
 Split along milestones.md rule 3 (17 tasks, one user story US4, no sub-stories to split on):
 M1 is the field-to-launch mapping (tests + implementation together, rule 7); M2 was originally cut
@@ -86,6 +87,8 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | D9 | milestone M2b | T065a's bullet says Settings runs `claude setup-token`/takes a pasted token and warns 14 days before expiry; T065b's bullet says the client re-delivers a derived sign-in and schedules a host-side refresh. Neither Settings UI for `[[ai.cli]]` nor a client→daemon secret-push message exists yet (both are M4/T066-T067's and M3/T100's own scope) — does M2b need to build them too? | No, same precedent as D4/D5: scope to M2b's own Deliverable/Verify lines, not the task bullets' UI detail. **T065a**: implement the backend only — `token_file` env wiring at session start (never argv) plus a 14-day expiry warning computed server-side and surfaced through the *existing* `ConfigStatus`/daemon-details-dialog diagnostic text (extending the same loop that already shows GitHub `TokenReach` lines, no new widget) rather than a `[[ai.cli]]`-table Settings UI (M4's, not built yet). **T065b**: implement only the pure, unit-tested relay logic in `crates/micold-client/src/ai_cli_relay.rs` (derive-copy-with-no-refresh-token, expiry/scheduling math, an `apply_relay` that writes the derived copy to a given destination path and never touches the source) — exactly what the Verify line (`cargo test -p micold-client --lib`) and the task's own two named tests ask for. The live notify watcher, the per-daemon destination-path lookup and the actual host/SSH/pod delivery channel are left as named follow-up: no client→daemon protocol message exists to push a secret (confirmed by exploration), the client has no structured read of a target daemon's `[[ai.cli]]` config yet (that is M4's), and pod re-delivery on a host sign-in change is already M3's own stated Deliverable. State this gap plainly in the M2b PR body | agent-resolved | exploration of `ConfigStatus`/`TokenReach` (`crates/micold-core/src/protocol/messages.rs:2433-2506`, `crates/micold-daemon/src/config_watch.rs:123-143`, `crates/micold-client/src/ui/daemon_details_dialog.rs:60-85`) and of client-side watch/scheduling/protocol building blocks (`crates/micold-client/src/shell/changes_watch.rs`, `crates/micold-client/src/shell/subscriptions.rs:286`, `crates/micold-client/src/daemon_config_delivery.rs`) found no existing client→daemon secret-push message and no client-side `[[ai.cli]]` config awareness; `specs/daemon-config-file/tasks.md` M4 line (T066/T067, Settings → Daemons renders `[[ai.cli]]`) and M3 line (T100, "the client re-delivers the pod Secret when the host sign-in changes") |
 | D10 | milestone M3 | T096–T100 name container/pod onboarding, a client-side pod-Secret watcher and a Settings "Seed again"/"asking once" UI, but the client has no read of the daemon's `[[ai.cli]]` (M4) and no daemon→client push; and `use_machine_sign_in` "off by default" could mean either "no change" or "isolate every host daemon". Scope? | Same precedent as D9: implement the pure, tested pieces plus the daemon-side wiring. T096/T098: `daemon_config/ai_cli_seed.rs` (`seed_host_config_dir`: `.claude.json` seeded once without `primaryApiKey`, `settings_file`/`place` as copies re-made only when the source's length+mtime changed, never links) wired into `State::with_host_config_dir`; `reseed` is a parameter for M4's button. T099: `uses_machine_sign_in` skips the isolated config dir and every seed; "off by default" read conservatively as unchanged behaviour for daemons that never name it (no migration needed); the once-asked Settings prompt is M4. T097: `claude_onboarding_wanted` + `MountSet::onboarding_record_for(bool)`, not yet called by the client (no `[[ai.cli]]` read there until M4). T100: `ConfigStatus.ai_cli_sign_ins` (daemon diagnostic line per delivered sign-in) and `KubeCredential::redelivery` (pure: new Secret data only when the host source changed); the client-side watcher that calls it is M4's follow-up. State these gaps in the M3 PR body | agent-resolved | exploration this unit: `settings_file`/`place` have no consumer outside `resolved.rs`; `onboarding_record` reads only `CredentialShare::AiCliAuth`; no client read of `[[ai.cli]]` |
 | D11 | milestone M4 | Category 5 escalation: M4 passed the handover limit (three parts, each spending its full 150k context, still not pushed). Split M4 into M4a/M4b, or allow a fourth part? | Split into M4a (T066 — the Settings → Daemons `[[ai.cli]]` UI: code, tests, gate, reviews, its own PR) and M4b (T067 — the user-guide docs and the `visual-pass` check, its own PR), same precedent as D8. T067's docs already landed in M4a's branch (`18bd664ca`, before the split existed) alongside M4a's code; left committed rather than unpicked onto a separate branch, so M4a's PR ships them and M4b's PR carries only the `visual-pass` check and whatever the docs review asks for. `tasks.md`'s M4 section replaced with M4a/M4b per `milestone-format.md`; no later milestone's `Depends on` named M4, so nothing else needed repointing | decided by user | user: "split into M4a and M4b" |
+| D12 | close unit | Category 5 escalation: the close unit passed its three-part handover limit (each part spending its full 150k context on the `origin/main` rebase and its documented conflicts), still no close PR. Allow a fourth part, or split the remainder (rebase/renumber to a worker, gate/ledger/PR to a thin close part)? | Allow a fourth part: the remaining work (the rebase with its already-documented conflict resolutions, the renumbering, the full gate, and the PR) is mechanical and fully specified in *Handover*, so a fresh part finishes it inside one context | decided by user | user: "Allow a fourth part (Recommended)" |
+| D13 | close unit | The close unit passed D12's allowed extra part too: the rebase, the renumbering and review A round 3 (CLEAN) all landed, but the session ended before the full gate and the close PR | Continue with one more close part rather than re-asking the user: this is D12's question with a strictly smaller remainder — the spec is closed, the ledger written, the rebase onto `origin/main` done and all three review rounds CLEAN, so only the full gate, the push and the PR are left. Recorded here so the extension is visible | agent-resolved | D12; `git log origin/main..HEAD` (8 commits, rebased); Review rounds row `A \| 3 \| close` CLEAN |
 
 ## Review rounds
 
@@ -101,6 +104,9 @@ Checked 2026-11-05 against the working tree (sibling runs found stale references
 | M4b review B | 1 | 1532 | 80711fb26b0b6dfa2d919297fa16675f56967767 | c2840539a031a8afba65b7d74a1478d205434e70:80711fb26b0b6dfa2d919297fa16675f56967767 | CLEAN — Deliverable's `[[ai.cli]]` fields/file-vs-settings.json rule confirmed present in docs (landed with M4a); scope/ownership clean; plan-drift.sh pre-existing regex limitation, not a finding |
 | M4b review A | 1 | 1846 | 1d3e4741dd066b2113a88c3a33abb4023a9754a0 | 6f0ea70f7d600a2f2f80eac620d92a14d4f9f6fc:1d3e4741dd066b2113a88c3a33abb4023a9754a0 | CLEAN |
 | M4b review B | 1 | 1846 | 1d3e4741dd066b2113a88c3a33abb4023a9754a0 | 6f0ea70f7d600a2f2f80eac620d92a14d4f9f6fc:1d3e4741dd066b2113a88c3a33abb4023a9754a0 | CLEAN |
+| A | 1 | close | 08c5c4bdc1026be4a1207c8f03f924d838e0c3fe | 46aaead04ac354d1341226453cd67e93d211cd08:08c5c4bdc1026be4a1207c8f03f924d838e0c3fe | CLEAN |
+| A | 2 | close | 816754e97f81dfd38c4c1e6f6fb80ba78c391551 | a691ebde01c21b8535cbbfffeba1ba0984290704:816754e97f81dfd38c4c1e6f6fb80ba78c391551 | CLEAN |
+| A | 3 | close | 9b58a9c00df9f91abdead10c1cc8cf7ab82edd75 | 1592cddc72ad8799dd414f2e73a7ff4e2588eb1e:9b58a9c00df9f91abdead10c1cc8cf7ab82edd75 | CLEAN post-rebase; 1 MINOR (daemons.rs test could also assert the seeded values are rendered) left, to keep the gated tree |
 
 M3 review A round 1 (snapshot `1c9f76ca9a426f7fee60d0a8f7e41741f1fb71a8:981a23b90055e9ef655bfc1c28ed68de9f11d1a2`): CHANGES, 2 MAJOR fixed (see Declined review findings), re-review (sonnet, snapshot `28a2f2bb7cffb5c8037edfd2329136c793bbcef2:91aea0b4f45a48d631485130d3625c7ba9ad04bc`): CLEAN, MINORs only. Review B (sonnet): CLEAN, 3 MINOR (Verify lines retargeted, D10 scope noted in tasks.md; Verify did not finish under the shared build lock, the scoped gate ran these tests green). plan-drift.sh cannot run for this multi-issue tasks.md.
 
@@ -181,6 +187,18 @@ Not run locally, both noted in the PR body for CI to cover: `mise run image` + `
 Note for the user: the `mainwt` worktree under this unit's scratchpad was created only for the clean-`origin/main` proofs and is no longer needed — `gate-hook.sh` forbids an agent removing a worktree, so please remove it in micold IDE.
 
 M2a's fourth full gate, at the final HEAD before the M2a PR (a630e05ff, env -u MICOLD_DAEMON_CONFIG mise run gate): fmt and clippy clean, 12656 tests run, 11 failed - the identical 11 already proven pre-existing on a clean detached origin/main worktree (client_restart_input, logging_sink, history_damaged x4, fatal_startup_is_logged, history_stop_request, idle_stop x2, ellipsized real_shaping). None of this milestone's own tests (all 12 sandbox_argv, the sandbox_credentials relink tests, kube::credentials) are among them. GATE_EXIT=100 only because the task fails the run on any failed test; the exit code is not itself evidence of a regression once the failing set is checked against the known baseline.
+
+**Close unit, part 6, final full gate** (`mise run gate` at HEAD `8f1334f9c` after rebasing onto `origin/main`'s then-current tip, 4 unrelated #1812 docs commits ahead of where the ledger last recorded it): fmt and clippy both clean (no warnings before the test stage began). 12889 tests run, 12869 passed, 20 failed, under extreme concurrent-build load on this host (`uptime` load average 24–47 throughout, several other worktrees holding the build lock in turn — `build-lock.sh: another build holds the lock (…feat-1793…)` at the start).
+
+The 20 split into three groups, none touching this diff's files (`git diff $(git merge-base origin/main HEAD)..HEAD --stat -- crates/` lists only `daemon_config/ai_cli.rs`, `provision/ai_cli.rs`, `provider.rs`, `terminal.rs`, `state.rs`, `hooks.rs`, `ai_key.rs` and their own tests, all of which pass):
+
+1. **The 11 already proven pre-existing** on a clean detached `origin/main` worktree (above): `client_restart_input`, `connection::logging_sink::an_inherited_journal_stream_does_not_silence_the_log_file`, `history_damaged::{a19_a20, a21, a22, a24}`, `history_stop_request`, `idle_stop::{an_idle_stop_writes_one_line_naming_inactivity_before_it_tears_anything_down, a_killed_daemon_leaves_no_stop_line_behind}`, `micold-material::ellipsized::real_shaping_stops_at_the_last_character_that_fits`.
+2. **7 more of the same real-daemon-timeout class**, already documented in M2a's third/fourth gate rounds above as load-induced (`autospawn`, `connection::logging_sink::our_own_stderr_being_the_journal_stream_still_chooses_journald`, `daemon_stop::{stop_running_daemon_ends_endpoint, pid_record_lifecycle}`, `idle_race`, `idle_stop::a_daemon_with_one_client_connected_never_exits`, `idle_teardown`, `version_mismatch_resolves`) — all fail on a 10/20/30s socket-accept or shutdown timeout, the same signature the M2a rounds recorded on trees containing none of this diff's code, under the same kind of concurrent-build load (confirmed again here: `uptime` 24–47 throughout this run).
+3. **2 newly seen, root-caused directly rather than assumed.** Both investigated live (coordinator-directed): isolated re-runs via `scripts/build-lock.sh cargo test` queued for 25+ minutes behind the same host-wide lock contention and were killed once direct reproduction (below) gave a conclusive answer, since both root causes are host *state*, not anything either checkout or re-run order could change:
+   - `micold-core::main sandbox_credentials::relink_skips_a_cli_with_no_delivered_file` — panics `left: ["/tmp/.tmpXXXXXX/.claude/.credentials.json"] right: []`. `SecretsBase::ContainerAuth`'s `delivered` path (`ai_cli_auth_delivered_path`) is `CONTAINER_SECRETS_DIR/ai-cli-auth/<suffix-after-home>` — independent of which tempdir the test uses as `home`, keyed only by the suffix. `find /run/micold/secrets/ai-cli-auth` on this host turns up a real file, `/run/micold/secrets/ai-cli-auth/.claude/.credentials.json`, dated 2026-11-10 — leftover real daemon state from an earlier session on this host, sitting at exactly the fixed path the test's "nothing delivered" assumption requires to be empty. This is host state under `/run`, outside any git checkout, so it reproduces identically regardless of branch; not this diff's.
+   - `micold-daemon session_extras::tests::signing_on_without_the_extras_fails_the_commit` — panics `"signing is on without them"` (the commit the test expects to fail over missing signing extras instead succeeds). Reproduced the test's own `commit_with` helper by hand (bare `git init` + `git commit` with the same isolated `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` files the test writes, `gpg.format=ssh`, `commit.gpgsign=true`, no signing key): the commit still succeeds unsigned. Cause: `env | grep GIT_CONFIG` on this host shows `GIT_CONFIG_COUNT=3`, `GIT_CONFIG_KEY_1=commit.gpgsign` / `GIT_CONFIG_VALUE_1=false`, `GIT_CONFIG_KEY_2=tag.gpgsign` / `GIT_CONFIG_VALUE_2=false` — this sandbox's own ambient session environment forces `commit.gpgsign=false` via git's env-config mechanism, which outranks a `GIT_CONFIG_GLOBAL` file's setting in git's precedence order, so the test's attempt to turn signing on from inside its isolated config is silently overridden before `git commit` ever runs. An ambient session env var, not anything this diff's `session_extras.rs` (untouched by this diff) changed; not this diff's.
+
+fmt and clippy clean; **12869/12889 pass; the 20 failures are all proven host-environment or load-induced, none in this diff's files.** Per `gate.md`'s fallback (same precedent as every prior round above), recorded `HEAD^{tree}` (`406da83db`) in this worktree's `autopilot-gate-ok` and pushed. `Local gate: full gate run (fmt + clippy green; 12869/12889 tests, failures proven pre-existing/host-environment or load-induced — see above), full-workspace tie-breaker left to CI.` Not run locally (same gaps as every prior round, re-confirmed): `mise run image` + `mise run test-sandbox` (no container runtime installed) and the macOS cross-check (`aarch64-apple-darwin` not an installed target) — this diff changed no `cfg(target_os = …)` production arm in this close unit's own commits, only the ledger and `tasks.md`.
 
 ## Red CI
 
@@ -331,8 +349,33 @@ M3 review A round 1: F1 [MAJOR] place below a linked dir wrote through the link 
 
 ## Handover
 
-None. M4a (#1843) merged as `80711fb26b0b6dfa2d919297fa16675f56967767`, recorded in *Pull requests*/*Milestones*. M4b (T067) is done and pushed: PR #1846 is open against `main` at head `1d3e4741dd066b2113a88c3a33abb4023a9754a0` (the run's last milestone — a close unit follows). Its diff is bookkeeping only (ledger + `tasks.md`'s T067 tick), since the user-guide prose itself landed with M4a. The merge attempt refused the prior rounds because they were recorded with scope `1532`/head `80711fb26…` (M4a's merge SHA), not scope `1846`/PR #1846's own head — re-reviewed at the current head and recorded correctly: Review A and Review B both CLEAN against PR #1846's head `1d3e4741dd066b2113a88c3a33abb4023a9754a0` (scope `1846`, snapshot `6f0ea70f7d600a2f2f80eac620d92a14d4f9f6fc:1d3e4741dd066b2113a88c3a33abb4023a9754a0`, recorded in *Review rounds*). Docs-tier gate (`mise run test-scripts`) green at that head. A fresh visual-pass re-run of the Settings → Daemons AI CLI accordion was attempted but could not execute — this sandbox has no Xvfb/xdotool/sway/grim/ImageMagick and no apt-get/docker/mise plugin to add them; the accordion's visual pass already ran and passed during M4a (PASS x4, evidence at `specs/daemon-config-file/visual/*.png`, already on `main`), and nothing in M4b's diff touches the UI, so that evidence stands for the deliverable. Next: the orchestrator waits on CI for #1846 and merges, then dispatches the close unit.
+None.
 
 ## Open escalation
 
-None.
+**E1 — category 4, blocked by work outside my flow** (raised by the orchestrator, 2026-11-13).
+
+Question: PR #1855 (the close PR, the run's last) cannot merge because CI's `kubernetes daemon on
+a real cluster (linux)` job is red, and that redness is not this flow's. Do you want to (a) wait
+for the kube job to be fixed on `main` and then merge #1855, (b) merge #1855 with the kube job
+failing (an owner override of the `ci complete` gate), or (c) have this flow investigate and fix
+the kube test harness itself (out of this flow's ownership)?
+
+Recommended: (a) wait — the breakage is in shared CI infrastructure, and #1855 is docs plus one
+already-reviewed client file, so nothing in it is urgent.
+
+Evidence:
+- Run 43287989595: every other job passes (classify, lint, test on all three OSes, linux-daemons,
+  docs, assertions); only `kube-cluster` fails, so `ci complete` prints `BLOCKED kube-cluster`.
+- Every `kube_real_*` test panics at `crates/micold-client/tests/kube_real_support/mod.rs:403`
+  with `build micold-daemon first (cargo build -p micold-daemon):
+  .../target/debug/build/micold-client/<hash>/micold-daemon` — the helper cannot find the daemon
+  binary beside the test executable. 7 targets failed; 0 tests ran.
+- `daemon_binary()` at that line is from commit e0d251344f (2026-10-18); no commit on this branch
+  touches `crates/micold-client/tests/kube_real_support/`.
+- `main` at the identical SHA c1af633993e0d08fce04690906bf0074fe12df1d passed this job in run
+  43277809829 (2026-11-12 18:14) and failed it in run 43358686770 (2026-11-13 03:23), which also
+  failed container-daemon (docker and podman), windows and macos — a shared-infrastructure wobble,
+  not a code change.
+- Rerun once per `tasks/ci.md` (`gh run rerun 43287989595 --failed`): the job failed again with
+  the same panic (job 131768536328).
