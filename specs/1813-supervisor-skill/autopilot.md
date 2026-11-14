@@ -20,13 +20,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1865 | Design | merged | bec5d62c7 |
 | #1885 | M1 | merged | 2084ae6eb |
+| #1888 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
-| M2 | T014–T018 | full | resume from ledger, report, watcher | #… | pending |
+| M2 | T014–T018 | full | resume from ledger, report, watcher | #1888 | open |
 | M3 | T019–T021 | full | overlap sequencing | #… | pending |
 | M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
 
