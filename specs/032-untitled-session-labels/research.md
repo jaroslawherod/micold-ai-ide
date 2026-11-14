@@ -190,7 +190,9 @@ the Unicode tables are the whole difficulty.
   `Catalog::record_session_name`) is unchanged: it already replaces any non-matching label with
   `Named`, which is FR-006 for a running session.
 - `prunable_session_cwds` stays `Pending`-only: a `Derived` session has a conversation by
-  definition, and one whose records were deleted keeps its label (spec edge case, 029 FR-008).
+  definition, and pruning never removes it. One whose records were deleted keeps its label only while it is
+  listed: it is removed when its conversation is found gone (026 FR-008a, BUG-1852; spec edge case,
+  029 FR-008).
 
 **Running sessions (US3, FR-010)**: `name_stale` is set at spawn and on every activity change
 `note_activity` sees, and the supervisor tick (`SUPERVISION_INTERVAL`, 250 ms) runs

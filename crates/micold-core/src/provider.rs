@@ -230,6 +230,14 @@ pub trait AiCliProvider {
     /// determined — callers treat that as "uncertain", never as "absent".
     fn config_dir(&self) -> Option<PathBuf>;
 
+    /// The directory under `config_dir` that holds this provider's recorded conversations (Claude:
+    /// `<config>/projects/`). A conversation can only be called gone (BUG-1852) while this exists
+    /// and reads as a directory: an unmounted disk or a moved home loses the store, not the
+    /// conversations. Defaults to the config directory itself.
+    fn conversation_store_root(&self, config_dir: &Path) -> PathBuf {
+        config_dir.to_path_buf()
+    }
+
     /// The one file under `home` that holds this CLI's sign-in, shared read-only into a sandbox
     /// (feature 488, FR-013), or `None` when the CLI keeps none a sandbox could share.
     ///
@@ -813,6 +821,10 @@ impl AiCliProvider for ClaudeProvider {
             .collect()
     }
 
+    fn conversation_store_root(&self, config_dir: &Path) -> PathBuf {
+        config_dir.join("projects")
+    }
+
     fn has_recorded_conversation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
         self.transcript_path(config_dir, cwd, session_id).exists()
     }
@@ -1173,6 +1185,10 @@ impl AiCliProvider for CopilotProvider {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    fn conversation_store_root(&self, config_dir: &Path) -> PathBuf {
+        config_dir.join("session-state")
     }
 
     fn has_recorded_conversation(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> bool {
@@ -1568,6 +1584,10 @@ impl AiCliProvider for PiProvider {
             .into_iter()
             .filter_map(|(id, _path)| id.parse::<Uuid>().ok())
             .collect()
+    }
+
+    fn conversation_store_root(&self, config_dir: &Path) -> PathBuf {
+        config_dir.join("sessions")
     }
 
     fn has_recorded_conversation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {

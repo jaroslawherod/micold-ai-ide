@@ -58,7 +58,7 @@ use support::layout as lay;
 /// cuts, in `session-area-six-tabs`. The label keeps its own width and the viewport clips it, as
 /// it does for any scrolled tab; the single `+` leaving the strip's trailing controls widened the
 /// viewport, so which tab the edge cuts moved onto this one.
-const KNOWN_OVERFLOWS: &[&str] = &["0/0/0/1/1/1/0/0/0/0/0/0/5/0/0/0/0/1/0"];
+const KNOWN_OVERFLOWS: &[&str] = &["0/0/0/1/1/0/0/0/0/0/0/0/5/0/0/0/0/1/0"];
 
 /// Name an offending node by its anchor where one covers it, otherwise by its path (FR-004).
 ///

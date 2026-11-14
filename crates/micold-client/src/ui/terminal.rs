@@ -616,8 +616,6 @@ pub(crate) fn transcript_body<'a>(
                 Message::Window(crate::features::window::Msg::FieldFocusChanged(id, focused))
             },
         }),
-        // #943 FR-019: **Open in terminal** in the transcript's header, from `switch_entries`.
-        switch_button(state, id, tokens::roles(scheme)),
     );
     iced::widget::column![
         transcript,

@@ -1083,6 +1083,12 @@ pub enum ClientMsg {
         /// Opaque echo value.
         nonce: u64,
     },
+    /// The answer to the orchestrator's [`DaemonMsg::LinkPing`] (#1724). Only an orchestrator
+    /// sends the probe; a daemon that hosts sessions ignores this message.
+    LinkPong {
+        /// Echo of the [`DaemonMsg::LinkPing`] nonce.
+        nonce: u64,
+    },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1200,6 +1206,12 @@ pub enum DaemonMsg {
     /// Keepalive reply.
     Pong {
         /// Echo of the [`ClientMsg::Ping`] nonce.
+        nonce: u64,
+    },
+    /// The orchestrator's heartbeat probe on a daemon link (#1724). Answered with
+    /// [`ClientMsg::LinkPong`]; a client ignores it.
+    LinkPing {
+        /// Opaque echo value.
         nonce: u64,
     },
 

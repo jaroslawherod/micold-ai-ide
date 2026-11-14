@@ -215,13 +215,15 @@ impl TreeKill {
             unsafe {
                 let mut info: libc::siginfo_t = std::mem::zeroed();
                 let pid = libc::id_t::from(self.pid);
-                libc::waitid(
+                let looked = libc::waitid(
                     libc::P_PID,
                     pid,
                     &mut info,
                     libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-                ) == 0
-                    && info.si_pid() != 0
+                );
+                // A failed look (ECHILD: already reaped) counts as exited, so `try_wait` gets to
+                // say so instead of the run loop polling forever.
+                looked != 0 || info.si_pid() != 0
             }
         }
         #[cfg(not(unix))]
@@ -504,8 +506,17 @@ impl StreamingChild {
             // As in `run_bounded`: whatever the child left running would hold the pipes open, so
             // the tree is killed once the child exits, and before it is reaped: until then its
             // pid, and so its group id, cannot name anyone else's processes.
-            if self.shared.tree.leader_exited() {
+            let exited = self.shared.tree.leader_exited();
+            if exited {
                 self.shared.tree.kill_tree();
+            }
+            #[cfg(test)]
+            tests::after_look(exited);
+            // Unix reaps only a child the look saw exited, after the kill above: one that exits
+            // between the look and the reap would be reaped with its tree still running (#1856).
+            // It is seen on the next pass instead.
+            if cfg!(unix) && !exited {
+                continue;
             }
             match self.child.try_wait() {
                 Ok(Some(status)) => {
@@ -728,6 +739,57 @@ mod tests {
             unsafe { libc::kill(pid, libc::SIGKILL) };
         }
         assert!(!alive, "the descendant {pid} outlived the tree kill");
+    }
+
+    type Hook = Box<dyn Fn(bool)>;
+
+    thread_local! {
+        static AFTER_LOOK: std::cell::RefCell<Option<Hook>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    /// Test seam: runs on the run loop's thread between the look at the child and the reap.
+    pub(super) fn after_look(exited: bool) {
+        AFTER_LOOK.with(|hook| {
+            if let Some(hook) = hook.borrow().as_ref() {
+                hook(exited);
+            }
+        });
+    }
+
+    /// #1856: a child that exits between the loop's look and its reap was reaped with its tree
+    /// still running. The hook holds that gap open until the child is gone.
+    #[cfg(unix)]
+    #[test]
+    fn a_child_exiting_between_the_look_and_the_reap_still_loses_its_tree() {
+        AFTER_LOOK.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(|exited| {
+                if !exited {
+                    std::thread::sleep(Duration::from_millis(600));
+                }
+            }));
+        });
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 300 >/dev/null 2>&1 & echo $!; sleep 0.3"]);
+        let mut out = String::new();
+        let exit = StreamingChild::spawn(cmd)
+            .unwrap()
+            .run(|_, bytes| out.push_str(&String::from_utf8_lossy(bytes)));
+        AFTER_LOOK.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(exit, ExitKind::Code(0));
+        let pid: libc::pid_t = out.trim().parse().expect("the sleep's pid");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only checks that the process exists.
+        while unsafe { libc::kill(pid, 0) } == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // SAFETY: as above.
+        let alive = unsafe { libc::kill(pid, 0) } == 0;
+        if alive {
+            // SAFETY: clean up the leaked sleep.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+        assert!(!alive, "the sleep {pid} outlived the run");
     }
 
     #[cfg(unix)]

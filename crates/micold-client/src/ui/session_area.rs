@@ -1,42 +1,36 @@
 //! The session area: what the main area draws while a session is shown (feature 1126, contract
-//! A1, research R12). Top to bottom: the context header naming the shown location, the tab strip,
-//! then the pane area; nothing under it. The header's words come from
-//! `micold_core::context_header` and the strip's members from `features::session_strip`; this
-//! module only lays them out (contracts H9, S7).
+//! A1, research R12; feature 1793). Top to bottom: the one-row tab strip, then the pane area;
+//! nothing under it. The strip's members come from `features::session_strip`; this module only
+//! lays them out (contract S7).
 
 use crate::app::{Message, State};
 use crate::features::header_bar::{HeaderMenu, Msg as HeaderMsg};
 use crate::features::session::Msg as SessionMsg;
 use crate::features::session_strip::{
-    member_offsets, strip_overflow, Member, PlusMenuModel, StripModel, PLUS_MENU_NAME,
+    member_offsets, strip_overflow, HiddenChip, Member, PlusMenuModel, StripModel, PLUS_MENU_NAME,
 };
 use crate::icons::Icon;
 use crate::ui::cdk::keyed::Keyed;
 use crate::ui::material::{
-    self, card_palette, card_state_icon, tab, tab_content_colour, ActivityBadge, BadgeEmphasis,
-    CountBadge, Ellipsized, Glyph, IconButton, IndicatorEdge, PullRequestIndicator, SurfaceKind,
-    Tab, Tag, Text, Tooltip, TooltipPosition, TypeRole, UnreadMark,
+    self, tab, tab_content_colour, ActivityBadge, BadgeEmphasis, CountBadge, Ellipsized,
+    IconButton, IndicatorEdge, SurfaceKind, Tab, Text, Tooltip, TooltipPosition, TypeRole,
+    UnreadMark,
 };
 use crate::ui::terminal;
 use iced::widget::{column, container, row, Space};
-use iced::{Alignment, Element, Length, Padding};
-use micold_core::context_header::{Chip, CountsReading, HeaderText, PrChipInput};
+use iced::{Alignment, Element, Length};
+use micold_core::context_header::CountsReading;
 use micold_core::review_tabs::ChangesButton;
 use micold_core::session::SessionLocation;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
 
-/// The widest a header chip grows before its text is cut with an ellipsis (FR-013); its full text
-/// is in its tooltip.
-pub const CHIP_MAX_WIDTH: f32 = 240.0;
+/// The one-row header's height (feature 1793, FR-001): the tab row, 40 px.
+pub const ROW_HEIGHT: f32 = 40.0;
 
-/// The widest the strip's status words grow before they are cut with an ellipsis (S7); the full
-/// words are in their tooltip.
-pub const STATUS_MAX_WIDTH: f32 = 160.0;
-
-/// The session area for the shown session: the header, the strip, then the pane area (A1, A2). The
-/// header's and the strip's slots are there even when they have nothing to draw, empty, so the pane
-/// area's place in the tree never moves (feature 023 FR-008a).
+/// The session area for the shown session: the strip, then the pane area (A1, A2). The strip's slot
+/// is there even when it has nothing to draw, empty, so the pane area's place in the tree never
+/// moves (feature 023 FR-008a).
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     state: &'a State,
@@ -47,16 +41,11 @@ pub fn view<'a>(
     scheme: ColorScheme,
     link_context: micold_core::link::LinkContext,
 ) -> Element<'a, Message> {
-    let header: Element<'a, Message> = match state.current_session_location() {
-        Some(location) => header(state, &location, scheme),
-        None => container(Space::new()).into(),
-    };
     let strip: Element<'a, Message> = match StripModel::of(state) {
         Some(model) => strip(state, &model, area, scheme),
         None => container(Space::new()).into(),
     };
     column![
-        header,
         strip,
         terminal::pane(
             state,
@@ -69,38 +58,6 @@ pub fn view<'a>(
         )
     ]
     .into()
-}
-
-/// The shown location's current pull request, as the sidebar's indicator reads it (FR-005, R4):
-/// `None` without a branch, while pull request status is off, or with no status for the branch.
-pub(crate) fn pr_chip_input(state: &State, branch: Option<&str>, now: u64) -> Option<PrChipInput> {
-    if !state.pr_status.enabled {
-        return None;
-    }
-    let status = state.pr_status.statuses.get(branch?)?;
-    let read_at = state.pr_status.read_at.unwrap_or(now);
-    Some(PrChipInput {
-        number: status.number,
-        state: status.state,
-        review: status.review,
-        conflict: status.conflict,
-        stale: micold_core::pull_request::is_stale(read_at, now),
-    })
-}
-
-/// What the header says for `location`, from its Overview card's own model (R2); `None` when the
-/// location does not resolve to a card.
-pub(crate) fn header_text(
-    state: &State,
-    location: &SessionLocation,
-    now: u64,
-) -> Option<(HeaderText, Option<PrChipInput>)> {
-    let model = crate::ui::overview::location_card(state, location)?;
-    let pr = pr_chip_input(state, model.branch.as_deref(), now);
-    Some((
-        HeaderText::of(&model, pr.as_ref(), counts_of(state, location)),
-        pr,
-    ))
 }
 
 /// What is known of `location`'s change counts: the header's reading when the header follows it,
@@ -144,14 +101,14 @@ pub fn over_review<'a>(
     changes: Element<'a, Message>,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
-    let Some(location) = state.shown_location() else {
+    if state.shown_location().is_none() {
         return changes;
-    };
+    }
     let strip: Element<'a, Message> = match StripModel::of(state) {
         Some(model) => strip(state, &model, None, scheme),
         None => container(Space::new()).into(),
     };
-    column![header(state, &location, scheme), strip, changes].into()
+    column![strip, changes].into()
 }
 
 /// The header's Changes button labelled `label` (H8, H9): outlined, the git glyph leading, shown
@@ -177,58 +134,6 @@ pub fn changes_button<'a>(
         tooltip,
         r,
     )
-    .into()
-}
-
-/// The context header (H9, amended by feature 1463): one line, the title taking the remaining
-/// width, then the chips row, then the Changes button, whose label is cut only
-/// after the title has given way; child lists that never vary.
-fn header<'a>(
-    state: &State,
-    location: &SessionLocation,
-    scheme: ColorScheme,
-) -> Element<'a, Message> {
-    let r = tokens::roles(scheme);
-    let Some((text, pr)) = header_text(state, location, crate::ui::sidebar::unix_now()) else {
-        return container(Space::new()).into();
-    };
-    let mut chips: Vec<Element<'a, Message>> = vec![state_chip(&text, r)];
-    let title = Tooltip::new(
-        Ellipsized::<Message>::at_role_spaced(text.title, TypeRole::Title, r.on_surface),
-        text.title_tooltip,
-        r,
-    );
-    if let Some(branch) = text.branch {
-        chips.push(neutral_chip(branch, None, r));
-    }
-    if let (Some(chip), Some(pr)) = (text.pull_request, pr) {
-        let (mark, checks) = crate::ui::sidebar::indicator_marks(&pr.state);
-        let mut indicator = PullRequestIndicator::<Message>::new(mark, &r).stale(pr.stale);
-        if let Some(checks) = checks {
-            indicator = indicator.checks(checks);
-        }
-        chips.push(neutral_chip(chip, Some(indicator.into()), r));
-    }
-    // The chips are laid out at their capped width, then the Changes button at the width it asks
-    // for or what remains (its label is cut with an ellipsis, FR-002); the Fill title gets the rest,
-    // so the title is what gives way first.
-    let changes = changes_button(state, location, text.changes, r);
-    container(
-        row![
-            container(title).width(Length::Fill),
-            row(chips).spacing(spacing::SM).align_y(Alignment::Center),
-            changes
-        ]
-        .spacing(spacing::MD)
-        .align_y(Alignment::Center),
-    )
-    .width(Length::Fill)
-    .padding(Padding {
-        top: spacing::XS,
-        bottom: spacing::XS,
-        left: spacing::LG,
-        right: spacing::LG,
-    })
     .into()
 }
 
@@ -283,47 +188,17 @@ pub(crate) fn strip<'a>(
     // Feature 1269 (U15): while the Review tab is shown the split buttons keep their place,
     // disabled, as they act on panes that are not drawn.
     let splits: Element<'a, Message> = match area.and_then(|a| a.layout.pane(a.layout.focused())) {
-        _ if model.review_shown() => crate::ui::panes::split_buttons_disabled(r),
-        Some(pane) => crate::ui::panes::split_buttons(pane, r),
+        _ if model.review_shown() => crate::ui::panes::split_buttons_in_row(None, ROW_HEIGHT, r),
+        Some(pane) => crate::ui::panes::split_buttons_in_row(Some(pane), ROW_HEIGHT, r),
         None => container(Space::new()).into(),
     };
-    // The controls after the tabs give way by rank when the strip is too narrow (feature 1463
-    // FR-012): the status words give way first, while the split buttons stay whole. A plain
-    // `row!` would squeeze the controls it lays out last instead.
-    let controls = material::GiveWayRow::new(spacing::SM)
-        .shorten(0, status_cluster(model, r))
-        .keep(splits);
-    let strip = row![tabs, controls]
-        .spacing(spacing::SM)
-        .align_y(Alignment::Center);
-    material::Surface::new(strip, SurfaceKind::Toolbar, r)
-        .width(Length::Fill)
-        .padding(spacing::SM)
-        .into()
-}
-
-/// The shown session's status words, cut under [`STATUS_MAX_WIDTH`] with the full words on hover,
-/// and while its marked process is stopped the restart as the cluster's last
-/// child, so its coming and going moves no other control (R9, US2 sc. 5 and 6). While the Review
-/// tab is shown the restart keeps its place, disabled (feature 1269, U15).
-fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Message> {
-    let words = Tooltip::new(
-        container(
-            Ellipsized::<Message>::at_role(
-                model.status.clone(),
-                TypeRole::Label,
-                r.on_surface_variant,
-            )
-            .shrink(),
-        )
-        .max_width(STATUS_MAX_WIDTH),
-        model.status.clone(),
-        r,
-    )
-    .position(TooltipPosition::Bottom);
-    let mut cluster = material::GiveWayRow::new(spacing::SM).shorten(0, words);
+    // The controls after the tabs keep their size: the restart while the marked process is stopped
+    // (R9; disabled while the Review tab is shown, feature 1269 U15), the split buttons, then the
+    // `N hidden` chip at the row's end (feature 1793, FR-001). A plain `row!` would squeeze the
+    // controls it lays out last.
+    let mut controls = material::GiveWayRow::new(spacing::SM);
     if let Some(restart) = model.restart.clone() {
-        cluster = cluster.keep(
+        controls = controls.keep(
             material::Button::with_content(
                 Text::new("restart", TypeRole::Label, r).muted(),
                 material::ButtonVariant::Text,
@@ -333,7 +208,52 @@ fn status_cluster<'a>(model: &StripModel, r: tokens::Roles) -> Element<'a, Messa
             .on_press_maybe((!model.review_shown()).then_some(restart)),
         );
     }
-    cluster.into()
+    controls = controls.keep(splits);
+    if let Some(chip) = &model.hidden {
+        controls = controls.keep(hidden_chip(chip, r));
+    }
+    let strip = row![tabs, controls]
+        .spacing(spacing::SM)
+        .align_y(Alignment::Center);
+    material::Surface::new(strip, SurfaceKind::Toolbar, r)
+        .width(Length::Fill)
+        .padding([0.0, spacing::SM])
+        .height(ROW_HEIGHT)
+        .into()
+}
+
+/// The `N hidden` chip: it shows the hidden events, and its tooltip carries the accessible name.
+fn hidden_chip<'a>(chip: &HiddenChip, r: tokens::Roles) -> Element<'a, Message> {
+    Tooltip::new(
+        material::ToggleChip::new(chip.text.clone(), chip.press.clone(), r)
+            .one_line()
+            .takes_the_keyboard(),
+        chip.name.clone(),
+        r,
+    )
+    .position(TooltipPosition::Bottom)
+    .into()
+}
+
+/// Where the `+` menu hangs from: the `+`'s leading edge in the strip, then the strip's bottom
+/// edge. The `+` sits after the tabs, so its offset follows the tab region's scroll; one scrolled
+/// out of view hangs from the region's end instead. The strip's own origin is the sidebar's width.
+fn plus_anchor(state: &State) -> (u16, u16) {
+    let at = StripModel::of(state)
+        .and_then(|model| {
+            let index = model
+                .members
+                .iter()
+                .position(|m| matches!(m, Member::Plus))?;
+            Some(member_offsets(&model.members)[index].0)
+        })
+        .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32)
+        .clamp(0.0, state.session.tab_strip_viewport_width as f32);
+    (
+        (crate::ui::freed_width(state) + spacing::SM + at) as u16,
+        // The bar's bottom edge, then the strip's one row (feature 1793: no header row above it).
+        (tokens::anatomy::app_bar::BOTTOM_EDGE + ROW_HEIGHT) as u16,
+    )
 }
 
 /// The `+` menu as a floating overlay (feature 1793, FR-007): another session, then a terminal,
@@ -358,24 +278,7 @@ pub(crate) fn plus_menu<'a>(
             .collect()
     });
     let count = items.len();
-    // The `+` sits after the tabs, so the panel hangs from its leading edge below the strip; the
-    // strip's own origin is the sidebar's width and the bar's bottom edge.
-    let at = StripModel::of(state)
-        .and_then(|model| {
-            let index = model
-                .members
-                .iter()
-                .position(|m| matches!(m, Member::Plus))?;
-            Some(member_offsets(&model.members)[index].0)
-        })
-        .map_or(0.0, |x| x - state.session.tab_strip_scroll_offset as f32);
-    let anchor = (
-        (crate::ui::freed_width(state) + spacing::SM + at.max(0.0)) as u16,
-        // The bar's bottom edge, the context header row, then the strip (one touch target each,
-        // padded). Approximate until the one-row header (M4) merges the header into the strip.
-        (tokens::anatomy::app_bar::BOTTOM_EDGE
-            + 2.0 * (tokens::anatomy::button::MIN_TOUCH_TARGET + 2.0 * spacing::SM)) as u16,
-    );
+    let anchor = plus_anchor(state);
     let (x, y) = crate::features::project::clamp_menu_anchor(
         anchor,
         material::menu_panel_size(count),
@@ -407,6 +310,7 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
             tooltip,
             marked,
             stopped,
+            working,
             ..
         } => {
             let tint = tab_content_colour(*marked, r);
@@ -425,7 +329,14 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
             .fixed_width(tab::SESSION_WIDTH)
             .edge(IndicatorEdge::Bottom)
             .active(*marked)
-            .leading(mark(*stopped))
+            .leading(ActivityBadge::for_emphasis(
+                if *working {
+                    Some(BadgeEmphasis::Working)
+                } else {
+                    stopped.then_some(BadgeEmphasis::Stopped)
+                },
+                r,
+            ))
             .trailing(
                 Tooltip::new(close, "Close this session", r).position(TooltipPosition::Bottom),
             )
@@ -502,6 +413,7 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
         Member::Plus => Tooltip::new(
             IconButton::new(Icon::AddSession, r)
                 .padding(spacing::SM)
+                .target(ROW_HEIGHT)
                 .on_press(m.press()),
             PLUS_MENU_NAME,
             r,
@@ -511,39 +423,38 @@ fn member<'a>(m: &Member, r: tokens::Roles) -> Element<'a, Message> {
     }
 }
 
-/// The state chip (FR-003): the card's state colour, its icon and its word, the reason on hover.
-fn state_chip<'a>(text: &HeaderText, r: Roles) -> Element<'a, Message> {
-    let p = card_palette(text.state, &r);
-    let chip = Tag::<Message>::new(text.state.label(), p.header)
-        .solid(p.on_header)
-        .role(TypeRole::Label)
-        .leading(
-            Glyph::<Message>::new(card_state_icon(text.state), TypeRole::Label, r)
-                .tint(p.on_header),
-        )
-        .max_width(CHIP_MAX_WIDTH);
-    Tooltip::new(chip, text.state_tooltip.clone(), r).into()
-}
-
-/// A branch or pull request chip: neutral, led by `leading` when given, its full text on hover.
-fn neutral_chip<'a>(
-    chip: Chip,
-    leading: Option<Element<'a, Message>>,
-    r: Roles,
-) -> Element<'a, Message> {
-    let mut tag = Tag::<Message>::new(chip.text, r.on_surface_variant)
-        .role(TypeRole::Label)
-        .max_width(CHIP_MAX_WIDTH);
-    if let Some(leading) = leading {
-        tag = tag.leading(leading);
-    }
-    Tooltip::new(tag, chip.tooltip, r).into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+
+    /// FR-007: the `+` menu hangs from the strip's bottom edge, and a `+` scrolled out of the tab
+    /// region hangs from the region's end rather than off-screen.
+    #[test]
+    fn the_plus_menu_hangs_below_the_strip_and_stays_in_the_tab_region() {
+        let (mut state, _) = shown_worktree();
+        state.session.tab_strip_viewport_width = 300;
+        let origin = crate::ui::freed_width(&state) + spacing::SM;
+        let (x, y) = plus_anchor(&state);
+        assert_eq!(
+            y,
+            (tokens::anatomy::app_bar::BOTTOM_EDGE + ROW_HEIGHT) as u16,
+            "one row below the bar"
+        );
+        assert!(f32::from(x) >= origin && f32::from(x) <= origin + 300.0);
+        state.session.tab_strip_scroll_offset = 100_000;
+        assert_eq!(
+            plus_anchor(&state).0,
+            origin as u16,
+            "scrolled past the leading edge: at the region's start"
+        );
+        state.session.tab_strip_scroll_offset = 0;
+        state.session.tab_strip_viewport_width = 10;
+        assert!(
+            f32::from(plus_anchor(&state).0) <= origin + 10.0,
+            "a `+` beyond the region's end hangs from the end"
+        );
+    }
 
     const NOW: u64 = 1_000_000;
 
@@ -557,58 +468,6 @@ mod tests {
             head: "abc".into(),
             conflict: true,
         }
-    }
-
-    fn with_status(enabled: bool, read_at: Option<u64>) -> State {
-        let mut state = State::default();
-        state.pr_status.enabled = enabled;
-        state.pr_status.read_at = read_at;
-        state.pr_status.statuses.insert(
-            "fix/1117_ci".into(),
-            status(
-                1118,
-                PrState::Open {
-                    checks: CheckStatus::Failing,
-                },
-            ),
-        );
-        state
-    }
-
-    /// T009 (FR-005, data-model *PrChipInput*): no chip without a branch, while the status is off
-    /// or with no status for the branch; otherwise the sidebar's reading, stale by its rule.
-    #[test]
-    fn the_pull_request_chip_reads_what_the_sidebar_reads() {
-        let on = with_status(true, Some(NOW));
-        assert_eq!(pr_chip_input(&on, None, NOW), None, "no branch");
-        assert_eq!(
-            pr_chip_input(&with_status(false, Some(NOW)), Some("fix/1117_ci"), NOW),
-            None,
-            "pull request status off"
-        );
-        assert_eq!(pr_chip_input(&on, Some("main"), NOW), None, "no status");
-        assert_eq!(
-            pr_chip_input(&on, Some("fix/1117_ci"), NOW),
-            Some(PrChipInput {
-                number: 1118,
-                state: PrState::Open {
-                    checks: CheckStatus::Failing,
-                },
-                review: ReviewState::ChangesRequested,
-                conflict: true,
-                stale: false,
-            })
-        );
-        let old = with_status(true, Some(0));
-        assert_eq!(
-            pr_chip_input(&old, Some("fix/1117_ci"), NOW).map(|pr| pr.stale),
-            Some(micold_core::pull_request::is_stale(0, NOW)),
-            "stale under the sidebar's rule"
-        );
-        assert_eq!(
-            pr_chip_input(&old, Some("fix/1117_ci"), NOW).map(|pr| pr.stale),
-            Some(true)
-        );
     }
 
     /// A project with the worktree `fix-1117_ci` on `fix/1117_ci` and one session in it, shown.
@@ -639,20 +498,6 @@ mod tests {
         (state, location)
     }
 
-    /// The pull request number the sidebar's row for `location` shows.
-    fn sidebar_pr(state: &State, now: u64) -> Option<u64> {
-        state.sidebar_entries().iter().find_map(|entry| {
-            crate::features::sidebar::row_pull_request(
-                entry,
-                &state.pr_status.statuses,
-                &state.pr_status.removable,
-                state.pr_status.read_at,
-                now,
-            )
-            .map(|row| row.status.number)
-        })
-    }
-
     /// The shown worktree's session starts running and a reading finds the branch's pull request,
     /// applied before one `State::update`.
     fn running_with_a_pull_request() -> (State, SessionLocation) {
@@ -674,64 +519,6 @@ mod tests {
         );
         state.update(Message::NoOp);
         (state, location)
-    }
-
-    /// T010, US1 scenario 5 (FR-014): a change of the location's state and pull request, applied
-    /// before one `State::update`, shows in the header text of that same state.
-    #[test]
-    fn the_header_shows_a_change_on_the_refresh() {
-        let (mut state, location) = shown_worktree();
-        state.update(Message::NoOp);
-        let (before, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        assert_eq!(before.state, micold_core::overview::CardState::Idle);
-        assert_eq!(before.pull_request, None);
-
-        let (state, location) = running_with_a_pull_request();
-        let (after, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        assert_eq!(
-            after.state,
-            micold_core::overview::CardState::NeedsAttention,
-            "a running session whose pull request has failing checks and requested changes calls \
-             for attention"
-        );
-        assert!(
-            after
-                .pull_request
-                .as_ref()
-                .is_some_and(|chip| chip.text.starts_with("PR #1118")),
-            "the header names the pull request: {:?}",
-            after.pull_request
-        );
-    }
-
-    /// T010, US1 scenario 5 (FR-014): the header and the sidebar's row for the location agree on
-    /// the pull request, before and after the change.
-    #[test]
-    fn the_header_and_the_sidebar_agree_on_the_pull_request() {
-        let (mut state, location) = shown_worktree();
-        state.update(Message::NoOp);
-        assert_eq!(sidebar_pr(&state, NOW), None);
-        let (before, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        assert_eq!(before.pull_request, None, "neither shows one yet");
-
-        let (state, location) = running_with_a_pull_request();
-        let (after, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        assert_eq!(sidebar_pr(&state, NOW), Some(1118));
-        assert!(
-            after
-                .pull_request
-                .is_some_and(|chip| chip.text.starts_with("PR #1118")),
-            "the header names the sidebar's pull request"
-        );
-    }
-
-    /// FR-014: the header's state is the card's own, which the Overview draws.
-    #[test]
-    fn the_header_state_is_the_cards_state() {
-        let (state, location) = running_with_a_pull_request();
-        let (after, _) = header_text(&state, &location, NOW).expect("the worktree resolves");
-        let card = crate::ui::overview::location_card(&state, &location).expect("a card");
-        assert_eq!(after.state, card.state, "the header's state is the card's");
     }
 
     /// R6: the follow step points the header at the shown location.

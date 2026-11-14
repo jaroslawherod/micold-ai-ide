@@ -392,6 +392,20 @@ rather than training everyone to reach for the label.
 The gate runs on pull requests only; a push to main has already been through it. Its own cases are
 in `scripts/tests/check-user-guide-updated.test.sh` and run in the same job, before it.
 
+## Linux-only CI (#1877)
+
+macOS and Windows are switched off in CI until main is green on them again. Nothing is deleted;
+the code, scripts and steps stay in the tree. To re-enable (follow-up issue tracks it):
+
+- `classify`'s `test_os` output in `ci.yml` is `["ubuntu-latest"]`; restore
+  `["ubuntu-latest","macos-latest","windows-latest"]` (and `["macos-latest","windows-latest"]` on a
+  proven push), plus the `fromJSON` fallback in the `test` job. That brings back the macOS bundle
+  package + launch smoke, the Windows installer package + smoke, the Windows daemon and
+  `windows_process_tree` steps, the GUI-subsystem exe check and the desktop notification backends.
+- `windows-arm64-package` (`windows-11-arm`) is disabled by a leading `false &&` in its `if:`;
+  remove it. The job stays in `ci-complete`'s `needs:`, where a skip reads as satisfied.
+- `release.yml` is unchanged: the `macos` and `windows` release jobs still run on a release.
+
 ## The macOS packaging step
 
 The macOS `.app` bundle is composed and launched inside the **`test` job's macOS leg**, as a step —

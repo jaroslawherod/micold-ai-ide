@@ -139,7 +139,7 @@ pub use host_picker::HostPicker;
 pub use inline_diff::{DiffPart, InlineDiff};
 pub use markdown_view::MarkdownView;
 pub use menu_select::{MenuSelect, MenuSelectRow};
-pub(crate) use overview_card::{palette as card_palette, state_icon as card_state_icon};
+pub(crate) use overview_card::state_icon as card_state_icon;
 pub use overview_card::{CardPrRow, OverviewCard, PrTone};
 pub use picker::EmphasisedLabel;
 pub use picker::Row as TypeaheadRow;

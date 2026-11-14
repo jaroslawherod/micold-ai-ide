@@ -55,6 +55,22 @@ pub enum RefuseReason {
     AlreadyLinked,
 }
 
+/// The sentence a refusal carries: a version mismatch names both numbers.
+pub fn refusal_message(
+    reason: RefuseReason,
+    id: &WireDaemonId,
+    daemon_version: u32,
+    orchestrator_version: u32,
+) -> String {
+    match reason {
+        RefuseReason::AlreadyLinked => format!("a link for daemon {id} is already open"),
+        RefuseReason::VersionMismatch => format!(
+            "daemon {id} speaks protocol version {daemon_version}; this orchestrator speaks \
+             {orchestrator_version}"
+        ),
+    }
+}
+
 /// The orchestrator's answer to an announcement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "verdict", rename_all = "snake_case")]
@@ -248,6 +264,17 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<LinkVerdict>(&serde_json::to_string(&refused).unwrap()).unwrap(),
             refused
+        );
+    }
+
+    #[test]
+    fn the_refusal_text_names_both_versions() {
+        let id = WireDaemonId::new("a").unwrap();
+        let text = refusal_message(RefuseReason::VersionMismatch, &id, 70, 81);
+        assert!(text.contains("70") && text.contains("81"), "{text}");
+        assert_ne!(
+            text,
+            refusal_message(RefuseReason::AlreadyLinked, &id, 70, 81)
         );
     }
 

@@ -107,7 +107,9 @@ background service, and confirm the row shows the new name rather than the old o
 ### Edge Cases
 
 - **A name is recorded, then the AI CLI's own records for that conversation are deleted.** The
-  remembered name stays on the row; losing the transcript must not un-name the session.
+  remembered name stays on the row while the application cannot tell the conversation is gone; one
+  found gone removes the session (026 FR-008a). Losing the transcript must not un-name a session
+  that stays listed.
 - **The application is stopped between a name being shown and it being written down.** At most the
   single most recent name change is lost, and the next time the session is running the name is
   re-observed and recorded again.
@@ -153,8 +155,13 @@ background service, and confirm the row shows the new name rather than the old o
   latest, never an earlier name the CLI still keeps beside it (BUG-002).
 - **FR-007**: A name recovered under FR-006 MUST be recorded like any other, so that the recovery is
   performed once rather than repeated on every restart.
-- **FR-008**: The application MUST keep a remembered name after the AI CLI's own records for that
-  conversation become unavailable or are removed.
+- **FR-008**: The application MUST keep a remembered name while it cannot tell that the AI CLI's
+  conversation is gone: the records are unreadable, the provider's store cannot be located or read
+  (at startup: its transcript root is missing, is not a directory or is empty), the provider assigns
+  its own ids, or every session of the provider looks gone at once (more than one candidate; a lost
+  store, not lost conversations). A conversation is gone only when the provider's store is readable
+  and has no record of it. A session whose conversation is found gone, at startup, at start, or on a
+  crash restart, is removed, and its name with it (026 FR-008a, BUG-1795 T094, BUG-1852).
 - **FR-009**: Failing to write a session's name durably MUST NOT change what is displayed, MUST NOT
   interrupt the session, and MUST NOT be surfaced to the user as a session failure.
 - **FR-010**: Sessions created before this feature exists MUST get their names back under FR-006;

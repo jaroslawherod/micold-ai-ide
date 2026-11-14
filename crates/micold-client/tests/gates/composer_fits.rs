@@ -199,7 +199,7 @@ fn a_long_draft_grows_the_composer_to_its_limit_and_the_transcript_stays() {
     type_draft(&mut short, id, "one line");
     let text: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
     type_draft(&mut long, id, &text.join("\n"));
-    let header = crate::session_area_fits::header_height(long.clone());
+    let header = crate::session_area_fits::strip_height(long.clone());
     let (_, short_view) = paint(short, id);
     let (_, long_view) = paint(long, id);
     let lost = short_view.height - long_view.height;
@@ -227,7 +227,7 @@ fn a_long_queue_and_a_long_draft_leave_the_transcript_and_send_in_view() {
     report(&mut state, id, busy(InterruptAsk::None), true, 12);
     let text: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
     type_draft(&mut state, id, &text.join("\n"));
-    let header = crate::session_area_fits::header_height(state.clone());
+    let header = crate::session_area_fits::strip_height(state.clone());
     assert!(header > 0.0, "the session area draws its header");
     let (_, roomy) = paint(idle, id);
     let (painted, transcript) = paint(state, id);

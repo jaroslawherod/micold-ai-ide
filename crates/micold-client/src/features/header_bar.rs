@@ -8,9 +8,10 @@ use crate::features::composer::Msg as ComposerMsg;
 use crate::features::session::{switch_entries, Msg as SessionMsg};
 use crate::features::session_strip::session_working;
 use crate::features::structured_transcript::TranscriptMsg;
+use crate::ui::transcript::running_text;
 use micold_core::context_header::changes_label;
 use micold_core::format::group_digits;
-use micold_core::session::{SessionId, SessionKind};
+use micold_core::session::{SessionId, SessionKind, SessionLifecycle};
 use micold_core::structured::insights::ContextState;
 use micold_core::structured::transcript::{format_cost, format_turns};
 
@@ -110,6 +111,10 @@ impl MeterText {
         if totals.turns_counted > 0 {
             lines.push(format!("Turns: {}", format_turns(totals.turns_counted)));
         }
+        let cli_running = session
+            .and_then(|id| state.workspace.find_session(id))
+            .is_some_and(|(_, s)| s.lifecycle == SessionLifecycle::Running);
+        lines.extend(running_text(insights.running_background(cli_running)));
         if warning {
             lines.push("Near compaction".to_string());
         }

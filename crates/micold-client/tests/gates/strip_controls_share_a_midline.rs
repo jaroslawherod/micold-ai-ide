@@ -1,7 +1,7 @@
 //! The strip's controls sit on one midline (feature 1126 S9, FR-008).
 //!
 //! It restores the alignment half of feature 027's `the_tabs_share_a_midline_with_the_controls_beside_them`,
-//! which retired with the bar: the strip's tabs, **The status cluster** and the split buttons are laid out
+//! which retired with the bar: the strip's tabs and the split buttons are laid out
 //! in one row centred vertically, and a control that lost its centring (a tab taller than its
 //! neighbours, a button pushed to the row's top edge) reads as misplaced. `tab_children_fit` holds
 //! a tab's content to its own tab's midline; this holds the tabs and the fixed controls to each
@@ -30,11 +30,9 @@ fn the_tabs_and_the_controls_beside_them_share_a_midline() {
             continue;
         };
         let name = covered.name;
-        let status = at(covered, records, "session.strip.status")
-            .unwrap_or_else(|| panic!("{name}: the status cluster is anchored"));
         let split = at(covered, records, "session.strip.split")
             .unwrap_or_else(|| panic!("{name}: the split buttons are anchored"));
-        let line = midline(status);
+        let line = midline(split);
         let members: Vec<&LayoutRecord> = records
             .iter()
             .filter(|r| {
@@ -51,7 +49,7 @@ fn the_tabs_and_the_controls_beside_them_share_a_midline() {
         for (what, control) in controls {
             assert!(
                 (midline(control) - line).abs() <= TOLERANCE,
-                "{name}: {what} {control:?} is centred at {:.1}, not on The status cluster's midline {line:.1}",
+                "{name}: {what} {control:?} is centred at {:.1}, not on the split buttons' midline {line:.1}",
                 midline(control),
             );
             checked += 1;

@@ -89,7 +89,7 @@ fn body_from(src: &str, marker: &str, expected: &[&str]) -> String {
     body
 }
 
-/// The strip's and the header's builders, and the area's own view (S8).
+/// The strip's builders, and the area's own view (S8).
 fn builders() -> Vec<(&'static str, String)> {
     let area = source("ui/session_area.rs");
     vec![
@@ -106,20 +106,8 @@ fn builders() -> Vec<(&'static str, String)> {
             ),
         ),
         (
-            "session_area::status_cluster",
-            body_from(
-                &area,
-                "fn status_cluster<'a>(",
-                &["model.restart", "then_some(restart)"],
-            ),
-        ),
-        (
             "session_area::member",
             body_from(&area, "fn member<'a>(", &["Member::Plus", "Member::Shell"]),
-        ),
-        (
-            "session_area::header",
-            body_from(&area, "fn header<'a>(", &["changes_button(", "chips"]),
         ),
     ]
 }
@@ -488,27 +476,6 @@ mod press_in_flight {
         (sessions[0].id, sessions[1].id)
     }
 
-    /// How many chips the laid-out header's chips row holds in `state`.
-    fn header_chips(state: &State) -> usize {
-        let renderer = lay::renderer();
-        let under = under(state.clone());
-        let mut element = lay::view_of(&under);
-        let mut tree = Tree::new(element.as_widget());
-        let limits = layout::Limits::new(Size::ZERO, WINDOW);
-        let node = element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &limits);
-        let row = [
-            &super::support::covered_states::SESSION_HEADER_CHANGES[..5],
-            &[0, 1],
-        ]
-        .concat();
-        lay::walk(Layout::new(&node), lay::Layer::Base)
-            .into_iter()
-            .filter(|r| r.path.len() == row.len() + 1 && r.path.starts_with(&row))
-            .count()
-    }
-
     /// A shell instance opens before the pressed member: the helper's tab still gets the press.
     #[test]
     fn a_press_survives_a_shell_instance_opening_before_it() {
@@ -542,41 +509,6 @@ mod press_in_flight {
             vec![Message::Session(SessionMsg::ShellInstanceSelected(
                 main, shell
             ))]
-        );
-    }
-
-    /// A chip appears in the header above (the pull request): the press on the session tab lands.
-    /// The header is not a sibling of the strip's keyed row, so this is a no-regression pin; the
-    /// assertion that the header gained a chip is what keeps the scenario from being a no-op.
-    #[test]
-    fn a_press_survives_a_header_chip_appearing() {
-        use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
-        let before = strip_with(1, 1).state;
-        let (main, _) = ids(&before);
-        let mut after = before.clone();
-        after.pr_status.enabled = true;
-        after.pr_status.statuses.insert(
-            "feat/short".into(),
-            PullRequestStatus {
-                number: 7,
-                title: "A pull request".into(),
-                url: "https://github.com/o/r/pull/7".into(),
-                state: PrState::Open {
-                    checks: CheckStatus::Failing,
-                },
-                review: ReviewState::None,
-                head: "abc".into(),
-                conflict: false,
-            },
-        );
-        assert_eq!(
-            header_chips(&after),
-            header_chips(&before) + 1,
-            "the pull request chip appeared in the header"
-        );
-        assert_eq!(
-            press_across(before, after, MemberKey::Session(main)),
-            vec![Message::Session(SessionMsg::TerminalAiCliSelected(main))]
         );
     }
 
@@ -676,17 +608,13 @@ mod press_in_flight {
 // ---- T063, T065: pressing the rendered controls (US3 scenario 2, US2 scenario 5, FR-007) ----
 
 mod rendered_presses {
-    use super::support::covered_states::{
-        review_shown, strip_with, SESSION_HEADER_CHANGES, SESSION_STRIP_ROW,
-    };
+    use super::support::covered_states::{strip_with, SESSION_STRIP_ROW};
     use super::support::layout::{self as lay, StateUnderTest};
     use iced::advanced::widget::Tree;
     use iced::advanced::{layout, Layout};
     use iced::{Point, Size};
     use micold_client::app::Message;
     use micold_client::features::session::Msg as SessionMsg;
-    use micold_client::features::sidebar::Msg as SidebarMsg;
-    use micold_core::session::SessionLocation;
 
     /// What a click on the centre of the laid-out element at `path` publishes.
     fn click(under: StateUnderTest, path: &[usize]) -> Vec<Message> {
@@ -713,55 +641,6 @@ mod rendered_presses {
         lay::clicks_at(lay::view_of(&under), &renderer, [centre])
     }
 
-    #[test]
-    fn pressing_changes_with_the_view_closed_opens_the_shown_location() {
-        let pressed: Vec<Message> = click(strip_with(1, 1), SESSION_HEADER_CHANGES)
-            .into_iter()
-            .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
-            .collect();
-        assert_eq!(
-            pressed,
-            vec![Message::Sidebar(SidebarMsg::ReviewChangesRequested(
-                SessionLocation::Worktree("feat-short".to_string())
-            ))]
-        );
-    }
-
-    /// Feature 1269 (T018, U12, FR-012): pressing **Changes** while the location's Review tab is
-    /// shown asks for it again, which leaves the tabs and the shown tab as they were.
-    #[test]
-    fn pressing_changes_with_the_review_shown_changes_nothing() {
-        let mut state = review_shown().state;
-        assert!(
-            state.changes.tabs.shown().is_some(),
-            "the premise: the review is shown"
-        );
-        let pressed: Vec<Message> =
-            click(StateUnderTest::new(state.clone()), SESSION_HEADER_CHANGES)
-                .into_iter()
-                .filter(|m| matches!(m, Message::Sidebar(_) | Message::Changes(_)))
-                .collect();
-        assert_eq!(
-            pressed,
-            vec![Message::Sidebar(SidebarMsg::ReviewChangesRequested(
-                SessionLocation::Worktree("feat-short".to_string())
-            ))],
-            "never a close"
-        );
-        // The follow step's own bookkeeping (feature 1269, R4) settles first.
-        state.update(Message::NoOp);
-        let _ = state.take_changes_effect();
-        let before = state.changes.tabs.clone();
-        for message in pressed {
-            state.update(message);
-        }
-        assert_eq!(
-            state.changes.tabs, before,
-            "the tabs and the shown tab are unchanged"
-        );
-        assert!(state.changes.pending.is_none(), "nothing is read");
-    }
-
     /// `012` BUG-004 / FR-010, carried to the strip: with a shell instance shown and its process
     /// stopped, the restart control restarts **that instance**; a bare session-level restart is a
     /// no-op in Regular mode, where the session's AI CLI primary is still running.
@@ -777,9 +656,9 @@ mod rendered_presses {
             .expect("the shown session")
             .1
             .mark_shell_exited(shell);
-        // The status cluster is the first child of the strip's controls group (the strip row's
-        // second child); its words and restart control are its two children.
-        let path = [SESSION_STRIP_ROW, &[1, 0, 1]].concat();
+        // The restart control is the first child of the strip's controls group (the strip row's
+        // second child), before the split buttons.
+        let path = [SESSION_STRIP_ROW, &[1, 0]].concat();
         let pressed: Vec<Message> = click(under, &path)
             .into_iter()
             .filter(|m| {

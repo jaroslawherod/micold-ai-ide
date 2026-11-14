@@ -1664,11 +1664,11 @@ live until `StartIntent` grew a place for it. See `bugs/BUG-001.md`.
       over the same data dir, the restart): (a) an `InterruptedResumable` row whose conversation
       vanished after startup, `start_session_gated(.., Resume, ..)`: `Err`, nothing spawned, not
       listed, not listed after the reload; (b) a `Named`/`Derived` session whose conversation is gone
-      is still listed after startup and after the reload (D3: startup removes nothing). Also asserts a never-used session (label `Pending`, no conversation) and
+      is still listed after startup and after the reload (superseded by T099: BUG-1852's startup pass removes it). Also asserts a never-used session (label `Pending`, no conversation) and
       a session whose conversation exists are kept (the removal is not greedy).
 - [x] T093 [BUG-1795] **Dropped (D3, decided by orchestrator default, user unanswered)**: no startup
       removal. 029 FR-008 / 032 invariant 4 stand; a `Named`/`Derived` session whose conversation is
-      gone stays listed after a restart and is removed by T094's crash-restart removal once a start resumes it. T092(b) pins this.
+      gone stays listed after a restart and is removed by T094's crash-restart removal once a start resumes it. T092(b) pins this (superseded by T099, BUG-1852).
 - [x] T094 [BUG-1795] Start-time removal. In `start_session_gated`, the conversation-gone branch
       removes the session through `delete_session` (persisted) in place of `start_failures.insert`,
       logs the reason, returns the same `Err(NotFound, conversation_gone_text)`, and the caller's
@@ -1694,6 +1694,14 @@ live until `StartIntent` grew a place for it. See `bugs/BUG-001.md`.
       `Catalog::prunable_session_cwds` stand.
 - [x] T097 [BUG-1795] Close the record: tick T092–T096, set BUG-1795 *Status* to Fixed with the
       commit, and add FR-008a cross-references; T046/T050a/T087 are not reopened (their refusal and report-by-error stay true; only the row's fate after it is new).
+
+**Bugfix**: 2026-11-14 — BUG-1852. Startup removes a `Named`/`Derived` session whose conversation is gone (supersedes D3 of BUG-1795). T093 and T098 stay dropped as written; T099–T103 do what they would have done. See `bugs/BUG-1852.md`.
+
+- [x] T099 [BUG-1852] RED, first: in `crates/micold-daemon/tests/dead_session_removed.rs`, turn case (b) of T092 around and add the keep cases, failing on today's tree. After startup (and after a reload of the catalog from disk): a `Named` and a `Derived` session whose conversation is gone (app-assigned provider, resolvable config dir) are not listed; a `Named` session whose conversation exists, a `Pending` session, a session of a provider that mints its own ids (Pi), a session whose config dir cannot be resolved, a session whose config dir resolves but is absent or unreadable (unmounted disk, moved home), a config dir that exists with no transcript root (a single `Named` session whose conversation is missing), a provider whose every session looks gone at once (more than one), and a regular shell session are all still listed.
+- [x] T100 [BUG-1852] Startup removal. In `crates/micold-daemon/src/state.rs` add `remove_gone_sessions_at_startup` beside `present_interrupted_resumable_at_startup`: gather the non-archived `Named`/`Derived` AI-CLI sessions under the lock, ask `conversation_gone(provider, cwd, resume_handle)` off the lock (the predicate start-time removal uses), but only for a provider whose transcript root (Claude: `<config>/projects/`, see the provider's `read_dir` of it) exists, reads as a directory and holds at least one entry, and remove nothing for a provider whose every candidate (more than one) is gone at once (a lost store, not lost conversations), and remove each through `remove_dead_session` (persisted, reason logged). Call it from `crates/micold-daemon/src/server.rs` right after `present_interrupted_resumable_at_startup`, in `spawn_blocking`, before the accept loop.
+- [x] T101 [BUG-1852] Doc comments: `Catalog::prunable_session_cwds` (`crates/micold-daemon/src/catalog.rs`) says the filter stays `Pending`-only and that a `Named`/`Derived` session whose conversation is gone is removed by the startup pass of T100, not by pruning; `present_interrupted_resumable_at_startup` points to it. Update the user guide sentence `docs/user-guide/worktrees-and-sessions.md` (~line 1381) to match.
+- [x] T102 [BUG-1852] Supersede 029 FR-008 and 032 data-model invariant 4, and the clauses that follow from them, with the text in `bugs/BUG-1852.md` (*Applied note*). Approved 2026-11-14; applied.
+- [x] T103 [BUG-1852] Close the record: tick T099–T103, set BUG-1852 *Status* to Fixed with the commit; mark T092(b) as superseded by T099. Done: BUG-1852 *Status* is Fixed; T092(b) superseded by T099.
 
 ---
 

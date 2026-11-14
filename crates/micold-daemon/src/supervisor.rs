@@ -1488,14 +1488,14 @@ mod config_git_tests {
             std::fs::set_permissions(&client, std::os::unix::fs::PermissionsExt::from_mode(0o600))
                 .unwrap();
             text.push_str(&format!(
-                "[auth]\nclient_token_file = \"{}/client\"\n",
+                "[auth]\nclient_token_file = '{}/client'\n",
                 dir.path().display()
             ));
         }
         text.push_str(&format!("[git]\n{git}\n"));
         for i in 0..tokens {
             text.push_str(&format!(
-                "[[github.tokens]]\nname = \"t{i}\"\ntoken_file = \"{}/t{i}\"\n",
+                "[[github.tokens]]\nname = \"t{i}\"\ntoken_file = '{}/t{i}'\n",
                 dir.path().display()
             ));
         }
@@ -1512,6 +1512,11 @@ mod config_git_tests {
     /// #1536, I16-3: `config_extra_edits` with a configuration file of `kind` carrying an SSH key, a
     /// CA file and a session file; returns the dir (the home is `home` in it) and the edits.
     fn extra_edits(kind: &str) -> (tempfile::TempDir, Vec<EnvEdit>) {
+        extra_edits_with_home(kind, true)
+    }
+
+    /// As `extra_edits`; `set_home` false leaves `DaemonSettings::home` unset (the `HOME` fallback).
+    fn extra_edits_with_home(kind: &str, set_home: bool) -> (tempfile::TempDir, Vec<EnvEdit>) {
         let dir = tempfile::tempdir().unwrap();
         let p = |name: &str, mode: u32| {
             let path = dir.path().join(name);
@@ -1530,16 +1535,16 @@ mod config_git_tests {
         );
         let text = format!(
             "schema = 1\n[daemon]\nname = \"t\"\nkind = \"{kind}\"\nimage = \"img\"\n\
-             [listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = \"{client}\"\n\
-             [git]\nssh_key_file = \"{key}\"\nknown_hosts_file = \"{hosts}\"\n\
-             [network]\nca_file = \"{ca}\"\n\
-             [[session.files]]\nfile = \"{src}\"\nas = \".npmrc\"\n"
+             [listen]\ntcp = \"127.0.0.1:7000\"\n[auth]\nclient_token_file = '{client}'\n\
+             [git]\nssh_key_file = '{key}'\nknown_hosts_file = '{hosts}'\n\
+             [network]\nca_file = '{ca}'\n\
+             [[session.files]]\nfile = '{src}'\nas = \".npmrc\"\n"
         );
         let file = dir.path().join("daemon.toml");
         std::fs::write(&file, text).unwrap();
         let settings = crate::settings::DaemonSettings {
             config_path: Some(file),
-            home: Some(dir.path().join("home")),
+            home: set_home.then(|| dir.path().join("home")),
             ..Default::default()
         };
         let edits = config_extra_edits(Vec::new(), &settings);
@@ -1570,6 +1575,24 @@ mod config_git_tests {
                 "{kind}: the session file was not delivered"
             );
         }
+    }
+
+    /// I16-16: with no `home` setting the session files land under the daemon's `HOME`.
+    #[test]
+    fn session_files_fall_back_to_the_daemons_home_variable() {
+        static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let saved = std::env::var_os("HOME");
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("env-home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::env::set_var("HOME", &home);
+        let _ = extra_edits_with_home("container", false);
+        match saved {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        assert_eq!(std::fs::read_to_string(home.join(".npmrc")).unwrap(), "x");
     }
 
     #[test]

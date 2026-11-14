@@ -10,13 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1760
 - **Worktree branch**: test/1760_scoped-token-step-11-assert-the-credential-flow-in
 - **Started**: 2026-11-12
-- **Phase**: tasks
-- **Next step**: design PR merge, then M1
+- **Phase**: design-pr
+- **Next step**: merge design PR #1870 on green CI, then M1 in a fresh thread
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1870 | design (spec, plan, tasks) | open | - |
 
 ## Milestones
 
@@ -55,7 +56,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Tasks, milestones, analyze fixes and the tasks review are committed (HEAD 9562dc383+). Not pushed: gate-hook refuses push until `mise run gate` is green (the classifier denied hand-recording the tree). A detached `mise run gate` was started, log `$SCRATCHPAD/gate.log` of the previous unit (/tmp/claude-1000/.../c47cee65-.../scratchpad/gate.log), queued behind another worktree's build lock. Next: when GATE_EXIT=0 (or rerun `mise run gate` detached), `git push --force-with-lease -u origin HEAD`, open the design PR (title `docs(1760): specify and plan kube scoped token flow (#1760)`, body ends `Refs #1760`), record its number in the ledger.
+2026-11-14 takeover (cloud thread): main merged in; plan re-checked against #1838/PR #1886. That fix changed only the daemon's client-token default (`CONTAINER_TOKEN_PATH` = `/run/micold/token`); this plan's GitHub token files live under `STARTUP_ENV_MOUNT` (`/run/micold/secrets/startup`, unchanged on main) and all anchors it names (`kube_attempt`, `POD_FILE_LIMIT`, `PodStartup`, `StartRequest::secret_files`, `GithubTokenSetting::from_store`, `KubeEnv`, `parse_token_file`) still exist. No spec/plan change needed.
+
+Earlier: tasks, milestones, analyze fixes and the tasks review are committed (HEAD 9562dc383+). Not pushed: gate-hook refuses push until `mise run gate` is green (the classifier denied hand-recording the tree). A detached `mise run gate` was started, log `$SCRATCHPAD/gate.log` of the previous unit (/tmp/claude-1000/.../c47cee65-.../scratchpad/gate.log), queued behind another worktree's build lock. Next: when GATE_EXIT=0 (or rerun `mise run gate` detached), `git push --force-with-lease -u origin HEAD`, open the design PR (title `docs(1760): specify and plan kube scoped token flow (#1760)`, body ends `Refs #1760`), record its number in the ledger.
 
 ## Open escalation
 
