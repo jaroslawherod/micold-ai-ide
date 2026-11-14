@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: Closed 2026-11-14 — shipped in PRs #1842, #1851, #1902 (design #1836)
+**Status**: Closed 2026-11-14 — shipped in PRs #1842, #1851, #1902 (design #1836); close PR #1919
 
 **Input**: User description: "feat: structured view: Material 3 select input and expand animation for the model, effort and permissions settings (#1792)"
 
