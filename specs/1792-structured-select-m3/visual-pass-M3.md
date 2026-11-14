@@ -50,3 +50,22 @@ Image: `visual-pass-M3-d1-model-list.png` (cropped).
 ## Not covered
 
 Step 1 and 4 (M1), step 7 (narrow window, light and dark) and the focus and pressed states. The recorded frames are not committed (only the strips above); frame times are wall-clock samples with about 22 ms spacing and a software renderer, so they say nothing about smoothness on a real GPU.
+
+## Step 5 re-check (unit, after the pass): PASS, the failure was a mutated binary
+
+Root cause: the release client the pass ran was built while review B round 1's mutation check
+had `options_motion` mutated to `if false && state.settings.reduce_motion` (recorded in
+`tdd/cycle-log.md`, *Review B round 1 F2*). The binary is stamped 21:36:03, `ui/composer.rs` was
+restored by `git checkout` at 21:36:15, and the mutation commit landed at 21:36:42: the binary
+carried the mutant, which ignores Reduce motion. The committed code has no fault.
+
+Evidence: the same binary reproduced the grow (top edge 624, 606, 591 ... 548 over about 0.25 s,
+`reduce_motion: true` loaded at boot). A release client rebuilt from the committed tree, same data
+dir and flow (Xvfb, session made structured from the top-bar menu, settings button pressed), with
+a temporary trace in `Expand::update`: 14 toggles, every one logged `over=0ns` and a single step
+`0 -> 1` or `1 -> 0` on the first frame; the frame trace showed the row at its end height on the
+first changed frame. Rebuilt again without the trace: 4 toggles, each in one frame. A visual
+re-check of step 5 by the orchestrator is still due.
+
+Follow-up for the process: a mutation check and a build for a visual pass must not share a
+worktree at the same time.

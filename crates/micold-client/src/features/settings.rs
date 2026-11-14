@@ -136,8 +136,9 @@ pub struct State {
     pub system_scheme: SystemScheme,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
     pub theme_pref: ThemePreference,
-    /// Whether the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
-    /// expansion (feature 1299) switch in one step (persisted). Set by a save, like `theme_pref`; the draft's copy is the unsaved edit.
+    /// Whether the Overview's full-screen zoom (feature 970, FR-008), Overview card focus and
+    /// expansion (feature 1299) and the session options row (feature 1792, FR-013) switch in one
+    /// step (persisted). Set by a save, like `theme_pref`; the draft's copy is the unsaved edit.
     pub reduce_motion: bool,
     /// Whether comment boxes show the suggestion chips (#1275, FR-022; persisted). Set by a save,
     /// like `reduce_motion`; the draft's copy is the unsaved edit.
@@ -329,8 +330,8 @@ impl SettingsSection {
 pub struct AppearanceDraft {
     /// Light, dark, or follow the system.
     pub theme: ThemePreference,
-    /// Switch the Overview's full-screen zoom (feature 970, FR-008) and Overview card focus and
-    /// expansion (feature 1299) in one step.
+    /// Switch the Overview's full-screen zoom (feature 970, FR-008), Overview card focus and
+    /// expansion (feature 1299) and the session options row (feature 1792, FR-013) in one step.
     pub reduce_motion: bool,
     /// Show *Rename*, *Add test* and *Why?* under every comment box (#1275, FR-022).
     pub suggestion_chips: bool,
