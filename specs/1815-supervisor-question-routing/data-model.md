@@ -18,12 +18,14 @@ One row per question. Key `R<issue>.Q<n>` (free-text escalation: `Q1`).
 | Answer | the answer text, evidence cited when `Via` is `supervisor` |
 | Sent | epoch seconds of the `send_session_input`, empty until sent |
 
-Transitions: `pending -> asked` (set when the banners and the notification go out, before the context check) `-> answered`; `pending -> resolved`; any state is removed by
+Transitions: `pending -> asked -> answered`; `pending -> resolved`; any state is removed by
 `route drop <issue>` (session left `asking`, or ended `lost`). `answered` and `resolved` rows of one
 issue are held until all its questions are one of the two, then sent together (`route compose`).
 After the send and a `CHANGED` wake showing the run left `asking`, the issue's rows are removed
 (the worker's *Decisions* holds the record); still `asking` after the Watcher ceiling: `route
 overdue` lists it and the skill reports it, never re-sends.
+
+`asked` is set when the banners and the notification go out, before the context check.
 
 ## Routing batch (derived)
 `route next` output: up to 4 `pending` rows, ascending issue then question number. Not stored.
