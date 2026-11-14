@@ -21,7 +21,9 @@ Dependency decision (orchestrator, recorded in the ledger): the parent/sibling v
 the `parent` field of the session list (#1858, #1857 FR-015 to FR-017) live only in open PR #1873,
 not on main. Everything below is specified against what main offers today, except the upward relay
 (US4), which is conditional on the daemon reporting the supervisor's parent. Nothing here depends
-on code from #1873.
+on code from #1873. The addressing rule of #1857 FR-015 to FR-017 (a session sees and addresses
+only its parent, siblings and direct children; anything else is `not_found`) is design intent, not
+main behaviour.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -45,7 +47,7 @@ session's answer only.
    **When** the supervisor routes questions, **Then** it makes one `AskUserQuestion` with two
    questions, each prefixed `#<issue>`, option 1 labelled `(Recommended)`.
 2. **Given** the user's answers to both, **When** the supervisor relays them, **Then** each session
-   receives `resume <answer>` (a batch escalation: one `<n>. <answer>` line per question) through
+   receives `resume <answer>` (By `user`) (a batch escalation: one `<n>. <answer>` line per question) through
    `send_session_input`, never the other session's answer.
 3. **Given** the answers were sent, **When** the supervisor re-reads each session's status, **Then**
    neither is `asking` any more (its *Open escalation* is `None.` and *Decisions* has the row).
@@ -75,10 +77,15 @@ first is answered with a cited evidence path and not batched, the second is batc
    nothing to the user batch.
 2. **Given** a "never ask" escalation for which the repo holds no evidence, **When** the supervisor
    routes, **Then** it does not guess: the question goes to the user batch.
-3. **Given** an escalation in category 1 to 6 of `rules/escalation.md`, **When** the supervisor
-   routes, **Then** it never answers it itself, whatever the evidence.
-4. **Given** a resolved question, **When** it is answered, **Then** the supervisor ledger's row for
-   the issue records the question, the answer, `resolved by supervisor` and the evidence path.
+3. **Given** an escalation labelled category 1 (or 5 or 6) whose subject is a *Never ask* item
+   (for example a clippy failure written up as non-convergence) and the repo answers it, **When**
+   the supervisor routes, **Then** it classifies by subject, overrides the label, and answers it.
+4. **Given** an escalation of category 2, 3 or 4, or a category 1, 5 or 6 one whose subject is not
+   a *Never ask* item, **When** the supervisor routes, **Then** it never answers it itself,
+   whatever the evidence.
+5. **Given** a resolved question, **When** it is answered, **Then** the supervisor ledger's row for
+   the issue records the question, the answer, `resolved by supervisor` and the evidence path, and
+   the worker's own ledger *Decisions* row has By `supervisor` with that evidence (not `user`).
 
 ---
 
@@ -110,8 +117,8 @@ the ledger.
 ### User Story 4 - A supervisor below the top tier relays the question upward (Priority: P3)
 
 A supervisor that is itself a session of a parent (not in `default`) and cannot answer a question
-from the repo passes it to its own parent and relays the answer back down. A worker never escalates
-to the user or to a session outside its scope. The rule is conditional: it applies only when the
+from the repo passes it to its own parent and relays the answer back down. A worker's escalation
+reaches the user only through its supervisor (FR-006a), never directly or to a session outside its scope. The rule is conditional: it applies only when the
 daemon reports the supervisor's parent. With no parent reported (main today), the supervisor
 treats itself as top tier and asks the user.
 
@@ -144,21 +151,35 @@ question goes to the parent, or to the user, respectively.
 - **FR-002**: Before asking anyone, the supervisor MUST try to resolve each escalation whose subject
   is in `rules/escalation.md` *Never ask about these*, from repo evidence, and MUST name the
   evidence path or command in the answer.
-- **FR-003**: The supervisor MUST NOT answer an escalation of category 1 to 6 itself.
+- **FR-003**: The supervisor MUST classify an escalation by its subject, not its category label.
+  A subject matching a *Never ask* item overrides a label of category 1, 5 or 6 (the categories a
+  run may mis-apply). It MUST NOT answer any escalation of category 2, 3 or 4, nor one of category
+  1, 5 or 6 whose subject matches no *Never ask* item.
 - **FR-004**: An escalation it cannot resolve with evidence MUST go to the user batch, not be
   guessed.
 - **FR-005**: The supervisor MUST send each resolved answer to the asking session with
-  `send_session_input` as `resume <answer>` (a batch escalation: one `<n>. <answer>` line per
+  `send_session_input` as `resume --by supervisor <answer>` (a batch escalation: one `<n>. <answer>` line per
   question), and record it as `resolved by supervisor` with question, answer and evidence.
+- **FR-005a**: `answer.sh` MUST accept `--by <who>` (default `user`), write that name in the
+  *Decisions* By cell, and `tasks/resume.md` MUST pass it through from `resume --by supervisor`.
+  An answer relayed from the user is sent as `resume <answer>`, By `user`.
 - **FR-006**: The supervisor MUST put every escalation left over in one `AskUserQuestion` call of up
   to 4 questions in ascending issue order, the rest in the next call after the answer. A single
   question goes alone, at once. Each question MUST name its issue, be answerable cold, and list the
   recommended option first labelled `(Recommended)` with its evidence.
+- **FR-006a**: `tasks/ask.md` step 0 MUST change: a supervised run writes its banner to its own
+  transcript but sends no `PushNotification`; the supervisor sends the only notification. Outside
+  supervision, ask.md is unchanged.
 - **FR-007**: Before the call the supervisor MUST send the banner of `tasks/ask.md` (unit field is
   `supervisor`) for each question, and one `PushNotification` `🛑 <issues> need a decision: <topic>`.
 - **FR-008**: After the answer, the supervisor MUST send each answer only to the session that asked
-  it, and MUST then re-read that session's status and confirm it left `asking`. A session still
-  `asking` after the send is reported to the user as not accepting input, never re-sent in a loop.
+  it, and MUST then re-read that session's status and confirm it left `asking`. The check runs
+  on the next Watcher wake (`CHANGED`) after the worker's next turn, not inline after the send. A
+  session still `asking` one Watcher ceiling after the send is reported to the user as not
+  accepting input, never re-sent in a loop.
+- **FR-008a**: Before sending, the supervisor MUST check that a batch answer has exactly one line
+  per question number of the escalation's `questions[]`, and re-ask the user for any missing one;
+  it does not rely on `answer.sh` exit 2, whose message prints in the worker.
 - **FR-009**: A question that was answered while the supervisor waited (its session left `asking`)
   MUST be dropped from the batch and its answer not sent.
 - **FR-010**: When `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py` prints `OVER`, the
@@ -172,12 +193,12 @@ question goes to the parent, or to the user, respectively.
   relayed back to the asking session. With no parent reported, the supervisor MUST act as top tier
   and ask the user. The supervisor MUST NOT read `parent` from anything but the daemon's session
   list.
-- **FR-013**: A session addresses only its parent, siblings and direct children; a send refused as
+- **FR-013**: Where the daemon enforces parent/sibling/child addressing, a send refused as
   `not_found` MUST be recorded and the question asked of the user, not retried.
-- **FR-014**: The supervisor MUST keep its own context small: it reads each run only through
-  `run-status.sh --json` and the ledger through `supervisor.sh ledger table`.
-- **FR-015**: The `autopilot-supervisor` SKILL.md *Report* section MUST be changed: an `asking` run
-  is routed by this feature; `stuck`, `blocked` and `lost` runs are still only reported.
+- **FR-014**: Routing MUST work from `run-status.sh --json` and `supervisor.sh ledger table`
+  alone: no session transcript is read to collect, ask or confirm a question.
+- **FR-015**: After this feature, the supervisor routes an `asking` run (resolve, batch or relay)
+  instead of only reporting it; `stuck`, `blocked` and `lost` runs are still only reported.
 
 ### Key Entities
 
@@ -188,8 +209,8 @@ question goes to the parent, or to the user, respectively.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: Two sessions escalating at once produce exactly one user prompt, and both resume
-  after the answer.
+- **SC-001**: Two sessions escalating at once produce exactly one user prompt and exactly one user
+  notification, and both resume after the answer.
 - **SC-002**: A routine question (clippy, fmt, review finding, conflict) produces zero user
   prompts and one send to its session.
 - **SC-003**: Over the cap, zero `AskUserQuestion` calls and the batch is present in the ledger.
@@ -202,8 +223,8 @@ question goes to the parent, or to the user, respectively.
 - A batch escalation (several `### Q<n>` in one run): all its questions go to the user, or all are
   resolved; an answer line per question number, as `answer.sh` requires. If only some resolve, the
   resolved ones are held until the rest are answered, and sent together.
-- The user's answer misses a question number: `answer.sh` exit 2 prints a message; the supervisor
-  re-asks only the missing question.
+- The user's answer misses a question number: the supervisor's pre-send check (FR-008a) catches it
+  and re-asks only the missing question; nothing is sent until the answer is complete.
 - Two supervisors: the ledger owner check of #1813 applies; only the owner routes.
 - A session ended (`lost`) while its question was pending: dropped and reported.
 - `send_session_input` fails: recorded in Note; the question stays `asked`, reported, not retried
@@ -219,3 +240,4 @@ question goes to the parent, or to the user, respectively.
   them.
 - Starting sessions, the queue and the gate (#1813); status derivation (#1812).
 - Answering `stuck`, `blocked` or `lost` runs.
+- Changing the escalation format or categories of `rules/escalation.md`.
