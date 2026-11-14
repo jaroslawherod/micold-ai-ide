@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c875n9
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M2 PR (orchestrator: Review B, visual pass quickstart §B, CI, merge), then M3
+- **Next step**: merge M2 PR #1918 on green CI, then M3 (fresh cloud thread)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
-| M2 | T018–T019 | light | form tick and user guide | pending PR | built, awaiting B, visual pass and CI |
+| M2 | T018–T019 | light | form tick and user guide | #1918 | reviewed (A, B CLEAN), visual pass PASS, awaiting CI |
 | M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
 ## Decisions
@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 2 | M1 | afc83aba87b0ffac0ffc2b88d92285c92a893f6f | bd50b71e8142636b177dd984f110c553e105c671:afc83aba87b0ffac0ffc2b88d92285c92a893f6f | CLEAN (1 MINOR: stale handover path, fixed) |
 | Review A M2 | 1 | diff | b43df5f | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (1 MINOR declined) |
 | Review B M2 | 1 | diff | b43df5f | same | CHANGES: F1 drift-M2.md, F2 cycle-log, F3 Verify line fixed (docs/prose only, no code change); F4 MINOR declined |
+| Review A | 1 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | MINOR-ONLY (F1 declined: spec fixes the label) |
+| Review B | 2 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (F1-F3 fixed in specs, Verify 122 passed) |
 
 ## Declined review findings
 
@@ -65,6 +67,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+2026-11-14 M2 orchestrator (cloud): draft PR #1918 opened via MCP. Review A r1 (fresh, high) MINOR-only; Review B r1 CHANGES fixed in 72a62c7 (specs only), r2 CLEAN, Verify 122 passed. Visual pass (quickstart §B) PASS in light and dark at b43df5f, screenshots /mnt/project-files/issue-1760/m2-b1-*.png; the cycle-log line "visual pass pending" is superseded by this entry. Next: squash-merge #1918 on green, merge main back, then M3.
 
 2026-11-14 M2 unit (cloud, branch claude/project-thread-c875n9): previous PR #1914 merged at 17284c645186eeb705ba403c114ee757f3ea3d53. T018–T019 built: tick in the Credentials section after Allowed credentials, `Msg::GithubTokensToggled`, `FieldId::DaemonKubeGithubTokens`, geometry and reducer tests, user guide wording. Targeted tests, fmt, clippy (client, all targets) green. Review A (self, high, small diff): no findings. Review B r1 fixed (drift-M2.md, cycle-log red run, Verify line). Still needed from the orchestrator: the visual pass (quickstart §B), push/PR (gh unavailable; PR body at the unit's scratchpad pr-body-m2.md), CI, merge.
 2026-11-14 M1 orchestrator (cloud): Review A and B round 2 CLEAN at afc83aba8; PR #1914 squash-merged (17284c645186eeb705ba403c114ee757f3ea3d53) on green CI (all checks, incl. the real kube cluster job). main merged back into claude/project-thread-myub4h. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M2 milestone unit (T018–T019, Tier light, model sonnet) on this branch; previous PR #1914, merge SHA above.
