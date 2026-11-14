@@ -32,7 +32,11 @@ Pending ──label──▶ Derived ──title──▶ Named ──newer titl
 2. A label never replaces a title, in memory, on disk or on the wire (FR-005).
 3. Every write is addressed by `SessionId` through `Workspace::find_session_mut` (029 invariant 4,
    Principle II): a label derived from session A's records can only reach session A.
-4. A `Derived` session is never pruned by `prunable_session_cwds` (it has, or had, a conversation).
+4. A `Derived` session is never pruned by `prunable_session_cwds` (it has, or had, a conversation;
+   the candidates stay `Pending`-only). A `Derived` session whose conversation is found gone (store
+   readable, no record) is removed by the separate pass of 026 FR-008a (BUG-1852), not by pruning. At
+   startup that pass judges a provider only when its transcript root exists, reads as a directory and
+   is non-empty, and removes nothing when every one of more than one candidate is gone at once.
 
 ## Session (`crates/micold-core/src/session.rs`) — gains one method
 

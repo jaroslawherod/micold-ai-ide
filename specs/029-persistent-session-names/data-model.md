@@ -28,7 +28,7 @@ unrepresentable (Principle V) — the placeholder is a *rendering* of `Pending`,
 
 **Mutation**: only through `Session::set_title`, which replaces whatever was there — latest wins
 (FR-005). There is deliberately no `clear_title`: nothing in this feature moves a label from `Named`
-back to `Pending` (FR-008, research R5).
+back to `Pending` (FR-008, research R5; removal of a gone session is 026 FR-008a).
 
 ### `StoredSession::title: Option<String>` (`micold-core/src/store.rs`) — unchanged shape, newly written
 
@@ -91,7 +91,8 @@ and never depended on for a name already recorded (FR-008).
    for a session, that same name has been written, or a write for it has been attempted and logged
    (FR-003, FR-009).
 2. **A name is never un-set.** No transition from `Named` to `Pending` exists — not on a missing
-   transcript, not on a failed read, not on a restart (FR-008).
+   transcript or a failed read, not on a restart (FR-008). A session found gone is removed whole, name
+   included (026 FR-008a), not un-named.
 3. **The newest name wins.** A later observation replaces an earlier one unconditionally; a name is
    never treated as first-write-wins (FR-005).
 4. **A name write is addressed by `SessionId`.** Never by index, by position in a project's session
@@ -117,7 +118,8 @@ and never depended on for a name already recorded (FR-008).
                                                                   ◄──────┘
 
         Pending ── recovery finds nothing ──► Pending      (no write, FR-004)
-        Named(s) ── transcript deleted ─────► Named(s)     (no transition exists, FR-008)
+        Named(s) ── transcript deleted, store unreadable ► Named(s)  (FR-008)
+        Named(s) ── found gone at startup, start or crash restart ► removed  (026 FR-008a, BUG-1852)
         Named(s) ── daemon restart ─────────► Named(s)     (loaded from the record, FR-001)
 ```
 

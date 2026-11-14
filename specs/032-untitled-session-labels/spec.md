@@ -187,8 +187,9 @@ restart.
 - **The AI CLI's records are missing, unreadable, or in a format the application does not
   recognise.** No label; the row reads "New session" (or its remembered label or title, if it has
   one) and the session is not reported as failed.
-- **The AI CLI's records are deleted after a label was shown.** The remembered label stays, as a
-  remembered title does (029 FR-008).
+- **The AI CLI's records are deleted after a label was shown.** The remembered label stays only while the
+  session is listed, as a remembered title does (029 FR-008); the session is removed when its
+  conversation is found gone (026 FR-008a, BUG-1852).
 - **A very large conversation** (thousands of records, as the reported ones are). Producing its label
   costs no more than producing a label for a short one (FR-014). When the part of the conversation
   the application looks at holds no usable prompt, the row reads "New session".
