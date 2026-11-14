@@ -54,7 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B | 1 | M2 | 8b5a7551b283d5ab5400d0bfa75f791c87cb012f | fc1b56097cbb953362207a5d0e22305d0b0a2fc2:8b5a7551b283d5ab5400d0bfa75f791c87cb012f | CHANGES: A F1 MAJOR, B F1 MAJOR fixed; F2 fixed; A F3 partly declined (round 2 pending) |
 | Review A | 2 | M2 | 5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | ac458b23cc63aff3c3b1072fff228b4feb626672:5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | CLEAN |
 | Review B | 2 | M2 | 5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | ac458b23cc63aff3c3b1072fff228b4feb626672:5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | CLEAN |
-| Review A+B | 1 | M3 | cb38584813bc1985f1bd2474ddf8c6f4281076b0 | 255f3946ba7113887eb240b2c656091d62b9cbc7:cb38584813bc1985f1bd2474ddf8c6f4281076b0 | dispatched |
+| Review A+B | 1 | M3 | cb38584813bc1985f1bd2474ddf8c6f4281076b0 | 255f3946ba7113887eb240b2c656091d62b9cbc7:cb38584813bc1985f1bd2474ddf8c6f4281076b0 | CHANGES: A 1 MAJOR 3 MINOR, B 1 MAJOR 2 MINOR; all fixed (round 2 pending) |
+| Review A+B | 2 | M3 | 51a7e4129d7156bc92772adbb40de6174165b538 | 8745964f7817a68fc5fec58ae6f5426683123000:51a7e4129d7156bc92772adbb40de6174165b538 | dispatched |
 
 ## Declined review findings
 
