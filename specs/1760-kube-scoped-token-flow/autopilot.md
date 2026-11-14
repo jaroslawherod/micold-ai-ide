@@ -49,6 +49,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | tasks.md, milestones | 240eae3bb528e9fe0d018c9d4b501bcdbf124c8c | 893ed26f20eb272e8a1574de8cdaf6fe034c8fdd:f8a94ddf620220ccd11a592b6644bb6b2a5a3d57 | CHANGES: 1 MAJOR fixed, 2 MINOR fixed; prose/task-list only |
 | Review A (code-review high) | 1 | M1 | c5fb01da75a62b53009826c1d649440184d47587 | 127f0833ef54e6b40f7306db53653abf0ea414a0:3c7c46c82761f64a23599beeaab880b4ce202b67 | CHANGES: 3 MAJOR fixed (F1 key per token name, F2 SecretToken kept out of PodStartup, F3 no projects dial while off), 3 MINOR: F4 comment fixed and retry behaviour declined, F5 Secret total checked, F6 shared checks; round 2 pending |
 | Review B (conformance) | 1 | M1 | c5fb01da75a62b53009826c1d649440184d47587 | 127f0833ef54e6b40f7306db53653abf0ea414a0:3c7c46c82761f64a23599beeaab880b4ce202b67 | CHANGES: F1 MAJOR fixed (drift-M1.md), F2 MINOR fixed (PR body moved out of the tree); round 2 (Verify) pending |
+| Review A | 2 | M1 | afc83aba87b0ffac0ffc2b88d92285c92a893f6f | bd50b71e8142636b177dd984f110c553e105c671:afc83aba87b0ffac0ffc2b88d92285c92a893f6f | CLEAN (all 6 round-1 findings fixed; F4 retry behaviour declined) |
+| Review B | 2 | M1 | afc83aba87b0ffac0ffc2b88d92285c92a893f6f | bd50b71e8142636b177dd984f110c553e105c671:afc83aba87b0ffac0ffc2b88d92285c92a893f6f | CLEAN (1 MINOR: stale handover path, fixed) |
 
 ## Declined review findings
 
@@ -60,7 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 2026-11-14 M1 fix unit (cloud): Review A r1 (6 findings) and Review B r1 (2) acted on in c5fb01da7: all fixed but F4's retry behaviour (declined, see table). Targeted tests, fmt and clippy (core, client) green. PR body updated at the unit's scratchpad (outside the tree, Review B F2). Next: round 2 of A and B on the fix diff from snapshot 127f0833e:3c7c46c82, then open the M1 PR.
-2026-11-14 M1 unit (cloud): previous PR #1870 merged at 55e614ed76ba667e09c0ac9649abc04114f93393. T001–T017 and T020 built test-first (tdd/test-list.md, tdd/cycle-log.md), committed and pushed on claude/project-thread-myub4h; PR body at specs/1760-kube-scoped-token-flow/pr-m1-body.md (uncommitted). Next: orchestrator runs Review A and B, the unit fixes findings, then the PR opens.
+2026-11-14 M1 unit (cloud): previous PR #1870 merged at 55e614ed76ba667e09c0ac9649abc04114f93393. T001–T017 and T020 built test-first (tdd/test-list.md, tdd/cycle-log.md), committed and pushed on claude/project-thread-myub4h; PR body kept out of the tree (orchestrator scratchpad). Next: orchestrator runs Review A and B, the unit fixes findings, then the PR opens.
 2026-11-14: design PR #1870 squash-merged (55e614ed7) on green CI. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M1 milestone unit (T001–T017, T020) on this branch.
 
 2026-11-14 takeover (cloud thread): main merged in; plan re-checked against #1838/PR #1886. That fix changed only the daemon's client-token default (`CONTAINER_TOKEN_PATH` = `/run/micold/token`); this plan's GitHub token files live under `STARTUP_ENV_MOUNT` (`/run/micold/secrets/startup`, unchanged on main) and all anchors it names (`kube_attempt`, `POD_FILE_LIMIT`, `PodStartup`, `StartRequest::secret_files`, `GithubTokenSetting::from_store`, `KubeEnv`, `parse_token_file`) still exist. No spec/plan change needed.
