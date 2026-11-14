@@ -24,10 +24,9 @@ When the PR's diff touches only autopilot tooling (`.claude/skills/**`, `.claude
 `lib/autopilot*`, `docs/**`, `specs/**`), the merge condition is a green local gate for the head
 (`mise run gate`, recorded by the gate), not a green `ci complete`. `scripts/autopilot/diff-class.sh
 <n>` classifies the diff (`TOOLING` or `PRODUCT`; an unreadable or 100+ file list is `PRODUCT`).
-`wait-merge.sh` applies the rule itself: on a **red** `ci complete` it merges with `--admin` only when
-the diff is `TOOLING` and the head's tree is in the local gate stamp (`autopilot-gate-ok`). It prints
-`SKIPPED-CI <n> <head> <checks>` before `MERGED`, writes `$AUTOPILOT_LOG_DIR/pr-<n>-skipped-checks.txt`
-and comments on the PR. **Record every skipped check** in the ledger (*Decisions*) and, for an epic, in
+`wait-merge.sh` applies the rule: on a **red** `ci complete` it merges with `--admin` only when the diff
+is `TOOLING` and the head's tree is in the local gate stamp (`autopilot-gate-ok`). It prints
+`SKIPPED-CI <n> <head> <checks>` before `MERGED`, writes `pr-<n>-skipped-checks.txt` and comments. **Record every skipped check** in the ledger (*Decisions*) and, for an epic, in
 its checklist. No recorded gate for the head: run the gate first. Any change under `crates/`, `.github/`
 or other product code keeps the full CI requirement (`RED`, above). Branch protection is never bypassed
 any other way.
