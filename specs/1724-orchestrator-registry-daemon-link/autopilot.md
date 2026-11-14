@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: claude/project-thread-daw24a
 - **Started**: 2026-11-11
-- **Phase**: milestone M4
-- **Next step**: open the M4 PR (pushed; scoped checks only, full gate left to CI); wait for CI, merge, then M5
+- **Phase**: milestone M5
+- **Next step**: dispatch the M5 milestone unit (T036–T040)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
 | #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
 | #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
+| #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
-| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | reviewed, PR to open |
+| M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
 
@@ -86,7 +87,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-None. (M4 started 2026-11-14 on `claude/project-thread-daw24a` from f94f183, after M3's merge 8bcf7894b91548a647319de47fecca688e0f74af.)
+M4 squash-merged 2026-11-14 as fa0e41a7 (PR #1895). CI: all jobs green on 6716d13b after one re-run of two failures outside this diff (sandbox DNS lookup of example.com; structured_permission two_sessions_waiting timing), commented on the PR. Reviews A and B clean round 1; fix commit ac07209b re-reviewed clean (sonnet). origin/main merged into the branch after the merge. Cloud thread branch: `claude/project-thread-daw24a`. Next thread: `/speckit-autopilot resume #1724`, which starts M5 (T036–T040, registry persisted, restart lists all offline) from this branch.
 
 ## Open escalation
 
@@ -94,4 +95,5 @@ None. (The 2026-11-13 question on red main is settled: 1863 was fixed on main, o
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- M4 re-review MINOR: the pre-steady handshake sends in `crates/micold-daemon/src/orchestrator/link.rs` (both `Refused`, `Welcome`) are unbounded, unlike `send_bounded` in the steady state; wrap them in one `LIVENESS_DEADLINE` timeout later.
+- Possibly flaky on CI (seen on PR #1895, passed on re-run): `sandbox_real_no_outbound_still_resolves_names` (outside DNS), `structured_permission::two_sessions_waiting_are_marked_separately`.
