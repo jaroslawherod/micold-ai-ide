@@ -110,6 +110,12 @@ specs/**      micold-docs
 # (feature 1276, FR-004). Must stay after `docs/**`, which sets the attribute.
 /docs/user-guide/reviewing-changes.md -micold-docs
 
+# Read by a test, so a test input rather than documentation: `crates/micold-client/tests/
+# settings_sections.rs` names this page in its list of the places still allowed to use the
+# "Session service" title. (It used to be carved out for the macOS logout claim, removed in #1897.)
+# Must stay after `docs/**`, which sets the attribute.
+/docs/daemon.md -micold-docs
+
 # The packaging set (#952).
 #
 # `micold-packaging` marks paths that can change the shipped packages or how they are built. No

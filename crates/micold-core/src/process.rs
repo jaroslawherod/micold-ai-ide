@@ -27,9 +27,8 @@ pub fn no_window(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
-/// The named mutex a running app holds. `packaging/windows/micold-ai-ide.iss` names the same one in
-/// `AppMutex`; `Local\` scopes it to the signed-in session, so another account's app does not block
-/// this account's install.
+/// The named mutex a running app held for the Windows installer's `AppMutex` check (Windows support
+/// was dropped in #1897).
 pub const APP_MUTEX_NAME: &str = "Local\\MicoldAIIDE";
 
 /// Proof that this process announced itself to the installer. The announcement ends on drop.

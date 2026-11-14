@@ -21,21 +21,13 @@
 //! (Constitution Principle VI). The classification itself is path arithmetic and runs everywhere,
 //! which is what makes it testable on all three.
 //!
-//! # One list, two consumers
-//!
-//! [`ProtectedLocation`]'s variants and the `NS*UsageDescription` keys in
-//! `packaging/macos/Info.plist.in` are the same list. macOS only offers to grant a permission it
-//! has a purpose string for, so a location classified here without a string there would produce
-//! the worst possible message: one telling the user to grant something the system never asks
-//! about. `crates/micold-core/tests/macos_permission_strings.rs` holds the two together.
+//! macOS is no longer a supported platform (#1897): this module stays only until its callers
+//! stop passing a `mac` flag, and is a candidate for removal.
 
 use std::io;
 use std::path::{Path, PathBuf};
 
 /// A folder macOS gates behind a per-application permission.
-///
-/// Adding a variant means adding the matching `NS*UsageDescription` key to
-/// `packaging/macos/Info.plist.in`; the test above fails until it is there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtectedLocation {
     Documents,

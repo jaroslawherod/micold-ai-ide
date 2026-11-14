@@ -370,9 +370,9 @@ fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
 /// and it took five CI re-runs and two bug reports to attribute. A ninth spawning test added
 /// without the guard would put it straight back.
 ///
-/// A test **spawns** if it writes a script and resolves it. The two `nonexistent_path_…` tests
-/// resolve a path that does not exist, so `resolve()` returns `MissingScript` before touching a
-/// shell; they contend for nothing and are correctly unguarded.
+/// A test **spawns** if it writes a script and resolves it. The `nonexistent_path_…` test resolves
+/// a path that does not exist, so `resolve()` returns `MissingScript` before touching a shell; it
+/// contends for nothing and is correctly unguarded.
 ///
 /// The needles are assembled at runtime rather than written as literals. This test reads the file
 /// it is written in, so a literal `"write_script("` here would be found in its own body — the same
@@ -407,8 +407,8 @@ fn the_body_scan_finds_the_tests_it_is_meant_to_read() {
     let (spawning, non_spawning) = classify_tests();
 
     assert!(
-        spawning.len() >= 14,
-        "expected at least the fourteen spawning tests both platform modules declare, found {}: \
+        spawning.len() >= 10,
+        "expected at least the ten spawning tests the unix module declares, found {}: \
          {spawning:?}. The body scan has drifted from the source it reads.",
         spawning.len()
     );
@@ -417,17 +417,17 @@ fn the_body_scan_finds_the_tests_it_is_meant_to_read() {
             .iter()
             .filter(|n| n.as_str() == "nonexistent_path_is_missing_script_with_no_vars")
             .count(),
-        2,
-        "expected both platforms' missing-script tests to be classified as non-spawning; found \
+        1,
+        "expected the missing-script test to be classified as non-spawning; found \
          {non_spawning:?}. If they now write a script they need the guard like everything else."
     );
 }
 
 /// Reads this file and sorts its tests into `(spawning, guarded?)` and the rest.
 ///
-/// A test **spawns** if it writes a script and resolves it. The two `nonexistent_path_…` tests
-/// resolve a path that does not exist, so `resolve()` returns `MissingScript` before touching a
-/// shell; they contend for nothing and are correctly unguarded.
+/// A test **spawns** if it writes a script and resolves it. The `nonexistent_path_…` test resolves
+/// a path that does not exist, so `resolve()` returns `MissingScript` before touching a shell; it
+/// contends for nothing and is correctly unguarded.
 fn classify_tests() -> (Vec<(String, bool)>, Vec<String>) {
     let src = include_str!("env_include_resolve.rs");
     let writes = format!("{}_{}(", "write", "script");

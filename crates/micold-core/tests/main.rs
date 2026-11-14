@@ -24,7 +24,6 @@ mod test_wiring;
 mod agent_run;
 mod ai_cli_registry;
 mod attach_discovery;
-mod background_spawns_hide_console;
 mod branch_candidates;
 mod branch_conflict;
 mod ci_gate_covers_every_job;

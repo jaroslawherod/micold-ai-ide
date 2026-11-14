@@ -24,21 +24,16 @@ one. A blank or invalid field is refused with the field named: a blank host or o
 
 ## What you need
 
-- **The computer you reach.** Linux or macOS, on Intel/AMD (`x86_64`) or Arm (`aarch64`), with an
-  SSH server and a writable home directory. A Mac or a Windows PC can start a daemon on a Linux
-  host, because the app carries the Linux builds; a macOS host needs a Mac client of the same
-  architecture (Intel or Arm), which copies its own daemon, since no macOS build ships.
-- **Linux, macOS and Windows clients.** Each uses the `ssh` on its `PATH`. On Windows that is the
-  OpenSSH client (`ssh.exe`) that ships with Windows, or the one in Git for Windows; if you use a
-  key with a passphrase, the **OpenSSH Authentication Agent** service must be running (set it to
-  start automatically and run `ssh-add` once).
+- **The computer you reach.** Linux, on Intel/AMD (`x86_64`) or Arm (`aarch64`), with an SSH
+  server and a writable home directory.
+- **The client** uses the `ssh` on its `PATH`. Linux is the only supported client platform.
 
 ## Which daemon is copied
 
 When the host has the same system and CPU architecture as your computer, Micold copies its own
-daemon. Otherwise it copies a build that ships with the app. Every package (the macOS app, the
-Windows setup, the `.deb` and the `.rpm`) carries static Linux builds for both `x86_64` and
-`aarch64`, so a Mac or a Windows PC can start a daemon on any Linux host or container. A host
+daemon. Otherwise it copies a build that ships with the app. Every package (the `.deb` and the
+`.rpm`) carries static Linux builds for both `x86_64` and `aarch64`, so the app can start a daemon
+on any Linux host or container, whatever its own architecture. A host
 running anything else is refused with `no matching daemon build for <system>-<architecture>`, for
 example `linux-riscv64`.
 

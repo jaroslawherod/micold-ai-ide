@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Drives `scripts/build-lock.sh` on a PATH without `flock` (feature 030, FR-016).
 #
-# Git Bash on a Windows runner has no `flock`, and `scripts/windows-installer.sh` builds through this
-# wrapper. The repo-wide lock is a concession to many worktrees on one Linux machine; cargo's own
+# A host without `flock` still builds through this wrapper. The repo-wide lock is a concession to many worktrees on one Linux machine; cargo's own
 # target-directory lock still applies without it. Runs in a throwaway git repository, so the real
 # lock file is never touched.
 
