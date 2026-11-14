@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review tasks | 1 | tasks | 1a1ee197be192270688f4301e1277bd959e95660 | 487bf465b9eb49788881a347aac95e089bd15703:0e835be57dbacca34a2f129c496cd69f7e5f26b0 | CLEAN (2 MINOR fixed, prose only) |
 | Review A M1 | 2 | M1 | 1b47d969deda1a299d42c6d4098ce871113166ea | 883e9e28e4bcb50d050a1933e298048422f50072:1b47d969deda1a299d42c6d4098ce871113166ea | CLEAN (scoped, sonnet; all 8 round-1 findings verified fixed) |
 | Review B M1 | 2 | M1 | 1b47d969deda1a299d42c6d4098ce871113166ea | 883e9e28e4bcb50d050a1933e298048422f50072:1b47d969deda1a299d42c6d4098ce871113166ea | CHANGES: 1 MAJOR (5 MISSING paths not in drift-M1.md), fixed |
+| Review B M1 | 3 | M1 | d85c11e2d86f1483d7fea77719665d2beec3d849 | c6eec4d17d8f2c33413a5ae234d64920cd3608fe:d85c11e2d86f1483d7fea77719665d2beec3d849 | CLEAN (scoped, sonnet) |
 
 ## Declined review findings
 
