@@ -546,7 +546,11 @@ pub async fn supervisor_tick(state: &Arc<DaemonState>) {
     let crate::state::DrainedSignals {
         changed: signals_changed,
         names,
+        clipboard,
     } = state.drain_signals();
+    for (session, content) in clipboard {
+        state.broadcast(DaemonMsg::ClipboardStore { session, content });
+    }
     if !changed.is_empty() || named > 0 || signals_changed {
         state.broadcast_catalog();
     }

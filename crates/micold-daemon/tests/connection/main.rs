@@ -12,6 +12,7 @@ mod framing;
 mod handshake_flow;
 mod link_pong_ignored;
 mod logging_sink;
+mod osc52_clipboard;
 mod pane_terminals;
 mod presence_counting;
 mod reattach_snapshot;

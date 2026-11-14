@@ -77,6 +77,9 @@ pub struct DrainedSignals {
     /// So this is precisely the text the row displays, which is what keeps the record and the
     /// screen from being able to diverge.
     pub names: Vec<(SessionId, String)>,
+    /// The text a session's program asked to put on the clipboard (OSC 52) since the last drain,
+    /// latest per session (#1720). The supervisor tick sends each as a `ClipboardStore`.
+    pub clipboard: Vec<(SessionId, String)>,
 }
 
 type IssueLookupFactory =
@@ -8063,6 +8066,12 @@ impl DaemonState {
         let threshold = inner.effective_long_task_threshold();
         let turn_now = inner.turn_now();
         for (id, live) in inner.sessions.iter_mut() {
+            // Any process of the session may copy: the primary or a shell tab (#1720).
+            for proc in live.procs.values() {
+                if let Some(text) = proc.pty().and_then(|pty| pty.signals().take_clipboard()) {
+                    out.clipboard.push((*id, text));
+                }
+            }
             // The name comes from the conversation, so from the AI CLI and nothing else (feature
             // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
             // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's

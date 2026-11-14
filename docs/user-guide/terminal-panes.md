@@ -129,6 +129,11 @@ terminal has focus, Ctrl+Shift+E releases focus, Ctrl+Shift+T opens a shell inst
 Ctrl+Shift+C and Ctrl+Shift+V copy and paste; on macOS they are Cmd+Shift+E, Cmd+Shift+T, Cmd+C and
 Cmd+V.
 
+A program that copies with the OSC 52 terminal sequence (an AI CLI's own selection, in a sandboxed
+session too) puts its text on the system clipboard of the window showing that session. While a
+program has mouse reporting on, drags and clicks go to the program; hold Shift to select with the
+terminal itself.
+
 ## Resize, close and swap
 
 **Resize.** Drag the line between two panes; both resize as you drag, and neither goes below a
