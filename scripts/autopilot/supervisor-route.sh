@@ -60,11 +60,33 @@ rkeys() {
 }
 
 route_next() {
-  [ $# -eq 0 ] || die "usage: route next"
-  local k
-  rkeys pending | head -n 4 | while read -r k; do
+  local st=pending lim=4 k
+  case "${1:-}" in
+    '') ;;
+    --reask) [ $# -eq 1 ] || die "usage: route next [--reask]"; st=asked; lim=1000000 ;;
+    *) die "usage: route next [--reask]" ;;
+  esac
+  rkeys "$st" | head -n "$lim" | while read -r k; do
     printf '%s | %s | %s | %s | %s\n' "$k" "$(rget "$k" 5)" "$(rget "$k" 6)" "$(rget "$k" 7)" "$(rget "$k" 8)"
   done
+}
+
+# route overdue --now <epoch> --ceiling <s>: issues whose Sent is set and older than the ceiling (FR-008).
+route_overdue() {
+  local now="" ceil=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --now) [ $# -ge 2 ] || die "usage: route overdue --now <epoch> --ceiling <s>"; now="$2"; shift 2 ;;
+      --ceiling) [ $# -ge 2 ] || die "usage: route overdue --now <epoch> --ceiling <s>"; ceil="$2"; shift 2 ;;
+      *) die "usage: route overdue --now <epoch> --ceiling <s>" ;;
+    esac
+  done
+  [ -n "$now" ] && [ -n "$ceil" ] || die "usage: route overdue --now <epoch> --ceiling <s>"
+  isnum "$now" || die "route overdue: --now is epoch seconds"
+  isnum "$ceil" || die "route overdue: --ceiling is seconds"
+  rrows | awk -F'|' -v now="$now" -v c="$ceil" '{
+    k = $2; s = $11; gsub(/ /, "", k); gsub(/ /, "", s)
+    if (s ~ /^[0-9]+$/ && now - s > c) { i = k; sub(/^R/, "", i); sub(/\..*/, "", i); print i } }' | sort -n -u
 }
 
 route_state() {
@@ -138,7 +160,8 @@ route_cmd() {
   case "$sub" in
     add) route_add "$@" ;; next) route_next "$@" ;; state) route_state "$@" ;;
     answer) route_answer "$@" ;; gate) route_gate "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
+    overdue) route_overdue "$@" ;;
     drop) route_drop "$@" ;; table) route_table ;;
-    *) die "usage: route add|next|state|answer|gate|compose|sent|drop|table" ;;
+    *) die "usage: route add|next|state|answer|gate|compose|sent|overdue|drop|table" ;;
   esac
 }
