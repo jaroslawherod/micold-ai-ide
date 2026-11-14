@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | implement M1 | How are ids never reused across restarts? | A stored `next_id` counter in the layout file | agent-resolved | data-model.md § UserGroup `id` |
 | D4 | implement M1 | Does "New group" also get a button in a project header? | No: since feature 1125 the sidebar has no project header and its header buttons are the chip bar's more menu; contract C6a's three entry points (more menu, empty-area menu, chord) are the contract | agent-resolved | contracts/sidebar-groups.md C6a; plan.md line 80 |
 | D5 | implement M1 | `GroupHeader::new(name, on_toggle)` with no toggle message before US6? | `GroupHeader::new(name).on_toggle(m)`: no twisty until M5 adds `Msg::Toggle`, so M1 draws no dead control | agent-resolved | tasks.md T040 |
-| D6 | implement M2 | T022 says the group menu opens "by the 803 chord", but no row menu has a keyboard opener | The menu opens by right click; its items are keyboard-operable like any menu. The keyboard opener lands with the header's tab stop in T040 (M5); U30 is PARTIAL | agent-resolved | tasks.md T040; test-list U30 |
+| D6 | implement M2 | T022 says the group menu opens "by the 803 chord", but no row menu has a keyboard opener | The menu opens by right click; its items are keyboard-operable like any menu. The keyboard opener lands with the header's tab stop in T040 (M5), which now names it (803 chord / Menu key on the focused header, with its test); U30 is PARTIAL | agent-resolved | tasks.md T040; test-list U30 |
 
 ## Review rounds
 
@@ -59,7 +59,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M1 | 1 | quickstart B1 | 18bc3ebc25f945817224ca706f2089e258172acd | — | PASS (screenshots /mnt/project-files/issue-1786/m1-*.png; header has no collapse glyph yet, M5) |
 | M2 diff (A, code-review high) | 1 | origin/main...HEAD | 1899fc214e2463840e7778e90ac0d3a0f6ff7164 | 70213a3cb713aa6253c12e0215a8276a1fa7d027:1899fc214e2463840e7778e90ac0d3a0f6ff7164 | CHANGES (4 fixed: stale menus survive Help, more menu and switcher; rename kept the menu under an open dialog; no-op rename wrote the store; duplicate menu code; 4 declined) |
 | Review B M2 | — | conformance | — | — | not run by this unit: the orchestrator dispatches it and the visual pass after return |
-| M2 diff (A, code-review high) | 1 | origin/main...HEAD | 1899fc214e2463840e7778e90ac0d3a0f6ff7164 | 70213a3cb713aa6253c12e0215a8276a1fa7d027:1899fc214e2463840e7778e90ac0d3a0f6ff7164 | CHANGES |
 
 ## Declined review findings
 
