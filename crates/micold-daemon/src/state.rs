@@ -6545,7 +6545,7 @@ impl DaemonState {
     /// never "gone" ([`Self::conversation_gone`], the predicate start-time removal uses).
     ///
     /// Destructive and durable, so ignorance removes nothing: a provider is judged only when its
-    /// conversation store exists and reads as a directory (an unmounted disk or a moved home is a
+    /// conversation store exists, reads as a directory and holds at least one entry (an unmounted disk or a moved home is a
     /// lost store, not lost conversations), and one whose every candidate (more than one) looks
     /// gone at once is treated as a lost store too. Runs once before the accept loop, so no client
     /// sees the intermediate list. **Blocking** (stats the store); the caller runs it off the async
@@ -6572,8 +6572,12 @@ impl DaemonState {
         let mut removed = 0;
         for (cli, candidates) in by_provider {
             let provider = cli.provider();
+            // Non-empty too: an emptied or recreated store holds no conversations at all, which a
+            // lone candidate cannot tell from one lost conversation (the all-gone rule below needs
+            // more than one).
             let store_readable = provider.config_dir().is_some_and(|config| {
-                std::fs::read_dir(provider.conversation_store_root(&config)).is_ok()
+                std::fs::read_dir(provider.conversation_store_root(&config))
+                    .is_ok_and(|mut entries| entries.next().is_some())
             });
             if !store_readable {
                 continue;

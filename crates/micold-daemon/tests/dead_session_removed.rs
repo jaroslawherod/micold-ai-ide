@@ -334,6 +334,9 @@ fn startup_removes_nothing_when_the_store_is_unreadable() {
     let (store, project) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     save(store.path(), project.path(), vec![named(1, AiCli::Copilot)]);
 
+    // An empty store (emptied or recreated), one Named session: kept.
+    assert_eq!(startup_twice(store.path(), project.path()).1, vec![id(1)]);
+
     // Config dir exists, no `session-state` in it (a single Named session: not "every candidate").
     std::fs::remove_dir_all(home.path().join("session-state")).unwrap();
     assert_eq!(startup_twice(store.path(), project.path()).1, vec![id(1)]);
