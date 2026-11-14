@@ -18,6 +18,7 @@ use micold_core::daemons::{
     start_script_delivered, DaemonEntry, DaemonId, DaemonRuntime, SessionExtras, StartupScript,
     StartupSettings,
 };
+use micold_core::protocol::auth::CONTAINER_TOKEN_PATH;
 use micold_core::sandbox::image::{ImageChoice, ImageRef, OwnImage};
 use micold_core::scoped_credential::pat_store::PatStore;
 
@@ -27,12 +28,12 @@ pub const HEADER: &str = "# Written by Micold AI IDE from Settings. Edit the dae
 /// The name the validation errors give the rendered file.
 pub const ORIGIN: &str = "daemon.toml";
 
-/// Where a container or pod daemon listens, and where its client token is mounted (research D10).
-/// Both are placeholders for the delivery issues (5-7) to settle with the mounts they create; the
-/// port is not `DEFAULT_SANDBOX_PORT`, which is the client's published port.
+/// Where a container or pod daemon listens (research D10). A placeholder for the delivery issues
+/// (5-7) to settle with the mounts they create; the port is not `DEFAULT_SANDBOX_PORT`, which is
+/// the client's published port. The token the daemon reads is at `CONTAINER_TOKEN_PATH`, the mount
+/// point the sandbox images document (#1838).
 const SANDBOX_LISTEN: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 7000);
-const SANDBOX_TOKEN: &str = "/run/micold/secrets/client-token";
 
 pub use micold_core::daemons::{AiCliSetting, ProjectSetting};
 
@@ -217,7 +218,7 @@ impl DaemonSettings {
         let (listen, token_default) = if sandbox {
             (
                 Listen::Tcp(SANDBOX_LISTEN),
-                Some(PathBuf::from(SANDBOX_TOKEN)),
+                Some(PathBuf::from(CONTAINER_TOKEN_PATH)),
             )
         } else {
             (Listen::Socket(SocketSpec::Auto), None)

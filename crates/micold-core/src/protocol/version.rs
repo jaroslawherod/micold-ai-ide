@@ -275,7 +275,8 @@
 /// `DaemonMsg::GitCredentialTargets` and `CredentialTarget`.
 /// And 79 → 80 for #1723's project rows: `ProjectSnapshot.daemon` and `ProjectSnapshot.identity`
 /// (`ProjectIdentity`, whose derivation rule lives in `project_identity.rs`, outside the hash).
-pub const PROTOCOL_VERSION: u32 = 80;
+/// And 80 → 81 for #1724's orchestrator heartbeat: `DaemonMsg::LinkPing` and `ClientMsg::LinkPong`.
+pub const PROTOCOL_VERSION: u32 = 81;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

@@ -1,7 +1,7 @@
 ---
 name: speckit-autopilot
 description: Use when the user hands over a feature idea, a bug report, a chore or a GitHub issue and wants it run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
-argument-hint: "#<issue> | <flow> [high|low] #<issue> | <feature description> | bug: <report> | chore: <task> | resume"
+argument-hint: "#<issue> [supervised] | <flow> [high|low] #<issue> | <feature description> | bug: <report> | chore: <task> | resume"
 user-invocable: true
 ---
 
@@ -33,7 +33,7 @@ the worktree is clean.
 | When | Read |
 |---|---|
 | The argument is `resume` | [tasks/resume.md](tasks/resume.md) |
-| Any other argument: `#<n>` or an issue URL (`gh issue view <n> --json title,body,labels`), `<flow> [high\|low] #<n>`, or text. Choose the flow and the effort from the command, the labels and the text | [flows/choose.md](flows/choose.md), then only the chosen one of [flows/bug.md](flows/bug.md), [flows/bugfix.md](flows/bugfix.md), [flows/feature.md](flows/feature.md), [flows/chore.md](flows/chore.md) |
+| Any other argument (a trailing `supervised` also: [rules/supervised.md](rules/supervised.md)): `#<n>` or an issue URL (`gh issue view <n> --json title,body,labels`), `<flow> [high\|low] #<n>`, or text. Choose the flow and the effort from the command, the labels and the text | [flows/choose.md](flows/choose.md), then only the chosen one of [flows/bug.md](flows/bug.md), [flows/bugfix.md](flows/bugfix.md), [flows/feature.md](flows/feature.md), [flows/chore.md](flows/chore.md) |
 | The flow is chosen: claim or open the issue, write the labels back | [tasks/issue.md](tasks/issue.md) |
 | The session is a cloud thread | [rules/cloud.md](rules/cloud.md) |
 | Starting a unit, and when it returns | [tasks/dispatch.md](tasks/dispatch.md) |

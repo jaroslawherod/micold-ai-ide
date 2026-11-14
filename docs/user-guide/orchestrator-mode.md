@@ -24,9 +24,15 @@ A daemon that links to the orchestrator is listed with:
 | `name` | its display name (the id when it has none) |
 | `protocol_version` | the protocol version it announced |
 | `capabilities` | what it says it can do |
-| `health` | `online` while the link is up |
+| `health` | `online` while the daemon answers; `offline` once it has been silent for 9 seconds |
 | `last_seen` | unix seconds of its last answer |
 | `tenant` | the tenant it announced, or `default` |
+
+## Online and offline
+
+The orchestrator checks each link every 3 seconds. A daemon that has not answered for 9 seconds shows
+`offline`, and `last_seen` stays at its last answer. It stays listed, and shows `online` again as soon
+as it answers. One silent daemon does not change the others.
 
 ## What it will not do
 

@@ -275,6 +275,15 @@ fn the_ca_file_reaches_every_tool_that_reads_one() {
     for name in CA_VARIABLES {
         assert_eq!(env[name], ca.to_string_lossy(), "{name}");
     }
+    // I16-14: the names are pinned as literals, not read back from the constant under test.
+    for name in [
+        "SSL_CERT_FILE",
+        "REQUESTS_CA_BUNDLE",
+        "NODE_EXTRA_CA_CERTS",
+        "GIT_SSL_CAINFO",
+    ] {
+        assert_eq!(env[name], ca.to_string_lossy(), "{name}");
+    }
     assert_eq!(Egress::of(&cfg).ca_file.as_deref(), Some(ca.as_path()));
 }
 
@@ -299,6 +308,8 @@ fn the_daemon_takes_its_proxy_from_session_env_or_a_secret_file() {
     assert!(egress.bypasses_proxy("api.corp"));
     assert!(egress.bypasses_proxy("LOCALHOST"));
     assert!(!egress.bypasses_proxy("api.github.com"));
+    // I16-12: a host that merely ends with the entry's text is not under that domain.
+    assert!(!egress.bypasses_proxy("notcorp"));
     let none = Egress::of(&config(dir.path(), "host", ""));
     assert_eq!(none, Egress::default());
 }
@@ -422,4 +433,24 @@ fn a_target_under_another_target_is_reported_and_leaves_the_first() {
     assert_eq!(failures.len(), 1, "{failures:?}");
     assert!(failures[0].starts_with("a/b"), "{failures:?}");
     assert_eq!(std::fs::read_to_string(home.join("a")).unwrap(), "x");
+}
+
+/// I16-15: a trailing space or CRLF on the `secret_env` proxy line is not part of the value.
+#[test]
+fn the_secret_env_proxy_value_is_trimmed() {
+    let dir = tempfile::tempdir().unwrap();
+    let secret = dir.path().join("proxy");
+    write(&secret, "http://proxy.corp:3128 \r\n", 0o600);
+    let cfg = config(
+        dir.path(),
+        "host",
+        &format!(
+            "[session.secret_env]\nHTTPS_PROXY = \"{}\"\n",
+            secret.display()
+        ),
+    );
+    assert_eq!(
+        Egress::of(&cfg).https_proxy.as_deref(),
+        Some("http://proxy.corp:3128")
+    );
 }
