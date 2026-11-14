@@ -55,7 +55,24 @@ A ledger already exists: continue from it, never rebuild the queue.
 
 ## Report
 
-For each run the mapping left `running` whose run-status JSON state is `asking`, `stuck` or `blocked`, and for each `lost` row (a `dead-no-ledger` run past Grace is reported through its `lost` row), tell the person the issue, the state and why, from that issue's `<scratch>/<n>.json` (the file Restart step 3 wrote; never a second `run-status` read), its JSON `escalation` (its `banner` and `questions` for `asking` and `blocked`), or the reason, without reading the session. A `dead-no-ledger` run within Grace counts as `running`: no alarm. Never answer a question, unblock or restart such a run yourself; the person decides. Finish with `supervisor.sh ledger table`.
+For each run the mapping left `running` whose run-status JSON state is `stuck` or `blocked`, and for each `lost` row (a `dead-no-ledger` run past Grace is reported through its `lost` row), tell the person the issue, the state and why, from that issue's `<scratch>/<n>.json` (the file Restart step 3 wrote; never a second `run-status` read), its JSON `escalation` (its `banner` and `questions` for `blocked`), or the reason, without reading the session. A `dead-no-ledger` run within Grace counts as `running`: no alarm. An `asking` run is not only reported: run *Route questions* for it. Never unblock or restart a `stuck`, `blocked` or `lost` run yourself; the person decides. Finish with `supervisor.sh ledger table`.
+
+## Route questions
+
+For every `running` row whose `<scratch>/<n>.json` state is `asking` (never a transcript), in this order:
+
+1. **Collect.** From that file's JSON `escalation` (`category`, `banner`, `questions`): `scripts/autopilot/supervisor.sh route add <n> <session id> <scratch>/<n>.json`. It writes one `R<n>.Q<k>` row per question as `pending` and is a no-op for rows already there, so a restart never asks twice.
+2. **Batch.** `supervisor.sh route next` prints up to 4 `pending` questions, ascending issue then number. Nothing printed: stop.
+3. **Banner.** For each question send the banner of `.claude/skills/speckit-autopilot/tasks/ask.md` with unit `supervisor`: first line prefixed `#<issue>`, a `(Recommended)` first option with its evidence, written so the person can answer it cold.
+4. **Notify.** One `PushNotification` (load it with `ToolSearch("select:PushNotification")`), text `🛑 <issues> need a decision: <topic>`.
+5. **Mark.** `supervisor.sh route state <key> asked` for each row of the batch, after the banners and the notification and before the question call (a restart never asks twice).
+6. **Ask.** One `AskUserQuestion` of at most 4 questions in ascending issue order, each prefixed `#<issue>`. More than 4 questions: the rest go in the next batch after the first answer (back to step 2). A single question goes alone, at once.
+7. **Record.** `supervisor.sh route answer <key> user "<answer>"` per answer.
+8. **Send.** `supervisor.sh route compose <issue>`. Exit 0: its first line is `session <id>`; `send_session_input` the remaining lines as one message (they already begin with `resume`) only to that session, never to another. Exit 1 prints `missing: <n> ...`: ask the person again for only the missing question, then compose again.
+9. **Mark sent.** `supervisor.sh route sent <issue> <epoch seconds>`.
+10. **Confirm.** After a `CHANGED` wake shows the run left `asking`, `supervisor.sh route drop <issue>` (the worker's *Decisions* holds the record).
+
+A send that fails with `not_found` (the session is gone): `route drop <issue>` and report the session lost. Any other failure: `supervisor.sh ledger set <n> Note "<error>"`, leave the rows `answered`, report the issue, and never retry in a loop.
 
 ## Watcher
 

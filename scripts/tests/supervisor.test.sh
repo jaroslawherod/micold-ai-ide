@@ -172,8 +172,8 @@ check "skill maps run-status JSON with map" 0 'supervisor.sh map' grep -n 'super
 check "skill reads run-status --json" 0 'run-status.sh --json' grep -n 'run-status.sh --json' "$SKILL"
 check "skill recovers a starting row with empty cells" 0 'empty' grep -n -i 'starting.*empty\|empty.*starting' "$SKILL"
 check "skill counts tries with retry" 0 'supervisor.sh retry' grep -n 'supervisor.sh retry' "$SKILL"
-check "skill reports asking, stuck, blocked and lost runs" 0 'dead-no-ledger' grep -n 'asking.*stuck.*blocked.*dead-no-ledger' "$SKILL"
-check "skill does not answer or restart a reported run" 0 'Never answer' grep -n -i 'never answer' "$SKILL"
+check "skill reports stuck, blocked and lost runs" 0 'dead-no-ledger' grep -n 'stuck.*blocked.*dead-no-ledger' "$SKILL"
+check "skill does not unblock or restart a reported run" 0 'Never unblock' grep -n 'Never unblock' "$SKILL"
 check "skill starts the watcher in the background" 0 'run_in_background' grep -n 'run_in_background' "$SKILL"
 check "skill names the watcher script" 0 'supervisor-watch.sh' grep -n 'supervisor-watch.sh' "$SKILL"
 
@@ -264,6 +264,98 @@ for occ in 0 1 2 3; do
   check "slots: $occ occupied, cap 3: next prints $want" 0 "^$want\$" bash -c 'AUTOPILOT_SUP_MEM_MIB=8000 "$0" next --ledger "$1" | wc -l | tr -d " "' "$SUP" "$L"
   check "slots: $occ occupied: gate agrees ($gw)" "$gx" "^$gw" env AUTOPILOT_SUP_MEM_MIB=8000 AUTOPILOT_SUP_LOAD=1 AUTOPILOT_SUP_CORES=8 "$SUP" gate --ledger "$L"
 done
+
+# --- #1815 M1: question routing (route add|next|state|answer|compose|sent|drop|table) ----------
+# esc <file> <category> <n> <question> [<n> <question>...]: an escalation JSON with two options each.
+esc() { local f="$1" cat="$2" qs="" sep=""; shift 2
+  while [ $# -ge 2 ]; do
+    qs="$qs$sep{\"number\":$1,\"question\":$(jq -Rn --arg q "$2" '$q'),\"options\":[{\"label\":\"A\",\"description\":\"a\"},{\"label\":\"B\",\"description\":\"b\"}],\"recommendation\":\"A\",\"evidence\":\"e\"}"
+    sep=","; shift 2
+  done
+  printf '{"category":"%s","banner":"b","questions":[%s]}\n' "$cat" "$qs" > "$f"; }
+# sessions <file> <id>[:<parent>]...: a session-list JSON with an optional parent field.
+sessions() { local f="$1" out="" sep=""; shift; local x
+  for x in "$@"; do out="$out$sep{\"id\":\"${x%%:*}\",\"parent\":\"$( [ "$x" != "${x#*:}" ] && echo "${x#*:}")\"}"; sep=","; done
+  printf '[%s]\n' "$out" > "$f"; }
+rt() { "$SUP" route "$@" --ledger "$L"; }
+mk 3 12 14
+E12="$D/e12.json"; E14="$D/e14.json"; E5="$D/e5.json"
+esc "$E12" "1 Product" 1 "Q for 12?"; esc "$E14" "1 Product" 1 "Q for 14?"
+cp "$L" "$D/before.md"
+check "route table on a ledger without Routing prints nothing" 0 '^$' rt table
+check "route: ledger table unchanged without Routing" 0 '^cap 3 occupied 0$' bash -c '"$0" ledger table --ledger "$1" | head -1' "$SUP" "$L"
+check "route: add gains an empty Routing section" 0 '^R12.Q1$' rt add 12 s-12 "$E12"
+check "route: the Routing section exists" 0 '^## Routing$' cat "$L"
+check "route: ledger set still works with a Routing section" 0 '^running$' bash -c '"$0" ledger set --ledger "$1" 12 State running && "$0" ledger get --ledger "$1" 12 State' "$SUP" "$L"
+check "route: ledger table still works with a Routing section" 0 '^#12 running$' bash -c '"$0" ledger table --ledger "$1" | sed -n 2p' "$SUP" "$L"
+check "route: next works with a Routing section" 0 '^14$' bash -c '"$0" next --ledger "$1"' "$SUP" "$L"
+check "route: a usage error exits 2" 2 'usage' rt bogus
+check "route: add without arguments exits 2" 2 'usage' rt add 12
+printf 'not a ledger\n' > "$D/bad.md"
+check "route: a malformed ledger exits 2" 2 'malformed' "$SUP" route table --ledger "$D/bad.md"
+check "route: a missing escalation file exits 2" 2 'no escalation' rt add 14 s-14 "$D/none.json"
+# add / next
+check "route add: a pending row" 0 '^pending$' bash -c '"$0" route table --ledger "$1" | awk -F"|" "/R12.Q1/ { gsub(/ /,\"\",\$3); print \$3 }"' "$SUP" "$L"
+check "route add: re-add is a no-op" 0 '^1$' bash -c '"$0" route add --ledger "$1" 12 s-12 "$2" >/dev/null; grep -c "^| R12.Q1 |" "$1"' "$SUP" "$L" "$E12"
+rt add 14 s-14 "$E14" >/dev/null
+check "route next: carries question, options, rec, evidence" 0 '^R12.Q1 \| Q for 12\? \| A: a // B: b \| A \| e$' bash -c '"$0" route next --ledger "$1" | head -1' "$SUP" "$L"
+esc "$E5" "1 Product" 1 "q1" 2 "q2" 3 "q3" 4 "q4" 5 "q5"
+rt add 15 s-15 "$E5" >/dev/null
+check "route next: at most 4, then the rest" 0 '^4$' bash -c '"$0" route next --ledger "$1" | wc -l | tr -d " "' "$SUP" "$L"
+check "route next: the first four are issue 12 14 then 15's first two" 0 '^R12.Q1 R14.Q1 R15.Q1 R15.Q2$' bash -c '"$0" route next --ledger "$1" | cut -d" " -f1 | paste -sd" " -' "$SUP" "$L"
+for k in R12.Q1 R14.Q1 R15.Q1 R15.Q2; do rt state "$k" asked; done
+check "route next: five questions give four then one" 0 '^R15.Q3 R15.Q4 R15.Q5$' bash -c '"$0" route next --ledger "$1" | cut -d" " -f1 | paste -sd" " -' "$SUP" "$L"
+for k in R15.Q3 R15.Q4 R15.Q5; do rt state "$k" asked; done
+check "route next: empty when none pending" 0 '^$' rt next
+printf '{"category":"1","banner":"free text ask","questions":[]}\n' > "$D/free.json"
+check "route add: a free-text escalation gives Q1" 0 '^R16.Q1$' "$SUP" route add --ledger "$L" 16 s-16 "$D/free.json"
+esc "$D/pipe.json" "1" 1 "a|b?"
+check "route add: a pipe in a question is stored as a slash" 0 'a/b\?' bash -c '"$0" route add --ledger "$1" 17 s-17 "$2" >/dev/null; "$0" route next --ledger "$1"' "$SUP" "$L" "$D/pipe.json"
+# state / answer
+check "route state: unknown state exits 2" 2 'unknown state' rt state R12.Q1 bogus
+check "route state: unknown key exits 2" 2 'no routing row' rt state R99.Q1 asked
+check "route answer: via must be known" 2 'via' rt answer R12.Q1 nobody x
+check "route answer: sets answered" 0 '^answered$' bash -c '"$0" route answer --ledger "$1" R12.Q1 user "Option A" && "$0" route table --ledger "$1" | awk -F"|" "/R12.Q1/ { gsub(/ /,\"\",\$3); print \$3 }"' "$SUP" "$L"
+check "route answer: a pipe keeps the cells" 0 '^answered\|s-17\|user$' bash -c '"$0" route answer --ledger "$1" R17.Q1 user "x|y" && "$0" route table --ledger "$1" | awk -F"|" "/R17.Q1/ { gsub(/ /,\"\",\$3); gsub(/ /,\"\",\$4); gsub(/ /,\"\",\$5); print \$3 \"|\" \$4 \"|\" \$5 }"' "$SUP" "$L"
+# compose
+check "route compose: a free-text answer is bare, session first" 0 '^session s-16 resume Fix it$' bash -c '"$0" route answer --ledger "$1" R16.Q1 user "Fix it" && "$0" route compose --ledger "$1" 16 | paste -sd" " -' "$SUP" "$L"
+check "route compose: exit 1 with missing while a question has no answer" 1 '^missing: 3 4 5$' bash -c '"$0" route answer --ledger "$1" R15.Q1 user a1; "$0" route answer --ledger "$1" R15.Q2 user a2; "$0" route compose --ledger "$1" 15' "$SUP" "$L"
+for n in 3 4 5; do rt answer R15.Q$n user "a$n"; done
+check "route compose: one line per question" 0 '^session s-15 resume 1. a1 2. a2 3. a3 4. a4 5. a5$' bash -c '"$0" route compose --ledger "$1" 15 | paste -sd" " -' "$SUP" "$L"
+check "route compose: only that issue's session and answer" 0 '^session s-12 resume Option A$' bash -c '"$0" route compose --ledger "$1" 12 | paste -sd" " -' "$SUP" "$L"
+check "route compose: a supervisor-resolved issue leads with --by supervisor" 0 '^session s-14 resume --by supervisor ok$' bash -c '"$0" route answer --ledger "$1" R14.Q1 supervisor ok && "$0" route compose --ledger "$1" 14 | paste -sd" " -' "$SUP" "$L"
+check "route compose: a single question with options is bare too" 0 '^session s-12 resume Option A$' bash -c '"$0" route compose --ledger "$1" 12 | paste -sd" " -' "$SUP" "$L"
+esc "$D/nl.json" "1" 1 "Which?
+second line"
+check "route add: a newline in a question keeps options and evidence" 0 'Which\? second line \| A: a // B: b \| A \| e' bash -c '"$0" route add --ledger "$1" 18 s-18 "$2" >/dev/null; "$0" route next --ledger "$1" | grep R18' "$SUP" "$L" "$D/nl.json"
+check "route compose: an unknown issue exits 2" 2 'no routing rows' rt compose 99
+# sent / drop
+check "route sent: sets Sent on the issue's rows" 0 '^1$' bash -c '"$0" route sent --ledger "$1" 12 1700 && "$0" route table --ledger "$1" | grep -c "| 1700 |"' "$SUP" "$L"
+check "route sent: a bad epoch exits 2" 2 'epoch' rt sent 12 soon
+check "route drop: removes only that issue's rows, pipes intact" 0 '^0 1$' bash -c '"$0" route drop --ledger "$1" 15; echo "$(grep -c "^| R15" "$1") $(grep -c "^| R17.Q1 | answered | s-17 | user | a/b? " "$1")"' "$SUP" "$L"
+check "route drop: a later add starts fresh" 0 '^pending$' bash -c '"$0" route add --ledger "$1" 15 s-15 "$2" >/dev/null; "$0" route table --ledger "$1" | awk -F"|" "/R15.Q1/ { gsub(/ /,\"\",\$3); print \$3 }"' "$SUP" "$L" "$E5"
+check "route: the existing ledger still parses after all of it" 0 '^cap 3 occupied 1$' bash -c '"$0" ledger table --ledger "$1" | head -1' "$SUP" "$L"
+
+# --- #1815 M1: skill text (Route questions, supervised notification) ---------------------------
+RQ() { awk '/^## Route questions/,/^## Watcher/' "$SKILL"; }
+ord() { local a="$1" b="$2" x y; x="$(RQ | grep -n -m1 -F -- "$a" | cut -d: -f1)"; y="$(RQ | grep -n -m1 -F -- "$b" | cut -d: -f1)"; [ -n "$x" ] && [ -n "$y" ] && [ "$x" -le "$y" ]; }
+check "skill has a Route questions section" 0 'Route questions' grep -n '^## Route questions' "$SKILL"
+check "route: collects each asking run's <n>.json" 0 '<scratch>/<n>.json' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n "<scratch>/<n>.json"' "$SKILL"
+order_ok() { ord "route add" "tasks/ask.md" && ord "tasks/ask.md" "PushNotification" && ord "PushNotification" "route state <key> asked" &&
+  ord "route state <key> asked" "AskUserQuestion" && ord "AskUserQuestion" "route answer" && ord "route answer" "route compose" &&
+  ord "route compose" "send_session_input" && ord "send_session_input" "route sent" && ord "route sent" "route drop" && echo ok; }
+check "route: steps in order add, banner, notification, asked, ask, answer, compose, sent, drop" 0 '^ok$' order_ok
+check "route: the notification text" 0 'need a decision' grep -nF '🛑 <issues> need a decision: <topic>' "$SKILL"
+check "route: one AskUserQuestion of at most 4" 0 'at most 4' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n "at most 4"' "$SKILL"
+check "route: the banner carries #<issue>, unit supervisor and (Recommended)" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; for w in "#<issue>" "supervisor" "(Recommended)" "cold"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "route: send only on compose exit 0, to the printed session" 0 'Exit 0' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n "Exit 0"' "$SKILL"
+check "route: a compose exit 1 re-asks only the missing question" 0 'missing' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n -i "only the missing"' "$SKILL"
+check "route: more than 4 go in the next batch" 0 'next batch' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n "next batch"' "$SKILL"
+check "route: a failed send leaves rows answered and sets Note, never loops" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; for w in "ledger set <n> Note" "answered" "never retry"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "route: not_found drops the rows and reports the session lost" 0 'not_found' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -n "not_found.*route drop"' "$SKILL"
+check "route: never names read_session_output" 1 '^$' grep -n 'read_session_output' "$SKILL"
+check "route: Report routes an asking run, stuck blocked lost stay reported" 0 'Route' bash -c 'awk "/^## Report/,/^## Route questions/" "$0" | grep -n "asking.*Route questions"' "$SKILL"
+check "route: Report still never answers a stuck or blocked run" 0 'Never' bash -c 'awk "/^## Report/,/^## Route questions/" "$0" | grep -n "Never unblock"' "$SKILL"
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
