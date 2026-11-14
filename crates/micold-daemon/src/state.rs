@@ -5410,12 +5410,73 @@ impl DaemonState {
                     let pruned = inner.reviews.prune_worktrees(&inner.catalog, project, gone);
                     Self::broadcast_locked(inner, pruned);
                 }
+                // Spec 1857: a worktree is live while discovery lists it or its directory is still
+                // there (the guard above also keeps a failed git query from retiring everyone).
+                if repo.is_dir() {
+                    let mut live: BTreeSet<String> =
+                        discovered.iter().map(|w| w.dir_name.clone()).collect();
+                    live.extend(
+                        inner
+                            .catalog
+                            .worktree_ids(project)
+                            .into_keys()
+                            .filter(|dir| !gone(dir)),
+                    );
+                    if let Err(e) = inner.catalog.reconcile_worktree_parents(project, &live) {
+                        tracing::warn!(%e, "recording worktree ids failed");
+                    }
+                }
                 inner.worktrees.insert(project.to_path_buf(), discovered);
             }
             _ => {
                 self.lock().worktrees.remove(project);
             }
         }
+    }
+
+    /// A worktree of `project` was just created: give it a fresh id and record `parent`, if any
+    /// (spec 1857, FR-001). A failed write is logged; the worktree exists either way.
+    pub fn record_worktree_parent(
+        &self,
+        project: &Path,
+        dir_name: &str,
+        parent: Option<&micold_core::worktree_parent::ParentChoice>,
+    ) {
+        let result = self
+            .lock()
+            .catalog
+            .record_worktree_parent(project, dir_name, parent);
+        if let Err(e) = result {
+            tracing::warn!(%e, "recording the worktree's parent failed");
+        }
+    }
+
+    /// A worktree of `project` was deleted: its children become removed, its own entries go
+    /// (spec 1857, FR-006).
+    pub fn forget_worktree_parent(&self, project: &Path, dir_name: &str) {
+        if let Err(e) = self
+            .lock()
+            .catalog
+            .forget_worktree_parent(project, dir_name)
+        {
+            tracing::warn!(%e, "dropping the deleted worktree's parent entries failed");
+        }
+    }
+
+    /// Each linked worktree of `project` and its parent (spec 1857), by directory name.
+    pub fn worktree_parent_views(
+        &self,
+        project: &Path,
+    ) -> BTreeMap<String, micold_core::worktree_parent::ParentView> {
+        self.lock().catalog.worktree_parent_views(project)
+    }
+
+    /// The stable ids of `project`'s worktrees, by directory name (spec 1857, FR-014).
+    pub fn worktree_ids(
+        &self,
+        project: &Path,
+    ) -> BTreeMap<String, micold_core::worktree::WorktreeId> {
+        self.lock().catalog.worktree_ids(project)
     }
 
     /// The worktrees `project` shows from outside the app's own directory (016 BUG-002, FR-030).

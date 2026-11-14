@@ -112,6 +112,10 @@ const OWNERS: &[(&str, &str)] = &[
     // Feature 533: the issue source the add-worktree dialog last used in a project; written by the
     // root's interpretation of `IssueSourceChosen`, read when the dialog opens.
     ("workspace.issue_sources", "worktree"),
+    // Feature 1857: the stable worktree ids and parent links; the daemon owns them, the client only
+    // carries them through a load/save round trip and reads them nowhere yet.
+    ("workspace.worktree_ids", "worktree"),
+    ("workspace.worktree_parents", "worktree"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
@@ -284,6 +288,19 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     (
         "project",
         "workspace.worktree_names",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    // Feature 1857: the worktree ids and parent links held against the path go with it.
+    (
+        "project",
+        "workspace.worktree_ids",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
+        "workspace.worktree_parents",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),

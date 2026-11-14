@@ -50,6 +50,7 @@ use micold_core::settings::{
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_core::worktree::worktrees_root;
+use micold_core::worktree_parent as wp;
 
 /// Record the durable, provider-side suppression marker for `session` (bugfix BUG-003, FR-020c)
 /// so reconciliation (FR-020b) never reconstructs it again, even if the catalog's own `archived`
@@ -1614,6 +1615,101 @@ impl Catalog {
             }
         }
         self.persist()
+    }
+
+    /// Apply one of the [`micold_core::worktree_parent`] rules to `project`'s ids and links and
+    /// persist when it reports a change (spec 1857). Maps emptied by it are dropped so the state
+    /// file keeps its shape.
+    fn edit_worktree_parents<R>(
+        &mut self,
+        project: &Path,
+        rule: impl FnOnce(&mut wp::Ids, &mut wp::Links) -> (bool, R),
+    ) -> io::Result<R> {
+        let mut ids = self
+            .workspace
+            .worktree_ids
+            .remove(project)
+            .unwrap_or_default();
+        let mut links = self
+            .workspace
+            .worktree_parents
+            .remove(project)
+            .unwrap_or_default();
+        let (changed, out) = rule(&mut ids, &mut links);
+        if !ids.is_empty() {
+            self.workspace
+                .worktree_ids
+                .insert(project.to_path_buf(), ids);
+        }
+        if !links.is_empty() {
+            self.workspace
+                .worktree_parents
+                .insert(project.to_path_buf(), links);
+        }
+        if changed {
+            self.persist()?;
+        }
+        Ok(out)
+    }
+
+    /// Mint ids for the worktrees in `live`, retire those of worktrees no longer live and tombstone
+    /// their children (spec 1857, R3).
+    pub fn reconcile_worktree_parents(
+        &mut self,
+        project: &Path,
+        live: &BTreeSet<String>,
+    ) -> io::Result<()> {
+        self.edit_worktree_parents(project, |ids, links| (wp::reconcile(ids, links, live), ()))
+    }
+
+    /// Record a worktree just created: a fresh id, and `parent` as its link when given.
+    pub fn record_worktree_parent(
+        &mut self,
+        project: &Path,
+        dir_name: &str,
+        parent: Option<&wp::ParentChoice>,
+    ) -> io::Result<()> {
+        self.edit_worktree_parents(project, |ids, links| {
+            wp::record(ids, links, dir_name, parent);
+            (true, ())
+        })
+    }
+
+    /// The worktree `dir_name` was deleted: tombstone its children, drop its own entries.
+    pub fn forget_worktree_parent(&mut self, project: &Path, dir_name: &str) -> io::Result<()> {
+        self.edit_worktree_parents(project, |ids, links| {
+            let known = ids.contains_key(dir_name);
+            wp::forget(ids, links, dir_name);
+            (known, ())
+        })
+    }
+
+    /// Each linked worktree of `project` and its parent, by directory name.
+    pub fn worktree_parent_views(
+        &self,
+        project: &Path,
+    ) -> std::collections::BTreeMap<String, wp::ParentView> {
+        let empty_ids = wp::Ids::new();
+        let empty_links = wp::Links::new();
+        wp::views(
+            self.workspace
+                .worktree_ids
+                .get(project)
+                .unwrap_or(&empty_ids),
+            self.workspace
+                .worktree_parents
+                .get(project)
+                .unwrap_or(&empty_links),
+        )
+    }
+
+    /// The worktree ids of `project`, by directory name.
+    pub fn worktree_ids(&self, project: &Path) -> wp::Ids {
+        self.workspace
+            .worktree_ids
+            .get(project)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// **Archive** (never drop) every non-archived session bound to `project`'s `dir_name` worktree,
