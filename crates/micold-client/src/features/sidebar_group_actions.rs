@@ -105,9 +105,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
     Vec::new()
 }
 
-/// **New group…** opens an empty draft; with no project open there is nothing to group.
+/// **New group…** opens an empty draft; with no project open there is nothing to group. Not over
+/// an open dialog (the chord is heard while one is up): opening this one would close it, and its
+/// draft with it. An open menu is fine, it is what the item was chosen from.
 fn new_started(state: &mut crate::app::State) {
-    if state.workspace.active.is_none() {
+    if state.workspace.active.is_none() || crate::overlay::registry::open_dialog(state).is_some() {
         return;
     }
     state.clear_for_dialog();

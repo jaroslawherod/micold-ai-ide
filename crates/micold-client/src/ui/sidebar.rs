@@ -59,7 +59,12 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // The list holds every entry once, the Default entry among them, so "one entry in all" is
     // "no worktree entries matched". Built once per render: it gives both the hint and the rows.
     let entries = state.sidebar_list();
-    let no_worktree_entries = entries.len() <= 1;
+    // A user group's header is not a location row (feature 1786), so it does not count.
+    let no_worktree_entries = entries
+        .iter()
+        .filter(|entry| !matches!(entry, crate::features::sidebar::SidebarEntry::UserGroup(_)))
+        .count()
+        <= 1;
     // A project with no discovered worktree takes the "none yet" branch — the "no match / clear
     // filters" branch would offer to clear a filter that was never applied.
     let hint: Option<Element<'_, Message>> = if state.worktree.worktrees.is_empty() {

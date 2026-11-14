@@ -194,3 +194,21 @@ fn the_empty_area_menu_dismisses_and_offers_nothing_with_no_project() {
     send(&mut none, Msg::EmptyAreaMenuOpened((40, 300)));
     assert_eq!(none.sidebar_groups.empty_menu, None);
 }
+
+#[test]
+fn new_group_over_an_open_dialog_leaves_that_dialog_and_its_draft_alone() {
+    let mut state = state_with_active();
+    send(&mut state, Msg::New);
+    send(&mut state, Msg::TextChanged("Half typed".into()));
+    // The chord again, while the naming dialog is up.
+    send(&mut state, Msg::New);
+    assert_eq!(
+        state
+            .sidebar_groups
+            .naming
+            .as_ref()
+            .map(|d| d.text.as_str()),
+        Some("Half typed"),
+        "the open dialog keeps its draft"
+    );
+}

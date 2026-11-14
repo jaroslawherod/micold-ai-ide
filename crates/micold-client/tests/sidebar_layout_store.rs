@@ -98,3 +98,20 @@ fn the_write_replaces_the_file_whole_and_leaves_no_staging_file() {
         "the file holds the last write whole"
     );
 }
+
+#[test]
+fn a_forgotten_projects_layout_is_removed_and_a_second_remove_is_not_an_error() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let store = store(dir.path());
+    store
+        .save_layout(Path::new(PROJECT), &layout())
+        .expect("the write succeeds");
+    ProjectStore::remove_layout(&store, Path::new(PROJECT)).expect("removed");
+    assert!(!store.layouts_path(Path::new(PROJECT)).exists());
+    assert_eq!(
+        ProjectStore::load_layout(&store, Path::new(PROJECT)),
+        SidebarLayout::default(),
+        "the same path added again starts with no groups"
+    );
+    ProjectStore::remove_layout(&store, Path::new(PROJECT)).expect("a missing file is fine");
+}

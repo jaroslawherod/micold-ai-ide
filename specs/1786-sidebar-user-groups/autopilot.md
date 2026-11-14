@@ -52,11 +52,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 | fix diff | 7ad2a0361951595eea2d898d6746b37a1ddb0036 | 70700fb0bd62ac2308bdaa57a5598ba424ce7882:1fc59a5f9b962824a590f71b1c41069072f626c6 | CLEAN |
 | Plan | 3 | design | 5d3885de780da42ac43772e0841f49a11dce4d3c | e984a4491e90ea566d4e00fe11bf0e87b4597b0f:5d3885de780da42ac43772e0841f49a11dce4d3c | CHANGES (1 MAJOR fixed: rename_dialog.rs line restored in plan.md) |
 | Plan | 4 | design | 5d3885de780da42ac43772e0841f49a11dce4d3c | e984a4491e90ea566d4e00fe11bf0e87b4597b0f:5d3885de780da42ac43772e0841f49a11dce4d3c | CLEAN (1 MINOR left: text.rs not listed in plan, pre-existing) |
+| M1 diff (A, code-review high) | 1 | origin/main...14c552a6a | 14c552a6a | fa0e41a7:14c552a6a | CHANGES (3 fixed: hint counted headers, chord reset an open dialog, layout file kept on forget; plus the sibling_dir cleanup; 6 declined) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 | A stored `collapsed: true` hides rows under a header with no twisty | M1 never writes `collapsed: true` and M5 (same release) adds the toggle; no released build reads a file this build cannot open |
+| M1 | A r1 | Header says "empty" while a filter hides every member | No group can hold a row before M3 (Move to group); revisit the count's meaning there (follow-up below) |
+| M1 | A r1 | Empty-area menu does not displace the session menus, more menu or help menu | It displaces exactly what `WorktreeContextMenu` does, the rule the row menus follow; pinned by `popover_displacement.rs` |
+| M1 | A r1 | `NamingDraft` does not record its project | The project cannot change while the modal dialog is up through the UI; M2 reworks the draft's targets |
+| M1 | A r1 | `refusal()` restates `LayoutError`'s Display | The dialog's words are contract C2's (quoted name); the core's Display is for logs |
+| M1 | A r1 | `apply_layout` clones per `sidebar_list()`; layout I/O on the UI thread | Small data (a handful of groups); the write happens only after a group operation, as `save_runs` does. Not a measured cost |
 
 ## Handover
 
@@ -105,4 +112,5 @@ Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- M3: decide whether a header's count is the group's members or its rows shown under the active filter (review A r1, declined for M1).
+- Review B (conformance) was not run for M1: the cloud unit has no Agent tool for a fresh-context subagent.

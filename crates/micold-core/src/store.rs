@@ -183,6 +183,12 @@ pub trait ProjectStore {
         Ok(())
     }
 
+    /// Delete a project's sidebar layout, when the project is forgotten. A missing file is not an
+    /// error. The default, for stores that persist nothing, succeeds.
+    fn remove_layout(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
+    }
+
     /// The files setup records, logs and the run id counter are kept in (feature 1289,
     /// data-model §settings and store). `None`, the default, for stores that persist nothing: the
     /// daemon then keeps setup in memory only.
@@ -1110,9 +1116,14 @@ impl JsonFileStore {
 
     /// Directory holding every project's run groups (feature 483): `runs/` beside `reviews/`.
     fn runs_dir(&self) -> PathBuf {
+        self.sibling_dir("runs")
+    }
+
+    /// The directory `name` beside the catalog file, where the per-project files of one kind live.
+    fn sibling_dir(&self, name: &str) -> PathBuf {
         match self.path.parent() {
-            Some(parent) => parent.join("runs"),
-            None => PathBuf::from("runs"),
+            Some(parent) => parent.join(name),
+            None => PathBuf::from(name),
         }
     }
 
@@ -1141,11 +1152,17 @@ impl JsonFileStore {
     /// A project's sidebar layout file (feature 1786): `layouts/<project id>.json` beside `runs/`.
     /// `pub` so tests can find it.
     pub fn layouts_path(&self, project_path: &Path) -> PathBuf {
-        let dir = match self.path.parent() {
-            Some(parent) => parent.join("layouts"),
-            None => PathBuf::from("layouts"),
-        };
-        dir.join(format!("{}.json", project_id(project_path)))
+        self.sibling_dir("layouts")
+            .join(format!("{}.json", project_id(project_path)))
+    }
+
+    /// Delete a project's sidebar layout (feature 1786): it goes with a forgotten project, so the
+    /// same path added again starts with no groups. A missing file is not an error.
+    pub fn remove_layout(&self, project_path: &Path) -> io::Result<()> {
+        match std::fs::remove_file(self.layouts_path(project_path)) {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        }
     }
 
     /// Load a project's sidebar layout (feature 1786, C7). Never fails: a missing file is no
@@ -1178,10 +1195,7 @@ impl JsonFileStore {
     /// Directory holding every project's setup records and logs, and the run id counter
     /// (feature 1289): `setup/` beside `runs/`.
     pub fn setup_dir(&self) -> PathBuf {
-        match self.path.parent() {
-            Some(parent) => parent.join("setup"),
-            None => PathBuf::from("setup"),
-        }
+        self.sibling_dir("setup")
     }
 
     /// The file holding the next setup run id, unique across the daemon (data-model §RunId).
@@ -1381,6 +1395,10 @@ impl ProjectStore for JsonFileStore {
 
     fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
         JsonFileStore::save_layout(self, project_path, layout)
+    }
+
+    fn remove_layout(&self, project_path: &Path) -> io::Result<()> {
+        JsonFileStore::remove_layout(self, project_path)
     }
 
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
@@ -1869,6 +1887,15 @@ impl ProjectStore for FakeProjectStore {
             .expect("fake lock")
             .layouts
             .insert(project_path.to_path_buf(), layout.clone());
+        Ok(())
+    }
+
+    fn remove_layout(&self, project_path: &Path) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .remove(project_path);
         Ok(())
     }
 }
