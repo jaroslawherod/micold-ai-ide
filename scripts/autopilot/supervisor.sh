@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Decisions of the autopilot supervisor skill, reproducible from fixtures: the supervisor ledger
 # (.autopilot/supervisor.md) and the start gate and queue. Prints; never calls gh or MCP.
-# Usage: supervisor.sh <ledger init|owner|set|get|table | next | gate | map | retry | check-owner> [--ledger <file>] ...
+# Usage: supervisor.sh <ledger init|owner|set|get|table | next | touches | overlap | gate | map | retry | check-owner> [--ledger <file>] ...
 # Exit: 0 answered, 1 gate FAIL, 2 usage error or malformed ledger.
 # Contract: specs/1813-supervisor-skill/contracts/supervisor-cli.md (bash 3.2: no associative arrays)
 STATES="queued starting running done failed lost skipped"
@@ -94,11 +94,81 @@ ledger_cmd() {
   esac
 }
 
+# norm_path <p>: strip a leading ./ and everything from the first path component that holds a glob
+# character (* ? [), then trailing slashes. A bare glob normalises to the empty path (whole repo).
+norm_path() {
+  local p="${1#./}"
+  p="$(printf '%s' "$p" | sed -E 's#(^|/)[^/]*[*?[].*$##; s#/+$##')"
+  echo "$p"
+}
+# overlap_yes <touches-a> <touches-b>: success when any path equals, or contains, one of the other's.
+ov_lists() {
+  local a b x y IFS=,
+  for a in $1; do
+    [ -n "$a" ] && [ "$a" != "-" ] || continue
+    x="$(norm_path "$a")"
+    for b in $2; do
+      [ -n "$b" ] && [ "$b" != "-" ] || continue
+      y="$(norm_path "$b")"
+      [ -n "$x" ] && [ -n "$y" ] || return 0
+      case "$x/" in "$y"/*) return 0 ;; esac
+      case "$y/" in "$x"/*) return 0 ;; esac
+    done
+  done
+  return 1
+}
+overlap_yes() { local r; set -f; ov_lists "$@"; r=$?; set +f; return "$r"; }
+overlap_cmd() {
+  [ $# -eq 2 ] || die "usage: overlap <touches-a> <touches-b>"
+  if overlap_yes "$1" "$2"; then echo yes; else echo no; fi
+}
+
+# touches <issue-body-file> [--labels "a b"]: paths on stdout (comma separated, - when none), and
+# declared|inferred|none on stderr. A `Touches:` line wins; else `specs/<dir>` paths in the body and
+# the flow file of each `flow:<name>` label.
+touches_cmd() {
+  local body="" labels="" out="" decl l
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --labels) [ $# -ge 2 ] || die "--labels needs a value"; labels="$2"; shift 2 ;;
+      *) body="$1"; shift ;;
+    esac
+  done
+  [ -n "$body" ] && [ -f "$body" ] || die "touches needs an issue body file"
+  local key='^[[:space:]]*([-*][[:space:]]+)?\**[Tt]ouches\**:\**[[:space:]]*'
+  decl="$(tr -d '\r' < "$body" | grep -m1 -E "$key" | sed -E "s/$key//" | tr ' ,' '\n\n' | sed '/^$/d' | paste -sd, -)"
+  if [ -n "$decl" ]; then echo "$decl"; echo declared >&2; return 0; fi
+  out="$( { grep -oE 'specs/[0-9]+-[A-Za-z0-9._-]+' "$body" || true
+            for l in $labels; do case "$l" in flow:?*) echo ".claude/skills/speckit-autopilot/flows/${l#flow:}.md" ;; esac; done
+          } | sort -u | paste -sd, -)"
+  if [ -n "$out" ]; then echo "$out"; echo inferred >&2; else echo "-"; echo none >&2; fi
+}
+
+# next: queued issues within the cap, ascending, none overlapping a starting or running row, a queued
+# row with a lower number, or an earlier pick (FR-004). Empty or `-` Touches is disjoint.
 next_cmd() {
   need_ledger
   local slots=$(( $(hdr Cap) - $(occupied) ))
   [ "$slots" -gt 0 ] || return 0
-  rows | awk '$2 == "queued" { print $1 }' | sort -n | head -n "$slots"
+  local n st t held picks=0 m mst mt rowt
+  # rowt: issue|state|touches per row, ascending by issue.
+  rowt="$(awk -F'|' '$2 ~ /^ *[0-9]+ *$/ { for (i = 2; i <= 4; i++) gsub(/ /, "", $i); print $2 "|" $3 "|" $4 }' "$LEDGER" | sort -t'|' -k1,1n)"
+  while IFS='|' read -r n st t; do
+    [ "$st" = queued ] || continue
+    [ "$picks" -lt "$slots" ] || break
+    held=0
+    while IFS='|' read -r m mst mt; do
+      [ "$m" != "$n" ] || continue
+      case "$mst" in
+        starting|running) ;;
+        queued) [ "$m" -lt "$n" ] || continue ;;
+        *) continue ;;
+      esac
+      if overlap_yes "$t" "$mt"; then held=1; break; fi
+    done <<< "$rowt"
+    [ "$held" = 0 ] || continue
+    echo "$n"; picks=$((picks + 1))
+  done <<< "$rowt"
 }
 
 mem_mib() {
@@ -218,6 +288,8 @@ case "$cmd" in
   check-owner) owner_cmd "$@" ;;
   ledger) ledger_cmd "$@" ;;
   next) next_cmd "$@" ;;
+  touches) touches_cmd "$@" ;;
+  overlap) overlap_cmd "$@" ;;
   gate) gate_cmd "$@" ;;
   *) die "unknown subcommand $cmd" ;;
 esac

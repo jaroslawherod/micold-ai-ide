@@ -49,9 +49,9 @@ cases live in `scripts/tests/supervisor.test.sh`, so test tasks are never `[P]` 
 
 **Independent test**: two issues with overlapping `Touches:` run one after the other even with cap room.
 
-- [ ] T019 [US3] Add test cases to `scripts/tests/supervisor.test.sh`: `touches` declared line, inferred from `flows` and spec paths, none; `overlap yes|no`; `touches` returns `none` for an issue with nothing inferable; `next` holds the later overlapping issue and releases it once the earlier is released (US3 1-3, FR-004)
-- [ ] T020 [US3] Implement `supervisor.sh touches` and `overlap`, and make `next` skip candidates overlapping an occupying row or an earlier pick
-- [ ] T021 [US3] Add the Touches step to `.claude/skills/autopilot-supervisor/SKILL.md` (read the issue body with `gh issue view`, run `touches`, store in the ledger; for `none`, write in Note that the issue is treated as disjoint)
+- [x] T019 [US3] Add test cases to `scripts/tests/supervisor.test.sh`: `touches` declared line, inferred from `flows` and spec paths, none; `overlap yes|no`; `touches` returns `none` for an issue with nothing inferable; `next` holds the later overlapping issue and releases it once the earlier is released (US3 1-3, FR-004)
+- [x] T020 [US3] Implement `supervisor.sh touches` and `overlap`, and make `next` skip candidates overlapping an occupying row or an earlier pick
+- [x] T021 [US3] Add the Touches step to `.claude/skills/autopilot-supervisor/SKILL.md` (read the issue body with `gh issue view`, run `touches`, store in the ledger; for `none`, write in Note that the issue is treated as disjoint)
 
 ## Phase 7: User Story 5 - Small supervisor context (P2)
 
