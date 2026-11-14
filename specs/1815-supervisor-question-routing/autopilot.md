@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M2 (T011–T016, tier full) on claude/project-thread-y16qre
+- **Next step**: M2 review A and B round 1, then PR (orchestrator opens it); local gate: cloud, scripts/gate.sh too slow, CI is the gate
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
-| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | pending |
+| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | implemented, in review |
 | M3 | T017–T019 | light | context-cap survival: reask, overdue | | pending |
 | M4 | T020–T022 | light | upward relay to a reported parent | | pending |
 
@@ -71,4 +71,4 @@ None.
 
 ## Follow-ups not done
 
-- M2: answer.sh must parse `--by supervisor` before any supervisor-resolved row is composed (`route compose` already prefixes it; Review A M1 round 2 MINOR).
+None.
