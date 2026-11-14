@@ -368,6 +368,28 @@ it's there, so a row that survived a filter it doesn't match is never unexplaine
 excluded worktree stays out of the list, and the exception disappears as soon as you move to a session
 somewhere your filters do allow. Adding it changes nothing about the filter chips on offer.
 
+### Your own groups
+
+You can make groups of your own in the sidebar, to keep the worktrees you think of together in one
+place. A group belongs to the project it was made in, and is kept across restarts.
+
+To make one, choose **New group…** from any of these:
+
+- the chip bar's **more** (⋯) menu;
+- the menu that opens when you right-click an empty part of the sidebar's list (below the last row);
+- the shortcut **Ctrl+Shift+G** (**Cmd+Shift+G** on macOS) while no terminal has the keyboard,
+  listed under **Sidebar** in the composer's shortcut sheet.
+
+A dialog asks for the group's name. Spaces around it are dropped. A blank name is refused, and so
+is a name another group of the project already has, whatever its capitals: the dialog says why and
+stays open so you can change it. **Cancel** or Escape closes it and makes nothing. You need a
+project open, but no worktree.
+
+The new group appears in the sidebar as a header row: its name (shortened with an ellipsis when it
+does not fit; point at it to read it whole), then how many rows it holds, or **empty**. A new group
+is empty. A group never stands for a state: a worktree keeps its group whatever its sessions are
+doing.
+
 ### Agent worktrees
 
 AI coding assistants create worktrees of their own inside your project, in the same

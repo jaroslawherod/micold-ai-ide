@@ -59,6 +59,7 @@ mod field_focus;
 /// `FormField` cannot be constructed from `tests/` at all.
 #[cfg(test)]
 mod form_field_anatomy;
+mod group_header;
 mod host_picker;
 mod inline_diff;
 mod markdown_view;
@@ -135,6 +136,7 @@ pub use connection_banner::ConnectionBanner;
 pub use diff_view::{
     DiffLayout, DiffView, MARKER_WIDTH as DIFF_MARKER_WIDTH, ROW_HEIGHT as DIFF_ROW_HEIGHT,
 };
+pub use group_header::{DropMarker, GroupHeader};
 pub use host_picker::HostPicker;
 pub use inline_diff::{DiffPart, InlineDiff};
 pub use markdown_view::MarkdownView;
