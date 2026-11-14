@@ -74,6 +74,7 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 
 - [ ] T023 [P] Add failing fixture cases in `scripts/tests/` (new `supervisor-ownership.test.sh`): from a stubbed `list_worktrees` JSON with runs of two parents, the ownership helper selects only the supervisor's own runs and refuses a run with another parent or none, including a run whose parent is `removed`
 - [ ] T024 Add `scripts/autopilot/runs-of-parent.sh` (reads worktree rows as JSON on stdin and a parent ref; prints own runs); T023 green
+- [ ] T033 Write the relay rule into the supervisor skill's rules and the worker prompt it sends (`.claude/skills/speckit-autopilot/`, the `speckit-supervisor` skill once #1813 lands): a worker contacts only its parent and siblings; questions and cross-scope messages go to the parent, which forwards them up or down (FR-017); the supervisor never expects a worker to reach another supervisor's run; fixture case in `scripts/tests/supervisor-ownership.test.sh`
 - [ ] T025 Write the ownership rule (a supervisor in `default` is not limited by FR-015, so the rule still applies to it; one in its own worktree is limited by the daemon) in `.claude/skills/speckit-autopilot/rules/ownership.md` (or the supervisor skill's rules once #1813 lands): create worktrees with the default parent, list runs by `parent`, record `parent` per run in the supervisor ledger, never act on another parent's run, treat a `removed` parent as an orphan to report, not to adopt
 - [ ] T026 Update #1813, #1814 and #1816 issue bodies and the epic #1817 (see Phase 8)
 
