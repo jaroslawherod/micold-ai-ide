@@ -78,7 +78,7 @@ check "load equal to cores passes" 0 '^PASS$' env AUTOPILOT_SUP_LOAD=8.00 "$SUP"
 check "--max-load overrides" 1 '^FAIL load' "$SUP" gate --ledger "$L" --max-load 1
 check "failure order: cap first" 1 '^FAIL cap' env AUTOPILOT_SUP_MEM_MIB=1 AUTOPILOT_SUP_LOAD=99 "$SUP" gate --ledger "$L" --running 2
 check "failure order: memory before load" 1 '^FAIL memory' env AUTOPILOT_SUP_MEM_MIB=1 AUTOPILOT_SUP_LOAD=99 "$SUP" gate --ledger "$L"
-check "the machine is read without overrides" 0 '^(PASS|FAIL (memory|load): [0-9])' env -u AUTOPILOT_SUP_MEM_MIB -u AUTOPILOT_SUP_LOAD -u AUTOPILOT_SUP_CORES "$SUP" gate --ledger "$L" --cap 9
+check "the machine is read without overrides" 0 '^(PASS|FAIL memory: [0-9]+ MiB free|FAIL load: load [0-9])' bash -c 'env -u AUTOPILOT_SUP_MEM_MIB -u AUTOPILOT_SUP_LOAD -u AUTOPILOT_SUP_CORES "$0" gate --ledger "$1" --cap 9; exit 0' "$SUP" "$L"
 check "gate without a cap is a usage error" 2 'cap' "$SUP" gate --ledger "$D/none.md"
 check "gate: a non-numeric --running fails" 1 '^FAIL' gt --running abc
 check "gate: a non-numeric --cap fails" 1 '^FAIL' gt --cap abc

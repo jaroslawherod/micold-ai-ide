@@ -68,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 1 MAJOR (unplanned supervisor.sh, drift-M4.md), 3 MINOR (red run, vacuous case, MISSING note), fixed |
 | Review A M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed) |
 | Review B M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; plan-drift clean) |
+| Review close | 1 | close | 03760652a14c137cfcef727c2af334482393d05f | 6764353ce73e1537e4a42c6091fbcc1070a6fb55:03760652a14c137cfcef727c2af334482393d05f | CHANGES: 1 MAJOR (T025 case exit code), 2 MINOR (follow-ups, tasks intro), fixed |
 
 ## Red runs
 
@@ -89,6 +90,12 @@ M4 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+
+## Follow-ups not done
+
+- Full gate: all green except `micold-daemon session_extras::tests::a_signed_commit_succeeds_with_the_delivered_key` (signing, cloud env; no Rust touched). `scripts/tests/*.test.sh` ran individually, all green.
+- T008: the supervised argument text lives in `rules/supervised.md` (SKILL.md is at its 60-line ceiling), linked from SKILL.md's route table.
+- Deferred TDD remediation (tasks.md Phase 8): T024, T026, T028, T029, T030, T031.
 
 ## Handover
 
