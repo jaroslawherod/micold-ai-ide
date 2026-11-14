@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-q9zjol
 - **Started**: 2026-11-11
 - **Phase**: M3 PR open (visual pass findings handled)
-- **Next step**: orchestrator runs review B round 2 (sonnet, fix diff from snapshot 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 back to 3ce8964c9) and a visual re-check of quickstart Part B step 5 on a fresh release build, then waits on CI and merges #1902
+- **Next step**: orchestrator waits on CI and merges #1902 (review B round 2 done; the step 5 visual re-check passed, see visual-pass-M3.md)
 
 ## Pull requests
 
@@ -44,6 +44,8 @@ M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy c
 
 
 ## Review rounds
+
+- M3 review B round 2: head 64c99464d — CHANGES (F1 MAJOR three settings paths unrecorded: added to drift-M3.md; F2 MINOR step 5 visual re-check: done, PASS: with reduce_motion on, 10 expands and 10 collapses each changed in a single frame with no intermediate height (one expand had a hover state first, 9 clean), control with it off showed 15 to 17 changing frames). Record-only fixes, checked against the findings.
 
 - M3 review B round 1: snapshot 2c11ee0509c3bd615ba1b2c1fa5f7f2afe653373:f11b1b9df547bb3f3365719e356d1174cc01bfca — CHANGES (F1 MAJOR drift unrecorded: drift-M3.md added; F2 MINOR mutation checks recorded). Fixes are docs only, checked against the findings.
 

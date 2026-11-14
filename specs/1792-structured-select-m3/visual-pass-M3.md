@@ -8,7 +8,7 @@ Measure: the y of the topmost non-background pixel of the options row, left 210 
 |---|---|
 | 2 Expand and collapse | PASS |
 | 3 Toggle twice quickly | PASS (visual, coarse) |
-| 5 Reduce motion on | FAIL on a mutated binary; re-run on a clean build passes by trace, visual re-check due (see the end) |
+| 5 Reduce motion on | FAIL on a mutated binary; PASS on a fresh release build of the clean tree (re-check, see the end) |
 | 6 Two sessions | PASS for animation, with an observation (see below) |
 | D1 `/model` with row collapsed | PASS |
 
@@ -51,7 +51,7 @@ Image: `visual-pass-M3-d1-model-list.png` (cropped).
 
 Step 1 and 4 (M1), step 7 (narrow window, light and dark) and the focus and pressed states. The recorded frames are not committed (only the strips above); frame times are wall-clock samples with about 22 ms spacing and a software renderer, so they say nothing about smoothness on a real GPU.
 
-## Step 5 re-check (unit, after the pass): the failure was a mutated binary; clean build passes by trace, visual re-check due
+## Step 5 re-check: the failure was a mutated binary; clean build passes by trace and visually (PASS)
 
 Root cause: the release client the pass ran was built while review B round 1's mutation check
 had `options_motion` mutated to `if false && state.settings.reduce_motion` (recorded in
@@ -64,8 +64,8 @@ Evidence: the same binary reproduced the grow (top edge 624, 606, 591 ... 548 ov
 dir and flow (Xvfb, session made structured from the top-bar menu, settings button pressed), with
 a temporary trace in `Expand::update`: 14 toggles, every one logged `over=0ns` and a single step
 `0 -> 1` or `1 -> 0` on the first frame; the frame trace showed the row at its end height on the
-first changed frame. Rebuilt again without the trace: 4 toggles, each in one frame. A visual
-re-check of step 5 by the orchestrator is still due.
+first changed frame. Rebuilt again without the trace: 4 toggles, each in one frame. The visual
+re-check follows below.
 
 The collapse readings fit the mutant too. The measure (topmost pixel changed against the first
 frame) reads 548 from the first moving frame of any collapse until the row is gone, so "held full
@@ -75,3 +75,21 @@ mutated binary in the re-check showed a continuous 0.3 s shrink, clipped from th
 
 Follow-up for the process: a mutation check and a build for a visual pass must not share a
 worktree at the same time.
+
+### Visual re-check of step 5 (2026-11-14, head 64c99464d, review B round 2 F2): PASS
+
+Tree clean (`git status` showed no source change) before and after the build. `cargo build --release -p micold-client -p micold-daemon` rebuilt micold-core, micold-material, micold-daemon and micold-client; `micold-ai-ide` stamped 22:18:13 and `micold-daemon` 22:17:33, newer than the last source commit (22:10:36) and with no `.rs` file newer than the binary. Both copied to a private dir and run on Xvfb :89 (1400x900, tiny-skia, not a real display), same stand-in `claude` on PATH, session made structured through the top-bar menu, private XDG dirs; the daemon log showed one `client attached` and no `refusing`. Frames: `root.get_image` of the composer region every 20 ms (about 22 ms with the grab), button held 0.1 s. `reduce_motion` set in `settings.json` with the client stopped, then relaunched, so the value is loaded at boot.
+
+Measure: per toggle about 47 frames, each compared with the frame before the press (start) and the last frame (end), over the part of the region above the settings button (so its hover and press state layer is not counted). A frame that differs from both by more than 200 pixels is an intermediate height.
+
+| Run | Toggles | Frames that changed the row | Intermediate frames |
+|---|---|---|---|
+| reduce_motion true, run `rm` | 5 expand, 5 collapse | 1 each (the first expand also had a hover state before the press, so it is not counted as clean) | 0 in 4 of 5 expands and 5 of 5 collapses |
+| reduce_motion true, run `rm2` (pointer already on the button) | 5 expand, 5 collapse | 1 each | 0 in all 10 |
+| reduce_motion false (control) | 1 expand, 1 collapse | 15 to 17 | 32 and 14 |
+
+So with Reduce motion on, 9 expands and 10 collapses, plus 1 expand with a hover state in front, went from closed to full height (top edge y=548) or back between two consecutive frames, about 0.38 s after the press started (press held 0.1 s after a 0.25 s pointer settle, grab latency), with no intermediate height. The control grew over the usual curve (top edge 650, 612, 594, 584, 574, 567, 564, 559, 555, 553, 550, 549, 548) and shrank over about 0.3 s. The step 5 expectation (FR-013, one frame) holds on the committed code; the earlier FAIL was the mutated binary.
+
+Limit: the frame spacing is 20 to 22 ms and the renderer is software, so a change within one frame is "one step", not a measure of how long that frame took on a real GPU.
+
+Image: `visual-pass-M3-reduce-motion-recheck.png`, rows top to bottom: the control expand (six growing frames, +0.379 to +0.486 s), reduce motion expand (closed, closed, then full height and stays) and reduce motion collapse (full, full, then closed and stays); each frame is cropped to the options row and the message box.
