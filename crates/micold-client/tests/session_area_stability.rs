@@ -615,6 +615,7 @@ mod rendered_presses {
     use iced::{Point, Size};
     use micold_client::app::Message;
     use micold_client::features::session::Msg as SessionMsg;
+    use micold_client::features::sidebar::Msg as SidebarMsg;
 
     /// What a click on the centre of the laid-out element at `path` publishes.
     fn click(under: StateUnderTest, path: &[usize]) -> Vec<Message> {
@@ -639,6 +640,91 @@ mod rendered_presses {
         );
         drop(element);
         lay::clicks_at(lay::view_of(&under), &renderer, [centre])
+    }
+
+    /// Every message a click publishes across `area` of the laid-out view (no repeats).
+    fn sweep(under: &StateUnderTest, area: iced::Rectangle) -> Vec<Message> {
+        let mut seen: Vec<Message> = Vec::new();
+        for m in lay::clicks_at(lay::view_of(under), &lay::renderer(), lay::grid(area, 4.0)) {
+            if !seen.contains(&m) {
+                seen.push(m);
+            }
+        }
+        seen
+    }
+
+    fn top_bar() -> iced::Rectangle {
+        iced::Rectangle::new(
+            Point::ORIGIN,
+            Size::new(
+                lay::WINDOW.width,
+                micold_core::tokens::anatomy::app_bar::HEIGHT,
+            ),
+        )
+    }
+
+    fn feat_short_location() -> micold_core::session::SessionLocation {
+        micold_core::session::SessionLocation::Worktree("feat-short".to_string())
+    }
+
+    /// Feature 1793 (T037, FR-003, FR-004): the top bar's Changes button asks to review the shown
+    /// location, and the worktree `⋮` toggles the worktree menu (the removed header's
+    /// `pressing_changes_*` tests, now for the top bar).
+    #[test]
+    fn pressing_the_top_bars_changes_and_worktree_menu_sends_their_messages() {
+        use micold_client::features::header_bar::{HeaderMenu, Msg as HeaderMsg};
+        let sent = sweep(&strip_with(1, 1), top_bar());
+        assert!(
+            sent.contains(&Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+                feat_short_location()
+            ))),
+            "Changes: {sent:?}"
+        );
+        assert!(
+            sent.contains(&Message::HeaderBar(HeaderMsg::Toggled(
+                HeaderMenu::Worktree
+            ))),
+            "the worktree menu: {sent:?}"
+        );
+    }
+
+    /// Pressing Changes while the location's Review tab is shown asks for it again (never a close).
+    #[test]
+    fn pressing_the_top_bars_changes_with_the_review_shown_asks_again() {
+        let under = super::support::covered_states::review_shown();
+        assert!(
+            under.state.changes.tabs.shown().is_some(),
+            "the premise: the review is shown"
+        );
+        let location = under
+            .state
+            .current_session_location()
+            .expect("the review's location");
+        let sent = sweep(&under, top_bar());
+        assert!(
+            sent.contains(&Message::Sidebar(SidebarMsg::ReviewChangesRequested(
+                location
+            ))),
+            "{sent:?}"
+        );
+    }
+
+    /// FR-007: the single `+` at the strip's end opens its menu.
+    #[test]
+    fn pressing_the_plus_opens_the_plus_menu() {
+        use micold_client::features::header_bar::{HeaderMenu, Msg as HeaderMsg};
+        let strip = iced::Rectangle::new(
+            Point::new(0.0, micold_core::tokens::anatomy::app_bar::HEIGHT),
+            Size::new(
+                lay::WINDOW.width,
+                micold_client::ui::session_area::ROW_HEIGHT,
+            ),
+        );
+        let sent = sweep(&strip_with(1, 0), strip);
+        assert!(
+            sent.contains(&Message::HeaderBar(HeaderMsg::Toggled(HeaderMenu::Plus))),
+            "{sent:?}"
+        );
     }
 
     /// `012` BUG-004 / FR-010, carried to the strip: with a shell instance shown and its process
