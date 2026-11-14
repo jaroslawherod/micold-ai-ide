@@ -134,15 +134,15 @@ async fn with_the_opt_in_on_the_matching_token_reaches_the_secret_and_daemon_tom
     let (result, log) = start(&client, &opted_in(true)).await;
     result.expect("the start connects");
 
-    assert_eq!(token_keys(&cluster), ["github-token-0"]);
+    assert_eq!(token_keys(&cluster), ["github-token-forge"]);
     let secret = cluster
         .manifest(NS, ObjectKind::Secret, &names().startup_secret())
         .unwrap();
-    assert_eq!(secret["stringData"]["github-token-0"], stored.as_str());
+    assert_eq!(secret["stringData"]["github-token-forge"], stored.as_str());
     let file = config(&cluster);
     assert!(
         file.contains(&format!(
-            "[[github.tokens]]\nname = \"forge\"\ntoken_file = \"/run/micold/secrets/startup/github-token-0\"\nrepos = [\"owner/repo\"]\nhost = \"{FORGE}\"\n"
+            "[[github.tokens]]\nname = \"forge\"\ntoken_file = \"/run/micold/secrets/startup/github-token-forge\"\nrepos = [\"owner/repo\"]\nhost = \"{FORGE}\"\n"
         )),
         "{file}"
     );
@@ -177,5 +177,32 @@ async fn a_bad_token_fails_the_start_before_any_cluster_call() {
         reason.starts_with("cannot deliver the GitHub token \"forge\" to the pod: "),
         "{reason}"
     );
+    assert!(cluster.calls().is_empty(), "{:?}", cluster.calls());
+}
+
+/// Review A F5: tokens that each fit a pod file but together pass the 1 MiB a Secret holds fail
+/// the start before any call reaches the cluster, instead of the API server refusing the Secret
+/// partway through.
+#[tokio::test]
+async fn tokens_over_the_secret_limit_fail_the_start_before_any_cluster_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = PatStore::new(dir.path());
+    for name in ["big-a", "big-b", "big-c"] {
+        let pat = StoredPat {
+            token: SecretToken::new("a".repeat(400 * 1024)),
+            expires_at: 4_000_000_000,
+            repos: vec![RepoPattern::parse("owner/repo").unwrap()],
+        };
+        store.put(name, &pat).unwrap();
+    }
+    let cluster = cluster();
+    let mut client = client(&cluster, welcoming());
+    client.env.tokens = PodTokenSource {
+        pat_root: Some(dir.path().to_path_buf()),
+        host: None,
+    };
+    let (result, _) = start(&client, &opted_in(true)).await;
+    let reason = result.expect_err("the start fails");
+    assert!(reason.contains("over the 1048576 bytes"), "{reason}");
     assert!(cluster.calls().is_empty(), "{:?}", cluster.calls());
 }

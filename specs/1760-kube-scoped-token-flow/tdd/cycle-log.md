@@ -119,3 +119,23 @@ Append only. Newest last.
   -> panicked at line 39 `assert!(settings.github_tokens)`, `4 passed; 1 failed`
 - green: `of` reads it and `settings()` writes it: `--test main daemons` -> `226 passed; 0 failed`
 - refactor: none needed.
+
+## Review A round 1 fixes (F1, F3, F5; F2 and F6 refactors under green)
+
+- F3 test: `daemon::tests::the_projects_dial_is_the_saved_repositories_and_part_of_the_identity`
+  now runs opt-in on and off. red: `scripts/build-lock.sh cargo test -p micold-client --lib
+  the_projects_dial_is` -> `0 passed; 1 failed` (off: identity changed). green after
+  `ProjectsDial::default()` when `github_tokens` is off.
+- F1 tests: `a_token_keeps_its_key_whatever_its_position`, `a_token_with_an_invalid_name_is_refused`
+  (`daemon_config_delivery_pod_tokens`), and `kube_daemon_github_tokens` expecting
+  `github-token-forge`. F5 test: `tokens_over_the_secret_limit_fail_the_start_before_any_cluster_call`.
+  red: `cargo test -p micold-client --test main -- daemon_config_delivery_pod_tokens
+  kube_daemon_github_tokens` -> `8 passed; 4 failed` (keys `github-token-0`, invalid name read,
+  oversize start succeeded).
+- green: key from the validated lower-case name; `check_secret_size` over env, git config, extras
+  and tokens, with the cluster connect moved after every file is read. `--test main --
+  daemon_config_delivery kube_daemon features_daemons_kube github_tokens_reach` -> `124 passed`;
+  `--lib daemon` -> `64 passed`; `micold-core --lib daemon_config` -> `72 passed`.
+- refactor: F2 token values stay `SecretToken` until `secret_files` is built for `StartRequest`;
+  F6 one `pod_text` limit-and-UTF-8 check for extras, script, env_file and tokens, and core's
+  `daemon_config::readable_by_others` for V14 and the token read.

@@ -110,6 +110,37 @@ fn read_pairs_each_entry_with_its_secret_key_at_the_startup_mount() {
     assert_ne!(read.files[0].0, read.files[1].0, "one key per token");
 }
 
+/// Review A F1: a token's key is its (lower-case) name, never its position, so a key keeps
+/// naming the same token when another is deleted or the order changes on a kept pod.
+#[test]
+fn a_token_keeps_its_key_whatever_its_position() {
+    let dir = tempfile::tempdir().unwrap();
+    let both = PodGithubTokens::read(vec![
+        stored(dir.path(), "Forge", FAKE.as_bytes()),
+        stored(dir.path(), "other", b"github_pat_FAKE_other"),
+    ])
+    .unwrap();
+    let alone = PodGithubTokens::read(vec![stored(dir.path(), "other", b"x")]).unwrap();
+    let keys = |read: &PodGithubTokens| -> Vec<String> {
+        read.files.iter().map(|(key, _)| key.clone()).collect()
+    };
+    assert_eq!(keys(&both), ["github-token-forge", "github-token-other"]);
+    assert_eq!(keys(&alone), ["github-token-other"]);
+}
+
+/// Review A F1: a name that is no token name (so no Secret key) is refused naming the token.
+#[test]
+fn a_token_with_an_invalid_name_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bad = stored(dir.path(), "ok", FAKE.as_bytes());
+    bad.name = "bad name/..".into();
+    let error = refusal(vec![bad]);
+    assert!(
+        error.starts_with("cannot deliver the GitHub token \"bad name/..\" to the pod: "),
+        "{error}"
+    );
+}
+
 /// T008, FR-002: nothing that prints a read set shows a token's value.
 #[test]
 fn a_read_set_never_prints_a_value() {

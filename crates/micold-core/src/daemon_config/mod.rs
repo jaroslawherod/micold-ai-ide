@@ -25,7 +25,7 @@ mod validate;
 mod tests;
 
 pub use files::{check_files, secret_entries};
-pub use resolved::{resolved_view, ResolvedView, SecretState, SecretStatus};
+pub use resolved::{readable_by_others, resolved_view, ResolvedView, SecretState, SecretStatus};
 pub use secret::{SecretPath, SecretValue};
 pub(crate) use validate::version_ok;
 pub use validate::{diagnose, parse, session_file_refusal, ConfigError, Severity};

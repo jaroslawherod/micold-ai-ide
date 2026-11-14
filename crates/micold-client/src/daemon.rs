@@ -613,7 +613,12 @@ pub fn actor_specs_answered(
                             .map(|(settings, _)| settings.extras)
                             .unwrap_or_default(),
                     ),
-                    projects: ProjectsDial::of(&entry.file.projects),
+                    // Off, the saved projects pick no token, so editing them must not re-dial.
+                    projects: if k.github_tokens {
+                        ProjectsDial::of(&entry.file.projects)
+                    } else {
+                        ProjectsDial::default()
+                    },
                 },
                 _ => return None,
             };
@@ -2074,8 +2079,9 @@ pub async fn kube_attempt(
     };
     let fail =
         |f: micold_core::kube::classify::KubeFailure| KubeAttemptError::Failed(f.to_string());
-    // Read before anything else, so a token the pod cannot take stops the start before any call
-    // reaches the cluster (#1760, contract §2). Off reads nothing.
+    // Read before this attempt's first cluster call, so a token the pod cannot take stops the
+    // start before anything is created (#1760, contract §2). On a reconnect, `kube_reconnect` has
+    // already asked for the pod's status. Off reads nothing.
     let tokens = pod_github_tokens(&env.tokens, settings, projects)?;
     let image = settings.pod_image();
     let (context, namespace) = (&settings.context.0, &settings.namespace.0);
@@ -2090,7 +2096,6 @@ pub async fn kube_attempt(
     }
     let cancel = CancelToken::new();
     let _registered = Registered::new(env, name, &cancel);
-    let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
     let read = |path: &Path| std::fs::read_to_string(path);
     // The file the pod's config map holds. Checked as every delivered file is: one that does not
     // validate is not delivered (contract §4).
@@ -2113,20 +2118,27 @@ pub async fn kube_attempt(
     pod_settings.startup = startup.cloned();
     pod_settings.extras = extras.clone();
     pod_settings.github_tokens = tokens.entries;
-    let mut delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
+    let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
-    // The values only ever go into the startup Secret; `daemon.toml` names their files.
-    delivered.files.extend(
-        tokens
-            .files
+    // The values stay `SecretToken`s until here, and only ever go into the startup Secret;
+    // `daemon.toml` names their files.
+    let secret_files: Vec<(String, String)> = (delivered.files.iter().cloned())
+        .chain((tokens.files.iter()).map(|(key, value)| (key.clone(), value.expose().to_string())))
+        .collect();
+    crate::daemon_config_delivery::check_secret_size(
+        [delivered.env.as_deref(), git_config.as_deref()]
             .into_iter()
-            .map(|(key, value)| (key, value.expose().to_string())),
-    );
+            .flatten()
+            .chain(secret_files.iter().map(|(_, value)| value.as_str())),
+    )
+    .map_err(|e| format!("cannot start the pod: {e}"))?;
     let config = crate::daemon_config_render::prepare(
         &delivered.settings,
         micold_core::daemon_config::Kind::Kubernetes,
     )
     .map_err(|errors| format!("the pod's configuration is invalid: {}", errors[0]))?;
+    // Every file is read and checked before the first call to the cluster.
+    let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
     let request = StartRequest {
         cluster: &*cluster,
         keys: &*env.keygen,
@@ -2142,7 +2154,7 @@ pub async fn kube_attempt(
         startup_script: delivered.script.as_deref(),
         startup_env: delivered.env.as_deref(),
         git_config: git_config.as_deref(),
-        secret_files: &delivered.files,
+        secret_files: &secret_files,
         time_zone,
     };
     let started = match start(&request, &mut |_| {}).await {
@@ -2480,7 +2492,8 @@ mod tests {
     }
 
     /// #1760 T010: the projects dial is the saved projects' GitHub repositories, lower-cased,
-    /// sorted and once each, and a change of them changes the Kubernetes actor's identity.
+    /// sorted and once each, and with the opt-in on a change of them changes the Kubernetes
+    /// actor's identity; with it off they pick nothing, so the identity stays (no re-dial).
     #[test]
     fn the_projects_dial_is_the_saved_repositories_and_part_of_the_identity() {
         use micold_core::daemons::{FileSettings, ProjectSetting};
@@ -2499,23 +2512,33 @@ mod tests {
         let shown: Vec<String> = dial.0.iter().map(ToString::to_string).collect();
         assert_eq!(shown, ["acme/app", "zed/repo"]);
 
-        let mut registry = DaemonRegistry::default();
-        let settings = micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
-        let id = registry
-            .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
-            .unwrap();
-        let mut states = DaemonStates::default();
-        states.insert(id, DaemonState::Starting);
-        let dir = std::path::Path::new("/nonexistent");
-        let before = actor_specs(&registry, &states, dir, None);
-        let file = FileSettings {
-            projects: projects.to_vec(),
-            ..FileSettings::default()
-        };
-        registry.set_file(id, file).unwrap();
-        let after = actor_specs(&registry, &states, dir, None);
-        assert_ne!(before[0], after[0]);
-        assert!(matches!(&after[0].dial, Dial::Kubernetes { projects, .. } if *projects == dial));
+        for opted_in in [true, false] {
+            let mut registry = DaemonRegistry::default();
+            let mut settings =
+                micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
+            settings.github_tokens = opted_in;
+            let id = registry
+                .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
+                .unwrap();
+            let mut states = DaemonStates::default();
+            states.insert(id, DaemonState::Starting);
+            let dir = std::path::Path::new("/nonexistent");
+            let before = actor_specs(&registry, &states, dir, None);
+            let file = FileSettings {
+                projects: projects.to_vec(),
+                ..FileSettings::default()
+            };
+            registry.set_file(id, file).unwrap();
+            let after = actor_specs(&registry, &states, dir, None);
+            if opted_in {
+                assert_ne!(before[0], after[0]);
+                assert!(
+                    matches!(&after[0].dial, Dial::Kubernetes { projects, .. } if *projects == dial)
+                );
+            } else {
+                assert_eq!(before[0], after[0], "off: saved projects are no identity");
+            }
+        }
     }
 
     /// The answer to the drift prompt is part of the actor's identity, so giving it restarts the

@@ -148,6 +148,12 @@ pub(super) fn mode_of(path: &Path) -> Option<Option<u32>> {
     }
 }
 
+/// The permission bits of the file at `path` when a group or other bit is set (Unix): a secret
+/// that is not owner-only. `None` when it is, cannot be inspected, or modes are not checked.
+pub fn readable_by_others(path: &Path) -> Option<u32> {
+    mode_of(path).flatten().filter(|mode| mode & 0o077 != 0)
+}
+
 fn probe(path: &Path) -> SecretStatus {
     let state = match std::fs::File::open(path) {
         Ok(_) => SecretState::Readable {

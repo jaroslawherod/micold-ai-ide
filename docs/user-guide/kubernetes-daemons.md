@@ -170,7 +170,8 @@ same one that holds the start script's `env_file`, and the pod's daemon configur
 files; the token's value is never in the configuration, in the pod's specification, in a session's
 environment or in the application's log. A start whose token file cannot be sent (it cannot be read,
 is empty, is not text, is too large, or on Linux and macOS is readable by other users) fails before
-anything is created, naming the token.
+anything is created, naming the token. So does a start whose tokens, start-script `env_file`,
+session files and git configuration together pass the 1 MiB a Kubernetes Secret holds.
 
 The set is replaced at each start: a token you replaced is sent again, and a token you deleted in
 Settings, or whose filter no longer names a project, is taken out of the Secret. Deleting or
