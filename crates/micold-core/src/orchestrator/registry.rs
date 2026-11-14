@@ -48,7 +48,10 @@ pub enum Claim {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClaimFailure {
     /// `Hello` named a protocol version or schema this build does not speak.
-    VersionMismatch,
+    VersionMismatch {
+        /// The protocol version the `Hello` named: the one the record lists.
+        daemon_version: u32,
+    },
     /// `Hello` came from another build of the same contract.
     BuildMismatch,
     /// `Hello` failed authentication.
@@ -199,10 +202,13 @@ impl Registry {
         };
         let (_, pending) = self.links.remove(&id).expect("found above");
         let announced = pending.expect("filtered on a pending reservation");
-        if reason != ClaimFailure::VersionMismatch {
+        let ClaimFailure::VersionMismatch { daemon_version } = reason else {
             return (LinkAction::Idle, None);
-        }
-        self.record_needs_update(&announced);
+        };
+        self.record_needs_update(&LinkAnnouncement {
+            protocol_version: daemon_version,
+            ..announced
+        });
         (LinkAction::Idle, Some(self.snapshot()))
     }
 
@@ -663,12 +669,14 @@ mod tests {
     fn a_failed_reservation_for_the_version_records_needs_update_and_frees_the_id() {
         let mut registry = Registry::new();
         let (link, _) = reserve(&mut registry, &ann("a", "A"));
-        let (action, snapshot) = registry.claim_failed(link, ClaimFailure::VersionMismatch);
+        let (action, snapshot) =
+            registry.claim_failed(link, ClaimFailure::VersionMismatch { daemon_version: 70 });
         assert_eq!(action, LinkAction::Idle);
         assert_eq!(snapshot.unwrap().records, registry.list());
         let listed = record(&registry, "a");
         assert_eq!(listed.health, Health::NeedsUpdate);
         assert_eq!(listed.name, "A");
+        assert_eq!(listed.protocol_version, 70, "the version the Hello named");
         assert!(matches!(
             registry.claim(&ann("a", "A")),
             Claim::Reserved { .. }
@@ -680,7 +688,10 @@ mod tests {
         let mut registry = Registry::new();
         let live = online(&mut registry, "a", 100);
         let before = registry.list();
-        for reason in [ClaimFailure::VersionMismatch, ClaimFailure::Dropped] {
+        for reason in [
+            ClaimFailure::VersionMismatch { daemon_version: 70 },
+            ClaimFailure::Dropped,
+        ] {
             assert_eq!(
                 registry.claim_failed(live, reason),
                 (LinkAction::Stale, None)

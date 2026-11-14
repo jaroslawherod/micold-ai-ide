@@ -179,7 +179,9 @@ where
 /// What a `Hello` refusal means for the reservation it ends.
 fn claim_failure(reason: &RefusalReason) -> ClaimFailure {
     match reason {
-        RefusalReason::VersionMismatch { .. } => ClaimFailure::VersionMismatch,
+        RefusalReason::VersionMismatch { client, .. } => ClaimFailure::VersionMismatch {
+            daemon_version: *client,
+        },
         RefusalReason::BuildMismatch { .. } => ClaimFailure::BuildMismatch,
         RefusalReason::AuthRejected => ClaimFailure::AuthRejected,
         _ => ClaimFailure::Dropped,

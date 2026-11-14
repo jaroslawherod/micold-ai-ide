@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
 - **Phase**: milestone M3
-- **Next step**: orchestrator dispatches reviews A (high) and B (conformance) on the M3 head, then the gate and the PR (title/body in the scratchpad, pr-title-m3.md)
+- **Next step**: orchestrator dispatches the scoped round-2 re-review (A and B) on the M3 fix diff, then continues the unit for the full gate and the PR (title/body in the scratchpad, pr-title-m3.md)
 
 ## Pull requests
 
@@ -63,7 +63,6 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | 1849 | dc4be4463cf3af17723b84edf3f7f83fce9f37ce | c2dde15b7b31e2f5255141b5a33838fd770ea022:dc4be4463cf3af17723b84edf3f7f83fce9f37ce | CLEAN: Verify 37+11 pass; MINOR drift note added |
 | Review A | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: 3 MINOR (send timeout, ignore-arm tests are guards, ping-reset assertion) not fixed |
 | Review B | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: F1 MAJOR (no red for T017-T022) declined, gap recorded in cycle-log, T022 waiver in drift-M2; heartbeat 4 pass; plan-drift clean; cadence note added |
-| Review A / B | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | pending |
 
 ## Declined review findings
 
@@ -74,10 +73,11 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | M2 | Review A 1 | F4 snapshots discarded; F6 no dialer answers LinkPing | Saver lands in M5; the dialer is outside #1724 |
 | M2 | Review B 1 | F1 retroactive red; F2 vacuous arm tests | Already recorded in cycle-log and drift-M2; the heartbeat behaviours are covered by non-vacuous tests (two failed and were fixed in this round) |
 | tasks | analyze | F10 split T014/T010; F14 move T041 to M1; F16 dup note | Each task is one coherent file pair; the no-outbound proof needs the whole feature; T018/T021 mention is harmless |
+| M3 | Review A 1 | none declined | F1, F2 fixed; B F1 (drift-M3.md), F2 (wire test), F3 (T027 text) fixed |
 
 ## Handover
 
-M3 (T026-T030) implemented and committed locally; scoped gate green except two cloud-only red tests (root reads an unreadable file: settings_refuses_save_over_failed_read, settings_write_is_logged), unrelated. Previous PR #1871 merge SHA b05740e146295f8e3dde4b5fe2499359aef7d17a. Next: reviews, full gate (CI is the gate in the cloud), PR.
+M3 (T026-T030) implemented, round-1 reviews fixed (see Review rounds), committed locally; scoped gate green. Previous PR #1871 merge SHA b05740e146295f8e3dde4b5fe2499359aef7d17a. Next: round-2 re-review of the fix diff, then full gate (CI is the gate in the cloud), PR.
 
 Older note: 
 M2 squash-merged 2026-11-14 as b05740e1 after main was merged in (issue 1863 fixed on main; all CI jobs green on 389f5e5d). Next thread: `/speckit-autopilot resume #1724`, which starts M3 (T026–T030, older-protocol daemon refused and listed needs-update) from this branch.

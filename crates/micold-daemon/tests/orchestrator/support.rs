@@ -229,8 +229,19 @@ impl LinkedDaemon {
 
     /// A `Hello` on the current protocol number with another schema hash or package version.
     pub async fn hello_with(&mut self, schema_hash: [u8; 32], package_version: &str) {
+        self.hello_at(PROTOCOL_VERSION, schema_hash, package_version)
+            .await;
+    }
+
+    /// A `Hello` naming `protocol_version`, whatever the announcement said.
+    pub async fn hello_at(
+        &mut self,
+        protocol_version: u32,
+        schema_hash: [u8; 32],
+        package_version: &str,
+    ) {
         self.send(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
+            protocol_version,
             schema_hash,
             client_build: "fake-daemon".into(),
             client_instance: ClientInstance::current(),
@@ -255,6 +266,19 @@ impl LinkedDaemon {
         match frame {
             Frame::Control(msg) => msg,
             other => panic!("expected a control frame, got {other:?}"),
+        }
+    }
+
+    /// Read until the orchestrator closes the connection, skipping pings; panics if it stays open.
+    pub async fn expect_closed(&mut self) {
+        loop {
+            match tokio::time::timeout(WITHIN, self.framed.next())
+                .await
+                .expect("the orchestrator closes the connection")
+            {
+                None | Some(Err(_)) => return,
+                Some(Ok(_)) => {}
+            }
         }
     }
 

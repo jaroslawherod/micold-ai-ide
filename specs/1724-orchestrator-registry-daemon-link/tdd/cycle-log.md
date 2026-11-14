@@ -49,3 +49,13 @@ preamble is `announce::tests::an_old_announcement_still_decodes` plus the wire t
 `..._an_old_format_preamble_is_still_refused_and_listed`. `claim_failed` cannot meet a live link in
 M3's one-slot model (a reservation excludes one); its stale-token test covers the never-over-live rule,
 and M4 revisits it when a reservation can sit beside a silent link.
+
+### M3 round 1 fixes
+
+- Red: `version_mismatch_a_hello_on_another_version_lists_the_version_it_named` (a `Hello` naming
+  `PROTOCOL_VERSION - 1` after a current-version announcement) failed `left: 81, right: 80`: the record
+  listed the announcement's version. Fix: `ClaimFailure::VersionMismatch { daemon_version }` carries the
+  `Hello`'s number; the unit test `a_failed_reservation_for_the_version_...` now asserts it.
+- Regression guards, green on first run (the behaviour already held; no red): the live link still
+  answers after a rival refusal (`..._a_live_daemon_is_never_overwritten`, extended) and
+  `version_mismatch_a_silent_link_is_closed_and_the_id_listed_needs_update` (FR-006 on the wire).
