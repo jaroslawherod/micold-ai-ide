@@ -273,6 +273,13 @@ bypass_case yes scripts/autopilot/wait-merge.sh crates/micold-core/src/lib.rs
 check "wait-merge: a crates/ diff stays red despite a green local gate" 1 '^RED 5 ' "$S/wait-merge.sh" 5
 bypass_case yes scripts/autopilot/wait-merge.sh
 check "wait-merge: --no-merge never bypasses" 1 '^RED 5 ' "$S/wait-merge.sh" 5 --no-merge
+bypass_case yes docs/a.md; echo "msg" > "$d/fx/merge-5.fail"
+check "wait-merge: a failed --admin merge prints MERGE-FAILED" 4 '^MERGE-FAILED 5 ' "$S/wait-merge.sh" 5
+check "wait-merge: a failed --admin merge leaves no skip record" 0 '^ok$' bash -c "! test -e '$d/pr-5-skipped-checks.txt' && echo ok"
+# A rename lists only the new path in `gh pr view`; the local diff of the head must still count the deletion.
+cls docs/a.md; merge_ready; mkdir -p crates; echo x > crates/old.rs; git add crates/old.rs; git commit -qm c; git push -q origin wt
+head="$(git rev-parse wt)"; for f in "$d/fx"/pr-5.json*; do sed "s/\"1111111111111111111111111111111111111111\"/\"$head\"/" "$f" > "$f.x" && mv "$f.x" "$f"; done
+check "diff-class: a local diff file outside the tooling paths makes it product" 1 '^PRODUCT 5 crates/old.rs' "$S/diff-class.sh" 5 "$head"
 wm; pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json"; files_json "$d/fx" crates/a.rs
 pr_json "$d/fx" 5 MERGED COMPLETED SUCCESS > "$d/fx/pr-5.merged.json"; merge_ready
 check "wait-merge: a crates/ diff merges on green CI without --admin" 0 '^MERGED 5 abc123' "$S/wait-merge.sh" 5

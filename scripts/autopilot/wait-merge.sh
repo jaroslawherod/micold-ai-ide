@@ -99,24 +99,29 @@ done
 
 # A red `ci complete` may be bypassed only for a tooling-only diff whose head tree a green local gate
 # recorded. Never silent: the skipped checks are printed, written to a file and commented on the PR.
-admin=""
+admin=""; skipped=""
 tooling_bypass() {
   local self head tree stamps names
   self="$(dirname "${BASH_SOURCE[0]}")"
-  "$self/diff-class.sh" "$pr" 2>&1 | tail -n 1 | grep -q '^TOOLING ' || return 1
   head="$(view headRefOid .headRefOid 2>/dev/null)"; [ -n "$head" ] || return 1
   git fetch -q origin "$(view headRefName .headRefName)" 2>/dev/null || return 1
   [ "$(git rev-parse FETCH_HEAD 2>/dev/null)" = "$head" ] || return 1
+  "$self/diff-class.sh" "$pr" "$head" 2>&1 | tail -n 1 | grep -q '^TOOLING ' || return 1
   tree="$(git rev-parse "$head^{tree}" 2>/dev/null)" || return 1
   stamps="$(git rev-parse --git-path autopilot-gate-ok)"
   grep -qxF "$tree" "$stamps" 2>/dev/null || return 1
   names="$( { view statusCheckRollup ".statusCheckRollup[] | $bad | .name"
               view statusCheckRollup '.statusCheckRollup[] | select(.context != null and (.state=="FAILURE" or .state=="ERROR")) | .context'
               echo "ci complete"; } | paste -sd, -)"
-  echo "SKIPPED-CI $pr $head $names"
-  echo "SKIPPED-CI $pr $head $names" >"$logdir/pr-$pr-skipped-checks.txt"
-  gh pr comment "$pr" --body "Merged past red CI: tooling-only diff, local gate green for head $head. Skipped checks: $names. Record it in the run ledger and the epic checklist." >/dev/null 2>&1 || true
+  skipped="SKIPPED-CI $pr $head $names"; skipped_names="$names"
   return 0
+}
+# Announced only once the merge went through, so a failed merge leaves no false record.
+announce_skip() {
+  [ -n "$skipped" ] || return 0
+  echo "$skipped"
+  echo "$skipped" >"$logdir/pr-$pr-skipped-checks.txt"
+  gh pr comment "$pr" --body "Merged past red CI: tooling-only diff, local gate green. Skipped checks: $skipped_names. Record it in the run ledger and the epic checklist." >/dev/null 2>&1 || true
 }
 
 if [ "$conclusion" != SUCCESS ]; then
@@ -155,10 +160,10 @@ if [ -z "${head:-}" ]; then
   echo "VERDICT-REFUSED $pr reviewed none current unknown re-review: guard gave no head ($glast)"; exit 7
 fi
 if ! err="$(gh pr merge "$pr" "$method" ${admin:+"$admin"} --match-head-commit "$head" 2>&1)"; then
-  [ "$(view state .state)" = MERGED ] && { merged_line; exit 0; }
+  [ "$(view state .state)" = MERGED ] && { announce_skip; merged_line; exit 0; }
   echo "MERGE-FAILED $pr $(echo "$err" | grep -v '^\s*$' | head -1)"
   exit 4
 fi
-[ "$(view state .state)" = MERGED ] && { merged_line; exit 0; }
+[ "$(view state .state)" = MERGED ] && { announce_skip; merged_line; exit 0; }
 echo "MERGE-FAILED $pr state is $(view state .state) after merge"
 exit 4
