@@ -52,7 +52,8 @@ M1 (#1723–#1727) and M2 (#1728–#1731) are unchanged and remain prerequisites
   token which should be passed to orchestrator, daemon and sessions"; Anthropic's terms forbid a
   third-party app offering Claude.ai login or storing or relaying Claude tokens, so access uses
   GitHub or Google (network) or a local access link (loopback), and Claude credentials stay on each
-  daemon (plan, "Claude credentials"; confirm in Q-A).
+  daemon (plan, "Claude credentials"). jaro chose both routes: an API key or cloud credential file,
+  or the user's own sign-in in unmodified Claude Code on the daemon.
 - Q: Mobile? → A: Future; **web only** for now (jaro).
 - Q: One orchestrator replica? → A: Yes initially, keeping it scalable (jaro).
 - Q: Storage? → A: A relational database, **PostgreSQL** (jaro).

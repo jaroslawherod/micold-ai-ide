@@ -212,7 +212,7 @@ tokens — sign-in to a Claude account must complete through Anthropic's own flo
 Claude Code binary must not be modified and must keep its own sign-in methods.
 
 So Micold neither offers "Sign in with Claude" nor carries a Claude token from the browser through
-the orchestrator. Two routes stay open, and the plan supports both (Q-A):
+the orchestrator. Two routes stay open, and the plan supports both (jaro chose both, 2026-11-14):
 
 | Route | How | Billing |
 |---|---|---|
@@ -402,13 +402,12 @@ M6 and M7 to retirement.
    the [Claude credentials](#claude-credentials) design, see Q-A.)
 4. **Web only** for now; the mobile app is future work.
 5. **One orchestrator replica** for now, designed to scale later.
+6. Storage in **PostgreSQL**.
+7. Claude credentials (Q-A): **both routes**, an API key or cloud credential file per daemon, or the
+   user's own sign-in in unmodified Claude Code on that daemon; Micold never handles the token.
 
 ## Open questions for jaro
 
-- **Q-A — Claude credentials**: Micold cannot offer a Claude login or relay a Claude token (Anthropic's
-  terms). Support both an API key / cloud provider credential per daemon and the user's own sign-in
-  in unmodified Claude Code on each daemon? Recommendation: both, with the API key route as the
-  default on Kubernetes.
 - **Q-B — Other providers and terminal sessions**: when the iced app is retired, do Codex, Copilot,
   Pi and OpenCode get structured adapters first (N14), or are they dropped from the product until
   they have one? Recommendation: keep the iced app in maintenance until at least the providers you
