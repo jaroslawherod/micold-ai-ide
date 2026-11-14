@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ln1h9s
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M4 (review)
-- **Next step**: orchestrator runs Review A (high) and Review B (conformance, sonnet) on the M4 head, opens the PR
+- **Phase**: M4 (PR)
+- **Next step**: wait on the M4 PR CI, squash-merge on green, then the close unit
 
 ## Pull requests
 
@@ -64,6 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 2 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | 5433ce69c700d2689d8ce9926656b0d93aaa1af0:b3feeb311945de92fbe0cf6cfd91c22104879d6b | CLEAN (scoped, sonnet; 3 round-1 findings verified fixed, 1 MINOR empty Touches line, optional) |
 | Review A M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 2 MAJOR (Report never run by the advance, one j.json per run), 2 MINOR (vacuous --json case, drift note), fixed |
 | Review B M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 1 MAJOR (unplanned supervisor.sh, drift-M4.md), 3 MINOR (red run, vacuous case, MISSING note), fixed |
+| Review A M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed) |
+| Review B M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; plan-drift clean) |
 
 ## Red runs
 
