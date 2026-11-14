@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1813
-- **Worktree branch**: claude/project-thread-87zjfg
+- **Worktree branch**: claude/project-thread-ln1h9s
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M3 (PR)
-- **Next step**: wait on the M3 PR CI, squash-merge, then hand over to M4
+- **Phase**: M4 (PR)
+- **Next step**: wait on the M4 PR CI, squash-merge on green, then the close unit
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1865 | Design | merged | bec5d62c7 |
 | #1885 | M1 | merged | 2084ae6eb |
 | #1888 | M2 | merged | 7f4a47735 |
+| #1889 | M3 | merged | f6805eb68 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
 | M2 | T014–T018 | full | resume from ledger, report, watcher | #1888 | merged |
-| M3 | T019–T021 | full | overlap sequencing | #… | in review |
-| M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
+| M3 | T019–T021 | full | overlap sequencing | #1889 | merged |
+| M4 | T022–T023 | light | small-context skill-text proofs | #… | implemented, in review |
 
 ## Decisions
 
@@ -61,6 +62,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 1 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | CHANGES: 2 MAJOR (CRLF, globs), fixed; MINOR bullet key fixed |
 | Review B M3 | 1 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | a207cda5e89efb15af68529069367e1f8505f8bf:3ea92d58dd3fb8dfc67f520adffbc4aa13c48003 | CLEAN (MINOR flow-label note added to SKILL.md) |
 | Review A M3 | 2 | M3 | b3feeb311945de92fbe0cf6cfd91c22104879d6b | 5433ce69c700d2689d8ce9926656b0d93aaa1af0:b3feeb311945de92fbe0cf6cfd91c22104879d6b | CLEAN (scoped, sonnet; 3 round-1 findings verified fixed, 1 MINOR empty Touches line, optional) |
+| Review A M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 2 MAJOR (Report never run by the advance, one j.json per run), 2 MINOR (vacuous --json case, drift note), fixed |
+| Review B M4 | 1 | M4 | 3745ddb | 4e48ed4f179020f78494ac025a01b1916ee2a3cd:ca82abd84caa378f9d47397d08f7a1c30031a1fc | CHANGES: 1 MAJOR (unplanned supervisor.sh, drift-M4.md), 3 MINOR (red run, vacuous case, MISSING note), fixed |
+| Review A M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed) |
+| Review B M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; plan-drift clean) |
 
 ## Red runs
 
@@ -73,6 +78,11 @@ M3 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 - T019 touches/overlap cases: `unknown subcommand touches|overlap` (exit 2, want 0), failing for the missing subcommands; `next` hold cases fail because `next` ignores Touches.
 - T021 skill-text cases: grep exit 1 (no *Touches* section, `gh issue view <n> --json body`, `supervisor.sh touches`, `ledger set <n> Touches`, "treated as disjoint" in SKILL.md).
 
+M4 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 175 case(s), 2 failure(s)`.
+- T022 skill-text cases: `skill says never to read a transcript` and `the report does not read the session` fail with grep exit 1 (the phrases are absent or split over two lines in SKILL.md). The `run-status.sh` count, `ledger table` and slot-agreement cases already hold from M1-M3.
+- Empty-`Touches:` case (M3 MINOR, fixed in `supervisor.sh` in M4; unplanned, see `drift-M4.md`): before the fix `touches` on `Touches:` then `Touches: crates/z` printed `-` / `none` (exit 0, want `crates/z`).
+- Review A M4 r1 tests (before the fix, 179 cases, 4 failures): `a read is written to one file per issue`, `the report reads that issue's file`, `the advance loop runs Report`, `the watcher wake runs Report` (grep exit 1). The vacuous `--json` case was replaced by a line-based one that holds.
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -80,7 +90,7 @@ M3 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 
 
 ## Handover
 
-M2 merged in #1888 (squash 7f4a47735) on 2026-11-14. Next: a fresh cloud thread runs `/speckit-autopilot resume #1813` and dispatches the M3 milestone unit (T019–T021, overlap sequencing). That thread works on its own `claude/...` branch: merge this handover commit's branch into it, then set the **Worktree branch** line above to it. No open findings (one MINOR from Review A M2 round 2, SKILL.md Restart step 2 wording for a filled Worktree with no session found, carried as optional). Reviews ran as `autopilot-reviewer` subagents dispatched by the orchestrator (units have no Agent tool); the orchestrator opened the PR and squash-merged via GitHub MCP. `scripts/gate.sh` stops on the known cloud-only red `a_signed_commit_succeeds_with_the_delivered_key`, so it never records the tree; units ran `scripts/tests/*.test.sh` by hand and CI was green.
+M3 merged in #1889 (squash f6805eb68) on 2026-11-14. Next: a fresh cloud thread runs `/speckit-autopilot resume #1813` and dispatches the M4 milestone unit (T022–T023, tier light, `model: "sonnet"`). That thread works on its own `claude/...` branch: merge this handover commit's branch into it, then set the **Worktree branch** line above to it. Carried optional MINORs: Review A M3 round 2, a body with an empty `Touches:` line before a populated one takes the empty one (grep -m1); Review A M2 round 2, SKILL.md Restart step 2 wording. Reviews ran as `autopilot-reviewer` subagents dispatched by the orchestrator; the orchestrator opened the PR and squash-merged via GitHub MCP. `scripts/gate.sh` still stops on the cloud-only red `a_signed_commit_succeeds_with_the_delivered_key`; units ran `scripts/tests/*.test.sh` by hand and CI was green.
 
 ## Open escalation
 

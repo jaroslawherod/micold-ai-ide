@@ -181,6 +181,8 @@ check "skill names the watcher script" 0 'supervisor-watch.sh' grep -n 'supervis
 B="$tmp/body.md"
 printf 'Intro\nTouches: crates/a, docs/x.md\nspecs/9-x/spec.md\n' > "$B"
 check "touches: a declared line wins" 0 '^crates/a,docs/x.md$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
+printf 'Touches:\nTouches: crates/z\n' > "$tmp/body-empty.md"
+check "touches: an empty Touches line before a populated one is skipped" 0 '^crates/z$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$tmp/body-empty.md"
 check "touches: declared is named on stderr" 0 '^declared$' bash -c '"$0" touches "$1" 2>&1 >/dev/null' "$SUP" "$B"
 printf 'Touches: crates/a docs/x.md\n' > "$B"
 check "touches: space separated paths" 0 '^crates/a,docs/x.md$' bash -c '"$0" touches "$1" 2>/dev/null' "$SUP" "$B"
@@ -236,6 +238,32 @@ check "skill reads the issue body with gh issue view" 0 'gh issue view' grep -n 
 check "skill runs touches" 0 'supervisor.sh touches' grep -n 'supervisor.sh touches' "$SKILL"
 check "skill stores touches in the ledger" 0 'ledger set <n> Touches' grep -n 'ledger set <n> Touches' "$SKILL"
 check "skill notes a disjoint treatment for none" 0 'disjoint' grep -n -i 'treated as disjoint' "$SKILL"
+
+
+# --- T022: small context (US5, FR-007, FR-010, SC-004) -----------------------------------------
+check "context: run-status.sh is named exactly once" 0 '^1$' bash -c 'grep -o "run-status\.sh" "$0" | wc -l | tr -d " "' "$SKILL"
+check "context: every line naming run-status.sh has --json" 0 '^0$' bash -c 'grep "run-status\.sh" "$0" | grep -vc -- "--json"; true' "$SKILL"
+check "context: the one read is --json, per row of the mapping step" 0 'run-status.sh --json <dir>' bash -c 'awk "/^## Restart/,/^## Report/" "$0" | grep -n "run-status.sh --json <dir>"' "$SKILL"
+check "context: a read is written to one file per issue" 0 '<scratch>/<n>.json' grep -n 'run-status.sh --json <dir> > <scratch>/<n>.json' "$SKILL"
+check "context: the report reads that issue's file, not run-status again" 0 '<scratch>/<n>.json' bash -c 'awk "/^## Report/,/^## Watcher/" "$0" | grep -n "<scratch>/<n>.json"' "$SKILL"
+check "context: the advance loop runs Report" 0 'Report' bash -c 'awk "/^## Advance loop/,/^## Restart/" "$0" | grep -n "\*Report\*"' "$SKILL"
+check "context: the watcher wake runs Report" 0 'Report' bash -c 'awk "/^## Watcher/,0" "$0" | grep -n "\*Report\*"' "$SKILL"
+check "context: no transcript or session output read is instructed" 1 '^$' grep -n -i 'read_session_output\|get_session_output\|session transcript.*read\|tail.*session' "$SKILL"
+check "context: the skill says never to read a transcript" 0 'never read a session' grep -n -i 'never read a session' "$SKILL"
+check "context: the ledger is read only through ledger table" 0 'only through `supervisor.sh ledger table`' grep -nF 'only through `supervisor.sh ledger table`' "$SKILL"
+check "context: the advance loop reports through ledger table" 0 'ledger table' bash -c 'awk "/^## Advance loop/,/^## Restart/" "$0" | grep -n "ledger table"' "$SKILL"
+check "context: the report ends with ledger table" 0 'Finish with `supervisor.sh ledger table`' bash -c 'awk "/^## Report/,/^## Watcher/" "$0" | grep -nF "Finish with \`supervisor.sh ledger table\`"' "$SKILL"
+check "context: an asking run is reported from the JSON escalation" 0 'escalation' bash -c 'awk "/^## Report/,/^## Watcher/" "$0" | grep -n "JSON .escalation"' "$SKILL"
+check "context: the report does not read the session" 0 'without reading the session' grep -n 'without reading the session' "$SKILL"
+check "context: no section reads the ledger file directly" 1 '^$' grep -n -E '(cat|Read|head|tail|sed -n) .*supervisor\.md' "$SKILL"
+mk 3 12 14 15 16 17
+for occ in 0 1 2 3; do
+  for i in 12 14 15; do st "$i" queued; done
+  [ "$occ" -ge 1 ] && st 12 running; [ "$occ" -ge 2 ] && st 14 starting; [ "$occ" -ge 3 ] && st 15 running
+  want=$((3 - occ)); gw=PASS; [ "$want" -eq 0 ] && gw=FAIL
+  check "slots: $occ occupied, cap 3: next prints $want" 0 "^$want\$" bash -c 'AUTOPILOT_SUP_MEM_MIB=8000 "$0" next --ledger "$1" | wc -l | tr -d " "' "$SUP" "$L"
+  check "slots: $occ occupied: gate agrees ($gw)" "$([ "$gw" = PASS ] && echo 0 || echo 1)" "^$gw" env AUTOPILOT_SUP_MEM_MIB=8000 AUTOPILOT_SUP_LOAD=1 AUTOPILOT_SUP_CORES=8 "$SUP" gate --ledger "$L"
+done
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
