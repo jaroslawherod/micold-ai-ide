@@ -8,32 +8,32 @@ cases live in `scripts/tests/supervisor.test.sh`, so test tasks are never `[P]` 
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `/.autopilot/` to `.gitignore`
-- [ ] T002 Create `scripts/tests/supervisor.test.sh` skeleton (sources `scripts/tests/lib/autopilot-fixtures.sh`, `tmp`, pass/fail counters; model on `scripts/tests/run-status.test.sh`) with a case asserting `git check-ignore .autopilot/supervisor.md`
+- [x] T001 Add `/.autopilot/` to `.gitignore`
+- [x] T002 Create `scripts/tests/supervisor.test.sh` skeleton (sources `scripts/tests/lib/autopilot-fixtures.sh`, `tmp`, pass/fail counters; model on `scripts/tests/run-status.test.sh`) with a case asserting `git check-ignore .autopilot/supervisor.md`
 
 ## Phase 2: Foundational (the supervisor ledger)
 
-- [ ] T003 Add ledger test cases to `scripts/tests/supervisor.test.sh`: `ledger init` (creates, refuses an existing file), `ledger owner`, `ledger set/get` per cell, unknown `State` rejected, malformed ledger exits 2, `ledger table` is short
-- [ ] T004 Create `scripts/autopilot/supervisor.sh` with argument parsing and the `ledger init|owner|set|get|table` subcommands (bash 3.2, `jq`-free text handling of the markdown table, data-model.md)
+- [x] T003 Add ledger test cases to `scripts/tests/supervisor.test.sh`: `ledger init` (creates, refuses an existing file), `ledger owner`, `ledger set/get` per cell, unknown `State` rejected, malformed ledger exits 2, `ledger table` is short
+- [x] T004 Create `scripts/autopilot/supervisor.sh` with argument parsing and the `ledger init|owner|set|get|table` subcommands (bash 3.2, `jq`-free text handling of the markdown table, data-model.md)
 
 ## Phase 3: User Story 1 - Start a queue of issues under a cap (P1) 🎯 MVP
 
 **Independent test**: with fixtures, `next` admits at most cap minus occupied issues, in ascending order.
 
-- [ ] T005 [US1] Add `next` test cases to `scripts/tests/supervisor.test.sh`: three queued, cap 2 gives two lowest; `starting` and `running` occupy slots; `done|failed|lost|skipped` release; nothing printed when none (US1 1-2, SC-001, FR-008)
-- [ ] T006 [US1] Implement `supervisor.sh next` (cap and slots only; overlap is added in US3)
-- [ ] T007 [US1] Add skill-text test cases to `scripts/tests/supervisor.test.sh` (red before T008/T009): `.claude/skills/speckit-autopilot/SKILL.md` documents the trailing `supervised` argument and the literal `- **Supervised**: yes` line `supervised.sh` matches; `.claude/skills/autopilot-supervisor/SKILL.md` names the prompt `/speckit-autopilot #<n> supervised` and never names `read_session_output`
-- [ ] T008 [US1] Document the trailing `supervised` argument (writes the ledger's `- **Supervised**: yes` line) in `.claude/skills/speckit-autopilot/SKILL.md`
-- [ ] T009 [US1] Create `.claude/skills/autopilot-supervisor/SKILL.md`: *Build the queue* (list or `autopilot:queue`, sorted), *Start an issue* (`create_worktree` with `github_issue`, `create_session` prompt `/speckit-autopilot #<n> supervised`, ledger write before and after; a closed or missing issue, or one that already has a worktree or ledger, gets `ledger set <n> State skipped` with the reason in Note; a failed create is noted in Note; the tries counter and `failed` after 3 tries are enforced in M2, T014-T015), the advance loop (`next`, start, an empty queue says nothing to do, stop when no slot is occupied), finishing report
-- [ ] T010 [US1] Add a pointer to the supervisor skill in `.claude/skills/speckit-autopilot/README.md`
+- [x] T005 [US1] Add `next` test cases to `scripts/tests/supervisor.test.sh`: three queued, cap 2 gives two lowest; `starting` and `running` occupy slots; `done|failed|lost|skipped` release; nothing printed when none (US1 1-2, SC-001, FR-008)
+- [x] T006 [US1] Implement `supervisor.sh next` (cap and slots only; overlap is added in US3)
+- [x] T007 [US1] Add skill-text test cases to `scripts/tests/supervisor.test.sh` (red before T008/T009): `.claude/skills/speckit-autopilot/SKILL.md` documents the trailing `supervised` argument and the literal `- **Supervised**: yes` line `supervised.sh` matches; `.claude/skills/autopilot-supervisor/SKILL.md` names the prompt `/speckit-autopilot #<n> supervised` and never names `read_session_output`
+- [x] T008 [US1] Document the trailing `supervised` argument (writes the ledger's `- **Supervised**: yes` line) in `.claude/skills/speckit-autopilot/SKILL.md`
+- [x] T009 [US1] Create `.claude/skills/autopilot-supervisor/SKILL.md`: *Build the queue* (list or `autopilot:queue`, sorted), *Start an issue* (`create_worktree` with `github_issue`, `create_session` prompt `/speckit-autopilot #<n> supervised`, ledger write before and after; a closed or missing issue, or one that already has a worktree or ledger, gets `ledger set <n> State skipped` with the reason in Note; a failed create is noted in Note; the tries counter and `failed` after 3 tries are enforced in M2, T014-T015), the advance loop (`next`, start, an empty queue says nothing to do, stop when no slot is occupied), finishing report
+- [x] T010 [US1] Add a pointer to the supervisor skill in `.claude/skills/speckit-autopilot/README.md`
 
 ## Phase 4: User Story 2 - Resource gate before every start (P1)
 
 **Independent test**: `gate` returns PASS or the first failing check for each fixture reading.
 
-- [ ] T011 [US2] Add `gate` test cases to `scripts/tests/supervisor.test.sh`: cap, memory below 4096 MiB, load above cores, PASS, failure order, readings from `AUTOPILOT_SUP_MEM_MIB|LOAD|CORES` (US2 1-4, SC-003)
-- [ ] T012 [US2] Implement `supervisor.sh gate` with Linux (`/proc/meminfo`, `nproc`) and macOS (`vm_stat`, `sysctl`) readers and `uptime` load
-- [ ] T013 [US2] Add the gate step to `.claude/skills/autopilot-supervisor/SKILL.md`: run `gate --running <occupied + starts so far>` before each `create_worktree`; on FAIL start nothing, report which check, retry next advance
+- [x] T011 [US2] Add `gate` test cases to `scripts/tests/supervisor.test.sh`: cap, memory below 4096 MiB, load above cores, PASS, failure order, readings from `AUTOPILOT_SUP_MEM_MIB|LOAD|CORES` (US2 1-4, SC-003)
+- [x] T012 [US2] Implement `supervisor.sh gate` with Linux (`/proc/meminfo`, `nproc`) and macOS (`vm_stat`, `sysctl`) readers and `uptime` load
+- [x] T013 [US2] Add the gate step to `.claude/skills/autopilot-supervisor/SKILL.md`: run `gate --running <occupied + starts so far>` before each `create_worktree`; on FAIL start nothing, report which check, retry next advance
 
 ## Phase 5: User Story 4 - A restarted supervisor resumes from its ledger (P1)
 

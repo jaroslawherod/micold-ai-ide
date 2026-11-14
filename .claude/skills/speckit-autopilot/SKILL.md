@@ -1,7 +1,7 @@
 ---
 name: speckit-autopilot
 description: Use when the user hands over a feature idea, a bug report, a chore or a GitHub issue and wants it run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
-argument-hint: "#<issue> | <flow> [high|low] #<issue> | <feature description> | bug: <report> | chore: <task> | resume"
+argument-hint: "#<issue> [supervised] | <flow> [high|low] #<issue> | <feature description> | bug: <report> | chore: <task> | resume"
 user-invocable: true
 ---
 
@@ -23,6 +23,13 @@ Everything it reads is re-read on every later call: batch independent probes int
 
 Each unit is a fresh subagent that reads [rules/unit.md](rules/unit.md) and the task files its
 flow lists. Overview for humans: [README.md](README.md).
+
+## Supervised argument
+
+A trailing `supervised` argument (`/speckit-autopilot #<n> supervised`, as the `autopilot-supervisor`
+skill starts a run) marks the run as supervised: when the ledger is created, write the literal line
+`- **Supervised**: yes` under **Kind**. `scripts/autopilot/supervised.sh` matches that line, and an
+escalation then ends the turn instead of blocking on a question. Drop the word before routing.
 
 ## Route
 
