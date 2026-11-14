@@ -189,12 +189,6 @@ pub fn catalog_on(store: &Path) -> Catalog {
 pub fn idle_process(id: SessionId) -> PtySession {
     #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
     cmd.cwd(std::env::temp_dir());
     PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("an idle process starts")
 }
@@ -205,12 +199,6 @@ pub fn process_that_exits(id: SessionId) -> PtySession {
     let mut cmd = {
         let mut cmd = CommandBuilder::new("sh");
         cmd.arg("-c");
-        cmd
-    };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/c");
         cmd
     };
     cmd.arg("exit 0");
@@ -243,17 +231,6 @@ pub fn wait_dead(pty: &PtySession) {
         on_exit
             .recv_timeout(OWED)
             .expect("the process did not exit in time");
-    }
-    #[cfg(windows)]
-    {
-        let deadline = std::time::Instant::now() + OWED;
-        while pty.is_alive() {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "the process did not exit in time"
-            );
-            std::thread::sleep(Duration::from_millis(20));
-        }
     }
     assert!(!pty.is_alive(), "the process has exited");
 }

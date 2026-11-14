@@ -14576,8 +14576,8 @@ mod panes {
                     key: Key::Char('a'),
                     mods: Mods {
                         shift: true,
-                        ctrl: !cfg!(target_os = "macos"),
-                        logo: cfg!(target_os = "macos"),
+                        ctrl: true,
+                        logo: false,
                         ..Mods::NONE
                     },
                     text: None,
@@ -14628,8 +14628,8 @@ mod panes {
         let ctrl_c = micold_client::keymap::KeyInput {
             key: micold_client::keymap::Key::Char('c'),
             mods: micold_client::keymap::Mods {
-                ctrl: !cfg!(target_os = "macos"),
-                logo: cfg!(target_os = "macos"),
+                ctrl: true,
+                logo: false,
                 ..micold_client::keymap::Mods::NONE
             },
             text: None,

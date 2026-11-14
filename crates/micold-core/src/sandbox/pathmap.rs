@@ -73,7 +73,7 @@ pub fn map_for(host: &Path, windows_host: bool) -> PathBuf {
 
 /// The path a host directory is mounted at inside the container, on *this* platform.
 pub fn map(host: &Path) -> PathBuf {
-    map_for(host, cfg!(windows))
+    map_for(host, false)
 }
 
 /// The host path a container path names, or `None` when the sandbox does not share it
@@ -225,7 +225,7 @@ pub fn is_identity_for(windows_host: bool) -> bool {
 
 /// Whether *this* platform mounts projects at their own absolute paths.
 pub fn is_identity() -> bool {
-    is_identity_for(cfg!(windows))
+    is_identity_for(false)
 }
 
 #[cfg(test)]

@@ -213,8 +213,6 @@ fn disk_mode(full: &Path, file_mode: bool) -> Option<&'static str> {
             return Some("100755");
         }
     }
-    #[cfg(not(unix))]
-    let _ = file_mode;
     Some("100644")
 }
 

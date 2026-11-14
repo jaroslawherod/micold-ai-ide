@@ -57,35 +57,19 @@ fn gated_script(dir: &Path) -> Gated {
     let gate = dir.join("gate");
     let bin = tempfile::tempdir().unwrap();
     write_cli_stand_in(bin.path(), CLI.provider().command());
-    let (name, body) = if cfg!(windows) {
-        (
-            "env-include.ps1",
-            format!(
-                "$v = (Get-Content -Path '{marker}' -Raw).Trim()\r\n\
-                 Add-Content -Path '{runs}' -Value run\r\n\
-                 while (-not (Test-Path '{gate}')) {{ Start-Sleep -Milliseconds 20 }}\r\n\
-                 if ($v -eq 'new') {{ $env:PATH = '{bin};' + $env:PATH }}\r\n",
-                runs = runs.display(),
-                marker = marker.display(),
-                gate = gate.display(),
-                bin = bin.path().display(),
-            ),
-        )
-    } else {
-        (
-            "env-include.sh",
-            format!(
-                "v=$(cat '{marker}')\n\
+    let (name, body) = (
+        "env-include.sh",
+        format!(
+            "v=$(cat '{marker}')\n\
                  echo run >> '{runs}'\n\
                  while [ ! -e '{gate}' ]; do sleep 0.02; done\n\
                  if [ \"$v\" = new ]; then export PATH=\"{bin}:$PATH\"; fi\n",
-                runs = runs.display(),
-                marker = marker.display(),
-                gate = gate.display(),
-                bin = bin.path().display(),
-            ),
-        )
-    };
+            runs = runs.display(),
+            marker = marker.display(),
+            gate = gate.display(),
+            bin = bin.path().display(),
+        ),
+    );
     let script = dir.join(name);
     std::fs::write(&script, body).unwrap();
     Gated {
@@ -103,15 +87,6 @@ fn write_cli_stand_in(dir: &Path, command: &str) {
     let stub = dir.join(command);
     std::fs::write(&stub, "#!/bin/sh\nexec sleep 600\n").unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-#[cfg(windows)]
-fn write_cli_stand_in(dir: &Path, command: &str) {
-    std::fs::write(
-        dir.join(format!("{command}.cmd")),
-        "@echo off\r\nping -n 600 127.0.0.1 >nul\r\n",
-    )
-    .unwrap();
 }
 
 /// A service with environment-include on and `script` configured, holding one AI-CLI session at

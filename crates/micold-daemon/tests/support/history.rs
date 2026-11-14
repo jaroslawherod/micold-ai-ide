@@ -23,10 +23,7 @@ use micold_daemon::state::DaemonState;
 
 pub const SEPARATOR: &str = "session restarted at";
 
-#[cfg(not(windows))]
 const STAND_IN: &str = "claude";
-#[cfg(windows)]
-const STAND_IN: &str = "claude.exe";
 
 /// The stand-in `claude`. It runs the directives of `.fake-cli`, one per line, then idles:
 ///
@@ -129,8 +126,6 @@ fn detach() {
     let _ = std::fs::write("grandchild.pid", child.id().to_string());
 }
 
-#[cfg(not(unix))]
-fn detach() {}
 "##;
 
 /// Compile the stand-in and put its directory first on `PATH`, once per test process. Every test

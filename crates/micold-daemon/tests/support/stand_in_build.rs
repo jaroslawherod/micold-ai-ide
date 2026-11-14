@@ -30,7 +30,7 @@ pub fn stand_in_dir(source_text: &str, exe_name: &str) -> PathBuf {
     std::fs::create_dir_all(&partial).expect("a directory for the stand-in");
     let source = partial.join("stand_in.rs");
     std::fs::write(&source, source_text).expect("write the stand-in's source");
-    let rustc_name = if cfg!(windows) { "rustc.exe" } else { "rustc" };
+    let rustc_name = "rustc";
     let rustc = std::env::var_os("RUSTC")
         .map(PathBuf::from)
         .or_else(|| {

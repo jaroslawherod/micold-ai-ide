@@ -85,7 +85,7 @@ fn the_default_profile_mounts_no_credentials() {
     // *at* the home path, so only the host half distinguishes the two.
     assert_eq!(
         mounts.home.container,
-        pathmap::map_for(Path::new("/home/u"), cfg!(windows)),
+        pathmap::map_for(Path::new("/home/u"), false),
         "the sandbox's home belongs at the user's home path, under this platform's mapping"
     );
     assert!(
@@ -651,7 +651,7 @@ fn the_sign_in_share_mounts_every_listed_file_at_its_own_path() {
         .collect();
     assert_eq!(mounted, layout.ai_cli_auth);
     for c in &mounts.credentials {
-        assert_eq!(c.container, pathmap::map_for(&c.host, cfg!(windows)));
+        assert_eq!(c.container, pathmap::map_for(&c.host, false));
     }
 }
 

@@ -416,8 +416,6 @@ fn env_hygiene_with(
     lang_inherited: bool,
 ) -> Vec<EnvEdit> {
     let mut edits = vec![EnvEdit::Remove(micold_core::paths::DATA_DIR_ENV.into())];
-    #[cfg(windows)]
-    edits.extend(prefer_process_path(target));
     edits.extend(strip_inherited_terminal_identity(target));
     // The daemon's data directory is the container signal: the configuration file names it,
     // whichever way the daemon was started.
@@ -495,26 +493,6 @@ pub fn apply_env_hygiene(target: &mut impl EnvTarget) {
     }
 }
 
-/// Put this process's `PATH` in front of the one a Windows child would otherwise get.
-///
-/// portable-pty seeds a Windows child's environment from the registry, so its `PATH` is the
-/// system and user `PATH` as stored, not the daemon's own. `AiCliProvider::is_available` checks
-/// the daemon's `PATH`, so without this a CLI found there could still fail to spawn with
-/// "cannot find the file specified". The registry entries stay behind, so a CLI installed since
-/// the daemon started is still found. An env-include `PATH` is applied later and still wins.
-#[cfg(windows)]
-fn prefer_process_path(target: &impl EnvTarget) -> Option<EnvEdit> {
-    let mut path = std::env::var_os("PATH")?;
-    if let Some(registry) = target
-        .own_var("PATH")
-        .filter(|registry| !registry.is_empty())
-    {
-        path.push(";");
-        path.push(registry);
-    }
-    Some(EnvEdit::Set("PATH".into(), path))
-}
-
 /// Remove every inherited variable that names another terminal (feature 031, FR-006, contract
 /// session-terminal-identity §2), so a program in the session asks micold's own identity, not the
 /// one of the terminal the daemon was started from. Applied before `TERM` and the include values
@@ -524,8 +502,7 @@ fn prefer_process_path(target: &impl EnvTarget) -> Option<EnvEdit> {
 /// entries and an identity variable with other bytes would otherwise slip through; and from the
 /// command too, which on Windows also carries the registry's variables.
 fn strip_inherited_terminal_identity(target: &impl EnvTarget) -> Vec<EnvEdit> {
-    let matches =
-        |key: &str, value: &str| is_inherited_terminal_identity(key, value, cfg!(windows));
+    let matches = |key: &str, value: &str| is_inherited_terminal_identity(key, value, false);
     std::env::vars_os()
         .filter(|(key, value)| matches(&key.to_string_lossy(), &value.to_string_lossy()))
         .map(|(key, _)| key)
@@ -613,14 +590,8 @@ impl SupervisedChild {
     }
 
     /// Terminate and reap the child (FR-015a / session close). Terminates the child's whole process
-    /// tree first — its process group on Unix, its job object on Windows — so processes the session
-    /// started don't orphan (FR-036, T061), then kills and reaps the direct child.
-    ///
-    /// On Windows `child.kill()` is `portable-pty`'s, whose killer reports `TerminateProcess`
-    /// inverted (research R3.4). `Child::kill` discards that result in 0.9.0, which is the only
-    /// reason the `?` in [`Supervised::terminate`] is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
-    /// and the process really gone — so an upgrade that starts propagating it fails a test rather
-    /// than every session close.
+    /// tree first — its process group — so processes the session started don't orphan (FR-036,
+    /// T061), then kills and reaps the direct child.
     ///
     /// The tree is terminated under the child's lock, so it cannot be racing a reap that would free
     /// the pid it signals through. A second `kill()` — the drop after a session close — finds the
@@ -693,8 +664,7 @@ impl PtySession {
     ) -> io::Result<Self> {
         ensure_cwd_exists(cwd)?;
         let shell = std::env::var("SHELL").ok();
-        let comspec = std::env::var("COMSPEC").ok();
-        let command = default_shell_command(shell.as_deref(), comspec.as_deref());
+        let command = default_shell_command(shell.as_deref());
         let mut cmd = CommandBuilder::new(command);
         apply_env_hygiene(&mut cmd);
         cmd.cwd(cwd);
@@ -751,14 +721,6 @@ impl PtySession {
             })
             .map_err(io::Error::other)?;
 
-        // The daemon is launched with `CREATE_NEW_PROCESS_GROUP`, which leaves it ignoring Ctrl-C,
-        // and a child inherits that. The session's program would then never see the `CTRL_C_EVENT`
-        // ConPTY raises from `0x03`. The daemon has no console, so restoring it costs nothing here.
-        #[cfg(windows)]
-        // SAFETY: a null handler with FALSE only clears this process's ignore-Ctrl-C attribute.
-        unsafe {
-            windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, 0);
-        }
         let mut child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
         // Before anything else: on Windows this is what puts the child in a job object, and every
         // instant between the spawn and this call is one in which a grandchild would escape it.
@@ -1361,97 +1323,6 @@ mod tests {
         assert_gone(
             grandchild,
             "grandchild of an exited child survived teardown",
-        );
-    }
-}
-
-#[cfg(all(test, windows))]
-mod windows_tests {
-    use super::*;
-    use std::time::{Duration, Instant};
-
-    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
-    use windows_sys::Win32::System::Threading::{
-        OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
-    };
-
-    /// How long the grandchild may take to go once its session is killed (E5.1).
-    const REAP_BUDGET: Duration = Duration::from_secs(5);
-
-    /// FR-020 / E5.1, the Windows counterpart of `kill_reaps_the_whole_process_group`: a process the
-    /// session's shell started must not outlive the session.
-    #[test]
-    fn kill_reaps_grandchild() {
-        let dir = tempfile::tempdir().unwrap();
-        let pidfile = dir.path().join("grandchild.pid");
-        // PowerShell starts `ping` as its own child (the session's grandchild), records its pid, then
-        // waits on it. `-n 300` bounds a leak to five minutes if the test fails before cleanup.
-        let script = format!(
-            "$p = Start-Process ping -ArgumentList '-n','300','127.0.0.1' -NoNewWindow -PassThru; \
-             Set-Content -Encoding ascii -Path '{}' -Value $p.Id; Wait-Process -Id $p.Id",
-            pidfile.display()
-        );
-        let mut cmd = CommandBuilder::new("powershell");
-        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
-        let session = PtySession::spawn(SessionId::new(), cmd, 100, None).unwrap();
-
-        let deadline = Instant::now() + Duration::from_secs(30);
-        let grandchild: u32 = loop {
-            if let Ok(text) = std::fs::read_to_string(&pidfile) {
-                if let Ok(pid) = text.trim().parse() {
-                    break pid;
-                }
-            }
-            assert!(Instant::now() < deadline, "grandchild pid never recorded");
-            std::thread::sleep(Duration::from_millis(50));
-        };
-        // SAFETY: a plain handle open on a pid; it is closed below on every path that reaches it.
-        let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_TERMINATE, 0, grandchild) };
-        assert!(
-            !handle.is_null(),
-            "grandchild {grandchild} should be alive before teardown: {}",
-            io::Error::last_os_error()
-        );
-
-        session.kill().unwrap();
-
-        // SAFETY: `handle` is a live process handle opened with SYNCHRONIZE and TERMINATE above.
-        let reaped = unsafe { WaitForSingleObject(handle, REAP_BUDGET.as_millis() as u32) };
-        if reaped != WAIT_OBJECT_0 {
-            // Do not leave the survivor behind for the rest of the suite.
-            // SAFETY: as above.
-            unsafe { TerminateProcess(handle, 1) };
-        }
-        // SAFETY: closed exactly once.
-        unsafe { CloseHandle(handle) };
-        assert_eq!(
-            reaped, WAIT_OBJECT_0,
-            "grandchild {grandchild} survived the session kill by {REAP_BUDGET:?}"
-        );
-    }
-
-    /// How long dropping a session may take once its child is gone.
-    const DROP_BUDGET: Duration = Duration::from_secs(10);
-
-    /// FR-020: tearing a session down must return. On Windows the reader thread's pipe reaches EOF
-    /// only once the pseudoconsole is closed, not when the child exits, so a `Drop` that waits on
-    /// the reader first never finishes.
-    #[test]
-    fn dropping_a_session_returns() {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.args(["/c", "ping -n 300 127.0.0.1"]);
-        let session = PtySession::spawn(SessionId::new(), cmd, 100, None).unwrap();
-
-        let (done_tx, done_rx) = std::sync::mpsc::channel();
-        // A drop that hangs leaves this thread blocked; the assertion below still fails the test.
-        std::thread::spawn(move || {
-            drop(session);
-            let _ = done_tx.send(());
-        });
-
-        assert!(
-            done_rx.recv_timeout(DROP_BUDGET).is_ok(),
-            "dropping the session did not return within {DROP_BUDGET:?}"
         );
     }
 }

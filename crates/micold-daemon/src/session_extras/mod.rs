@@ -143,11 +143,6 @@ fn set_mode(path: &Path, mode: u32) -> Result<(), String> {
         .map_err(|e| format!("cannot set its mode: {e}"))
 }
 
-#[cfg(not(unix))]
-fn set_mode(_path: &Path, _mode: u32) -> Result<(), String> {
-    Ok(())
-}
-
 /// The proxy and CA bundle the daemon's own HTTPS honours (FR-037).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct Egress {

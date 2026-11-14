@@ -1616,7 +1616,7 @@ impl crate::app::State {
         };
         let facts = crate::links::LabelFacts {
             runtime_missing: container && self.settings.runtime_missing,
-            paths_mapped: container && cfg!(windows),
+            paths_mapped: false,
             lost_sessions: self.active_sessions().iter().any(|s| {
                 s.location.is_worktree(key)
                     && !s.archived

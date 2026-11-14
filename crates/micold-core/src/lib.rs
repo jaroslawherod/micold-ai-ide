@@ -106,9 +106,8 @@ pub mod tokens;
 pub mod tooltip;
 pub mod typeahead;
 pub mod unix_time;
-#[cfg(windows)]
-pub(crate) mod win_job;
 pub mod workspace;
 pub mod worktree;
 pub mod worktree_branches;
 pub mod worktree_guard;
+pub mod worktree_parent;

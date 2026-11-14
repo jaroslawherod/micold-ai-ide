@@ -587,11 +587,7 @@ pub fn palette_of<'a, M: Clone + 'a>(
 }
 
 /// The **Add attachment** button's tooltip (#1464 FR-006).
-pub const ATTACH_TOOLTIP: &str = if cfg!(target_os = "macos") {
-    "Add attachment (Cmd+Shift+A)"
-} else {
-    "Add attachment (Ctrl+Shift+A)"
-};
+pub const ATTACH_TOOLTIP: &str = "Add attachment (Ctrl+Shift+A)";
 
 /// The **Add attachment** icon button with its tooltip, pressing `press`; inert without one. Also
 /// posed by the showcase (#1464 FR-014).
@@ -612,11 +608,7 @@ pub fn attach_button<'a, M: Clone + 'a>(roles: Roles, press: Option<M>) -> Eleme
 pub const OPTIONS_LABEL: &str = "Session options";
 
 /// The **Open large editor** button's tooltip (feature 1703 FR-004).
-pub const OPEN_EDITOR_TOOLTIP: &str = if cfg!(target_os = "macos") {
-    "Open large editor (Cmd+Shift+M)"
-} else {
-    "Open large editor (Ctrl+Shift+M)"
-};
+pub const OPEN_EDITOR_TOOLTIP: &str = "Open large editor (Ctrl+Shift+M)";
 
 /// The **Open large editor** icon button with its tooltip, pressing `press`. Also posed by the
 /// showcase (feature 1703).

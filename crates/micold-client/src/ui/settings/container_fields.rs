@@ -131,11 +131,7 @@ fn unshared_sign_in<'a>(view: &ContainerView<'a>) -> Option<&'a str> {
 ///
 /// The Keychain is named on macOS only, where it is the usual reason (FR-004g).
 pub fn unshared_sign_in_notice(view: &ContainerView<'_>) -> Option<String> {
-    let keychain = if cfg!(target_os = "macos") {
-        " On macOS, Claude Code keeps the token in the Keychain rather than in that file."
-    } else {
-        ""
-    };
+    let keychain = "";
     unshared_sign_in(view).map(|path| {
         format!(
             "The sign-in is not shared: the running sandbox's container has no token from {path}.\
@@ -676,9 +672,8 @@ mod tests {
             notice.contains("On this computer"),
             "the one in-app way to a new container is not named: {notice}"
         );
-        assert_eq!(
-            notice.contains("Keychain"),
-            cfg!(target_os = "macos"),
+        assert!(
+            !notice.contains("Keychain"),
             "the Keychain is named where it is not the reason: {notice}"
         );
     }

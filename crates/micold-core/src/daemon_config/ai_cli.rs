@@ -237,10 +237,6 @@ fn replace_link(target: &Path, link: &Path) -> std::io::Result<()> {
     {
         std::os::unix::fs::symlink(target, link)
     }
-    #[cfg(not(unix))]
-    {
-        std::fs::copy(target, link).map(|_| ())
-    }
 }
 
 /// Whether `a` and `b` name the same existing file, following links.
@@ -286,10 +282,6 @@ pub fn prepare_host_config_dir(
                 .symlink_metadata()
                 .is_ok_and(|m| !m.file_type().is_symlink());
             if source.exists() && !kept {
-                #[cfg(not(unix))]
-                if source.is_dir() {
-                    continue;
-                }
                 let _ = replace_link(&source, &dir.join(extra));
             }
         }

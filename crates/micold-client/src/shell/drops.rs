@@ -81,7 +81,6 @@ pub fn on_drops_settled(app: &mut App) -> Task<Message> {
 pub fn login_shell_kind() -> micold_core::path_insert::ShellKind {
     micold_core::path_insert::ShellKind::detect(&micold_core::terminal::default_shell_command(
         std::env::var("SHELL").ok().as_deref(),
-        std::env::var("COMSPEC").ok().as_deref(),
     ))
 }
 

@@ -252,24 +252,16 @@ fn bin_with(command: &str) -> tempfile::TempDir {
     bin
 }
 
-/// An environment-include script in `dir`: `unix` is sourced by `bash`, `windows` by PowerShell.
-fn include_script(dir: &Path, unix: &str, windows: &str) -> PathBuf {
-    let (name, body) = if cfg!(windows) {
-        ("env-include.ps1", windows)
-    } else {
-        ("env-include.sh", unix)
-    };
-    let script = dir.join(name);
+/// An environment-include script in `dir`, sourced by `bash`.
+fn include_script(dir: &Path, body: &str) -> PathBuf {
+    let script = dir.join("env-include.sh");
     std::fs::write(&script, body).unwrap();
     script
 }
 
-/// The line that puts `bin` in front of `PATH`, in each shell's syntax.
-fn prepend_to_path(bin: &Path) -> (String, String) {
-    (
-        format!("export PATH=\"{}:$PATH\"\n", bin.display()),
-        format!("$env:PATH = '{};' + $env:PATH\r\n", bin.display()),
-    )
+/// The line that puts `bin` in front of `PATH`.
+fn prepend_to_path(bin: &Path) -> String {
+    format!("export PATH=\"{}:$PATH\"\n", bin.display())
 }
 
 /// A service whose settings turn environment-include on (with `script`) or off.
@@ -314,8 +306,8 @@ async fn a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it() 
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(session_bin.path());
-    let script = include_script(store.path(), &unix, &windows);
+    let unix = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix);
 
     let state = service_with(store.path(), Some(&script));
     let mut client = connect(&state).await;
@@ -336,8 +328,8 @@ fn the_answer_for_a_directory_walks_the_path_env_include_resolves_there() {
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(session_bin.path());
-    let script = include_script(store.path(), &unix, &windows);
+    let unix = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix);
 
     let state = service_with(store.path(), Some(&script));
 
@@ -377,11 +369,7 @@ fn a_script_that_leaves_path_alone_answers_from_the_services_own_path() {
     let _service = ServicePath::without_clis(Some(service_bin.path()));
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let script = include_script(
-        store.path(),
-        "export BUG001_UNRELATED=1\n",
-        "$env:BUG001_UNRELATED = '1'\r\n",
-    );
+    let script = include_script(store.path(), "export BUG001_UNRELATED=1\n");
 
     let state = service_with(store.path(), Some(&script));
 
@@ -402,14 +390,10 @@ fn a_second_answer_for_a_directory_does_not_run_the_script_again() {
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     let runs = store.path().join("runs");
-    let (unix, windows) = prepend_to_path(session_bin.path());
+    let unix = prepend_to_path(session_bin.path());
     let script = include_script(
         store.path(),
         &format!("echo run >> '{}'\n{unix}", runs.display()),
-        &format!(
-            "Add-Content -Path '{}' -Value run\r\n{windows}",
-            runs.display()
-        ),
     );
 
     let state = service_with(store.path(), Some(&script));
@@ -442,14 +426,7 @@ async fn a_request_with_no_directory_is_answered_for_the_home_directory() {
     let _service = ServicePath::without_clis(None);
     let store = tempfile::tempdir().unwrap();
     let seen = store.path().join("sourced-in");
-    let script = include_script(
-        store.path(),
-        &format!("pwd > '{}'\n", seen.display()),
-        &format!(
-            "(Get-Location).Path | Set-Content -Path '{}'\r\n",
-            seen.display()
-        ),
-    );
+    let script = include_script(store.path(), &format!("pwd > '{}'\n", seen.display()));
     let home = directories::UserDirs::new()
         .expect("fixture check: this machine has a home directory")
         .home_dir()
@@ -477,11 +454,7 @@ async fn a_slow_environment_does_not_hold_up_the_next_request_on_the_connection(
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let script = include_script(
-        store.path(),
-        &format!("sleep {SLOW_SECONDS}\n"),
-        &format!("Start-Sleep -Seconds {SLOW_SECONDS}\r\n"),
-    );
+    let script = include_script(store.path(), &format!("sleep {SLOW_SECONDS}\n"));
 
     let state = service_with(store.path(), Some(&script));
     let mut client = connect(&state).await;
@@ -523,8 +496,8 @@ async fn with_env_include_off_a_cli_only_the_script_would_add_is_not_offered() {
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(session_bin.path());
-    let script = include_script(store.path(), &unix, &windows);
+    let unix = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix);
 
     let state = service_with_script(store.path(), Some(&script), false);
     let mut client = connect(&state).await;
@@ -548,8 +521,8 @@ async fn with_env_include_off_the_answer_says_it_is_off() {
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(session_bin.path());
-    let script = include_script(store.path(), &unix, &windows);
+    let unix = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix);
 
     let state = service_with_script(store.path(), Some(&script), false);
     let mut client = connect(&state).await;
@@ -614,7 +587,7 @@ async fn a_script_that_exits_with_an_error_is_reported_as_failed() {
     let _service = ServicePath::without_clis(Some(service_bin.path()));
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let script = include_script(store.path(), "exit 3\n", "exit 3\r\n");
+    let script = include_script(store.path(), "exit 3\n");
 
     let state = service_with(store.path(), Some(&script));
     let mut client = connect(&state).await;
@@ -654,7 +627,7 @@ async fn a_script_that_runs_past_the_timeout_is_reported_as_timed_out() {
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let script = include_script(store.path(), "sleep 5\n", "Start-Sleep -Seconds 5\r\n");
+    let script = include_script(store.path(), "sleep 5\n");
 
     let state = service_with_settings(
         store.path(),
@@ -682,8 +655,8 @@ async fn a_script_that_adds_the_cli_is_reported_as_applied_and_the_cli_is_offere
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(session_bin.path());
-    let script = include_script(store.path(), &unix, &windows);
+    let unix = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix);
 
     let state = service_with(store.path(), Some(&script));
     let mut client = connect(&state).await;
@@ -702,11 +675,7 @@ async fn a_script_that_succeeds_and_adds_nothing_is_still_reported_as_applied() 
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let script = include_script(
-        store.path(),
-        "export F037_UNRELATED=1\n",
-        "$env:F037_UNRELATED = '1'\r\n",
-    );
+    let script = include_script(store.path(), "export F037_UNRELATED=1\n");
 
     let state = service_with(store.path(), Some(&script));
     let mut client = connect(&state).await;
@@ -726,8 +695,8 @@ fn with_no_directory_the_state_is_known_only_from_the_settings() {
     let service_bin = bin_with(AiCli::Pi.provider().command());
     let _service = ServicePath::without_clis(Some(service_bin.path()));
     let script_dir = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(script_dir.path());
-    let script = include_script(script_dir.path(), &unix, &windows);
+    let unix = prepend_to_path(script_dir.path());
+    let script = include_script(script_dir.path(), &unix);
 
     let off = tempfile::tempdir().unwrap();
     assert_eq!(
@@ -758,8 +727,8 @@ fn turning_env_include_on_changes_the_next_answer_for_the_same_directory() {
     let _service = ServicePath::without_clis(None);
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let (unix, windows) = prepend_to_path(session_bin.path());
-    let script = include_script(store.path(), &unix, &windows);
+    let unix = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix);
 
     let state = service_with_script(store.path(), Some(&script), false);
     assert_eq!(

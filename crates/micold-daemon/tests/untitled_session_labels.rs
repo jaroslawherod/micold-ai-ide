@@ -964,12 +964,6 @@ fn a_labelled_copilot_session_reads_the_name_its_workspace_file_gained() {
 fn register_cat(state: &DaemonState, id: SessionId) -> Arc<PtySession> {
     #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
     state.register_session(session)
@@ -982,22 +976,6 @@ fn register_titler(state: &DaemonState, id: SessionId, title: &str) -> Arc<PtySe
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
     cmd.arg(format!("printf '\\033]0;{title}\\007'; sleep 30"));
-    cmd.cwd(std::env::temp_dir());
-    let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn titler session");
-    state.register_session(session)
-}
-
-/// ConPTY does not pass a child's escape sequences through verbatim — it re-renders console state
-/// as VT — so on Windows the child sets the console title and ConPTY emits the OSC-0 for it.
-#[cfg(windows)]
-fn register_titler(state: &DaemonState, id: SessionId, title: &str) -> Arc<PtySession> {
-    let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
-    let mut cmd = CommandBuilder::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
-    cmd.arg(format!(
-        "[Console]::Title = -join [char[]]({}); Start-Sleep -Seconds 30",
-        codes.join(",")
-    ));
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn titler session");
     state.register_session(session)

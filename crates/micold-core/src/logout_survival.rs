@@ -3,8 +3,7 @@
 //!
 //! Surviving a full logout — not just closing the window — belongs to **the sandboxed placement,
 //! and only to it**. A container runtime's restart policy is implemented by a service the platform
-//! already keeps running across logout and reboot, on all three platforms, so the promise holds on
-//! macOS and Windows as well as Linux.
+//! already keeps running across logout and reboot.
 //!
 //! # What feature 028 removed, and why
 //!
@@ -16,18 +15,6 @@
 //! §4.11). A promise resting on the registration could not outlive it, so
 //! [`Placement::HostProcess`] reports [`SurvivalOutcome::Unsupported`] in **both** directions, on
 //! every platform, Linux included.
-//!
-//! # The macOS answer, in the words the documentation uses (feature 028, FR-032)
-//!
-//! On macOS, sessions survive closing the window but not logging out when the session service runs
-//! directly on your computer; running it in a container is the supported way to survive logout
-//! there.
-//!
-//! That sentence is not a summary of this module — it is the same sentence
-//! `docs/user-guide/install-macos.md` and `docs/daemon.md` give the user, required verbatim in all
-//! three by `crates/micold-core/tests/macos_logout_claims_agree.rs`. It is here because this is the
-//! file someone edits when the answer changes, and an answer that changes in the code while two
-//! documents still give the old one is the failure that gate exists to prevent.
 //!
 //! # Nothing is *done* here
 //!

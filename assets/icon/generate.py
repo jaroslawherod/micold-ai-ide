@@ -5,8 +5,6 @@ Reproduce with:  uv run --with pillow python assets/icon/generate.py
 
 Produces (under assets/icon/):
   png/icon-<n>.png   Linux/desktop PNGs (16..1024)
-  icon.ico           Windows multi-size icon
-  icon.icns          macOS icon
   icon-64.rgba       raw 64x64 RGBA for the iced window icon (include_bytes! in main.rs)
 
 Design: a terminal prompt (caret ">" + cursor block) in white on the brand primary
@@ -56,12 +54,6 @@ def main() -> None:
     sizes = [16, 32, 48, 64, 128, 256, 512, 1024]
     for n in sizes:
         master.resize((n, n), Image.LANCZOS).save(OUT / "png" / f"icon-{n}.png")
-
-    # Windows .ico (embeds several sizes).
-    master.save(OUT / "icon.ico", sizes=[(s, s) for s in (16, 32, 48, 64, 128, 256)])
-
-    # macOS .icns.
-    master.save(OUT / "icon.icns", format="ICNS")
 
     # Raw RGBA for the iced window icon (no runtime image decoder needed).
     (OUT / "icon-64.rgba").write_bytes(master.resize((64, 64), Image.LANCZOS).tobytes())

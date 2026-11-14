@@ -70,13 +70,7 @@ fn default_env_include_timeout_secs() -> u64 {
 /// call site (`default_env_include_script_path_string`), not here.
 pub fn default_env_include_path(home: Option<&Path>) -> PathBuf {
     let base = home.unwrap_or_else(|| Path::new(""));
-    if cfg!(windows) {
-        base.join("Documents")
-            .join("WindowsPowerShell")
-            .join("profile.ps1")
-    } else {
-        base.join(".bashrc")
-    }
+    base.join(".bashrc")
 }
 
 fn default_env_include_script_path_string() -> String {

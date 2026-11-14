@@ -94,30 +94,14 @@ fn is_ctrl_c(press: &KeyInput) -> bool {
 
 /// The **Add attachment** chord (#1464 FR-010): Cmd+Shift+A on macOS, Ctrl+Shift+A elsewhere.
 fn is_attach_key(press: &KeyInput) -> bool {
-    let mods = if cfg!(target_os = "macos") {
-        Mods {
-            logo: true,
-            shift: true,
-            ..Mods::NONE
-        }
-    } else {
-        CTRL_SHIFT
-    };
+    let mods = CTRL_SHIFT;
     is_char(press, 'a', mods)
 }
 
 /// The **Open large editor** chord (feature 1703 FR-001): Cmd+Shift+M on macOS, Ctrl+Shift+M
 /// elsewhere.
 fn is_large_editor_key(press: &KeyInput) -> bool {
-    let mods = if cfg!(target_os = "macos") {
-        Mods {
-            logo: true,
-            shift: true,
-            ..Mods::NONE
-        }
-    } else {
-        CTRL_SHIFT
-    };
+    let mods = CTRL_SHIFT;
     is_char(press, 'm', mods)
 }
 

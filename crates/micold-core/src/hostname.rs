@@ -19,35 +19,6 @@ fn read() -> Option<String> {
     Some(String::from_utf8_lossy(&buf[..end]).into_owned())
 }
 
-#[cfg(windows)]
-fn read() -> Option<String> {
-    use windows_sys::Win32::System::SystemInformation::{
-        ComputerNamePhysicalDnsHostname, GetComputerNameExW,
-    };
-    let mut len: u32 = 0;
-    // SAFETY: a null buffer with a zero length only asks for the size, written to `len`.
-    unsafe {
-        GetComputerNameExW(
-            ComputerNamePhysicalDnsHostname,
-            std::ptr::null_mut(),
-            &mut len,
-        )
-    };
-    if len == 0 {
-        return None;
-    }
-    let mut buf = vec![0u16; len as usize];
-    // SAFETY: `len` is `buf`'s length in UTF-16 units, as the call requires.
-    if unsafe { GetComputerNameExW(ComputerNamePhysicalDnsHostname, buf.as_mut_ptr(), &mut len) }
-        == 0
-    {
-        return None;
-    }
-    // On success `len` is the name's length without the trailing NUL.
-    buf.truncate(len as usize);
-    Some(String::from_utf16_lossy(&buf))
-}
-
 #[cfg(test)]
 mod tests {
     use super::hostname;
@@ -55,12 +26,10 @@ mod tests {
     /// The name matches what the system's own tool prints (`uname -n`, `hostname` on Windows).
     #[test]
     fn hostname_matches_the_systems_own_tool() {
-        let out = if cfg!(windows) {
-            std::process::Command::new("hostname").output()
-        } else {
-            std::process::Command::new("uname").arg("-n").output()
-        }
-        .expect("the system's hostname tool runs");
+        let out = std::process::Command::new("uname")
+            .arg("-n")
+            .output()
+            .expect("the system's hostname tool runs");
         let expected = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
         assert!(!expected.is_empty(), "the hostname tool printed a name");
         assert_eq!(hostname(), expected);

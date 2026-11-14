@@ -9,8 +9,6 @@
 # User guide
 
 - [Installing on Fedora, RHEL and openSUSE](user-guide/install-rpm.md)
-- [Installing on macOS](user-guide/install-macos.md)
-- [Installing on Windows](user-guide/install-windows.md)
 - [Help & About](user-guide/help-about.md)
 - [Opening a project](user-guide/project-selection.md)
 - [Appearance & theming](user-guide/appearance-theming.md)
@@ -47,8 +45,6 @@
 - [The shared target directory and build lock](development/shared-build.md)
 - [The duplication budget](development/duplication.md)
 - [Duplication triage](development/duplication-triage.md)
-- [Packaging for macOS](development/macos-packaging.md)
-- [Packaging for Windows](development/windows-packaging.md)
 - [The documentation site](development/docs-site.md)
 - [Screenshots for the manual visual passes](development/screenshots.md)
 - [Autopilot token usage](development/autopilot-tokens.md)

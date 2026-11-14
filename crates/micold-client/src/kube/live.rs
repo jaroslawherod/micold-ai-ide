@@ -289,9 +289,6 @@ pub fn read_kubeconfigs(paths: &[PathBuf]) -> Result<Kubeconfig, KubeFailure> {
 /// The login shell's `PATH`, read once per run (not on Windows), within five seconds.
 async fn login_shell_path() -> Option<OsString> {
     static CELL: tokio::sync::OnceCell<Option<OsString>> = tokio::sync::OnceCell::const_new();
-    if cfg!(windows) {
-        return None;
-    }
     CELL.get_or_init(|| async {
         let shell = std::env::var_os("SHELL")?;
         let script = format!("printf '%s%s%s' '{PATH_BEGIN}' \"$PATH\" '{PATH_END}'");
