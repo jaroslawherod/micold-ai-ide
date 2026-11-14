@@ -11,13 +11,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-0lx36q
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
-- **Phase**: tasks
-- **Next step**: open the design PR (orchestrator), then M1
+- **Phase**: milestones
+- **Next step**: M1 (T001–T010), in a fresh cloud thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1899 | design (spec, plan, tasks) | merged (squash) | e75744062ef543f93a3085b22f4b846e56d1bf4f |
 
 ## Milestones
 
@@ -53,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+2026-11-14: design PR #1899 squash-merged (e7574406); origin/main merged into claude/project-thread-0lx36q. Next thread starts M1 (T001–T010, tier full). The new thread pushes to its own harness branch; this branch name is only the old one. Cloud: no mise, gh unauthenticated (use GitHub MCP), units have no Agent tool (orchestrator dispatches reviewers), CI is the gate, never rebase or force-push, squash-merge.
 
 ## Open escalation
 
