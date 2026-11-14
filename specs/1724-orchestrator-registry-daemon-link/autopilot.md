@@ -80,6 +80,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review A | 2 | M6 | 059be2672ce0f358268b70e65402b54a188b5e45 | 20fa6aa0b8a4a9348c71053dc8888e8ff0b5eeb6:059be2672ce0f358268b70e65402b54a188b5e45 | pending (orchestrator dispatches, scoped, sonnet) |
 | Review A | 2 | M6 | 059be2672ce0f358268b70e65402b54a188b5e45 | 20fa6aa0b8a4a9348c71053dc8888e8ff0b5eeb6:059be2672ce0f358268b70e65402b54a188b5e45 | CHANGES: F1 MAJOR netns proof skips silently in CI (fixed: strace in apt, apparmor sysctl, panic when CI set), F2 MINOR connect bound (fixed: exact addresses) |
 | Review A | 3 | M6 | db687910594ad7ed4920ee0c51037d13cb16aa80 | e437c697057e1cee88e69b1c9e7968cecc985690:db687910594ad7ed4920ee0c51037d13cb16aa80 | pending |
+| Review A | 3 | M6 | db687910594ad7ed4920ee0c51037d13cb16aa80 | e437c697057e1cee88e69b1c9e7968cecc985690:db687910594ad7ed4920ee0c51037d13cb16aa80 | CLEAN: round-2 F1 (strace + userns in CI, fail not skip when CI set) and F2 hold; PR #1908 |
 
 ## Declined review findings
 
