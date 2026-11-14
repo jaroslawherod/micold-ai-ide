@@ -11,6 +11,7 @@ use crate::daemon_config_render::{self, DaemonSettings, GithubTokenSetting, Star
 use micold_core::daemon_config::Kind;
 use micold_core::daemons::SessionExtras;
 use micold_core::github::GithubRepo;
+use micold_core::scoped_credential::SecretToken;
 
 /// The script's file name beside the delivered configuration (host data dir; SSH `secrets/`).
 pub const SCRIPT_NAME: &str = "startup.sh";
@@ -397,6 +398,94 @@ pub fn select_tokens(
             repositories.iter().any(|repo| reaches(&filter, repo))
         })
         .collect()
+}
+
+/// The selected tokens read for a pod (#1760, FR-001): `entries` render as `[[github.tokens]]`
+/// naming each token at the startup Secret's mount, and `files` are the Secret's keys and values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PodGithubTokens {
+    pub entries: Vec<GithubTokenSetting>,
+    pub files: Vec<(String, SecretToken)>,
+}
+
+/// A delivered token's key in the startup Secret is this prefix and its position in the set.
+pub const GITHUB_TOKEN_PREFIX: &str = "github-token-";
+
+impl PodGithubTokens {
+    /// Reads each selected token's file, verbatim (the daemon parses the stored shape), for the
+    /// pod's startup Secret. A file that cannot be read, is empty, is not text, is over
+    /// [`POD_FILE_LIMIT`] or, on Unix, can be read by another user stops the start naming the
+    /// token, so the pod never starts with a token silently missing (#1533's stance).
+    pub fn read(selected: Vec<GithubTokenSetting>) -> io::Result<Self> {
+        use micold_core::kube::manifest::STARTUP_ENV_MOUNT;
+        let mut read = Self {
+            entries: Vec::with_capacity(selected.len()),
+            files: Vec::with_capacity(selected.len()),
+        };
+        for (n, entry) in selected.into_iter().enumerate() {
+            let value = read_token_file(&entry.token_file).map_err(|(kind, reason)| {
+                io::Error::new(
+                    kind,
+                    format!(
+                        "cannot deliver the GitHub token \"{}\" to the pod: {reason}",
+                        entry.name
+                    ),
+                )
+            })?;
+            let key = format!("{GITHUB_TOKEN_PREFIX}{n}");
+            read.entries.push(GithubTokenSetting {
+                token_file: PathBuf::from(format!("{STARTUP_ENV_MOUNT}/{key}")),
+                ..entry
+            });
+            read.files.push((key, value));
+        }
+        Ok(read)
+    }
+}
+
+/// A token file's text, or why it cannot go to a pod (never quoting the content).
+fn read_token_file(path: &Path) -> Result<SecretToken, (io::ErrorKind, String)> {
+    let bytes = std::fs::read(path).map_err(|e| {
+        (
+            e.kind(),
+            format!("{} could not be read: {e}", path.display()),
+        )
+    })?;
+    let invalid = |reason: String| (io::ErrorKind::InvalidData, reason);
+    if let Some(mode) = readable_by_others(path) {
+        return Err(invalid(format!(
+            "{} can be read by other users (mode {mode:o}); make it owner-only (chmod 600)",
+            path.display()
+        )));
+    }
+    if bytes.is_empty() {
+        return Err(invalid(format!("{} is empty", path.display())));
+    }
+    if bytes.len() > POD_FILE_LIMIT {
+        return Err(invalid(format!(
+            "{} is {} bytes, over the {POD_FILE_LIMIT} a pod can hold",
+            path.display(),
+            bytes.len()
+        )));
+    }
+    String::from_utf8(bytes)
+        .map(SecretToken::new)
+        .map_err(|_| invalid(format!("{} is not text", path.display())))
+}
+
+/// The file's permission bits when a group or other bit is set (Unix); the PAT store writes
+/// owner-only files, so a wider one was changed by hand.
+#[cfg(unix)]
+fn readable_by_others(path: &Path) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(path).ok()?.permissions().mode() & 0o777;
+    (mode & 0o077 != 0).then_some(mode)
+}
+
+/// No mode bits to check: the file is read as the PAT store wrote it under the user profile.
+#[cfg(not(unix))]
+fn readable_by_others(_path: &Path) -> Option<u32> {
+    None
 }
 
 /// Removes `path` when it exists; whether it did.

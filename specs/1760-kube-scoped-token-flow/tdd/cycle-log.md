@@ -45,3 +45,19 @@ Append only. Newest last.
   bool): `2 passed; 0 failed`
 - refactor: none needed; reusing `specificity` keeps one matcher for the daemon's choice and the
   client's selection.
+
+## Cycle 4: U4 `PodGithubTokens::read` (T008, T009)
+
+- tests: `crates/micold-client/tests/daemon_config_delivery_pod_tokens.rs`
+  `read_pairs_each_entry_with_its_secret_key_at_the_startup_mount`,
+  `a_read_set_never_prints_a_value`, `an_unusable_token_file_is_refused_naming_the_token`,
+  `a_token_file_readable_by_others_is_refused_naming_the_token` (Unix)
+- red: with `read` a stub returning an empty set:
+  `scripts/build-lock.sh cargo test -p micold-client --test main daemon_config_delivery_pod`
+  -> `left: 0 right: 2` (`read.entries.len()`), the two refusal tests panicked at `expect_err`,
+  `3 passed; 3 failed`
+- green: `read` with `read_token_file` and the `#[cfg(unix)] readable_by_others` helper, values
+  as `SecretToken`, keys `github-token-<n>` at `STARTUP_ENV_MOUNT`: `6 passed; 0 failed`
+- mutant: `a_read_set_never_prints_a_value` passed on the stub (empty set), so a mutant put the
+  value into an entry's `name`: `test result: FAILED. 0 passed; 1 failed` at line 112; restored.
+- refactor: none needed.
