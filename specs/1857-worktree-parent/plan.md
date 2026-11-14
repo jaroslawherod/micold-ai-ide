@@ -77,7 +77,7 @@ crates/micold-client/src/features/
 ├── sidebar.rs         # TagFilter::Parent, available_tag_filters, parent label
 └── worktree.rs        # worktree_tags gains the parent tag
 docs/user-guide/       # agent-tools.md, worktrees-and-sessions.md
-.claude/skills/speckit-supervisor/ and scripts/autopilot/   # M3: ownership rule, ledger field
+.claude/skills/autopilot-supervisor/ and scripts/autopilot/ # M3: ownership rule, ledger field
 ```
 
 **Structure Decision**: extend the existing core/daemon/client split; no new crate. Milestones:
