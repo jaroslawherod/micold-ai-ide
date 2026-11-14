@@ -108,3 +108,25 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   `cargo test -p micold-client --test layout_snapshot` -> `177 passed` after
   `UPDATE_LAYOUT_SNAPSHOT=1` (the more menu's fourth item, all under `0/8`).
 - refactor: none
+
+## Cycle 6: rename and delete a group (T018 to T023)
+
+- test: core `sidebar_layout::tests` (`rename_*`, `a_refused_rename_*`, `delete_*`,
+  `deleting_an_unknown_group_*`); `tests/sidebar_group_actions.rs` (rename draft, rename keeps
+  members and saves, blank/duplicate/vanished rename refused, delete returns members and touches no
+  worktree or session, the group menu); `popover_displacement` and `overlay_registration` rows for
+  `user_group_menu`.
+- red: core tests: `cargo test -p micold-core --lib sidebar_layout` -> `error[E0599]: no method
+  named rename/delete found for struct SidebarLayout` (5 errors). Client tests:
+  `cargo test -p micold-client --test main sidebar_group_actions` -> 20 errors (`Msg::Rename`,
+  `Msg::Delete`, `Msg::MenuOpened`, `Msg::MenuDismissed`, `NamingTarget::Rename`,
+  `State.menu`, `GROUP_MENU_ITEMS`, `ui::sidebar::group_menu` not found).
+- green: `SidebarLayout::rename`/`delete`; `Msg::{Rename, Delete, MenuOpened, MenuDismissed}`,
+  `NamingTarget::Rename`, `GroupContextMenu` (id `user_group_menu`, registered as a context menu
+  that replaces the other row menus); header `on_right_press`; `ui::sidebar::group_menu`.
+  Core `15 passed`; `cargo test -p micold-client --test main` -> `3419 passed; 0 failed`.
+- refactor: none
+- notes: the state field is `group_menu`, not `menu`: `overlay_registration` finds popover flags by
+  a `_menu`/`_open` name. No chord opens a row menu from the keyboard for worktree rows either, so
+  the group menu matches them: its items are keyboard-operable menu items (U30); a keyboard opener
+  arrives with the header's focus handling in M5 (T040).

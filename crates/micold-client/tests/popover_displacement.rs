@@ -82,6 +82,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "run_group_menu",
             "overview_card_menu",
             "sidebar_empty_menu",
+            "user_group_menu",
         ],
     ),
     // The two context menus replace each other. A panel popover open elsewhere in the window is
@@ -93,6 +94,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "run_group_menu",
             "overview_card_menu",
             "sidebar_empty_menu",
+            "user_group_menu",
         ],
     ),
     // Feature 483's run group row menu is a third row menu and replaces the other two.
@@ -103,6 +105,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "worktree_menu",
             "overview_card_menu",
             "sidebar_empty_menu",
+            "user_group_menu",
         ],
     ),
     // Feature 1786's sidebar empty-area menu is a context menu like the row menus: it and they
@@ -114,6 +117,19 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "worktree_menu",
             "run_group_menu",
             "overview_card_menu",
+            "user_group_menu",
+        ],
+    ),
+    // Feature 1786's group header menu is one more row menu: it and the others replace each other
+    // (C6).
+    (
+        "user_group_menu",
+        &[
+            "project_menu",
+            "worktree_menu",
+            "run_group_menu",
+            "overview_card_menu",
+            "sidebar_empty_menu",
         ],
     ),
     // Feature 972's card menu acts on a location as the row menus do, so it and the four row menus
@@ -127,6 +143,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "session_menu",
             "session_start_menu",
             "sidebar_empty_menu",
+            "user_group_menu",
         ],
     ),
     // The session menu closed nothing until feature 972: it closes the card menu, and nothing else.
@@ -219,6 +236,12 @@ fn opener(id: &str) -> Message {
         "sidebar_empty_menu" => Message::SidebarGroups(
             micold_client::features::sidebar_group_actions::Msg::EmptyAreaMenuOpened((70, 70)),
         ),
+        "user_group_menu" => Message::SidebarGroups(
+            micold_client::features::sidebar_group_actions::Msg::MenuOpened(
+                micold_core::sidebar_layout::UserGroupId(0),
+                (70, 70),
+            ),
+        ),
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -245,6 +268,10 @@ fn base() -> State {
     });
     st.workspace.active = Some(path.clone());
     st.overview.open = true;
+    // A group for the group header's menu to act on (feature 1786).
+    let mut layout = micold_core::sidebar_layout::SidebarLayout::default();
+    layout.create("Work").unwrap();
+    st.sidebar_layout_loaded(path.clone(), layout);
     // A Review tab, so the review bar's overflow menu has a view to open on (feature 1270).
     micold_client::features::changes::update(
         &mut st.changes,

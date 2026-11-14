@@ -647,6 +647,35 @@ pub fn empty_area_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surf
     )
 }
 
+/// A user group header's menu (feature 1786, C6): **Rename** and **Delete**, at the press point,
+/// clamped into the window like the row menus. `None` while it is closed.
+pub fn group_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'a, Message>> {
+    use crate::features::sidebar_group_actions::{Msg, GROUP_MENU_ITEMS};
+    let menu = state.sidebar_groups.group_menu?;
+    let items = vec![
+        material::MenuItem::new(
+            Icon::Rename,
+            GROUP_MENU_ITEMS[0],
+            Message::SidebarGroups(Msg::Rename(menu.group)),
+        ),
+        material::MenuItem::new(
+            Icon::Delete,
+            GROUP_MENU_ITEMS[1],
+            Message::SidebarGroups(Msg::Delete(menu.group)),
+        ),
+    ];
+    let (x, y) = crate::features::project::clamp_menu_anchor(
+        menu.anchor,
+        material::menu_panel_size(items.len()),
+        state.window.window_size,
+    );
+    Some(
+        material::MenuOverlay::new(items, Message::SidebarGroups(Msg::MenuDismissed), r)
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into(),
+    )
+}
+
 /// What choosing `action` on the more menu does: the message today's header button sent (FR-015).
 /// The shell sends it once the menu has closed, so the refresh still goes through its request path.
 pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Message {
@@ -905,6 +934,16 @@ fn build_items(
                         .count(header.count)
                         .roles(r)
                         .key(row_key(RowKey::UserGroup(header.id)))
+                        .on_right_press({
+                            let id = header.id;
+                            move |point| {
+                                Message::SidebarGroups(
+                                    crate::features::sidebar_group_actions::Msg::MenuOpened(
+                                        id, point,
+                                    ),
+                                )
+                            }
+                        })
                         .into(),
                 );
                 continue;

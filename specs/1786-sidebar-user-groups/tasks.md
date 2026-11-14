@@ -43,12 +43,12 @@ Create (scenarios 1, 4, 5 on create):
 
 Rename and delete (scenarios 2, 3):
 
-- [ ] T018 [U15][U16] [US1] Tests in `crates/micold-core/src/sidebar_layout.rs`: `rename(id, name)` with `Blank`, `Duplicate` (own current name is not a duplicate), `UnknownGroup`; `delete(id)` appends the group's items to the end of `ungrouped` in their order, `UnknownGroup` otherwise (C1). Red first.
-- [ ] T019 [U15][U16] [US1] Implement `rename` and `delete` in `crates/micold-core/src/sidebar_layout.rs` (depends on T018).
-- [ ] T020 [A2][A3][A4][A5][U30] [US1] Tests in `crates/micold-client/tests/sidebar_group_actions.rs`: rename through the draft keeps members; blank/duplicate rename refused with message; delete returns members to ungrouped and the worktree and session lists are unchanged (SC-004, FR-003, FR-014); group menu offers Rename, Delete, opens by keyboard (803); both save. Red first.
-- [ ] T021 [A2][A3][U30] [US1] Add `Msg::Rename`, `Msg::Delete` and `GroupContextMenu` (Rename, Delete; Move up/Move down are added by T038 and Collapse/Expand by T040) to `crates/micold-client/src/features/sidebar_group_actions.rs`; register `GroupContextMenu` (layer ContextMenu) in `crates/micold-client/src/overlay/registry.rs` (depends on T019, T020).
-- [ ] T022 [US1] Glue in `crates/micold-client/src/ui/sidebar.rs`: open the group menu from the header by right click and by the 803 chord; `crates/micold-client/src/main.rs` routing (depends on T021).
-- [ ] T023 [US1] User guide: renaming and deleting a group (sessions are never touched) in `docs/user-guide/worktrees-and-sessions.md`.
+- [x] T018 [U15][U16] [US1] Tests in `crates/micold-core/src/sidebar_layout.rs`: `rename(id, name)` with `Blank`, `Duplicate` (own current name is not a duplicate), `UnknownGroup`; `delete(id)` appends the group's items to the end of `ungrouped` in their order, `UnknownGroup` otherwise (C1). Red first.
+- [x] T019 [U15][U16] [US1] Implement `rename` and `delete` in `crates/micold-core/src/sidebar_layout.rs` (depends on T018).
+- [x] T020 [A2][A3][A4][A5][U30] [US1] Tests in `crates/micold-client/tests/sidebar_group_actions.rs`: rename through the draft keeps members; blank/duplicate rename refused with message; delete returns members to ungrouped and the worktree and session lists are unchanged (SC-004, FR-003, FR-014); group menu offers Rename, Delete, opens by keyboard (803); both save. Red first.
+- [x] T021 [A2][A3][U30] [US1] Add `Msg::Rename`, `Msg::Delete` and `GroupContextMenu` (Rename, Delete; Move up/Move down are added by T038 and Collapse/Expand by T040) to `crates/micold-client/src/features/sidebar_group_actions.rs`; register `GroupContextMenu` (layer ContextMenu) in `crates/micold-client/src/overlay/registry.rs` (depends on T019, T020).
+- [x] T022 [US1] Glue in `crates/micold-client/src/ui/sidebar.rs`: open the group menu from the header by right click and by the 803 chord; `crates/micold-client/src/main.rs` routing (depends on T021).
+- [x] T023 [US1] User guide: renaming and deleting a group (sessions are never touched) in `docs/user-guide/worktrees-and-sessions.md`.
 
 ## Phase 4: User Story 2 - Assign a worktree without dragging (P1)
 

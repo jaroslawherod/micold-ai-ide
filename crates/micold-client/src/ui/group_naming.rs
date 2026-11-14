@@ -18,6 +18,7 @@ pub fn modal<'a>(
 ) -> Element<'a, Message> {
     let (title, confirm) = match draft.target {
         NamingTarget::New => ("New group", "Create"),
+        NamingTarget::Rename(_) => ("Rename group", "Rename"),
     };
     rename_dialog::view(
         RenameSpec {
