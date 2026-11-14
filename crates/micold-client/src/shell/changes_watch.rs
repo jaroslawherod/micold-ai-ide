@@ -55,11 +55,50 @@ impl Hash for Key {
 /// worktree's own git dir and the common one live in the main checkout) by itself plus its `refs/`
 /// (R9). A git dir inside the entry (the Default entry's `.git`) is already under its watch.
 fn targets(root: &Path, git_dirs: &[PathBuf]) -> Vec<(PathBuf, RecursiveMode)> {
-    let mut targets = vec![(root.to_path_buf(), RecursiveMode::Recursive)];
+    let mut targets = watched_tree(root);
     for dir in git_dirs.iter().filter(|dir| !dir.starts_with(root)) {
         targets.push((dir.clone(), RecursiveMode::NonRecursive));
         targets.push((dir.join("refs"), RecursiveMode::Recursive));
     }
+    targets
+}
+
+/// `root` watched recursively, except the worktrees under `.claude/worktrees` (#1683): each has its
+/// own entry and watch, and the Default entry watching them too cost thousands of inotify watches
+/// and woke the window on every agent edit. With such a directory, `root` and `.claude` are watched
+/// by themselves and their other subdirectories recursively; a directory created later is not
+/// watched inside until the watch restarts.
+fn watched_tree(root: &Path) -> Vec<(PathBuf, RecursiveMode)> {
+    let worktrees = root.join(".claude").join("worktrees");
+    if !worktrees.is_dir() {
+        return vec![(root.to_path_buf(), RecursiveMode::Recursive)];
+    }
+    let subdirs = |dir: &Path| -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .map(|e| e.path())
+            .collect();
+        dirs.sort();
+        dirs
+    };
+    let claude = root.join(".claude");
+    let mut targets = vec![(root.to_path_buf(), RecursiveMode::NonRecursive)];
+    targets.extend(
+        subdirs(root)
+            .into_iter()
+            .filter(|d| *d != claude)
+            .map(|d| (d, RecursiveMode::Recursive)),
+    );
+    targets.push((claude.clone(), RecursiveMode::NonRecursive));
+    targets.extend(
+        subdirs(&claude)
+            .into_iter()
+            .filter(|d| *d != worktrees)
+            .map(|d| (d, RecursiveMode::Recursive)),
+    );
     targets
 }
 
@@ -124,11 +163,12 @@ where
         let resolved = Arc::new(resolved);
         let read = Arc::new(read);
         let (events, mut changed) = tokio::sync::mpsc::unbounded_channel::<Vec<PathBuf>>();
-        let root = resolved.root.clone();
         let watcher = RecommendedWatcher::new(
             move |event: notify::Result<Event>| {
-                if let Some(paths) = event.ok().and_then(|event| forwarded_paths(&root, event)) {
-                    let _ = events.send(paths);
+                if let Ok(event) = event {
+                    if is_change(&event.kind) {
+                        let _ = events.send(event.paths);
+                    }
                 }
             },
             Config::default(),
@@ -203,17 +243,6 @@ fn is_change(kind: &EventKind) -> bool {
     !matches!(kind, EventKind::Access(_))
 }
 
-/// The paths of `event` to hand the watch loop: none for an event that is not a change, and none
-/// for one whose every path is under `<root>/.claude/worktrees/` (#1683). Those are other entries'
-/// files, each watched by its own entry; `relevant_paths` would drop them later, but dropping them
-/// here keeps the loop from waking for every agent edit under them.
-fn forwarded_paths(root: &Path, event: Event) -> Option<Vec<PathBuf>> {
-    let worktrees = root.join(".claude").join("worktrees");
-    let elsewhere =
-        event.paths.is_empty() || !event.paths.iter().all(|p| p.starts_with(&worktrees));
-    (is_change(&event.kind) && elsewhere).then_some(event.paths)
-}
-
 /// Watch each of `targets`, returning those that could not be watched (a directory that does not
 /// exist yet), so the caller can try them again.
 fn watch_targets(
@@ -259,9 +288,42 @@ pub(crate) fn counts(
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::sync::mpsc;
-    use std::time::Duration;
 
+    /// #1683: the Default entry holds every worktree under `.claude/worktrees`, each with its own
+    /// entry and watch; watching them again recursively cost thousands of inotify watches and woke
+    /// the window on every agent edit.
+    #[test]
+    fn the_default_entrys_watch_leaves_out_the_worktrees_under_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for sub in ["src", ".claude/worktrees/a", ".claude/agents"] {
+            fs::create_dir_all(root.join(sub)).unwrap();
+        }
+        let got = targets(root, &[]);
+        let under_worktrees = |p: &Path| p.starts_with(root.join(".claude/worktrees"));
+        assert!(
+            !got.iter().any(|(p, mode)| *mode == RecursiveMode::Recursive
+                && (p == root || p == &root.join(".claude") || under_worktrees(p))),
+            "{got:?}"
+        );
+        for kept in ["src", ".claude/agents"] {
+            assert!(
+                got.contains(&(root.join(kept), RecursiveMode::Recursive)),
+                "{kept} stays watched: {got:?}"
+            );
+        }
+        assert!(got.contains(&(root.to_path_buf(), RecursiveMode::NonRecursive)));
+    }
+
+    #[test]
+    fn an_entry_without_worktrees_is_watched_recursively_as_before() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        assert_eq!(
+            targets(dir.path(), &[]),
+            vec![(dir.path().to_path_buf(), RecursiveMode::Recursive)]
+        );
+    }
     use super::*;
     use notify::event::{AccessKind, AccessMode, CreateKind, MetadataKind, ModifyKind, RemoveKind};
 
@@ -332,78 +394,5 @@ mod tests {
                 (common.join("refs"), RecursiveMode::Recursive),
             ]
         );
-    }
-
-    #[test]
-    fn an_event_is_forwarded_unless_it_is_no_change_or_only_under_the_worktrees() {
-        let root = Path::new("/repo");
-        let event = |kind, paths: &[&str]| Event {
-            paths: paths.iter().map(PathBuf::from).collect(),
-            ..Event::new(kind)
-        };
-        let make = EventKind::Create(CreateKind::File);
-        let forwarded = |kind, paths: &[&str]| forwarded_paths(root, event(kind, paths)).is_some();
-        assert!(forwarded(make, &["/repo/src/x"]));
-        assert!(forwarded(make, &["/repo/.claude/agents/x"]));
-        assert!(!forwarded(make, &["/repo/.claude/worktrees/a/x"]));
-        assert!(!forwarded(
-            make,
-            &["/repo/.claude/worktrees/a/x", "/repo/.claude/worktrees/b"]
-        ));
-        assert!(forwarded(
-            make,
-            &["/repo/.claude/worktrees/a/x", "/repo/src/x"]
-        ));
-        assert!(!forwarded(
-            EventKind::Access(AccessKind::Any),
-            &["/repo/src/x"]
-        ));
-    }
-
-    /// #1683: a write under `.claude/worktrees/` (another entry's file) wakes nothing, any other
-    /// write, in a directory that is new too, wakes once.
-    #[test]
-    fn a_write_under_the_worktrees_wakes_nothing_and_any_other_write_does() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        for sub in ["src", ".claude/worktrees/a"] {
-            fs::create_dir_all(root.join(sub)).unwrap();
-        }
-        let (tx, rx) = mpsc::channel();
-        let watched = root.clone();
-        let mut watcher = RecommendedWatcher::new(
-            move |event: notify::Result<Event>| {
-                if let Some(paths) = event.ok().and_then(|e| forwarded_paths(&watched, e)) {
-                    let _ = tx.send(paths);
-                }
-            },
-            Config::default(),
-        )
-        .unwrap();
-        watcher.watch(&root, RecursiveMode::Recursive).unwrap();
-        // Events arrive in order, so once the wake for `file` is in, an earlier worktrees event
-        // would be among those collected; no sleep proves the silence.
-        let wakes_until_seen = |file: PathBuf| {
-            let mut seen = Vec::new();
-            // A write racing the watch of a directory created a moment ago can be missed: write
-            // again before giving up.
-            for attempt in 0..5 {
-                fs::write(&file, attempt.to_string()).unwrap();
-                while let Ok(paths) = rx.recv_timeout(Duration::from_secs(1)) {
-                    let done = paths.contains(&file);
-                    seen.extend(paths);
-                    if done {
-                        return seen;
-                    }
-                }
-            }
-            panic!("no wake for {}: {seen:?}", file.display());
-        };
-        fs::write(root.join(".claude/worktrees/a/f"), "x").unwrap();
-        let seen = wakes_until_seen(root.join("src/x"));
-        let worktrees = root.join(".claude/worktrees");
-        assert!(!seen.iter().any(|p| p.starts_with(&worktrees)), "{seen:?}");
-        fs::create_dir(root.join("newdir")).unwrap();
-        wakes_until_seen(root.join("newdir/f"));
     }
 }
