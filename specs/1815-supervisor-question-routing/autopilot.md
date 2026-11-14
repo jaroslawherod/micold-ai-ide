@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-do55sf
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
-- **Phase**: milestones
-- **Next step**: M4 implemented and pushed; orchestrator dispatches Review A and B, then opens the PR from pr-title.txt/pr-body.md
+- **Phase**: close
+- **Next step**: close unit (all milestones merged)
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1901 | M1 batch routing core | merged (squash) | afe9a3fe0d243743505cea0a95c47ed551c51e83 |
 | #1907 | M2 routine questions from repo evidence | merged (squash) | b3ec7f88ce399a4f178b0a9a8a4d869434e788cb |
 | #1911 | M3 context-cap survival | merged (squash) | 9721aedb923006f0625fd368aa1f7e485fde9841 |
+| #1916 | M4 upward relay | merged (squash) | d996a8d24ab09d325e2520ac5a43cc234c1b9faf |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
 | M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | #1907 | merged |
 | M3 | T017–T019 | light | context-cap survival: reask, overdue | #1911 | merged |
-| M4 | T020–T022 | light | upward relay to a reported parent | | implemented, reviews pending |
+| M4 | T020–T022 | light | upward relay to a reported parent | #1916 | merged |
 
 ## Decisions
 
