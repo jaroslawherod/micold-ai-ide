@@ -10,8 +10,8 @@
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T002 [P] Test: `KubeSettings.github_tokens` defaults off, round-trips, an old JSON without the key loads off, omitted from JSON when off, in `micold-core/src/kube/settings.rs`.
-- [ ] T003 Add `KubeSettings.github_tokens: bool` (`#[serde(default, skip_serializing_if = "std::ops::Not::not")]`, Raw, `new()`) in `micold-core/src/kube/settings.rs`.
+- [X] T002 [P] Test: `KubeSettings.github_tokens` defaults off, round-trips, an old JSON without the key loads off, omitted from JSON when off, in `micold-core/src/kube/settings.rs`.
+- [X] T003 Add `KubeSettings.github_tokens: bool` (`#[serde(default, skip_serializing_if = "std::ops::Not::not")]`, Raw, `new()`) in `micold-core/src/kube/settings.rs`.
 - [ ] T004 [P] Test: `GithubTokenSetting.host` renders `host = "..."` only when `Some`; the value never appears in the rendered config, in `micold-client/src/daemon_config_render.rs`.
 - [ ] T005 Add `host: Option<String>` to `GithubTokenSetting` (`from_store` leaves `None`) in `micold-client/src/daemon_config_render.rs`.
 - [ ] T006 [P] Test: `select_tokens` keeps Settings order, matches `Exact`/`Owner` case-insensitively, keeps an empty-`repos` token only with at least one repository, returns nothing with no repositories (FR-009), in `micold-client/src/daemon_config_delivery.rs`.
