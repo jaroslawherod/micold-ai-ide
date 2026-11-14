@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-i50nzc
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: M1 round 2 reviews A and B pending (prompts in scratchpad 1816-m1: review-A-r2.md, review-B-r2.md), then open the M1 PR; M2 next (M3, M4 wait on #1860)
+- **Next step**: open the M1 PR (reviews done, both CLEAN); then M2 (M3, M4 wait on #1860)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | verify-run.sh verdict | | in progress |
+| M1 | T001–T008 | full | verify-run.sh verdict | | review done |
 | M2 | T009–T012 | full | follow-up.sh and cap | | pending |
 | M3 | T013–T014 | full | close-out-report.sh | | pending |
 | M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
@@ -42,13 +42,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 1 | design | 544462318f4689651683e5fe6040a35b3bdc557e | 34ac5b9c25a116953a645270bf401005d0390523:2dbd44316839e9d860da057b6e15d691917e45e4 | CLEAN (3 MINOR fixed, prose only) |
 | Review A | 1 | M1 | 48ae431f513a090ba0c9ef22726015a5f2e8ab7e | a7b5c63f4353827b85efd13bd60d2ffd644d82e4:48ae431f513a090ba0c9ef22726015a5f2e8ab7e | CHANGES (F1, F2 MAJOR fixed; F3 MINOR fixed) |
 | Review B | 1 | M1 | 48ae431f513a090ba0c9ef22726015a5f2e8ab7e | a7b5c63f4353827b85efd13bd60d2ffd644d82e4:48ae431f513a090ba0c9ef22726015a5f2e8ab7e | CHANGES (F1 drift-M1.md, F2 cycle-log, F3 T004 fixed) |
-| Review A | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | pending |
-| Review B | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | pending |
+| Review A | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | CLEAN (1 MINOR declined) |
+| Review B | 2 | M1 | 2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | 3577d93096f5d84b3560e5cab130faa8ac2969bf:2a0ccc2ffa4fecf6e0542d0a4a635f1053469130 | CLEAN |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r2 | F1 MINOR: verify-run.sh runs ledgers_of twice | Cheap (a few ms) and the code stays as reviewed so both CLEAN verdicts stay bound to the head |
 
 ## Handover
 
