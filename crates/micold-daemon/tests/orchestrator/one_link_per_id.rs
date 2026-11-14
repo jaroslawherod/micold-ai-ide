@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 
 use micold_core::orchestrator::{LinkVerdict, RefuseReason};
 use micold_core::protocol::keepalive::{LIVENESS_DEADLINE, PING_INTERVAL};
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
 
-use crate::support::{announcement, FakeDaemon, LinkedDaemon, Orchestrator, WITHIN};
+use crate::support::{announcement, record_when, FakeDaemon, LinkedDaemon, Orchestrator, WITHIN};
 
 fn already_linked(verdict: &LinkVerdict) -> bool {
     matches!(
@@ -17,25 +17,6 @@ fn already_linked(verdict: &LinkVerdict) -> bool {
             ..
         }
     )
-}
-
-/// The listed record of `id`, once `ready` holds for it.
-async fn record_when(
-    orchestrator: &Orchestrator,
-    id: &str,
-    ready: impl Fn(&serde_json::Value) -> bool,
-) -> serde_json::Value {
-    let started = Instant::now();
-    loop {
-        let daemons = orchestrator.daemons().await;
-        if let Some(record) = daemons.iter().find(|d| d["id"] == id) {
-            if ready(record) {
-                return record.clone();
-            }
-        }
-        assert!(started.elapsed() < WITHIN, "{id} never became ready");
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
 }
 
 /// Dial and announce `name` for id `a` until it is accepted, then `Hello`: the orchestrator may
@@ -73,7 +54,9 @@ async fn a_second_link_is_refused_and_the_first_stays_online() {
         panic!("the first link is still served")
     };
     first.send(ClientMsg::LinkPong { nonce }).await;
-    let record = record_when(&orchestrator, "a", |a| a["last_seen"] != 0).await;
+    // Only the pong, after the rival's claim, can move `last_seen` to the advanced wall time.
+    let pinged_at = orchestrator.clock.wall();
+    let record = record_when(&orchestrator, "a", |a| a["last_seen"] == pinged_at).await;
     assert_eq!(record["health"], "online");
 }
 
@@ -102,6 +85,35 @@ async fn a_silent_link_is_closed_when_a_new_link_takes_over() {
     silent.expect_closed().await;
     let record = record_when(&orchestrator, "a", |a| a["name"] == "replacement").await;
     assert_eq!(record["health"], "online");
+}
+
+#[tokio::test]
+async fn a_hello_after_the_replaced_link_answered_is_refused_already_linked() {
+    let orchestrator = Orchestrator::start().await;
+    let mut silent = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    orchestrator.clock.advance(LIVENESS_DEADLINE);
+    record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
+
+    // The new link reserves the id; before its `Hello`, the silent link answers and is live again.
+    let mut announced = announcement("a");
+    announced.name = "replacement".into();
+    let mut late = FakeDaemon::dial(&orchestrator)
+        .await
+        .accepted(&announced)
+        .await;
+    silent.send(ClientMsg::LinkPong { nonce: 0 }).await;
+    record_when(&orchestrator, "a", |a| a["health"] == "online").await;
+
+    late.hello().await;
+    match late.next().await {
+        DaemonMsg::Refused {
+            reason: RefusalReason::NotPermitted { detail },
+        } => assert!(detail.contains("already open"), "{detail}"),
+        other => panic!("expected an already-linked refusal, got {other:?}"),
+    }
+    late.expect_closed().await;
+    let record = record_when(&orchestrator, "a", |_| true).await;
+    assert_ne!(record["name"], "replacement");
 }
 
 #[tokio::test]

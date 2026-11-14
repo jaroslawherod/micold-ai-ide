@@ -7,8 +7,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::orchestrator::{
-    decode_first_frame, refusal_message, Claim, ClaimFailure, FirstFrame, LinkAction,
-    LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
+    decode_first_frame, refusal_message, Claim, ClaimFailure, ConfirmRefused, FirstFrame,
+    LinkAction, LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
 };
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
@@ -73,7 +73,7 @@ where
             return refuse(&mut framed, RefuseReason::VersionMismatch, &announcement).await
         }
     };
-    let served = after_claim(&shared, framed, link).await;
+    let served = after_claim(&shared, framed, link, &announcement).await;
     shared.registry().closed(link);
     served
 }
@@ -107,6 +107,7 @@ async fn after_claim<S>(
     shared: &Shared,
     mut framed: Framed<S, LengthDelimitedCodec>,
     link: LinkToken,
+    announcement: &LinkAnnouncement,
 ) -> io::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -172,13 +173,28 @@ where
             .map_err(io::Error::other);
     }
     // Refused when the token expired or a replaced silent link answered meanwhile: either way
-    // another link holds the id, and this one closes.
-    if shared
+    // this link closes. A live old link is named, so the daemon learns why without redialling;
+    // the wire has no `AlreadyLinked`, so it goes as `NotPermitted` with the preamble's sentence.
+    let confirmed = shared
         .registry()
-        .confirm(link, shared.now(), shared.wall_secs())
-        .is_err()
-    {
-        return Ok(());
+        .confirm(link, shared.now(), shared.wall_secs());
+    match confirmed {
+        Ok(_) => {}
+        Err(ConfirmRefused::Stale) => return Ok(()),
+        Err(ConfirmRefused::AlreadyLinked) => {
+            let detail = refusal_message(
+                RefuseReason::AlreadyLinked,
+                &announcement.id,
+                announcement.protocol_version,
+                PROTOCOL_VERSION,
+            );
+            return framed
+                .send(Frame::Control(DaemonMsg::Refused {
+                    reason: RefusalReason::NotPermitted { detail },
+                }))
+                .await
+                .map_err(io::Error::other);
+        }
     }
     framed
         .send(Frame::Control(DaemonMsg::Welcome {

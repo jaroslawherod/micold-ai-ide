@@ -299,3 +299,24 @@ impl LinkedDaemon {
         }
     }
 }
+
+/// The listed record of `id`, once it is listed and `ready` holds for it; panics after [`WITHIN`].
+pub async fn record_when(
+    orchestrator: &Orchestrator,
+    id: &str,
+    ready: impl Fn(&serde_json::Value) -> bool,
+) -> serde_json::Value {
+    let started = Instant::now();
+    loop {
+        let daemons = orchestrator.daemons().await;
+        let record = daemons.iter().find(|d| d["id"] == id);
+        if let Some(record) = record.filter(|r| ready(r)) {
+            return record.clone();
+        }
+        assert!(
+            started.elapsed() < WITHIN,
+            "{id} never became ready: {record:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}

@@ -98,3 +98,17 @@ covers `Dropped`.
 Green: `cargo test -p micold-core --lib -- orchestrator` 69 passed; `--test orchestrator` 29 passed
 (`one_link_per_id` 5 passed). `cargo test -p micold-core --all-targets`: all pass except two
 unreadable-file settings tests that fail only as root (the gate runs them unprivileged).
+
+### M4 review fixes (round 1, Review A F1–F3)
+
+- Red: `a_hello_after_the_replaced_link_answered_is_refused_already_linked` against a98b297ae's
+  `link.rs` (5 passed / 1 failed): support.rs `next` panicked "the connection stays open" — the
+  orchestrator closed with a bare EOF when `confirm` returned `AlreadyLinked`.
+- Green: `link.rs` sends `Refused { NotPermitted { detail } }` with the preamble's `AlreadyLinked`
+  sentence (the wire `RefusalReason` has no `AlreadyLinked`; adding one would change the schema
+  hash). `Stale` still closes silently.
+- F2: `a_second_link_is_refused_and_the_first_stays_online` now waits for `last_seen` to equal the
+  wall time after `advance(PING_INTERVAL)`, which only the pong can set.
+- F3: one `record_when` in `support.rs` (waits while the id is unlisted) replaces the copies in
+  `heartbeat.rs` and `one_link_per_id.rs`.
+- `--test orchestrator` 30 passed; fmt and workspace clippy `-D warnings` clean.
