@@ -19,8 +19,7 @@ tail -6 "$log"
 The script waits for the `ci complete` check, the only required one, runs the verdict guard, and
 merges with `gh pr merge <n> --rebase --match-head-commit <head>` (`wait-merge.sh <n> --squash`
 squash-merges instead): never `--delete-branch`, never `--admin` by hand. A direct `gh pr merge` is
-denied by `gate-hook.sh`; `wait-merge.sh` is the only merge path. A tooling-only diff merges on a green
-local gate past a red CI, with `SKIPPED-CI` printed: [ci.md](ci.md), *Tooling-only diffs*.
+denied by `gate-hook.sh`; `wait-merge.sh` is the only merge path. Tooling-only diffs: [ci.md](ci.md).
 
 ## A verdict belongs to one head
 
