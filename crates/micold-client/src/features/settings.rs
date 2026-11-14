@@ -835,7 +835,7 @@ impl From<FieldError> for Refusal {
 pub struct ValidSettings {
     /// Appearance.
     pub theme: ThemePreference,
-    /// Appearance (feature 970).
+    /// Appearance: what it covers is on `micold_core::settings::Settings::reduce_motion`.
     pub reduce_motion: bool,
     /// Appearance: **Suggestion chips** (#1275).
     pub suggestion_chips: bool,

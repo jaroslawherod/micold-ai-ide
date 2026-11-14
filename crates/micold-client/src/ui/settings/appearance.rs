@@ -69,8 +69,8 @@ pub fn view<'a>(
     let reduce_motion = field_note(
         reduce_motion,
         Some(
-            "Switch the Overview's full-screen zoom, card focus and expansion, and the session \
-             options row, in one step",
+            "Switch the Overview's full-screen zoom, card focus and expansion, and the composer's \
+             session options row, in one step",
         ),
         roles,
     );

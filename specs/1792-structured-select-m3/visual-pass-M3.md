@@ -8,7 +8,7 @@ Measure: the y of the topmost non-background pixel of the options row, left 210 
 |---|---|
 | 2 Expand and collapse | PASS |
 | 3 Toggle twice quickly | PASS (visual, coarse) |
-| 5 Reduce motion on | FAIL |
+| 5 Reduce motion on | FAIL on a mutated binary; re-run on a clean build passes by trace, visual re-check due (see the end) |
 | 6 Two sessions | PASS for animation, with an observation (see below) |
 | D1 `/model` with row collapsed | PASS |
 
@@ -31,7 +31,7 @@ Setting Settings > Appearance > Reduce motion on (saved; `settings.json` shows `
 - Expected (FR-013): expand and collapse in one frame.
 - Seen: expand with reduce motion on still grew over about 0.26 s (top edge y: 626, 610, 592, 581, 574, 567, 562, 557, 554, 552, 550, 549, 548), the same curve as step 2, three runs, plus once after a client restart. Collapse with reduce motion on, in the first run, held full height and vanished in one frame about 0.3 s after the press, but after the restart it shrank over about 0.1 s (548, 550, 554, 561, 569 then gone), so it is not reliably instant either.
 - The source builds `Duration::ZERO` when `state.settings.reduce_motion` (`crates/micold-client/src/ui/composer.rs`, `options_motion`), so the value reaching the animation, or the animation's handling of a zero duration, is the place to look; I did not debug it.
-- Also not an error but worth a look: the Reduce motion setting's own description in the Settings page still names only the Overview ("Switch the Overview's full-screen zoom, card focus and expansion in one step").
+- (Fixed in 8107980c1: the note now names the composer's session options row.) Also not an error but worth a look: the Reduce motion setting's own description in the Settings page still names only the Overview ("Switch the Overview's full-screen zoom, card focus and expansion in one step").
 
 Image: `visual-pass-M3-reduce-motion-expand-frames.png` (reduce motion on, expand, frames at +0.13, +0.17, +0.22, +0.28, +0.39 s: still a gradual grow).
 
@@ -51,7 +51,7 @@ Image: `visual-pass-M3-d1-model-list.png` (cropped).
 
 Step 1 and 4 (M1), step 7 (narrow window, light and dark) and the focus and pressed states. The recorded frames are not committed (only the strips above); frame times are wall-clock samples with about 22 ms spacing and a software renderer, so they say nothing about smoothness on a real GPU.
 
-## Step 5 re-check (unit, after the pass): PASS, the failure was a mutated binary
+## Step 5 re-check (unit, after the pass): the failure was a mutated binary; clean build passes by trace, visual re-check due
 
 Root cause: the release client the pass ran was built while review B round 1's mutation check
 had `options_motion` mutated to `if false && state.settings.reduce_motion` (recorded in
@@ -66,6 +66,12 @@ a temporary trace in `Expand::update`: 14 toggles, every one logged `over=0ns` a
 `0 -> 1` or `1 -> 0` on the first frame; the frame trace showed the row at its end height on the
 first changed frame. Rebuilt again without the trace: 4 toggles, each in one frame. A visual
 re-check of step 5 by the orchestrator is still due.
+
+The collapse readings fit the mutant too. The measure (topmost pixel changed against the first
+frame) reads 548 from the first moving frame of any collapse until the row is gone, so "held full
+height and vanished" is what a continuous shrink reports; frames of a collapse grabbed from the
+mutated binary in the re-check showed a continuous 0.3 s shrink, clipped from the bottom. The
+0.1 s reading after the restart is most likely the tail of that shrink under the same measure.
 
 Follow-up for the process: a mutation check and a build for a visual pass must not share a
 worktree at the same time.
