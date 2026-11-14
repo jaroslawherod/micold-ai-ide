@@ -186,6 +186,13 @@ mod structured_row_marker_fits;
 #[path = "gates/disclosure_card_header_fits.rs"]
 mod disclosure_card_header_fits;
 
+// --- A user group's header fits the sidebar row (feature 1786, T015) ---------------------------
+
+// The showcase's group header, as the sidebar draws it: one row tall, name and count inside, a long
+// name cut with an ellipsis.
+#[path = "gates/sidebar_group_header_fits.rs"]
+mod sidebar_group_header_fits;
+
 // --- The transcript's rich components hold their parts (feature 940, T025) ---------------------
 
 // The showcase's code block: its tag and copy control stay in its header row at a narrow width, and

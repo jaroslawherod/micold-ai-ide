@@ -591,6 +591,8 @@ fn each_more_menu_item_sends_the_header_buttons_message() {
             Message::Worktree(WorktreeMsg::RefreshRequested),
             Message::Attach(micold_client::features::attach::Msg::Opened),
             Message::Sidebar(SidebarMsg::RunInParallelRequested),
+            // Feature 1786 (C6a): New group opens the naming dialog.
+            Message::SidebarGroups(micold_client::features::sidebar_group_actions::Msg::New),
         ]
     );
 }
@@ -606,11 +608,11 @@ fn the_more_menus_refresh_is_enabled_exactly_when_a_refresh_can_start() {
     };
     let mut state = state_with_active();
     assert!(state.can_refresh_worktrees());
-    assert_eq!(enabled(&state), [true, true, true]);
+    assert_eq!(enabled(&state), [true, true, true, true]);
     state.update(Message::Worktree(WorktreeMsg::RefreshRequested));
     assert!(!state.can_refresh_worktrees());
-    assert_eq!(enabled(&state), [false, true, true]);
-    assert_eq!(enabled(&State::default()), [false, false, false]);
+    assert_eq!(enabled(&state), [false, true, true, true]);
+    assert_eq!(enabled(&State::default()), [false, false, false, false]);
 }
 
 /// **All** clears every active filter in one press, as **Clear filters** did (US4.3).
@@ -1029,6 +1031,9 @@ mod flat_list {
             SidebarEntry::Worktree(node) => node.location(),
             SidebarEntry::Group(group) => {
                 SessionLocation::Worktree(format!("group {}", group.name))
+            }
+            SidebarEntry::UserGroup(header) => {
+                SessionLocation::Worktree(format!("user group {}", header.name))
             }
         }
     }

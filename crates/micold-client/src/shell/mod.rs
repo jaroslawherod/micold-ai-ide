@@ -59,6 +59,7 @@ mod sandbox_real;
 pub mod service_control;
 pub mod settings;
 pub mod setup;
+pub mod sidebar_layout;
 pub mod ssh_aliases;
 pub mod startup;
 pub mod subscriptions;

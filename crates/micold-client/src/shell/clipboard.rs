@@ -69,6 +69,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::LocationRevealed(_)
         | Outcome::KeyboardRowLeft
         | Outcome::ProjectEntered
+        | Outcome::SidebarLayoutChanged { .. }
         | Outcome::RevealSuppressed(_)
         | Outcome::FieldFocusCleared
         | Outcome::FieldBlurred(_)

@@ -139,7 +139,7 @@ mod over_the_flat_list {
             .map(|e| match e {
                 SidebarEntry::Default(_) => SessionLocation::Default,
                 SidebarEntry::Worktree(n) => n.location(),
-                SidebarEntry::Group(_) => unreachable!(),
+                SidebarEntry::Group(_) | SidebarEntry::UserGroup(_) => unreachable!(),
             })
             .collect();
         assert_eq!(order, stable);

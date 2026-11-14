@@ -151,6 +151,9 @@ pub struct TreeItem<'a, M> {
     /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
     /// R13, [`TreeItem::key`]). Crate-visible so a host's tests can check every row has one.
     pub(crate) key: Option<u64>,
+    /// A role the label is always drawn in, whatever the view's roles (feature 1786: a user
+    /// group's header, [`GroupHeader`](super::GroupHeader)). `None` for every other row.
+    heading_role: Option<TypeRole>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -188,8 +191,15 @@ impl<'a, M> TreeItem<'a, M> {
             keyboard_focus: None,
             tab_stop: false,
             key: None,
+            heading_role: None,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Draw the label in `role` whatever the view's label roles (feature 1786, R7): a heading row.
+    pub fn heading(mut self, role: TypeRole) -> Self {
+        self.heading_role = Some(role);
+        self
     }
 
     /// Show the location's state in a fixed slot after the twisty (feature 905, S2). The host
@@ -229,6 +239,9 @@ impl<'a, M> TreeItem<'a, M> {
     /// The role this row's label is drawn in: the view's emphasised role for a selected or an
     /// unread row, else the view's label role.
     fn label_role(&self, label_role: TypeRole, selected_label_role: Option<TypeRole>) -> TypeRole {
+        if let Some(role) = self.heading_role {
+            return role;
+        }
         match selected_label_role {
             Some(role) if self.selected || self.unread == RowUnread::Unread => role,
             _ => label_role,

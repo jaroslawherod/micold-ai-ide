@@ -697,7 +697,7 @@ fn the_keyboard_subscription_names_no_surface() {
     // Whitespace is dropped first, so a message rustfmt splits over lines still reads as one name.
     // Each name runs to the first character a path cannot hold (`,`, `{`, `;`, `=`), and is compared
     // whole, so a longer message sharing a prefix with an exempt one is still found.
-    const EXEMPT: [&str; 11] = [
+    const EXEMPT: [&str; 12] = [
         "Message::EscapePressed",
         "Message::EscapePressed)",
         "Message::FocusMoved",
@@ -711,6 +711,8 @@ fn the_keyboard_subscription_names_no_surface() {
         "Message::Overview(msg))",
         "Message::Changes(crate::features::changes::Msg::KeyPressed(press",
         "Message::History(crate::features::history::Msg::Pressed",
+        // Feature 1786 (C6a): the New group chord, an app chord like the switcher's.
+        "Message::SidebarGroups(crate::features::sidebar_group_actions::Msg::New",
     ];
     let named: Vec<String> = body
         .match_indices("Message::")

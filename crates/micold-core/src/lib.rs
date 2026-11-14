@@ -93,6 +93,7 @@ pub mod session;
 pub mod settings;
 pub mod setup;
 pub mod sidebar_groups;
+pub mod sidebar_layout;
 pub mod spawn;
 pub mod ssh;
 pub mod startup_result;
