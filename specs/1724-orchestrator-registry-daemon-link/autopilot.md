@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1724
-- **Worktree branch**: claude/project-thread-daw24a
+- **Worktree branch**: claude/project-thread-3cm73q
 - **Started**: 2026-11-11
 - **Phase**: milestone M5
-- **Next step**: dispatch the M5 milestone unit (T036–T040)
+- **Next step**: M5 reviews A and B, then push and PR
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
-| M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
+| M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | in progress |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
@@ -87,7 +87,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-M4 squash-merged 2026-11-14 as fa0e41a7 (PR #1895). CI: all jobs green on 6716d13b after one re-run of two failures outside this diff (sandbox DNS lookup of example.com; structured_permission two_sessions_waiting timing), commented on the PR. Reviews A and B clean round 1; fix commit ac07209b re-reviewed clean (sonnet). origin/main merged into the branch after the merge. Cloud thread branch: `claude/project-thread-daw24a`. Next thread: `/speckit-autopilot resume #1724`, which starts M5 (T036–T040, registry persisted, restart lists all offline) from this branch.
+None.
 
 ## Open escalation
 

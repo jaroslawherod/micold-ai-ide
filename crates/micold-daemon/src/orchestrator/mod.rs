@@ -13,7 +13,9 @@ use std::time::Instant;
 
 use interprocess::local_socket::traits::tokio::Listener as _;
 use micold_core::endpoint::Endpoint;
-use micold_core::orchestrator::Registry;
+use micold_core::orchestrator::{
+    JsonRegistryStore, Registry, RegistrySaver, RegistryStore, Snapshot,
+};
 
 pub mod link;
 pub mod query;
@@ -63,14 +65,36 @@ impl Clock for SystemClock {
 pub struct Shared {
     registry: Mutex<Registry>,
     clock: Arc<dyn Clock>,
+    saver: RegistrySaver,
 }
 
 impl Shared {
-    fn new(clock: Arc<dyn Clock>) -> Self {
+    fn new(clock: Arc<dyn Clock>, registry: Registry, store: Arc<dyn RegistryStore>) -> Self {
         Self {
-            registry: Mutex::new(Registry::new()),
+            registry: Mutex::new(registry),
             clock,
+            saver: RegistrySaver::new(store),
         }
+    }
+
+    /// Save the snapshot a mutating registry call returned, after the lock is released, through
+    /// the one saver that skips an older snapshot. A failure is logged to stderr: the registry in
+    /// memory stays right and the next change tries again (FR-004).
+    pub(crate) fn save(&self, snapshot: Option<Snapshot>) {
+        let Some(snapshot) = snapshot else {
+            return;
+        };
+        if let Err(e) = self.saver.save(&snapshot) {
+            eprintln!("micold-daemon: orchestrator: {e}");
+        }
+    }
+
+    /// Run a mutating registry call that returns `(answer, snapshot)`, then save the snapshot
+    /// with the lock released.
+    pub(crate) fn update<T>(&self, call: impl FnOnce(&mut Registry) -> (T, Option<Snapshot>)) -> T {
+        let (answer, snapshot) = call(&mut self.registry());
+        self.save(snapshot);
+        answer
     }
 
     /// The registry. The guard is never held across an `.await`.
@@ -98,10 +122,18 @@ fn endpoint() -> io::Result<Endpoint> {
     })
 }
 
-/// Run the orchestrator on the user's endpoint until the process is stopped.
+/// Run the orchestrator on the user's endpoint until the process is stopped, keeping its registry
+/// in `orchestrator/registry.json` under the data directory.
 pub async fn run() -> io::Result<()> {
     let endpoint = endpoint()?;
-    serve(endpoint, Arc::new(SystemClock)).await
+    let data_dir = micold_core::paths::data_dir().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "no data directory to keep the orchestrator registry in",
+        )
+    })?;
+    let store = Arc::new(JsonRegistryStore::in_data_dir(&data_dir));
+    serve(endpoint, Arc::new(SystemClock), store).await
 }
 
 /// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
@@ -117,16 +149,26 @@ pub fn main() -> io::Result<()> {
         .block_on(run())
 }
 
-/// Run the orchestrator on `socket` with `clock` (tests pass their own).
-pub async fn run_with(socket: PathBuf, clock: Arc<dyn Clock>) -> io::Result<()> {
+/// Run the orchestrator on `socket` with `clock` and `store` (tests pass their own).
+pub async fn run_with(
+    socket: PathBuf,
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+) -> io::Result<()> {
     let endpoint = Endpoint {
         lock_path: socket.with_extension("lock"),
         socket_path: socket,
     };
-    serve(endpoint, clock).await
+    serve(endpoint, clock, store).await
 }
 
-async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
+async fn serve(
+    endpoint: Endpoint,
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+) -> io::Result<()> {
+    // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
+    let registry = Registry::restore(store.load().map_err(io::Error::other)?);
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {
@@ -139,8 +181,12 @@ async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
             ))
         }
     };
-    let shared = Arc::new(Shared::new(clock));
+    let shared = Arc::new(Shared::new(clock, registry, store));
+    // The link tasks end with this future: stopping the orchestrator leaves no link saving into
+    // the registry behind it.
+    let mut links = tokio::task::JoinSet::new();
     loop {
+        while links.try_join_next().is_some() {}
         // One failed accept (a peer that left mid-accept, a full descriptor table) must not end
         // the registry and every link with it: log, back off, go on.
         let conn = match bound.listener.accept().await {
@@ -152,7 +198,7 @@ async fn serve(endpoint: Endpoint, clock: Arc<dyn Clock>) -> io::Result<()> {
             }
         };
         let shared = Arc::clone(&shared);
-        tokio::spawn(async move {
+        links.spawn(async move {
             if let Err(e) = link::serve_connection(shared, conn).await {
                 tracing::warn!(error = %e, "orchestrator connection ended with an error");
             }

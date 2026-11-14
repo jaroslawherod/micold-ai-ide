@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind};
 use micold_core::session::AiCli;
 
-use crate::support::{announcement, FakeDaemon, Orchestrator};
+use crate::support::{announcement, child_count, FakeDaemon, Orchestrator};
 
 #[tokio::test]
 async fn a_session_start_is_refused_not_hosted() {
@@ -58,24 +58,4 @@ async fn no_child_process_is_spawned() {
     // has no child after serving the link.
     assert_eq!(child_count(), 0);
     drop(orchestrator);
-}
-
-/// Children of every thread of this process: the orchestrator runs on tokio worker threads, and
-/// `/proc/<pid>/task/<pid>/children` lists only those of the main thread.
-#[cfg(target_os = "linux")]
-fn child_count() -> usize {
-    let me = std::process::id();
-    let Ok(tasks) = std::fs::read_dir(format!("/proc/{me}/task")) else {
-        return 0;
-    };
-    tasks
-        .flatten()
-        .filter_map(|task| std::fs::read_to_string(task.path().join("children")).ok())
-        .map(|children| children.split_whitespace().count())
-        .sum()
-}
-
-#[cfg(not(target_os = "linux"))]
-fn child_count() -> usize {
-    0
 }

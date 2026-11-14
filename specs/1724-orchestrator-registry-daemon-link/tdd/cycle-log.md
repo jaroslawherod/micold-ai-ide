@@ -112,3 +112,19 @@ unreadable-file settings tests that fail only as root (the gate runs them unpriv
 - F3: one `record_when` in `support.rs` (waits while the id is unlisted) replaces the copies in
   `heartbeat.rs` and `one_link_per_id.rs`.
 - `--test orchestrator` 30 passed; fmt and workspace clippy `-D warnings` clean.
+
+## M5 — Registry survives a restart (T036–T040)
+
+- Red (core): `store.rs` tests and two `registry.rs` restore tests against `todo!("T038")` stubs:
+  13 failed, 0 passed (`cargo test -p micold-core --lib -- orchestrator::store ...restore ...a_restored`).
+- Green (core): `JsonRegistryStore` (`write_with`, `{version: 1, daemons}`; absent = empty; read or
+  parse error or another version = `StoreError::Corrupt`, file untouched), `MemoryRegistryStore`
+  (injectable save failure), `RegistrySaver` (skips seq <= last given), `Registry::restore` (all
+  `offline`, no link). `cargo test -p micold-core --lib -- orchestrator` 82 passed. The torn write is
+  driven by a directory at `.registry.json.tmp`, so the save fails before the rename even as root.
+- Red (daemon): `restart.rs` with `run_with(socket, clock, store)` loading and restoring but not
+  saving: 1 passed (corrupt file, a load-path behaviour), 4 failed — the restart listed `[]`, the
+  relinked listing had 1 record, `orchestrator/` did not exist, no save failure was logged.
+- Green (daemon): `link.rs` saves every returned snapshot after the lock is released
+  (`Shared::update`/`save`, failure to stderr); `serve` keeps link tasks in a `JoinSet` so a stopped
+  orchestrator leaves none writing behind it. `--test orchestrator` 35 passed.
