@@ -369,6 +369,14 @@ Reds are the mutants named in `tdd/verification.md`, "Remediation result (Issue 
   `a_session_file_with_a_missing_source_or_a_bad_mode_is_reported`, `a_read_only_copy_already_there_is_replaced`,
   `a_secret_env_file_that_cannot_be_read_gives_no_proxy` (T155).
 
+### Issue 16 (#1536) tdd-verify re-run after M2 (audit, no code changed)
+
+53 deliberate mutants over the M2 files, one at a time, each restored and the scoped suites re-run green; 40 caught, 13 survived (2 equivalent: `add_extras` total `Set` pushed, `write_if_changed` creation mode). Surviving mutants are findings I16-9 to I16-16 in `tdd/verification.md`: the daemon HTTPS CA trust (I16-9, HIGH), two session files sharing one delivered name (I16-10, HIGH), `kube_attempt` with extras (I16-11), `NO_PROXY` dot boundary (I16-12), the retired-pod rule for `secret_files` (I16-13), and three LOW. I16-2 stays open for its CA half (T153 ticked without that test); I16-1 and I16-3 to I16-8 are closed with evidence. The behaviors stay `TEST_AFTER`.
+
+### Issue 16 (#1536) close unit remediation (T169-T172), all `TEST_AFTER`
+
+Each new test was run against its surviving mutant and failed it (red), then the mutant was restored: D28, D20, D11, D26, D3 (T169); C4 (container, pod, SSH), C19, C23, C11, C12 (T170); K3 (T171).
+
 ## Issue 11 (#1532) close-unit remediation (T165): deliberate-mutant checks for M1 and M3
 
 `tdd/verification.md`'s Finding 2 (HIGH) asked for one deliberate-mutant check per milestone that

@@ -591,6 +591,42 @@ async fn a_pod_made_before_the_config_map_is_recreated_never_kept_or_asked_about
     }
 }
 
+/// #1536 (T166): a pod made before the startup secret cannot see the extras, so a start with only
+/// `secret_files` recreates it, never keeps it or asks about it.
+#[tokio::test(start_paused = true)]
+async fn a_pod_without_the_startup_secret_is_recreated_when_only_the_extras_need_it() {
+    for choice in [DriftChoice::Keep, DriftChoice::Ask] {
+        let fake = cluster();
+        ready(run(&fake, &settings()).await.0);
+        let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+        let mut stamp: serde_json::Value = serde_json::from_str(
+            pod["metadata"]["annotations"][POD_STAMP_ANNOTATION]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        stamp.as_object_mut().unwrap().remove("startup_secret");
+        fake.set_annotation(
+            NS,
+            ObjectKind::Pod,
+            &names().pod(),
+            POD_STAMP_ANNOTATION,
+            &stamp.to_string(),
+        );
+        let (keys, client) = (FakeKeyGen::default(), client("c1"));
+        let (s, n) = (settings(), names());
+        let files = [("ssh-key".to_string(), "KEY".to_string())];
+        let mut request = start_request(&fake, &s, &n, &keys, &client, choice, &no_files);
+        request.secret_files = &files;
+        ready(start(&request, &mut |_| {}).await);
+        assert_eq!(
+            deletes(&fake),
+            [format!("delete Pod {}", n.pod())],
+            "{choice:?}"
+        );
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_pod_never_scheduled_times_out_in_schedule_and_rolls_back_in_reverse() {
     let fake = cluster();
