@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1792
-- **Worktree branch**: claude/project-thread-q9zjol
+- **Worktree branch**: claude/project-thread-hyfws4
 - **Started**: 2026-11-11
-- **Phase**: M3 PR open (visual pass findings handled)
-- **Next step**: orchestrator waits on CI and merges #1902 (review B round 2 done; the step 5 visual re-check passed, see visual-pass-M3.md)
+- **Phase**: close
+- **Next step**: close unit: polish T022–T023, speckit-tdd-verify, close PR
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
 | #1842 | M1 | merged | 7628262fce95c344ccb9eed01db1138e2da2a5fa |
 | #1851 | M2 | merged (2026-11-12) | bd4e5970c23446123021f819fd9543caadf9c46f |
-| #1902 | M3 | open | — |
+| #1902 | M3 | merged (2026-11-14) | aa9968e9ae1f6988b5b9325e00afddc91e40254f |
 
 ## Milestones
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | merged |
 | M2 | T011–T012 | light | menu parity pinned (test-only if green) | #1851 | merged |
-| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | #1902 | PR open |
+| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | #1902 | merged |
 
 Polish T022–T023 (no code) is left to the close unit.
 
