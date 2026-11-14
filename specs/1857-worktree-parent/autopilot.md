@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-11hi7h
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: M1b implemented; verify, review, gate, PR
+- **Next step**: merge (CI); review B still to run
 
 ## Pull requests
 
@@ -19,14 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
-| (pending) | M1b | to open | — |
+| #1912 | M1b | open (draft) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
-| M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | (pending) | implemented |
+| M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | in-review |
 
 ## Decisions
 
