@@ -2,33 +2,12 @@
 //! `offline` with its last answer's time within the deadline, and `online` again on its next frame.
 //! The clock is the test's own, so no test waits nine real seconds.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use micold_core::protocol::keepalive::{LIVENESS_DEADLINE, PING_INTERVAL};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 
-use crate::support::{announcement, FakeDaemon, Orchestrator, WITHIN};
-
-/// The listed record of `id`, once `ready` holds for it.
-async fn record_when(
-    orchestrator: &Orchestrator,
-    id: &str,
-    ready: impl Fn(&serde_json::Value) -> bool,
-) -> serde_json::Value {
-    let started = Instant::now();
-    loop {
-        let daemons = orchestrator.daemons().await;
-        let record = daemons.iter().find(|d| d["id"] == id).expect("listed");
-        if ready(record) {
-            return record.clone();
-        }
-        assert!(
-            started.elapsed() < WITHIN,
-            "{id} never became ready: {record}"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
+use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
 
 #[tokio::test]
 async fn an_idle_link_gets_a_link_ping_every_ping_interval() {

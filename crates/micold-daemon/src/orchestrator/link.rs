@@ -7,8 +7,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::orchestrator::{
-    decode_first_frame, refusal_message, Claim, ClaimFailure, FirstFrame, LinkAction,
-    LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
+    decode_first_frame, refusal_message, Claim, ClaimFailure, ConfirmRefused, FirstFrame,
+    LinkAction, LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
 };
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
@@ -65,7 +65,7 @@ async fn link<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    let claim = shared.registry().claim(&announcement);
+    let claim = shared.registry().claim(&announcement, shared.now());
     let link = match claim {
         Claim::Reserved { link, .. } => link,
         Claim::Refused(reason) => return refuse(&mut framed, reason, &announcement).await,
@@ -73,7 +73,7 @@ where
             return refuse(&mut framed, RefuseReason::VersionMismatch, &announcement).await
         }
     };
-    let served = after_claim(&shared, framed, link).await;
+    let served = after_claim(&shared, framed, link, &announcement).await;
     shared.registry().closed(link);
     served
 }
@@ -107,6 +107,7 @@ async fn after_claim<S>(
     shared: &Shared,
     mut framed: Framed<S, LengthDelimitedCodec>,
     link: LinkToken,
+    announcement: &LinkAnnouncement,
 ) -> io::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -116,9 +117,15 @@ where
     // From here the frames are the wire protocol's.
     let mut framed = framed.map_codec(|_| DaemonCodec::new());
 
-    let hello = tokio::time::timeout(LIVENESS_DEADLINE, framed.next())
-        .await
-        .map_err(|_| invalid("no Hello within the deadline"))?;
+    // A reservation lasts at most the deadline: no `Hello` by then, or a closed connection,
+    // releases it (`claim_failed(Dropped)`).
+    let dropped = || {
+        shared.registry().claim_failed(link, ClaimFailure::Dropped);
+    };
+    let Ok(hello) = tokio::time::timeout(LIVENESS_DEADLINE, framed.next()).await else {
+        dropped();
+        return Err(invalid("no Hello within the deadline"));
+    };
     let intro = match hello {
         Some(Ok(Frame::Control(ClientMsg::Hello {
             protocol_version,
@@ -139,9 +146,18 @@ where
             fingerprint: client_fingerprint,
             require_fingerprint_match,
         },
-        Some(Ok(_)) => return Err(invalid("expected Hello as the first frame")),
-        Some(Err(e)) => return Err(io::Error::other(e)),
-        None => return Ok(()),
+        Some(Ok(_)) => {
+            dropped();
+            return Err(invalid("expected Hello as the first frame"));
+        }
+        Some(Err(e)) => {
+            dropped();
+            return Err(io::Error::other(e));
+        }
+        None => {
+            dropped();
+            return Ok(());
+        }
     };
     // An orchestrator holds no token and has no image to be stale against.
     let expectation = handshake::Expectation {
@@ -156,12 +172,29 @@ where
             .await
             .map_err(io::Error::other);
     }
-    if shared
+    // Refused when the token expired or a replaced silent link answered meanwhile: either way
+    // this link closes. A live old link is named, so the daemon learns why without redialling;
+    // the wire has no `AlreadyLinked`, so it goes as `NotPermitted` with the preamble's sentence.
+    let confirmed = shared
         .registry()
-        .confirm(link, shared.now(), shared.wall_secs())
-        .is_err()
-    {
-        return Ok(());
+        .confirm(link, shared.now(), shared.wall_secs());
+    match confirmed {
+        Ok(_) => {}
+        Err(ConfirmRefused::Stale) => return Ok(()),
+        Err(ConfirmRefused::AlreadyLinked) => {
+            let detail = refusal_message(
+                RefuseReason::AlreadyLinked,
+                &announcement.id,
+                announcement.protocol_version,
+                PROTOCOL_VERSION,
+            );
+            return framed
+                .send(Frame::Control(DaemonMsg::Refused {
+                    reason: RefusalReason::NotPermitted { detail },
+                }))
+                .await
+                .map_err(io::Error::other);
+        }
     }
     framed
         .send(Frame::Control(DaemonMsg::Welcome {
@@ -204,8 +237,10 @@ where
 /// The steady state (contracts/link.md, step 4): every inbound frame is an answer, a timer sends
 /// `LinkPing` when the link is idle and marks the daemon `offline` when it has been silent past
 /// the deadline. After `Expired` the loop keeps reading, so a later frame brings the daemon back
-/// `online` on the same link. When the transport ends the loop lets the deadline run out first, so
-/// a drop is seen as silence and the record turns `offline` like any other.
+/// `online` on the same link. When the transport ends the id is free for a new link at once
+/// (`Registry::ended`), but the loop lets the deadline run out first, so a drop is seen as silence
+/// and the record turns `offline` like any other. The loop ends as soon as its `LinkToken` is
+/// replaced (a call returns `Stale`), which closes a replaced silent link.
 async fn steady<S>(
     shared: &Shared,
     mut framed: Framed<S, DaemonCodec>,
@@ -219,6 +254,11 @@ where
     let mut open = true;
     let mut expired = false;
     let mut nonce = 0_u64;
+    let end = |open: &mut bool| {
+        if std::mem::take(open) {
+            shared.registry().ended(link);
+        }
+    };
     loop {
         tokio::select! {
             frame = framed.next(), if open => {
@@ -229,7 +269,7 @@ where
                     if expired {
                         return Ok(());
                     }
-                    open = false;
+                    end(&mut open);
                     continue;
                 };
                 expired = false;
@@ -239,11 +279,11 @@ where
                     return Ok(());
                 }
                 match frame {
-                    Frame::Control(ClientMsg::Goodbye) => open = false,
+                    Frame::Control(ClientMsg::Goodbye) => end(&mut open),
                     Frame::Control(msg) => {
                         if let Some(answer) = query::not_hosted(&msg) {
                             if !send_bounded(&mut framed, answer).await {
-                                open = false;
+                                end(&mut open);
                             }
                         }
                     }
@@ -261,7 +301,7 @@ where
                     LinkAction::SendPing if open => {
                         nonce += 1;
                         if !send_bounded(&mut framed, DaemonMsg::LinkPing { nonce }).await {
-                            open = false;
+                            end(&mut open);
                         }
                     }
                     _ => {}

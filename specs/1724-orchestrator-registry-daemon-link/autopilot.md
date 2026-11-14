@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1724
-- **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
+- **Worktree branch**: claude/project-thread-daw24a
 - **Started**: 2026-11-11
-- **Phase**: milestone M3
-- **Next step**: open the M3 PR (title/body in the scratchpad, pr-title-m3.md, pr-body-m3.md) and merge on green
+- **Phase**: milestone M4
+- **Next step**: open the M4 PR (pushed; scoped checks only, full gate left to CI); wait for CI, merge, then M5
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1841 | Design | merged | 4652701784d3fba4add8d503d6a6ee614ec7d7f8 |
 | #1849 | M1 | merged | 21de2080eb685861ea423f52d4ba4a71428d9798 |
 | #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
+| #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
-| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | pending open | reviews clean, gate run |
-| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
+| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
+| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | reviewed, PR to open |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
 
@@ -67,6 +68,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CHANGES: fixed F1 MAJOR (drift-M3.md), F2 (wire test), F3 (T027 text); round 2 pending on e606147c |
 | Review A | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN (declined MINOR: close the silent link right after the offline wait; FR-006 says the mismatched claim closes it) |
 | Review B | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN: F1-F3 fixed, no plan drift for M3, Verify 9 passed |
+| Review A | 1 | M4 | ac07209bf661c1bfbf127210d11ce041b8f82800 | 1e3b41175be72fc247fe7e2dc62334c6b02f8b44:a98b297aefbee75c4cd4df7282956739262a8837 | MINOR-ONLY: CLEAN, 3 MINOR fixed (F1 Refused after AlreadyLinked confirm, wire test red-first; F2 pong-time assertion; F3 shared record_when) |
+| Review B | 1 | M4 | ac07209bf661c1bfbf127210d11ce041b8f82800 | 1e3b41175be72fc247fe7e2dc62334c6b02f8b44:a98b297aefbee75c4cd4df7282956739262a8837 | CLEAN: 1 MINOR declined (T034 Dropped wire test); Verify one_link_per_id 5 passed, core orchestrator 69 passed, plan-drift clean |
 
 ## Declined review findings
 
@@ -79,13 +82,11 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | tasks | analyze | F10 split T014/T010; F14 move T041 to M1; F16 dup note | Each task is one coherent file pair; the no-outbound proof needs the whole feature; T018/T021 mention is harmless |
 | M3 | Review A 1 | none declined | F1, F2 fixed; B F1 (drift-M3.md), F2 (wire test), F3 (T027 text) fixed |
 | M3 | Review A 2 | F1 assert closure right after the offline wait | FR-006: the mismatched claim closes a silent link; an offline link is not closed by silence alone, so closure after the refusal is the behaviour under test |
+| M4 | Review B 1 | F1: T034's explicit `claim_failed(Dropped)` has no wire test that tells it from M3 | No wire-observable difference: `link()` calls `closed(link)` after every path, which releases the reservation the same way; the core unit test covers `Dropped` (cycle-log, M4) |
 
 ## Handover
 
-M3 (T026-T030) implemented, round-1 reviews fixed (see Review rounds), committed locally; scoped gate green. Previous PR #1871 merge SHA b05740e146295f8e3dde4b5fe2499359aef7d17a. Next: round-2 re-review of the fix diff, then full gate (CI is the gate in the cloud), PR.
-
-Older note: 
-M2 squash-merged 2026-11-14 as b05740e1 after main was merged in (issue 1863 fixed on main; all CI jobs green on 389f5e5d). Next thread: `/speckit-autopilot resume #1724`, which starts M3 (T026–T030, older-protocol daemon refused and listed needs-update) from this branch.
+None. (M4 started 2026-11-14 on `claude/project-thread-daw24a` from f94f183, after M3's merge 8bcf7894b91548a647319de47fecca688e0f74af.)
 
 ## Open escalation
 

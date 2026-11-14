@@ -42,6 +42,17 @@ names both versions, for example `daemon box speaks protocol version 80; this or
 and let it link again: it then shows `online`. A daemon that is already linked and answering is never
 replaced by a refused one, and the other daemons keep their status.
 
+## One link per daemon
+
+Each daemon id is linked once. While a daemon is linked and answering, a second daemon that claims the
+same id is refused (`a link for daemon <id> is already open`), and the first one keeps working. A
+daemon that reconnects after its connection closed, or after it went `offline`, is accepted at once
+and replaces its old link.
+
+A daemon that has just connected holds its id for up to 9 seconds while it finishes the handshake;
+another claim on that id in that time is refused. If it does not finish, the id is free again. Two
+daemons that claim one id at the same moment never both get in: exactly one is accepted.
+
 ## What it will not do
 
 Asking the orchestrator to start a session is refused with `not hosted by the orchestrator`, and its
