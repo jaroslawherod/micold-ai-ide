@@ -294,6 +294,22 @@ pub async fn run() -> io::Result<()> {
         }
     }
 
+    // FR-008a (BUG-1852): a Named/Derived session whose conversation is confirmed gone is removed,
+    // persistently, before any client can list it. Blocking (stats the store).
+    {
+        let startup = Arc::clone(&state);
+        let removed =
+            tokio::task::spawn_blocking(move || startup.remove_gone_sessions_at_startup())
+                .await
+                .unwrap_or(0);
+        if removed > 0 {
+            tracing::info!(
+                count = removed,
+                "removed sessions whose conversation is gone"
+            );
+        }
+    }
+
     // Restart supervision runs on its own timer, independent of any client connection: a session
     // that crashes with no window open is restarted anyway (US4, FR-005).
     spawn_supervisor(Arc::clone(&state));
@@ -2809,6 +2825,9 @@ where
             ClientMsg::SetupOutputUnwatch { project, location } => {
                 state.setup(|runs, _| runs.unwatch(id, &project, &location));
             }
+            // The orchestrator's heartbeat answer (#1724): a daemon that hosts sessions has no use
+            // for it.
+            ClientMsg::LinkPong { .. } => {}
             // Any remaining unhandled control message is ignored.
             _ => {}
         }

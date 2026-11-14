@@ -368,3 +368,36 @@ Reds are the mutants named in `tdd/verification.md`, "Remediation result (Issue 
   `a_key_path_with_a_space_stays_one_argument`, `the_ssh_command_needs_both_the_key_and_the_known_hosts`,
   `a_session_file_with_a_missing_source_or_a_bad_mode_is_reported`, `a_read_only_copy_already_there_is_replaced`,
   `a_secret_env_file_that_cannot_be_read_gives_no_proxy` (T155).
+
+### Issue 16 (#1536) tdd-verify re-run after M2 (audit, no code changed)
+
+53 deliberate mutants over the M2 files, one at a time, each restored and the scoped suites re-run green; 40 caught, 13 survived (2 equivalent: `add_extras` total `Set` pushed, `write_if_changed` creation mode). Surviving mutants are findings I16-9 to I16-16 in `tdd/verification.md`: the daemon HTTPS CA trust (I16-9, HIGH), two session files sharing one delivered name (I16-10, HIGH), `kube_attempt` with extras (I16-11), `NO_PROXY` dot boundary (I16-12), the retired-pod rule for `secret_files` (I16-13), and three LOW. I16-2 stays open for its CA half (T153 ticked without that test); I16-1 and I16-3 to I16-8 are closed with evidence. The behaviors stay `TEST_AFTER`.
+
+### Issue 16 (#1536) close unit remediation (T169-T172), all `TEST_AFTER`
+
+Each new test was run against its surviving mutant and failed it (red), then the mutant was restored: D28, D20, D11, D26, D3 (T169); C4 (container, pod, SSH), C19, C23, C11, C12 (T170); K3 (T171).
+
+## Issue 11 (#1532) close-unit remediation (T165): deliberate-mutant checks for M1 and M3
+
+`tdd/verification.md`'s Finding 2 (HIGH) asked for one deliberate-mutant check per milestone that
+landed source and tests together with no cycle-log entry (M1, M3, M4a); M1 and M3 are done here —
+M4a (`daemons.rs`) is covered by T166/T168's own strengthened assertions instead.
+
+- **M1** (`crates/micold-daemon/src/state.rs:1581`, `DaemonState::ai_cli_disabled`): reverted the
+  body to `let _ = which; false` (the "configuration never disables anything" mutant).
+  - red: `scripts/build-lock.sh cargo test -p micold-daemon --test ai_cli_config
+    a_disabled_cli_refuses_the_start_with_its_own_reason_not_not_on_path -- --exact` ->
+    `FAILED. 0 passed; 1 failed`; `scripts/build-lock.sh cargo test -p micold-daemon --test
+    ai_cli_availability a_cli_disabled_in_the_configuration_is_hidden_even_though_it_is_on_path --
+    --exact` -> `FAILED. 0 passed; 1 failed`. Both tests catch the mutant.
+  - restored the real body; green: both commands -> `ok. 1 passed; 0 failed` each.
+- **M3** (`crates/micold-core/src/daemon_config/ai_cli.rs:288`, the host-linked-extras relink
+  guard): dropped `&& !kept` from `if source.exists() && !kept`, so a seeded settings copy the CLI
+  has edited would be relinked over regardless.
+  - red: `scripts/build-lock.sh cargo test -p micold-core --lib
+    daemon_config::ai_cli_seed::tests::the_clis_edit_of_a_settings_copy_survives_the_next_prepare
+    -- --exact` -> `FAILED. 0 passed; 1 failed`. Caught.
+  - restored `&& !kept`; green: same command -> `ok. 1 passed; 0 failed`.
+
+Both reverts and restores were applied and confirmed with `git diff --stat` empty before and after
+each check; no production file carries any diff from this remediation.

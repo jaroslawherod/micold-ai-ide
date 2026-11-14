@@ -28,7 +28,7 @@ async fn a_daemon_started_with_a_file_reports_it_and_pushes_a_rejected_reload() 
     let file = dir.path().join("daemon.toml");
     let data = dir.path().join("from-the-file");
     let valid = format!(
-        "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = \"{}\"\n",
+        "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\ndata_dir = '{}'\n",
         data.display()
     );
     std::fs::write(&file, &valid).unwrap();

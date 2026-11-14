@@ -57,6 +57,18 @@ fn the_meter_carries_the_percent_cost_and_a_tooltip_with_tokens_cost_and_turns()
     assert!(meter.warning, "the recording sits above its threshold");
 }
 
+/// T034 (R6, FR-012): the session bar's running count lives in the ring's tooltip.
+#[test]
+fn the_ring_tooltip_carries_the_running_background_task_count() {
+    let model = HeaderBarModel::of(&transcript_pane_insights()).expect("shown");
+    assert!(
+        model.meter.tooltip.contains("1 background task running"),
+        "{:?}",
+        model.meter.tooltip
+    );
+    assert_eq!(model.meter.accessible, model.meter.tooltip);
+}
+
 #[test]
 fn a_session_with_no_usage_shows_the_empty_state_and_invents_no_cost() {
     let state = title_bar_crowded();

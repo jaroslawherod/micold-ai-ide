@@ -1858,6 +1858,10 @@ impl Catalog {
     /// the user typed, so that session had a conversation too. This filter stays `Pending`-only
     /// while the recovery passes widened to "not `Named`" (C6.2) — the two ask different questions:
     /// recovery asks whether a better name may exist, pruning asks whether anything was ever said.
+    ///
+    /// A `Named`/`Derived` session whose conversation is found gone (store readable, no record) is
+    /// removed by the separate startup pass `DaemonState::remove_gone_sessions_at_startup`
+    /// (026 FR-008a, BUG-1852), not by pruning: the filter stays `Pending`-only.
     pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf, AiCli)> {
         self.workspace
             .sessions
@@ -2021,7 +2025,18 @@ impl Catalog {
                 // The conversation a resume would continue (#943 FR-005a), not always the id.
                 let handle = SessionId::from_uuid(session.resume_handle());
                 if !is_resumable(handle, &cwd, TerminalMode::AiCli, session.provider) {
-                    continue;
+                    // A `/clear` followed by a restart before anything was typed (#1853): the CLI
+                    // writes a conversation's transcript on its first message, so the one the
+                    // hook named has none, while the one before the clear does. Resume that,
+                    // rather than leave a row whose fresh start the CLI refuses (its id is in use).
+                    // In memory only, like the lifecycle; a later hook or write keeps it.
+                    if session.conversation.is_some()
+                        && is_resumable(session.id, &cwd, TerminalMode::AiCli, session.provider)
+                    {
+                        session.conversation = None;
+                    } else {
+                        continue;
+                    }
                 }
                 if session.mode != TerminalMode::AiCli {
                     tracing::warn!(
