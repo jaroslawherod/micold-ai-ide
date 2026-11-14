@@ -94,3 +94,17 @@ Append only. Newest last.
   (`settings.github_tokens || true`): `FAILED. 2 passed; 1 failed` at line 117; restored.
 - refactor: `PodGithubTokens` derives `Default` for the off path; the selection is one helper,
   `pod_github_tokens`, called before the keys and the cluster connect.
+
+## Cycle 7: U7 the startup Secret's lifecycle for token keys (T015, characterization)
+
+- test: `crates/micold-core/src/kube/start_tests.rs`
+  `github_token_keys_are_replaced_withdrawn_and_removed_with_the_startup_secret`
+- baseline: green at once, as planned (`start.rs` already merges any `secret_files`):
+  `scripts/build-lock.sh cargo test -p micold-core --lib github_token_keys` -> `1 passed; 0 failed`
+- mutant: `startup_secret` replaced the secret only when the new data was empty
+  (`view.data != data && data.is_empty()`): `FAILED. 0 passed; 1 failed` at line 1276 (the
+  `replace Secret` assertion); restored. `start.rs` unchanged.
+- note: the pod's startup secret volume is always mounted (`optional: true`), so the first token
+  added or the last removed changes no pod spec and recreates no pod; the test asserts the pod is
+  kept and the only delete is the Secret's. The live revert check (T026, M3) is this behaviour's
+  red evidence.
