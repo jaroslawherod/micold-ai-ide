@@ -34,7 +34,7 @@
 - [X] T017 [US1] Add the draft field and mapping in `micold-client/src/features/daemons_kube.rs`.
 - [ ] T018 [US1] Test (geometry/UI): the tick row after **Allowed credentials** has the label `GitHub tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can read them)` and the help line, in `micold-client/src/ui/settings/daemons.rs` tests.
 - [ ] T019 [US1] Add the tick row (reuse the checkbox-row builder of the allowed-credentials list) in `micold-client/src/ui/settings/daemons.rs`, then run quickstart §B (visual-pass) for the row and add the tick wording in `docs/user-guide/kubernetes-daemons.md`.
-- [ ] T020 [US1] User guide (ships in M1 with the setting, `features/**` is user-facing; word it around the `github_tokens` key in `daemons.json`, no mention of a form tick until M2): the opt-in and its exposure wording, replace the "Until you paste a GitHub token" paragraph in `docs/user-guide/kubernetes-daemons.md`; add the pod note in `docs/user-guide/settings.md#github-tokens`.
+- [X] T020 [US1] User guide (ships in M1 with the setting, `features/**` is user-facing; word it around the `github_tokens` key in `daemons.json`, no mention of a form tick until M2): the opt-in and its exposure wording, replace the "Until you paste a GitHub token" paragraph in `docs/user-guide/kubernetes-daemons.md`; add the pod note in `docs/user-guide/settings.md#github-tokens`.
 
 ## Phase 4: User Story 2 and 3 - The pod holds only the scoped credential; the kind test asserts it (P1/P2)
 
