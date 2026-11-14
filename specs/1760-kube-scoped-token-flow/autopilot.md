@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1760
 - **Worktree branch**: test/1760_scoped-token-step-11-assert-the-credential-flow-in
 - **Started**: 2026-11-12
-- **Phase**: design-pr
-- **Next step**: merge design PR #1870 on green CI, then M1 in a fresh thread
+- **Phase**: milestones
+- **Next step**: M1 (fresh cloud thread)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1870 | design (spec, plan, tasks) | open | - |
+| #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
 
 ## Milestones
 
@@ -55,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | spec | spec review r1 | F1 MAJOR: three open markers (FR-008..010) leave scope unsettled | They are the template's allowed three; the rubric sends each to clarify. FR-008 is escalated there. Fixed F2, F3, F4 (prose/edge case). |
 
 ## Handover
+
+2026-11-14: design PR #1870 squash-merged (55e614ed7) on green CI. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M1 milestone unit (T001–T017, T020) on this branch.
 
 2026-11-14 takeover (cloud thread): main merged in; plan re-checked against #1838/PR #1886. That fix changed only the daemon's client-token default (`CONTAINER_TOKEN_PATH` = `/run/micold/token`); this plan's GitHub token files live under `STARTUP_ENV_MOUNT` (`/run/micold/secrets/startup`, unchanged on main) and all anchors it names (`kube_attempt`, `POD_FILE_LIMIT`, `PodStartup`, `StartRequest::secret_files`, `GithubTokenSetting::from_store`, `KubeEnv`, `parse_token_file`) still exist. No spec/plan change needed.
 
