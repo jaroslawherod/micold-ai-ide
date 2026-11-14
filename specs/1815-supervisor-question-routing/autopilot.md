@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: spec
-- **Next step**: spec review round 1 (the orchestrator dispatches an autopilot-reviewer with rubrics/spec.md; the spec unit had no Agent tool), then clarify unit
+- **Next step**: spec review round 2 (scoped re-review, sonnet, dispatched by the orchestrator), then clarify unit
 
 ## Pull requests
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
+| Review spec | 1 | spec | 861681bf64f50b5ce0c1aa81af07c06480367738 | 861681bf64f50b5ce0c1aa81af07c06480367738:fa0e41a737c21651652a6954264cefd2d07b1065 | CHANGES: 4 MAJOR, 2 MINOR, all fixed (round 2 pending) |
 
 ## Declined review findings
 
@@ -50,4 +51,4 @@ None.
 
 ## Follow-ups not done
 
-- Spec review round 1 not run: the spec unit had no `Agent` tool. Snapshot before review: `861681bf64f50b5ce0c1aa81af07c06480367738:fa0e41a737c21651652a6954264cefd2d07b1065`.
+None.
