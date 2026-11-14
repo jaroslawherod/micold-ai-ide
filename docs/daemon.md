@@ -650,8 +650,19 @@ The orchestrator pings each link with `LinkPing { nonce }` every 3 s when the li
 daemon answers `LinkPong { nonce }` (protocol 81). Any frame counts as an answer. A link silent for
 9 s (checked every second) is listed `offline` with `last_seen` left at its last answer; the entry and
 its link stay, and the next frame of any kind brings it back `online` and advances `last_seen`. Other
-daemons are unaffected. The registry is still in memory; `needs-update`, one live link per id and a
-registry that survives a restart follow in the same issue (#1724).
+daemons are unaffected.
+
+A daemon whose protocol version differs from the orchestrator's, older or newer, is refused with
+`Refused { reason: "version_mismatch", orchestrator_version, daemon_version, message }`; the message
+names both numbers (`daemon <id> speaks protocol version 80; this orchestrator speaks 81`). Its id
+is listed `needs-update`, and the record then carries `orchestrator_version` beside its own
+`protocol_version`. A daemon on the current number whose `Hello` carries another schema hash is
+refused at `Hello` and listed the same way. A refusal for the build (`BuildMismatch`) or for
+authentication leaves the registry unchanged. A mismatch never overwrites an id that has a live link:
+the claim is refused and that record and link stay as they were. If the id's link is open but silent
+(`offline`), the silent link is closed and the record becomes `needs-update`. A `needs-update`
+daemon that links again on the current version becomes `online`. The registry is still in memory;
+one live link per id and a registry that survives a restart follow in the same issue (#1724).
 
 ## Finding the logs and recent errors
 

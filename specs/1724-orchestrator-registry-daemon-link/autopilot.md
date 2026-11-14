@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
 - **Started**: 2026-11-11
 - **Phase**: milestone M3
-- **Next step**: dispatch the M3 milestone unit (T026–T030)
+- **Next step**: orchestrator dispatches reviews A (high) and B (conformance) on the M3 head, then the gate and the PR (title/body in the scratchpad, pr-title-m3.md)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
-| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | pending |
+| M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #… | implemented, awaiting review |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
@@ -76,6 +76,9 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
+M3 (T026-T030) implemented and committed locally; scoped gate green except two cloud-only red tests (root reads an unreadable file: settings_refuses_save_over_failed_read, settings_write_is_logged), unrelated. Previous PR #1871 merge SHA b05740e146295f8e3dde4b5fe2499359aef7d17a. Next: reviews, full gate (CI is the gate in the cloud), PR.
+
+Older note: 
 M2 squash-merged 2026-11-14 as b05740e1 after main was merged in (issue 1863 fixed on main; all CI jobs green on 389f5e5d). Next thread: `/speckit-autopilot resume #1724`, which starts M3 (T026–T030, older-protocol daemon refused and listed needs-update) from this branch.
 
 ## Open escalation

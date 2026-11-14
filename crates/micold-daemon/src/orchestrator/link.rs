@@ -7,13 +7,13 @@ use std::sync::Arc;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::orchestrator::{
-    decode_first_frame, Claim, FirstFrame, LinkAction, LinkAnnouncement, LinkToken, LinkVerdict,
-    RefuseReason, MAX_PREAMBLE_FRAME,
+    decode_first_frame, refusal_message, Claim, ClaimFailure, FirstFrame, LinkAction,
+    LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
 };
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::keepalive::{CHECK_INTERVAL, LIVENESS_DEADLINE};
-use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg};
+use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, RefusalReason};
 use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::settings::Settings;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -68,11 +68,9 @@ where
     let claim = shared.registry().claim(&announcement);
     let link = match claim {
         Claim::Reserved { link, .. } => link,
-        Claim::Refused(reason) => {
-            let verdict = refusal(reason, &announcement);
-            return framed
-                .send(Bytes::from(serde_json::to_vec(&verdict).map_err(invalid)?))
-                .await;
+        Claim::Refused(reason) => return refuse(&mut framed, reason, &announcement).await,
+        Claim::NeedsUpdate { .. } => {
+            return refuse(&mut framed, RefuseReason::VersionMismatch, &announcement).await
         }
     };
     let served = after_claim(&shared, framed, link).await;
@@ -80,22 +78,29 @@ where
     served
 }
 
-fn refusal(reason: RefuseReason, announcement: &LinkAnnouncement) -> LinkVerdict {
-    let message = match reason {
-        RefuseReason::AlreadyLinked => {
-            format!("a link for daemon {} is already open", announcement.id)
-        }
-        RefuseReason::VersionMismatch => format!(
-            "protocol version {} is not this orchestrator's {PROTOCOL_VERSION}",
-            announcement.protocol_version
-        ),
-    };
-    LinkVerdict::Refused {
+/// Write the refusal verdict; the caller then drops the connection.
+async fn refuse<S>(
+    framed: &mut Framed<S, LengthDelimitedCodec>,
+    reason: RefuseReason,
+    announcement: &LinkAnnouncement,
+) -> io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let verdict = LinkVerdict::Refused {
         reason,
         orchestrator_version: PROTOCOL_VERSION,
         daemon_version: announcement.protocol_version,
-        message,
-    }
+        message: refusal_message(
+            reason,
+            &announcement.id,
+            announcement.protocol_version,
+            PROTOCOL_VERSION,
+        ),
+    };
+    framed
+        .send(Bytes::from(serde_json::to_vec(&verdict).map_err(invalid)?))
+        .await
 }
 
 async fn after_claim<S>(
@@ -144,6 +149,8 @@ where
         ..Default::default()
     };
     if let Err(reason) = handshake::evaluate_introduction(&intro, &expectation) {
+        // Released before the refusal is written, so a listing read after it sees the outcome.
+        shared.registry().claim_failed(link, claim_failure(&reason));
         return framed
             .send(Frame::Control(DaemonMsg::Refused { reason }))
             .await
@@ -167,6 +174,16 @@ where
         .map_err(io::Error::other)?;
 
     steady(shared, framed, link).await
+}
+
+/// What a `Hello` refusal means for the reservation it ends.
+fn claim_failure(reason: &RefusalReason) -> ClaimFailure {
+    match reason {
+        RefusalReason::VersionMismatch { .. } => ClaimFailure::VersionMismatch,
+        RefusalReason::BuildMismatch { .. } => ClaimFailure::BuildMismatch,
+        RefusalReason::AuthRejected => ClaimFailure::AuthRejected,
+        _ => ClaimFailure::Dropped,
+    }
 }
 
 /// Send one frame, giving up after the liveness deadline: a peer that keeps the socket open but

@@ -187,6 +187,11 @@ impl FakeDaemon {
     /// Send the announcement and read the verdict.
     pub async fn announce(&mut self, announcement: &LinkAnnouncement) -> LinkVerdict {
         let body = serde_json::to_vec(announcement).expect("encodes");
+        self.announce_raw(body).await
+    }
+
+    /// Send `body` as the preamble and read the verdict.
+    pub async fn announce_raw(&mut self, body: Vec<u8>) -> LinkVerdict {
         self.framed.send(Bytes::from(body)).await.expect("sent");
         let frame = tokio::time::timeout(WITHIN, self.framed.next())
             .await
@@ -219,12 +224,17 @@ impl FakeDaemon {
 
 impl LinkedDaemon {
     pub async fn hello(&mut self) {
+        self.hello_with(SCHEMA_HASH, PACKAGE_VERSION).await;
+    }
+
+    /// A `Hello` on the current protocol number with another schema hash or package version.
+    pub async fn hello_with(&mut self, schema_hash: [u8; 32], package_version: &str) {
         self.send(ClientMsg::Hello {
             protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
+            schema_hash,
             client_build: "fake-daemon".into(),
             client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
+            client_package_version: package_version.into(),
             auth_token: None,
             client_fingerprint: BUILD_FINGERPRINT.into(),
             require_fingerprint_match: false,

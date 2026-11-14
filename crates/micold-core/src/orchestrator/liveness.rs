@@ -24,6 +24,11 @@ impl Heartbeat {
         }
     }
 
+    /// Whether the link has been reported expired and not answered since: it is silent.
+    pub fn is_silent(&self) -> bool {
+        self.expired
+    }
+
     /// Any frame from the daemon, `LinkPong` included, at `now`. Returns whether the link had
     /// been reported expired (it is live again).
     pub fn answered(&mut self, now: Instant) -> bool {

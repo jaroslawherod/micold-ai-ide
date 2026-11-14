@@ -34,6 +34,14 @@ The orchestrator checks each link every 3 seconds. A daemon that has not answere
 `offline`, and `last_seen` stays at its last answer. It stays listed, and shows `online` again as soon
 as it answers. One silent daemon does not change the others.
 
+## A daemon that needs an update
+
+A daemon on a different protocol version cannot join. The orchestrator refuses it with a message that
+names both versions, for example `daemon box speaks protocol version 80; this orchestrator speaks
+81`, and lists it as `needs-update` with its own version and the orchestrator's. Update the daemon
+and let it link again: it then shows `online`. A daemon that is already linked and answering is never
+replaced by a refused one, and the other daemons keep their status.
+
 ## What it will not do
 
 Asking the orchestrator to start a session is refused with `not hosted by the orchestrator`, and its
