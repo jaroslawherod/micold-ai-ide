@@ -39,9 +39,9 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 
 ## Phase 3b: Visibility by parent (M1; FR-015, FR-016)
 
-- [ ] T030 [P] [US1] Add failing tests in `crates/micold-daemon/tests/mcp_worktree_parent_visibility.rs` (new): from a worktree `A` with parent `P` and sibling `B`, child `C` of `A`, and an unrelated `X`: `list_worktrees`/`list_sessions` return exactly `A`, `P`, `B`, `C`; `get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `stop_session`, `create_session`, `rename_worktree`, `delete_worktree` on `X` or on `default` -> `not_found`; an unparented caller sees itself and its children; a `default` caller sees all; explicit `parent` outside the set (including `default` from a non-root caller) -> `invalid_input`
+- [ ] T030 [P] [US1] Add failing tests in `crates/micold-daemon/tests/mcp_worktree_parent_visibility.rs` (new): from a worktree `A` with parent `P` and sibling `B`, child `C` of `A`, and an unrelated `X`: `list_worktrees`/`list_sessions` return exactly `A`, `P`, `B`, `C`; `get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `stop_session`, `create_session`, `rename_worktree`, `delete_worktree` on `X` or on `default` -> `not_found`; an unparented caller sees itself and its children; a message to an out-of-scope session is refused while the same message sent to the parent succeeds (relay, FR-017); a `default` caller sees all; explicit `parent` outside the set (including `default` from a non-root caller) -> `invalid_input`
 - [ ] T031 [US1] Implement one visibility filter in `crates/micold-daemon/src/mcp/tools.rs` (beside `resolve_caller`) computed from the parent links in the catalog (`crates/micold-daemon/src/catalog.rs`), applied by every tool of `contracts/mcp-parent.md`; T030 green
-- [ ] T032 [US1] Document the visibility rule in `docs/user-guide/agent-tools.md` (extend "What it can see" and "Reading and typing into other sessions")
+- [ ] T032 [US1] Document the visibility rule and the relay through the parent (FR-017) in `docs/user-guide/agent-tools.md` (extend "What it can see" and "Reading and typing into other sessions")
 
 ## Phase 4: User Story 2 and User Story 3 - Survives renames and restarts; removed parent (Priority: P1/P2) (M1)
 

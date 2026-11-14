@@ -203,6 +203,10 @@ state, a session in `default` reports none.
   every tool that lists, reads or addresses a session or worktree (listing, reading output, sending
   input, interrupting, creating a session, renaming, deleting). A session in `default` sees and
   addresses everything, as today. An unparented worktree's session sees itself and its children.
+- **FR-017**: Communication outside a session's scope MUST go through the hierarchy: a session that
+  needs to reach one it cannot see asks its parent, and the parent passes it on (to its own parent
+  or to the target if the target is in the parent's scope). No tool offers a direct route around
+  FR-015. Goal: sessions never communicate outside their own scope.
 - **FR-016**: A non-`default` caller MUST be able to name only a worktree it can see as the explicit
   `parent` of a new worktree; it cannot name `default` or a worktree outside its set.
 - **FR-013**: The user guide for the agent tools MUST describe the parent, its default, the
