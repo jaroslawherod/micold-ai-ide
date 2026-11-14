@@ -76,6 +76,12 @@ selector is no longer in the message box row itself.
 
 - The row is hidden by default. Whether it is shown is remembered per window and restored when the
   app restarts.
+- The row grows open below the message box's other lines over 300 ms and collapses the same way;
+  pressing the button again mid-way turns it back from where it is. Each session's composer moves
+  on its own. With [Reduce motion](settings.md#reduce-motion) on it appears and disappears in one
+  step.
+- Collapsing the row closes any **Model**, **Effort** or **Permission** list left open. Typing
+  `/model` or `/effort` alone while the row is hidden opens the row with that list.
 - When Claude Code refuses a model, effort or permission change, the row opens by itself so the
   refused selector is visible.
 - While **Bypass permissions** is on, the settings icon carries a warning marker and its tooltip says so.

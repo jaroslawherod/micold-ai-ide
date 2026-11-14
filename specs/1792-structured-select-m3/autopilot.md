@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1792
-- **Worktree branch**: feat/1792_feat-structured-view-material-3-select-input-and
+- **Worktree branch**: claude/project-thread-q9zjol
 - **Started**: 2026-11-11
-- **Phase**: M2 PR open
-- **Next step**: orchestrator merges M2 PR; then M3
+- **Phase**: M3 verify
+- **Next step**: M3 scoped gate + review A, then review B and visual pass (autopilot-unit, model opus override, cloud thread)
 
 ## Pull requests
 
@@ -19,15 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
 | #1842 | M1 | merged | 7628262fce95c344ccb9eed01db1138e2da2a5fa |
-| #1851 | M2 | open | — |
+| #1851 | M2 | merged (2026-11-12) | bd4e5970c23446123021f819fd9543caadf9c46f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | merged |
-| M2 | T011–T012 | light | menu parity pinned (test-only if green) | #1851 | open |
-| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | pending |
+| M2 | T011–T012 | light | menu parity pinned (test-only if green) | #1851 | merged |
+| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | — | in progress |
 
 Polish T022–T023 (no code) is left to the close unit.
 
@@ -35,6 +35,7 @@ Polish T022–T023 (no code) is left to the close unit.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D1 | M3 | `/model` or `/effort` sent while the options row is collapsed opened a picker with no visible trigger; with `expand` always built its menu would float over a zero-high row. | Opening a picker by command also expands the row (`open_model_picker`, `open_effort_picker` call `expand_options`), as a refusal does (1703 FR-012). | unit (M3) | `features::composer::tests::a_picker_opened_by_command_opens_the_options_row`; research R3 (no hidden guard in `Expand::overlay`) |
 
 
 ## Review rounds

@@ -34,9 +34,9 @@ use crate::ui::cdk::focus_within::FocusWithin;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
 use crate::ui::material::{
-    AttachmentChip, BusyIndicator, Button, CommandPalette, IconButton, MenuSelect, MenuSelectRow,
-    PromptCard, QueueRow, Scrollable, Text, TextArea, TextField, Tooltip, TooltipPosition,
-    TypeRole, TypeaheadRow,
+    expand, AttachmentChip, BusyIndicator, Button, CommandPalette, IconButton, MenuSelect,
+    MenuSelectRow, PromptCard, QueueRow, Scrollable, Text, TextArea, TextField, Tooltip,
+    TooltipPosition, TypeRole, TypeaheadRow,
 };
 use iced::widget::text::Wrapping;
 use micold_core::session::SessionKind;
@@ -186,10 +186,10 @@ pub fn view<'a>(
         parts.push(status);
     }
 
-    // The session options row, behind the settings icon (feature 1703 FR-008, FR-009).
-    if state.composers.options_open {
-        parts.push(options_row(state, session, roles, seams.control));
-    }
+    // The session options row, behind the settings icon (feature 1703 FR-008, FR-009), between
+    // the parts above it and the ones below.
+    let options = options_row(state, session, roles, seams.control);
+    let above = std::mem::take(&mut parts);
 
     // The draft's pictures (US5).
     if let Some(composer) = composer.filter(|c| !c.draft.images.is_empty()) {
@@ -214,11 +214,11 @@ pub fn view<'a>(
     // The parts above the input row come and go; held in a column of their own, they leave the
     // input row at the same place in the tree, so the text area keeps its state (focus, caret)
     // when a queue row, a notice or a chip appears (T061 run 2, step 6).
+    let parts = around_options(above, options, parts, state);
     let input = input_row(state, session, phase, roles, seams.waiting, seams.bypass);
-    let composer =
-        container(column![column(parts).spacing(spacing::SM), input].spacing(spacing::SM))
-            .padding([spacing::SM, spacing::MD])
-            .width(Length::Fill);
+    let composer = container(column![parts, input].spacing(spacing::SM))
+        .padding([spacing::SM, spacing::MD])
+        .width(Length::Fill);
     // Tab from the text area to **Send** (or among the queue's actions) keeps the keyboard in the
     // window: without the region's report the area's blur handed it back to the pane, which took
     // the button's focus on the next event (T061 visual pass F5).
@@ -277,6 +277,49 @@ fn options_row<'a>(
         .align_y(Alignment::Center)
         .wrap()
         .into()
+}
+
+/// The composer's parts with the options row between `above` and `below`, grown and collapsed
+/// by `expand` (feature 1792 FR-005, FR-007, FR-008).
+///
+/// The row is always built, so its track lives on in this composer's tree; collapsed, it is zero
+/// high. A column would still put its gap beside a zero-high child, so the gaps the row needs
+/// travel inside the reveal and a collapsed row leaves the composer as tall as without it. Every
+/// child keeps its place whichever parts are there: the track and the row's controls keep their
+/// state when a notice or a chip comes and goes.
+fn around_options<'a>(
+    above: Vec<Element<'a, Message>>,
+    options: Element<'a, Message>,
+    below: Vec<Element<'a, Message>>,
+    state: &State,
+) -> Element<'a, Message> {
+    let gap = |on: bool| Space::new().height(if on { spacing::SM } else { 0.0 });
+    let (over, under) = (!above.is_empty(), !below.is_empty());
+    // Above and below both there: the gap between them stays when the row is collapsed, and the
+    // row brings the one under it. Otherwise the row brings the gap on the side that has a part.
+    let between = over && under;
+    let reveal = expand(
+        column![gap(over && !under), options, gap(under)],
+        state.composers.options_open,
+        options_motion(state),
+    );
+    column![
+        column(above).spacing(spacing::SM),
+        gap(between),
+        reveal,
+        column(below).spacing(spacing::SM),
+    ]
+    .into()
+}
+
+/// How long the options row takes to grow or collapse: the standard `MEDIUM_2` (research R3), and
+/// one step under the app's Reduce motion (feature 1792 FR-006, FR-013).
+fn options_motion(state: &State) -> std::time::Duration {
+    if state.settings.reduce_motion {
+        std::time::Duration::ZERO
+    } else {
+        std::time::Duration::from_millis(micold_core::tokens::motion::duration::MEDIUM_2)
+    }
 }
 
 /// The activity indicator's words and whether it turns (FR-010): its tooltip, and what a screen
@@ -910,3 +953,7 @@ fn transcript_key_message(
         crate::features::composer::Msg::TranscriptKey { session, press },
     ))
 }
+
+#[cfg(test)]
+#[path = "composer_expand_tests.rs"]
+mod expand_tests;

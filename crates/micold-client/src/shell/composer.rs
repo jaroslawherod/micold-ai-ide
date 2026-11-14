@@ -187,7 +187,7 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::LargeEditorRequested(session) => {
             return crate::shell::large_editor::update(app, LargeEditorMsg::Requested(session));
         }
-        Msg::OptionsToggled(_) => app.core.composers.options_toggled(),
+        Msg::OptionsToggled(_) => app.core.options_toggled(),
         Msg::AttachPickerClosed(session) => app.core.composers.attach_picker_closed(session),
         Msg::AttachPicked { session, paths } => {
             if app.core.composers.attach_picked(session, paths.len()) {
