@@ -63,6 +63,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | 1849 | dc4be4463cf3af17723b84edf3f7f83fce9f37ce | c2dde15b7b31e2f5255141b5a33838fd770ea022:dc4be4463cf3af17723b84edf3f7f83fce9f37ce | CLEAN: Verify 37+11 pass; MINOR drift note added |
 | Review A | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: 3 MINOR (send timeout, ignore-arm tests are guards, ping-reset assertion) not fixed |
 | Review B | 2 | M2 | 409c8ac49e734c2f9c2c3d0165f769edfd687303 | b6ddee0a059aa4ebdaea0c39799a383f77116533:409c8ac49e734c2f9c2c3d0165f769edfd687303 | CLEAN: F1 MAJOR (no red for T017-T022) declined, gap recorded in cycle-log, T022 waiver in drift-M2; heartbeat 4 pass; plan-drift clean; cadence note added |
+| Review A | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CLEAN: fixed F1 (Hello's version recorded), F2 (live-link and silent-link wire tests) |
+| Review B | 1 | M3 | c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | 462e410b0aa2664d012347bfd57afea4b9f4b1f6:c0f5e236b0c42f8c345c67f906e4d49d0ec75bd3 | CHANGES: fixed F1 MAJOR (drift-M3.md), F2 (wire test), F3 (T027 text); round 2 pending on e606147c |
 
 ## Declined review findings
 
