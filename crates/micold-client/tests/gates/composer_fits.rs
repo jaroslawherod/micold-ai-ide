@@ -126,9 +126,23 @@ fn find<'p>(painted: &'p [Overflow], content: &str) -> &'p Overflow {
         })
 }
 
+/// The `content` drawn under the transcript (in the composer), else the first drawn anywhere.
+///
+/// Paint order is not screen order: a part drawn inside a reveal (`expand`, the session options
+/// row since feature 1792) paints on its own layer after the base, so a word the sidebar also
+/// shows ("Default") would otherwise be found there first.
+fn find_under<'p>(painted: &'p [Overflow], transcript: Rectangle, content: &str) -> &'p Overflow {
+    painted
+        .iter()
+        .find(|p| {
+            p.content == content && p.origin.y >= transcript.y + transcript.height - TOLERANCE
+        })
+        .unwrap_or_else(|| find(painted, content))
+}
+
 /// `content` is drawn under the transcript and inside the window.
 fn under_the_transcript(painted: &[Overflow], transcript: Rectangle, content: &str) {
-    let text = find(painted, content);
+    let text = find_under(painted, transcript, content);
     assert!(
         text.origin.y >= transcript.y + transcript.height - TOLERANCE,
         "`{content}` at {:?} is under the transcript {transcript:?}",
@@ -709,7 +723,7 @@ fn the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode() {
             under_the_transcript(&painted, transcript, &format!("{MODE_LABEL}:"));
             under_the_transcript(&painted, transcript, mode.label());
             let send = find(&painted, "Send");
-            let shown = find(&painted, mode.label());
+            let shown = find_under(&painted, transcript, mode.label());
             assert!(
                 shown.origin.y < send.origin.y,
                 "the mode sits in the options row, above the input row: {:?} vs {:?}",
@@ -762,7 +776,8 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
     let closed_painted =
         lay::painted_text_settled_at(lay::view_of(&closed), &mut renderer, WINDOW).0;
     // The trigger is the control showing the current mode, not the field label beside it.
-    let trigger = find(&closed_painted, PermissionMode::Default.label());
+    let transcript = viewport(&closed, transcript_scroll_id(id));
+    let trigger = find_under(&closed_painted, transcript, PermissionMode::Default.label());
     let at = iced::Point::new(
         trigger.origin.x + trigger.natural_width / 2.0,
         trigger.origin.y + trigger.natural_height / 2.0,

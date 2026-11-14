@@ -1110,6 +1110,16 @@ impl crate::app::State {
         }
     }
 
+    /// A press on `session`'s permission trigger: open its mode list, or close it. Opened while
+    /// the row is collapsing (its trigger still takes clicks until it is gone), it opens the row
+    /// again, as `/model` does (feature 1792 D1).
+    pub fn mode_menu_toggled(&mut self, session: SessionId, current: usize) {
+        self.permission_prompts.toggle_mode_menu(session, current);
+        if self.permission_prompts.mode_menu(session).is_some() {
+            self.composers.expand_options();
+        }
+    }
+
     /// Open `session`'s model picker (FR-014, FR-018).
     pub fn open_model_picker(&mut self, session: SessionId) {
         let current = self.model_choice(session);
@@ -1334,18 +1344,30 @@ pub(crate) mod tests {
 
     /// A window with one structured Claude Code session, which offers all three pickers.
     pub(crate) fn structured_state() -> (crate::app::State, SessionId) {
-        use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
         let mut state = crate::app::State::default();
+        let path = std::path::PathBuf::from("/repo/options");
+        state.workspace.active = Some(path);
+        let id = add_structured_session(&mut state);
+        (state, id)
+    }
+
+    /// Add a structured Claude Code session to the active project of `state`.
+    pub(crate) fn add_structured_session(state: &mut crate::app::State) -> SessionId {
+        use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
         let session = Session::start_new_of_kind(
             SessionLocation::Default,
             AiCli::ClaudeCode,
             SessionKind::Structured,
         );
         let id = session.id;
-        let path = std::path::PathBuf::from("/repo/options");
-        state.workspace.sessions.insert(path.clone(), vec![session]);
-        state.workspace.active = Some(path);
-        (state, id)
+        let path = state.workspace.active.clone().expect("an active project");
+        state
+            .workspace
+            .sessions
+            .entry(path)
+            .or_default()
+            .push(session);
+        id
     }
 
     /// Feature 1792 T017 (research R3, contract §2): collapsing the options row closes any open
@@ -1391,6 +1413,24 @@ pub(crate) mod tests {
         assert!(
             state.permission_prompts.mode_menu(s).is_none(),
             "mode list closed"
+        );
+    }
+
+    /// Review A M3 F1: the permission trigger still takes a click while the row collapses; the
+    /// list it opens brings the row back rather than floating over nothing.
+    #[test]
+    fn a_mode_list_opened_while_collapsing_opens_the_row_again() {
+        let (mut state, s) = structured_state();
+        state.options_toggled();
+        state.options_toggled();
+        assert!(!state.composers.options_open);
+        state.mode_menu_toggled(s, 0);
+        assert!(state.permission_prompts.mode_menu(s).is_some());
+        assert!(state.composers.options_open, "the row opens with its list");
+        state.mode_menu_toggled(s, 0);
+        assert!(
+            state.permission_prompts.mode_menu(s).is_none(),
+            "a second press closes it"
         );
     }
 

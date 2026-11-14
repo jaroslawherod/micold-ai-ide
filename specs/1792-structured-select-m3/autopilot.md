@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-q9zjol
 - **Started**: 2026-11-11
 - **Phase**: M3 verify
-- **Next step**: M3 scoped gate + review A, then review B and visual pass (autopilot-unit, model opus override, cloud thread)
+- **Next step**: M3 review A round 2 (fix diff), full gate, review B and visual pass (autopilot-unit, model opus override, cloud thread)
 
 ## Pull requests
 
@@ -63,6 +63,7 @@ Polish T022–T023 (no code) is left to the close unit.
 | B | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase onto main; same resolution review) |
 | re-review | 4 | M1 | 64840445679bd6a719003157b9298f812d3fe173 | 1e0c45029ea6b92bcfe2318e975c20b50eea1570:64840445679bd6a719003157b9298f812d3fe173 | CLEAN (rebase resolution) |
 | B | 2 | M2 | a9db09bbb89f702d329e281fce2869adbfad06f9 | 13130c93e19f445a3233ed4aa9df7fc16d3c644d:7628262fce95c344ccb9eed01db1138e2da2a5fa | CLEAN |
+| A | 1 | M3 | d245eb1df9da42ec4c3b5a88dca23c1c76898d6a | 67aebd450ac5bb82028c55e0e6653cb953cb9e6f:d245eb1df9da42ec4c3b5a88dca23c1c76898d6a | CHANGES (code-review high, 9 findings: F1 mode list reopened mid-collapse fixed via `mode_menu_toggled` expanding the row; F7 fixture duplication, F8 test tidy, F9 doc wording fixed; F2-F6 declined, see Declined) |
 
 ## Declined review findings
 
@@ -70,6 +71,11 @@ Polish T022–T023 (no code) is left to the close unit.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A1 | F2 gate `Expand::overlay` when hidden | Plan keeps `animation.rs` unchanged (research R3 chose closing pickers); every overlay the row can float (model, effort, mode list) is closed on collapse and reopens the row when opened (D1, F1 fix); a tooltip needs hover, which `Expand::update` withholds at zero height. |
+| M3 | A1 | F3 another session's picker loses focus target | The press or key that toggles the row already took focus from the other session's filter field (a text field unfocuses on a press outside it; the keyboard toggle needs the settings button focused). |
+| M3 | A1 | F4 no per-session key on the track | One row flag per window: a session switched in mid-flight continues toward the same target its row must reach; `restart_on` would replay the grow from zero on every switch, which is worse. Separate composers keep separate tracks (T015). |
+| M3 | A1 | F5 `/model` focus while the row is still at 0 | The filter field is in the menu overlay, which `Expand::overlay` forwards at any progress, so the focus operation reaches it; the visual pass checks `/model` while hidden. |
+| M3 | A1 | F6 hidden row built every frame | Required by design: the track must live in the tree (research R3); three small controls per composer. |
 
 ## Handover
 

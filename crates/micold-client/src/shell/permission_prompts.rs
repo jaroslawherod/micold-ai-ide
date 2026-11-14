@@ -68,7 +68,11 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 });
             }
         }
-        Msg::ModeMenuToggled { session, current } => prompts.toggle_mode_menu(session, current),
+        Msg::ModeMenuToggled { session, current } => {
+            let was_open = app.core.composers.options_open;
+            app.core.mode_menu_toggled(session, current);
+            crate::shell::composer::persist_options_if_changed(app, was_open);
+        }
         Msg::ModeMenuMoved { session, direction } => {
             prompts.step_mode_menu(session, direction, PermissionMode::ALL.len());
         }

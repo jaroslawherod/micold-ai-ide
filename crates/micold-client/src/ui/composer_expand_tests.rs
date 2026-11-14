@@ -14,7 +14,7 @@ use iced::{Element, Event, Point, Size};
 use micold_core::tokens::motion::duration;
 
 use super::*;
-use crate::features::composer::tests::structured_state;
+use crate::features::composer::tests::{add_structured_session, structured_state};
 
 /// A room wide enough for the three controls on one line.
 const WIDE: Size = Size::new(1200.0, 800.0);
@@ -158,7 +158,7 @@ fn a_toggle_mid_way_reverses_from_the_current_height() {
     );
     assert!((back.last().expect("frames ran").1 - shut).abs() <= TOLERANCE);
 
-    for (i, _) in (0..9).enumerate() {
+    for i in 0..9 {
         m.rebuild(composer(if i % 2 == 0 { &open } else { &closed }, s));
         run(&mut m, &mut clock, 0);
     }
@@ -175,23 +175,7 @@ fn a_toggle_mid_way_reverses_from_the_current_height() {
 #[test]
 fn two_sessions_keep_separate_tracks() {
     let (mut closed, a) = posed(false, false);
-    let b = {
-        use micold_core::session::{AiCli, Session, SessionKind, SessionLocation};
-        let session = Session::start_new_of_kind(
-            SessionLocation::Default,
-            AiCli::ClaudeCode,
-            SessionKind::Structured,
-        );
-        let id = session.id;
-        closed
-            .workspace
-            .sessions
-            .values_mut()
-            .next()
-            .expect("a project")
-            .push(session);
-        id
-    };
+    let b = add_structured_session(&mut closed);
     let mut open = closed.clone();
     open.composers.options_open = true;
     let pair = |state| pair(state, a, b);
@@ -341,15 +325,13 @@ fn at_a_narrow_width_the_row_ends_at_its_wrapped_height() {
 
 /// How much the composer grows in `room` from `closed` to `open`, run to its end.
 fn grow(closed: &State, open: &State, s: SessionId, room: Size) -> f32 {
-    {
-        let mut m = Mounted::new_in(composer(closed, s), room);
-        let shut = height(&m);
-        let mut clock = 0;
-        m.rebuild(composer(open, s));
-        let end = run(&mut m, &mut clock, OVER.as_millis() as u64 * 2)
-            .last()
-            .expect("frames ran")
-            .1;
-        end - shut
-    }
+    let mut m = Mounted::new_in(composer(closed, s), room);
+    let shut = height(&m);
+    let mut clock = 0;
+    m.rebuild(composer(open, s));
+    let end = run(&mut m, &mut clock, OVER.as_millis() as u64 * 2)
+        .last()
+        .expect("frames ran")
+        .1;
+    end - shut
 }
