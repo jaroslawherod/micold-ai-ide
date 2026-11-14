@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1813
-- **Worktree branch**: claude/project-thread-87zjfg
+- **Worktree branch**: claude/project-thread-ln1h9s
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
 - **Phase**: M4 (implement)
