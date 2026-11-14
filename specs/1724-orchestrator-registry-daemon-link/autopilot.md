@@ -75,6 +75,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review A | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CHANGES: fixed F1 (CHILDREN lock), F2+F3 (one saving thread, coalesced, joined on stop; red-first unit test), F4 (list after stop); round 2 pending |
 | Review B | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CLEAN: core orchestrator 82 passed, daemon orchestrator 35 passed, no plan drift for M5 |
 | Review A | 2 | M5 | 35bd7e8cc4660bb44785f66a5ffa553f1c573127 | 276e72832ecb6c3d8857e2357901f971a0a38805:35bd7e8cc4660bb44785f66a5ffa553f1c573127 | CLEAN: round-1 fixes hold; 1 MINOR declined (save thread panic unlogged) |
+| Review A | 1 | M6 | 617dba58e2c2632676ed27cdf65b7245a322615b | 9f8b399a5314ad8c02f6c244229215019acca3bc:617dba58e2c2632676ed27cdf65b7245a322615b | pending (orchestrator dispatches) |
+| Review B | 1 | M6 | 617dba58e2c2632676ed27cdf65b7245a322615b | 9f8b399a5314ad8c02f6c244229215019acca3bc:617dba58e2c2632676ed27cdf65b7245a322615b | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
