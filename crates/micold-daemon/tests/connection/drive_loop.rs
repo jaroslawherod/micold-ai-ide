@@ -48,20 +48,12 @@ fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
 /// The key a terminal sends for Enter: a tty maps it to a newline, and `cmd` needs the return itself.
 #[cfg(unix)]
 const ENTER: &str = "\n";
-#[cfg(windows)]
-const ENTER: &str = "\r";
 
 /// A process that echoes whatever is typed into its PTY: `cat` on Unix; an interactive `cmd`, whose
 /// console line editor echoes, on Windows.
 #[cfg(unix)]
 fn echo_sink() -> CommandBuilder {
     CommandBuilder::new("cat")
-}
-#[cfg(windows)]
-fn echo_sink() -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/q");
-    cmd
 }
 
 /// An echoing session — a deterministic sink for asserting that driven input reached the process.

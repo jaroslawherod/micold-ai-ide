@@ -748,7 +748,7 @@ pub struct TerminalPane<'a> {
 pub(crate) fn local_link_context() -> LinkContext {
     LinkContext {
         host_names: Vec::new(),
-        windows_host: cfg!(windows),
+        windows_host: false,
         sandbox: None,
     }
 }
@@ -2289,9 +2289,6 @@ mod tests {
 
         /// The platform's copy (`"c"`) or paste (`"v"`) chord (FR-013).
         fn chord(c: &str) -> Event {
-            #[cfg(target_os = "macos")]
-            let modifiers = keyboard::Modifiers::LOGO;
-            #[cfg(not(target_os = "macos"))]
             let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Character(c.into()),
@@ -2367,9 +2364,6 @@ mod tests {
         /// The platform's next-location chord on the physical `.` key, under a layout that puts
         /// another character there (feature 803, contracts/keys.md K2).
         fn next_location_chord() -> Event {
-            #[cfg(target_os = "macos")]
-            let modifiers = keyboard::Modifiers::LOGO | keyboard::Modifiers::SHIFT;
-            #[cfg(not(target_os = "macos"))]
             let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Character("ю".into()),
@@ -2412,9 +2406,6 @@ mod tests {
 
         #[test]
         fn the_switcher_chord_is_published_as_a_toggle_and_captured() {
-            #[cfg(target_os = "macos")]
-            let modifiers = keyboard::Modifiers::LOGO | keyboard::Modifiers::SHIFT;
-            #[cfg(not(target_os = "macos"))]
             let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
             let (captured, messages) =
                 press_focused(&Event::Keyboard(keyboard::Event::KeyPressed {
@@ -2446,9 +2437,6 @@ mod tests {
 
         #[test]
         fn an_unfocused_pane_publishes_nothing_for_the_switcher_chord() {
-            #[cfg(target_os = "macos")]
-            let modifiers = keyboard::Modifiers::LOGO | keyboard::Modifiers::SHIFT;
-            #[cfg(not(target_os = "macos"))]
             let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
             let (captured, messages) = press_with_focus(
                 &Event::Keyboard(keyboard::Event::KeyPressed {

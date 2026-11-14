@@ -123,7 +123,7 @@ service may run in a container, so the flow is split by who can know what.
 | A session changed to awaiting input | the session service only (it runs while no window is open) | `DaemonState::note_activity`, `crates/micold-daemon/src/state.rs` |
 | Which session each window has in view | the window; the service keeps the last report per connection | `micold_core::attention::in_view`, `ClientMsg::WindowView` |
 | Which window raises the notification | the service decides, once per event | `AttentionClaim`, `AttentionGranted` |
-| The system notification and its click | the window process that raised it | `crates/micold-client/src/shell/desktop_notify/` (`linux.rs`, `macos.rs`, `windows.rs`) |
+| The system notification and its click | the window process that raised it | `crates/micold-client/src/shell/desktop_notify/` (`linux.rs`) |
 | Which window shows the clicked session | the service | `SessionReveal`, `RevealSession`, `micold_core::attention::resolve_reveal` |
 
 **View report.** A window derives `in_view` with a pure function: the window is focused, no screen
@@ -161,10 +161,9 @@ connection a window already has). A client-side file of "viewed" sessions would 
 writers and a watcher; a service that pushed the event to one chosen window could not tell a
 window that lost its connection from no window at all.
 
-**Adding a platform backend.** Add a `cfg` module to `desktop_notify/` with a `Notifier` that shows
-the notification and reports a click as `NotifierEvent::Activated` for the session. CI's "Test
-(desktop notification backends)" step runs on macOS and Windows and picks its tests up by the
-`desktop_notify` name filter (Principle VI).
+**The backend.** `desktop_notify/linux.rs` holds the one `Notifier` (the session bus's notification
+service); it shows the notification and reports a click as `NotifierEvent::Activated` for the
+session. Linux is the only supported platform (#1897).
 
 ## Pull request and check status on worktree rows
 
@@ -773,9 +772,7 @@ service is asked to stop; both accept loops select on it beside the idle timer a
 
 | Platform | What raises it |
 |---|---|
-| Linux, macOS, the container | `SIGTERM`, `SIGINT`, `SIGHUP` |
-| Windows | The named event `Local\Micold.Daemon.Stop.<user SID>` (owner-only DACL), or `WM_ENDSESSION` to the service's hidden window, which waits for the unwind |
+| Linux, the container | `SIGTERM`, `SIGINT`, `SIGHUP` |
 
-The senders are `terminate_daemon` (signal on Unix; on Windows the event, then `TerminateProcess`
-after 5 s) and the Windows installer script. A crash, `SIGKILL` or a power loss is not orderly: the
+The sender is `terminate_daemon` (a signal). A crash, `SIGKILL` or a power loss is not orderly: the
 terminal loses at most its last 60 s.

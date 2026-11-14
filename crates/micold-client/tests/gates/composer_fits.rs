@@ -998,11 +998,7 @@ fn the_add_attachment_tooltip_names_the_action_and_the_shortcut() {
     let under = StateUnderTest::new(state);
     let (tip, _) =
         lay::painted_text_hovering_at(lay::view_of(&under), &mut lay::renderer(), &path, WINDOW);
-    let wanted = if cfg!(target_os = "macos") {
-        "Add attachment (Cmd+Shift+A)"
-    } else {
-        "Add attachment (Ctrl+Shift+A)"
-    };
+    let wanted = "Add attachment (Ctrl+Shift+A)";
     assert!(
         tip.iter()
             .any(|p| p.layer == lay::Layer::Overlay && p.content == wanted),

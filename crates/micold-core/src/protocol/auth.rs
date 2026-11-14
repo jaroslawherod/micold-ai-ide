@@ -132,13 +132,6 @@ fn write_owner_only(path: &Path, contents: &str) -> io::Result<()> {
     file.sync_all()
 }
 
-#[cfg(not(unix))]
-fn write_owner_only(path: &Path, contents: &str) -> io::Result<()> {
-    // Windows has no mode bits. The file inherits the per-user state directory's ACL, which is the
-    // same protection the named pipe already relies on.
-    fs::write(path, contents)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

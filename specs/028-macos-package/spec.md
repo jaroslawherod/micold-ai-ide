@@ -4,6 +4,8 @@
 
 **Created**: 2026-08-27
 
+**Superseded**: 2026-11-14 by #1897 — macOS is no longer a supported platform. The bundle and disk-image scripts, `packaging/macos/`, the CI step and the release job are removed; this spec is kept as a record and describes nothing the project ships.
+
 **Status**: Closed 2026-09-14 — implemented and shipped in PR #284 (merged 2026-09-13); 59 of the 60
 tasks in [tasks.md](./tasks.md) are done, and the universal disk image ships with every release from
 v0.13.0. The one open task, T059 — quickstart §C, the manual pass on a real Mac — is split out to

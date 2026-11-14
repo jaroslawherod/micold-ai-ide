@@ -459,7 +459,4 @@ async fn a_returned_worktree_path_is_in_the_platforms_native_form() {
         path,
         native(f.repo().join(".claude").join("worktrees").join("a"))
     );
-    if cfg!(windows) {
-        assert!(!path.contains('/'), "{path}");
-    }
 }

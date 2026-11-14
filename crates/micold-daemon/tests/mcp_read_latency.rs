@@ -64,11 +64,6 @@ fn arguments(tool: &str) -> Option<Value> {
     }
 }
 
-/// Whether `tool` can be timed on this platform.
-fn timed_here(tool: &str) -> bool {
-    cfg!(unix) || tool != "read_session_output"
-}
-
 /// A stand-in `claude` on `PATH` that prints `PRINTED` lines and a prompt, then waits. Holds the
 /// directories it lives in; this file has one test, so the variables are not restored.
 #[cfg(unix)]
@@ -217,7 +212,7 @@ async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sess
     start_the_read_session(&state, addr, &cred).await;
 
     let mut slow = Vec::new();
-    for tool in tools.iter().filter(|tool| timed_here(tool)) {
+    for tool in tools.iter() {
         let args = arguments(tool).unwrap_or_else(|| {
             panic!("no arguments for the read-only tool {tool}: time it here (SC-004)")
         });

@@ -28,8 +28,6 @@ fn write(path: &Path, text: &str, mode: u32) {
     std::fs::write(path, text).unwrap();
     #[cfg(unix)]
     std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(mode)).unwrap();
-    #[cfg(not(unix))]
-    let _ = mode;
 }
 
 fn vars(edits: &[EnvEdit]) -> BTreeMap<String, String> {

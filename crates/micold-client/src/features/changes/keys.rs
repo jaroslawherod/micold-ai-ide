@@ -538,17 +538,7 @@ pub fn sheet_model(single_keys: bool, review: bool) -> SheetModel {
         title: COMPOSER_GROUP,
         rows: COMPOSER_KEYS
             .iter()
-            .map(|&(other, mac, text)| {
-                (
-                    if cfg!(target_os = "macos") {
-                        mac
-                    } else {
-                        other
-                    }
-                    .to_owned(),
-                    text,
-                )
-            })
+            .map(|&(other, _, text)| (other.to_owned(), text))
             .collect(),
     });
     SheetModel {
@@ -574,12 +564,8 @@ fn history_rows() -> [(String, &'static str); 2] {
 
 /// `row`'s key in the running platform's form (contract K4).
 fn platform_label(row: &ReviewKey) -> String {
-    let (other, mac) = row.labels();
-    if cfg!(target_os = "macos") {
-        mac
-    } else {
-        other
-    }
+    let (other, _) = row.labels();
+    other
 }
 
 /// The tooltip of **Send review (n)** (FR-013), naming the send chord.
@@ -623,11 +609,7 @@ mod tests {
         let alone = sheet_model(false, false);
         assert_eq!(titles(&alone), [COMPOSER_GROUP]);
         assert_eq!(alone.note, None, "the note is about the Review keys");
-        let (attach, large) = if cfg!(target_os = "macos") {
-            ("Cmd+Shift+A", "Cmd+Shift+M")
-        } else {
-            ("Ctrl+Shift+A", "Ctrl+Shift+M")
-        };
+        let (attach, large) = ("Ctrl+Shift+A", "Ctrl+Shift+M");
         // Feature 1703 FR-005, SC-006: the large editor's chord, next to Add attachment.
         assert_eq!(
             alone.rows_of(COMPOSER_GROUP),

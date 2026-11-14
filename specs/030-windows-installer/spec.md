@@ -4,6 +4,8 @@
 
 **Created**: 2026-09-13
 
+**Superseded**: 2026-11-14 by #1897 — Windows is no longer a supported platform. The installer scripts, `packaging/windows/`, the CI jobs and the release job are removed; this spec is kept as a record and describes nothing the project ships.
+
 **Status**: Draft
 
 **Input**: User description: "the app should support installation package for windows same as currently support dep for linux and macos"

@@ -71,11 +71,6 @@ expect specs/028-client-managed-daemon/quickstart.md unset
 expect specs/028-client-managed-daemon/spec.md     set
 expect specs/028-client-managed-daemon/tasks.md    set
 
-# The same shape, feature 028: `crates/micold-core/tests/macos_package_gate.rs` holds `ci.yml`'s
-# macOS packaging step to §B of this quickstart.
-expect specs/028-macos-package/quickstart.md       unset
-expect specs/028-macos-package/spec.md             set
-
 # The same shape, 006 BUG-009: `crates/micold-core/tests/settings_contract_examples.rs` loads the
 # `settings.json` example in each settings contract through the real store. Only the contracts that
 # show one; a sibling contract stays documentation.

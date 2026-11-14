@@ -304,13 +304,7 @@ pub enum HostOs {
 impl HostOs {
     /// The OS this build runs on — the one `cfg` in the lookup.
     pub fn current() -> HostOs {
-        if cfg!(windows) {
-            HostOs::Windows
-        } else if cfg!(target_os = "macos") {
-            HostOs::MacOs
-        } else {
-            HostOs::Linux
-        }
+        HostOs::Linux
     }
 
     /// The GitHub CLI's file name on this OS.

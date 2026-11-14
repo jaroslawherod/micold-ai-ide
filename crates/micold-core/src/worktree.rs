@@ -968,11 +968,6 @@ fn foreign_uid(path: &Path) -> Option<u32> {
     (uid != euid).then_some(uid)
 }
 
-#[cfg(not(unix))]
-fn foreign_uid(_path: &Path) -> Option<u32> {
-    None
-}
-
 /// The named stage a worktree creation is (or was, on failure) currently in (feature 013,
 /// FR-006/FR-007/FR-009). A closed enum (Principle V) so the progress display can never show a
 /// stage that isn't a real, reachable step.

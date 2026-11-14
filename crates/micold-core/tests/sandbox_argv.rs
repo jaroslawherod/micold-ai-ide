@@ -416,11 +416,8 @@ fn a_containers_projects_are_its_project_mounts() {
 fn an_adopted_containers_credential_mounts_are_not_projects() {
     let home = Path::new("/home/u");
     let layout = CredentialLayout::conventional(home, None);
-    let credential = |host: &Path| -> String {
-        pathmap::map_for(host, cfg!(windows))
-            .to_string_lossy()
-            .into_owned()
-    };
+    let credential =
+        |host: &Path| -> String { pathmap::map_for(host, false).to_string_lossy().into_owned() };
     let mounts = MountSet::build_for(
         &[PathBuf::from("/proj/P")],
         &SandboxProfile::default(),

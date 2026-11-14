@@ -81,12 +81,6 @@ fn state_with_sessions(
 fn register_cat(state: &DaemonState, id: SessionId) -> Arc<PtySession> {
     #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/q");
-        cmd
-    };
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat");
     state.register_session(session)

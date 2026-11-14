@@ -2179,7 +2179,7 @@ impl DaemonState {
             return resolved;
         };
         let mut joined = bin_dir.into_os_string();
-        joined.push(if cfg!(windows) { ";" } else { ":" });
+        joined.push(":");
         joined.push(session_path(&resolved.vars));
         let joined = joined.to_string_lossy().into_owned();
         match resolved
@@ -9803,7 +9803,7 @@ mod offered_tests {
             .expect("a PATH in the spawn environment");
         match gh_shim_bin_dir() {
             Some(dir) => {
-                let prefix = format!("{}{}", dir.display(), if cfg!(windows) { ';' } else { ':' });
+                let prefix = format!("{}{}", dir.display(), ':');
                 raw.strip_prefix(prefix.as_str())
                     .map_or(raw.clone(), str::to_string)
             }
@@ -9869,11 +9869,7 @@ mod offered_tests {
             .find(|(k, _)| k == "PATH")
             .map(|(_, v)| v.clone())
             .expect("a PATH in the spawn environment");
-        let prefix = format!(
-            "{}{}",
-            shim_dir.display(),
-            if cfg!(windows) { ';' } else { ':' }
-        );
+        let prefix = format!("{}{}", shim_dir.display(), ':');
         assert!(
             path.starts_with(&prefix),
             "PATH {path:?} does not start with the gh shim directory {shim_dir:?}"
@@ -9930,11 +9926,7 @@ mod offered_tests {
                 .find(|(k, _)| k == "PATH")
                 .map(|(_, v)| v.clone())
                 .expect("a PATH in the spawn environment");
-            let prefix = format!(
-                "{}{}",
-                shim_dir.display(),
-                if cfg!(windows) { ';' } else { ':' }
-            );
+            let prefix = format!("{}{}", shim_dir.display(), ':');
             assert!(
                 path.starts_with(&prefix),
                 "kind {kind}: PATH {path:?} does not start with the gh shim directory {shim_dir:?}"

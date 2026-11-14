@@ -477,23 +477,6 @@ mod tests {
         );
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn the_log_never_lands_in_the_roaming_profile() {
-        // R2.3: logs must never sync to a roaming profile. `data_dir()` on Windows *is* the roaming
-        // one, and this is the only platform where it differs from `data_local_dir()` — so this is
-        // the only place the rule can be checked, and it runs in the Windows CI job (BUG-015).
-        let Ok(local) = std::env::var("LOCALAPPDATA") else {
-            return;
-        };
-        let path = default_log_path().expect("a log path on Windows");
-        let path = path.to_string_lossy().to_lowercase();
-        assert!(
-            path.starts_with(&local.to_lowercase()),
-            "the log must live under %LOCALAPPDATA%, got {path}"
-        );
-    }
-
     #[cfg(target_os = "linux")]
     #[test]
     fn a_value_we_cannot_read_is_not_a_match() {

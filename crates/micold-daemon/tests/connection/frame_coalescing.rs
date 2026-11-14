@@ -50,15 +50,6 @@ fn flood(marker: &str, count: usize) -> CommandBuilder {
         ));
         cmd
     };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/c");
-        cmd.arg(format!(
-            "(for /l %i in (1,1,{count}) do @echo {marker}_%i)& ping -n 61 127.0.0.1 >nul"
-        ));
-        cmd
-    };
     cmd.cwd(std::env::temp_dir());
     cmd
 }
@@ -72,15 +63,6 @@ fn endless_flood(marker: &str) -> CommandBuilder {
         cmd.arg("-c");
         cmd.arg(format!(
             "i=1; while :; do echo {marker}_$i; i=$((i+1)); done"
-        ));
-        cmd
-    };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/c");
-        cmd.arg(format!(
-            "for /l %i in (1,1,2147483647) do @echo {marker}_%i"
         ));
         cmd
     };

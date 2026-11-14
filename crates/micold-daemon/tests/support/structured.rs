@@ -15,10 +15,7 @@ pub use stand_in_build::scratch_home;
 
 use micold_core::session::AiCli;
 
-#[cfg(not(windows))]
 const STAND_IN: &str = "claude";
-#[cfg(windows)]
-const STAND_IN: &str = "claude.exe";
 
 /// The stand-in `claude`. At start it writes, in its cwd, its arguments to `argv-record` (one per
 /// line), its cwd to `cwd-record` and `TERM`, `PATH` and every `MICOLD_*` variable to
@@ -395,17 +392,6 @@ fn close_stdin() {
     }
 }
 
-#[cfg(windows)]
-fn close_stdin() {
-    extern "system" {
-        fn GetStdHandle(which: u32) -> *mut std::ffi::c_void;
-        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
-    }
-    // SAFETY: the standard input handle; nothing reads it after this.
-    unsafe {
-        CloseHandle(GetStdHandle(-10i32 as u32));
-    }
-}
 
 /// For each later stdin `user` line, replay `file`, or the `replies` file for its text: one turn
 /// per message; a message with neither gets no turn. `gated`: the n-th waits for `turn-<n>` in the

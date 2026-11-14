@@ -191,13 +191,10 @@ pkg_case() { # <name> <want> <path>
   run_pkg "$1" "$2" "$d" HEAD~1 HEAD
   rm -rf "$d"
 }
-pkg_case "packaging/windows file"           true  packaging/windows/installer.iss
-pkg_case "windows-installer.sh"             true  scripts/windows-installer.sh
-pkg_case "windows-install-smoke.sh"         true  scripts/windows-install-smoke.sh
+pkg_case "packaging file"                   true  packaging/basic/Containerfile
 pkg_case "workspace Cargo.toml"             true  Cargo.toml
 pkg_case "Cargo.lock"                       true  Cargo.lock
 pkg_case "release.yml"                      true  .github/workflows/release.yml
-pkg_case "installer icon"                   true  assets/icon/icon.ico
 pkg_case "LICENSE"                          true  LICENSE
 pkg_case "remote-daemon-bundle.sh"          true  scripts/remote-daemon-bundle.sh
 pkg_case "build-lock.sh"                    true  scripts/build-lock.sh
@@ -248,7 +245,6 @@ dr_case ".cargo/config.toml"             true  .cargo/config.toml
 dr_case "sandbox Containerfile"          true  packaging/sandbox/Containerfile
 dr_case "basic image entrypoint"         true  packaging/basic/entrypoint.sh
 dr_case "basic-image-hash.sh"            true  scripts/basic-image-hash.sh
-dr_case "icon read by build.rs"          true  assets/icon/icon.ico
 dr_case "ci.yml itself"                  true  .github/workflows/ci.yml
 dr_case "client container bring-up"      true  crates/micold-client/src/shell/sandbox.rs
 dr_case "client connection actor"        true  crates/micold-client/src/daemon.rs
@@ -258,7 +254,7 @@ dr_case "client shell source"            false crates/micold-client/src/shell/da
 dr_case "client UI source"               false crates/micold-client/src/ui/a.rs
 dr_case "client feature source"          false crates/micold-client/src/features/a.rs
 dr_case "client Cargo.toml"              false crates/micold-client/Cargo.toml
-dr_case "windows packaging"              false packaging/windows/installer.iss
+dr_case "desktop entry"                  false packaging/micold-ai-ide.desktop
 dr_case "documentation only"             false docs/page.md
 dr_case "release.yml"                    false .github/workflows/release.yml
 
