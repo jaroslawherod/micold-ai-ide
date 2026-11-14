@@ -69,6 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; 4 round-1 findings verified fixed) |
 | Review B M4 | 2 | M4 | d7dea746e286510b0252844ebd555e687594fa12 | d9612fe7234fc5a8dfa123809f6d547f7b1e9e78:d7dea746e286510b0252844ebd555e687594fa12 | CLEAN (scoped, sonnet; plan-drift clean) |
 | Review close | 1 | close | 03760652a14c137cfcef727c2af334482393d05f | 6764353ce73e1537e4a42c6091fbcc1070a6fb55:03760652a14c137cfcef727c2af334482393d05f | CHANGES: 1 MAJOR (T025 case exit code), 2 MINOR (follow-ups, tasks intro), fixed |
+| Review close | 2 | close | 0c281abda420bf2aa81aaa5758cf2d2b445ef37d | 0a93ca5a98714d37dfdabf8a2504362eda08177f:0c281abda420bf2aa81aaa5758cf2d2b445ef37d | CLEAN (scoped, sonnet; 3 round-1 findings verified fixed) |
 
 ## Red runs
 
