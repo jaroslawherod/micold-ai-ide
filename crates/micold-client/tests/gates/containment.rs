@@ -997,7 +997,7 @@ fn the_recorded_options_row_escape_is_its_reveal() {
     assert!(
         escaping_nodes(false)
             .iter()
-            .any(|n| n == OPTIONS_ROW_REVEAL),
+            .any(|n| n == OPTIONS_ROW_REVEAL[0]),
         "the collapsed options row reports no escape, so OPTIONS_ROW_REVEAL is attributed to \
          nothing"
     );
