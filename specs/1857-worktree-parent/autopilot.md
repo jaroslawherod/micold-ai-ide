@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-11hi7h
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: merge (CI); review B still to run
+- **Next step**: review B round 2 (orchestrator), then merge (CI)
 
 ## Pull requests
 
@@ -52,7 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 2 | M1 | 73605a1b51507be22bd169b6576566de44db6462 | b198666fb3c888f7c13fa1797ce5011f87c6f28c:73605a1b51507be22bd169b6576566de44db6462 | MINOR-ONLY (round 1 findings declined; no code change since, only rebase onto main with the #1863 daemon-lookup fix) |
 
 | A | 1 | M1b | 7318d57 | (code-review skill, high, no subagent tool) | 7 findings: list_resumable_sessions and list_branches scoped, scope computed in the blocking closure, redundant retain removed, `Scope::unrestricted()`, list_branches test added; 2 declined |
-| B | 1 | M1b | — | — | not run: this unit has no subagent tool; orchestrator to run the conformance review |
+| B | 1 | M1b | f8a65aedc8a930ce6de6b90bf29bc8e2b6c8c5b7 | 091e3648b65b331889996323fab008ad31a1ba0d:9949424349adb1a57a7b6ce87a8d75e9634a9bb8 | CHANGES (F1-F4): all fixed (cycle-log red runs, drift-M1b.md, relay test states coverage, Scope::explain with red-first tests); round 2 to run by orchestrator |
 
 ## Declined review findings
 
