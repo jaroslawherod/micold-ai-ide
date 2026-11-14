@@ -31,10 +31,10 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 
 **Goal**: `follow-up.sh` turns `NOT DONE` into SEND / RESUME, counts, escalates at the cap.
 
-- [ ] T009 [US2] Tests: live session gives `SEND` with remaining lines, stopped gives `RESUME`, count increments in the supervisor ledger *Follow-ups* (US2.1, US2.2, FR-006) in `scripts/tests/close-out.test.sh`
-- [ ] T010 [US2] Tests: after 3 follow-ups the next call gives `ESCALATE` once with a category 5 block exactly once in the ledger, then `HOLD`; same `--check` id gives `SKIP`; `VERIFIED` after a follow-up gives `DONE`, count unchanged (US2.3, US2.4, FR-007, SC-004) in `scripts/tests/close-out.test.sh`
-- [ ] T011 [US2] Implement `scripts/autopilot/supervisor-ledger.sh` (sourced): readers of `Auto-remove`, *Interventions*, *Follow-ups*, *Escalations*, and the *Follow-ups* / *Escalations* writer, per `data-model.md`
-- [ ] T012 [US2] Implement `scripts/autopilot/follow-up.sh` per `contracts/follow-up.md`: six closed action words, cap 3, bash 3.2 safe
+- [x] T009 [US2] Tests: live session gives `SEND` with remaining lines, stopped gives `RESUME`, count increments in the supervisor ledger *Follow-ups* (US2.1, US2.2, FR-006) in `scripts/tests/close-out.test.sh`
+- [x] T010 [US2] Tests: after 3 follow-ups the next call gives `ESCALATE` once with a category 5 block exactly once in the ledger, then `HOLD`; same `--check` id gives `SKIP`; `VERIFIED` after a follow-up gives `DONE`, count unchanged (US2.3, US2.4, FR-007, SC-004) in `scripts/tests/close-out.test.sh`
+- [x] T011 [US2] Implement `scripts/autopilot/supervisor-ledger.sh` (sourced): readers of `Auto-remove`, *Interventions*, *Follow-ups*, *Escalations*, and the *Follow-ups* / *Escalations* writer, per `data-model.md`
+- [x] T012 [US2] Implement `scripts/autopilot/follow-up.sh` per `contracts/follow-up.md`: six closed action words, cap 3, bash 3.2 safe
 
 **Checkpoint**: a NOT DONE run is sent back at most 3 times, then escalated once.
 
