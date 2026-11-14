@@ -133,13 +133,15 @@ mk 3 12 14; st 12 running; st 14 running
 cat > "$D/rs.sh" <<'STUB'
 #!/usr/bin/env bash
 # stub run-status: --json <dir>; the state is the content of <dir>.state, "running" when absent
-d="${@: -1}"; s="$(cat "$d.state" 2>/dev/null || echo running)"
+d="${@: -1}"; echo x >> "$(dirname "$d")/calls"; s="$(cat "$d.state" 2>/dev/null || echo running)"
 printf '{"state":"%s"}\n' "$s"
 STUB
 chmod +x "$D/rs.sh"
 export AUTOPILOT_RUN_STATUS="$D/rs.sh"
 check "watch: no change exits CEILING" 0 '^CEILING$' "$WATCH" --ledger "$L" --interval 1 --ceiling 2
-chg() { ( sleep 0.5; for kv in "$@"; do echo "${kv#*=}" > "$D/w${kv%%=*}.state"; done ) & }
+# chg k=v...: flips states once the stub has been called for both rows (the watcher's baseline is read)
+chg() { : > "$D/calls"; ( while [ "$(cat "$D/calls" 2>/dev/null | wc -l)" -lt 2 ]; do sleep 0.1; done
+  for kv in "$@"; do echo "${kv#*=}" > "$D/w${kv%%=*}.state"; done ) & }
 chg 14=asking
 check "watch: a changed state exits CHANGED" 0 '^CHANGED 14 running asking$' "$WATCH" --ledger "$L" --interval 1 --ceiling 5
 echo running > "$D/w14.state"; chg 12=done
@@ -148,6 +150,8 @@ echo running > "$D/w12.state"
 check "watch: AUTOPILOT_WATCH_CEILING sets the ceiling" 0 '^CEILING$' env AUTOPILOT_WATCH_CEILING=1 "$WATCH" --ledger "$L" --interval 1 --ceiling 1
 mk 3 12; st 12 queued
 check "watch: only starting/running rows are watched" 0 '^CEILING$' "$WATCH" --ledger "$L" --interval 1 --ceiling 1
+check "watch: a zero interval is a usage error" 2 'interval' "$WATCH" --ledger "$L" --interval 0 --ceiling 1
+check "watch: an empty interval is a usage error" 2 'interval' "$WATCH" --ledger "$L" --interval "" --ceiling 1
 check "watch: a missing ledger is a usage error" 2 'no ledger' "$WATCH" --ledger "$D/none.md" --interval 1 --ceiling 1
 unset AUTOPILOT_RUN_STATUS
 
@@ -168,7 +172,7 @@ check "skill maps run-status JSON with map" 0 'supervisor.sh map' grep -n 'super
 check "skill reads run-status --json" 0 'run-status.sh --json' grep -n 'run-status.sh --json' "$SKILL"
 check "skill recovers a starting row with empty cells" 0 'empty' grep -n -i 'starting.*empty\|empty.*starting' "$SKILL"
 check "skill counts tries with retry" 0 'supervisor.sh retry' grep -n 'supervisor.sh retry' "$SKILL"
-check "skill reports asking, stuck, blocked and dead-no-ledger" 0 'dead-no-ledger' grep -n 'asking.*stuck.*blocked.*dead-no-ledger' "$SKILL"
+check "skill reports asking, stuck, blocked and lost runs" 0 'dead-no-ledger' grep -n 'asking.*stuck.*blocked.*dead-no-ledger' "$SKILL"
 check "skill does not answer or restart a reported run" 0 'Never answer' grep -n -i 'never answer' "$SKILL"
 check "skill starts the watcher in the background" 0 'run_in_background' grep -n 'run_in_background' "$SKILL"
 check "skill names the watcher script" 0 'supervisor-watch.sh' grep -n 'supervisor-watch.sh' "$SKILL"

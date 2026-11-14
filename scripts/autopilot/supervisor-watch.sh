@@ -17,7 +17,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -f "$LEDGER" ] || die "no ledger at $LEDGER"
-case "$interval$ceiling" in ''|*[!0-9]*) die "--interval and --ceiling are whole seconds" ;; esac
+case "$interval" in ''|*[!0-9]*) die "--interval is whole seconds" ;; esac
+case "$ceiling" in ''|*[!0-9]*) die "--ceiling is whole seconds" ;; esac
+[ "$interval" -ge 1 ] || die "--interval must be at least 1"
 
 # watched: `issue worktree` of every starting/running row with a worktree.
 watched() {
