@@ -153,15 +153,40 @@ route_drop() {
 
 route_table() { awk '/^## Routing$/ { f = 1; next } f && /^## / { f = 0 } f && NF { print }' "$LEDGER"; }
 
+# route target --sessions <list_sessions JSON> --me <id>: `parent <id>` or `user` (FR-012). Reads
+# only the daemon's `parent` (a worktree name) of the row `--me`, mapped to a session of that worktree.
+route_target() {
+  local f="" me="" have=0
+  while [ $# -gt 0 ]; do
+    case "$1" in --sessions|--me) [ $# -ge 2 ] || die "usage: route target --sessions <file> --me <id>" ;; esac
+    case "$1" in
+      --sessions) f="$2"; shift 2 ;; --me) me="$2"; have=1; shift 2 ;;
+      *) die "usage: route target --sessions <file> --me <id>" ;;
+    esac
+  done
+  [ -n "$f" ] && [ "$have" = 1 ] || die "usage: route target --sessions <file> --me <id>"
+  jq -e 'type == "array"' "$f" >/dev/null 2>&1 || die "unreadable session list $f"
+  jq -r --arg me "$me" '
+    def sid: (.ref // .id // "") | tostring;
+    . as $all
+    | ([.[] | select(sid == $me)] | first // {}) as $r
+    | ($r.parent // "") as $p
+    | if ($p | type) != "string" or $p == "" or $p == "default" then "user"
+      else ([$all[] | select((.worktree // "") == $p and sid != $me) | sid] | first) as $t
+        | if $t == null or $t == "" then "user" else "parent " + $t end
+      end' "$f"
+}
+
 route_cmd() {
   local sub="${1:-}"; [ $# -gt 0 ] && shift
   [ "$sub" = gate ] && { route_gate "$@"; return; }
+  [ "$sub" = target ] && { route_target "$@"; return; }
   need_ledger
   case "$sub" in
     add) route_add "$@" ;; next) route_next "$@" ;; state) route_state "$@" ;;
     answer) route_answer "$@" ;; gate) route_gate "$@" ;; compose) route_compose "$@" ;; sent) route_sent "$@" ;;
     overdue) route_overdue "$@" ;;
     drop) route_drop "$@" ;; table) route_table ;;
-    *) die "usage: route add|next|state|answer|gate|compose|sent|overdue|drop|table" ;;
+    *) die "usage: route add|next|state|answer|gate|compose|sent|overdue|target|drop|table" ;;
   esac
 }

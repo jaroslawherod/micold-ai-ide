@@ -72,9 +72,9 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: a session-list fixture with a `parent` field and one without.
 
-- [ ] T020 [US4] Failing cases in `scripts/tests/supervisor.test.sh` for `route target --sessions <file> --me <id>` (`parent <id>` when that row has a non-empty `parent`; `user` when the field is empty or absent; exit 2 when the file is unreadable).
-- [ ] T021 [US4] Implement `route target` in `scripts/autopilot/supervisor.sh` until T020 passes.
-- [ ] T022 [US4] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md, then edit `.claude/skills/autopilot-supervisor/SKILL.md` until they pass: step 6 sends the banner to the parent with `send_session_input`, holds the rows `asked` with Via `parent`, and records the reply with `route answer ... parent`; a `not_found` refusal runs `ledger set <issue> Note "<refusal>"` then asks the user (Via `user`), never retried (FR-012, FR-013); a top-tier supervisor asks the user.
+- [x] T020 [US4] Failing cases in `scripts/tests/supervisor.test.sh` for `route target --sessions <file> --me <id>` (`parent <id>` when that row has a non-empty `parent`; `user` when the field is empty or absent; exit 2 when the file is unreadable).
+- [x] T021 [US4] Implement `route target` in `scripts/autopilot/supervisor.sh` until T020 passes.
+- [x] T022 [US4] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md, then edit `.claude/skills/autopilot-supervisor/SKILL.md` until they pass: step 6 sends the banner to the parent with `send_session_input`, holds the rows `asked` with Via `parent`, and records the reply with `route answer ... parent`; a `not_found` refusal runs `ledger set <issue> Note "<refusal>"` then asks the user (Via `user`), never retried (FR-012, FR-013); a top-tier supervisor asks the user.
 
 **Checkpoint**: all four stories pass on fixtures.
 

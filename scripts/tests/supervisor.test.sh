@@ -409,5 +409,30 @@ check "skill3: Restart checks the cap before asking, and loops in fours" 0 '^ok$
 check "skill3: an overdue report is noted once" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; printf "%s" "$r" | grep -qF "Note \"not accepting input\"" && echo ok' "$SKILL"
 check "skill3: Confirm names route overdue, reports, never re-sends" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; for w in "route overdue" "Watcher ceiling" "never re-sent" "not accepting input"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
 
+# --- #1815 M4: upward relay (route target, SKILL text) ----------------------------------------
+# list_sessions rows: ref, worktree, parent (the parent worktree's name; omitted at top level).
+T="$D/sess.json"
+cat > "$T" <<'J'
+[{"ref":"s-par","worktree":"par-wt","is_caller":false},
+ {"ref":"s-me","worktree":"me-wt","parent":"par-wt","parent_state":"known","is_caller":true},
+ {"ref":"s-top","worktree":"default","is_caller":false},
+ {"ref":"s-empty","worktree":"e-wt","parent":""},
+ {"ref":"s-gone","worktree":"g-wt","parent":"nowhere-wt","parent_state":"known"},
+ {"ref":"s-def","worktree":"d-wt","parent":"default","parent_state":"known"}]
+J
+check "target: a reported parent maps to its session" 0 '^parent s-par$' "$SUP" route target --sessions "$T" --me s-me
+check "target: an absent parent field is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-top
+check "target: an empty parent is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-empty
+check "target: a parent with no session is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-gone
+check "target: a parent of default with no session is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-def
+check "target: an unknown --me is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-nobody
+check "target: an unreadable file exits 2" 2 'unreadable' "$SUP" route target --sessions "$D/none.json" --me s-me
+check "target: a non-JSON file exits 2" 2 'unreadable' "$SUP" route target --sessions "$D/free.json.nope" --me s-me
+check "target: --sessions and --me are required" 2 'usage' "$SUP" route target --sessions "$T"
+check "target: needs no ledger" 0 '^parent s-par$' bash -c 'cd "$2" && "$0" route target --sessions "$1" --me s-me' "$SUP" "$T" "$D"
+check "skill4: step 6 names route target and the parent send" 0 '^ok$' sk_has "route target" "send_session_input" "Via \`parent\`" "route answer <key> parent"
+check "skill4: not_found records the refusal and asks the user, never retried" 0 '^ok$' sk_has "ledger set <n> Note \"<refusal>\"" "Via \`user\`" "never retried"
+check "skill4: top tier asks the user" 0 '^ok$' sk_has "top-tier" "only from \`list_sessions\`"
+
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
