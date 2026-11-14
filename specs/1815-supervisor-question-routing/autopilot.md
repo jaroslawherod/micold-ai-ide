@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M3 implemented (T017–T019); Review A and B round 1, then PR
+- **Next step**: M4 (T020–T022, tier light), in a fresh cloud thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1899 | design (spec, plan, tasks) | merged (squash) | e75744062ef543f93a3085b22f4b846e56d1bf4f |
 | #1901 | M1 batch routing core | merged (squash) | afe9a3fe0d243743505cea0a95c47ed551c51e83 |
 | #1907 | M2 routine questions from repo evidence | merged (squash) | b3ec7f88ce399a4f178b0a9a8a4d869434e788cb |
+| #1911 | M3 context-cap survival | merged (squash) | 9721aedb923006f0625fd368aa1f7e485fde9841 |
 
 ## Milestones
 
@@ -72,7 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+2026-11-14: M3 PR #1911 squash-merged (9721aedb) after Review A and B round 2 CLEAN and green CI; origin/main merged into claude/project-thread-ovjkmi. M4 is unblocked: #1858 M1 (#1873) is on main and `list_sessions` rows carry `parent`/`parent_state` (crates/micold-daemon/src/mcp/tools.rs insert_parent); note the field is the parent worktree's name, so `route target` must map it to a session; sibling visibility (#1858 phase 3b) may still refuse with not_found, which M4's fallback to the user covers. Next thread starts M4 (T020–T022, tier light: unit model sonnet) on its own harness branch: merge claude/project-thread-ovjkmi in and set Worktree branch. Cloud: no mise, gh unauthenticated (GitHub MCP for PR/merge, REST `gh api` for check-runs), units have no Agent tool (orchestrator dispatches reviewers), CI is the gate, never rebase or force-push, squash-merge. Units commit pr-title.txt/pr-body.md under the spec dir.
 
 ## Open escalation
 
