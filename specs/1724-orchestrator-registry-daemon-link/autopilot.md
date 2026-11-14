@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-3cm73q
 - **Started**: 2026-11-11
 - **Phase**: milestone M5
-- **Next step**: M5 Review A (high) and Review B on snapshot aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735, then the PR
+- **Next step**: M5 Review A round 2 (sonnet, scoped to the fix diff `review-snapshot.sh diff aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735`) on head d4cb49cb2; Review B does not re-run; then CI and merge of #1898
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
-| M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | in progress |
+| M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | in progress |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
@@ -71,6 +71,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 2 | M3 | e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | d87571396ed0129d5f067f12db6fb698ff2ae759:e606147c373b9ecc4e2f7b8e22d10901cd4ddffe | CLEAN: F1-F3 fixed, no plan drift for M3, Verify 9 passed |
 | Review A | 1 | M4 | ac07209bf661c1bfbf127210d11ce041b8f82800 | 1e3b41175be72fc247fe7e2dc62334c6b02f8b44:a98b297aefbee75c4cd4df7282956739262a8837 | MINOR-ONLY: CLEAN, 3 MINOR fixed (F1 Refused after AlreadyLinked confirm, wire test red-first; F2 pong-time assertion; F3 shared record_when) |
 | Review B | 1 | M4 | ac07209bf661c1bfbf127210d11ce041b8f82800 | 1e3b41175be72fc247fe7e2dc62334c6b02f8b44:a98b297aefbee75c4cd4df7282956739262a8837 | CLEAN: 1 MINOR declined (T034 Dropped wire test); Verify one_link_per_id 5 passed, core orchestrator 69 passed, plan-drift clean |
+| Review A | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CHANGES: fixed F1 (CHILDREN lock), F2+F3 (one saving thread, coalesced, joined on stop; red-first unit test), F4 (list after stop); round 2 pending |
+| Review B | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CLEAN: core orchestrator 82 passed, daemon orchestrator 35 passed, no plan drift for M5 |
 
 ## Declined review findings
 
@@ -84,6 +86,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | M3 | Review A 1 | none declined | F1, F2 fixed; B F1 (drift-M3.md), F2 (wire test), F3 (T027 text) fixed |
 | M3 | Review A 2 | F1 assert closure right after the offline wait | FR-006: the mismatched claim closes a silent link; an offline link is not closed by silence alone, so closure after the refusal is the behaviour under test |
 | M4 | Review B 1 | F1: T034's explicit `claim_failed(Dropped)` has no wire test that tells it from M3 | No wire-observable difference: `link()` calls `closed(link)` after every path, which releases the reservation the same way; the core unit test covers `Dropped` (cycle-log, M4) |
+| M5 | Review A 1 | none declined | F1 (CHILDREN lock), F2/F3 (saving thread, drift-M5), F4 (list after stop) fixed |
 
 ## Handover
 
