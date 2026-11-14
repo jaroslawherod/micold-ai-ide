@@ -276,6 +276,7 @@ impl Measure {
 
     /// One paragraph per hard line, laid out `width` wide.
     fn paragraphs(&self, width: f32) -> Vec<Paragraph> {
+        BUILDS.with(|n| n.set(n.get() + self.lines.len()));
         let s = self.shape;
         self.lines
             .iter()
@@ -299,6 +300,18 @@ impl Measure {
             })
             .collect()
     }
+}
+
+thread_local! {
+    /// How many paragraphs [`Measure`]s built on this thread (#1683: shaping is the cost).
+    static BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many paragraphs every [`Selectable`] on this thread has shaped so far, for tests that pin
+/// that laying out text shapes it once, in the child, and not again here (#1683).
+#[doc(hidden)]
+pub fn paragraph_builds() -> usize {
+    BUILDS.with(std::cell::Cell::get)
 }
 
 /// What a hit sends, from the hit.
@@ -342,6 +355,11 @@ impl<'a, M: 'a> Selectable<'a, M> {
 
 /// The paragraphs a [`Selectable`] measured, and the gesture it is following.
 struct State {
+    /// The width the last layout gave the text.
+    width: f32,
+    /// The measure the paragraphs were shaped from, and the width they are laid out at. Built on
+    /// the first hit, not in layout: the child already shaped the text to draw it, and a transcript
+    /// re-shown at once would shape every entry twice (#1683).
     measured: Option<(Measure, f32)>,
     /// Each hard line's paragraph, top and height.
     paragraphs: Vec<(Paragraph, f32, f32)>,
@@ -380,7 +398,47 @@ impl<M> Selectable<'_, M> {
         Some((text(at(p.x)), text(at(0.0))..text(at(1.0e7))))
     }
 
+    /// Shape the measure's paragraphs at the laid-out width if they are not: shaped again when the
+    /// text changed, resized when only the width did.
+    fn measure_now(&self, state: &mut State) {
+        let width = state.width;
+        let reshape = match &state.measured {
+            Some((measure, w)) if *measure == self.measure => {
+                if *w == width {
+                    return;
+                }
+                false
+            }
+            _ => true,
+        };
+        let s = self.measure.shape;
+        let line = s.line_height.to_absolute(Pixels(s.size)).0;
+        let paragraphs: Vec<Paragraph> = if reshape {
+            self.measure.paragraphs(width)
+        } else {
+            std::mem::take(&mut state.paragraphs)
+                .into_iter()
+                .map(|(mut p, ..)| {
+                    p.resize(Size::new(width, f32::INFINITY));
+                    p
+                })
+                .collect()
+        };
+        let mut top = 0.0;
+        state.paragraphs = paragraphs
+            .into_iter()
+            .map(|p| {
+                let height = p.min_bounds().height.max(line);
+                let at = top;
+                top += height;
+                (p, at, height)
+            })
+            .collect();
+        state.measured = Some((self.measure.clone(), width));
+    }
+
     fn publish(&self, state: &mut State, p: Point, shell: &mut Shell<'_, M>) {
+        self.measure_now(state);
         let Some((offset, line)) = self.hit_at(state, p) else {
             return;
         };
@@ -424,6 +482,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
 
     fn state(&self) -> tree::State {
         tree::State::new(State {
+            width: 0.0,
             measured: None,
             paragraphs: Vec::new(),
             down: false,
@@ -460,28 +519,8 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Selectable<'a, M> {
             Wrapping::None => f32::INFINITY,
             _ => limits.max().width,
         };
-        let state = tree.state.downcast_mut::<State>();
-        let stale = state
-            .measured
-            .as_ref()
-            .is_none_or(|(measure, w)| *w != width || *measure != self.measure);
-        if stale {
-            let s = self.measure.shape;
-            let line = s.line_height.to_absolute(Pixels(s.size)).0;
-            let mut top = 0.0;
-            state.paragraphs = self
-                .measure
-                .paragraphs(width)
-                .into_iter()
-                .map(|p| {
-                    let height = p.min_bounds().height.max(line);
-                    let at = top;
-                    top += height;
-                    (p, at, height)
-                })
-                .collect();
-            state.measured = Some((self.measure.clone(), width));
-        }
+        // Only the width: the paragraphs are shaped on the first hit (`measure_now`).
+        tree.state.downcast_mut::<State>().width = width;
         // The child's own node, not a node around it: the wrapper adds no level to the layout
         // tree, so a leaf made selectable lays out exactly as before (T-4; layout_snapshot).
         child
@@ -919,6 +958,42 @@ mod tests {
         let painted: String = m.painted_text().into_iter().map(|p| p.content).collect();
         let words = |t: &str| t.split_whitespace().map(str::to_owned).collect::<Vec<_>>();
         assert_eq!(words(&painted), words("one two\nthree"));
+    }
+
+    /// #1683: laying out a selectable text shapes no paragraph of its own (its child already
+    /// shaped the text); the first press does, once per hard line, and a relayout at a new width
+    /// resizes them instead of shaping them again.
+    #[test]
+    fn layout_shapes_nothing_until_a_press() {
+        let spans = [plain("abcdef\nghijkl\nmnopqr")];
+        let (a, h) = (advance(), row());
+        let before = paragraph_builds();
+        let mut m = Mounted::new(mono(&spans));
+        assert_eq!(paragraph_builds(), before, "layout shapes nothing");
+        let at = Point::new(2.3 * a, 1.5 * h);
+        assert_eq!(offsets(&m.press(at)), vec![7 + 2]);
+        release(&mut m, at);
+        assert_eq!(paragraph_builds(), before + 3, "a press shapes each hard line");
+        assert_eq!(offsets(&m.press(Point::new(1.2 * a, 2.5 * h))), vec![14 + 1]);
+        assert_eq!(paragraph_builds(), before + 3, "and only once");
+    }
+
+    /// #1683: after a width change the paragraphs are resized, and hits follow the new wrap.
+    #[test]
+    fn a_new_width_resizes_the_paragraphs() {
+        let spans = [plain("aaaa bbbb cccc dddd")];
+        let (a, h) = (advance(), row());
+        let mut m = Mounted::new_in(mono(&spans), Size::new(40.0 * a, 400.0));
+        let at = Point::new(1.2 * a, 0.5 * h);
+        assert_eq!(offsets(&m.press(at)), vec![1]);
+        release(&mut m, at);
+        let built = paragraph_builds();
+        m.room = Size::new(11.0 * a, 400.0);
+        m.relayout();
+        let out = m.press(Point::new(1.2 * a, 1.5 * h));
+        let line = out[0].split(' ').nth(3).expect("a line").to_owned();
+        assert_eq!(line, "10..19", "the second row after the resize: {out:?}");
+        assert_eq!(paragraph_builds(), built, "resized, not shaped again");
     }
 
     /// FR-005: a second and third press in place carry `Double` and `Triple`.
