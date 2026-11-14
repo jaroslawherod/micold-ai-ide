@@ -1,6 +1,6 @@
 //! `Egress::agent` against local listeners (#1536, I16-2): the proxy is used, `no_proxy` skips it.
-//! No certificate generator is a dev-dependency, so a TLS handshake against a CA is not driven:
-//! the CA file is tested for being tolerated (bad file) and not disturbing the proxy choice.
+//! No certificate generator is a dev-dependency, so no TLS handshake is driven: a CA file is
+//! tested for being tolerated (bad file) and for the agent's TLS config holding its certificate.
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener};
@@ -151,4 +151,41 @@ fn an_unreadable_or_invalid_ca_file_leaves_the_agent_working() {
         );
         assert_eq!(direct.load(Ordering::SeqCst), 1);
     }
+}
+
+/// A self-signed CA (EC P-256, valid to 2126) made once with `openssl req -x509`.
+const TEST_CA: &str = "-----BEGIN CERTIFICATE-----
+MIIBijCCAS+gAwIBAgIUKjrC8wqAq42746wHsMKb+v14b+kwCgYIKoZIzj0EAwIw
+GTEXMBUGA1UEAwwObWljb2xkIHRlc3QgY2EwIBcNMjYxMTEyMTUxMTAwWhgPMjEy
+NjEwMTkxNTExMDBaMBkxFzAVBgNVBAMMDm1pY29sZCB0ZXN0IGNhMFkwEwYHKoZI
+zj0CAQYIKoZIzj0DAQcDQgAEWK6CPjXJF+srrkUXd55nQmuOgq28m3cgdf0LfOyN
+5hUGPZR45uHPS3K7lTi8Mx7FauAX7Y2Wn66JRjC8ZV7/NaNTMFEwHQYDVR0OBBYE
+FM/NGKxh6xzfsVMVq3tsumiiQHHQMB8GA1UdIwQYMBaAFM/NGKxh6xzfsVMVq3ts
+umiiQHHQMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDSQAwRgIhAIrMviyd
+7fEh8WmWc7yDvkrH7PHeQUdA2f/3JuD5rxA0AiEA7DQ5CZYY4roI4ltMmiVpvMnY
+ZQ7Jb0L6c+rgAlqdVcU=
+-----END CERTIFICATE-----
+";
+
+/// I16-9: the CA file's certificate is the agent's only trust root; without it the platform's apply.
+#[test]
+fn a_ca_file_becomes_the_agents_only_trust_root() {
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, TEST_CA).unwrap();
+    let roots = |egress: &Egress| {
+        let agent = egress.agent(ureq::Agent::config_builder(), "example.com");
+        agent.config().tls_config().root_certs().clone()
+    };
+    match roots(&Egress {
+        ca_file: Some(ca),
+        ..Default::default()
+    }) {
+        ureq::tls::RootCerts::Specific(certs) => assert_eq!(certs.len(), 1),
+        _ => panic!("the CA file was not made the trust root"),
+    }
+    assert!(!matches!(
+        roots(&Egress::default()),
+        ureq::tls::RootCerts::Specific(_)
+    ));
 }

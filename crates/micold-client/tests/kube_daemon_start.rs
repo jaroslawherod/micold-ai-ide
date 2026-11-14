@@ -152,6 +152,44 @@ async fn a_pods_start_delivers_the_script_and_env_file_and_refuses_an_unreadable
     assert!(reason.contains("gone.sh"), "{reason}");
 }
 
+/// #1536 (I16-11): a CA file reaches the startup secret and the rendered file names its mount.
+#[tokio::test]
+async fn a_cluster_start_delivers_the_ca_file_through_the_startup_secret() {
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca");
+    std::fs::write(&ca, "CA-TEXT").unwrap();
+    let extras = micold_core::daemons::SessionExtras {
+        ca_file: Some(ca),
+        ..Default::default()
+    };
+    let cluster = cluster();
+    let client = client(&cluster, welcoming());
+    let (sink, _) = sink();
+    kube_attempt(
+        &client.env,
+        NAME,
+        &settings(),
+        None,
+        &extras,
+        DriftChoice::Ask,
+        &sink,
+    )
+    .await
+    .expect("the start connects");
+    let secret = cluster
+        .manifest(NS, ObjectKind::Secret, &names().startup_secret())
+        .expect("the startup secret");
+    assert_eq!(secret["stringData"]["ca.pem"], "CA-TEXT");
+    let map = cluster
+        .manifest(NS, ObjectKind::ConfigMap, &names().config_map())
+        .unwrap();
+    let file = map["data"]["daemon.toml"].as_str().unwrap();
+    assert!(
+        file.contains("/run/micold/secrets/startup/ca.pem"),
+        "{file}"
+    );
+}
+
 #[tokio::test]
 async fn nothing_creates_a_service_or_an_ingress() {
     let cluster = cluster();

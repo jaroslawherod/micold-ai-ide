@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1536
 - **Worktree branch**: feat/1536_ssh-key-signing-key-ca-file-and-session-files-for
 - **Started**: 2026-11-06
-- **Phase**: milestone (M2)
-- **Next step**: milestone unit M2, then a new close unit (re-run tdd-verify, spec Status, follow-ups, close PR)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,13 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1748 | design: M1 milestone cut | merged | 3dafe3fdeff78991721162255acdeb460c724f98 |
 | #1756 | M1 | merged | f6c8a1c6604e7ed460df121db260504a7c161a7c |
+| #1844 | M2 | merged | 8d86299527ffd3011afd845c30a8f28b76029cee |
+| (close) | close: tdd-verify remediation T164-T167, spec Status | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T101–T106 | full | SSH key, signing key, CA file, session files reach sandbox sessions | see PR table | merged |
-| M2 | T148–T156 | full | The extras are delivered to container, pod and SSH daemons (M1 rendered client-local paths; `deliver_container`, pod and `ssh_delivery` did not deliver them); tdd-verify I16-1..I16-8 tests | #1844 | open |
+| M2 | T148–T156 | full | The extras are delivered to container, pod and SSH daemons (M1 rendered client-local paths; `deliver_container`, pod and `ssh_delivery` did not deliver them); tdd-verify I16-1..I16-8 tests | #1844 | merged |
 
 ## Decisions
 
@@ -47,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 3 | 1844 | 99825b74517607de40b166cbf02135ca66fc131a | 2bcfdff2dd60d54a3ffb7231b0b3cb831a170f2d:99825b74517607de40b166cbf02135ca66fc131a | CLEAN (rebase onto main: code patch-ids identical, docs conflicts kept both sides; gate green 12838 tests) |
 | A | 4 | 1844 | 6017c87a9389b5dd17a4434143f8d4c595ef6a0f | 5fe37646c018536c95ec1295237631b11b0cee2d:6017c87a9389b5dd17a4434143f8d4c595ef6a0f | CLEAN (rebase onto moved main plus call-site fix 6017c87a9; patch lines unchanged; gate green 12888 tests) |
 | B | 4 | 1844 | 6017c87a9389b5dd17a4434143f8d4c595ef6a0f | 5fe37646c018536c95ec1295237631b11b0cee2d:6017c87a9389b5dd17a4434143f8d4c595ef6a0f | CLEAN (rebase onto moved main plus call-site fix 6017c87a9; patch lines unchanged; gate green 12888 tests) |
+| A | 5 | 1854 | ecfbe32df4107e9062dd10ff06c7a0fae4b2140e | b516856df9ae864e99ceea047c63c84187522f7d:ecfbe32df4107e9062dd10ff06c7a0fae4b2140e | CLEAN (close review of 4884ffcbc; 4884ffcbc..ecfbe32df is ledger/format-only; 3 MINOR in follow-ups; full gate green) |
 
 ## Declined review findings
 
@@ -57,7 +60,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 review rounds recorded for PR #1844 head (A and B CLEAN). M2 pushed and PR #1844 opened (rebased onto origin/main, full gate green). Next: the orchestrator waits on CI and merges; then the close unit.
+None. Close unit done: tdd-verify re-run with mutation pass (53 mutants), I16-9..I16-16 closed by tests (T164-T167), spec Status set, review CLEAN, full gate green; close PR opened.
+
 
 ## Open escalation
 
@@ -68,4 +72,4 @@ None.
 - Settings -> Daemons has inputs for the four path extras (ssh key, known hosts, signing key, CA file); `[[session.files]]` entries have no UI row yet (kept from the daemon file on save, render and delivery work). Add a list editor later.
 - Pod: the startup secret mounts at `defaultMode` 0440, so OpenSSH may refuse the delivered SSH key (group-readable); check in the real-cluster test or give the key items mode 0400. The pod size limit is per file, not a total of the Secret's 1 MiB (review A F2, B F3/F4, M2).
 - Delivery: `write_secret` doc comment claims temp file and rename but writes in place (daemon_config_delivery.rs ~390); an SSH host keeps `ssh-key`/`signing-key` copies sent by an earlier version (review A M2 round 2 MINOR).
-- Close unit: run tdd-verify mutation pass over daemon_config_delivery.rs, kube start.rs secret_files and ssh_delivery (review B M2 MINOR).
+- Close review MINORs: the `HOME` fallback test (`supervisor.rs` `session_files_fall_back_to_the_daemons_home_variable`) sets HOME under a mutex only it takes and restores it off a drop guard; `supervisor.rs:1562` still iterates `CA_VARIABLES`; no real TLS handshake test of the daemon's CA trust (needs a certificate generator dev-dependency).

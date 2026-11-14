@@ -1296,3 +1296,156 @@ Untested criteria: daemon-HTTPS trust and proxy (T103), form and delivery (T105)
 - Whether `spec.md` FR-036..038 and V18 say more than the task text; docs content (T106) was not read for accuracy.
 - Performance and flakiness over repeated runs; the `session_extras` tests ran once (0.06 s).
 - The client `daemon_config_render` run was started but had not completed when this section was written (the build queue held the lock); its result is not recorded.
+
+---
+
+# Issue 16 (#1536) re-verification after M2 (T148-T156)
+
+```yaml
+scope: Issue 16 (#1536), M1 findings I16-1..I16-8 re-checked, M2 tasks T148-T156 (FR-036, FR-037, FR-038); code in b2e9cffcd (wip, source + tests + docs in one commit), cd656bb4b, e05cd306e
+standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
+verified_at: 8d8629952
+independent: true # auditor did not write these tests; no subagent smell pass (read by the auditor)
+verdict: PASS_WITH_GAPS # blocked from PASS by I16-9 and I16-10 (HIGH)
+behaviors: 4 listed for M2 in tdd/test-list.md (I16-1a, I16-2a, I16-3a, I16-2..I16-8 as one aggregate row); 8 findings re-checked
+proven: 0
+likely: 0
+test_after: all (b2e9cffcd lands tests and source in one wip commit; the cycle log says TEST_AFTER)
+no_test: 0
+high_findings: 2 # I16-9, I16-10 (new); of the M1 findings, none is HIGH any more except the CA half of I16-2, folded into I16-9
+mutants_tried: 53
+mutants_caught: 40
+mutants_survived: 13 # 2 judged equivalent (D13, C9), 11 reported as findings
+mutation_score: 40/51 = 78% # 53 tried, 2 survivors judged equivalent and left out of the denominator (40/53 = 75% raw)
+suite: micold-daemon --lib (session_extras, a_container_and_a_pod, credential_config) 30 passed; micold-client --lib (a_typed_extra_path, each_stored_extra, ssh_delivery, named_secrets) 5 passed + --test main (daemon_config_delivery_host, kube_daemon) 45 passed; micold-core --lib kube:: 155 passed; all green before and after the mutants
+```
+
+**Verdict: PASS_WITH_GAPS.** Seven of the eight M1 findings are closed with a failing mutant to show for each, but the CA trust half of T153 (the ticked claim "ca_file makes a
+certificate signed by that CA trusted") has no test (mutant D28 survives), and two session files collide on one delivered name (mutant C4 survives).
+
+## Status of the M1 findings
+
+| Finding | Status | Evidence |
+|---|---|---|
+| I16-1 HIGH (no rows, no log) | Closed (docs); red stays unrecorded | `tdd/test-list.md:133-141` has the #1536 rows (traces FR-036, FR-037, FR-038, V18); `tdd/cycle-log.md:354-370` has the entry and says `TEST_AFTER` outright. `b2e9cffcd` is one `wip` commit with tests and source together, so ordering is not provable: class `TEST_AFTER`, honestly recorded. The `I16-2..I16-8` row is one aggregate `DONE`, not one row per behavior; see I16-9 for why that overstates |
+| I16-2 HIGH (daemon HTTPS trust) | Open, in part | Proxy and `NO_PROXY` half closed: `egress_tests.rs:57,77,99,111` and `credential_config/egress_tests.rs` run `Egress::agent` and `UreqTransport` against local listeners; mutants D23 (`.filter(|_| true)`) and D24 (`proxy(None)`) fail 2 and 4 tests. CA half open: `egress_tests.rs:1-3` says no certificate generator is a dev-dependency, so only a bad or missing CA file is tested (`:138`); mutant D28 survives. Folded into I16-9 |
+| I16-3 HIGH (supervisor wiring) | Closed | `supervisor.rs:1550` `a_container_and_a_pod_session_carry_the_ssh_command_ca_and_git_config_and_the_session_file` drives `config_extra_edits` for `container` and `kubernetes`. Mutants D1 (no session files delivered), D2 (`add_extras` dropped), D4 (`Kind::Kubernetes` dropped) each fail exactly it. The `HOME` fallback is not covered (I16-16, LOW) |
+| I16-4 HIGH (Settings mapping and delivery) | Closed | `features/daemons.rs:2924` and `:2949` pin each `ExtraPath` to its own field and the round trip; mutants C17 (SSH key reads the CA slot) and C18 (reordered `begin_edit` array) fail them. `named_secrets` no longer carries the keys: they are staged by `stage_extras` and mutant C1 (key delivered under the known-hosts name) fails `a_pods_extras_become_secret_items...` and `the_extras_are_delivered_as_files...`. `ssh_delivery` is pinned by `daemon.rs:2183`: C2, C3, C14, C15, C16 each fail it |
+| I16-5 HIGH (silent pass without tools) | Closed | `tests.rs:189-262`: `commit_with` and `ssh_keygen` use `.expect("... is installed")`, so a missing tool fails; the eager test is split into `a_signed_commit_succeeds_with_the_delivered_key`, `an_unsigned_commit_succeeds_with_the_extras_when_no_key_arrived`, `signing_on_without_the_extras_fails_the_commit` (a control). D9 (`gpgsign` true), D10 (wrong signing key name), D12, D14 fail the signed and unsigned tests |
+| I16-6 MED (missing cases) | Closed, with residue | One of two set: `tests.rs:119`; path with a space: `:104` (D5, D7 caught); missing source and bad mode: `:383`; read-only target: `:399` (D15 caught); unreadable `secret_env`: `:362`; lowercase and empty proxy: `egress_tests.rs:111` (D25, D27 caught). Residue: I16-12, I16-15 |
+| I16-7 MED (Windows) | Closed on reading; not compiled for Windows here | `PermissionsExt` is now inside `#[cfg(unix)]` (`tests.rs:29-32`, `:314`, `:397`, `:327` in a `cfg(unix)` test); `commit_with` writes a real empty system config (`:193,199`) instead of `/dev/null` |
+| I16-8 LOW (re-implemented expectation) | Closed | `tests.rs:56-70` `shell_args` parses the command back with `sh -c printf` instead of comparing with the format that built it; D6 (`IdentitiesOnly` dropped) and D7 fail. `mise run duplication` was not run |
+
+## Changes to tests that already existed (Issue 16, M2)
+
+None weakened. Removed lines in the range `0c866e112..HEAD` are the `deliver_container(...)` calls gaining the `extras` argument (`daemon_config_delivery_host.rs`, same assertions kept) and the SSH command
+and signed-commit assertions, which were replaced by stronger ones (`shell_args` parse; the signed commit now also checks `gpgsig` in `git cat-file`). No skip, `#[ignore]`, exclusion or threshold added.
+
+## Findings from the mutation run (I16-9 onward)
+
+- **I16-9 HIGH (CA trust of the daemon's own HTTPS is untested; T153 ticked without it).** D28: `session_extras/mod.rs:216` `if !certs.is_empty() {` to `if false {` leaves all 30 tests green, so the PEM parse and `tls_config`
+  (`:208-222`) are unexercised; `tasks.md` T153 ("`ca_file` makes a certificate signed by that CA trusted") is `[x]` and `test-list.md` marks `I16-2..I16-8` `DONE`. The test file's own header (`egress_tests.rs:2-3`) admits the TLS handshake is not driven.
+  Should assert that an `Egress` with `ca_file` builds an agent that completes a TLS handshake with a server whose certificate that CA signed (a CA generated in the test, for example with `rcgen` as a dev-dependency, or a checked-in fixture pair with a long validity), and fails without the CA. Until then T153 is not done.
+- **I16-10 HIGH (two session files collide on one delivered name).** C4: `daemon_config_delivery.rs:125` `format!("{SESSION_FILE_PREFIX}{n}")` to a constant `..-0` survives all 22 client tests. Every test delivers at most one session file (`daemon_config_delivery_host.rs:479`, `daemon.rs:2197`; the pod test has none), so with two `[[session.files]]` the second overwrites the first and both rendered paths name one file. Should deliver two session files with different content and assert `session-file-0` and `session-file-1` hold their own, in the container, pod and SSH paths.
+- **I16-11 MED (pod start path, real cluster, with extras).** C19 (`daemon.rs:2022` `pod_settings.extras = extras.clone()` removed), C23 (`daemon.rs:2045` `secret_files: &delivered.files` replaced by `&[]`) and C12 (`daemon_config_delivery.rs:315` the 512 KiB limit check for an extra removed), C11 (`>` to `>=`) all survive: `kube_daemon_start.rs:327` passes `SessionExtras::default()`, and the size test (`daemon_config_delivery_host.rs:596`) covers the script, not an extra. Should run `kube_attempt` with a CA file and assert the startup secret holds it and the rendered file names its mount, and put an over-limit extra through `pod_startup` and expect the error naming it.
+- **I16-12 MED (NO_PROXY suffix without a dot boundary).** D20: `mod.rs:197` `host.ends_with(&format!(".{entry}"))` to `host.ends_with(&entry)` survives; `tests.rs:299-301` check `api.corp` (matches) and `api.github.com` (does not) but no host that merely ends with the entry's text, so `notcorp` would skip the proxy for an entry `corp`. Should assert `!bypasses_proxy("notcorp")`.
+- **I16-13 MED (retired pod recreation for extras).** K3: `kube/start.rs:629` `|| !r.secret_files.is_empty()` removed survives all 155 `kube::` tests: a pod created before the startup secret existed is not recreated when only the extras need the secret. Should have a test that a pod without the startup-secret stamp, started with only `secret_files`, is deleted and recreated.
+- **I16-14 LOW (expectation derived from the constant).** D11: dropping `REQUESTS_CA_BUNDLE` from `CA_VARIABLES` survives, because `tests.rs:275` and `supervisor.rs:1562` iterate the constant they test. Should pin the four names as literals once.
+- **I16-15 LOW (`secret_env` proxy value is not trimmed).** D26: `mod.rs:167` `.trim()` removed survives; the fixture line ends in `"\n"` only (`tests.rs:285`). Should cover a trailing space or CRLF.
+- **I16-16 LOW (`HOME` fallback).** D3: `supervisor.rs:325` `.or_else(|| std::env::var_os("HOME")...)` to `.or(None)` survives; every test sets `settings.home`. Should cover a daemon with no `home` setting and `HOME` set (a `serial` env test, like `daemon_config_delivery_host_env.rs`).
+- **Judged equivalent, not findings.** D13 (`mod.rs:95` `edits[i] = total` to a push): the later `Set` of `GIT_CONFIG_COUNT` wins when the edits are applied, so the effective environment is the same. C9 (`daemon_config_delivery.rs` `OpenOptionsExt::mode(.., 0o644)`): `set_owner_only` runs right after and fixes the mode, so only the unobservable window before it changes; the "never readable in between" claim in the comment is unpinned.
+
+## Mutation results (Issue 16, re-verification)
+
+Tool: none installed (`mutation: null`); deliberate mutants, one at a time, driven by a throwaway script that applied each edit, ran the scoped tests, and restored the file with `git checkout --` in a `finally`.
+Each file was restored after every mutant, and the scoped suites were re-run green at the end of each batch; `git status` was clean (no source file changed). Scope: the files the task named
+(`session_extras/mod.rs`, `supervisor.rs` `config_extra_edits`, `daemon_config_delivery.rs` where the task wrote `deliver_file`/`write_secret`: the delivery functions there are `stage_extras`, `sync_extras`, `write_if_changed`, `set_owner_only`, `pod_startup`; `kube/start.rs` secret files; `daemon.rs` `ssh_delivery` and `kube_attempt`; `features/daemons.rs` form mapping). 53 mutants (a sample, not every possible one).
+Commands: `scripts/build-lock.sh cargo test -p micold-daemon --lib -- session_extras a_container_and_a_pod credential_config`; `... -p micold-client --lib -- a_typed_extra_path each_stored_extra ssh_delivery named_secrets` then `... -p micold-client --test main -- daemon_config_delivery_host` (`kube_daemon` added for C23); `... -p micold-core --lib -- kube::`.
+
+| Id | Mutant | Result | Caught by |
+|---|---|---|---|
+| D1 | `supervisor.rs` `deliver_files(&config.session.files, ..)` to `&[]` | Caught | `a_container_and_a_pod_session_carry_...` |
+| D2 | `config_extra_edits` returns `edits` (no `add_extras`) | Caught | same |
+| D3 | `HOME` fallback `.or_else(..)` to `.or(None)` | Survived | I16-16 |
+| D4 | `Kind::Container \| Kind::Kubernetes` to `Kind::Container` | Caught | same supervisor test (pod) |
+| D5 | `known_hosts` path unquoted | Caught | `a_key_path_with_a_space_stays_one_argument` |
+| D6 | `-o IdentitiesOnly=yes` dropped | Caught | 3 tests incl. `a_sandbox_session_ssh_command_names_the_key_and_the_known_hosts` |
+| D7 | key path unquoted | Caught | `a_key_path_with_a_space_stays_one_argument` |
+| D8 | `tag.gpgsign` entry dropped | Caught | `signing_follows_the_key_and_is_off_without_it` and the supervisor test |
+| D9 | `commit.gpgsign` `false` to `true` | Caught | `an_unsigned_commit_succeeds_...`, `signing_follows_...` |
+| D10 | `user.signingkey` renamed | Caught | `a_signed_commit_succeeds_with_the_delivered_key`, `signing_follows_...` |
+| D11 | `REQUESTS_CA_BUNDLE` dropped from `CA_VARIABLES` | Survived | I16-14 |
+| D12 | `count += 1` removed in `add_extras` | Caught | 4 tests |
+| D13 | total `Set` pushed instead of replacing the first | Survived, equivalent | judged above |
+| D14 | `.unwrap_or(0)` to `.unwrap_or(1)` | Caught | 4 tests |
+| D15 | `remove_file` before the copy removed | Caught | `a_read_only_copy_already_there_is_replaced` |
+| D16 | `set_mode` skipped | Caught | `a_read_only_copy_...`, `a_session_file_lands_in_the_home_with_its_mode` |
+| D17 | V18 refusal ignored | Caught | `a_target_outside_the_home_or_in_a_cli_config_dir_is_refused` |
+| D18 | `create_dir_all` skipped | Caught | 3 tests |
+| D19 | default mode `0600` to `0777` | Caught | `a_session_file_lands_in_the_home_with_its_mode` |
+| D20 | `NO_PROXY` suffix match without the dot | Survived | I16-12 |
+| D21 | leading `.` of a `NO_PROXY` entry kept | Caught | `the_daemon_takes_its_proxy_from_session_env_or_a_secret_file` |
+| D22 | `*` entry no longer bypasses | Caught | `a_host_in_no_proxy_skips_the_proxy` |
+| D23 | bypass check removed from `agent` | Caught | `a_host_in_no_proxy_skips_the_proxy`, the `UreqTransport` test |
+| D24 | `proxy(None)` | Caught | 4 tests |
+| D25 | empty proxy value kept | Caught | `a_lowercase_https_proxy_and_an_empty_value_...` |
+| D26 | `.trim()` of the `secret_env` value removed | Survived | I16-15 |
+| D27 | lowercase `https_proxy` ignored | Caught | `a_lowercase_https_proxy_and_an_empty_value_...` |
+| D28 | `if !certs.is_empty()` to `if false` (no `tls_config`) | Survived | I16-9 |
+| D29 | `Egress::of` drops `ca_file` | Caught | `the_ca_file_reaches_every_tool_that_reads_one` (env layer only) |
+| C1 | SSH key delivered under the known-hosts name | Caught | pod and container delivery tests |
+| C2 | CA delivered under the signing-key name | Caught | `ssh_delivery_sends_the_ca_and_session_files_and_names_exactly_those` |
+| C3 | `if keys` to `if true` (SSH host gets keys) | Caught | same |
+| C4 | session file name index constant `0` | Survived | I16-10 |
+| C6 | stale extra copy not removed | Caught | `the_extras_are_delivered_as_files_and_the_rendered_paths_name_them` |
+| C7 | stale session-file copy not removed | Caught | same |
+| C8 | widened mode not corrected on unchanged content | Caught | `an_unchanged_file_with_a_widened_mode_is_made_private_again` |
+| C9 | file created `0644` then fixed to `0600` | Survived, equivalent | judged above |
+| C10 | `set_owner_only` mode `0600` to `0644` | Caught | 3 tests |
+| C11 | pod size limit `>` to `>=` | Survived | I16-11 |
+| C12 | pod size limit check for an extra removed | Survived | I16-11 |
+| C13 | `write_if_changed` always rewrites | Caught | 4 tests |
+| C14 | `ssh_delivery` does not send the staged files | Caught | `ssh_delivery_sends_...` |
+| C15 | `ssh_delivery` renders the unstaged extras | Caught | same |
+| C16 | `ssh_delivery` stages with `keys = true` | Caught | same |
+| C17 | form: SSH key field reads the CA slot | Caught | `a_typed_extra_path_lands_in_its_own_field_only`, `each_stored_extra_survives_...` |
+| C18 | form: `begin_edit` array reordered | Caught | `each_stored_extra_survives_opening_and_saving_the_form` |
+| C19 | `kube_attempt` drops `pod_settings.extras` | Survived | I16-11 |
+| C21 | `deliver_container` renders no staged extras | Caught | `the_extras_are_delivered_as_files_...` |
+| C22 | `deliver_container` does not sync the extras | Caught | same |
+| C23 | `kube_attempt` passes `secret_files: &[]` | Survived | I16-11 |
+| K1 | startup secret loses `secret_files` | Caught | `the_extras_are_keys_of_the_startup_secret` |
+| K2 | extras alone no longer create the secret | Caught | same |
+| K3 | retired-pod recreate ignores `secret_files` | Survived | I16-13 |
+
+Score: 53 tried, 40 caught, 13 survived (D13 and C9 equivalent; D3, D11, D20, D26, D28, C4, C11, C12, C19, C23, K3 are findings). Excluding the 2 equivalent: 40 of 51, 78%. A survivor inside a `DONE` behavior is HIGH: D28 and C4 are, hence I16-9 and I16-10.
+
+## Traceability (Issue 16, re-verification)
+
+| Criterion | Tests | End to end |
+|---|---|---|
+| FR-036 SSH command, signing key (container, pod) | `tests.rs:84,104,119,144,232,253,259`; supervisor `:1550` | Yes: through `config_extra_edits` and a real `git commit` |
+| FR-037 CA file to sessions | `tests.rs:265`; supervisor `:1550` | Sessions: yes. The daemon's own HTTPS: proxy yes (`egress_tests.rs`), CA trust no (I16-9) |
+| FR-037 proxy and `NO_PROXY` for the daemon | `egress_tests.rs:57,77,99,111`; `credential_config/egress_tests.rs` | Yes, against local listeners (plain HTTP and `CONNECT`; no TLS) |
+| FR-038 session files and V18 | `tests.rs:316,343,383,399,417` | Direct on `deliver_files`; through `config_extra_edits` for one file; two files untested (I16-10) |
+| Delivery C, K, S (T148-T150) | `daemon_config_delivery_host.rs:465,607`; `daemon.rs:2183`; `kube/start_tests.rs:1170` | Delivery functions yes; `kube_attempt` with extras no (I16-11) |
+| Settings form (T151) | `features/daemons.rs:2924,2949` | Reducer and mapping yes; no rendered-form test (not claimed) |
+
+Tests tracing to nothing: none. Criteria with no test: the CA trust of the daemon's HTTPS.
+
+## What was not audited (Issue 16, re-verification)
+
+- Mutation was a sample of 53 hand-picked mutants in the named files, not an exhaustive tool run; `core/daemon_config/validate.rs` (V18, `session_file_refusal`), `manifest.rs` (the pod mount of the extras) and `credential_config.rs` were not mutated.
+- The full workspace suite, the `sandbox_real_*` and `kube_real_*` acceptance tests, `scripts/tests/*.test.sh`, and `mise run duplication` were not run; the Settings visual pass was not run.
+- Windows compilation of the new tests (I16-7) was verified by reading the `cfg` gates only.
+- `docs/user-guide/daemon-configuration.md` (T106, T156) was not read for accuracy; `spec.md` FR-036..038 were taken as the task text, not re-derived.
+- Flakiness and speed over repeated runs: the listener-based egress tests each ran once per mutant (about 40 runs, no flake seen), but no repeated-run check was done.
+- The smell pass was done by the auditor (no subagent). Eager tests were noted but not listed as findings: `the_extras_are_delivered_as_files_and_the_rendered_paths_name_them` (`daemon_config_delivery_host.rs:465`, deliver, stale removal and leak check in one body) and `a_pods_extras_become_secret_items_and_the_rendered_paths_name_them` (`:607`, which does not pin `signing-key`, `known-hosts`'s rendered path or a session file); both are MED at most.
+
+### Issue 16 (#1536) close unit: findings closed (T164-T167)
+
+All of I16-9 to I16-16 closed by tests only; each mutant was applied once against the new test and failed it, then restored.
+- I16-9 (D28), I16-12 (D20), I16-14 (D11), I16-15 (D26), I16-16 (D3): `session_extras/egress_tests.rs` `a_ca_file_becomes_the_agents_only_trust_root`; `session_extras/tests.rs` (`notcorp`, literal CA names, `the_secret_env_proxy_value_is_trimmed`); `supervisor.rs` `session_files_fall_back_to_the_daemons_home_variable`. Left open: no real TLS handshake against a CA-signed server (no certificate generator is a dev-dependency); the test asserts the agent's trust root is exactly the CA file.
+- I16-10 (C4), I16-11 (C11, C12, C19, C23): `daemon_config_delivery_host.rs` two-session-file tests (container, pod), `daemon.rs` `ssh_delivery_sends_two_session_files_under_their_own_names`, `a_pods_over_limit_extra_stops_the_start_naming_it`, `kube_daemon_start.rs` `a_cluster_start_delivers_the_ca_file_through_the_startup_secret`.
+- I16-13 (K3): `kube/start_tests.rs` `a_pod_without_the_startup_secret_is_recreated_when_only_the_extras_need_it`.
+- I16-1 stays `TEST_AFTER` (tests and source landed in one commit; no red run is provable). Verdict after remediation: PASS_WITH_GAPS (the two gaps above).
