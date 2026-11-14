@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M2 review A and B round 1, then PR (orchestrator opens it); local gate: cloud, scripts/gate.sh too slow, CI is the gate
+- **Next step**: M2 PR open, wait CI (local gate: cloud, scripts/gate.sh too slow, CI is the gate)
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
-| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | implemented, in review |
+| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | PR pending (orchestrator opens it) |
 | M3 | T017–T019 | light | context-cap survival: reask, overdue | | pending |
 | M4 | T020–T022 | light | upward relay to a reported parent | | pending |
 
@@ -51,10 +51,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 2 | M1 | d95705445c1ef4707649eac990722985e6fe2e40 | 0be4456b2a3083247fe354b62a7f7f4706c8fee9:d95705445c1ef4707649eac990722985e6fe2e40 | CLEAN (1 MINOR: --by supervisor prefix not yet parsed by answer.sh; M2 owns it) |
 | Review B | 2 | M1 | d95705445c1ef4707649eac990722985e6fe2e40 | 0be4456b2a3083247fe354b62a7f7f4706c8fee9:d95705445c1ef4707649eac990722985e6fe2e40 | CLEAN (1 MINOR: drift-M1.md not written; reason in Declined table) |
 | Review A+B | 1 | M2 | 8b5a7551b283d5ab5400d0bfa75f791c87cb012f | fc1b56097cbb953362207a5d0e22305d0b0a2fc2:8b5a7551b283d5ab5400d0bfa75f791c87cb012f | CHANGES: A F1 MAJOR, B F1 MAJOR fixed; F2 fixed; A F3 partly declined (round 2 pending) |
+| Review A | 2 | M2 | 5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | ac458b23cc63aff3c3b1072fff228b4feb626672:5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | CLEAN |
+| Review B | 2 | M2 | 5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | ac458b23cc63aff3c3b1072fff228b4feb626672:5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | CLEAN |
 
 ## Declined review findings
-
-- M2 round 1, Review A F3 (first two parts): one escalation is answered by one `resume`, and `answer.sh` writes one By per message, so a mixed batch is By `user` (the user ratified the batch); FR-005 requires the evidence in the answer text. The `route gate` ordering part was fixed.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | Review B 1 | F1 (drift-M1.md) | contracts/routing-cli.md and data-model.md are references cited by T003/T004, not files the milestone creates: false positive. |
 | M1 | Review B 1 | F2 (`facts: a 50-file diff` failure) | Flaky and environmental (git push negotiation in the container); untouched code; autopilot.test.sh passed 348/0 on re-runs with and without this diff. CI decides. |
 | M1 | Review B 1 | F3 (no red-before-green evidence) | Tests and code were written in one commit; later milestones commit tests first. Noted, not retroactively splittable. |
+| M2 | Review A 1 | F3 (mixed batch By `user`; evidence kept out of the answer) | One escalation is answered by one `resume` and `answer.sh` writes one By per message, so a mixed batch is By `user`; FR-005 requires the evidence in the answer text. The `route gate` ordering part was fixed. |
 | all | Review tasks 1 | F2 (split T019 and T022 into test and edit tasks) | Test files are now named; splitting would renumber T020–T022 and every milestone range for no gain, as the failing test comes first within the task. |
 
 ## Handover

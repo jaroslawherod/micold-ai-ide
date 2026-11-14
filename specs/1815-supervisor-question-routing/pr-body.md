@@ -5,7 +5,8 @@
 **Tasks**: T011–T016 · **Satisfies**: US2 scenarios 1–5, FR-002..FR-005a, SC-002
 
 ## Agent review
-- Review A / B: pending (round 1 dispatched by the orchestrator; see ledger *Review rounds*).
+- Review A (code-review, high): round 1 CHANGES (1 MAJOR fixed: resolved-only issues are now sent; 2 MINOR: step ref fixed, mixed-batch By declined with reason); round 2 CLEAN.
+- Review B (conformance, sonnet): round 1 CHANGES (1 MAJOR fixed: T013 names supervisor-route.sh; 1 MINOR fixed); round 2 CLEAN. Verify: supervisor.test.sh 249 cases, autopilot.test.sh 354 cases, no FAIL.
 
 ## Local gate
 Cloud thread: no mise; `scripts/gate.sh` too slow to wait for. Both script suites pass (supervisor 246 cases, autopilot 354); CI is the gate. Clears the M1 follow-up (`answer.sh` parses `--by`).
