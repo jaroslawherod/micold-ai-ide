@@ -11,6 +11,12 @@ Every state has a dwell limit: `scripts/autopilot/pr-state.sh <pr>` says whether
 it and the action ([waiting.md](../rules/waiting.md), *PR states and dwell limits*). Run it when
 `wait-merge.sh` returns `HOLD`/`TIMEOUT`, and before any rerun, close or reopen below.
 
+A PR whose diff is autopilot tooling only (`scripts/autopilot/diff-class.sh <pr>` prints `TOOLING`)
+does not need a green CI: with a green local gate for its head, `wait-merge.sh` merges past the red
+check on its own and prints `SKIPPED-CI` ([merge.md](merge.md), *Tooling-only diffs*). Do not rerun or
+escalate such a red; record the skipped checks. Without a recorded local gate for the head, run the gate
+first. Any product diff follows the rest of this section.
+
 Rerun once: `gh run rerun <run-id> --failed`. Passes: a flake, carry on. Fails again: check `main`
 (`gh run list --branch main --status completed --limit 3`). Either way, do not fix it. Escalate as
 *blocked by work outside my flow*, with the evidence.
