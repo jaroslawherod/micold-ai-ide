@@ -947,6 +947,7 @@ pub fn view_with<'a>(
         .push_maybe(review_overflow)
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
+        .push_maybe(sidebar::empty_area_menu(state, roles))
         .push_maybe(group_menu)
         .push_maybe(session_menu)
         .push_maybe(card_menu)

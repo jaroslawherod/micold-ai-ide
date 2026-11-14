@@ -167,3 +167,30 @@ fn the_new_group_chord_is_primary_shift_g_and_on_the_shortcut_sheet() {
         "the shortcut sheet lists the chord"
     );
 }
+
+#[test]
+fn the_empty_area_menu_opens_at_the_press_and_its_new_group_opens_the_dialog() {
+    let mut state = state_with_active();
+    send(&mut state, Msg::EmptyAreaMenuOpened((40, 300)));
+    assert_eq!(state.sidebar_groups.empty_menu, Some((40, 300)));
+    let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
+    assert!(
+        micold_client::ui::sidebar::empty_area_menu(&state, roles).is_some(),
+        "an open empty-area menu is drawn"
+    );
+    // Its one item is New group…, which opens the naming dialog and closes the menu.
+    send(&mut state, Msg::New);
+    assert!(state.sidebar_groups.naming.is_some());
+    assert_eq!(state.sidebar_groups.empty_menu, None);
+}
+
+#[test]
+fn the_empty_area_menu_dismisses_and_offers_nothing_with_no_project() {
+    let mut state = state_with_active();
+    send(&mut state, Msg::EmptyAreaMenuOpened((40, 300)));
+    send(&mut state, Msg::EmptyAreaMenuDismissed);
+    assert_eq!(state.sidebar_groups.empty_menu, None);
+    let mut none = State::default();
+    send(&mut none, Msg::EmptyAreaMenuOpened((40, 300)));
+    assert_eq!(none.sidebar_groups.empty_menu, None);
+}

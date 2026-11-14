@@ -11,7 +11,8 @@
 //!
 //! # Messages
 //!
-//! `New`, `TextChanged`, `Confirmed`, `Cancelled`.
+//! `New`, `TextChanged`, `Confirmed`, `Cancelled`; the sidebar's empty-area menu
+//! (`EmptyAreaMenuOpened`, `EmptyAreaMenuDismissed`), whose one item is **New group…** (C6a).
 
 use crate::app::Message;
 use crate::features::Outcome;
@@ -25,6 +26,8 @@ use micold_core::sidebar_layout::{LayoutError, SidebarLayout};
 pub struct State {
     /// The naming dialog's draft; its presence *is* the dialog being shown.
     pub naming: Option<NamingDraft>,
+    /// The sidebar's empty-area menu, at the window point it was opened from; `None` while closed.
+    pub empty_menu: Option<(u16, u16)>,
 }
 
 /// What the naming dialog names (data-model.md, *NamingDraft*). Renaming a group and creating one
@@ -55,6 +58,10 @@ pub enum Msg {
     Confirmed,
     /// The naming dialog was dismissed.
     Cancelled,
+    /// The sidebar's empty area was right-clicked at this window point (C6a).
+    EmptyAreaMenuOpened((u16, u16)),
+    /// The empty-area menu was dismissed.
+    EmptyAreaMenuDismissed,
 }
 
 /// The message a refused name shows under the field (FR-004).
@@ -85,6 +92,15 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         }
         Msg::Confirmed => return confirmed(state),
         Msg::Cancelled => state.sidebar_groups.naming = None,
+        Msg::EmptyAreaMenuOpened(point) => {
+            // With no project open there is nothing to group, so nothing to offer.
+            if state.workspace.active.is_none() {
+                return Vec::new();
+            }
+            state.sidebar_groups.empty_menu = Some(point);
+            return crate::features::surface_opened(true, SidebarEmptyAreaMenu::ID);
+        }
+        Msg::EmptyAreaMenuDismissed => state.sidebar_groups.empty_menu = None,
     }
     Vec::new()
 }
@@ -130,6 +146,27 @@ fn confirmed(state: &mut crate::app::State) -> Vec<Outcome> {
             }
             Vec::new()
         }
+    }
+}
+
+/// The sidebar's empty-area menu, as a floating surface (C6a): a context menu, so it and the row
+/// menus replace each other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SidebarEmptyAreaMenu;
+
+impl SidebarEmptyAreaMenu {
+    /// This surface's identity, nameable by the surfaces that displace it.
+    pub const ID: SurfaceId = SurfaceId::new("sidebar_empty_menu");
+}
+
+floating_surface!(SidebarEmptyAreaMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::SidebarGroups(Msg::EmptyAreaMenuDismissed));
+
+impl Registered for SidebarEmptyAreaMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .sidebar_groups
+            .empty_menu
+            .map(|_| SidebarEmptyAreaMenu)
     }
 }
 

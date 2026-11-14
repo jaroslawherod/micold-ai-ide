@@ -88,3 +88,23 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   `sidebar.layouts` COMPONENT_LOCAL pin removed, new `tests/features_sidebar_group_actions.rs`.
   The "Sidebar" sheet group is shown only on the sheet opened outside a Review tab:
   with it, the Review sheet overflowed `review_tab_fits` at 640x480 by 8 px.
+
+## Cycle 5: the header row, its gate, the empty-area menu (T008, rest of T014, T015, T016, T044)
+
+- test: `group_header.rs` unit tests (count words, one-line heading row with its full name on the
+  tooltip); `tests/gates/sidebar_group_header_fits.rs` (module of `tests/layout_snapshot.rs`);
+  two empty-area menu tests in `tests/sidebar_group_actions.rs`; the `sidebar_empty_menu` row of
+  `tests/popover_displacement.rs` and `tests/overlay_registration.rs`.
+- red: the gate and the menu tests were written beside the code, not before it, so their red is
+  shown by mutation instead: giving the header a second line (`supporting_text`) fails the gate at
+  `sidebar_group_header_fits.rs:55` ("no 36 dp header row"); the guard tests went red on the new
+  popover until it was listed (`overlay_registration` "a new popover-shaped field ...
+  sidebar_groups.empty_menu"; showcase completeness "variant `UserGroupHeader` has no instance").
+- green: `ui/material/group_header.rs` (`GroupHeader::new(name).on_toggle(m).collapsed(b)
+  .count(n).roles(r).key(k)` into a `TreeItem`, `DropMarker` into an `Element`),
+  `TreeItem::heading(role)`, `TypeRole::UserGroupHeader` (`label_medium`), showcase poses
+  `group_header_row`, `group_header`, `drop_marker`; `ui/sidebar.rs` draws `SidebarEntry::UserGroup`
+  headers and wraps the list in a `ContextArea` that opens `SidebarEmptyAreaMenu` (New group…).
+  `cargo test -p micold-client --test layout_snapshot` -> `177 passed` after
+  `UPDATE_LAYOUT_SNAPSHOT=1` (the more menu's fourth item, all under `0/8`).
+- refactor: none

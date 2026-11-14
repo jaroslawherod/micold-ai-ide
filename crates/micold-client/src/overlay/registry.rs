@@ -299,6 +299,7 @@ register! {
             crate::features::project::ProjectContextMenu,
             crate::features::worktree::WorktreeContextMenu,
             crate::features::overview::OverviewCardMenu,
+            crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
     },
     // Feature 972: the Overview card's menu acts on a location as the row menus do, so it and they
     // (with the start menu) replace each other — one context menu at a time (R2, FR-014).
@@ -309,6 +310,7 @@ register! {
             crate::features::runs::GroupContextMenu,
             crate::features::session::SessionContextMenu,
             crate::features::session::SessionStartMenu,
+            crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
     },
     crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
     // The switcher is deliberately absent: this menu is opened by right-clicking a row *inside*
@@ -322,6 +324,7 @@ register! {
             crate::features::worktree::WorktreeContextMenu,
             crate::features::runs::GroupContextMenu,
             crate::features::overview::OverviewCardMenu,
+            crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
     },
     crate::features::project::ProjectSelectorDialog => crate::ui::project_selector::dialog,
     crate::features::project::ProjectSwitcher {
@@ -365,6 +368,15 @@ register! {
     crate::features::daemons::DaemonDetailsDialog => crate::ui::daemon_details_dialog::dialog,
     // Feature 1786 (R6): the user-group naming dialog.
     crate::features::sidebar_group_actions::GroupNamingDialog => crate::ui::group_naming::dialog,
+    // Feature 1786 (C6a): the sidebar's empty-area menu is a context menu like the row menus, so
+    // it and they replace each other.
+    crate::features::sidebar_group_actions::SidebarEmptyAreaMenu {
+        displaces:
+            crate::features::project::ProjectContextMenu,
+            crate::features::worktree::WorktreeContextMenu,
+            crate::features::runs::GroupContextMenu,
+            crate::features::overview::OverviewCardMenu,
+    },
     crate::features::sidebar::SidebarMoreMenu {
         displaces:
             crate::features::help::HelpMenu,
@@ -382,6 +394,7 @@ register! {
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
             crate::features::overview::OverviewCardMenu,
+            crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
     },
     crate::features::worktree::RenameWorktreeDialog => crate::ui::worktree_rename::dialog,
     crate::features::worktree_form::AddWorktreeDialog => crate::ui::worktree_form::dialog,

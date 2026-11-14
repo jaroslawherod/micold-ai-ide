@@ -101,6 +101,10 @@ pub enum TypeRole {
     CardSmall,
     /// An Overview card's 12 px semibold labels: "NOW" and the pull request pills (BUG-1298).
     CardTag,
+    /// A user group's header name in the sidebar (feature 1786, R7): 12/16 at weight 500, so it
+    /// reads as a heading above the rows it holds yet fits the one-line row height. It names no
+    /// state: the retired `SidebarGroup` grouped by state and this does not.
+    UserGroupHeader,
 }
 
 impl TypeRole {
@@ -138,12 +142,13 @@ impl TypeRole {
             TypeRole::CardType => typography::OVERVIEW_CARD_TYPE,
             TypeRole::CardSmall => typography::OVERVIEW_CARD_SMALL,
             TypeRole::CardTag => typography::OVERVIEW_CARD_TAG,
+            TypeRole::UserGroupHeader => typography::LABEL_MEDIUM,
         }
     }
 
     /// Every role a call site can name, so a test or the showcase can enumerate them without
     /// restating the list (and drifting from it).
-    pub const ALL: [TypeRole; 17] = [
+    pub const ALL: [TypeRole; 18] = [
         TypeRole::Display,
         TypeRole::Headline,
         TypeRole::Title,
@@ -161,6 +166,7 @@ impl TypeRole {
         TypeRole::CardType,
         TypeRole::CardSmall,
         TypeRole::CardTag,
+        TypeRole::UserGroupHeader,
     ];
 
     /// The role's name as the enum spells it — for the showcase's per-role labels and for test
@@ -184,6 +190,7 @@ impl TypeRole {
             TypeRole::CardType => "CardType",
             TypeRole::CardSmall => "CardSmall",
             TypeRole::CardTag => "CardTag",
+            TypeRole::UserGroupHeader => "UserGroupHeader",
         }
     }
 
