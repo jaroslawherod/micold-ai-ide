@@ -11,6 +11,7 @@ error or malformed ledger.
 | `touches <issue-body-file> [--labels "a b"]` | comma separated paths, `-` when none; first line `declared`, `inferred` or `none` on stderr |
 | `overlap <touches-a> <touches-b>` | `yes` or `no` |
 | `next [--live-sessions "ids"]` | candidates only (the skill runs `gate --running <occupied + starts so far>` before each `create_worktree`, so one reading never admits several starts): issue numbers, one per line, ascending: queued, within cap minus occupied, and no overlap with any occupying row or an earlier pick. Prints nothing when none. |
+| `retry <issue>` | a failed start: reads `Tries`; below 3 sets `queued`, else `failed`; prints the state |
 | `check-owner --live-sessions "ids" --me <id>` | `OWN`, `FREE` (no owner or owner not listed; read-only, the skill then calls `ledger owner <id>`), or `HELD <owner>` (exit 1) |
 | `ledger init --owner <id> --cap N [--grace S] --source <text> <issues...>` | creates the file; refuses when it exists |
 | `ledger owner <id>` | sets the Owner header |

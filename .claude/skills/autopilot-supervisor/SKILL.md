@@ -15,7 +15,7 @@ a session's transcript.
 ## Build the queue
 
 1. Issues named in the arguments, or `gh issue list --label autopilot:queue --state open --limit 1000 --json number -q '.[].number'`; sort ascending.
-2. `scripts/autopilot/supervisor.sh ledger init --owner <this session id> --cap <N> --source "<label autopilot:queue | issues ...>" <issues...>` (default cap 3). It refuses when a ledger exists: M2 covers a restart; for now stop and tell the person.
+2. `scripts/autopilot/supervisor.sh ledger init --owner <this session id> --cap <N> --source "<label autopilot:queue | issues ...>" <issues...>` (default cap 3). It refuses when a ledger exists: that is a restart, see *Restart*.
 
 ## Start an issue
 
@@ -26,14 +26,28 @@ For each issue `<n>` that `supervisor.sh next` prints, one at a time:
 3. Write first: `ledger set <n> State starting`, `ledger set <n> Started <epoch seconds>`, `ledger set <n> Tries <tries + 1>`.
 4. `create_worktree` with `github_issue: <n>`; `ledger set <n> Worktree <path>`.
 5. `create_session` in that worktree with the prompt `/speckit-autopilot #<n> supervised`; `ledger set <n> Session <id>` and `ledger set <n> State running`.
-6. A failed create: leave the state, write the reason with `ledger set <n> Note "<reason>"`, and go on. Counting tries and `failed` after 3 tries are enforced with the restart logic (M2, T014-T015).
+6. A failed create: leave the state, write the reason with `ledger set <n> Note "<reason>"`, and go on. Then `supervisor.sh retry <n>` (the `Tries` cell counts the start; it prints `queued`, or `failed` at 3 tries).
 
 ## Advance loop
 
 1. `supervisor.sh next` lists the issues to start. Nothing printed: say there is nothing to do.
 2. Start each as above, gate first, one at a time.
-3. `next` prints nothing: report with `ledger table` and end the turn. Never poll `next`; a restarted supervisor resumes from the ledger (M2).
+3. `next` prints nothing: report with `ledger table` and end the turn. Never poll `next`: start the watcher (*Watcher*) and end the turn.
+
+## Restart
+
+A ledger already exists: continue from it, never rebuild the queue.
+
+1. **Owner.** `list_sessions` (metadata only), then `supervisor.sh check-owner --live-sessions "<ids>" --me <this session id>`. `OWN`: go on. `FREE`: `supervisor.sh ledger owner <this session id>`, go on. `HELD <owner>` (exit 1): another supervisor owns the ledger; say which session and stop.
+2. **Map each `starting` or `running` row.** For `<n>` with Worktree `<dir>`: `scripts/autopilot/run-status.sh --json <dir> > <scratch>/j.json`, then `supervisor.sh map <scratch>/j.json --started <Started> --ledger .autopilot/supervisor.md` and `ledger set <n> State <result>`. Exit 2 (worktree gone) or 3 (several ledgers): `supervisor.sh map --exit <code> --started <Started>` gives `lost`; put the exit code in Note. `done` frees the slot; `running` keeps it and is never started twice.
+3. **Liveness.** A `running` row whose Session id is not in the `list_sessions` ids while its state is not `done`: `ledger set <n> State lost`, and report it. Never restart a `lost` issue yourself.
+4. **A `starting` row with an empty Worktree or Session cell** (the supervisor ended mid-start): look for a worktree and a session of the issue (`list_sessions`, `git worktree list`). Found: fill the cells, State `running`. None: `supervisor.sh retry <n>` (back to `queued`, or `failed` after 3 tries).
+5. Then the advance loop.
 
 ## Report
 
-Finish with `supervisor.sh ledger table` and nothing longer.
+For each run the mapping left `running` whose run-status JSON state is `asking`, `stuck`, `blocked` or `dead-no-ledger`, and for each `lost` row, tell the person the issue, the state and why, from the JSON `escalation` (its `banner` and `questions` for `asking` and `blocked`) or the reason. A `dead-no-ledger` run within Grace counts as `running`: no alarm. Never answer a question, unblock or restart such a run yourself; the person decides. Finish with `supervisor.sh ledger table`.
+
+## Watcher
+
+After an advance that leaves issues `starting` or `running`, start `scripts/autopilot/supervisor-watch.sh` with `run_in_background` and end the turn. It exits on the first state change (`CHANGED <issue> <old> <new>`) or after 10 minutes (`CEILING`; `AUTOPILOT_WATCH_CEILING` sets it), and its exit wakes you: run *Restart* steps 2 to 4 and the advance loop again. Never poll with `sleep`.

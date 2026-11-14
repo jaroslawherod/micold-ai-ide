@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-aqhtd9
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M2 (implement)
-- **Next step**: dispatch the M2 milestone unit (T014–T018)
+- **Phase**: M2 (gate and review)
+- **Next step**: M2 full gate, then Review A (high) and Review B by the orchestrator, then the PR
 
 ## Pull requests
 
@@ -53,6 +53,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 | 2 | M1 | 1b47d969deda1a299d42c6d4098ce871113166ea | 883e9e28e4bcb50d050a1933e298048422f50072:1b47d969deda1a299d42c6d4098ce871113166ea | CLEAN (scoped, sonnet; all 8 round-1 findings verified fixed) |
 | Review B M1 | 2 | M1 | 1b47d969deda1a299d42c6d4098ce871113166ea | 883e9e28e4bcb50d050a1933e298048422f50072:1b47d969deda1a299d42c6d4098ce871113166ea | CHANGES: 1 MAJOR (5 MISSING paths not in drift-M1.md), fixed |
 | Review B M1 | 3 | M1 | d85c11e2d86f1483d7fea77719665d2beec3d849 | c6eec4d17d8f2c33413a5ae234d64920cd3608fe:d85c11e2d86f1483d7fea77719665d2beec3d849 | CLEAN (scoped, sonnet) |
+
+## Red runs
+
+M2 (before implementing, `bash scripts/tests/supervisor.test.sh`): `supervisor: 112 case(s), 45 failure(s)`.
+- T014 map, retry, skipped, check-owner cases: `unknown subcommand map|retry|check-owner` (exit 2, want 0/1), failing for the missing subcommands.
+- T016 watcher cases: `supervisor-watch.sh: No such file or directory` (exit 127), failing for the missing script.
+- T018 skill-text cases: grep exit 1 (no *Restart*, `check-owner`, `supervisor.sh map`, `retry`, `list_sessions`, `run_in_background`, `supervisor-watch.sh` in SKILL.md).
 
 ## Declined review findings
 
