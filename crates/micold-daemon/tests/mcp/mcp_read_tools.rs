@@ -130,7 +130,7 @@ async fn whoami_names_the_caller_its_project_worktree_and_cli() {
 #[tokio::test]
 async fn list_worktrees_is_default_then_the_sidebars_set() {
     let f = fixture().await;
-    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let out = f.ok(sid(1), "list_worktrees", json!({})).await;
     let listed = refs(&out, "worktrees");
     assert_eq!(listed[0], "default");
     for name in ["a", "b", AGENT_WORKTREE] {
@@ -177,7 +177,7 @@ async fn each_worktree_counts_the_sessions_it_hosts() {
         AiCli::Pi,
     )])
     .await;
-    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let out = f.ok(sid(1), "list_worktrees", json!({})).await;
     assert_eq!(row(&out, "worktrees", "default")["session_count"], 1);
     assert_eq!(row(&out, "worktrees", "a")["session_count"], 2);
     assert_eq!(row(&out, "worktrees", "b")["session_count"], 1);
@@ -186,7 +186,7 @@ async fn each_worktree_counts_the_sessions_it_hosts() {
 #[tokio::test]
 async fn an_agent_named_worktree_is_listed_like_any_other() {
     let f = fixture().await;
-    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let out = f.ok(sid(1), "list_worktrees", json!({})).await;
     let agent = row(&out, "worktrees", AGENT_WORKTREE);
     assert!(agent.get("assistant_owned").is_none());
 }
@@ -195,7 +195,7 @@ async fn an_agent_named_worktree_is_listed_like_any_other() {
 async fn a_worktree_whose_directory_is_gone_is_missing() {
     let f = fixture().await;
     std::fs::remove_dir_all(f.repo().join(".claude/worktrees/a")).unwrap();
-    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let out = f.ok(sid(1), "list_worktrees", json!({})).await;
     assert_eq!(row(&out, "worktrees", "a")["status"], "missing");
 }
 
@@ -204,14 +204,14 @@ async fn a_directory_git_does_not_know_is_prunable() {
     let f = fixture().await;
     let orphan = f.repo().join(".claude/worktrees/orphan");
     std::fs::create_dir_all(&orphan).unwrap();
-    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let out = f.ok(sid(1), "list_worktrees", json!({})).await;
     assert_eq!(row(&out, "worktrees", "orphan")["status"], "prunable");
 }
 
 #[tokio::test]
 async fn list_sessions_marks_only_the_caller() {
     let f = fixture().await;
-    let out = f.ok(sid(3), "list_sessions", json!({})).await;
+    let out = f.ok(sid(1), "list_sessions", json!({})).await;
     let mut listed = refs(&out, "sessions");
     listed.sort();
     assert_eq!(
@@ -220,7 +220,7 @@ async fn list_sessions_marks_only_the_caller() {
         "the other project's session is not listed"
     );
     for s in out["sessions"].as_array().unwrap() {
-        assert_eq!(s["is_caller"], json!(s["ref"] == sid(3).0.to_string()));
+        assert_eq!(s["is_caller"], json!(s["ref"] == sid(1).0.to_string()));
     }
     let s2 = row(&out, "sessions", &sid(2).0.to_string());
     assert_eq!(
@@ -259,10 +259,10 @@ async fn list_sessions_and_get_session_never_return_hook_activity() {
         f.state.note_hook_activity(sid(2), &prompt),
         "the prompt is captured"
     );
-    let list = f.ok(sid(3), "list_sessions", json!({})).await.to_string();
+    let list = f.ok(sid(1), "list_sessions", json!({})).await.to_string();
     let one = f
         .ok(
-            sid(3),
+            sid(1),
             "get_session",
             json!({"session": sid(2).0.to_string()}),
         )
@@ -279,11 +279,11 @@ async fn list_sessions_and_get_session_never_return_hook_activity() {
 async fn list_sessions_filters_by_worktree() {
     let f = fixture().await;
     let a = f
-        .ok(sid(3), "list_sessions", json!({"worktree": "a"}))
+        .ok(sid(1), "list_sessions", json!({"worktree": "a"}))
         .await;
     assert_eq!(refs(&a, "sessions"), [sid(2).0.to_string()]);
     let root = f
-        .ok(sid(3), "list_sessions", json!({"worktree": "default"}))
+        .ok(sid(1), "list_sessions", json!({"worktree": "default"}))
         .await;
     assert_eq!(refs(&root, "sessions"), [sid(1).0.to_string()]);
 }
@@ -292,7 +292,7 @@ async fn list_sessions_filters_by_worktree() {
 async fn list_sessions_on_an_unknown_worktree_is_not_found() {
     let f = fixture().await;
     let error = f
-        .err(sid(3), "list_sessions", json!({"worktree": "nope"}))
+        .err(sid(1), "list_sessions", json!({"worktree": "nope"}))
         .await;
     assert_eq!(error["category"], "not_found");
 }
@@ -308,7 +308,7 @@ async fn a_regular_terminal_session_is_listed_as_such() {
     .await;
     let out = f
         .ok(
-            sid(3),
+            sid(1),
             "get_session",
             json!({"session": sid(5).0.to_string()}),
         )
@@ -326,7 +326,7 @@ async fn get_session_reports_a_failure_reason_only_for_a_failed_session() {
     let f = fixture_with(vec![failed]).await;
     let out = f
         .ok(
-            sid(3),
+            sid(1),
             "get_session",
             json!({"session": sid(6).0.to_string()}),
         )
@@ -336,7 +336,7 @@ async fn get_session_reports_a_failure_reason_only_for_a_failed_session() {
 
     let idle = f
         .ok(
-            sid(3),
+            sid(1),
             "get_session",
             json!({"session": sid(2).0.to_string()}),
         )
@@ -352,14 +352,14 @@ async fn an_unknown_or_foreign_session_is_not_found_with_the_same_message() {
     let foreign = sid(9);
     let e1 = f
         .err(
-            sid(3),
+            sid(1),
             "get_session",
             json!({"session": unknown.0.to_string()}),
         )
         .await;
     let e2 = f
         .err(
-            sid(3),
+            sid(1),
             "get_session",
             json!({"session": foreign.0.to_string()}),
         )
@@ -450,7 +450,7 @@ async fn an_empty_project_answers_default_and_the_caller_alone() {
 #[tokio::test]
 async fn a_returned_worktree_path_is_in_the_platforms_native_form() {
     let f = fixture().await;
-    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let out = f.ok(sid(1), "list_worktrees", json!({})).await;
     let path = row(&out, "worktrees", "a")["path"]
         .as_str()
         .unwrap()

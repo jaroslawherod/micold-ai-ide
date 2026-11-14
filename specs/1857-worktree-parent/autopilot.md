@@ -1,30 +1,32 @@
-# Autopilot ledger — #1858 worktree-parent M1
+# Autopilot ledger — #1858 worktree-parent M1, M1b
 
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.
 
-- **Input**: Milestone M1 of specs/1857-worktree-parent/tasks.md (T001-T014, T020-T022); labels: enhancement, flow:feature
+- **Input**: Milestone M1b (Phase 3b: T030-T032, FR-015, FR-016, FR-017) of specs/1857-worktree-parent/tasks.md; M1 merged earlier; labels: enhancement, flow:feature
 - **Kind**: feature
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1858
-- **Worktree branch**: feat/1858_worktree-parent-m1-persist-and-expose-the-parent
+- **Worktree branch**: claude/project-thread-11hi7h
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: merge (CI)
+- **Next step**: M1b implemented; verify, review, gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
-| #1873 | M1 | open | — |
+| #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
+| (pending) | M1b | to open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | in-review |
+| M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
+| M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | (pending) | implemented |
 
 ## Decisions
 
@@ -33,6 +35,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | milestones | Where do the new daemon tests live? | In `crates/micold-daemon/tests/mcp/` as module `mcp_worktree_parent` (one binary, #1175), not new top-level files; catalog tests are in the same module | agent-resolved | tests/mcp/main.rs |
 | D2 | milestones | Pure id/link rules | In `micold-core/src/worktree_parent.rs` (unit-tested), applied by `Catalog` | agent-resolved | plan.md |
 | D3 | milestones | Relocation test (T011) | No relocation fixture exists for per-project state (state is keyed by project path); covered by the store round trip and daemon restart tests | agent-resolved | store.rs `project_state_path` |
+| D4 | milestones | Where does T030's test live? | `crates/micold-daemon/tests/mcp/mcp_worktree_parent_visibility.rs`, a module of the `mcp` binary (D1), not the top-level file T030 names; tasks.md updated | agent-resolved | tests/mcp/main.rs |
+| D5 | milestones | `default` as the target of `rename_worktree`/`delete_worktree` from a restricted caller | Stays `invalid_input` (argument validation in core, before any scope; reveals nothing); all other out-of-scope targets are `not_found` | agent-resolved | core mcp/tools.rs `not_default` |
+| D6 | milestones | Relay test (FR-017) | A message to the parent passes the scope check (fails only with `conflict`, no running process in the fixture); the typed-in path is covered by mcp_cross_session | agent-resolved | mcp_worktree_parent_visibility.rs |
+| D7 | milestones | Existing tests with a worktree caller listing unrelated worktrees | Fixtures changed: callers moved to the `default` session, or parent links added; behaviour under test unchanged | agent-resolved | mcp_read_tools.rs, mcp_lifecycle_tools.rs |
 
 ## Review rounds
 

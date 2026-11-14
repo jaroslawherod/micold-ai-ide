@@ -156,8 +156,8 @@ nothing in the app or the tools changes a parent after the worktree is created.
 out otherwise). `parent_state` is `known`, or `removed` once the parent worktree was deleted; then
 `parent` keeps the parent's last name. Pass `parent` to `list_worktrees` to list only that
 worktree's direct children (`default` is allowed; a name that is not a worktree gives an empty
-list). The parent is a label for finding runs, not a permission: it changes what a session may do
-to no worktree.
+list). The parent also decides what a session can see: see
+[Which worktrees a session can see](#which-worktrees-a-session-can-see).
 
 A parent follows its worktree through a rename of either one and through a restart of the app.
 Deleting a parent, in the app or with `delete_worktree`, does not delete or change its children:
@@ -353,6 +353,12 @@ A change applies to the very next request, also from sessions that are already r
 request leaves the other session untouched and tells the assistant that the option in Settings
 refused it.
 
+**Only within the worktrees a session can see.** A session reads and types only into sessions of
+the worktrees [it can see](#which-worktrees-a-session-can-see); another one is "not found". To reach
+a session outside that set, an assistant asks its parent, which can see it or can ask its own
+parent in turn: the parent passes the message on with its own `send_session_input`. No tool offers
+a direct route around the rule, so sessions never communicate outside their own scope.
+
 ## Reporting on review comments
 
 When you send a review from the Review tab
@@ -389,6 +395,22 @@ The log records the reference of each report, never the reply.
 **Its own project, and nothing else.** A session's assistant sees the worktrees, branches and
 sessions of the project it runs in. Another project's sessions are reported as "not found", exactly
 as a session that does not exist is, so an assistant cannot even learn that another project has one.
+
+### Which worktrees a session can see
+
+A session in `default` sees every worktree and session of the project. A session in any other
+worktree sees only the worktrees related to its own by parent: its own, its parent, its siblings
+(the worktrees with the same parent) and its direct children, and the sessions in them. A worktree
+with no parent has no parent or siblings to see, so its session sees itself and its children. A
+worktree whose parent was removed has no parent to see either.
+
+Everything else is reported as "not found", exactly as one that does not exist is, in every tool
+that lists, reads or addresses a session or worktree: `list_worktrees`, `list_sessions`,
+`get_session`, `read_session_output`, `send_session_input`, `interrupt_session`, `start_session`,
+`stop_session`, `create_session`, `rename_worktree` and `delete_worktree`. Listings leave it out.
+`create_worktree` takes an explicit `parent` only from the same set, so a session outside `default`
+cannot name `default` or an unrelated worktree: that is refused with `invalid_input` and nothing is
+created. The permission settings below still apply on top.
 
 Each session connects with its own key. The key is created when the session starts, stops working
 when the session is deleted (directly or with its worktree), and is never reused after the service

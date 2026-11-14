@@ -164,12 +164,24 @@ impl Sandbox {
 
     /// Call `tool` as S1; it must succeed.
     async fn ok(&self, tool: &str, args: Value) -> Value {
-        call_ok(self.addr, &credential(&self.state, sid(S1)), tool, args).await
+        call_ok(
+            self.addr,
+            &full_view_credential(&self.state, sid(S1)),
+            tool,
+            args,
+        )
+        .await
     }
 
     /// Call `tool` as S1; it must fail.
     async fn err(&self, tool: &str, args: Value) -> Value {
-        call_err(self.addr, &credential(&self.state, sid(S1)), tool, args).await
+        call_err(
+            self.addr,
+            &full_view_credential(&self.state, sid(S1)),
+            tool,
+            args,
+        )
+        .await
     }
 
     /// How many numbered lines the stand-in prints before its prompt.
@@ -739,7 +751,7 @@ async fn at_confirm_each_send_an_unanswered_send_needs_confirmation_and_s2_is_un
     s.set_access(CrossSessionAccess::ConfirmEachSend);
     let mut window = fake_window(&s.state);
 
-    let (addr, bearer) = (s.addr, credential(&s.state, sid(S1)));
+    let (addr, bearer) = (s.addr, full_view_credential(&s.state, sid(S1)));
     let args = json!({"session": reference(s2), "text": TEXT});
     let call =
         tokio::spawn(async move { call_err(addr, &bearer, "send_session_input", args).await });
