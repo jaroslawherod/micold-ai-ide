@@ -205,6 +205,11 @@ impl FakeDaemon {
     pub async fn accepted(mut self, announcement: &LinkAnnouncement) -> LinkedDaemon {
         let verdict = self.announce(announcement).await;
         assert_eq!(verdict, LinkVerdict::Accepted);
+        self.accepted_after_verdict()
+    }
+
+    /// Switch to the wire codec after an `Accepted` verdict read with [`Self::announce`].
+    pub fn accepted_after_verdict(self) -> LinkedDaemon {
         LinkedDaemon {
             framed: self.framed.map_codec(|_| ClientCodec::new()),
         }

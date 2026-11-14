@@ -661,8 +661,21 @@ refused at `Hello` and listed the same way. A refusal for the build (`BuildMisma
 authentication leaves the registry unchanged. A mismatch never overwrites an id that has a live link:
 the claim is refused and that record and link stay as they were. If the id's link is open but silent
 (`offline`), the silent link is closed and the record becomes `needs-update`. A `needs-update`
-daemon that links again on the current version becomes `online`. The registry is still in memory;
-one live link per id and a registry that survives a restart follow in the same issue (#1724).
+daemon that links again on the current version becomes `online`.
+
+One daemon id has at most one live link (FR-007). A second link that claims an id whose link is
+open and answering is refused with `Refused { reason: "already_linked", ... }` (`a link for daemon
+<id> is already open`); the first link and its record are untouched. A claim is accepted, and
+replaces the old link once its `Hello` is confirmed, when the old link's transport has closed (at
+once: the id does not wait for the deadline, though the record still turns `offline` at it if no
+new link arrives), when the old link is open but silent (`offline`: it is then closed), or when the
+id has no link. An accepted announcement *reserves* the id until its `Hello`: for up to 9 s
+(`LIVENESS_DEADLINE`) a rival claim is refused `already_linked`, and a link that sends no `Hello` in
+that time, or closes, releases the id with no record change. If a silent old link answers while a
+new link's reservation is pending, the old link keeps the id and the new one is closed. Claims are
+taken under one lock, so of two daemons claiming one id at the same moment exactly one is accepted.
+The registry is still in memory; a registry that survives a restart follows in the same issue
+(#1724).
 
 ## Finding the logs and recent errors
 

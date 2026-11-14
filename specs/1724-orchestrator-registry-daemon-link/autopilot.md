@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1724
-- **Worktree branch**: feat/1724_feat-micold-daemon-orchestrator-registry-daemon
+- **Worktree branch**: claude/project-thread-daw24a
 - **Started**: 2026-11-11
 - **Phase**: milestone M4
-- **Next step**: dispatch the M4 milestone unit (T031–T035)
+- **Next step**: M4 reviews A (high) and B (conformance) on the committed M4 head; then full gate left to CI, push, PR
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | orchestrator starts, links and lists a daemon, no session hosted | #1849 | merged |
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
-| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | pending |
+| M4 | T031–T035 | full | one live link per id, reservation expiry | #… | implemented, in review |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #… | pending |
 | M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
 
@@ -83,7 +83,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-M3 squash-merged 2026-11-14 as 8bcf7894 (PR #1892, all CI jobs green on baeae6ef; reviews A and B clean in round 2). origin/main merged into the branch after the merge. Cloud thread pushed to `claude/project-thread-k0fxqv`, not the feat/ branch. Next thread: `/speckit-autopilot resume #1724`, which starts M4 (T031–T035, one live link per daemon id, reservation expiry) from this branch.
+None. (M4 started 2026-11-14 on `claude/project-thread-daw24a` from f94f183, after M3's merge 8bcf7894b91548a647319de47fecca688e0f74af.)
 
 ## Open escalation
 
