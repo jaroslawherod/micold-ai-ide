@@ -11,21 +11,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9ycwrh
 - **Runs as**: the orchestrator runs units as `autopilot-unit` in a cloud thread (no `mise`, no `gh`; PRs opened by the orchestrator)
 - **Started**: 2026-11-12
-- **Phase**: M1 (implement)
-- **Next step**: M1 fixes for review A/B round 1 done; scoped re-review of A, then merge of #1885
+- **Phase**: M2 (implement)
+- **Next step**: dispatch the M2 milestone unit (T014–T018)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1865 | Design | merged | bec5d62c7 |
-| #1885 | M1 | open (draft) | … |
+| #1885 | M1 | merged | 2084ae6eb |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | capped, gated queue start with ledger | #… | pending |
+| M1 | T001–T013 | full | capped, gated queue start with ledger | #1885 | merged |
 | M2 | T014–T018 | full | resume from ledger, report, watcher | #… | pending |
 | M3 | T019–T021 | full | overlap sequencing | #… | pending |
 | M4 | T022–T023 | light | small-context skill-text proofs | #… | pending |
@@ -61,8 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 merged in #1885 (squash 2084ae6eb) on 2026-11-14. Next: a fresh cloud thread runs `/speckit-autopilot resume #1813` and dispatches the M2 milestone unit (T014–T018). That thread works on its own `claude/...` branch: set the **Worktree branch** line above to it first (resume.sh finds the ledger by that line; it falls back to origin/main). No open findings. Reviews ran as `autopilot-reviewer` subagents dispatched by the orchestrator (units have no Agent tool); `verdict-guard.sh`/`wait-merge.sh` need gh, so the orchestrator merged via GitHub MCP after the ledger's Review rounds were CLEAN for the head.
 
 ## Open escalation
 
