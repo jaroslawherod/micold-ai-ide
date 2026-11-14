@@ -122,11 +122,6 @@ impl Fixture {
         ];
         #[cfg(unix)]
         let stub = claude_stub.then(|| self::claude_stub(store.path()));
-        #[cfg(not(unix))]
-        let stub = {
-            let _ = claude_stub;
-            None
-        };
         let state = state_over(
             vec![(project.path().to_path_buf(), true, sessions)],
             store.path(),

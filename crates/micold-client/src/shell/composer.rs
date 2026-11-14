@@ -81,8 +81,7 @@ fn update_message(app: &mut App, msg: Msg) -> Task<Message> {
             let phase = app.core.composers.phase(session);
             let selecting = app.core.transcript_selection.selecting(session);
             let focused = app.core.window.focused_field == Some(FieldId::Transcript(session));
-            let intent =
-                transcript_key(&press, phase, selecting, focused, cfg!(target_os = "macos"));
+            let intent = transcript_key(&press, phase, selecting, focused, false);
             // Feature 1550: the transcript's own keys are its selection's.
             let select = match intent {
                 KeyIntent::CopySelection => Some(SelectMsg::CopySelection { session }),

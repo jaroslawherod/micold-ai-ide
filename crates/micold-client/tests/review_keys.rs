@@ -867,8 +867,8 @@ fn chord() -> Press {
     Press {
         key: PressKey::Enter,
         primary: true,
-        ctrl: !cfg!(target_os = "macos"),
-        logo: cfg!(target_os = "macos"),
+        ctrl: true,
+        logo: false,
         shift: true,
         ..press('x')
     }
@@ -941,8 +941,8 @@ fn the_send_chord_in_the_comment_box_sends_the_saved_drafts_and_keeps_the_box() 
         press('j'),
         Press {
             primary: true,
-            ctrl: !cfg!(target_os = "macos"),
-            logo: cfg!(target_os = "macos"),
+            ctrl: true,
+            logo: false,
             key: PressKey::Enter,
             ..press('x')
         },
@@ -1012,11 +1012,7 @@ fn with_the_switch_off_the_send_chord_still_sends_and_is_named() {
         Effect::ReviewSend { count: 1, .. }
     ));
     assert_eq!(composer_press(&chord(), false), Some(Msg::SendPressed));
-    let chord_label = if cfg!(target_os = "macos") {
-        "Cmd+Shift+Enter"
-    } else {
-        "Ctrl+Shift+Enter"
-    };
+    let chord_label = "Ctrl+Shift+Enter";
     for on in [true, false] {
         assert_eq!(
             with_key_hint(SEND_TOOLTIP, ReviewAction::Send, on),
@@ -1081,11 +1077,7 @@ fn question_mark_closes_the_sheet_the_composer_opened() {
 /// Back and Forward as the sheet ends with them (FR-014, contracts/ui.md U6). The labels are
 /// written out, not taken from the code under test.
 fn history_rows() -> [(String, &'static str); 2] {
-    let (back, forward) = if cfg!(target_os = "macos") {
-        ("Cmd+[", "Cmd+]")
-    } else {
-        ("Alt+←", "Alt+→")
-    };
+    let (back, forward) = ("Alt+←", "Alt+→");
     [
         (back.to_string(), "Back (also the mouse back button)"),
         (
@@ -1131,12 +1123,8 @@ fn with_the_switch_off_the_sheet_lists_only_the_chords() {
     assert!(!sheet_open(&app), "`?` does nothing");
     app.update_changes(Msg::ShortcutsOpened);
     let model = shortcut_sheet(&app).expect("open");
-    let mac = cfg!(target_os = "macos");
     let mut want: Vec<(String, &str)> = sheet_rows(false)
-        .map(|row| {
-            let (other, macos) = row.labels();
-            (if mac { macos } else { other }, row.sheet)
-        })
+        .map(|row| (row.labels().0, row.sheet))
         .collect();
     want.extend(history_rows());
     assert_eq!(model.rows_of("Review"), want);

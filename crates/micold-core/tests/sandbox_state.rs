@@ -618,7 +618,7 @@ fn the_mount_set_is_out_of_date_exactly_while_the_sets_differ() {
         paths
             .iter()
             .map(|s| {
-                micold_core::sandbox::pathmap::map_for(Path::new(s), cfg!(windows))
+                micold_core::sandbox::pathmap::map_for(Path::new(s), false)
                     .to_string_lossy()
                     .into_owned()
             })

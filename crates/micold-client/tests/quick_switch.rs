@@ -865,9 +865,6 @@ fn the_chord_pressed_in_the_field_still_reaches_the_toggle() {
     // Research R8: the field leaves the press uncaptured so `app_chord_listener` hears it.
     let mut state = three();
     open(&mut state);
-    #[cfg(target_os = "macos")]
-    let primary = iced::keyboard::Modifiers::LOGO;
-    #[cfg(not(target_os = "macos"))]
     let primary = iced::keyboard::Modifiers::CTRL;
     let (messages, status) = press_in_dialog(
         &state,

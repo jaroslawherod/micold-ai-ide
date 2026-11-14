@@ -32,7 +32,6 @@ pub trait LinkOpener: Send + Sync {
 }
 
 /// How long a launcher is waited for before it counts as launched (contract §2).
-#[cfg_attr(windows, allow(dead_code))]
 pub const LAUNCH_WINDOW: Duration = Duration::from_secs(2);
 
 /// How often a launcher is checked inside the window.
@@ -178,8 +177,6 @@ fn reveal_linux(runner: &dyn CommandRunner, path: &Path) -> Result<(), OpenFailu
 fn file_uri(path: &Path) -> String {
     #[cfg(unix)]
     let bytes = std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()).to_vec();
-    #[cfg(not(unix))]
-    let bytes = path.to_string_lossy().into_owned().into_bytes();
     let mut uri = String::from("file://");
     for byte in bytes {
         match byte {
@@ -233,74 +230,6 @@ impl LinkOpener for SystemLinkOpener {
 
     fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
         reveal_linux(self, path)
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl LinkOpener for SystemLinkOpener {
-    fn open(&self, target: &str) -> Result<(), OpenFailure> {
-        // `open` hands the address to Launch Services and exits; the application it starts does
-        // not inherit this pipe, so reading stderr at exit cannot block on it.
-        let child = spawn("open", &[OsStr::new(target)], true)?;
-        launch_window(child, LAUNCH_WINDOW, classify_macos_open)
-    }
-
-    fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
-        let child = spawn("open", &[OsStr::new("-R"), path.as_os_str()], true)?;
-        launch_window(child, LAUNCH_WINDOW, classify_macos_open)
-    }
-}
-
-#[cfg(windows)]
-impl LinkOpener for SystemLinkOpener {
-    fn open(&self, target: &str) -> Result<(), OpenFailure> {
-        use windows_sys::Win32::System::Com::{
-            CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
-        };
-        use windows_sys::Win32::UI::Shell::ShellExecuteW;
-        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-        let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain(Some(0)).collect() };
-        let verb = wide("open");
-        let file = wide(target);
-        // `ShellExecuteW` can hand the verb to a shell extension that needs COM, so its documentation
-        // asks for COM on the calling thread. A blocking-pool thread may already have it (then this
-        // is S_FALSE) or have it in another mode (RPC_E_CHANGED_MODE); either way the call proceeds,
-        // and COM stays up for the thread's life rather than being torn down per open.
-        // SAFETY: the reserved pointer must be null.
-        let _ = unsafe {
-            CoInitializeEx(
-                std::ptr::null(),
-                (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
-            )
-        };
-        // SAFETY: both strings are NUL-terminated UTF-16 buffers that outlive the call, and the
-        // null window, parameters and directory are documented as optional.
-        let ret = unsafe {
-            ShellExecuteW(
-                std::ptr::null_mut(),
-                verb.as_ptr(),
-                file.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-        classify_shell_execute(ret as isize)
-    }
-
-    fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
-        use std::os::windows::process::CommandExt;
-        use std::process::Command;
-        // Rust's own quoting would wrap the whole `/select,…` argument, which explorer does not
-        // parse; a Windows path cannot contain `"`, so quoting it by hand is safe.
-        // `no_window` for the rule every spawn follows (feature 030, FR-024); explorer is a GUI
-        // program, so the flag changes nothing for it.
-        micold_core::process::no_window(&mut Command::new("explorer.exe"))
-            .raw_arg(format!("/select,\"{}\"", path.display()))
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| OpenFailure::LaunchFailed(format!("couldn't start explorer.exe: {e}")))
     }
 }
 

@@ -43,27 +43,14 @@ fn write_script(dir: &tempfile::TempDir, name: &str, contents: &str) -> PathBuf 
 ///
 /// Unix keeps running in parallel: a no-op guard there costs nothing and serialising it would slow
 /// two of the three CI platforms to fix a problem neither has.
-struct SpawnGuard {
-    #[cfg(windows)]
-    _held: std::sync::MutexGuard<'static, ()>,
-}
-
-#[cfg(windows)]
-static SPAWNING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+struct SpawnGuard {}
 
 /// Take the spawn lock. Call it as a test's **first** statement, before any `Instant::now()`, so
 /// time spent waiting for the lock never lands inside a measured window.
 fn spawn_guard() -> SpawnGuard {
-    SpawnGuard {
-        // Poison-tolerant on purpose. A failure in this file manifests as a panic while the lock is
-        // held, and a poisoned mutex would turn one real assertion failure into seven others that
-        // report the poisoning instead of what they were testing.
-        #[cfg(windows)]
-        _held: SPAWNING.lock().unwrap_or_else(|e| e.into_inner()),
-    }
+    SpawnGuard {}
 }
 
-#[cfg(not(windows))]
 mod unix {
     use super::*;
 
@@ -262,129 +249,6 @@ mod unix {
     }
 }
 
-#[cfg(windows)]
-mod windows {
-    use super::*;
-
-    /// The budget for a test that expects the script to be sourced, not to run out of time (#381).
-    ///
-    /// [`spawn_guard`] took the contention out, and a `windows-latest` runner still spent more
-    /// than ten seconds on one cold `powershell.exe` start: four tests failed together on the
-    /// baseline, serialised, having never reached their scripts. For these tests the budget is not
-    /// what is being tested — only that the answer arrives — so they get the most a user may
-    /// configure (`MAX_ENV_INCLUDE_TIMEOUT_SECS`). The tests whose budget *is* the subject keep
-    /// their own small one, so this cannot hide a slow resolution: those still fail if one is.
-    const ANSWERED: Duration =
-        Duration::from_secs(micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS);
-
-    #[test]
-    fn exported_variable_is_captured() {
-        let _guard = spawn_guard();
-        let dir = tempfile::tempdir().unwrap();
-        let script = write_script(&dir, "profile.ps1", "$env:QUICKSTART_MARKER = 'hello'\n");
-
-        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
-
-        assert_eq!(outcome, EnvIncludeOutcome::Success);
-        assert!(vars.contains(&("QUICKSTART_MARKER".to_string(), "hello".to_string())));
-    }
-
-    #[test]
-    fn nonexistent_path_is_missing_script_with_no_vars() {
-        let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join("does-not-exist.ps1");
-
-        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
-
-        assert_eq!(outcome, EnvIncludeOutcome::MissingScript);
-        assert!(vars.is_empty());
-    }
-
-    #[test]
-    fn non_zero_exit_captures_diagnostic() {
-        let _guard = spawn_guard();
-        let dir = tempfile::tempdir().unwrap();
-        let script = write_script(
-            &dir,
-            "profile.ps1",
-            "Write-Output 'something went wrong'\nexit 1\n",
-        );
-
-        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
-
-        assert!(vars.is_empty());
-        match outcome {
-            EnvIncludeOutcome::NonZeroExit { code, diagnostic } => {
-                assert_eq!(code, 1);
-                assert!(diagnostic.contains("something went wrong"));
-            }
-            other => panic!("expected NonZeroExit, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn hanging_script_times_out_promptly() {
-        let _guard = spawn_guard();
-        let dir = tempfile::tempdir().unwrap();
-        let script = write_script(&dir, "profile.ps1", "Start-Sleep -Seconds 999\n");
-
-        let start = std::time::Instant::now();
-        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_millis(500));
-        let elapsed = start.elapsed();
-
-        assert!(vars.is_empty());
-        assert!(matches!(outcome, EnvIncludeOutcome::TimedOut { .. }));
-        assert!(
-            elapsed < Duration::from_secs(10),
-            "resolve() took {elapsed:?}, expected to return promptly after the timeout"
-        );
-    }
-
-    #[test]
-    fn empty_script_succeeds_with_no_vars() {
-        let _guard = spawn_guard();
-        let dir = tempfile::tempdir().unwrap();
-        let script = write_script(&dir, "profile.ps1", "");
-
-        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
-
-        assert_eq!(outcome, EnvIncludeOutcome::Success);
-        assert!(vars.is_empty());
-    }
-
-    /// BUG-002 (specs/011-env-include-script/bugs/BUG-002.md): Windows equivalent of the Unix
-    /// directory-dependent-PATH regression test — see that module's doc comment.
-    #[test]
-    fn directory_dependent_export_is_captured_only_when_cwd_contains_marker() {
-        let _guard = spawn_guard();
-        let script_dir = tempfile::tempdir().unwrap();
-        let script = write_script(
-            &script_dir,
-            "profile.ps1",
-            "if (Test-Path .\\.bug002-marker) { $env:BUG002_VAR = 'present' }\n",
-        );
-
-        let project_with_marker = tempfile::tempdir().unwrap();
-        std::fs::File::create(project_with_marker.path().join(".bug002-marker")).unwrap();
-        let (vars, outcome) = resolve(&script, project_with_marker.path(), ANSWERED);
-        assert_eq!(outcome, EnvIncludeOutcome::Success);
-        assert!(
-            vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
-            "expected BUG002_VAR to be captured when the sourcing cwd contains the marker file; \
-             captured vars: {vars:?}"
-        );
-
-        let project_without_marker = tempfile::tempdir().unwrap();
-        let (vars, outcome) = resolve(&script, project_without_marker.path(), ANSWERED);
-        assert_eq!(outcome, EnvIncludeOutcome::Success);
-        assert!(
-            !vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
-            "expected BUG002_VAR to be absent when the sourcing cwd does not contain the marker; \
-             captured vars: {vars:?}"
-        );
-    }
-}
-
 /// BUG-003 (specs/011-env-include-script/bugs/BUG-003.md): a sourced script that **backgrounds a
 /// process holding the pipe** must not hold `resolve()` open past its own timeout.
 ///
@@ -407,25 +271,11 @@ fn a_script_that_backgrounds_a_pipe_holder_still_returns_promptly() {
     let _guard = spawn_guard();
     let dir = tempfile::tempdir().unwrap();
 
-    #[cfg(not(windows))]
     let script = write_script(
         &dir,
         "script.sh",
         // Inherits this process's stdout, then outlives the script that started it.
         "sleep 120 &\nexport BUG003_VAR=done\n",
-    );
-    #[cfg(windows)]
-    let script = write_script(
-        &dir,
-        "profile.ps1",
-        // `UseShellExecute = false` with no redirection makes the child inherit our handles, which
-        // is the case that matters — a job runner or version-manager helper left holding stdout.
-        "$si = New-Object System.Diagnostics.ProcessStartInfo\n\
-         $si.FileName = 'powershell'\n\
-         $si.Arguments = '-NoProfile -Command Start-Sleep -Seconds 120'\n\
-         $si.UseShellExecute = $false\n\
-         [void][System.Diagnostics.Process]::Start($si)\n\
-         $env:BUG003_VAR = 'done'\n",
     );
 
     let timeout = Duration::from_secs(2);
@@ -461,10 +311,7 @@ fn a_budget_too_small_to_establish_a_baseline_says_so() {
     let _guard = spawn_guard();
     let dir = tempfile::tempdir().unwrap();
     // A script that would succeed instantly given any real budget at all.
-    #[cfg(not(windows))]
     let script = write_script(&dir, "script.sh", "export BUG003_TINY=yes\n");
-    #[cfg(windows)]
-    let script = write_script(&dir, "profile.ps1", "$env:BUG003_TINY = 'yes'\n");
 
     let (vars, outcome) = resolve(&script, dir.path(), Duration::from_millis(1));
 
@@ -496,10 +343,7 @@ fn a_budget_too_small_to_establish_a_baseline_says_so() {
 fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
     let _guard = spawn_guard();
     let dir = tempfile::tempdir().unwrap();
-    #[cfg(not(windows))]
     let script = write_script(&dir, "script.sh", "sleep 120\n");
-    #[cfg(windows)]
-    let script = write_script(&dir, "profile.ps1", "Start-Sleep -Seconds 120\n");
 
     let timeout = Duration::from_secs(2);
     let start = std::time::Instant::now();

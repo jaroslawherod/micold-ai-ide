@@ -45,7 +45,7 @@ impl PathFacts for RealPathFacts {
     }
 
     fn case_insensitive(&self, _path: &Path) -> bool {
-        cfg!(any(windows, target_os = "macos"))
+        false
     }
 }
 

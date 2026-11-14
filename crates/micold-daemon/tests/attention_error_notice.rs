@@ -39,14 +39,6 @@ fn respawns_crash() {
     ONCE.call_once(|| {
         #[cfg(unix)]
         std::env::set_var("SHELL", "/bin/false");
-        #[cfg(windows)]
-        {
-            let dir = std::env::temp_dir().join(format!("micold-613-false-{}", std::process::id()));
-            std::fs::create_dir_all(&dir).expect("a directory for the crashing shell");
-            let script = dir.join("false.cmd");
-            std::fs::write(&script, "@exit 1\r\n").expect("the crashing shell is written");
-            std::env::set_var("COMSPEC", &script);
-        }
     });
 }
 
@@ -178,12 +170,6 @@ fn process_exiting(id: SessionId, status: u8) -> PtySession {
     let mut cmd = {
         let mut cmd = CommandBuilder::new("sh");
         cmd.arg("-c");
-        cmd
-    };
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut cmd = CommandBuilder::new("cmd");
-        cmd.arg("/c");
         cmd
     };
     cmd.arg(format!("exit {status}"));

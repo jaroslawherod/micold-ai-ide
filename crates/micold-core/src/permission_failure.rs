@@ -90,12 +90,7 @@ impl PermissionFailure {
 /// [`None`] on every platform but macOS, and on macOS for any error that is not
 /// `PermissionDenied` or any path outside a gated location.
 pub fn classify(err: &io::Error, path: &Path) -> Option<PermissionFailure> {
-    classify_on(
-        err.kind(),
-        path,
-        home_dir().as_deref(),
-        cfg!(target_os = "macos"),
-    )
+    classify_on(err.kind(), path, home_dir().as_deref(), false)
 }
 
 /// The rule, with its inputs. Split out so the macOS behaviour is exercised on every platform:

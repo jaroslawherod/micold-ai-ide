@@ -65,31 +65,12 @@ fn echo_sink() -> CommandBuilder {
     CommandBuilder::new("cat")
 }
 
-/// Windows has no `cat`; an interactive `cmd` echoes typed input through the console's line editor.
-#[cfg(windows)]
-fn echo_sink() -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/q");
-    cmd
-}
-
 /// Print `scrollback_line_1` to `scrollback_line_100`, then idle for about a minute.
 #[cfg(unix)]
 fn hundred_lines_then_idle() -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
     cmd.arg("i=1; while [ $i -le 100 ]; do echo scrollback_line_$i; i=$((i+1)); done; sleep 60");
-    cmd
-}
-
-/// `cmd` has no `sleep`; `ping -n 61` to loopback waits about a minute.
-#[cfg(windows)]
-fn hundred_lines_then_idle() -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.args([
-        "/c",
-        "(for /l %i in (1,1,100) do @echo scrollback_line_%i)& ping -n 61 127.0.0.1 >nul",
-    ]);
     cmd
 }
 

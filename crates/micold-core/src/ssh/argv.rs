@@ -19,13 +19,7 @@ pub enum ClientPlatform {
 impl ClientPlatform {
     /// The platform this build runs on.
     pub fn current() -> Self {
-        if cfg!(windows) {
-            ClientPlatform::Windows
-        } else if cfg!(target_os = "macos") {
-            ClientPlatform::MacOs
-        } else {
-            ClientPlatform::Linux
-        }
+        ClientPlatform::Linux
     }
 
     /// The `os` string a remote probe prints for this platform's own OS.
