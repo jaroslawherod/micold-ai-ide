@@ -805,6 +805,12 @@ computer and over SSH**, when no token applies to a repository, git falls back t
 already had (the keychain, `gh`); with no token at all, your git setup is left as it is. A sandbox
 never falls back: it clears every inherited helper.
 
+A **Kubernetes** daemon is the exception: its pod receives tokens only when you turn on that
+daemon's GitHub tokens opt-in, and then only the tokens whose filter names one of its saved
+projects' repositories, or that have no filter. They are kept in a Kubernetes Secret, which anyone
+who can read Secrets in the namespace, and etcd, can read. See
+[GitHub tokens in the pod](kubernetes-daemons.md#github-tokens-in-the-pod).
+
 Tokens you pasted before this version, one per repository, are converted when you first start the
 application: each becomes a token named `owner-repo`, limited to `owner/repo`, so the repository
 keeps using the same token.

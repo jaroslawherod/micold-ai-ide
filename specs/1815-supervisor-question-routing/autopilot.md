@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1815
-- **Worktree branch**: claude/project-thread-ovjkmi
+- **Worktree branch**: claude/project-thread-do55sf
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M3 implemented (T017–T019); Review A and B round 1, then PR
+- **Next step**: M4 implemented and pushed; orchestrator dispatches Review A and B, then opens the PR from pr-title.txt/pr-body.md
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1899 | design (spec, plan, tasks) | merged (squash) | e75744062ef543f93a3085b22f4b846e56d1bf4f |
 | #1901 | M1 batch routing core | merged (squash) | afe9a3fe0d243743505cea0a95c47ed551c51e83 |
 | #1907 | M2 routine questions from repo evidence | merged (squash) | b3ec7f88ce399a4f178b0a9a8a4d869434e788cb |
+| #1911 | M3 context-cap survival | merged (squash) | 9721aedb923006f0625fd368aa1f7e485fde9841 |
 
 ## Milestones
 
@@ -28,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
 | M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | #1907 | merged |
-| M3 | T017–T019 | light | context-cap survival: reask, overdue | | implemented, review due |
-| M4 | T020–T022 | light | upward relay to a reported parent | | pending |
+| M3 | T017–T019 | light | context-cap survival: reask, overdue | #1911 | merged |
+| M4 | T020–T022 | light | upward relay to a reported parent | | implemented, reviews pending |
 
 ## Decisions
 
@@ -58,6 +59,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B | 2 | M3 | 51a7e4129d7156bc92772adbb40de6174165b538 | 8745964f7817a68fc5fec58ae6f5426683123000:51a7e4129d7156bc92772adbb40de6174165b538 | A CLEAN; B CHANGES (1 MAJOR: T018 wording) fixed, plan-drift exit 0 |
 | Review A | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
 | Review B | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
+| Review A | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 2 MAJOR (object shape of list_sessions; `default` parent), 2 MINOR (parent_state/live pick; is_caller fallback), all fixed |
+| Review B | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 1 MAJOR (T021 names supervisor-route.sh; plan-drift exit 0) fixed, 1 MINOR declined |
+| Review A | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: only failed lifecycle demoted; left as is) |
+| Review B | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: contracts/routing-cli.md route target row predates round-1 fixes; close unit updates it) |
 
 ## Declined review findings
 
@@ -69,10 +74,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | Review B 1 | F3 (no red-before-green evidence) | Tests and code were written in one commit; later milestones commit tests first. Noted, not retroactively splittable. |
 | M2 | Review A 1 | F3 (mixed batch By `user`; evidence kept out of the answer) | One escalation is answered by one `resume` and `answer.sh` writes one By per message, so a mixed batch is By `user`; FR-005 requires the evidence in the answer text. The `route gate` ordering part was fixed. |
 | all | Review tasks 1 | F2 (split T019 and T022 into test and edit tasks) | Test files are now named; splitting would renumber T020–T022 and every milestone range for no gain, as the failing test comes first within the task. |
+| M4 | Review B 1 | F2 (no tdd/cycle-log.md) | Light tier: no cycle log is required; the red-then-green run (13 of 282 cases failing before the implementation) is in the PR body. |
 
 ## Handover
 
-None.
+2026-11-14: M3 PR #1911 squash-merged (9721aedb) after Review A and B round 2 CLEAN and green CI; origin/main merged into claude/project-thread-ovjkmi. M4 is unblocked: #1858 M1 (#1873) is on main and `list_sessions` rows carry `parent`/`parent_state` (crates/micold-daemon/src/mcp/tools.rs insert_parent); note the field is the parent worktree's name, so `route target` must map it to a session; sibling visibility (#1858 phase 3b) may still refuse with not_found, which M4's fallback to the user covers. Next thread starts M4 (T020–T022, tier light: unit model sonnet) on its own harness branch: merge claude/project-thread-ovjkmi in and set Worktree branch. Cloud: no mise, gh unauthenticated (GitHub MCP for PR/merge, REST `gh api` for check-runs), units have no Agent tool (orchestrator dispatches reviewers), CI is the gate, never rebase or force-push, squash-merge. Units commit pr-title.txt/pr-body.md under the spec dir.
 
 ## Open escalation
 
@@ -80,4 +86,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- Close unit: extend the `route target` row in contracts/routing-cli.md with the M4 round-1 rules (object-shaped list, is_caller fallback, parent_state known, `default` via worktree lookup, live over failed). Review B M4 round 2 MINOR.

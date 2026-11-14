@@ -10,31 +10,31 @@
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T002 [P] Test: `KubeSettings.github_tokens` defaults off, round-trips, an old JSON without the key loads off, omitted from JSON when off, in `micold-core/src/kube/settings.rs`.
-- [ ] T003 Add `KubeSettings.github_tokens: bool` (`#[serde(default, skip_serializing_if = "std::ops::Not::not")]`, Raw, `new()`) in `micold-core/src/kube/settings.rs`.
-- [ ] T004 [P] Test: `GithubTokenSetting.host` renders `host = "..."` only when `Some`; the value never appears in the rendered config, in `micold-client/src/daemon_config_render.rs`.
-- [ ] T005 Add `host: Option<String>` to `GithubTokenSetting` (`from_store` leaves `None`) in `micold-client/src/daemon_config_render.rs`.
-- [ ] T006 [P] Test: `select_tokens` keeps Settings order, matches `Exact`/`Owner` case-insensitively, keeps an empty-`repos` token only with at least one repository, returns nothing with no repositories (FR-009), in `micold-client/src/daemon_config_delivery.rs`.
-- [ ] T007 Implement `select_tokens` in `micold-client/src/daemon_config_delivery.rs`.
-- [ ] T008 [P] Test: `PodGithubTokens::read` refuses an empty, non-UTF-8, over-`POD_FILE_LIMIT` file and, on Unix, a file with group/other bits, each error naming the token; `entries[i].token_file` ends with `files[i].0`; `Debug` shows no value (the value is a `SecretToken`, not a plain `String`), in `micold-client/src/daemon_config_delivery.rs`.
-- [ ] T009 Implement `PodGithubTokens` (`entries`, `files`, `read`, the client-side Unix loose-mode check on token files as one `#[cfg(unix)]` helper, values held as `SecretToken`, `token_file` = `<STARTUP_ENV_MOUNT>/github-token-<n>`) in `micold-client/src/daemon_config_delivery.rs`.
-- [ ] T010 [P] Test: `ProjectsDial` is the sorted, lower-cased `owner/repo` set from saved projects' `remote`, and a change of it changes the dial identity, in `micold-client/src/daemon.rs`.
-- [ ] T011 Add `Dial::Kubernetes.projects: ProjectsDial` and carry it to `kube_attempt` and `kube_reconnect`, in `micold-client/src/daemon.rs`.
-- [ ] T012 Add `KubeEnv.tokens: PodTokenSource { pat_root: Option<PathBuf>, host: Option<String> }`; production sets `PatStore::on_device()` and no host, in `micold-client/src/daemon.rs`.
+- [X] T002 [P] Test: `KubeSettings.github_tokens` defaults off, round-trips, an old JSON without the key loads off, omitted from JSON when off, in `micold-core/src/kube/settings.rs`.
+- [X] T003 Add `KubeSettings.github_tokens: bool` (`#[serde(default, skip_serializing_if = "std::ops::Not::not")]`, Raw, `new()`) in `micold-core/src/kube/settings.rs`.
+- [X] T004 [P] Test: `GithubTokenSetting.host` renders `host = "..."` only when `Some`; the value never appears in the rendered config, in `micold-client/src/daemon_config_render.rs`.
+- [X] T005 Add `host: Option<String>` to `GithubTokenSetting` (`from_store` leaves `None`) in `micold-client/src/daemon_config_render.rs`.
+- [X] T006 [P] Test: `select_tokens` keeps Settings order, matches `Exact`/`Owner` case-insensitively, keeps an empty-`repos` token only with at least one repository, returns nothing with no repositories (FR-009), in `micold-client/src/daemon_config_delivery.rs`.
+- [X] T007 Implement `select_tokens` in `micold-client/src/daemon_config_delivery.rs`.
+- [X] T008 [P] Test: `PodGithubTokens::read` refuses an empty, non-UTF-8, over-`POD_FILE_LIMIT` file and, on Unix, a file with group/other bits, each error naming the token; `entries[i].token_file` ends with `files[i].0`; `Debug` shows no value (the value is a `SecretToken`, not a plain `String`), in `micold-client/src/daemon_config_delivery.rs`.
+- [X] T009 Implement `PodGithubTokens` (`entries`, `files`, `read`, the client-side Unix loose-mode check on token files as one `#[cfg(unix)]` helper, values held as `SecretToken`, `token_file` = `<STARTUP_ENV_MOUNT>/github-token-<name>`) in `micold-client/src/daemon_config_delivery.rs`.
+- [X] T010 [P] Test: `ProjectsDial` is the sorted, lower-cased `owner/repo` set from saved projects' `remote`, and a change of it changes the dial identity, in `micold-client/src/daemon.rs`.
+- [X] T011 Add `Dial::Kubernetes.projects: ProjectsDial` and carry it to `kube_attempt` and `kube_reconnect`, in `micold-client/src/daemon.rs`.
+- [X] T012 Add `KubeEnv.tokens: PodTokenSource { pat_root: Option<PathBuf>, host: Option<String> }`; production sets `PatStore::on_device()` and no host, in `micold-client/src/daemon.rs`.
 
 ## Phase 3: User Story 1 - A pod daemon gets the scoped token (P1) MVP
 
 **Goal**: with the opt-in on, a pod start delivers the matching tokens; with it off nothing changes.
 **Independent test**: the unit and fake-cluster tests below.
 
-- [ ] T013 [US1] Test: opt-in off reads nothing and adds no key or entry; on, token keys reach `StartRequest::secret_files` and `[[github.tokens]]` entries reach `daemon.toml`; a bad token fails with `cannot deliver the GitHub token "<name>" to the pod: <reason>` before any cluster call; a sentinel value is absent from the rendered config, the pod manifest and captured logs (FR-002), in `micold-client/src/daemon.rs` tests.
-- [ ] T014 [US1] Wire `kube_attempt`/`kube_reconnect`: when `settings.github_tokens`, `select_tokens(GithubTokenSetting::from_store(PatStore::new(env.tokens.pat_root)), projects)`, `PodGithubTokens::read`, `pod_settings.github_tokens = entries`, `delivered.files` gains the keys; apply `env.tokens.host`, in `micold-client/src/daemon.rs`.
-- [ ] T015 [P] [US1] Test: token keys land in the `<name>-startup` Secret, are replaced at the next start, a token deleted in Settings disappears, the Secret is deleted when no key remains, and the first token added or last removed changes the pod's Secret volume (FR-010), in `micold-core/src/kube/start_tests.rs`; a characterization test (may be green at once, the live revert check T026 is the red evidence); fix `start.rs` only if red.
-- [ ] T016 [P] [US1] Test: `KubeDaemonDraft.github_tokens` maps both ways through `of(settings)` and `settings()`, in `micold-client/src/features/daemons_kube.rs`.
-- [ ] T017 [US1] Add the draft field and mapping in `micold-client/src/features/daemons_kube.rs`.
+- [X] T013 [US1] Test: opt-in off reads nothing and adds no key or entry; on, token keys reach `StartRequest::secret_files` and `[[github.tokens]]` entries reach `daemon.toml`; a bad token fails with `cannot deliver the GitHub token "<name>" to the pod: <reason>` before any cluster call; a sentinel value is absent from the rendered config, the pod manifest and captured logs (FR-002), in `micold-client/src/daemon.rs` tests.
+- [X] T014 [US1] Wire `kube_attempt`/`kube_reconnect`: when `settings.github_tokens`, `select_tokens(GithubTokenSetting::from_store(PatStore::new(env.tokens.pat_root)), projects)`, `PodGithubTokens::read`, `pod_settings.github_tokens = entries`, `delivered.files` gains the keys; apply `env.tokens.host`, in `micold-client/src/daemon.rs`.
+- [X] T015 [P] [US1] Test: token keys land in the `<name>-startup` Secret, are replaced at the next start, a token deleted in Settings disappears, the Secret is deleted when no key remains, and the first token added or last removed changes the pod's Secret volume (FR-010), in `micold-core/src/kube/start_tests.rs`; a characterization test (may be green at once, the live revert check T026 is the red evidence); fix `start.rs` only if red.
+- [X] T016 [P] [US1] Test: `KubeDaemonDraft.github_tokens` maps both ways through `of(settings)` and `settings()`, in `micold-client/src/features/daemons_kube.rs`.
+- [X] T017 [US1] Add the draft field and mapping in `micold-client/src/features/daemons_kube.rs`.
 - [ ] T018 [US1] Test (geometry/UI): the tick row after **Allowed credentials** has the label `GitHub tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can read them)` and the help line, in `micold-client/src/ui/settings/daemons.rs` tests.
 - [ ] T019 [US1] Add the tick row (reuse the checkbox-row builder of the allowed-credentials list) in `micold-client/src/ui/settings/daemons.rs`, then run quickstart §B (visual-pass) for the row and add the tick wording in `docs/user-guide/kubernetes-daemons.md`.
-- [ ] T020 [US1] User guide (ships in M1 with the setting, `features/**` is user-facing; word it around the `github_tokens` key in `daemons.json`, no mention of a form tick until M2): the opt-in and its exposure wording, replace the "Until you paste a GitHub token" paragraph in `docs/user-guide/kubernetes-daemons.md`; add the pod note in `docs/user-guide/settings.md#github-tokens`.
+- [X] T020 [US1] User guide (ships in M1 with the setting, `features/**` is user-facing; word it around the `github_tokens` key in `daemons.json`, no mention of a form tick until M2): the opt-in and its exposure wording, replace the "Until you paste a GitHub token" paragraph in `docs/user-guide/kubernetes-daemons.md`; add the pod note in `docs/user-guide/settings.md#github-tokens`.
 
 ## Phase 4: User Story 2 and 3 - The pod holds only the scoped credential; the kind test asserts it (P1/P2)
 
