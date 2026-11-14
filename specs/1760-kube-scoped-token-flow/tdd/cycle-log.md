@@ -139,3 +139,19 @@ Append only. Newest last.
 - refactor: F2 token values stay `SecretToken` until `secret_files` is built for `StartRequest`;
   F6 one `pod_text` limit-and-UTF-8 check for extras, script, env_file and tokens, and core's
   `daemon_config::readable_by_others` for V14 and the token read.
+
+## Cycle 9: U9 the form tick (T018, T019)
+
+- test: `tests/daemons_section_geometry.rs`
+  `the_kubernetes_form_and_row_paint_their_fields_without_overflow` (now opens Credentials and
+  asserts the label and help line); `tests/features_daemons.rs`
+  `the_github_tokens_tick_is_off_by_default_and_saved_with_the_daemon`.
+- red: with `src/ui/settings/daemons.rs` at its pre-M2 state (the message and focus id kept):
+  `scripts/build-lock.sh cargo test -p micold-client --test main -- daemons_section_geometry`
+  -> `23 passed; 1 failed`, panicked at `daemons_section_geometry.rs:523` (the label is not painted).
+  The reducer test cannot be red on its own: `Msg::GithubTokensToggled` did not exist, so it failed
+  to compile before the message was added.
+- green: the tick row added: `--test main -- daemons_section_geometry features_daemon_sections
+  features_daemons_kube features_daemons::` -> `130 passed`, then `features_daemons::` -> `89 passed`.
+- refactor: none needed.
+- visual pass (T019, quickstart §B): pending, run by the orchestrator.

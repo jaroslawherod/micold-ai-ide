@@ -75,7 +75,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T018–T019
 - **Deliverable**: Settings -> Daemons -> a Kubernetes daemon shows the **GitHub tokens** tick (off by default, label names the exposure) (the user guide, shipped in M1 with the setting, gets the tick's wording in T019).
 - **Satisfies**: FR-008 (the label and help, exposure wording); Constitution VII
-- **Verify**: quickstart §B; `scripts/build-lock.sh cargo test -p micold-client features::daemons_kube`
+- **Verify**: quickstart §B; `scripts/build-lock.sh cargo test -p micold-client --test main -- daemons_section_geometry features_daemons`
 - **Depends on**: M1
 - **Tier**: light
 
