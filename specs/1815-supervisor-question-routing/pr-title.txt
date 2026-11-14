@@ -1,1 +1,1 @@
-#1815: autopilot supervisor M4: route session questions to the user in one batch (M2)
+#1815: autopilot supervisor M4: route session questions to the user in one batch (M3)

@@ -38,6 +38,11 @@ pub(crate) fn specificity(filter: &Filter<'_>, repo: &GithubRepo) -> Option<u8> 
         .max()
 }
 
+/// Whether `filter` reaches `repo` at all: no filter, or a pattern naming it (case-insensitive).
+pub fn reaches(filter: &Filter<'_>, repo: &GithubRepo) -> bool {
+    specificity(filter, repo).is_some()
+}
+
 /// The ranked candidates for `repo`: the best specificity first, and in list order within it.
 fn ranked(filters: &[Filter<'_>], rank: impl Fn(&Filter<'_>) -> Option<u8>) -> Vec<usize> {
     let mut found: Vec<(usize, u8)> = filters

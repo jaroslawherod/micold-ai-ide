@@ -139,13 +139,19 @@ impl Sandbox {
     }
 
     async fn call(&self, tool: &str, args: Value) -> Value {
-        call_tool(self.addr, &credential(&self.state, sid(3)), tool, args).await
+        call_tool(
+            self.addr,
+            &full_view_credential(&self.state, sid(3)),
+            tool,
+            args,
+        )
+        .await
     }
 
     async fn ok(&self, args: Value) -> Value {
         call_ok(
             self.addr,
-            &credential(&self.state, sid(3)),
+            &full_view_credential(&self.state, sid(3)),
             "create_session",
             args,
         )
@@ -155,7 +161,7 @@ impl Sandbox {
     async fn err(&self, args: Value) -> Value {
         call_err(
             self.addr,
-            &credential(&self.state, sid(3)),
+            &full_view_credential(&self.state, sid(3)),
             "create_session",
             args,
         )
@@ -517,7 +523,7 @@ async fn start_session_beside_a_running_one_is_a_conflict_the_flag_lifts() {
     assert!(micold_daemon::ops::stop_session(&s.state, second)
         .await
         .unwrap());
-    let caller = credential(&s.state, sid(3));
+    let caller = full_view_credential(&s.state, sid(3));
     let error = call_err(
         s.addr,
         &caller,
@@ -821,7 +827,7 @@ async fn the_first_prompt_goes_to_the_primary_process_even_with_a_shell_attached
     s.state.set_first_prompt_bound(READY_BOUND);
     let before = s.session_ids();
     let addr = s.addr;
-    let credential = credential(&s.state, sid(3));
+    let credential = full_view_credential(&s.state, sid(3));
     let call = tokio::spawn(async move {
         call_ok(
             addr,
@@ -946,7 +952,7 @@ impl Sandbox {
     async fn worktree_ok(&self, caller: SessionId, args: Value) -> Value {
         call_ok(
             self.addr,
-            &credential(&self.state, caller),
+            &full_view_credential(&self.state, caller),
             "create_worktree",
             args,
         )
@@ -956,7 +962,7 @@ impl Sandbox {
     async fn worktree_err(&self, args: Value) -> Value {
         call_err(
             self.addr,
-            &credential(&self.state, sid(3)),
+            &full_view_credential(&self.state, sid(3)),
             "create_worktree",
             args,
         )

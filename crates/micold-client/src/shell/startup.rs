@@ -253,7 +253,8 @@ fn boot() -> (App, Task<Message>) {
         directories::UserDirs::new().as_ref().map(|d| d.home_dir()),
     );
     // What Kubernetes daemons are started with (feature 686).
-    micold_client::daemon::install_kube(micold_client::daemon::KubeEnv::new(
+    // A daemon whose `github_tokens` opt-in is on receives this device's stored tokens (#1760).
+    let mut kube = micold_client::daemon::KubeEnv::new(
         caps.kube_connector(),
         std::sync::Arc::new(crate::shell::daemons::SshKeygen),
         std::sync::Arc::new(crate::shell::daemons::system_ssh()),
@@ -261,7 +262,9 @@ fn boot() -> (App, Task<Message>) {
         directories::UserDirs::new()
             .map(|dirs| dirs.home_dir().to_path_buf())
             .unwrap_or_default(),
-    ));
+    );
+    kube.tokens = micold_client::daemon::PodTokenSource::on_device();
+    micold_client::daemon::install_kube(kube);
     let mut core = State::default();
     // Feature 028 (FR-019): before anything else is loaded, where is this executable running from?
     // Asked here because `current_exe()` is a syscall and this is the boundary; the verdict is a

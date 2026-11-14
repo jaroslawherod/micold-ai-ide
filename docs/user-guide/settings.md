@@ -57,7 +57,9 @@ the app is running.
 Off by default. Turn it on and the Overview's [full-screen](overview.md#full-screen) zoom switches
 in one step: the sidebar goes or returns and the cards take their new places in the next frame, with
 no sliding. The focus outline of an Overview card, and the shadow of an expanded card, also appear
-and disappear at once instead of easing in and out over 150 ms. Other animations in the app are
+and disappear at once instead of easing in and out over 150 ms. In a structured session the
+[session options](structured-input.md#session-options) row shows and hides in one step instead of
+growing and collapsing over 300 ms. Other animations in the app are
 unchanged. Like the other settings it applies when you press **Save** and is discarded by
 **Cancel**. The operating system's reduced-motion setting is not read.
 
@@ -802,6 +804,12 @@ repository is missing, at most once a minute. Offline, the last answer stays in 
 computer and over SSH**, when no token applies to a repository, git falls back to the helpers you
 already had (the keychain, `gh`); with no token at all, your git setup is left as it is. A sandbox
 never falls back: it clears every inherited helper.
+
+A **Kubernetes** daemon is the exception: its pod receives tokens only when you turn on that
+daemon's GitHub tokens opt-in, and then only the tokens whose filter names one of its saved
+projects' repositories, or that have no filter. They are kept in a Kubernetes Secret, which anyone
+who can read Secrets in the namespace, and etcd, can read. See
+[GitHub tokens in the pod](kubernetes-daemons.md#github-tokens-in-the-pod).
 
 Tokens you pasted before this version, one per repository, are converted when you first start the
 application: each becomes a token named `owner-repo`, limited to `owner/repo`, so the repository

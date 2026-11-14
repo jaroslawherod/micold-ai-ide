@@ -146,12 +146,40 @@ The **git credentials** and **SSH key** items were removed: they handed the pod 
 identity. A daemon that had them ticked keeps working without them; its entry in the daemon list
 shows a one-time notice, with a **Dismiss** button, and the old secrets (`<name>-git-credentials`
 and `<name>-git-ssh`) are deleted on the next start or remove. A pod that had either item is
-recreated on the next start, without asking to keep it. Until you paste a GitHub token for the
-project's repository (see [GitHub tokens](settings.md#github-tokens)), the pod cannot
-push. Once you have, the pod pushes and pulls with that one-repository token over HTTPS, with no
-SSH key (an SSH remote is rewritten to HTTPS inside the pod). The application never renews the
-token: you paste a new one before it expires, and a token that leaks from the pod stays valid until
-it expires or you delete it on GitHub.
+recreated on the next start, without asking to keep it.
+
+### GitHub tokens in the pod
+
+A pod receives none of your [GitHub tokens](settings.md#github-tokens) unless you turn on the
+daemon's **GitHub tokens** opt-in, which is off for every daemon. A delivered token is stored in a
+Kubernetes Secret: **anyone who can read Secrets in the namespace, and anyone who can read the
+cluster's etcd, can read the token.** Turn it on only for a namespace you trust with it.
+
+The form has no switch for it yet. To turn it on, quit the application and add
+`"github_tokens": true` to the daemon's `runtime` object (the one with `"kind": "kubernetes"`) in
+the `daemons` list of `settings.json` (see
+[Where settings are stored](settings.md#where-settings-are-stored)); remove the key, or set it to
+`false`, to turn it off. It applies at the daemon's next start.
+
+With it on, each start sends the pod only the tokens that can be for its projects: a token whose
+**Repositories** filter names the repository (`owner/repo` or `owner/*`) of one of the daemon's
+saved projects, and a token with no filter, whose reach the application cannot see, so it may not
+reach the project. A daemon with no saved project with a GitHub remote receives none, and a project
+you add to a running pod does not count. The tokens go into the pod's `<name>-startup` Secret, the
+same one that holds the start script's `env_file`, and the pod's daemon configuration names their
+files; the token's value is never in the configuration, in the pod's specification, in a session's
+environment or in the application's log. A start whose token file cannot be sent (it cannot be read,
+is empty, is not text, is too large, or on Linux and macOS is readable by other users) fails before
+anything is created, naming the token. So does a start whose tokens, start-script `env_file`,
+session files and git configuration together pass the 1 MiB a Kubernetes Secret holds.
+
+The set is replaced at each start: a token you replaced is sent again, and a token you deleted in
+Settings, or whose filter no longer names a project, is taken out of the Secret. Deleting or
+removing the daemon removes the Secret with the pod's other secrets. Without a token for the
+project's repository the pod cannot push. With one, the pod pushes and pulls with it over HTTPS,
+with no SSH key (an SSH remote is rewritten to HTTPS inside the pod). The application never renews
+the token: you paste a new one before it expires, and a token that leaks from the pod or the Secret
+stays valid until it expires or you delete it on GitHub.
 
 ## The form
 

@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1815
-- **Worktree branch**: claude/project-thread-y16qre
+- **Worktree branch**: claude/project-thread-ovjkmi
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
 - **Phase**: milestones
-- **Next step**: M2 PR open, wait CI (local gate: cloud, scripts/gate.sh too slow, CI is the gate)
+- **Next step**: M3 implemented (T017–T019); Review A and B round 1, then PR
 
 ## Pull requests
 
@@ -20,14 +20,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1899 | design (spec, plan, tasks) | merged (squash) | e75744062ef543f93a3085b22f4b846e56d1bf4f |
 | #1901 | M1 batch routing core | merged (squash) | afe9a3fe0d243743505cea0a95c47ed551c51e83 |
+| #1907 | M2 routine questions from repo evidence | merged (squash) | b3ec7f88ce399a4f178b0a9a8a4d869434e788cb |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
-| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | | PR pending (orchestrator opens it) |
-| M3 | T017–T019 | light | context-cap survival: reask, overdue | | pending |
+| M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | #1907 | merged |
+| M3 | T017–T019 | light | context-cap survival: reask, overdue | | implemented, review due |
 | M4 | T020–T022 | light | upward relay to a reported parent | | pending |
 
 ## Decisions
@@ -53,6 +54,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B | 1 | M2 | 8b5a7551b283d5ab5400d0bfa75f791c87cb012f | fc1b56097cbb953362207a5d0e22305d0b0a2fc2:8b5a7551b283d5ab5400d0bfa75f791c87cb012f | CHANGES: A F1 MAJOR, B F1 MAJOR fixed; F2 fixed; A F3 partly declined (round 2 pending) |
 | Review A | 2 | M2 | 5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | ac458b23cc63aff3c3b1072fff228b4feb626672:5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | CLEAN |
 | Review B | 2 | M2 | 5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | ac458b23cc63aff3c3b1072fff228b4feb626672:5533ddb6c5b64dfb477b2cd048990c7e3e97bf02 | CLEAN |
+| Review A+B | 1 | M3 | cb38584813bc1985f1bd2474ddf8c6f4281076b0 | 255f3946ba7113887eb240b2c656091d62b9cbc7:cb38584813bc1985f1bd2474ddf8c6f4281076b0 | CHANGES: A 1 MAJOR 3 MINOR, B 1 MAJOR 2 MINOR; all fixed (round 2 pending) |
+| Review A+B | 2 | M3 | 51a7e4129d7156bc92772adbb40de6174165b538 | 8745964f7817a68fc5fec58ae6f5426683123000:51a7e4129d7156bc92772adbb40de6174165b538 | A CLEAN; B CHANGES (1 MAJOR: T018 wording) fixed, plan-drift exit 0 |
+| Review A | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
+| Review B | 2 | M3 | 853a8e5d25780010966ba74c22e899705eb83633 | d97d007e459583e8b158b69d5d1474986ca26b54:853a8e5d25780010966ba74c22e899705eb83633 | CLEAN |
 
 ## Declined review findings
 
@@ -67,7 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-2026-11-14: M1 PR #1901 squash-merged (afe9a3fe) after Review A and B round 2 CLEAN and green CI; origin/main merged into claude/project-thread-fy8cr5. Next thread starts M2 (T011–T016, tier full) and must land `--by` parsing in answer.sh (see Follow-ups). The new thread pushes to its own harness branch. Cloud: no mise, gh unauthenticated (GitHub MCP for PR/merge, REST `gh api` for check-runs), units have no Agent tool (orchestrator dispatches reviewers), CI is the gate, never rebase or force-push, squash-merge.
+None.
 
 ## Open escalation
 

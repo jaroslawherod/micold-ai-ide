@@ -220,13 +220,10 @@ async fn a_session_in_a_worktree_records_it_and_an_explicit_parent_overrides() {
         (Some("w"), Some("known")),
         "the create result carries it"
     );
-    f.create(sid(3), "c2", json!({"parent": "default"})).await;
+    f.create(sid(3), "c2", json!({"parent": "c1"})).await;
     f.create(sid(1), "c3", json!({"parent": "w"})).await;
     assert_eq!(parent_of(&f.row("c1").await), (Some("w"), Some("known")));
-    assert_eq!(
-        parent_of(&f.row("c2").await),
-        (Some("default"), Some("known"))
-    );
+    assert_eq!(parent_of(&f.row("c2").await), (Some("c1"), Some("known")));
     assert_eq!(parent_of(&f.row("c3").await), (Some("w"), Some("known")));
 }
 

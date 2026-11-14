@@ -10,8 +10,8 @@
 ## `PodGithubTokens` (`daemon_config_delivery.rs`, new)
 | Field | Meaning |
 |---|---|
-| `entries: Vec<GithubTokenSetting>` | what `daemon.toml` renders; `token_file` is `<STARTUP_ENV_MOUNT>/github-token-<n>` |
-| `files: Vec<(String, String)>` | `("github-token-<n>", value)` appended to `PodStartup.files` |
+| `entries: Vec<GithubTokenSetting>` | what `daemon.toml` renders; `token_file` is `<STARTUP_ENV_MOUNT>/github-token-<name>` |
+| `files: Vec<(String, String)>` | `("github-token-<name>", SecretToken)`, `<name>` the lower-case token name; joined with `PodStartup.files` only where `StartRequest::secret_files` is built |
 
 Invariants: `entries[i].token_file` ends with `files[i].0`; `files` is empty when the opt-in is off or nothing matches; no value is ever stored in `entries` or in `Debug` output (the value type is `SecretToken`, redacted).
 
