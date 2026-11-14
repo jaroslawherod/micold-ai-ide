@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-i50nzc
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: open the M1 PR (reviews done, both CLEAN); then M2 (M3, M4 wait on #1860)
+- **Next step**: milestone M2 (T009–T012) in a fresh thread; M3, M4 wait on #1860
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1867 | design | merged | 749d63f |
+| #1909 | M1 | merged | 7c96443 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | verify-run.sh verdict | | review done |
+| M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
 | M2 | T009–T012 | full | follow-up.sh and cap | | pending |
 | M3 | T013–T014 | full | close-out-report.sh | | pending |
 | M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
@@ -53,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 merged (#1909, squash 7c96443). Next: dispatch a milestone unit for M2 (T009–T012, follow-up.sh and cap) from a fresh cloud thread on its harness branch; update the Worktree branch line to that branch. M3, M4 stay blocked on #1860.
 
 ## Open escalation
 
