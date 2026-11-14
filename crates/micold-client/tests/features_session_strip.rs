@@ -216,3 +216,57 @@ fn the_hidden_chip_shows_the_count_only_while_events_are_hidden() {
         "nothing is hidden with raw events shown"
     );
 }
+
+/// Only the working session's tab carries the dot when two sessions are open (FR-006).
+#[test]
+fn with_two_sessions_only_the_working_one_shows_the_dot() {
+    use micold_core::session::{AiCli, Session, SessionLifecycle};
+    let mut state = with_lifecycle(transcript_pane_insights(), SessionLifecycle::Running);
+    let location = state
+        .workspace
+        .sessions
+        .values()
+        .flatten()
+        .next()
+        .expect("a session")
+        .location
+        .clone();
+    let other = Session::start_new(location, AiCli::ClaudeCode);
+    let other_id = other.id;
+    state
+        .workspace
+        .sessions
+        .values_mut()
+        .next()
+        .expect("a project")
+        .push(other);
+    assert_eq!(
+        working_of(&state),
+        [true, false],
+        "the running one, then the idle one"
+    );
+    state.session.active = Some(other_id);
+    assert_eq!(
+        working_of(&state),
+        [true, false],
+        "the dot follows the work, not the selection"
+    );
+}
+
+/// A Regular-mode session is working while its shell runs, whatever its AI CLI is doing (FR-006).
+#[test]
+fn a_running_shell_in_regular_mode_shows_the_dot() {
+    use micold_core::session::{SessionLifecycle, TerminalMode};
+    let mut state = with_lifecycle(transcript_pane_insights(), SessionLifecycle::Idle);
+    let session = state
+        .workspace
+        .sessions
+        .values_mut()
+        .flatten()
+        .next()
+        .expect("a session");
+    session.set_mode(TerminalMode::Regular);
+    let shell = session.open_shell_instance();
+    session.mark_shell_running(shell);
+    assert_eq!(working_of(&state), [true]);
+}

@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-10
 
-**Status**: Draft
+**Status**: Closed 2026-11-14 — shipped in PRs #1797, #1798, #1827, #1847, #1869 (FR-011 tabs-shrink-before-scroll deferred, see autopilot.md follow-ups)
 
 **Input**: User description: "GitHub issue #1793: feat: structured view: header in one row, status and actions move to the top bar" (labels: enhancement, flow:feature)
 
