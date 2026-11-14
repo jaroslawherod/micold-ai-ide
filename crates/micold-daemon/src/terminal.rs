@@ -36,6 +36,9 @@ pub type SharedTerm = Arc<FairMutex<Term<DaemonListener>>>;
 /// both write to the one PTY master, so both hold this.
 pub type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
+/// The largest OSC 52 store sent on to the windows (#1720), well under the protocol's frame limit.
+pub const MAX_CLIPBOARD_STORE: usize = 1024 * 1024;
+
 /// Signals the framer and supervisor read out-of-band from the VT stream: a change count raised on
 /// every content change (each viewer compares it with the count it last framed at — T032), the
 /// latest OSC-0 title (T047), a rung-bell edge, and the child's reported exit code (`Event::ChildExit`).
@@ -246,6 +249,14 @@ impl EventListener for DaemonListener {
             // OSC 52 store (#1720): kept for the supervisor tick to send to the window showing the
             // session. The selection buffer is the same text for our purposes. Reads
             // (`ClipboardLoad`) are never answered: a program cannot read the user's clipboard.
+            // A store larger than [`MAX_CLIPBOARD_STORE`] is dropped: it would not fit one control
+            // frame, and a failed send closes the window's link.
+            Event::ClipboardStore(_, text) if text.len() > MAX_CLIPBOARD_STORE => {
+                tracing::warn!(
+                    len = text.len(),
+                    "OSC 52 clipboard store too large, dropped"
+                );
+            }
             Event::ClipboardStore(_, text) => {
                 *self
                     .signals

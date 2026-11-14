@@ -78,7 +78,8 @@ pub struct DrainedSignals {
     /// screen from being able to diverge.
     pub names: Vec<(SessionId, String)>,
     /// The text a session's program asked to put on the clipboard (OSC 52) since the last drain,
-    /// latest per session (#1720). The supervisor tick sends each as a `ClipboardStore`.
+    /// the latest per process of the session (#1720). The supervisor tick sends each as a
+    /// `ClipboardStore`.
     pub clipboard: Vec<(SessionId, String)>,
 }
 

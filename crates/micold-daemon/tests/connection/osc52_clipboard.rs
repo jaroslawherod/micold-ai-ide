@@ -9,9 +9,11 @@ use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::WindowSize;
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::term::{Config, Term};
+use alacritty_terminal::term::{Config, Osc52, Term};
 use alacritty_terminal::vte::ansi::Processor;
-use micold_daemon::terminal::{DaemonListener, SharedWriter, TerminalColors, VtSignals};
+use micold_daemon::terminal::{
+    DaemonListener, SharedWriter, TerminalColors, VtSignals, MAX_CLIPBOARD_STORE,
+};
 
 struct Dims;
 
@@ -27,10 +29,30 @@ impl Dimensions for Dims {
     }
 }
 
+/// What the terminal wrote back to the program.
+#[derive(Clone, Default)]
+struct Replies(Arc<Mutex<Vec<u8>>>);
+
+impl io::Write for Replies {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Feed `output` to a terminal and return what its signals hold afterwards.
 fn feed(output: &str) -> VtSignals {
+    feed_with(Config::default(), output).0
+}
+
+/// Feed `output` to a terminal built with `config`; return its signals and what it wrote back.
+fn feed_with(config: Config, output: &str) -> (VtSignals, Vec<u8>) {
     let signals = VtSignals::default();
-    let writer: SharedWriter = Arc::new(Mutex::new(Box::new(io::sink())));
+    let replies = Replies::default();
+    let writer: SharedWriter = Arc::new(Mutex::new(Box::new(replies.clone())));
     let size = Arc::new(Mutex::new(WindowSize {
         num_lines: 24,
         num_cols: 80,
@@ -38,10 +60,11 @@ fn feed(output: &str) -> VtSignals {
         cell_height: 0,
     }));
     let listener = DaemonListener::new(writer, size, signals.clone(), TerminalColors::default());
-    let mut term = Term::new(Config::default(), &Dims, listener);
+    let mut term = Term::new(config, &Dims, listener);
     let mut parser: Processor = Processor::new();
     parser.advance(&mut term, output.as_bytes());
-    signals
+    let written = replies.0.lock().unwrap().clone();
+    (signals, written)
 }
 
 #[test]
@@ -62,7 +85,27 @@ fn the_latest_store_wins() {
 
 #[test]
 fn an_osc52_read_request_is_never_answered() {
-    let signals = feed("\x1b]52;c;?\x07");
+    // Even with reads enabled in the emulator, the daemon's listener answers none: nothing is
+    // written back to the program, and nothing is stored.
+    let config = Config {
+        osc52: Osc52::CopyPaste,
+        ..Config::default()
+    };
+    let (signals, written) = feed_with(config, "\x1b]52;c;?\x07");
+
+    assert!(
+        written.is_empty(),
+        "the clipboard was answered: {written:?}"
+    );
+    assert_eq!(signals.take_clipboard(), None);
+}
+
+#[test]
+fn a_store_too_large_for_one_frame_is_dropped() {
+    use base64::Engine as _;
+    let text = "x".repeat(MAX_CLIPBOARD_STORE + 1);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&text);
+    let signals = feed(&format!("\x1b]52;c;{encoded}\x07"));
 
     assert_eq!(signals.take_clipboard(), None);
 }
