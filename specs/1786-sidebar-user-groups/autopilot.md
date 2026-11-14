@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 3 | design | 5d3885de780da42ac43772e0841f49a11dce4d3c | e984a4491e90ea566d4e00fe11bf0e87b4597b0f:5d3885de780da42ac43772e0841f49a11dce4d3c | CHANGES (1 MAJOR fixed: rename_dialog.rs line restored in plan.md) |
 | Plan | 4 | design | 5d3885de780da42ac43772e0841f49a11dce4d3c | e984a4491e90ea566d4e00fe11bf0e87b4597b0f:5d3885de780da42ac43772e0841f49a11dce4d3c | CLEAN (1 MINOR left: text.rs not listed in plan, pre-existing) |
 | M1 diff (A, code-review high) | 1 | origin/main...14c552a6a | 14c552a6a | fa0e41a7:14c552a6a | CHANGES (3 fixed: hint counted headers, chord reset an open dialog, layout file kept on forget; plus the sibling_dir cleanup; 6 declined) |
+| Review B M1 | 1 | conformance | 18bc3ebc25f945817224ca706f2089e258172acd | 571a6f78f42446d00816ad36b6d4fbad107069fa:18bc3ebc25f945817224ca706f2089e258172acd | CHANGES (1 MAJOR fixed: drift-M1.md; 1 MINOR fixed: Verify line) |
+| Visual pass M1 | 1 | quickstart B1 | 18bc3ebc25f945817224ca706f2089e258172acd | — | PASS (screenshots /mnt/project-files/issue-1786/m1-*.png; header has no collapse glyph yet, M5) |
 
 ## Declined review findings
 
@@ -68,7 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 3 finished M1: all of T001–T017 and T044 are ticked. Review A ran in round 1 (4 fixed, 6 declined, see the tables above). Review B and the visual pass were not run: the cloud unit had no Agent tool, and the environment has no xdotool, sway or grim. origin/main was merged in at 45383389c, the branch is pushed, and draft PR #1905 is open. The PR author is the reviewer, so a review request was refused. Four micold-core permission tests fail only as root in the container: settings_refuses_save_over_failed_read, settings_write_is_logged, and two in worktree_leftovers.
+M1 unit 3 finished M1: all of T001–T017 and T044 are ticked. Review A ran in round 1 (4 fixed, 6 declined, see the tables above). Review B (conformance) and the visual pass ran afterwards: review B found 1 MAJOR (plan drift record) and 1 MINOR, both fixed; the visual pass under Xvfb passed. origin/main was merged in at 45383389c, the branch is pushed, and draft PR #1905 is open. The PR author is the reviewer, so a review request was refused. Four micold-core permission tests fail only as root in the container: settings_refuses_save_over_failed_read, settings_write_is_logged, and two in worktree_leftovers.
 
 ## Open escalation
 
@@ -91,4 +93,3 @@ Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 ## Follow-ups not done
 
 - M3: decide whether a header's count is the group's members or its rows shown under the active filter (review A r1, declined for M1).
-- Review B (conformance) was not run for M1: the cloud unit has no Agent tool for a fresh-context subagent.
