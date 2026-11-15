@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1948
 - **Worktree branch**: claude/project-thread-ns6vcg
 - **Started**: 2026-11-15
-- **Phase**: spec
-- **Next step**: round-2 spec re-review (orchestrator), then clarify unit
+- **Phase**: spec (done)
+- **Next step**: clarify unit
 
 ## Pull requests
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec | d3937c8969e34c08a0ce2f78559cde430b5c65f9 | 09cb2cfc0a611043c58abc651afcc426257803e6:d65a0b90b4bab89ddf4da88fcd33c56490018866 | CHANGES: 5 MAJOR 3 MINOR, all fixed |
-| Spec | 2 | spec | d3937c8969e34c08a0ce2f78559cde430b5c65f9 | 1faf1b6e8adebd019dd1d2e6f8675ad1d5a15b12:d3937c8969e34c08a0ce2f78559cde430b5c65f9 | pending |
+| Spec | 2 | spec | 69983c1058338b7230c9e70066dc73eca578a606 | 1faf1b6e8adebd019dd1d2e6f8675ad1d5a15b12:d3937c8969e34c08a0ce2f78559cde430b5c65f9 | CLEAN (2 MINOR fixed, prose only) |
 
 ## Declined review findings
 
@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec round-1 findings fixed (CHANGES recorded). Next: orchestrator dispatches the round-2 scoped re-review (sonnet), then the clarify unit.
+None.
 
 ## Open escalation
 
