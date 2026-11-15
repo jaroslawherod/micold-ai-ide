@@ -8,16 +8,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1981
-- **Worktree branch**: claude/project-thread-pcdbm7
+- **Worktree branch**: claude/project-thread-ltu9ny
 - **Started**: 2026-11-15
-- **Phase**: tasks
-- **Next step**: Design PR open; orchestrator waits on CI and merges, then M1.
+- **Phase**: milestones
+- **Next step**: M1 (#1982) milestone unit.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1987 | Design | open (draft) | … |
+| #1987 | Design | merged | 6c2819edede47166c5034a37335c7c62c775fa4d |
 
 ## Milestones
 
@@ -70,4 +70,5 @@ None.
 
 - Clarify unit skipped by the orchestrator (no markers left in the spec). Milestones reordered: M2 ops before M3 harness (smoke needs the readiness probe); spec table updated. Plan written, plan review pending (reviewer round 1 not run: unit has no Agent tool).
 - Tasks cut (T001-T030, M1-M5). Plan deviation: install-kube-tools.sh is created in M1 with helm and kubeconform pins (kube-chart job needs them); M3 adds kind and kubectl. No user-guide tasks (no end-user surface). Tasks review pending; gate and PR pending.
+- M1 thread (2026-11-15): agent types listed; units have no Agent tool, so the orchestrator dispatches review B.
 - Tasks review 1 fixes: T003 check-first, M4 reordered and split (T023-T030, adds refusal suite harness wiring), M5 now T031-T032, SC-001 under M3, spec FR-019/ownership/FR-013 and harness-env.md corrected. Issues updated by orchestrator.
