@@ -115,7 +115,7 @@ is dropped on purpose; nothing stays desktop-only once the iced app is retired. 
 gone. The client lists existing terminal sessions with their state and lets the user stop them, and
 starts only structured sessions. Today the structured mode exists for Claude Code (features 938–944),
 so "Claude Code first" and "structured only" agree; other providers (Codex, Copilot, Pi, OpenCode)
-need a structured adapter each before the web client can drive them (Q-B).
+need a structured adapter each before the web client can drive them; they ship later (decision 8).
 
 ### Network API (#1732, revised)
 
@@ -379,7 +379,7 @@ M6 and M7 to retirement.
 |---|---|---|
 | Constitution IV, V and VI must change | Blocks all client work | N1 first (approved in principle by jaro) |
 | Replacing the desktop app before parity | Users lose provisioning, settings or review | Iced app in maintenance until M7's parity rows ship; retirement is its own issue (N13) |
-| Terminal sessions lose their UI | Codex, Copilot, Pi and OpenCode users, and anyone relying on a terminal session, cannot work in the web client | Claude Code first; terminal sessions listed and stoppable; structured adapters for other providers (N14, Q-B) before the iced app goes, or an explicit decision to drop them |
+| Terminal sessions lose their UI | After retirement, Codex, Copilot, Pi and OpenCode cannot be driven until their structured adapters ship | Accepted by jaro (decision 8): Claude Code first; terminal sessions listed and stoppable; adapters later (N14); the release notes of the retirement say so |
 | `react-native-web` and Paper gaps (focus rings, keyboard navigation, hover, text selection in long transcripts, diff view) | Web feels less capable than the iced app | Platform files where needed; Playwright keyboard tests; spike in #1735 to check the transcript and a diff view before committing |
 | Large transcripts in the browser | Jank, memory | FlashList virtualization, server-side page of history plus live tail, a load test with the transcript that caused #1683 |
 | Claude credential policy | A design that relays Claude tokens would break Anthropic's terms | No Claude login in Micold; API key or the user's own sign-in in unmodified Claude Code per daemon |
@@ -405,13 +405,12 @@ M6 and M7 to retirement.
 6. Storage in **PostgreSQL**.
 7. Claude credentials (Q-A): **both routes**, an API key or cloud credential file per daemon, or the
    user's own sign-in in unmodified Claude Code on that daemon; Micold never handles the token.
+8. Other providers (Q-B, 2026-11-15): **no**, they do not block the web client or the iced app's
+   retirement. Focus on delivering the UI for Claude Code; Codex, Copilot, Pi and OpenCode ship later
+   (N14).
 
 ## Open questions for jaro
 
-- **Q-B — Other providers and terminal sessions**: when the iced app is retired, do Codex, Copilot,
-  Pi and OpenCode get structured adapters first (N14), or are they dropped from the product until
-  they have one? Recommendation: keep the iced app in maintenance until at least the providers you
-  use have adapters.
 - **Q-C — Password-free sign-in**: GitHub and Google for network access, the local access link for
   loopback, no password account. OK?
 - **Q-D — Per-daemon grants**: three global roles for "basic permissions". OK?

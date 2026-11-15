@@ -195,7 +195,8 @@ structured session through the gateway.
 - A gateway with a 60 s idle timeout: the client pings every 20 s; the chart documents timeouts.
 - A daemon of an older protocol: shown as needing an update.
 - Codex, Copilot, Pi and OpenCode sessions have no structured mode today: listed with state and
-  stoppable only, until a structured adapter exists (Q-B).
+  stoppable only, until a structured adapter ships later (jaro, 2026-11-15: focus on Claude Code; the
+  others do not block retiring the iced app).
 
 ## Requirements *(mandatory)*
 

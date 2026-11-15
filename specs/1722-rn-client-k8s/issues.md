@@ -38,7 +38,7 @@ PR titles follow the project rule: `#<issue>: <issue title>`.
 | N11 | new | feat: daemon provisioning moves into the orchestrator (container, SSH host, Kubernetes pod) |
 | N12 | new | feat: web client — secret settings (GitHub, Jira, environment), Kubernetes view, large editor |
 | N13 | new | chore: retire the iced desktop app (remove `micold-client`, `micold-material`, packaging, docs) |
-| N14 | future | feat: structured adapters for Codex, Copilot, Pi and OpenCode (Q-B) |
+| N14 | future | feat: structured adapters for Codex, Copilot, Pi and OpenCode (after Claude Code; does not block N13) |
 | N15 | future | feat: several orchestrator replicas — Postgres link directory and replica-to-replica forwarding |
 | N16 | new | feat: PostgreSQL store for the orchestrator (sqlx, migrations, store traits; SQLite for local mode) |
 
@@ -235,7 +235,7 @@ link to this plan.
 
 ### N13 — chore: retire the iced desktop app
 
-- **Milestone**: M7 · **Depends on**: N5, N6, N11, N12 (and Q-B's answer) · **Labels**: `flow:chore`,
+- **Milestone**: M7 · **Depends on**: N5, N6, N11, N12 (not on N14: jaro, 2026-11-15) · **Labels**: `flow:chore`,
   `effort:high` · **Covers**: FR-044, SC-014
 - **Body**: After one release with the web client as the default, remove `crates/micold-client`,
   `crates/micold-material`, the iced dependency, AppImage/deb packaging, desktop notifications and
