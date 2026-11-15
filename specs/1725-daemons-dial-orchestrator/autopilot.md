@@ -53,12 +53,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M1 | 8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | 1f0940a172cbebd59b6fb65d90ab571ce84caf61:8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | CHANGES: 2 MAJOR drift records, 1 MINOR test; all fixed |
 | Review B | 2 | M1 | d7a3d1066f8747ae9388e8609854f959a72baea6 | f90edcff30b590fb73aed5b450becf8325d1114b:d7a3d1066f8747ae9388e8609854f959a72baea6 | CLEAN (fix diff, sonnet) |
 | Review A | 1 | M2 | 2e31bdcd1b62b43879df3a1a9afa37fb0f88858f | bb26161ef2fa2e86022fc2cbb791aab111384099:a199b3c482dad6e2e2c35e8a607dcf758f2ff756 | MINOR-ONLY: CLEAN with 3 MINOR (redundant claim_failed, Detached comment and duplicated set-up, thread-local capture in host test); all fixed, no new round (MINOR only) |
+| Review B | 1 | M2 | d120a5c13b499fc7f04b3d9a923813229864c532 | 43ea938da69a7ebd31566488c5881cbcc07b885c:d120a5c13b499fc7f04b3d9a923813229864c532 | MINOR-ONLY: 2 MINOR declined (orchestrator, sonnet); Verify 7 passed, no plan drift |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | Spec review 1 | none | all six findings fixed |
+| M2 | Review B 1 | F1 MINOR: outage tests' session/client half has no red mutant | log states it; the behaviour predates M2 and the test is a regression guard |
+| M2 | Review B 1 | F2 MINOR: `pub struct Detached` is test-only API | recorded in drift-M2.md; daemon crate is internal, no public API surface |
 
 ## Handover
 
