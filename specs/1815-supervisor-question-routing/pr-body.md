@@ -1,17 +1,16 @@
-## Milestone M2 of 4 — supervisor-question-routing (specs/1815-supervisor-question-routing)
+## Close 1815 — supervisor-question-routing (specs/1815-supervisor-question-routing)
 
-**Deliverable**: `route gate` and `answer.sh --by supervisor`; the supervisor answers a *Never ask* question from repo evidence with `resume --by supervisor`; categories 2, 3, 4 always reach the user.
-**Verify**: `bash scripts/tests/supervisor.test.sh` and `bash scripts/tests/autopilot.test.sh` print no FAIL
-**Tasks**: T011–T016 · **Satisfies**: US2 scenarios 1–5, FR-002..FR-005a, SC-002
+All four milestones are merged (#1901, #1907, #1911, #1916). This PR closes the spec.
 
-## Agent review
-- Review A (code-review, high): round 1 CHANGES (1 MAJOR fixed: resolved-only issues are now sent; 2 MINOR: step ref fixed, mixed-batch By declined with reason); round 2 CLEAN.
-- Review B (conformance, sonnet): round 1 CHANGES (1 MAJOR fixed: T013 names supervisor-route.sh; 1 MINOR fixed); round 2 CLEAN. Verify: supervisor.test.sh 249 cases, autopilot.test.sh 354 cases, no FAIL.
+- spec.md `**Status**` set to Closed.
+- contracts/routing-cli.md: the `route target` row now states the M4 round-1 rules (list shape, `is_caller` fallback, `parent_state`, `default` via worktree lookup, live over failed).
+- drift-M1.md records the plan-drift false positive (reference files from the design PR).
+- Ledger: Phase `done`, Next step `handoff`, follow-up cleared.
 
-## Local gate
-Cloud thread: no mise; `scripts/gate.sh` too slow to wait for. Both script suites pass (supervisor 246 cases, autopilot 354); CI is the gate. Clears the M1 follow-up (`answer.sh` parses `--by`).
+plan-drift: M1 recorded in drift-M1.md, M2, M3, M4 clean. Converge skipped: Review B CLEAN for every milestone. No code or tests changed; CI is the gate.
 
 Refs #1815
+
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
-https://claude.ai/code/session_01NCdYvPSkcfsd48mQKscE4f
+https://claude.ai/code/session_01NCdYvKE22c2oWVNFebVx1H

@@ -27,6 +27,7 @@ pub fn state_with(sessions: Vec<Session>) -> State {
         workspace,
         worktree: worktree::State {
             worktrees: vec![Worktree {
+                parent: None,
                 dir_name: DIR.to_string(),
                 path: PathBuf::from(PROJECT).join(".claude/worktrees").join(DIR),
                 branch: Some("feat/a".to_string()),

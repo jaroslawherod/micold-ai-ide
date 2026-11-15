@@ -199,6 +199,12 @@ Small **chips** follow the second line's text:
 - **current session**, when the row is listed only because it holds the session you are in; the
   name of the **daemon** the worktree runs on; **outside this app** for an included worktree; and
   **can be removed** when its merged pull request holds all its work.
+- A **parent** tag, `parent: <name>`, on a worktree an assistant created from another worktree or
+  from the project folder (see [Which worktree created this one](agent-tools.md#which-worktree-created-this-one-parent)):
+  the name is the parent's current name, so renaming the parent changes it, and a parent that has
+  since been deleted shows as `parent: <name> (removed)`. A worktree with no parent has no such
+  tag. The rows are not nested under their parent: they stay in their state groups and in the same
+  order as without the tag.
 - A **setup** tag, last, when the project's [setup command](#setup-in-a-new-worktree) has run in
   the worktree. The *Default* entry gets it too.
 
@@ -355,11 +361,19 @@ panel. In a narrow sidebar the toggle is just the chevron. The panel stays open 
 - Tap a **type chip** (e.g. `fix`) to show only worktrees of that type.
 - Tap **issue** to show only worktrees that have a Jira key.
 - Tap **untyped** to show worktrees that do not follow the naming convention.
-- Multiple filters combine with **OR** — tapping `feat` and `fix` shows both.
+- Tap **parent: <name>** to show only the direct children of that parent (`parent: default` for
+  the worktrees made from the project folder). There is one chip per parent that has children, and
+  a removed parent has its own, marked **(removed)**. A parent chip that is on keeps the name it had
+  when you tapped it: after the parent is renamed it matches nothing, so clear it and tap the chip
+  with the new name.
+- Type, issue and untyped chips combine with **OR** — tapping `feat` and `fix` shows both. Parent
+  chips are a second choice on top of them: with a parent chip on, a worktree must be a child of one
+  of the chosen parents *and* match the other chips you chose, so `parent: supervisor` with `issue`
+  shows that parent's children that have a Jira key. Two parent chips show the children of either.
 - **All** restores the full list in one tap. If a filter matches nothing, an empty message with
   a **Clear filters** action is shown, and the Overview row and the chip bar stay.
 
-Only chips for tags actually present in your worktrees are offered. Tab reaches every control on the line, after the Overview row, and the panel's chips while it is open; Enter or Space presses the one with the focus
+Only chips for tags actually present in your worktrees are offered (a parent chip only for a parent that has children). Tab reaches every control on the line, after the Overview row, and the panel's chips while it is open; Enter or Space presses the one with the focus
 ring.
 
 **One exception, and only one.** The worktree holding your current session stays listed even when

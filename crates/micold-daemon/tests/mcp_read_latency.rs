@@ -189,7 +189,7 @@ async fn each_read_only_tool_answers_within_a_second_at_fifty_worktrees_and_sess
         store.path(),
     );
     let addr = serve_tool_server(&state, store.path().join("mcp")).await;
-    let cred = credential(&state, session_id(0));
+    let cred = full_view_credential(&state, session_id(0));
     // Kills the started session even if an assertion below panics.
     #[cfg(unix)]
     let _reaper = Reaper(std::sync::Arc::clone(&state));

@@ -60,6 +60,7 @@ async fn kube_real_sessions_survive_the_client_and_a_deleted_pod_is_reported() {
         &settings,
         None,
         &Default::default(),
+        &[],
         &events.sink(),
     )
     .await
@@ -94,6 +95,7 @@ async fn kube_real_sessions_survive_the_client_and_a_deleted_pod_is_reported() {
         &settings,
         None,
         &Default::default(),
+        &[],
         &events.sink(),
     )
     .await

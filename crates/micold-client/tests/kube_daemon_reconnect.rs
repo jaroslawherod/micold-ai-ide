@@ -53,6 +53,7 @@ async fn reconnect(
         &settings(),
         None,
         &Default::default(),
+        &[],
         &sink,
     )
     .await

@@ -60,9 +60,9 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: run the routing step with the context check reporting `OVER`; no second prompt after restart.
 
-- [ ] T017 [US3] Failing cases in `scripts/tests/supervisor.test.sh` for `route next --reask` (every `asked` row, no limit, ascending; no banner or notification text) and `route overdue --now <epoch> --ceiling <s>` (issues whose Sent is set and older than the ceiling; none when Sent is empty).
-- [ ] T018 [US3] Implement `route next --reask` and `route overdue` in `scripts/autopilot/supervisor.sh` until T017 passes.
-- [ ] T019 [US3] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md, then edit `.claude/skills/autopilot-supervisor/SKILL.md` until they pass: the step 3 context check ends the turn on `OVER` only after the banners, the notification and `route state ... asked` (M1) and prints `Cheaper: /clear, then /autopilot-supervisor — it asks this again from the ledger.` (FR-010); *Restart* calls `route next --reask` and re-asks without a banner or notification; a session that left `asking` unanswered gets `route drop` (FR-009; the subcommand ships in M1); after the send a `CHANGED` wake showing the run left `asking` removes the rows, and still `asking` past the Watcher ceiling is listed by `route overdue` and reported, never re-sent.
+- [x] T017 [US3] Failing cases in `scripts/tests/supervisor.test.sh` for `route next --reask` (every `asked` row, no limit, ascending; no banner or notification text) and `route overdue --now <epoch> --ceiling <s>` (issues whose Sent is set and older than the ceiling; none when Sent is empty).
+- [x] T018 [US3] Implement `route next --reask` and `route overdue` in `scripts/autopilot/supervisor-route.sh`, the route code the supervisor script sources, until T017 passes.
+- [x] T019 [US3] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md, then edit `.claude/skills/autopilot-supervisor/SKILL.md` until they pass: the step 3 context check ends the turn on `OVER` only after the banners, the notification and `route state ... asked` (M1) and prints `Cheaper: /clear, then /autopilot-supervisor — it asks this again from the ledger.` (FR-010); *Restart* calls `route next --reask` and re-asks without a banner or notification; a session that left `asking` unanswered gets `route drop` (FR-009; the subcommand ships in M1); after the send a `CHANGED` wake showing the run left `asking` removes the rows, and still `asking` past the Watcher ceiling is listed by `route overdue` and reported, never re-sent.
 
 **Checkpoint**: SC-003 holds on fixtures.
 
@@ -72,9 +72,9 @@ description: "Task list for autopilot supervisor M4: route session questions to 
 
 **Independent test**: a session-list fixture with a `parent` field and one without.
 
-- [ ] T020 [US4] Failing cases in `scripts/tests/supervisor.test.sh` for `route target --sessions <file> --me <id>` (`parent <id>` when that row has a non-empty `parent`; `user` when the field is empty or absent; exit 2 when the file is unreadable).
-- [ ] T021 [US4] Implement `route target` in `scripts/autopilot/supervisor.sh` until T020 passes.
-- [ ] T022 [US4] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md, then edit `.claude/skills/autopilot-supervisor/SKILL.md` until they pass: step 6 sends the banner to the parent with `send_session_input`, holds the rows `asked` with Via `parent`, and records the reply with `route answer ... parent`; a `not_found` refusal runs `ledger set <issue> Note "<refusal>"` then asks the user (Via `user`), never retried (FR-012, FR-013); a top-tier supervisor asks the user.
+- [x] T020 [US4] Failing cases in `scripts/tests/supervisor.test.sh` for `route target --sessions <file> --me <id>` (`parent <id>` when that row has a non-empty `parent`; `user` when the field is empty or absent; exit 2 when the file is unreadable).
+- [x] T021 [US4] Implement `route target` in `scripts/autopilot/supervisor-route.sh` (dispatched from `supervisor.sh`) until T020 passes.
+- [x] T022 [US4] Failing grep cases in `scripts/tests/supervisor.test.sh` over SKILL.md, then edit `.claude/skills/autopilot-supervisor/SKILL.md` until they pass: step 6 sends the banner to the parent with `send_session_input`, holds the rows `asked` with Via `parent`, and records the reply with `route answer ... parent`; a `not_found` refusal runs `ledger set <issue> Note "<refusal>"` then asks the user (Via `user`), never retried (FR-012, FR-013); a top-tier supervisor asks the user.
 
 **Checkpoint**: all four stories pass on fixtures.
 
@@ -129,3 +129,12 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `bash scripts/tests/supervisor.test.sh` prints no FAIL (the `route target` and SKILL step 6 cases)
 - **Depends on**: M1
 - **Tier**: light
+
+## Phase 7: TDD remediation
+
+Source: `specs/1815-supervisor-question-routing/tdd/verification.md` (verdict FAIL). The feature is not done until T023 and T024 are cleared.
+
+- [x] T023 [US1] Finding 1 (HIGH): add a case in `scripts/tests/supervisor.test.sh` near line 311 that runs `route add 16 s-16 "$D/free.json"` twice and asserts `grep -c "^| R16.Q1 |"` is 1. Done when it passes, and fails with `rhas "R$1.Q1" ||` removed at `scripts/autopilot/supervisor-route.sh:39`; run `bash scripts/tests/supervisor.test.sh`.
+- [x] T024 [US1] Finding 2 (HIGH): add a case in `scripts/tests/supervisor.test.sh` near line 305 with issues 9 and 100 and a `Q10` against `Q2` and asserts `route next` prints `R9.Q1`, `R100.Q1`, and `R<n>.Q2` before `R<n>.Q10`. Done when it passes, and fails with `sort -k1,1 -k2,2` at `scripts/autopilot/supervisor-route.sh:59`; run `bash scripts/tests/supervisor.test.sh`.
+- [x] T025 [US4] Finding 3 (MED): add a `route target` case in `scripts/tests/supervisor.test.sh` near line 430 where a row's `parent` equals its own `worktree`, and assert `user`. Done when it fails with the `sid != ($r | sid)` guard removed at `scripts/autopilot/supervisor-route.sh:178`.
+- [x] T026 [P] Finding 5 (LOW): remove the unused `ord() { :; }` stubs at `scripts/tests/supervisor.test.sh:378` and `:402`; `bash scripts/tests/supervisor.test.sh` still prints `0 failure(s)`.

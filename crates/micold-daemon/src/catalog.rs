@@ -440,6 +440,7 @@ impl Catalog {
                     .chain(sessions.iter().filter_map(|s| s.worktree_dir.clone()))
                     .collect();
 
+                let parents = self.worktree_parent_views(&p.path);
                 let worktrees = dirs
                     .into_iter()
                     .map(|dir_name| {
@@ -447,6 +448,14 @@ impl Catalog {
                             .and_then(|m| m.get(&dir_name))
                             .cloned()
                             .unwrap_or_else(|| dir_name.clone());
+                        let parent = parents.get(&dir_name).map(|view| {
+                            view.label(|dir| {
+                                overrides
+                                    .and_then(|m| m.get(dir))
+                                    .cloned()
+                                    .unwrap_or_else(|| dir.to_string())
+                            })
+                        });
                         WorktreeSnapshot {
                             daemon: self.daemon.clone(),
                             // The durable half knows a worktree only by the key its sessions were
@@ -459,6 +468,7 @@ impl Catalog {
                             display_name,
                             status: WorktreeStatus::Clean,
                             included: false,
+                            parent,
                         }
                     })
                     .collect();

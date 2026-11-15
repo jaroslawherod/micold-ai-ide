@@ -65,6 +65,20 @@ const TOLERANCE: f32 = 0.5;
 /// open, or a child escaping a parent that does not clip, which is a bug.
 const CLIP_REVEALED: &[&str] = &["0/0/0/1/0/0/0/1/1/0"];
 
+/// A structured session's collapsed **session options row** (feature 1792 US3), the same
+/// mechanism as [`CLIP_REVEALED`] at a second site, held only in the transcript states and only
+/// past the bottom edge: the row is always built inside `expand`, so its track lives on, and
+/// collapsed it is a full-height row in a 0px reveal. `the_recorded_options_row_escape_is_its_reveal`
+/// opens it and shows the same node come clean.
+const OPTIONS_ROW_REVEAL: &[&str] = &["0/0/0/1/1/1/0/0/1/0/0/1/0"];
+
+/// Whether `escape` is the collapsed options row in a transcript state ([`OPTIONS_ROW_REVEAL`]).
+fn is_options_row_reveal(state: &str, escape: &lay::Escape) -> bool {
+    state.starts_with("session-transcript")
+        && OPTIONS_ROW_REVEAL.contains(&escape.child_path.as_str())
+        && escape.edge == "bottom"
+}
+
 /// The sidebar list's scroll content, which is taller than its viewport by design.
 ///
 /// A second clipping parent, kept in its own list because it is a different mechanism and the
@@ -369,6 +383,8 @@ pub(crate) fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'
         Some("FOLDED_BODY_REVEAL")
     } else if is_drawer_rows_scroll(state, escape) {
         Some("DRAWER_ROWS_CONTENT")
+    } else if is_options_row_reveal(state, escape) {
+        Some("OPTIONS_ROW_REVEAL")
     } else {
         None
     }
@@ -414,6 +430,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(TRANSCRIPT_CONTENT)
         .chain(FOLDED_BODY_REVEAL)
         .chain(DRAWER_ROWS_CONTENT)
+        .chain(OPTIONS_ROW_REVEAL)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(
@@ -626,6 +643,7 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
             worktree: micold_client::features::worktree::State {
                 worktrees: (0..worktrees)
                     .map(|i| micold_core::worktree::Worktree {
+                        parent: None,
                         dir_name: format!("feat-{i:02}"),
                         path: std::path::PathBuf::from("/fixture/project")
                             .join(format!("feat-{i:02}")),
@@ -957,4 +975,37 @@ fn the_recorded_escapes_are_the_accordion_reveal() {
              accordion's reveal and the attribution recorded in CLIP_REVEALED is wrong"
         );
     }
+}
+
+/// [`OPTIONS_ROW_REVEAL`] is the row's reveal (feature 1792): collapsed, the row escapes its 0px
+/// `expand`; opened (`composers.options_open`, the one input that drives that reveal), the same node
+/// is clean. A freshly built `expand` starts settled at its target, so one pass sees each at rest.
+#[test]
+fn the_recorded_options_row_escape_is_its_reveal() {
+    let covered = covered_states()
+        .iter()
+        .find(|c| c.name == "session-transcript-pane")
+        .expect("the transcript pane is a covered state");
+    let escaping_nodes = |open: bool| -> Vec<String> {
+        let mut under = (covered.build)();
+        under.state.composers.options_open = open;
+        let renderer = lay::renderer();
+        lay::escapes(&lay::resolve(lay::view_of(&under), &renderer), TOLERANCE)
+            .into_iter()
+            .map(|e| e.child_path)
+            .collect()
+    };
+    assert!(
+        escaping_nodes(false)
+            .iter()
+            .any(|n| n == OPTIONS_ROW_REVEAL[0]),
+        "the collapsed options row reports no escape, so OPTIONS_ROW_REVEAL is attributed to \
+         nothing"
+    );
+    assert!(
+        !escaping_nodes(true)
+            .iter()
+            .any(|n| n == OPTIONS_ROW_REVEAL[0]),
+        "the node escapes with the row open too, so it is not the row's reveal"
+    );
 }

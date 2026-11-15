@@ -18,3 +18,10 @@ scripts/autopilot/safe-to-remove.sh <run-worktree>... --no-live-sessions
 ```
 Check: an open-PR run is under Not done, never Completed; no `REMOVE` line appears without the
 `- **Auto-remove**: yes` field in the supervisor ledger; no worktree disappears.
+
+## Results (2026-11-15, close unit)
+
+- **A. Automated**: `scripts/tests/close-out.test.sh` 110 cases, 0 failed; `supervisor.test.sh` 291 cases and
+  `supervisor-ownership.test.sh` 39 cases, 0 failed.
+- **B. By hand**: not run. `gh` is not authenticated in the cloud session, so a real run's issue and PR
+  state cannot be read; SC-003 and SC-006 (under 10 s) stay unmeasured against live GitHub.

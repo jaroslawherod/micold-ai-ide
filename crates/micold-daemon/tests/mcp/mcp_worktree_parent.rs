@@ -220,13 +220,10 @@ async fn a_session_in_a_worktree_records_it_and_an_explicit_parent_overrides() {
         (Some("w"), Some("known")),
         "the create result carries it"
     );
-    f.create(sid(3), "c2", json!({"parent": "default"})).await;
+    f.create(sid(3), "c2", json!({"parent": "c1"})).await;
     f.create(sid(1), "c3", json!({"parent": "w"})).await;
     assert_eq!(parent_of(&f.row("c1").await), (Some("w"), Some("known")));
-    assert_eq!(
-        parent_of(&f.row("c2").await),
-        (Some("default"), Some("known"))
-    );
+    assert_eq!(parent_of(&f.row("c2").await), (Some("c1"), Some("known")));
     assert_eq!(parent_of(&f.row("c3").await), (Some("w"), Some("known")));
 }
 
@@ -308,6 +305,46 @@ async fn a_restart_keeps_the_link() {
         reloaded.worktree_ids(f.path()),
         f.state.worktree_ids(f.path()),
         "ids survive too"
+    );
+}
+
+// --- US4: the catalog carries the parent for the sidebar --------------------------------------
+
+/// The parent label the catalog snapshot gives worktree `dir`.
+fn snapshot_parent(f: &Fixture, dir: &str) -> Option<micold_core::worktree::ParentLabel> {
+    let project = f.path();
+    f.state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.path == project)?
+        .worktrees
+        .into_iter()
+        .find(|w| w.dir_name == dir)?
+        .parent
+}
+
+#[tokio::test]
+async fn the_snapshot_labels_a_child_with_its_parents_current_name_and_marks_a_removed_one() {
+    let f = Fixture::new().await;
+    f.create(sid(3), "c1", json!({})).await;
+    f.create(sid(1), "c2", json!({})).await;
+    let label = |name: &str, removed| {
+        Some(micold_core::worktree::ParentLabel {
+            name: name.into(),
+            removed,
+        })
+    };
+    assert_eq!(snapshot_parent(&f, "c1"), label("w", false));
+    assert_eq!(snapshot_parent(&f, "c2"), label("default", false));
+    assert_eq!(snapshot_parent(&f, "hand"), None, "no parent, no label");
+    ops::rename_worktree(&f.state, f.path(), "w", "A new name").unwrap();
+    assert_eq!(snapshot_parent(&f, "c1"), label("A new name", false));
+    f.delete("w").await;
+    assert_eq!(
+        snapshot_parent(&f, "c1"),
+        label("A new name", true),
+        "a removed parent keeps the last name it was shown by"
     );
 }
 

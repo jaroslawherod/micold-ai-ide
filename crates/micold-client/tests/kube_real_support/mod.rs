@@ -6,6 +6,7 @@
 #![cfg(feature = "kube-real-runtime")]
 #![allow(dead_code)]
 
+pub mod forge;
 pub mod services;
 
 #[path = "../daemon_bin/mod.rs"]
@@ -484,12 +485,25 @@ pub async fn start(
     settings: &KubeSettings,
     events: &Events,
 ) -> Result<Started, String> {
+    start_for(client, name, settings, events, &[]).await
+}
+
+/// [`start`] for a daemon whose saved projects are `projects` (the repositories tokens are
+/// selected for).
+pub async fn start_for(
+    client: &Client,
+    name: &str,
+    settings: &KubeSettings,
+    events: &Events,
+    projects: &[micold_core::github::GithubRepo],
+) -> Result<Started, String> {
     let (connected, relay) = kube_attempt(
         &client.env,
         name,
         settings,
         None,
         &Default::default(),
+        projects,
         DriftChoice::Keep,
         &events.sink(),
     )
@@ -744,4 +758,285 @@ pub fn pod_uids(namespace: &str) -> String {
         None,
     )
     .expect("list the pods")
+}
+
+/// A temporary PAT store holding `tokens` as `(name, secret, repository filter)`, in that order
+/// (#1760): the store a start that delivers GitHub tokens reads, so the suite never touches the
+/// developer's own.
+pub fn token_store(tokens: &[(&str, &str, &[&str])]) -> tempfile::TempDir {
+    use micold_core::daemon_config::RepoPattern;
+    use micold_core::scoped_credential::pat_store::{PatStore, StoredPat};
+    use micold_core::scoped_credential::SecretToken;
+    let dir = tempfile::tempdir().expect("token store directory");
+    let store = PatStore::new(dir.path());
+    for (name, secret, repos) in tokens {
+        let pat = StoredPat {
+            token: SecretToken::new(*secret),
+            expires_at: 4_000_000_000,
+            repos: repos
+                .iter()
+                .map(|r| RepoPattern::parse(r).expect("a repository pattern"))
+                .collect(),
+        };
+        store.put(name, &pat).expect("store the token");
+    }
+    dir
+}
+
+/// The repository `owner/name` on github.com, as a saved project's remote names it.
+pub fn repo(full_name: &str) -> micold_core::github::GithubRepo {
+    micold_core::github::GithubRepo::from_remote_url(&format!("https://github.com/{full_name}"))
+        .expect("a repository")
+}
+
+/// One start that delivers the GitHub tokens of `store` to the pod, naming the forge `host`
+/// (#1760): the client reads `store`, and the daemon's `github_tokens` opt-in is `opt_in`.
+#[allow(clippy::too_many_arguments)]
+pub async fn start_with_tokens(
+    client: &mut Client,
+    name: &str,
+    settings: &KubeSettings,
+    events: &Events,
+    store: &Path,
+    host: &str,
+    opt_in: bool,
+    projects: &[micold_core::github::GithubRepo],
+) -> Result<Started, String> {
+    client.env.tokens = micold_client::daemon::PodTokenSource {
+        pat_root: Some(store.to_path_buf()),
+        host: Some(host.to_string()),
+    };
+    let mut settings = settings.clone();
+    settings.github_tokens = opt_in;
+    start_for(client, name, &settings, events, projects).await
+}
+
+/// A session's shell instance: opened, viewed and wide, so its grid streams.
+pub struct Shell {
+    pub session: micold_core::session::SessionId,
+    serial: u64,
+    instance: micold_core::session::ShellInstanceId,
+}
+
+/// The first shell instance of a session.
+pub const SHELL: micold_core::session::ShellInstanceId = micold_core::session::ShellInstanceId(1);
+
+impl Shell {
+    /// `welcome` is the connection's: its catalog holds the next input serial the daemon expects
+    /// for the session, which it keeps across a restart.
+    pub async fn open(
+        conn: &mut DaemonConnection,
+        welcome: &micold_core::connect::Welcome,
+        project: &Path,
+        session: micold_core::session::SessionId,
+    ) -> Self {
+        let serial = welcome
+            .catalog
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .find(|s| s.id == session)
+            .map_or(0, |s| s.input_serial);
+        let mut shell = Self {
+            session,
+            serial,
+            instance: SHELL,
+        };
+        shell.attach(conn, project).await;
+        shell
+    }
+
+    /// Another session of the stand-in `claude` in the worktree `work` made, with its first shell
+    /// instance opened (a new session's input serial starts at 0).
+    pub async fn open_another_session(
+        conn: &mut DaemonConnection,
+        project: &Path,
+        seen: &mut String,
+    ) -> Self {
+        let OperationResult::SessionCreated { session } = request(
+            conn,
+            ClientMsg::SessionCreate {
+                req: 4,
+                project: project.to_path_buf(),
+                worktree_dir: "feature-x".into(),
+                provider: micold_core::session::AiCli::ClaudeCode,
+                allow_additional_session: true,
+                kind: Default::default(),
+                permission_mode: Default::default(),
+            },
+            4,
+            seen,
+        )
+        .await
+        else {
+            panic!("a second session is created")
+        };
+        conn.send(Frame::Control(ClientMsg::SessionStart {
+            session,
+            allow_additional_session: true,
+        }))
+        .await
+        .expect("start the second session");
+        let mut shell = Self {
+            session,
+            serial: 0,
+            instance: SHELL,
+        };
+        shell.attach(conn, project).await;
+        shell
+    }
+
+    /// Open the session's shell instance `instance` and type into that one from now on: another
+    /// terminal of the same session, with its own process tree.
+    pub async fn switch(
+        &mut self,
+        conn: &mut DaemonConnection,
+        project: &Path,
+        instance: micold_core::session::ShellInstanceId,
+    ) {
+        self.instance = instance;
+        self.attach(conn, project).await;
+    }
+
+    async fn attach(&mut self, conn: &mut DaemonConnection, project: &Path) {
+        use micold_core::protocol::messages::{SessionProcess, TerminalRef};
+        let session = self.session;
+        let process = SessionProcess::Shell(self.instance);
+        for msg in [
+            ClientMsg::SessionOpenShell {
+                session,
+                instance: self.instance,
+            },
+            ClientMsg::SetViewedTerminals {
+                project: project.to_path_buf(),
+                terminals: vec![TerminalRef { session, process }],
+            },
+            ClientMsg::SessionResize {
+                session,
+                cols: 200,
+                rows: 50,
+                process: Some(process),
+            },
+        ] {
+            conn.send(Frame::Control(msg))
+                .await
+                .expect("open the shell");
+        }
+    }
+
+    async fn type_line(&mut self, conn: &mut DaemonConnection, line: String) {
+        let serial = self.serial;
+        self.serial += 1;
+        conn.send(Frame::Control(ClientMsg::SessionInput {
+            session: self.session,
+            serial,
+            bytes: line.into_bytes(),
+            process: Some(micold_core::protocol::messages::SessionProcess::Shell(
+                self.instance,
+            )),
+        }))
+        .await
+        .expect("type into the shell");
+    }
+
+    /// Type `cmd` as the step `tag`, which ends with `<tag>-OK` or, after the tail of its log,
+    /// `<tag>-FAILED`. Both are typed split, so the echo of the command (wrapped or not) never
+    /// carries them.
+    pub async fn step(&mut self, conn: &mut DaemonConnection, tag: &str, cmd: &str, secs: u64) {
+        let typed = format!(
+            "({cmd}) >/tmp/{tag}.log 2>&1 && echo {tag}\"-OK\" || {{ tail -n 30 /tmp/{tag}.log; echo {tag}\"-FAILED\"; }}\r"
+        );
+        self.type_line(conn, typed).await;
+        let mut seen = String::new();
+        let ended = wait_for(conn, &mut seen, &format!("{tag}-"), secs).await;
+        assert!(
+            ended && seen.contains(&format!("{tag}-OK")),
+            "step {tag} (`{cmd}`) did not succeed in the session's terminal: {seen}"
+        );
+    }
+
+    /// Type `cmd` and return what the terminal showed up to its end. `cmd` prints its results as
+    /// `KEY"="value` (split, so the echo of the command never carries `KEY=`): read them with
+    /// [`field`].
+    pub async fn capture(
+        &mut self,
+        conn: &mut DaemonConnection,
+        tag: &str,
+        cmd: &str,
+        secs: u64,
+    ) -> String {
+        self.type_line(conn, format!("({cmd}) 2>&1; echo {tag}\"-END\"\r"))
+            .await;
+        let mut seen = String::new();
+        let ended = wait_for(conn, &mut seen, &format!("{tag}-END"), secs).await;
+        assert!(
+            ended,
+            "`{cmd}` did not end in the session's terminal: {seen}"
+        );
+        seen
+    }
+}
+
+/// The value of the line `key=value` a [`Shell::capture`] printed; `None` when there is none.
+pub fn field(seen: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    // A line may start with the prompt (`$ KEY=value`) when the command was typed before a
+    // fresh shell printed it; the echo of the command never holds `KEY=` (it is typed split).
+    seen.lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let at = l.find(&prefix)?;
+            (at == 0 || l[..at].ends_with(' ')).then(|| l[at + prefix.len()..].to_string())
+        })
+        .next_back()
+}
+
+/// What a session's terminal holds (#1760, FR-007): its environment and its home directory.
+#[derive(Debug)]
+pub struct SessionFacts {
+    /// Lines of `env` holding the secret in `token_file`.
+    pub env_secret_lines: usize,
+    /// Lines of `env` naming `SSH_AUTH_SOCK`.
+    pub ssh_auth_sock_lines: usize,
+    /// The session's `$HOME`.
+    pub home: String,
+    /// The entries of `ls -A $HOME`.
+    pub home_entries: Vec<String>,
+    /// Whether `$HOME/.ssh` exists.
+    pub home_has_ssh: bool,
+    /// Files under `$HOME` (recursively) holding the secret.
+    pub home_secret_files: usize,
+}
+
+/// Read the shell's environment and home: `env`, `ls -A` and a recursive `grep -F` of the home for
+/// the secret kept in the pod file `token_file`. The secret is read in the pod and never typed, so
+/// neither the shell's history nor its echo can carry it. `tag` names the capture.
+pub async fn session_env_and_home(
+    conn: &mut DaemonConnection,
+    shell: &mut Shell,
+    tag: &str,
+    token_file: &str,
+) -> SessionFacts {
+    let cmd = format!(
+        r#"S=$(sed -n 's/^token=//p' {token_file} | head -n1); test -n "$S" || echo NOSECRET"="1; echo ENVSECRET"="$(env | grep -cF -- "$S"); echo ENVSSH"="$(env | grep -c '^SSH_AUTH_SOCK='); echo HOMEDIR"="$HOME; echo HOMELS"="$(ls -A "$HOME" | tr '\n' ,); echo HOMESSH"="$(test -e "$HOME/.ssh" && echo 1 || echo 0); echo HOMEHITS"="$(grep -rlF -- "$S" "$HOME" 2>/dev/null | wc -l)"#
+    );
+    let seen = shell.capture(conn, tag, &cmd, 120).await;
+    assert!(
+        field(&seen, "NOSECRET").is_none(),
+        "the pod holds no secret at {token_file}: {seen}"
+    );
+    let get = |key: &str| field(&seen, key).unwrap_or_else(|| panic!("no {key} in: {seen}"));
+    let count = |key: &str| get(key).trim().parse::<usize>().expect("a count");
+    SessionFacts {
+        env_secret_lines: count("ENVSECRET"),
+        ssh_auth_sock_lines: count("ENVSSH"),
+        home: get("HOMEDIR"),
+        home_entries: get("HOMELS")
+            .split(',')
+            .filter(|e| !e.is_empty())
+            .map(str::to_string)
+            .collect(),
+        home_has_ssh: get("HOMESSH") == "1",
+        home_secret_files: count("HOMEHITS"),
+    }
 }

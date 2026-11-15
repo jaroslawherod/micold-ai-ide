@@ -20,14 +20,12 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use kube_real_support::services::NPM_PROBE;
 use kube_real_support::*;
-use micold_core::connect::{DaemonConnection, Welcome};
+use micold_core::connect::DaemonConnection;
 use micold_core::kube::lifecycle;
 use micold_core::kube::names::ResourceNames;
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, OperationResult, SessionProcess, TerminalRef,
-};
-use micold_core::session::{AiCli, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult};
+use micold_core::session::{AiCli, SessionLocation};
 use micold_core::setup::{SetupCommand, SetupState};
 
 const NAME: &str = "Toolchain box";
@@ -41,9 +39,6 @@ const INSTALL_SECS: u64 = 8 * 60;
 
 /// A step after the setup: a build with the toolchain already there, or the session's own installs.
 const STEP_SECS: u64 = 5 * 60;
-
-/// The session's shell instance the steps are typed into.
-const SHELL: ShellInstanceId = ShellInstanceId(1);
 
 /// Every tool the image ships runs, as the non-root pod user whose home is the volume's.
 const IMAGE_TOOLS: &str = r#"test "$(id -u)" != 0 && test "$HOME" = /data/home && mise --version && cc --version && python3 --version"#;
@@ -63,78 +58,6 @@ fn installed() -> String {
     format!(
         r#"case "$(command -v uv)" in /data/home/*) ;; *) exit 1;; esac && test "$(command -v {NPM_PROBE})" = /data/home/.local/bin/{NPM_PROBE} && uv --version | grep -q 'uv 0.8.0' && {NPM_PROBE} | grep -q NPM-PROBE-OK && cd mise-c-crate && cargo --version | grep -q 'cargo 1.90.0'"#
     )
-}
-
-/// The session's shell instance: opened, viewed and wide, so its grid streams.
-struct Shell {
-    session: SessionId,
-    serial: u64,
-}
-
-impl Shell {
-    /// `welcome` is the connection's: its catalog holds the next input serial the daemon expects
-    /// for the session, which it keeps across a restart.
-    async fn open(
-        conn: &mut DaemonConnection,
-        welcome: &Welcome,
-        project: &Path,
-        session: SessionId,
-    ) -> Self {
-        let serial = welcome
-            .catalog
-            .projects
-            .iter()
-            .flat_map(|p| &p.sessions)
-            .find(|s| s.id == session)
-            .map_or(0, |s| s.input_serial);
-        let process = SessionProcess::Shell(SHELL);
-        for msg in [
-            ClientMsg::SessionOpenShell {
-                session,
-                instance: SHELL,
-            },
-            ClientMsg::SetViewedTerminals {
-                project: project.to_path_buf(),
-                terminals: vec![TerminalRef { session, process }],
-            },
-            ClientMsg::SessionResize {
-                session,
-                cols: 200,
-                rows: 50,
-                process: Some(process),
-            },
-        ] {
-            conn.send(Frame::Control(msg))
-                .await
-                .expect("open the shell");
-        }
-        Self { session, serial }
-    }
-
-    /// Type `cmd` as the step `tag`, which ends with `<tag>-OK` or, after the tail of its log,
-    /// `<tag>-FAILED`. Both are typed split, so the echo of the command (wrapped or not) never
-    /// carries them.
-    async fn step(&mut self, conn: &mut DaemonConnection, tag: &str, cmd: &str, secs: u64) {
-        let typed = format!(
-            "({cmd}) >/tmp/{tag}.log 2>&1 && echo {tag}\"-OK\" || {{ tail -n 30 /tmp/{tag}.log; echo {tag}\"-FAILED\"; }}\r"
-        );
-        let serial = self.serial;
-        self.serial += 1;
-        conn.send(Frame::Control(ClientMsg::SessionInput {
-            session: self.session,
-            serial,
-            bytes: typed.into_bytes(),
-            process: Some(SessionProcess::Shell(SHELL)),
-        }))
-        .await
-        .expect("type into the shell");
-        let mut seen = String::new();
-        let ended = wait_for(conn, &mut seen, &format!("{tag}-"), secs).await;
-        assert!(
-            ended && seen.contains(&format!("{tag}-OK")),
-            "step {tag} (`{cmd}`) did not succeed in the session's terminal: {seen}"
-        );
-    }
 }
 
 /// Set the project's setup command, run it at `location` and wait for its end: it succeeds.

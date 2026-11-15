@@ -253,6 +253,10 @@ name = "kube_real_reconnect"
 path = "tests/kube_real_reconnect.rs"
 
 [[test]]
+name = "kube_real_scoped_token"
+path = "tests/kube_real_scoped_token.rs"
+
+[[test]]
 name = "kube_real_security"
 path = "tests/kube_real_security.rs"
 

@@ -711,7 +711,7 @@ pub(crate) fn location_card(state: &State, location: &SessionLocation) -> Option
         SidebarEntry::Default(_) | SidebarEntry::UserGroup(_) => None,
         SidebarEntry::Worktree(node) => (node.worktree.dir_name == *dir).then_some(node),
         SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
-            RunRow::Worktree(node) if node.worktree.dir_name == *dir => Some(node),
+            RunRow::Worktree(node) if node.worktree.dir_name == *dir => Some(&**node),
             _ => None,
         }),
     })?;
@@ -954,6 +954,7 @@ mod tests {
         state.workspace.active = Some(path);
         state.worktree.worktrees = (0..30)
             .map(|i| Worktree {
+                parent: None,
                 dir_name: format!("feat-{i}"),
                 path: format!("/repo/.claude/worktrees/feat-{i}").into(),
                 branch: Some(format!("feat/{i}")),
@@ -1143,6 +1144,7 @@ mod tests {
         state.workspace.active = Some(path);
         state.worktree.worktrees = (0..n)
             .map(|i| Worktree {
+                parent: None,
                 dir_name: format!("feat-{i}"),
                 path: format!("/repo/.claude/worktrees/feat-{i}").into(),
                 branch: Some(format!("feat/{i}")),
@@ -1676,6 +1678,7 @@ mod tests {
             .push(Project::new(path.clone(), true, Availability::Available));
         state.workspace.active = Some(path.clone());
         state.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: "feat-a".into(),
             path: "/repo/.claude/worktrees/feat-a".into(),
             branch: Some("feat/a".into()),
@@ -1904,6 +1907,7 @@ mod tests {
         app.workspace.active = Some(path.clone());
         for dir in ["feat-a", "fix-b"] {
             app.worktree.worktrees.push(Worktree {
+                parent: None,
                 dir_name: dir.into(),
                 path: path.join(".claude/worktrees").join(dir),
                 branch: Some(dir.replacen('-', "/", 1)),

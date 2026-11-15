@@ -309,6 +309,11 @@ for k in R15.Q3 R15.Q4 R15.Q5; do rt state "$k" asked; done
 check "route next: empty when none pending" 0 '^$' rt next
 printf '{"category":"1","banner":"free text ask","questions":[]}\n' > "$D/free.json"
 check "route add: a free-text escalation gives Q1" 0 '^R16.Q1$' "$SUP" route add --ledger "$L" 16 s-16 "$D/free.json"
+check "route add: re-adding a free-text escalation is a no-op" 0 '^1$' bash -c '"$0" route add --ledger "$1" 16 s-16 "$2" >/dev/null; grep -c "^| R16.Q1 |" "$1"' "$SUP" "$L" "$D/free.json"
+LO="$D/ord.md"; "$SUP" ledger init --ledger "$LO" --owner s-1 --cap 3 --source x 9 100 >/dev/null
+esc "$D/o9.json" "1" 1 "q" 2 "q" 10 "q"; esc "$D/o100.json" "1" 1 "q"
+"$SUP" route add --ledger "$LO" 100 s-100 "$D/o100.json" >/dev/null; "$SUP" route add --ledger "$LO" 9 s-9 "$D/o9.json" >/dev/null
+check "route next: numeric order across issues 9 and 100 and Q2 before Q10" 0 '^R9.Q1 R9.Q2 R9.Q10 R100.Q1$' bash -c '"$0" route next --ledger "$1" | cut -d" " -f1 | paste -sd" " -' "$SUP" "$LO"
 esc "$D/pipe.json" "1" 1 "a|b?"
 check "route add: a pipe in a question is stored as a slash" 0 'a/b\?' bash -c '"$0" route add --ledger "$1" 17 s-17 "$2" >/dev/null; "$0" route next --ledger "$1"' "$SUP" "$L" "$D/pipe.json"
 # state / answer
@@ -375,10 +380,71 @@ check "route2: cites repo evidence in the answer" 0 '^ok$' rq_has "evidence" "ro
 check "route2: no evidence goes to the user batch as pending" 0 '^ok$' rq_has "no evidence" "pending"
 check "route2: sends with resume --by supervisor" 0 '^ok$' rq_has "resume --by supervisor"
 check "route2: a route gate exit 2 goes to the user" 0 '^ok$' rq_has "exits 2" "user"
-check "route2: step 2 sits between Collect and Batch" 0 '^ok$' bash -c 'ord() { :; }; r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; a="$(printf "%s" "$r" | grep -n "^1\. \*\*Collect" | cut -d: -f1)"; b="$(printf "%s" "$r" | grep -n "route gate" | head -1 | cut -d: -f1)"; c="$(printf "%s" "$r" | grep -n "route next" | head -1 | cut -d: -f1)"; [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && echo ok' "$SKILL"
+check "route2: step 2 sits between Collect and Batch" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; a="$(printf "%s" "$r" | grep -n "^1\. \*\*Collect" | cut -d: -f1)"; b="$(printf "%s" "$r" | grep -n "route gate" | head -1 | cut -d: -f1)"; c="$(printf "%s" "$r" | grep -n "route next" | head -1 | cut -d: -f1)"; [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && echo ok' "$SKILL"
 check "route2: Batch with nothing pending still sends resolved, unsent issues" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; printf "%s" "$r" | grep "^3\. " | grep -qF "run steps 9 to 11" && echo ok' "$SKILL"
 check "route2: the follow-up batch goes back to step 3" 0 'back to step 3' bash -c 'awk "/^## Route questions/,/^## Watcher/" "$0" | grep -o "back to step 3"' "$SKILL"
 check "route gate: works on a malformed ledger" 0 '^judge$' "$SUP" route gate --ledger "$D/bad.md" 1
+
+# --- #1815 M3: context-cap survival (route next --reask, route overdue, SKILL text) -----------
+L3="$D/m3.md"; "$SUP" ledger init --ledger "$L3" --owner s-1 --cap 3 --source x 31 32 >/dev/null
+esc "$D/m3a.json" "1 Product" 1 "Qa1?" 2 "Qa2?" 3 "Qa3?"
+esc "$D/m3b.json" "1 Product" 1 "Qb1?" 2 "Qb2?" 3 "Qb3?"
+"$SUP" route add --ledger "$L3" 31 s-31 "$D/m3a.json" >/dev/null; "$SUP" route add --ledger "$L3" 32 s-32 "$D/m3b.json" >/dev/null
+for k in R32.Q1 R31.Q2 R31.Q1 R32.Q2 R31.Q3; do "$SUP" route state --ledger "$L3" "$k" asked; done
+check "reask: every asked row, no limit, ascending" 0 '^R31.Q1 R31.Q2 R31.Q3 R32.Q1 R32.Q2$' bash -c '"$0" route next --ledger "$1" --reask | cut -d" " -f1 | paste -sd" " -' "$SUP" "$L3"
+check "reask: carries the question, options, rec and evidence" 0 '^R31.Q1 \| Qa1\? \| A: a // B: b \| A \| e$' bash -c '"$0" route next --ledger "$1" --reask | head -1' "$SUP" "$L3"
+check "reask: prints no banner or notification text" 1 '^$' bash -c '"$0" route next --ledger "$1" --reask | grep -E "Cheaper|need a decision|banner"' "$SUP" "$L3"
+check "reask: leaves pending rows out" 0 '^0$' bash -c '"$0" route next --ledger "$1" --reask | grep -c "R32.Q3"; true' "$SUP" "$L3"
+check "reask: an unknown option exits 2" 2 'usage' "$SUP" route next --ledger "$L3" --bogus
+"$SUP" route sent --ledger "$L3" 31 1000
+check "overdue: Sent older than the ceiling is listed" 0 '^31$' "$SUP" route overdue --ledger "$L3" --now 1700 --ceiling 600
+check "overdue: exactly at the ceiling is not overdue" 0 '^$' "$SUP" route overdue --ledger "$L3" --now 1600 --ceiling 600
+check "overdue: an empty Sent is never overdue" 0 '^31$' bash -c '"$0" route overdue --ledger "$1" --now 99999 --ceiling 1 | paste -sd" " -' "$SUP" "$L3"
+check "overdue: an issue listed once" 0 '^1$' bash -c '"$0" route overdue --ledger "$1" --now 1700 --ceiling 600 | wc -l | tr -d " "' "$SUP" "$L3"
+check "overdue: --now and --ceiling are required" 2 'usage' "$SUP" route overdue --ledger "$L3" --now 1700
+check "overdue: a non-numeric --now exits 2" 2 'epoch' "$SUP" route overdue --ledger "$L3" --now soon --ceiling 600
+sk_has() { local r; r="$(RQ)"; for w in "$@"; do printf '%s' "$r" | grep -qF -- "$w" || { echo "missing: $w"; return 1; }; done; echo ok; }
+check "skill3: OVER ends the turn after banners, notification and asked" 0 '^ok$' bash -c 'r="$(awk "/^## Route questions/,/^## Watcher/" "$0")"; a="$(printf "%s" "$r" | grep -n -m1 "OVER" | cut -d: -f1)"; b="$(printf "%s" "$r" | grep -n -m1 "route state <key> asked" | cut -d: -f1)"; [ -n "$a" ] && [ "$a" -gt "$b" ] && printf "%s" "$r" | grep "OVER" | grep -qF "end the turn" && echo ok' "$SKILL"
+check "skill3: names the context check" 0 '^ok$' sk_has "AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py" "OVER"
+check "skill3: OVER makes no AskUserQuestion call" 0 '^ok$' sk_has "no \`AskUserQuestion\`"
+check "skill3: the Cheaper line, verbatim" 0 'Cheaper' grep -nF 'Cheaper: /clear, then /autopilot-supervisor — it asks this again from the ledger.' "$SKILL"
+check "skill3: Restart re-asks with route next --reask, no banner or notification" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "route next --reask" "without a banner or notification"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: Restart drops a session that left asking" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "route drop" "left \`asking\`"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: Restart checks the cap before asking, and loops in fours" 0 '^ok$' bash -c 'r="$(awk "/^## Restart/,/^## Report/" "$0")"; for w in "context.py" "Cheaper:" "at most 4" "until every printed row is answered"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+check "skill3: an overdue report is noted once" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; printf "%s" "$r" | grep -qF "Note \"not accepting input\"" && echo ok' "$SKILL"
+check "skill3: Confirm names route overdue, reports, never re-sends" 0 '^ok$' bash -c 'r="$(awk "/^11\. \*\*Confirm/,/^## Watcher/" "$0")"; for w in "route overdue" "Watcher ceiling" "never re-sent" "not accepting input"; do printf "%s" "$r" | grep -qF -- "$w" || exit 1; done; echo ok' "$SKILL"
+
+# --- #1815 M4: upward relay (route target, SKILL text) ----------------------------------------
+# list_sessions rows: ref, worktree, parent (the parent worktree's name; omitted at top level).
+T="$D/sess.json"
+cat > "$T" <<'J'
+[{"ref":"s-par","worktree":"par-wt","is_caller":false},
+ {"ref":"s-me","worktree":"me-wt","parent":"par-wt","parent_state":"known","is_caller":true},
+ {"ref":"s-top","worktree":"default","is_caller":false},
+ {"ref":"s-empty","worktree":"e-wt","parent":""},
+ {"ref":"s-gone","worktree":"g-wt","parent":"nowhere-wt","parent_state":"known"},
+ {"ref":"s-def","worktree":"d-wt","parent":"default","parent_state":"known"}]
+J
+check "target: a reported parent maps to its session" 0 '^parent s-par$' "$SUP" route target --sessions "$T" --me s-me
+check "target: an absent parent field is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-top
+check "target: an empty parent is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-empty
+check "target: a parent with no session is the user" 0 '^user$' "$SUP" route target --sessions "$T" --me s-gone
+check "target: a parent of default maps to the session in default" 0 '^parent s-top$' "$SUP" route target --sessions "$T" --me s-def
+check "target: the daemon's {sessions:[...]} shape" 0 '^parent s-par$' bash -c 'jq "{sessions: .}" "$1" > "$1.obj" && "$0" route target --sessions "$1.obj" --me s-me' "$SUP" "$T"
+check "target: an empty --me falls back to the is_caller row" 0 '^parent s-par$' "$SUP" route target --sessions "$T" --me ""
+check "target: a failed session in the parent worktree is passed over" 0 '^parent s-live$' bash -c 'echo "[{\"ref\":\"s-dead\",\"worktree\":\"w\",\"lifecycle\":\"failed\"},{\"ref\":\"s-live\",\"worktree\":\"w\",\"lifecycle\":\"running\"},{\"ref\":\"m\",\"worktree\":\"x\",\"parent\":\"w\",\"parent_state\":\"known\"}]" > "$1" && "$0" route target --sessions "$1" --me m' "$SUP" "$D/live.json"
+check "target: a parent_state other than known is the user" 0 '^user$' bash -c 'echo "[{\"ref\":\"p\",\"worktree\":\"w\"},{\"ref\":\"m\",\"parent\":\"w\",\"parent_state\":\"removed\"}]" > "$1" && "$0" route target --sessions "$1" --me m' "$SUP" "$D/ps.json"
+check "target: an unknown --me falls back to the is_caller row" 0 '^parent s-par$' "$SUP" route target --sessions "$T" --me s-nobody
+check "target: no matching row and no is_caller row is the user" 0 '^user$' bash -c 'jq "map(del(.is_caller))" "$1" > "$1.nc" && "$0" route target --sessions "$1.nc" --me s-nobody' "$SUP" "$T"
+check "target: an unreadable file exits 2" 2 'unreadable' "$SUP" route target --sessions "$D/none.json" --me s-me
+check "target: a non-JSON file exits 2" 2 'unreadable' "$SUP" route target --sessions "$D/free.json.nope" --me s-me
+check "target: --sessions and --me are required" 2 'usage' "$SUP" route target --sessions "$T"
+check "target: a parent equal to its own worktree is the user, not itself" 0 '^user$' bash -c 'echo "[{\"ref\":\"m\",\"worktree\":\"w\",\"parent\":\"w\",\"parent_state\":\"known\"}]" > "$1" && "$0" route target --sessions "$1" --me m' "$SUP" "$D/self.json"
+check "target: needs no ledger" 0 '^parent s-par$' bash -c 'cd "$2" && "$0" route target --sessions "$1" --me s-me' "$SUP" "$T" "$D"
+check "skill4: step 6 names route target and the parent send" 0 '^ok$' sk_has "route target" "send_session_input" "Via \`parent\`" "route answer <key> parent"
+check "skill4: not_found records the refusal and asks the user, never retried" 0 '^ok$' sk_has "ledger set <n> Note \"<refusal>\"" "Via \`user\`" "never retried"
+check "skill4: exit 2 and an unmatched row mean the user" 0 '^ok$' sk_has "exits 2" "is_caller"
+check "skill4: top tier asks the user" 0 '^ok$' sk_has "top-tier" "only from \`list_sessions\`"
 
 echo "supervisor: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]
