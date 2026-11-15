@@ -130,3 +130,49 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   a `_menu`/`_open` name. No chord opens a row menu from the keyboard for worktree rows either, so
   the group menu matches them: its items are keyboard-operable menu items (U30); a keyboard opener
   arrives with the header's focus handling in M5 (T040).
+
+## Cycle 7: move an item to a group (U6, U17–U19; T024, T025)
+
+- test: core `sidebar_layout::tests` (`move_item_*`, `a_run_group_moves_as_one_item`,
+  `every_outcome_keeps_each_item_in_exactly_one_list`, `adopt_places_an_unheld_item_*`).
+- red: `cargo test -p micold-core --lib sidebar_layout` -> `error[E0599]: no method named
+  move_item found for struct SidebarLayout` (10 errors).
+- green: `SidebarLayout::move_item(&item, DropTarget)` removes before it inserts, adjusts the index
+  for a move inside one list, clamps it, refuses `Worktree("")` (`IsDefault`), an unlisted item
+  (`UnknownItem`) and a missing group or a `GroupSlot` (`UnknownGroup`), leaving the layout as it
+  was; helpers `holds`, `list_of`, `adopt`. `23 passed`.
+- refactor: review A r1 moved "a live row the layout does not hold is ungrouped" into
+  `SidebarLayout::adopt`, so the client's two callers do not each copy it.
+
+## Cycle 8: Move to group in the menus (A6–A9, U27; T026, T027)
+
+- test: `tests/sidebar_group_actions.rs` (`the_move_menu_*`, `moving_*`, `new_group_from_the_move_menu_*`,
+  `a_refused_name_keeps_the_move_pending_*`, `a_run_group_row_moves_as_one_unit_*`,
+  `the_worktree_menu_offers_move_to_group_above_delete`, `a_keyboard_user_moves_a_row_through_the_card_menu_*`,
+  `choosing_the_list_the_row_is_already_in_*`, `new_group_from_a_move_menu_leaves_an_open_dialog_*`).
+- red: `cargo test -p micold-client --test main sidebar_group_actions` -> 5 errors (`E0432`
+  unresolved `move_menu_items`, `MoveTarget`; `E0599` no variant `Msg::Move`, 2x `NamingTarget::NewAndMove`).
+  One test went red after the first green for the right reason: moving a row the layout never held
+  to *Ungrouped* pinned it to the front of the saved order (`left: ungrouped: [b]`, `right: []`); it
+  now does nothing, the row being ungrouped already.
+- green: `features/sidebar_group_actions.rs` (`MoveTarget`, `MoveEntry`, `move_menu_items`,
+  `Msg::Move`, `NamingTarget::NewAndMove`), `ui::sidebar::move_items`, entries in
+  `ui::location_menu_items` (worktree menu and Overview card menu, above the bind and setup entries
+  that sit above Delete) and in the run group menu. Keyboard: the Overview card menu (Menu or
+  Shift+F10, Up/Down, Enter) carries the same entries. `--test main` -> `3465 passed; 0 failed`.
+  Two existing tests went red and pointed at the placement: `setup_output_geometry` (setup entries
+  stay directly above Delete) and `feature_write_isolation` / `surface_registration_cost` (the run
+  group menu is closed through `runs::close_menu`, not by writing `state.runs.menu`).
+- refactor: none beyond the `adopt` extraction above.
+
+## Cycle 9: the header's count under a filter (decision D7)
+
+- test: `tests/sidebar_group_actions.rs::a_header_counts_the_rows_shown_and_says_how_many_a_filter_hides`,
+  `a_group_holding_no_member_has_nothing_hidden`, `a_member_whose_worktree_is_gone_is_not_counted_as_hidden`;
+  `group_header.rs` unit test `a_group_whose_members_a_filter_hides_is_not_called_empty`.
+- red: written beside the code, so its red is shown by mutation: setting `hidden: 0` in
+  `apply_layout` fails the first test (`left: (0, 0)`, `right: (0, 2)`), and `count_words` without
+  the `hidden` arm shows `empty` for `(0, 2)`.
+- green: `GroupHeaderNode.hidden`, `GroupHeader::hidden`, `count_words(count, hidden)`: `n`, `n of m`
+  or `empty`.
+- refactor: none.

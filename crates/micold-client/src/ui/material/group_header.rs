@@ -26,6 +26,7 @@ pub struct GroupHeader<M> {
     on_toggle: Option<M>,
     collapsed: bool,
     count: usize,
+    hidden: usize,
     roles: Roles,
     key: Option<u64>,
     on_right_press: Option<OnRightPress<M>>,
@@ -40,6 +41,7 @@ impl<M> GroupHeader<M> {
             on_toggle: None,
             collapsed: false,
             count: 0,
+            hidden: 0,
             roles: micold_core::tokens::DARK,
             key: None,
             on_right_press: None,
@@ -64,6 +66,13 @@ impl<M> GroupHeader<M> {
         self
     }
 
+    /// How many more members the group holds that the list does not show (a tag filter hides
+    /// them): the header then says `n of m` instead of passing for empty or smaller.
+    pub fn hidden(mut self, hidden: usize) -> Self {
+        self.hidden = hidden;
+        self
+    }
+
     /// The colour roles it is drawn in.
     pub fn roles(mut self, roles: Roles) -> Self {
         self.roles = roles;
@@ -84,18 +93,20 @@ impl<M> GroupHeader<M> {
     }
 }
 
-/// The words after a group's name: its count, or [`EMPTY_GROUP`].
-fn count_words(count: usize) -> String {
-    match count {
-        0 => EMPTY_GROUP.to_string(),
-        n => n.to_string(),
+/// The words after a group's name: the rows it shows, `n of m` when a filter hides some of its
+/// members, or [`EMPTY_GROUP`] only when it holds no member at all.
+fn count_words(count: usize, hidden: usize) -> String {
+    match (count, hidden) {
+        (0, 0) => EMPTY_GROUP.to_string(),
+        (n, 0) => n.to_string(),
+        (n, h) => format!("{n} of {}", n + h),
     }
 }
 
 impl<'a, M: 'a> From<GroupHeader<M>> for TreeItem<'a, M> {
     fn from(header: GroupHeader<M>) -> Self {
         let r = header.roles;
-        let words = count_words(header.count);
+        let words = count_words(header.count, header.hidden);
         let mut item = TreeItem::new(0, header.name.clone(), r.on_surface)
             .heading(TypeRole::UserGroupHeader)
             .annotation(words, r.on_surface_variant)
@@ -149,8 +160,14 @@ mod tests {
 
     #[test]
     fn a_group_with_rows_shows_its_count_and_an_empty_one_says_so() {
-        assert_eq!(count_words(3), "3");
-        assert_eq!(count_words(0), EMPTY_GROUP);
+        assert_eq!(count_words(3, 0), "3");
+        assert_eq!(count_words(0, 0), EMPTY_GROUP);
+    }
+
+    #[test]
+    fn a_group_whose_members_a_filter_hides_is_not_called_empty() {
+        assert_eq!(count_words(0, 2), "0 of 2");
+        assert_eq!(count_words(1, 2), "1 of 3");
     }
 
     #[test]
