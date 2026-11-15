@@ -370,9 +370,10 @@ impl<'a, M> TreeItem<'a, M> {
         self
     }
 
-    /// Hold the row's press back while `inert`: the row keeps its button and its look, but a
-    /// release over it lets go of the press without pressing (feature 1786, the row a drag is
-    /// carrying). Keyboard presses are not held: a drag is a pointer gesture.
+    /// Hold the row's presses back while `inert`: the row keeps its buttons and its look, but a
+    /// release over it lets go of the press without pressing, the row's own, its twisty's and its
+    /// actions' (feature 1786, the row a drag is carrying). Keyboard presses are not held: a drag
+    /// is a pointer gesture.
     pub fn inert(mut self, inert: bool) -> Self {
         self.inert = inert;
         self
@@ -874,11 +875,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     r.on_surface,
                     shape::FULL,
                 );
-                // Always wrapped, so holding the release back changes no widget mid-press.
-                ContextArea::new(ripple).hold_release(item.inert).into()
+                ripple.into()
             } else {
                 body
             };
+            // Always wrapped, so holding the release back changes no widget mid-press. It holds
+            // the whole row's content, the row's own press and the twisty's and the actions' alike.
+            let row_el: Element<'a, M> = ContextArea::new(row_el).hold_release(item.inert).into();
 
             // The keyboard's focus ring, over the row's own shape (feature 803, FR-010).
             // A Tab stop with a press: Tab reaches it, Enter and Space press it.

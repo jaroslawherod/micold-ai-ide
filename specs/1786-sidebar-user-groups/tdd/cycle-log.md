@@ -263,3 +263,26 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   space, no window pointer). `sidebar_drag.over` pinned in `COMPONENT_LOCAL`; the vocabulary count
   is 34. `--test main` -> `3491 passed; 0 failed`.
 - refactor: `moved` takes the activation and the hit test in one place.
+
+## Cycle 15: review B round 1 fixes (F1 to F3)
+
+- test: `ui::sidebar::tests::the_dragged_row_of_every_kind_holds_its_release_until_the_button_is_up`
+  (a worktree row, a run group's row and a group header, through Escape or a focus loss and the
+  release); `tests/sidebar_drag.rs::escape_mid_drag_holds_the_rows_release_until_the_button_is_up`,
+  `a_focus_loss_before_the_drag_is_active_holds_nothing`,
+  `leaving_the_list_before_the_drag_is_active_forgets_where_it_started`.
+- red (F1): `cargo test -p micold-client --lib the_dragged_row_of_every_kind` -> `Item(Worktree("work")):
+  held until the button is up`, `left: []`, `right: [("feat/work", true)]`: `Cancelled` reset the
+  state, so the next view gave the dragged row its live press back.
+- red (F2), once F1 was green: the same test -> `Item(Run(GroupId(..1))): []`, `left: 0`,
+  `right: 1`: a run group's row (and a header) was never held.
+- red (F3): `cargo test -p micold-client --test main leaving_the_list_before` failed at
+  `sidebar_drag.rs:147`, "re-entering is where it starts": the stale `from` activated the drag.
+- green: `sidebar_drag::State::held`, set by `Cancelled` from an active drag and cleared by
+  `Released` or the next press; `State::holds` keys `inert` for every row kind and
+  `State::listens` keeps the window's release heard until the button is up; `GroupHeader::inert`;
+  `TreeView` wraps every row's content, pressable or not, in the holding `ContextArea`;
+  `Moved(None)` while inactive clears `from`. `--test main` 3494 passed, `--lib` 1110 passed,
+  `layout_snapshot` 180, `feature_registration_cost` 7.
+- refactor: the run group fixture of `a_run_group_row_wears_the_worst_state_of_its_runs` is the
+  shared `with_run_group` helper.

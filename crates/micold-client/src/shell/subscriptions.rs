@@ -168,8 +168,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     // Feature 1786 (contract C3): while a sidebar row is pressed, the release ends the drag
     // wherever it lands, and the window losing its focus cancels it. The pointer itself is the
-    // list's to report (`ui::sidebar`), never the window's. Escape goes through `on_escape`.
-    if app.core.sidebar_drag.armed.is_some() {
+    // list's to report (`ui::sidebar`), never the window's. Escape goes through `on_escape`. A
+    // cancelled drag still waits for the release, which lets go of the row it carried.
+    if app.core.sidebar_drag.listens() {
         subs.push(iced::event::listen_with(sidebar_drag_message));
     }
     // Feature 1465 (H4, research R7): the mouse's side buttons go Back and Forward from anywhere

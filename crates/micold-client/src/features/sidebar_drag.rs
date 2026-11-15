@@ -18,7 +18,9 @@
 //! active, [`hit_test`] over the drawn rows turns each report into the [`DropSpot`]: the target
 //! the sidebar highlights and the row edge its insertion marker is on. The release, heard through
 //! the window, commits; Escape, the window losing focus, a release over no target, or the dragged
-//! row leaving the sidebar ends it with no change.
+//! row leaving the sidebar ends it with no change. A drag Escape or the focus loss ended still
+//! holds the dragged row's release back until the button is up ([`State::held`]), so letting go
+//! over that row is no click either.
 //!
 //! # Messages
 //!
@@ -53,6 +55,24 @@ pub struct State {
     /// Where a release would land; `None` over no target, and then nothing is highlighted and no
     /// marker is drawn (C3).
     pub over: Option<DropSpot>,
+    /// What a cancelled drag was carrying while its button is still down: that row holds its
+    /// release back until [`Msg::Released`], so the cancel changes nothing (US5-1, FR-009).
+    pub held: Option<Dragged>,
+}
+
+impl State {
+    /// Whether the row carrying `dragged` holds its release back: it is dragged, or its drag was
+    /// cancelled and the button is not up yet.
+    pub fn holds(&self, dragged: &Dragged) -> bool {
+        let dragging = self.active && self.armed.as_ref() == Some(dragged);
+        dragging || self.held.as_ref() == Some(dragged)
+    }
+
+    /// Whether the window's release and focus loss are heard: while a press is armed, and after a
+    /// cancel until the button is up.
+    pub fn listens(&self) -> bool {
+        self.armed.is_some() || self.held.is_some()
+    }
 }
 
 /// A place a dragged row can land, as the drawn list names it.
@@ -199,9 +219,19 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         }
         Msg::Moved(at) => moved(state, at),
         Msg::Released => return released(state),
-        Msg::Cancelled => state.sidebar_drag = State::default(),
+        Msg::Cancelled => cancelled(&mut state.sidebar_drag),
     }
     Vec::new()
+}
+
+/// Escape or the focus loss: the drag ends with no change, and the row it carried, if it was
+/// active, holds its release back until the button is up.
+fn cancelled(drag: &mut State) {
+    let was = std::mem::take(drag);
+    drag.held = match was.armed {
+        Some(dragged) if was.active => Some(dragged),
+        _ => was.held,
+    };
 }
 
 /// Whether `dragged` is a row or group the open project's sidebar has; never Default (FR-015).
@@ -231,16 +261,20 @@ fn still_there(state: &crate::app::State) -> bool {
 /// the drag starts from, a report [`ACTIVATION_PX`] from it activates the drag, and while active
 /// each report picks the drop spot. A dragged row that left the sidebar ends the drag.
 fn moved(state: &mut crate::app::State, at: Option<(u32, u32)>) {
+    if state.sidebar_drag.armed.is_none() {
+        return;
+    }
     if !still_there(state) {
         state.sidebar_drag = State::default();
         return;
     }
     let drag = &mut state.sidebar_drag;
-    if let (false, Some(at)) = (drag.active, at) {
-        match drag.from {
-            None => drag.from = Some(at),
-            Some(from) => drag.active = moved_far(from, at),
-        }
+    // A pointer that left the list before the drag is active starts again where it comes back.
+    match (drag.active, at, drag.from) {
+        (true, _, _) => {}
+        (false, None, _) => drag.from = None,
+        (false, Some(at), None) => drag.from = Some(at),
+        (false, Some(at), Some(from)) => drag.active = moved_far(from, at),
     }
     if !state.sidebar_drag.active {
         return;

@@ -135,6 +135,25 @@ fn a_press_arms_and_a_move_under_four_pixels_stays_a_click() {
     assert!(!saved(&state));
 }
 
+/// Review B r1 F3: a pointer that left the list forgets where the drag starts from, so coming
+/// back in is no motion; only a move from where it came back activates the drag.
+#[test]
+fn leaving_the_list_before_the_drag_is_active_forgets_where_it_started() {
+    let mut state = grouped();
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("c"))));
+    send(&mut state, at(20, 100));
+    send(&mut state, Msg::Moved(None));
+    send(&mut state, at(20, 110));
+    assert!(!state.sidebar_drag.active, "re-entering is where it starts");
+    send(&mut state, at(20, 112));
+    assert!(
+        !state.sidebar_drag.active,
+        "2 px from there is still a click"
+    );
+    send(&mut state, at(20, 114));
+    assert!(state.sidebar_drag.active, "4 px from there is a drag");
+}
+
 #[test]
 fn a_move_of_four_pixels_activates_the_drag() {
     let mut state = grouped();
@@ -443,6 +462,51 @@ fn escape_ends_the_drag_with_no_change() {
     assert_eq!(layout(&state), before);
     assert_eq!(state.sidebar_list(), entries, "the sidebar is as it was");
     assert!(!saved(&state));
+}
+
+/// Review B r1 F1: after Escape mid-drag the button is still down, so the dragged row keeps its
+/// release held back and the window's release stays heard; the release then lets go of the row
+/// with no click and no move.
+#[test]
+fn escape_mid_drag_holds_the_rows_release_until_the_button_is_up() {
+    let mut state = dragging_over_a_target();
+    let before = layout(&state);
+    state.update(Message::EscapePressed);
+    let c = Dragged::Item(wt("c"));
+    assert!(
+        state.sidebar_drag.holds(&c),
+        "the dragged row presses nothing"
+    );
+    assert!(!state.sidebar_drag.holds(&Dragged::Item(wt("d"))));
+    assert!(state.sidebar_drag.listens(), "the release is still heard");
+    send(&mut state, at(20, 140));
+    assert_eq!(state.sidebar_drag.over, None, "the pointer no longer drags");
+    send(&mut state, Msg::Cancelled);
+    assert!(
+        state.sidebar_drag.holds(&c),
+        "a second cancel keeps the hold"
+    );
+    send(&mut state, Msg::Released);
+    assert!(
+        !state.sidebar_drag.holds(&c),
+        "the release let go of the row"
+    );
+    assert!(
+        !state.sidebar_drag.listens(),
+        "and nothing is heard any more"
+    );
+    assert_eq!(layout(&state), before);
+    assert!(!saved(&state));
+}
+
+/// A press that never became a drag holds nothing after a focus loss: it was a click.
+#[test]
+fn a_focus_loss_before_the_drag_is_active_holds_nothing() {
+    let mut state = grouped();
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("c"))));
+    send(&mut state, Msg::Cancelled);
+    assert!(!state.sidebar_drag.holds(&Dragged::Item(wt("c"))));
+    assert!(!state.sidebar_drag.listens());
 }
 
 #[test]

@@ -1017,6 +1017,8 @@ fn build_items(
                         .hidden(header.hidden)
                         .roles(r)
                         .key(row_key(RowKey::UserGroup(header.id)))
+                        // The header a drag carries holds its release back (C3, US5-1).
+                        .inert(state.sidebar_drag.holds(&Dragged::Group(id)))
                         .on_right_press({
                             let id = header.id;
                             move |point| {
@@ -1102,14 +1104,12 @@ fn build_items(
                 Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
         }
-        // Feature 1786 (C3): the row being dragged holds its press back while the drag is active,
-        // so releasing the drag over it is not also a click; it keeps its button, so it does not
-        // move.
-        let dragging = state.sidebar_drag.active
-            && state.sidebar_drag.armed
-                == Some(Dragged::Item(
-                    micold_core::sidebar_layout::LayoutItem::Worktree(dir.clone()),
-                ));
+        // Feature 1786 (C3, US5-1): the row being dragged holds its press back while the drag is
+        // active, and after a cancel until the button is up, so releasing over it is not also a
+        // click; it keeps its button, so it does not move.
+        let dragging = state.sidebar_drag.holds(&Dragged::Item(
+            micold_core::sidebar_layout::LayoutItem::Worktree(dir.clone()),
+        ));
         if let Some(main) = node.main_session() {
             item = item
                 .on_press(Message::Session(SessionMsg::Selected(main)))
@@ -1382,14 +1382,18 @@ fn group_items(
             },
         }
     }));
-    // Feature 1786 (FR-016): the group's row is dragged as one unit with its runs.
+    // Feature 1786 (FR-016): the group's row is dragged as one unit with its runs; while it is,
+    // its release is held back, so letting go over it does not toggle it (C3, US5-1).
+    let dragged = micold_core::sidebar_layout::LayoutItem::Run(group.id);
+    let held = state.sidebar_drag.holds(&Dragged::Item(dragged.clone()));
     let group_row = drag_source(
         tinted(
             TreeItem::new(0, group.name.clone(), r.on_surface),
             group_state,
             r,
-        ),
-        micold_core::sidebar_layout::LayoutItem::Run(group.id),
+        )
+        .inert(held),
+        dragged,
     );
     let mut items = vec![with_keyboard_focus(
         group_row
@@ -2214,13 +2218,9 @@ mod tests {
         assert_eq!(tooltip.lines().last(), Some("Working"), "{tooltip:?}");
     }
 
-    /// Feature 1718 (FR-004, G6): a run group's row shows the worst state over its runs, as icon,
-    /// tint and the last line of its tooltip.
-    #[test]
-    fn a_run_group_row_wears_the_worst_state_of_its_runs() {
+    /// A run group `grp` whose runs are the worktrees `dirs`, numbered from 1.
+    fn with_run_group(state: &mut State, dirs: &[&str]) {
         use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
-        let r = tokens::roles(ColorScheme::Dark);
-        let mut state = five_state_project();
         let run = |number: u8, dir: &str| Run {
             number,
             provider: AiCli::ClaudeCode,
@@ -2243,9 +2243,22 @@ mod tests {
             base_branch: "main".into(),
             base_commit: "abc".into(),
             created: std::time::SystemTime::UNIX_EPOCH,
-            runs: vec![run(1, "work"), run(2, "act")],
+            runs: dirs
+                .iter()
+                .zip(1..)
+                .map(|(dir, number)| run(number, dir))
+                .collect(),
         })
         .expect("valid group")];
+    }
+
+    /// Feature 1718 (FR-004, G6): a run group's row shows the worst state over its runs, as icon,
+    /// tint and the last line of its tooltip.
+    #[test]
+    fn a_run_group_row_wears_the_worst_state_of_its_runs() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        with_run_group(&mut state, &["work", "act"]);
         let items = rows(&state, r);
         let group = row_labelled(&items, "grp");
         assert_eq!(
@@ -2292,6 +2305,7 @@ mod tests {
                 marker: 2,
                 below: false,
             }),
+            held: None,
         };
         let highlight = Some((r.secondary_container, r.on_secondary_container));
         let items = rows(&state, r);
@@ -2342,5 +2356,66 @@ mod tests {
             0,
             "a press not yet a drag keeps it"
         );
+    }
+
+    /// Feature 1786 (C3, US5-1, FR-009; review B r1 F1, F2): the row a drag carries, of every
+    /// kind (a worktree row, a run group's row, a group header), holds its release back while the
+    /// drag is active and still after Escape or a focus loss ends it, until the button is up, so
+    /// the release over it is neither a click nor a toggle.
+    #[test]
+    fn the_dragged_row_of_every_kind_holds_its_release_until_the_button_is_up() {
+        use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroupId};
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        with_run_group(&mut state, &["done", "attn"]);
+        let mut layout = SidebarLayout::default();
+        layout.create("Work").unwrap();
+        state.sidebar_layout_loaded(std::path::PathBuf::from("/repo"), layout);
+        let run = LayoutItem::Run(state.runs.groups[0].id);
+        let send = |state: &mut State, msg: DragMsg| {
+            state.update(Message::SidebarDrag(msg));
+        };
+        let held = |state: &State| -> Vec<(String, bool)> {
+            rows(state, r)
+                .iter()
+                .filter(|i| i.inert)
+                .map(|i| (i.label.clone(), i.on_press.is_some()))
+                .collect()
+        };
+        let worktree = Dragged::Item(LayoutItem::Worktree("work".into()));
+        for (dragged, label, escape) in [
+            (worktree, None, true),
+            (Dragged::Item(run), Some("grp"), false),
+            (Dragged::Group(UserGroupId(0)), Some("Work"), false),
+        ] {
+            assert!(held(&state).is_empty(), "nothing is held before the press");
+            send(&mut state, DragMsg::Pressed(dragged.clone()));
+            send(&mut state, DragMsg::Moved(Some((20, 100))));
+            send(&mut state, DragMsg::Moved(Some((20, 110))));
+            assert!(state.sidebar_drag.active, "{dragged:?} is dragged");
+            let during = held(&state);
+            assert_eq!(during.len(), 1, "{dragged:?}: {during:?}");
+            if let Some(label) = label {
+                assert_eq!(during[0].0, label);
+            } else {
+                assert!(during[0].1, "the worktree row has a press to hold back");
+            }
+            if escape {
+                state.update(Message::EscapePressed);
+            } else {
+                send(&mut state, DragMsg::Cancelled);
+            }
+            assert!(!state.sidebar_drag.active, "the drag ended");
+            assert_eq!(
+                held(&state),
+                during,
+                "{dragged:?}: held until the button is up"
+            );
+            send(&mut state, DragMsg::Released);
+            assert!(
+                held(&state).is_empty(),
+                "{dragged:?}: the release let it go"
+            );
+        }
     }
 }

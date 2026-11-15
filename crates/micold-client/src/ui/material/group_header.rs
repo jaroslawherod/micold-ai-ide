@@ -31,6 +31,7 @@ pub struct GroupHeader<M> {
     key: Option<u64>,
     on_right_press: Option<OnRightPress<M>>,
     on_primary_press: Option<(OnRightPress<M>, M)>,
+    inert: bool,
 }
 
 impl<M> GroupHeader<M> {
@@ -47,6 +48,7 @@ impl<M> GroupHeader<M> {
             key: None,
             on_right_press: None,
             on_primary_press: None,
+            inert: false,
         }
     }
 
@@ -95,6 +97,13 @@ impl<M> GroupHeader<M> {
         self
     }
 
+    /// Hold the header's release back while `inert`: the header a drag carries (feature 1786,
+    /// [`TreeItem::inert`]).
+    pub fn inert(mut self, inert: bool) -> Self {
+        self.inert = inert;
+        self
+    }
+
     /// What the row is, for its widget state to follow it when the list moves it.
     pub fn key(mut self, key: u64) -> Self {
         self.key = Some(key);
@@ -119,7 +128,8 @@ impl<'a, M: 'a> From<GroupHeader<M>> for TreeItem<'a, M> {
         let mut item = TreeItem::new(0, header.name.clone(), r.on_surface)
             .heading(TypeRole::UserGroupHeader)
             .annotation(words, r.on_surface_variant)
-            .row_tooltip(header.name);
+            .row_tooltip(header.name)
+            .inert(header.inert);
         if let Some(on_toggle) = header.on_toggle {
             item = item.expandable(!header.collapsed, on_toggle);
         }
