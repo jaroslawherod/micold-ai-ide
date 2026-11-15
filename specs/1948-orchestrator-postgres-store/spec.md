@@ -166,7 +166,7 @@ multi-user later needs no data migration (FR-046).
   PostgreSQL role needs no such grant.
 - SQLite file on a path that is not writable, or on a network filesystem: start fails with the path.
 - Cross-platform (Principle VI): the orchestrator is Linux only (#1897); the SQLite file is
-  owner-only (0600) through `owner_only`.
+  owner-only (0600).
 - `url_file` with a trailing newline or whitespace: trimmed (FR-008).
 
 ## Requirements *(mandatory)*
@@ -214,7 +214,7 @@ multi-user later needs no data migration (FR-046).
   a database built at version N by the shipped migrations upgrades to the current one with its data
   intact.
 - **FR-014**: A slow database call MUST NOT stall daemon links: heartbeats from other daemons are
-  still handled within their deadline while a store call is outstanding.
+  still handled within the 9 s link liveness deadline of #1724 while a store call is outstanding.
 - **FR-015**: The registry store MUST offer per-record upsert and remove, besides the existing
   whole-list `save`, which stays for current callers.
 - **FR-016**: An unreachable database at start MUST fail the start with the host and cause, never
