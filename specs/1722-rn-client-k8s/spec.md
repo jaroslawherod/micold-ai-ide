@@ -4,8 +4,8 @@
 
 **Created**: 2026-11-14
 
-**Status**: Draft, revision 2 (planning only). Owner answers of 2026-11-14 applied; remaining open
-questions in [plan.md](plan.md#open-questions-for-jaro).
+**Status**: Draft, revision 2 (planning only). Owner answers of 2026-11-14 applied; all owner
+questions answered (see [plan.md](plan.md#owner-decisions-2026-11-14)).
 
 **Input**: Owner request (jaro, 2026-11-14): "I would like you to do planning of migration into web
 interface that was mentioned for orchestrator. It should use react native to support web and mobile
@@ -30,7 +30,7 @@ Clarifications); "make orchestrator use some relational db as storage, assume po
 | Access | OIDC plus a local owner account with a password | Always authenticated: GitHub or Google on a network deployment, a one-time local access link on loopback; no passwords |
 | Claude credentials | not covered | API key / cloud provider credential, or the user's own sign-in in unmodified Claude Code, per daemon; never through Micold ([plan.md](plan.md#claude-credentials)) |
 | Permissions | owner / operator / viewer with per-daemon grants | owner / operator / viewer, one global role per user |
-| Storage | JSON and files on one volume | PostgreSQL (SQLite for loopback-only local mode, Q-F) |
+| Storage | JSON and files on one volume | PostgreSQL (SQLite for loopback-only local mode) |
 | Deployment | compose and Helm examples | Kubernetes first: images, Helm chart, Gateway API, LoadBalancer for daemon mTLS links, secrets as files, probes, metrics; one replica now, built to scale out |
 | Daemon provisioning | the desktop app; the orchestrator never provisions | moves into the orchestrator before the iced app is retired |
 
@@ -59,7 +59,7 @@ M1 (#1723–#1727) and M2 (#1728–#1731) are unchanged and remain prerequisites
 - Q: Storage? → A: A relational database, **PostgreSQL** (jaro).
 - Q: Who may sign in on a network deployment? → A: Only invited GitHub or Google identities; the
   first owner binds with a one-time bootstrap code. _(agent-decided)_
-- Q: Basic permissions? → A: Three global roles: owner, operator, viewer. _(agent-decided; Q-D)_
+- Q: Basic permissions? → A: Three global roles: owner, operator, viewer. _(confirmed by jaro, 2026-11-15)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -214,7 +214,7 @@ requirement that replaces the one with the same number there.
   revocations, users, identities, invites, bootstrap code hash, refresh-token hashes, audit log) in
   PostgreSQL, through store traits, with forward-only migrations applied on start; it MUST refuse a
   newer schema. Private keys MUST stay out of the database. A loopback-only local mode MAY use
-  SQLite through the same traits (Q-F).
+  SQLite through the same traits (jaro, 2026-11-15).
 
 ### Access and permissions (M3)
 

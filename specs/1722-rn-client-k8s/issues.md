@@ -208,7 +208,7 @@ link to this plan.
 - **Milestone**: M4a · **Depends on**: #1733, #1735 · **Covers**: FR-021R, FR-033R
 - **Body**: `micold-daemon orchestrator --serve-web` binds 127.0.0.1, serves the web bundle from the
   API's origin, prints a one-time access link, and exchanges it for an owner session cookie. A
-  systemd user unit starts it on login. Stores on SQLite through N16's traits (Q-F).
+  systemd user unit starts it on login. Stores on SQLite through N16's traits.
 
 ### N10 — feat: Claude credentials per daemon
 

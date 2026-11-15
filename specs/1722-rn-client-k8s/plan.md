@@ -197,7 +197,7 @@ The client hides what the role cannot do; the orchestrator refuses it regardless
 | Security | `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, all capabilities dropped, `seccompProfile: RuntimeDefault`; no service account token mounted |
 | In-cluster daemons | A documented example StatefulSet for a standing daemon (spec 686's image) that enrolls with a token Secret and links to `micold-orchestrator-link.<ns>.svc:8443` (FR-039). Daemon pods created by the orchestrator's pod provisioner (N11) link the same way |
 | Scaling | Vertical for the orchestrator in v1 (requests 100m/128Mi, limits a chart value; tens of daemons and clients per replica); horizontal later ([Scalability path](#scalability-path)); horizontal for web now |
-| Local and compose | A `docker compose` file (orchestrator, web, Postgres) for one server stays as a small example; plain local mode needs neither (SQLite, Q-F) |
+| Local and compose | A `docker compose` file (orchestrator, web, Postgres) for one server stays as a small example; plain local mode needs neither (SQLite, decision 12) |
 | CI | A `kind` job: build both images, `helm install` with Envoy Gateway as the Gateway API implementation, CloudNativePG for the database, a pre-created bootstrap Secret and a fake OAuth provider (a small OIDC mock in the test), enroll a daemon pod, run the Playwright smoke test through the gateway; `helm lint` and `kubeconform` on every chart change |
 
 ### Claude credentials
@@ -278,7 +278,7 @@ jaro (2026-11-14): "make orchestrator use some relational db as storage, assume 
   CloudNativePG in the cluster); the chart takes an existing Secret with the URL and, for kind CI
   and demos only, can install a CloudNativePG `Cluster`. The orchestrator then needs **no volume**:
   it becomes a Deployment, which is the main step of the [Scalability path](#scalability-path).
-- **Local mode**: see Q-F. Recommendation: a local Postgres is not required; the same traits get a
+- **Local mode** (decision 12): no local Postgres; the same traits get a
   SQLite implementation (`sqlx` supports both) for the loopback-only orchestrator, so the
   offline, single-machine case keeps working with no server process (Principle IV).
 - **Backup**: the database's own backups (managed service, or CloudNativePG's scheduled backups);
@@ -437,12 +437,13 @@ M6 and M7 to retirement.
     `packages/protocol/`), the chart (`deploy/helm/micold`) and the Rust crates live in this
     repository; images publish from it to `ghcr.io/jaroslawherod/micold-orchestrator` and
     `ghcr.io/jaroslawherod/micold-web`.
+12. Local mode storage (Q-F, 2026-11-15): **SQLite** for the loopback-only orchestrator; PostgreSQL
+    for every network deployment.
 
 ## Open questions for jaro
 
-- **Q-F — Local mode storage**: PostgreSQL for every network deployment. For the loopback-only
-  local mode, SQLite through the same traits (no server to run), or Postgres everywhere (one code
-  path, but a local Postgres to install)? Recommendation: SQLite locally.
+None: every question is answered above (2026-11-14 and 2026-11-15).
+
 Also planned without a question (say if you disagree): an owner screen listing signed-in browsers
 with sign-out per browser (N3), linking a GitHub and a Google identity to one user, and
 accessibility to WCAG 2.2 AA with screen-reader labels on every control.
