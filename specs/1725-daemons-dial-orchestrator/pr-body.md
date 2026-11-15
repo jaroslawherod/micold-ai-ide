@@ -23,7 +23,7 @@ _Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_0
 - Round 2 on the F1 fix and review B (conformance, sonnet): run by the orchestrator.
 
 ## Local gate
-`scripts/gate.sh` (CI's order) passed at GATE_SHA. `ssh_real_link`: 4 passed against a real rootless `sshd` (installed in this session). A mutant that ignores `opts.link` makes all 4 fail. In the whole `ssh_real` suite, `ssh_real_an_unreachable_host_fails_within_the_connection_timeout` fails in this cloud sandbox (`ConnectionRefused` for the unroutable address). That test opens no link. No container runtime was available: `mise run image` / `test-sandbox` were not run (sshd_config changed), so CI's sandbox job covers it. Visual pass: not applicable (nothing visible).
+`scripts/gate.sh` (CI's order) at 4c34d54: fmt, clippy (core, workspace) and `cargo nextest` (13214 tests) green. `scripts/tests/autopilot.test.sh` failed in this sandbox with a different set of `facts:` cases on each run (1 case, then 7). Their output shows git's own `push negotiation failed` against the test's local remote. No script changed in this diff, so CI validates that part. `ssh_real_link`: 4 passed against a real rootless `sshd` (installed in this session). A mutant that ignores `opts.link` makes all 4 fail. In the whole `ssh_real` suite, `ssh_real_an_unreachable_host_fails_within_the_connection_timeout` fails in this cloud sandbox (`ConnectionRefused` for the unroutable address). That test opens no link. No container runtime was available: `mise run image` / `test-sandbox` were not run (sshd_config changed), so CI's sandbox job covers it. Visual pass: not applicable (nothing visible).
 
 Refs #1725
 

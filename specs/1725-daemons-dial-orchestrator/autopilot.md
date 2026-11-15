@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-t27ol0
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M4 review A, gates, PR files (unit); then review B (orchestrator), PR
+- **Next step**: M4 review B (orchestrator, sonnet) and review A round 2 on the F1 fix diff (snapshot in Review rounds), then open the PR from pr-title.md/pr-body.md
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
-| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | pending (branch claude/project-thread-t27ol0) | implemented; review A fixed; full gate; awaiting review B + A round 2, PR |
+| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | pending (branch claude/project-thread-t27ol0) | implemented; review A round 1 fixed; gate green but for env-flaky script tests; awaiting review B + A round 2, PR |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
 
 ## Decisions
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M4 A F4 (second `ssh -G` per user-config connection): declined; it only reads files under a 5 s bound, and carrying the first answer through `ProvisionOptions` couples the timeout probe to the link; not worth the coupling.
 
 ## Handover
+
+2026-11-15, M4 unit (branch claude/project-thread-t27ol0, previous PR #1976 merged at 2880eeb17): T028–T037 done and ticked; cycles 11–14 and review A fixes in tdd/cycle-log.md; drift-M4.md written, plan-drift clean. Review A round 1 (opus, headless) CHANGES: F1 fixed in code (`ClearAllForwardings=no`), F2 prose + Decisions (T028 fail-the-open kept; may need the user), F3 fixed, F4 declined. Round 2 of A on the F1 fix not run by the unit. ssh_real_link 4 passed against a real sshd installed in the sandbox (`apt-get install openssh-server`, `mkdir /run/sshd`). Full gate: Rust green; scripts/tests/autopilot.test.sh flaky from sandbox git (`push negotiation failed`), left to CI. PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review A round 2 + review B, then open the PR.
 
 2026-11-15, M3 unit (branch claude/project-thread-2igsm0, previous PR #1975 merged at 1e9b379e3c749ce740aefcf0bd6a118991b3506a): T021–T027 done and ticked; cycles 8–10 and review A fixes in tdd/cycle-log.md; drift-M3.md written, plan-drift clean. Review A (opus, headless) CLEAN with 3 MINOR, all fixed in 11cf6ef6a. Not run by the unit (orchestrator runs them): review B, visual pass (nothing visible changed). PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review B on origin/main...HEAD, then open the PR.
 2026-11-15, M2 thread (branch claude/project-thread-itbg1f): PR #1975 squash-merged (1e9b379e3) on green `ci complete`. Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) MINOR-ONLY, 2 MINOR declined. Mutants (advisory) red again from the job's environment, not the diff: baseline failed on netns test (`unshare -rn` unavailable); on M1 it was documentation_is_not_read (no .git in the copy). Reported to the coordinator for a chore. origin/main merged back; diff vs main is ledger only. Next: M3 (T021–T027, tier full) in a fresh cloud thread running `/speckit-autopilot resume` (update the Worktree branch line to that thread's branch). Unit took ~250k tokens over ~73 min in one part.
