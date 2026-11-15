@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
 | #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
 | #1976 | M3 backoff + link status | merged (squash) | 2880eeb17 |
+| #1979 | M4 reverse forward | merged (squash) | bc0a44f22 |
 
 ## Milestones
 
@@ -73,6 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+2026-11-15, M4 thread (branch claude/project-thread-t27ol0): PR #1979 squash-merged (bc0a44f22) on green `ci complete` after one fix: diff coverage (80%) failed because the `prepare-link` subprocess run is invisible to lcov; the command was split into `prepare_link_command` (resolver injected) and tested in process. Review A round 1 CHANGES (fixed), review B + round 2 CLEAN, 1 MINOR declined. Mutants (advisory) cancelled/red as before. Behaviour decision for jaro: SSH hosts with their own forwards, or a failing `ssh -G`, now fail to connect with a message (T028; revert is one match in `provision::admit_link`). Next: M5 (T038–T040) in a fresh thread.
 2026-11-15, M4 unit (branch claude/project-thread-t27ol0, previous PR #1976 merged at 2880eeb17): T028–T037 done and ticked; cycles 11–14 and review A fixes in tdd/cycle-log.md; drift-M4.md written, plan-drift clean. Review A round 1 (opus, headless) CHANGES: F1 fixed in code (`ClearAllForwardings=no`), F2 prose + Decisions (T028 fail-the-open kept; may need the user), F3 fixed, F4 declined. Round 2 of A on the F1 fix not run by the unit. ssh_real_link 4 passed against a real sshd installed in the sandbox (`apt-get install openssh-server`, `mkdir /run/sshd`). Full gate: Rust green; scripts/tests/autopilot.test.sh flaky from sandbox git (`push negotiation failed`), left to CI. PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review A round 2 + review B, then open the PR.
 
 2026-11-15, M3 unit (branch claude/project-thread-2igsm0, previous PR #1975 merged at 1e9b379e3c749ce740aefcf0bd6a118991b3506a): T021–T027 done and ticked; cycles 8–10 and review A fixes in tdd/cycle-log.md; drift-M3.md written, plan-drift clean. Review A (opus, headless) CLEAN with 3 MINOR, all fixed in 11cf6ef6a. Not run by the unit (orchestrator runs them): review B, visual pass (nothing visible changed). PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review B on origin/main...HEAD, then open the PR.
