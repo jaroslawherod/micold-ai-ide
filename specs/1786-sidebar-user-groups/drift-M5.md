@@ -7,7 +7,10 @@
 | `crates/micold-client/src/ui/material/tree_view.rs` | `TreeItem::on_menu_key`: a Tab-stop row answers the Menu key and Shift+F10 (the card menu's keys, feature 972) with its own menu, which is how the group header's menu opens by keyboard (T040, D6). `tab_stop` made `pub(crate)` so the sidebar's in-crate test can read it. |
 | `crates/micold-client/src/ui/mod.rs` | The group menu's key listener (Up, Down, Enter, Space while it is open, mapped from the card menu's own key function) beside the card menu's, and the Overview's arrow listener left out while a group menu has the keys. |
 | `crates/micold-client/src/ui/sidebar.rs` | The header is a Tab stop with a twisty whose press toggles (or runs the open group menu's highlighted entry), and its Menu key message carries an anchor beside the header (`header_menu_anchor`); the group menu is drawn from `group_menu_items` with the keyboard's highlight; `move_items` appends **Move up** / **Move down**, so the worktree, run group and Overview card menus all get them from the one place the **Move to group** entries come from (T038 names `worktree.rs`, which builds no menu items: they are built here and in `ui/mod.rs`, unchanged); a dragged group highlights no list. |
+| `crates/micold-client/tests/fixtures/layout_snapshot.txt` | Regenerated: the row menu is two entries taller with **Move up** / **Move down** (cycle 19). |
 | `crates/micold-client/tests/overlay_registration.rs` | The `GroupMenu` literal gains `highlighted: None`. |
+| `crates/micold-client/tests/overlay_registry.rs` | Its EXEMPT list grows from 12 to 13 for `group_menu_key`'s return (cycle 19). |
+| `crates/micold-client/tests/root_state_is_shared.rs` | New `sidebar_drag.held` entry, for the ledger follow-up that clears `held` on any press (cycle 19). |
 | `crates/micold-client/tests/sidebar_state.rs` | Its card-state walk moved to the shared fixture (`card_state_steps`), which T041's test reuses rather than copying it. |
 | `crates/micold-client/tests/support/sidebar_fixture.rs` | `card_state_steps`: the walk of one worktree through the five card states (T041, SC-005). |
 

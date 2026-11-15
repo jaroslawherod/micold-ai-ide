@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-swhfr3
 - **Started**: 2026-11-11
 - **Phase**: milestones (M5)
-- **Next step**: M5 pushed on claude/project-thread-swhfr3; orchestrator: open the M5 PR (body /mnt/project-files/issue-1786/m5-pr-body.md), review B and the visual pass (quickstart §B steps 4–6), merge; then M6
+- **Next step**: M5 PR #1972: merge on green CI, then M6 in a fresh thread
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
 | M4 | T029–T034 | full | Drag between lists and cancel | #1968 | merged |
-| M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pushed, PR to open (base d1712abc8) |
+| M5 | T035–T042 | full | Reorder, collapse, no state grouping | #1972 | review B and visual pass |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
 
 ## Decisions
@@ -78,6 +78,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 | 2 | M4 | 2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | db4fe07eeef99d8f15b6953a5d3d8bb01ae3a136:2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | CLEAN (scoped to fix diff c4df81448..2f2bcd226; 1 MINOR left: held survives a blur released outside the window until the next press) |
 | M5 diff (A, inline review high) | 1 | M5 | 5cfbd81007b825218f9669e87bd41e8fac21d5b9 | 8035a9b69f57deb6769c9ecfa55d121303c1965e:5cfbd81007b825218f9669e87bd41e8fac21d5b9 | MINOR-ONLY (2 MINOR, recorded: Move up/down under a tag filter can swap with a hidden row; a reveal-opened group is saved with the next message) |
 | M5 diff (A, inline review high) | 2 | M5 | 6a0da7a25b8287eb4cab652bd2468d5a70720abd | b5792d9ed192604e2343262ab4fcc5fe9ffa1b4d:6a0da7a25b8287eb4cab652bd2468d5a70720abd | CLEAN (scoped to the gate-fix diff: shared menu_key map, held pinned, snapshot regenerated; not counted) |
+| Review B M5 | 1 | conformance | 1c3380ec1c2caaf13d6fce8a5a52e8812a507099 | d1712abc888fad5ab736f08d5fb3e877bad784cf:1c3380ec1c2caaf13d6fce8a5a52e8812a507099 | CHANGES (1 MAJOR fixed by the orchestrator: three UNPLANNED test paths added to drift-M5.md, plan-drift now clean; 2 MINOR: spec-dir files exempt, held follow-up already closed) |
+| Visual pass M5 | 1 | quickstart B4–6, header keyboard, themes | 1c3380ec1c2caaf13d6fce8a5a52e8812a507099 | d1712abc888fad5ab736f08d5fb3e877bad784cf:1c3380ec1c2caaf13d6fce8a5a52e8812a507099 | PASS (no FAIL; card-state step not exercised without live sessions, covered by T041 test; keyboard checks light only; screenshots /mnt/project-files/issue-1786/m5-*.png) |
 
 ## Declined review findings
 
