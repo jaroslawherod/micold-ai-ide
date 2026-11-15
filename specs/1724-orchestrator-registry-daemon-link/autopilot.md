@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: claude/project-thread-430lii
 - **Started**: 2026-11-11
-- **Phase**: milestone M6
-- **Next step**: M6 Review A round 2 (scoped, sonnet), then PR (orchestrator opens it)
+- **Phase**: close
+- **Next step**: close step 3: fix tdd/verification.md findings 1-17 (tasks T044-T054, Phase 9) through autopilot-worker subagents per crate (orchestrator dispatches), re-run tests, then Status, diff review, gate, pr-title/pr-body, push
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
 | #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
 | #1898 | M5 | merged | da60fabfaa8264ac0b74d9b9deee5865339b694f |
+| #1908 | M6 | merged | 6a02088c387e1c055a2c03802d2f4a998c61a037 |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | merged |
-| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | in progress |
+| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #1908 | merged |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
 
