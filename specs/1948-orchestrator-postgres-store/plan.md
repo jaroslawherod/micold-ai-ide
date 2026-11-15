@@ -212,7 +212,7 @@ v1 schema ([contracts/schema.md](contracts/schema.md)). Rules enforced by sqlx a
 - Forward only: no `.down.sql` files exist; a test fails the build if one appears.
 - Each migration runs in its own transaction (a half-way failure leaves the previous version).
 - PostgreSQL takes an advisory lock for the run, so two starters serialize and the second sees the
-  migration applied; SQLite serializes through its single writer with `busy_timeout` 10 s.
+  migration applied; SQLite has no advisory lock in sqlx's migrator, so `run_forward` retries once on a busy or "already exists" failure after re-reading `_sqlx_migrations`, and the second starter then finds the migration applied (the spike, task 1, probes two concurrent runs); `busy_timeout` is 10 s.
 - A recorded checksum that differs from the shipped file is refused, naming the migration.
 
 **Newer schema**, which sqlx reports only as a missing-version error after it has already created its

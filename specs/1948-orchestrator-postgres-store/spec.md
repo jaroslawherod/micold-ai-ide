@@ -96,7 +96,8 @@ column of every table for private-key material.
 1. **Given** the stores hold certificate serials, revocations, token hashes and public data, **When**
    every table is dumped, **Then** no PEM private-key block and no column named for a key exists.
 2. **Given** a caller passes private-key material to a store method, **When** it is saved, **Then**
-   the store has no field to put it in (the types hold serials, hashes and public data only).
+   the secret-bearing fields (tokens, serials) accept only a hash or hex serial, and the column scan
+   finds any key material that reached a free-text field.
 
 ---
 
@@ -119,7 +120,9 @@ URL with its password) and `database.ca_file` (TLS to the server).
 3. **Given** no `[database]` table and the orchestrator bound to loopback only, **When** it starts,
    **Then** it uses a SQLite file under the data directory.
 4. **Given** no `[database]` table and a non-loopback bind address, **When** the orchestrator starts
-   or `config check` runs, **Then** it fails, naming the missing `database.url_file` key.
+   or `config check` runs, **Then** it fails, naming the missing `database.url_file` key. (The
+   orchestrator has no network bind yet: this feature ships the rule and its unit test, #1732 wires
+   it end to end.)
 
 ---
 
@@ -160,8 +163,8 @@ multi-user later needs no data migration (FR-046).
 1. **Given** the migrated schema, **When** its tables are listed, **Then** every table that holds
    orchestrator data has a `tenant_id` (the migration bookkeeping table is the one exception) and
    the daemon, project and session tables have an `owner_user_id`.
-2. **Given** records of two tenants in one store, **When** one tenant reads, **Then** it sees only
-   its own rows.
+2. **Given** auth and audit data of two tenants in one database, **When** one tenant's store reads,
+   **Then** it sees only its own rows (registry records carry their tenant and load together).
 
 ### Edge Cases
 
@@ -206,8 +209,9 @@ multi-user later needs no data migration (FR-046).
   serials, hashes and public data, and a test MUST scan every column after exercising every store.
 - **FR-007**: Every table that holds orchestrator data (all but the migration bookkeeping table)
   MUST have a `tenant_id`; every daemon, project and session table MUST have
-  an `owner_user_id`. In v1 the single tenant and its owner fill them; store reads MUST filter by
-  tenant.
+  an `owner_user_id`. In v1 the single tenant and its owner fill them; `AuthStore` and `AuditStore` reads MUST
+  filter by tenant. `RegistryStore` loads every tenant's records, because each record names its
+  own tenant (plan.md, *Tenant scope*).
 - **FR-008**: The orchestrator config MUST accept `database.url_file` (path to a file holding the
   PostgreSQL URL), `database.ca_file` (CA for TLS to the server) and a pool size, name secrets by
   path only, and show no URL or password in any output. The URL read from the file is trimmed, and
@@ -215,7 +219,7 @@ multi-user later needs no data migration (FR-046).
 - **FR-009**: With no `[database]` table and a loopback-only bind, the orchestrator MUST use SQLite
   in the data directory (owner-only file) and MUST NOT need a database server. With a non-loopback
   bind and no `[database]` table it MUST refuse to start, and `config check` MUST fail, naming the
-  missing key.
+  missing key (the rule lands here; the bind key that triggers it lands with #1732).
 - **FR-010**: On start, when an un-imported `registry.json` exists, the orchestrator MUST import it
   into an empty database registry (either backend) and mark the file as imported; it MUST do
   nothing on later starts. A corrupt file, or a database registry that already has rows, MUST fail
