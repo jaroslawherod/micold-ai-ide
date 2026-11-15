@@ -9,4 +9,4 @@
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified (#1724 on main; #1949 not merged, noted)
-- [x] Cross-platform (Principle VI) and multi-session (Principle II) edge cases covered
+- [x] Multi-session (Principle II) edge cases covered; Linux only per #1897 (the constitution's all-OS text is stale until #1949)

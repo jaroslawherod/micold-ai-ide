@@ -16,8 +16,11 @@ Covers FR-042 and FR-046 of `specs/1722-rn-client-k8s/spec.md`. Plan: `specs/172
 - Local mode on one machine uses SQLite; network deployments use PostgreSQL (jaro, 2026-11-15).
 - Every daemon, project and session record carries an owner and a tenant from the start (jaro).
 - Dependency: the constitution amendment that allows PostgreSQL for network deployments (#1949) is
-  not merged when this spec is written. Nothing in this feature's behaviour waits on it; the
-  amendment must merge before a network deployment ships, not before this code merges.
+  not merged when this spec is written, and the constitution text still says local-only storage.
+  Nothing in this feature's behaviour waits on it; #1949 must merge before a network deployment
+  ships, not before this code merges.
+- Linux only: jaro dropped macOS and Windows on 2026-11-14 (#1897). That decision stands whatever
+  the constitution text says until #1949 updates it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -99,8 +102,10 @@ URL with its password) and `database.ca_file` (TLS to the server).
    resolved view.
 2. **Given** a missing or empty `url_file`, or a `ca_file` that does not exist, **When** `config
    check` runs, **Then** it fails naming the key and the path.
-3. **Given** no `[database]` table, **When** the orchestrator starts in local mode, **Then** it uses
-   a SQLite file under the data directory.
+3. **Given** no `[database]` table and the orchestrator bound to loopback only, **When** it starts,
+   **Then** it uses a SQLite file under the data directory.
+4. **Given** no `[database]` table and a non-loopback bind address, **When** the orchestrator starts
+   or `config check` runs, **Then** it fails, naming the missing `database.url_file` key.
 
 ---
 
@@ -114,13 +119,16 @@ An operator who ran #1724's JSON registry moves to the database.
 
 **Acceptance Scenarios**:
 
-1. **Given** a `registry.json` and an empty registry in the database, **When** the import runs,
-   **Then** every record is in the database and the file is left in place, renamed with a suffix
-   that marks it as imported.
-2. **Given** the import already ran, **When** it runs again, **Then** it does nothing and reports
-   that it was already done.
-3. **Given** a corrupt `registry.json`, **When** the import runs, **Then** it fails naming the file
-   and imports nothing.
+1. **Given** a `registry.json` not yet imported and an empty database registry (either backend),
+   **When** the orchestrator starts, **Then** it imports every record automatically and renames the
+   file with a suffix that marks it as imported.
+2. **Given** the import already ran, **When** the orchestrator starts again, **Then** nothing is
+   imported and nothing changes.
+3. **Given** a corrupt `registry.json`, **When** the orchestrator starts, **Then** the start fails
+   naming the file and imports nothing.
+4. **Given** an un-imported `registry.json` and a database registry that already has rows, **When**
+   the orchestrator starts, **Then** it refuses, naming the file and the row count, and imports
+   nothing.
 
 ---
 
@@ -135,8 +143,9 @@ multi-user later needs no data migration (FR-046).
 
 **Acceptance Scenarios**:
 
-1. **Given** the migrated schema, **When** its tables are listed, **Then** every table has a
-   `tenant_id` and the daemon, project and session tables have an `owner_user_id`.
+1. **Given** the migrated schema, **When** its tables are listed, **Then** every table that holds
+   orchestrator data has a `tenant_id` (the migration bookkeeping table is the one exception) and
+   the daemon, project and session tables have an `owner_user_id`.
 2. **Given** records of two tenants in one store, **When** one tenant reads, **Then** it sees only
    its own rows.
 
@@ -147,7 +156,8 @@ multi-user later needs no data migration (FR-046).
   password; a transient loss after start returns a store error and the orchestrator keeps running.
 - Concurrency (Principle II): two orchestrators migrating one database at once; exactly one applies
   each migration and the other waits and then sees it applied. Concurrent saves of the registry do
-  not lose either writer's records that the other did not touch.
+  not lose a record the other writer did not touch (the traits offer per-record upsert and remove,
+  FR-015).
 - A migration fails half way: the database stays at the previous version (each migration runs in a
   transaction) and the start fails.
 - A migration file edited after release: the start refuses, naming the migration, because its
@@ -155,10 +165,9 @@ multi-user later needs no data migration (FR-046).
 - The audit log is append-only: the stores offer no update or delete of an audit entry, and the
   PostgreSQL role needs no such grant.
 - SQLite file on a path that is not writable, or on a network filesystem: start fails with the path.
-- Cross-platform (Principle VI): Linux only for the orchestrator; the SQLite file path and mode
-  handling (owner-only, 0600) follow `owner_only` and need no other platform's handling.
-- `url_file` containing a trailing newline or whitespace: trimmed. A URL with a scheme other than
-  `postgres`/`postgresql`: refused by `config check`.
+- Cross-platform (Principle VI): the orchestrator is Linux only (#1897); the SQLite file is
+  owner-only (0600) through `owner_only`.
+- `url_file` with a trailing newline or whitespace: trimmed (FR-008).
 
 ## Requirements *(mandatory)*
 
@@ -171,8 +180,9 @@ multi-user later needs no data migration (FR-046).
 - **FR-002**: Registry records, users, identities, invites, the bootstrap code hash, refresh-token
   hashes, certificate serials and revocations, enrollments and audit entries MUST survive an
   orchestrator restart on PostgreSQL and on SQLite.
-- **FR-003**: Schema migrations MUST live in `crates/micold-daemon/migrations/`, apply on start,
-  run forward only, and each run in a transaction.
+- **FR-003**: Schema migrations MUST apply on start, run forward only, and each run all-or-nothing.
+  When two orchestrators start on one database, exactly one applies each migration and the other
+  waits, then sees it applied.
 - **FR-004**: The orchestrator MUST refuse a database whose schema version is newer than its newest
   migration; the error MUST name the database's version and the build's version and MUST leave the
   database unchanged.
@@ -180,17 +190,22 @@ multi-user later needs no data migration (FR-046).
   migration differs from the shipped one.
 - **FR-006**: No private key MUST ever be written to the database: the store types hold only
   serials, hashes and public data, and a test MUST scan every column after exercising every store.
-- **FR-007**: Every table MUST have a `tenant_id`; every daemon, project and session table MUST have
+- **FR-007**: Every table that holds orchestrator data (all but the migration bookkeeping table)
+  MUST have a `tenant_id`; every daemon, project and session table MUST have
   an `owner_user_id`. In v1 the single tenant and its owner fill them; store reads MUST filter by
   tenant.
 - **FR-008**: The orchestrator config MUST accept `database.url_file` (path to a file holding the
   PostgreSQL URL), `database.ca_file` (CA for TLS to the server) and a pool size, name secrets by
-  path only, and show no URL or password in any output.
-- **FR-009**: With no `[database]` table the orchestrator MUST use SQLite in the data directory
-  (owner-only file), and MUST NOT need a database server.
-- **FR-010**: A one-shot import MUST read an existing `registry.json` into an empty database
-  registry, mark the file as imported, and do nothing when run again. A corrupt file MUST fail the
-  import and change nothing.
+  path only, and show no URL or password in any output. The URL read from the file is trimmed, and
+  a scheme other than `postgres` or `postgresql` is refused by `config check`.
+- **FR-009**: With no `[database]` table and a loopback-only bind, the orchestrator MUST use SQLite
+  in the data directory (owner-only file) and MUST NOT need a database server. With a non-loopback
+  bind and no `[database]` table it MUST refuse to start, and `config check` MUST fail, naming the
+  missing key.
+- **FR-010**: On start, when an un-imported `registry.json` exists, the orchestrator MUST import it
+  into an empty database registry (either backend) and mark the file as imported; it MUST do
+  nothing on later starts. A corrupt file, or a database registry that already has rows, MUST fail
+  the start naming the file (and the row count) and import nothing.
 - **FR-011**: Audit entries MUST be append-only through the trait: no update or delete operation
   exists, and the PostgreSQL migration MUST NOT grant one to the orchestrator's role.
 - **FR-012**: The store tests MUST run against the in-memory, SQLite and PostgreSQL implementations
@@ -198,8 +213,13 @@ multi-user later needs no data migration (FR-046).
 - **FR-013**: CI MUST test the migration chain from every released schema version to the newest:
   a database built at version N by the shipped migrations upgrades to the current one with its data
   intact.
-- **FR-014**: Store calls MUST not block the async runtime's executor threads on database I/O
-  (they are async or run on a blocking pool), so link handling stays responsive.
+- **FR-014**: A slow database call MUST NOT stall daemon links: heartbeats from other daemons are
+  still handled within their deadline while a store call is outstanding.
+- **FR-015**: The registry store MUST offer per-record upsert and remove, besides the existing
+  whole-list `save`, which stays for current callers.
+- **FR-016**: An unreachable database at start MUST fail the start with the host and cause, never
+  the password. A database lost after start MUST make store calls return an error while the
+  orchestrator keeps running and retries on the next call.
 
 ### Key Entities
 
@@ -217,20 +237,22 @@ multi-user later needs no data migration (FR-046).
 ### Measurable Outcomes
 
 - **SC-001**: After a restart, 100% of the registry, user and audit rows written before it are
-  readable, on PostgreSQL and on SQLite.
+  readable, in each deployment mode (network and local).
 - **SC-002**: Starting against a newer schema fails 100% of the time, with both versions in the
-  message, and the database is byte-for-byte unchanged by the attempt.
+  message, and no migration row, table or data row is added, changed or removed by the attempt (the SQLite file
+  is byte-identical).
 - **SC-003**: A scan of every column of every table after the full store suite finds zero
   private-key blocks.
-- **SC-004**: The one shared store suite passes on all three implementations, and the migration
-  chain test passes from every released schema.
+- **SC-004**: The one shared store suite passes for every implementation, in CI for each
+  deployment mode, and the migration chain test passes from every released schema.
 - **SC-005**: Local mode starts with no external service and no configuration beyond the data
   directory.
 
 ## Assumptions
 
-- `sqlx` (async, `PgPool` and SQLite pool) is the access layer, as the plan decided; its choice and
-  the exact trait signatures (sync as in #1724, or async) belong to the plan unit.
+- The access layer (`sqlx`, as the 1722 plan decided), the migrations directory
+  (`crates/micold-daemon/migrations/`), threading and the exact trait signatures (sync as in #1724,
+  or async) belong to the plan unit.
 - "Released schema" means each schema version a shipped orchestrator build could have written;
   before this feature none was released, so the chain starts at this feature's first version, and
   the test enumerates the migration files so each later release adds itself.
