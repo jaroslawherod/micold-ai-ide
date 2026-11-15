@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vc038y
 - **Started**: 2026-11-11
 - **Phase**: milestones (M4)
-- **Next step**: M4 (T029–T034): answer the open escalation, then the orchestrator's review B, visual pass and PR
+- **Next step**: M4 (T029–T034): the orchestrator's scoped review B round 2 of the fix diff c4df81448..888b042f1, then the M4 PR
 
 ## Pull requests
 
@@ -44,6 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | implement M1 | `GroupHeader::new(name, on_toggle)` with no toggle message before US6? | `GroupHeader::new(name).on_toggle(m)`: no twisty until M5 adds `Msg::Toggle`, so M1 draws no dead control | agent-resolved | tasks.md T040 |
 | D6 | implement M2 | T022 says the group menu opens "by the 803 chord", but no row menu has a keyboard opener | The menu opens by right click; its items are keyboard-operable like any menu. The keyboard opener lands with the header's tab stop in T040 (M5), which now names it (803 chord / Menu key on the focused header, with its test); U30 is PARTIAL | agent-resolved | tasks.md T040; test-list U30 |
 | D7 | implement M3 | Is a header's count the group's members or the rows shown under the active filter? | The rows shown, with the hidden members said aloud: `n` while none is hidden, `n of m` while a tag filter hides some, `empty` only for a group that holds no member. A group is not empty because a filter hides its members, and the count never claims rows the list does not draw (C3: hidden rows are not targets, their stored places stay). A member whose worktree is gone is not counted as hidden | agent-resolved | spec.md edge cases (empty group; tag filter hides worktrees); contracts/sidebar-groups.md C3, C5; tests `a_header_counts_the_rows_shown_*` |
+| D8 | implement M4 | Review A of M4 still found a MAJOR in round 3 (fixed, not re-reviewed): go on to review B and the visual pass, or hold M4? (escalation category 5) | Go on (option 1) | agent-resolved, orchestrator | review B round 1 covered the post-round-3 commits (head c4df81448) |
 
 ## Review rounds
 
@@ -70,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 diff (A, code-review high) | 1 | M4 | 725770af9eb94bbe648b45bbf7e0a3938b723b5e | 1bf5b31241892b3fb8b91b3270b05b4d4c07bb2a:8c55c9c76f0bd0c94795784693b971bc04e08a4e | CHANGES (5 fixed: marker drawn on the next list's row, highlight striped across session rows, click fired on release after a drag, Escape reached an open surface first, tinted's doc moved; 5 declined) |
 | M4 diff (A, code-review high) | 2 | M4 | 895410de40095a6edf9cf5566ffaa0f2160319e1 | fix diff 8c55c9c76..725770af9 | CHANGES (2 fixed: the Escape key press closed a surface before the drag, the dragged row lost its button and padding mid-drag; 2 declined) |
 | M4 diff (A, code-review high) | 3 | M4 | c8a3831ba91c795c728a0034a1e43af3f6f0195f | fix diff 725770af9..895410de4 | CHANGES (round limit: 3 fixed, not re-reviewed: inert button kept a stale pressed state, a surface refusing Escape dropped the drag cancel, the cancel rule written twice; 2 declined). Escalated, category 5 |
+| Review B M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CHANGES (2 MAJOR, 1 MINOR, all fixed in 888b042f1: a release after Escape or a focus loss mid-drag selected the dragged row; run group rows and headers were never held; Moved(None) left from stale) |
+| Visual pass M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CLEAN (PASS, all six checks; screenshots /mnt/project-files/issue-1786/m4-*.png) |
 
 ## Declined review findings
 
@@ -100,19 +103,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 unit (milestone M4, T029–T034, all ticked; nothing outside the range). New `features/sidebar_drag.rs` (press arms, the list's pointer reports activate at 4 px and hit-test, the window's release commits, Escape / focus loss / off-target release / a vanished row cancel), glue in `ui/sidebar.rs`, `ui/material/{tree_view,group_header}.rs`, `cdk::ContextArea`, `shell/subscriptions.rs`; user guide section *Drag a row between lists*. Review A ran 3 rounds (high); round 3 still found a MAJOR, fixed in c8a3831ba and not re-reviewed, so M4 is escalated (category 5, *Open escalation*). Local gate: fmt and clippy (core, workspace, -D warnings) green; `cargo test -p micold-client` `--test main` (3491), `--lib`, `--bin micold-ai-ide`, `layout_snapshot`, `feature_registration_cost` and nine more client test binaries, and `micold-material`, `micold-core --lib`, all green. A full `cargo test --workspace` ran out of disk (target-shared wiped), and cargo-nextest is not installed: CI is the full gate. Branch pushed; no PR yet. Next: answer the escalation; then the orchestrator runs review B and the visual pass (quickstart §B steps 2–3, plus a click after a drag selects nothing) and opens the M4 PR with the body in the unit's return.
+None.
 
 ## Open escalation
 
-- **Category**: 5 Non-convergence
-- **Question**: Review A of M4 still found a MAJOR in round 3 (now fixed, not re-reviewed); go on to review B and the visual pass, or hold M4?
-- **Options**:
-  1. Go on (Recommended) — the orchestrator runs review B (conformance) and the visual pass on the final head, which covers the round-3 fix, then opens the M4 PR
-  2. One more review A round — a fourth scoped code-review of the round-3 fix diff before review B
-  3. Hold M4 — leave the branch unpushed to a PR until someone reads the drag code
-- **Recommended**: Go on — each round's MAJORs were in the previous round's fix of the same click-after-drag/Escape seam, not new areas; the round-3 fix (`ContextArea::hold_release`) is small and unit-tested, and review B and the visual pass (drag, drop, Escape, a click after a drag) check it in the real app
-- **Evidence**: ledger *Review rounds* (M4 diff A rounds 1-3), *Declined review findings* (M4 rows); commits 725770af9, 895410de4, c8a3831ba, and 2a1c0d0ef after round 3 (the idle guard forbids a window pointer listener, so the drag takes the pointer from the list; guard tests green); tests/sidebar_drag.rs; crates/micold-material/src/cdk/context_area.rs `a_held_release_reaches_the_content_with_no_cursor`
-- **Banner**: not sent (unit return)
+None.
 
 ## Follow-ups not done
 
