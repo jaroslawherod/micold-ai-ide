@@ -727,12 +727,14 @@ jobs:
     # #1981 (FR-005): the chart's lint, schema and conformance checks, and the orchestrator image's
     # build and smoke run, with no cluster. Pull requests run it only when a path declared
     # `micold-kube` changed (or the `full-ci` label forces `kube_paths=true`); main pushes and the
-    # nightly schedule always run it. A skipped job satisfies `ci-complete`.
+    # nightly schedule always run it. A skipped job satisfies `ci-complete`. #959: skipped on a push
+    # its pull request already proved.
     needs: classify
     if: >-
       ${{ !cancelled()
       && needs.classify.result == 'success'
       && needs.classify.outputs.docs_only != 'true'
+      && needs.classify.outputs.pr_proven != 'true'
       && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45

@@ -67,3 +67,11 @@ Append only. Newest last.
 - green: not runnable here (no docker daemon in the cloud thread); the `kube-chart` CI job runs
   `scripts/chart-check.sh --image` (build, image user 65532, entrypoint refuses an unknown flag,
   serves on a read-only root with `--data-dir` and `--socket`).
+
+### Review A fixes (code-review high, 10 findings)
+
+- tests added together with each fix (no separate red run): `config.rs` case "a flag where the value goes"
+  (`--data-dir --socket=/x`), conformance "an empty image.repository is refused" and an exact
+  Service-selector check, classify cases for the image inputs, ci.yml and job-only tests.
+- green: `orchestrator::config` 4 passed; `chart-conformance: all 41 checks passed`;
+  `classify-change: all 90 cases passed`; `chart-check: all 3 cases passed`.

@@ -5,8 +5,13 @@ the first slice of the Kubernetes deployment in `specs/1722-rn-client-k8s/plan.m
 it. Design and values contract: `specs/1981-kube-e2e/` (`contracts/chart-values.md`).
 
 ```sh
-helm install micold deploy/helm/micold -n micold --create-namespace
+docker build -f Dockerfile.orchestrator -t ghcr.io/jaroslawherod/micold-orchestrator:dev .
+helm install micold deploy/helm/micold -n micold --create-namespace --set image.tag=dev
 ```
+
+No image is published yet: the release workflow that builds, signs and pushes the images, and keeps
+`appVersion` in step with the release, belongs to #1740. Until then build `:dev` locally (and load
+it into the cluster, e.g. `kind load docker-image`) as above.
 
 ## What it renders
 

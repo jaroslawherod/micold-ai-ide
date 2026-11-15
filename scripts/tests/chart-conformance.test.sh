@@ -137,7 +137,9 @@ if render web -f "$CHART/ci/web-enabled.yaml"; then
   expect_kinds "web.enabled adds a web Deployment and Service" "$w" \
     "Deployment Deployment PersistentVolumeClaim Service"
   check "web image from web.image" "$w" '^ +image: "ghcr\.io/jaroslawherod/micold-web:dev"$'
-  check "web Service selects the web pods" "$w" '^    app\.kubernetes\.io/component: web$'
+  got="$(awk '/^kind: Service$/ { svc = 1 } svc && /^  selector:$/ { sel = 1; next }
+    sel && /^    / { print; next } sel { exit }' "$w" | grep -c 'app\.kubernetes\.io/component: web$')"
+  if [ "$got" = 1 ]; then ok "web Service selects the web pods"; else fail "web Service selects the web pods (selector has no web component)"; fi
 else
   fail "web-enabled values render: $(cat "$work/web.err")"
 fi
@@ -145,7 +147,7 @@ fi
 if render webnoimage --set web.enabled=true --set web.image.repository=; then
   fail "web.enabled without an image repository must fail"
 else
-  check "web.enabled without an image names the value" "$work/webnoimage.err" 'web\.image\.repository'
+  check "web.enabled without an image names the value" "$work/webnoimage.err" 'web[./]image[./]repository'
 fi
 
 # --- persistence off (US1-3) ---------------------------------------------------------------------
@@ -179,6 +181,11 @@ if render names --set state.mode=file --set database.existingSecret=micold-db; t
   ok "state.mode and database.existingSecret are the chart's value names"
 else
   fail "state.mode and database.existingSecret are the chart's value names: $(cat "$work/names.err")"
+fi
+if render norepo --set image.repository=; then
+  fail "an empty image.repository must be refused"
+else
+  ok "an empty image.repository is refused"
 fi
 if render unknown --set database.url=x; then
   fail "an unknown value name must be refused by the schema"

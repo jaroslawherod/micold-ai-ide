@@ -54,7 +54,9 @@ impl Defaults for SystemDefaults {
     }
 }
 
-/// The endpoint for an explicit socket path: the lock sits beside it, as in `run_with`.
+/// The endpoint for an explicit socket path: the lock sits beside it, as in `run_with`. Unlike the
+/// default, the directory is not checked for an owner-only mode: whoever names the path owns that
+/// choice (in the chart it is a pod-private `emptyDir`, reachable only by the pod's containers).
 pub fn endpoint_at(socket: PathBuf) -> Endpoint {
     Endpoint {
         lock_path: socket.with_extension("lock"),
@@ -100,8 +102,10 @@ impl OrchestratorConfig {
             };
             let value = match inline {
                 Some(value) => value,
+                // `--data-dir --socket=/x` is a missing value, not a directory named `--socket=/x`.
                 None => rest
                     .next()
+                    .filter(|next| !next.to_string_lossy().starts_with("--"))
                     .cloned()
                     .ok_or_else(|| invalid(format!("{name} needs a value")))?,
             };
@@ -292,6 +296,11 @@ mod tests {
             ("unknown flag=value", &["--port=9090"], "\"--port\""),
             ("stray word", &["serve"], "\"serve\""),
             ("missing value", &["--data-dir"], "--data-dir needs a value"),
+            (
+                "a flag where the value goes",
+                &["--data-dir", "--socket=/x"],
+                "--data-dir needs a value",
+            ),
             (
                 "empty inline value",
                 &["--socket="],

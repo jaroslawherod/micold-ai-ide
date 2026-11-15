@@ -42,20 +42,20 @@ image_smoke() {
   id="$(docker run -d --read-only --user 65532:65532 --cap-drop ALL --security-opt no-new-privileges \
     --tmpfs /var/lib/micold:uid=65532,gid=65532 --tmpfs /run/micold:uid=65532,gid=65532 --tmpfs /tmp \
     "$tag" --data-dir=/var/lib/micold --socket=/run/micold/orchestrator.sock)"
+  trap 'docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
   sleep 3
   local running
-  running="$(docker inspect -f '{{.State.Running}}' "$id")"
+  running="$(docker inspect -f '{{.State.Running}}' "$id" || echo unknown)"
   if [ "$running" != true ]; then
     docker logs "$id" >&2 || true
-    docker rm -f "$id" >/dev/null 2>&1 || true
     echo "chart-check: the orchestrator exited instead of serving as UID 65532 on a read-only root" >&2
     exit 1
   fi
-  docker rm -f "$id" >/dev/null
   echo "ok    orchestrator runs as 65532 on a read-only root with --data-dir and --socket"
 }
 
 if [ "${1:-}" = --image ]; then
+  [ "$#" -eq 1 ] || { echo "usage: $0 [--image]" >&2; exit 2; }
   image_smoke
   exit 0
 fi
@@ -73,8 +73,9 @@ done
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-# One run per values set: the defaults, then each ci/*.yaml.
-sets=(default)
+# One run per values set: the defaults (unless ci/default.yaml stands for them), then each ci/*.yaml.
+sets=()
+[ -e "$CHART/ci/default.yaml" ] || sets=(default)
 for f in "$CHART"/ci/*.yaml; do
   [ -e "$f" ] && sets+=("ci/$(basename "$f")")
 done

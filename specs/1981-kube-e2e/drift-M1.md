@@ -27,6 +27,16 @@ Recorded against `scripts/autopilot/plan-drift.sh specs/1981-kube-e2e M1`.
   `deploy/helm/micold/ci/no-persistence.yaml`, `deploy/helm/micold/ci/web-enabled.yaml`: T005 names
   them in brace lists (`templates/{_helpers.tpl,...}`, `ci/{default,web-enabled,no-persistence}.yaml`).
 
+### From review A (code-review, high)
+
+- `.gitattributes` `micold-kube` also marks what the image is built from
+  (`crates/micold-core/**`, `crates/micold-daemon/**`, `Cargo.toml`, `Cargo.lock`,
+  `.cargo/config.toml`, `.dockerignore`), the workflow and the two job-only tests, so a change
+  that breaks the image or the job runs `kube-chart` on its PR instead of first on main.
+- `scripts/gate.sh` runs `chart-check.sh` with `CHART_CHECK_CONFORMANCE=0` (the test loop runs the
+  conformance test), and `chart-check.sh` skips the implicit default set when `ci/default.yaml`
+  exists, so the gate renders each set once.
+
 ## MISSING (planned, no change in the diff)
 
 - `crates/micold-core/tests/ci_gate_covers_every_job.rs`: T009 requires it to pass, not to change.

@@ -296,7 +296,14 @@ kube_case "chart check"                  true  scripts/chart-check.sh
 kube_case "chart conformance test"       true  scripts/tests/chart-conformance.test.sh
 kube_case "e2e crate source"             true  crates/micold-e2e/src/lib.rs
 kube_case "e2e crate test"               true  crates/micold-e2e/tests/link/main.rs
-kube_case "daemon source"                false crates/micold-daemon/src/a.rs
+kube_case "chart check test"             true  scripts/tests/chart-check.test.sh
+kube_case "pinned tools test"            true  scripts/tests/install-kube-tools.test.sh
+kube_case "daemon source (image input)"  true  crates/micold-daemon/src/a.rs
+kube_case "core source (image input)"    true  crates/micold-core/src/a.rs
+kube_case "Cargo.lock (image input)"     true  Cargo.lock
+kube_case ".dockerignore"                true  .dockerignore
+kube_case "ci.yml itself"                true  .github/workflows/ci.yml
+kube_case "client UI source"             false crates/micold-client/src/ui/a.rs
 kube_case "other deploy file"            false deploy/README.md
 kube_case "other script"                 false scripts/test-kube.sh
 kube_case "documentation only"           false docs/page.md
