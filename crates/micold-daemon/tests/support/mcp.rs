@@ -76,20 +76,33 @@ pub fn state_over(
     projects: Vec<(PathBuf, bool, Vec<Session>)>,
     store_dir: &Path,
 ) -> Arc<DaemonState> {
+    let store = FakeProjectStore::loaded(workspace_over(projects));
+    state_over_store(Box::new(store), store_dir)
+}
+
+/// The catalog [`state_over`] serves.
+pub fn workspace_over(projects: Vec<(PathBuf, bool, Vec<Session>)>) -> Workspace {
     let mut sessions = BTreeMap::new();
     let mut list = Vec::new();
     for (path, is_git, project_sessions) in projects {
         list.push(Project::new(path.clone(), is_git, Availability::Available));
         sessions.insert(path, project_sessions);
     }
-    let workspace = Workspace {
+    Workspace {
         active: list.first().map(|p| p.path.clone()),
         projects: list,
         sessions,
         ..Default::default()
-    };
+    }
+}
+
+/// A daemon state over `store`, with a settings file in `store_dir`.
+pub fn state_over_store(
+    store: Box<dyn micold_core::store::ProjectStore + Send + Sync>,
+    store_dir: &Path,
+) -> Arc<DaemonState> {
     let catalog = Catalog::load(
-        Box::new(FakeProjectStore::loaded(workspace)),
+        store,
         Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
     );
     Arc::new(DaemonState::new(catalog))

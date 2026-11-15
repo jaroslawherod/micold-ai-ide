@@ -107,6 +107,18 @@ const SHARED: &[(&str, &str)] = &[(
 /// so it has a reader outside its feature and its view.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
     (
+        "sidebar_drag.over",
+        "tests/sidebar_drag.rs::over_a_target_the_spot_carries_the_marker_and_over_none_nothing_is_drawn \
+         — the drop spot is computed from the root's drawn list and read back by the release that \
+         commits it, so it outlives the view that draws it (feature 1786, contract C3)",
+    ),
+    (
+        "sidebar_drag.held",
+        "tests/sidebar_drag.rs::any_press_lets_go_of_a_row_held_after_a_cancel — the row a \
+         cancelled drag carried stays held across the window's release and focus loss, which reach \
+         the root through the window listener, not the view (feature 1786, US5-1)",
+    ),
+    (
         "history.list",
         "tests/history.rs::two_windows_keep_independent_histories — the window's Back/Forward \
          history is recorded after every message from the place shown, whatever view is on \

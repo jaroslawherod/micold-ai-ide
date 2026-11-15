@@ -27,7 +27,7 @@
 `Group { id, index }` (into a group's items at `index`) | `Ungrouped { index }` | `GroupSlot { index }` (header reorder). `None` is the invalid place.
 
 ## Transient (client, not stored)
-`DragState { armed: Option<(Item, origin)>, active: bool, over: Option<DropTarget> }`; naming draft `{ target: New | Rename(id) | NewAndMove(item), text, error }`.
+`DragState { armed: Option<(Item, origin)>, active: bool, over: Option<DropTarget>, held: Option<Item> }` (`held`: what a cancelled drag carried, whose release stays held until the button is up, US5-1); naming draft `{ target: New | Rename(id) | NewAndMove(item), text, error }`.
 
 ## Persistence
 `layouts/<project id>.json`; write atomic; unreadable file renamed `.corrupt` and an empty layout loads (FR-018). State transitions: none beyond the operations above.

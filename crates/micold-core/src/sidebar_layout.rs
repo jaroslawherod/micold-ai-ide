@@ -293,8 +293,81 @@ impl SidebarLayout {
         Ok(())
     }
 
+    /// Move the group `id`, with its items, to `to_index` among the groups (FR-019). As for
+    /// [`Self::move_item`], the index counts positions before the move and is clamped to the end.
+    pub fn move_group(&mut self, id: UserGroupId, to_index: usize) -> Result<(), LayoutError> {
+        let at = self.group_index(id).ok_or(LayoutError::UnknownGroup)?;
+        let group = self.groups.remove(at);
+        let index = if at < to_index {
+            to_index - 1
+        } else {
+            to_index
+        };
+        self.groups.insert(index.min(self.groups.len()), group);
+        Ok(())
+    }
+
+    /// Move `item` one place up (`by < 0`) or down (`by > 0`) within its own list (FR-010).
+    /// `Ok(false)`, with nothing changed, when it is already at that end of its list. Refused as
+    /// [`Self::move_item`] refuses: the project root, or an item in no list.
+    pub fn step_item(&mut self, item: &LayoutItem, by: isize) -> Result<bool, LayoutError> {
+        if matches!(item, LayoutItem::Worktree(dir) if dir.is_empty()) {
+            return Err(LayoutError::IsDefault);
+        }
+        let (list, at) = self.locate(item).ok_or(LayoutError::UnknownItem)?;
+        let items = self.list_mut(list);
+        let Some(to) = stepped(items.len(), at, by) else {
+            return Ok(false);
+        };
+        items.swap(at, to);
+        Ok(true)
+    }
+
+    /// Move the group `id` one place among the groups, as [`Self::step_item`] moves an item.
+    pub fn step_group(&mut self, id: UserGroupId, by: isize) -> Result<bool, LayoutError> {
+        let at = self.group_index(id).ok_or(LayoutError::UnknownGroup)?;
+        let Some(to) = stepped(self.groups.len(), at, by) else {
+            return Ok(false);
+        };
+        self.groups.swap(at, to);
+        Ok(true)
+    }
+
+    /// Whether [`Self::step_item`] would move `item`: what a **Move up** or **Move down** entry is
+    /// enabled by (contract C6).
+    pub fn can_step_item(&self, item: &LayoutItem, by: isize) -> bool {
+        let list = |id: Option<UserGroupId>| match id {
+            Some(id) => self.group(id).map_or(0, |group| group.items.len()),
+            None => self.ungrouped.len(),
+        };
+        let root = matches!(item, LayoutItem::Worktree(dir) if dir.is_empty());
+        !root
+            && self
+                .locate(item)
+                .is_some_and(|(id, at)| stepped(list(id), at, by).is_some())
+    }
+
+    /// Whether [`Self::step_group`] would move the group `id`.
+    pub fn can_step_group(&self, id: UserGroupId, by: isize) -> bool {
+        self.group_index(id)
+            .is_some_and(|at| stepped(self.groups.len(), at, by).is_some())
+    }
+
+    /// Collapse (`true`) or expand the group `id`: its rows hide under its header, which stays
+    /// (FR-011). Its items are untouched.
+    pub fn set_collapsed(&mut self, id: UserGroupId, collapsed: bool) -> Result<(), LayoutError> {
+        let at = self.group_index(id).ok_or(LayoutError::UnknownGroup)?;
+        self.groups[at].collapsed = collapsed;
+        Ok(())
+    }
+
+    /// The position of the group `id` among the groups.
+    fn group_index(&self, id: UserGroupId) -> Option<usize> {
+        self.groups.iter().position(|group| group.id == id)
+    }
+
     /// The list `item` is in (`None` for `ungrouped`) and its position there.
-    fn locate(&self, item: &LayoutItem) -> Option<(Option<UserGroupId>, usize)> {
+    pub fn locate(&self, item: &LayoutItem) -> Option<(Option<UserGroupId>, usize)> {
         self.groups
             .iter()
             .find_map(|group| {
@@ -332,6 +405,12 @@ impl SidebarLayout {
         }
         Ok(name.to_string())
     }
+}
+
+/// The position `by` places from `at` in a list of `len`, if it is in the list and not `at`.
+fn stepped(len: usize, at: usize, by: isize) -> Option<usize> {
+    let to = at.checked_add_signed(by)?;
+    (to < len && to != at).then_some(to)
 }
 
 #[cfg(test)]
@@ -793,5 +872,156 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ---- T035: reorder within a list and among groups (US4; A16 to A18, U24, U25) ----
+
+    fn three_groups() -> SidebarLayout {
+        SidebarLayout {
+            version: LAYOUT_VERSION,
+            next_id: 3,
+            groups: vec![
+                group(0, "A", vec![worktree("a1")]),
+                group(1, "B", vec![]),
+                group(2, "C", vec![worktree("c1"), worktree("c2")]),
+            ],
+            ungrouped: vec![worktree("u1"), worktree("u2"), worktree("u3")],
+        }
+    }
+
+    fn group_order(layout: &SidebarLayout) -> Vec<u64> {
+        layout.groups.iter().map(|group| group.id.0).collect()
+    }
+
+    #[test]
+    fn move_group_takes_its_items_along_and_counts_the_index_before_the_removal() {
+        let mut layout = three_groups();
+        assert_eq!(layout.move_group(UserGroupId(2), 0), Ok(()));
+        assert_eq!(group_order(&layout), vec![2, 0, 1]);
+        assert_eq!(
+            layout.group(UserGroupId(2)).unwrap().items,
+            vec![worktree("c1"), worktree("c2")],
+            "its worktrees go with it"
+        );
+        assert_eq!(layout.move_group(UserGroupId(2), 2), Ok(()));
+        assert_eq!(
+            group_order(&layout),
+            vec![0, 2, 1],
+            "lands before the third"
+        );
+        assert_eq!(layout.move_group(UserGroupId(0), 99), Ok(()));
+        assert_eq!(
+            group_order(&layout),
+            vec![2, 1, 0],
+            "an index past the end is clamped"
+        );
+        let before = layout.clone();
+        assert_eq!(layout.move_group(UserGroupId(1), 1), Ok(()));
+        assert_eq!(layout, before, "a drop on its own place changes nothing");
+        assert_eq!(layout.ungrouped, three_groups().ungrouped);
+    }
+
+    #[test]
+    fn move_group_refuses_an_unknown_group_and_changes_nothing() {
+        let mut layout = three_groups();
+        assert_eq!(
+            layout.move_group(UserGroupId(9), 0),
+            Err(LayoutError::UnknownGroup)
+        );
+        assert_eq!(layout, three_groups());
+    }
+
+    #[test]
+    fn step_item_moves_one_place_in_its_list_and_the_others_keep_their_order() {
+        let mut layout = three_groups();
+        assert_eq!(layout.step_item(&worktree("u3"), -1), Ok(true));
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("u1"), worktree("u3"), worktree("u2")]
+        );
+        assert_eq!(layout.step_item(&worktree("u1"), 1), Ok(true));
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("u3"), worktree("u1"), worktree("u2")]
+        );
+        assert_eq!(layout.step_item(&worktree("c1"), 1), Ok(true));
+        assert_eq!(
+            layout.group(UserGroupId(2)).unwrap().items,
+            vec![worktree("c2"), worktree("c1")],
+            "within its group, never out of it"
+        );
+    }
+
+    #[test]
+    fn step_item_at_either_end_of_its_list_changes_nothing() {
+        let mut layout = three_groups();
+        assert_eq!(layout.step_item(&worktree("u1"), -1), Ok(false));
+        assert_eq!(layout.step_item(&worktree("u3"), 1), Ok(false));
+        assert_eq!(
+            layout.step_item(&worktree("a1"), 1),
+            Ok(false),
+            "a list of one"
+        );
+        assert_eq!(layout.step_item(&worktree("a1"), -1), Ok(false));
+        assert_eq!(layout, three_groups());
+        assert!(!layout.can_step_item(&worktree("u1"), -1));
+        assert!(layout.can_step_item(&worktree("u1"), 1));
+        assert!(!layout.can_step_item(&worktree("c2"), 1));
+        assert!(layout.can_step_item(&worktree("c2"), -1));
+    }
+
+    #[test]
+    fn step_item_refuses_what_it_cannot_place() {
+        let mut layout = three_groups();
+        assert_eq!(
+            layout.step_item(&worktree("gone"), 1),
+            Err(LayoutError::UnknownItem)
+        );
+        assert_eq!(
+            layout.step_item(&worktree(""), 1),
+            Err(LayoutError::IsDefault)
+        );
+        assert!(!layout.can_step_item(&worktree("gone"), 1));
+        assert_eq!(layout, three_groups());
+    }
+
+    #[test]
+    fn step_group_moves_one_place_and_changes_nothing_at_the_ends() {
+        let mut layout = three_groups();
+        assert_eq!(layout.step_group(UserGroupId(1), -1), Ok(true));
+        assert_eq!(group_order(&layout), vec![1, 0, 2]);
+        assert_eq!(layout.step_group(UserGroupId(0), 1), Ok(true));
+        assert_eq!(group_order(&layout), vec![1, 2, 0]);
+        assert_eq!(layout.step_group(UserGroupId(1), -1), Ok(false));
+        assert_eq!(layout.step_group(UserGroupId(0), 1), Ok(false));
+        assert_eq!(group_order(&layout), vec![1, 2, 0]);
+        assert_eq!(
+            layout.step_group(UserGroupId(9), 1),
+            Err(LayoutError::UnknownGroup)
+        );
+        assert!(layout.can_step_group(UserGroupId(2), 1));
+        assert!(!layout.can_step_group(UserGroupId(1), -1));
+        assert!(!layout.can_step_group(UserGroupId(9), 1));
+    }
+
+    // ---- T039: collapse (US6; A23, U28) ----
+
+    #[test]
+    fn set_collapsed_marks_only_that_group_and_keeps_its_items() {
+        let mut layout = three_groups();
+        assert_eq!(layout.set_collapsed(UserGroupId(2), true), Ok(()));
+        let collapsed: Vec<bool> = layout.groups.iter().map(|g| g.collapsed).collect();
+        assert_eq!(collapsed, vec![false, false, true]);
+        assert_eq!(
+            layout.group(UserGroupId(2)).unwrap().items,
+            vec![worktree("c1"), worktree("c2")]
+        );
+        assert_eq!(layout.set_collapsed(UserGroupId(2), false), Ok(()));
+        assert_eq!(layout, three_groups());
+        assert_eq!(
+            layout.set_collapsed(UserGroupId(9), true),
+            Err(LayoutError::UnknownGroup)
+        );
+        assert_eq!(layout, three_groups());
     }
 }

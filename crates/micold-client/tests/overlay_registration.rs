@@ -80,6 +80,7 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
             Some(micold_client::features::sidebar_group_actions::GroupMenu {
                 group: micold_core::sidebar_layout::UserGroupId(0),
                 anchor: (40, 300),
+                highlighted: None,
             })
     }),
     ("worktree.menu_open", "worktree_menu", |s| {

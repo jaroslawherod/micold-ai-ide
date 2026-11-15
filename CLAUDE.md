@@ -85,8 +85,6 @@ whose use is not obvious from that:
   tests are off by default, so `mise run test` does not need a container runtime installed.
 - `mise run duplication` — fail when code duplication passes its budget (jscpd, similarity-rs); not
   in the gate. See `docs/development/duplication.md`.
-- `mise run app` — on Linux it stages the macOS bundle unsigned, which is what
-  `scripts/tests/macos-bundle.test.sh` drives.
 
 The first `mise run <task>` in a fresh worktree/clone requires trusting the repo's `mise.toml`
 once via `mise trust` (mise refuses untrusted configs by default).

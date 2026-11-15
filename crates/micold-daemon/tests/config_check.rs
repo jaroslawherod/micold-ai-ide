@@ -326,3 +326,19 @@ fn an_orchestrator_url_with_credentials_exits_two_without_echoing_the_password()
     assert!(stderr.contains("daemon.toml:6:7:"), "{stderr}");
     assert!(!stdout.contains("hunter2") && !stderr.contains("hunter2"));
 }
+
+#[test]
+fn orchestrator_link_empty_socket_unknown_key_and_valid_table() {
+    let valid = check_text("[orchestrator_link]\nenabled = true\nsocket = \"/run/o.sock\"\n");
+    assert_eq!(valid.status.code(), Some(0), "{}", text(&valid.stderr));
+
+    let empty = check_text("[orchestrator_link]\nenabled = true\nsocket = \"\"\n");
+    assert_eq!(empty.status.code(), Some(2));
+    let stderr = text(&empty.stderr);
+    assert!(stderr.contains("daemon.toml:7:10:"), "{stderr}");
+    assert!(stderr.contains("orchestrator_link.socket"), "{stderr}");
+
+    let unknown = check_text("[orchestrator_link]\nbogus = 1\n");
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(text(&unknown.stderr).contains("bogus"));
+}

@@ -1844,6 +1844,11 @@ impl DaemonState {
         }
     }
 
+    /// The configuration in force, if the daemon started with a file.
+    pub fn config_current(&self) -> Option<Arc<micold_core::daemon_config::DaemonConfig>> {
+        self.config.get().map(|runtime| runtime.current())
+    }
+
     /// The `config` section of the diagnostic (contract §5); `None` without a configuration file.
     pub fn config_status(&self) -> Option<micold_core::protocol::messages::ConfigStatus> {
         self.config.get().map(|runtime| runtime.status())
@@ -5455,13 +5460,21 @@ impl DaemonState {
         dir_name: &str,
         parent: Option<&micold_core::worktree_parent::ParentChoice>,
     ) {
-        let result = self
-            .lock()
-            .catalog
-            .record_worktree_parent(project, dir_name, parent);
-        if let Err(e) = result {
+        if let Err(e) = self.try_record_worktree_parent(project, dir_name, parent) {
             tracing::warn!(%e, "recording the worktree's parent failed");
         }
+    }
+
+    /// [`Self::record_worktree_parent`], with the failure returned for the caller to report.
+    pub fn try_record_worktree_parent(
+        &self,
+        project: &Path,
+        dir_name: &str,
+        parent: Option<&micold_core::worktree_parent::ParentChoice>,
+    ) -> std::io::Result<()> {
+        self.lock()
+            .catalog
+            .record_worktree_parent(project, dir_name, parent)
     }
 
     /// A worktree of `project` was deleted: its children become removed, its own entries go

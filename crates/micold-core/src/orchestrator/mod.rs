@@ -5,20 +5,22 @@
 pub mod announce;
 pub mod audit;
 pub mod auth;
+pub mod dial;
 pub mod liveness;
 pub mod record;
 pub mod registry;
 pub mod store;
 
 pub use announce::{
-    decode_first_frame, refusal_message, FirstFrame, LinkAnnouncement, LinkQuery, LinkVerdict,
-    RefuseReason, MAX_PREAMBLE_FRAME,
+    decode_first_frame, encode_announcement, refusal_message, FirstFrame, LinkAnnouncement,
+    LinkQuery, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
 };
 pub use audit::{AuditEntry, AuditStore, MemoryAuditStore, NewAuditEntry, MAX_DETAIL_BYTES};
 pub use auth::{
     AuthStore, Bootstrap, CertSerial, Identity, Invite, MemoryAuthStore, NewEnrollment, NewInvite,
     NewUser, Provider, RefreshToken, Revocation, Role, TokenHash, User, UserId,
 };
+pub use dial::{jittered, LinkStatus, RetryPolicy};
 pub use liveness::Heartbeat;
 pub use record::{DaemonRecord, Health, TenantId, UNOWNED};
 pub use registry::{

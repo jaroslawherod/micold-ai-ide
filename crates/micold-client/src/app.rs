@@ -215,6 +215,8 @@ pub enum Message {
     /// The user's own sidebar groups (feature 1786); see
     /// [`crate::features::sidebar_group_actions::Msg`].
     SidebarGroups(crate::features::sidebar_group_actions::Msg),
+    /// Feature 1786 (US3, US5): dragging a sidebar row between lists, and cancelling it.
+    SidebarDrag(crate::features::sidebar_drag::Msg),
 
     /// Escape was pressed with the terminal unfocused (feature 021, T034). The first of the three
     /// dismissal triggers to be reported the same way the third already was: as *what happened*,
@@ -455,6 +457,9 @@ pub struct State {
     /// What the user-group actions remember (feature 1786) -- see
     /// [`crate::features::sidebar_group_actions::State`].
     pub sidebar_groups: crate::features::sidebar_group_actions::State,
+    /// The sidebar drag in progress (feature 1786) -- see
+    /// [`crate::features::sidebar_drag::State`].
+    pub sidebar_drag: crate::features::sidebar_drag::State,
     /// What the session feature remembers -- see [`crate::features::session::State`].
     pub session: crate::features::session::State,
     /// What the daemons feature remembers -- see [`crate::features::daemons::State`].
@@ -573,7 +578,11 @@ impl State {
     /// shape — a scroll invalidates every anchored menu at once, Escape is a single decision
     /// aimed at whatever holds the user's attention.
     fn dismiss_topmost(&mut self) {
-        if crate::overlay::registry::topmost(self).is_some() {
+        // Feature 1786 (US5-1, FR-009): an Escape press cancels a sidebar drag first, and alone;
+        // a surface open under it waits for the next press.
+        if let Some(cancel) = drag_escape(self) {
+            self.update(cancel);
+        } else if crate::overlay::registry::topmost(self).is_some() {
             crate::overlay::registry::close_topmost(self);
         } else if let Some(answer) = on_escape(self) {
             self.update(answer);
@@ -1567,6 +1576,10 @@ impl State {
                 let outcomes = crate::features::sidebar_group_actions::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            Message::SidebarDrag(msg) => {
+                let outcomes = crate::features::sidebar_drag::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             // Feature 939: the transcript view's messages are the transcript feature's; the
             // scroll they ask for is the shell's (`shell/transcript.rs`), so here it is dropped.
             Message::Session(crate::features::session::Msg::Transcript(msg)) => {
@@ -2234,6 +2247,13 @@ where
     }
 }
 
+/// What Escape does to a sidebar drag (feature 1786, US5-1): cancels it while it is active.
+fn drag_escape(state: &State) -> Option<Message> {
+    state.sidebar_drag.active.then_some(Message::SidebarDrag(
+        crate::features::sidebar_drag::Msg::Cancelled,
+    ))
+}
+
 /// Map an Escape key press to a [`Message`] given the current state.
 ///
 /// Returns `Some(AboutClosed)` only while the About overlay is open (FR-011); returns
@@ -2257,7 +2277,14 @@ pub fn on_escape(state: &State) -> Option<Message> {
     // surface that refuses Escape answers for itself too: falling through would let a scrim click
     // on a non-dismissible dialog discard the Settings draft behind it (013 BUG-001, FR-010a).
     match crate::overlay::registry::topmost(state) {
-        Some(open) => open.on(micold_core::overlay::Trigger::Escape).cloned(),
+        // Feature 1786 (US5-1, FR-009): a surface that refuses Escape still leaves it to cancel a
+        // sidebar drag, so the key stays heard; the press itself reaches the drag first, in
+        // `dismiss_topmost`. A scrim click stays the dialog's own.
+        Some(open) => open
+            .on(micold_core::overlay::Trigger::Escape)
+            .cloned()
+            .or_else(|| drag_escape(state)),
+        None if state.sidebar_drag.active => drag_escape(state),
         None if state.settings.settings_draft.is_some() => {
             Some(Message::Settings(crate::features::settings::Msg::Cancelled))
         }

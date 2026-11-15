@@ -24,6 +24,8 @@ use micold_core::cli_reason::{self, AttemptDir, Place, SpawnEnv};
 use micold_core::mcp::submission::SETTLE_AFTER;
 use micold_core::protocol::messages::{ActivitySignal, CatalogSnapshot};
 use micold_core::session::{AiCli, SessionId, TerminalMode};
+use micold_core::store::{FakeProjectStore, LoadOutcome, ProjectStore};
+use micold_core::workspace::Workspace;
 use micold_daemon::hooks::{self, HookReceiver};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -36,6 +38,22 @@ static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const WINDOW_BOUND: Duration = Duration::from_secs(2);
 
 const PROMPT: &str = "print the branch name";
+
+/// A project store that fails the write of any catalog holding a worktree parent link.
+struct LinkRefusingStore(FakeProjectStore);
+
+impl ProjectStore for LinkRefusingStore {
+    fn load(&self) -> LoadOutcome {
+        self.0.load()
+    }
+
+    fn save(&self, workspace: &Workspace) -> std::io::Result<()> {
+        if workspace.worktree_parents.values().any(|l| !l.is_empty()) {
+            return Err(std::io::Error::other("read-only data directory"));
+        }
+        self.0.save(workspace)
+    }
+}
 
 /// Stand-in CLIs on a `PATH` that holds nothing else of the user's, a fake home whose Claude and
 /// Copilot records trust the project, a project with worktrees `b` and `gone` (whose directory has
@@ -62,6 +80,15 @@ impl Sandbox {
     }
 
     async fn build(child: bool) -> Self {
+        Self::build_over(child, false).await
+    }
+
+    /// [`Self::new`] over a store that refuses every write holding a parent link.
+    async fn with_unwritable_links() -> Self {
+        Self::build_over(false, true).await
+    }
+
+    async fn build_over(child: bool, refuse_links: bool) -> Self {
         let bin = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
@@ -121,10 +148,13 @@ impl Sandbox {
             });
             seeded.push(c);
         }
-        let state = state_over(
-            vec![(project.path().to_path_buf(), true, seeded)],
-            store.path(),
-        );
+        let projects = vec![(project.path().to_path_buf(), true, seeded)];
+        let state = if refuse_links {
+            let fake = FakeProjectStore::loaded(workspace_over(projects));
+            state_over_store(Box::new(LinkRefusingStore(fake)), store.path())
+        } else {
+            state_over(projects, store.path())
+        };
         state.set_pi_activity_component(true).unwrap();
         let addr = serve_tool_server(&state, store.path().join("mcp")).await;
         Self {
@@ -1082,4 +1112,71 @@ async fn a_default_caller_creates_the_worktree_and_its_session_in_it() {
         .cloned()
         .unwrap();
     assert_eq!(summary.worktree_dir.as_deref(), Some("feat-q"));
+}
+
+// --- Feature 1945, US4: the parent link is recorded before the session starts (FR-009) ------------
+
+/// A create with a session records the explicit parent link, and the worktree's own session runs
+/// only after it (the link is in the catalog when `create_worktree` replies, with the session).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_create_with_a_session_records_the_parent_link() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_first_prompt_bound(READY_BOUND);
+    let out = s
+        .worktree_ok(
+            sid(3),
+            json!({"branch": "feat-l", "ai_cli": "copilot", "parent": "default"}),
+        )
+        .await;
+    assert_eq!(out["parent"], "default", "{out}");
+    let views = s.state.worktree_parent_views(s.project.path());
+    let view = views.get("feat-l").expect("the link is recorded");
+    assert_eq!(view.name, "default");
+}
+
+/// A create that fails before the worktree exists records no link and mints no id.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_create_that_fails_before_the_worktree_exists_records_no_link() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    std::fs::remove_file(s.bin.path().join("pi")).unwrap();
+    let error = s
+        .worktree_err(json!({
+            "branch": "feat-n", "ai_cli": "pi", "prompt": PROMPT, "parent": "default"
+        }))
+        .await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    assert!(!s
+        .state
+        .worktree_parent_views(s.project.path())
+        .contains_key("feat-n"));
+    assert!(!s
+        .state
+        .worktree_ids(s.project.path())
+        .contains_key("feat-n"));
+}
+
+/// A parent link that cannot be written is reported naming the worktree, which stays without a
+/// session: the agent never starts in a worktree without its link.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_link_that_cannot_be_written_names_the_worktree_and_starts_no_session() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::with_unwritable_links().await;
+    let sessions = s.session_ids();
+    let error = s
+        .worktree_err(json!({
+            "branch": "feat-u", "ai_cli": "copilot", "prompt": PROMPT, "parent": "default"
+        }))
+        .await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    let message = error["message"].as_str().unwrap_or_default();
+    assert!(message.contains("\"feat-u\""), "{error}");
+    assert!(
+        message.contains("parent link could not be recorded"),
+        "{error}"
+    );
+    assert!(message.contains("read-only data directory"), "{error}");
+    assert!(s.worktree_dirs().contains(&"feat-u".to_string()));
+    assert_eq!(s.session_ids(), sessions, "no session started");
 }

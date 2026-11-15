@@ -208,6 +208,24 @@ pub async fn handshake(stream: Transport, client_build: &str) -> io::Result<Conn
     handshake_with(stream, client_build, &Credentials::default()).await
 }
 
+/// The `Hello` every connection opens with: this build's protocol, schema and package, this
+/// process's instance and the `credentials`. The orchestrator link's daemon sends it too (#1725).
+pub fn hello_message(client_build: &str, credentials: &Credentials) -> ClientMsg {
+    ClientMsg::Hello {
+        protocol_version: PROTOCOL_VERSION,
+        schema_hash: SCHEMA_HASH,
+        client_build: client_build.to_string(),
+        // This process's own instance, not a parameter: an instance identifies the *process*,
+        // so letting a caller pass one in would let two connections of one process disagree
+        // about which window they are — the exact confusion BUG-022 is about.
+        client_instance: ClientInstance::current(),
+        client_package_version: PACKAGE_VERSION.to_string(),
+        auth_token: credentials.auth_token.clone(),
+        client_fingerprint: BUILD_FINGERPRINT.to_string(),
+        require_fingerprint_match: credentials.require_fingerprint_match,
+    }
+}
+
 /// Perform the handshake, presenting the token and fingerprint policy in `credentials`.
 pub async fn handshake_with(
     stream: Transport,
@@ -216,19 +234,7 @@ pub async fn handshake_with(
 ) -> io::Result<Connected> {
     let mut framed = Framed::new(stream, ClientCodec::new());
     framed
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: client_build.to_string(),
-            // This process's own instance, not a parameter: an instance identifies the *process*,
-            // so letting a caller pass one in would let two connections of one process disagree
-            // about which window they are — the exact confusion BUG-022 is about.
-            client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.to_string(),
-            auth_token: credentials.auth_token.clone(),
-            client_fingerprint: BUILD_FINGERPRINT.to_string(),
-            require_fingerprint_match: credentials.require_fingerprint_match,
-        }))
+        .send(Frame::Control(hello_message(client_build, credentials)))
         .await
         .map_err(io::Error::from)?;
 
