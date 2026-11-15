@@ -111,7 +111,7 @@ M4 unit (milestone M4, T029–T034, all ticked; nothing outside the range). New 
   2. One more review A round — a fourth scoped code-review of the round-3 fix diff before review B
   3. Hold M4 — leave the branch unpushed to a PR until someone reads the drag code
 - **Recommended**: Go on — each round's MAJORs were in the previous round's fix of the same click-after-drag/Escape seam, not new areas; the round-3 fix (`ContextArea::hold_release`) is small and unit-tested, and review B and the visual pass (drag, drop, Escape, a click after a drag) check it in the real app
-- **Evidence**: ledger *Review rounds* (M4 diff A rounds 1-3), *Declined review findings* (M4 rows); commits 725770af9, 895410de4, c8a3831ba; tests/sidebar_drag.rs; crates/micold-material/src/cdk/context_area.rs `a_held_release_reaches_the_content_with_no_cursor`
+- **Evidence**: ledger *Review rounds* (M4 diff A rounds 1-3), *Declined review findings* (M4 rows); commits 725770af9, 895410de4, c8a3831ba, and 2a1c0d0ef after round 3 (the idle guard forbids a window pointer listener, so the drag takes the pointer from the list; guard tests green); tests/sidebar_drag.rs; crates/micold-material/src/cdk/context_area.rs `a_held_release_reaches_the_content_with_no_cursor`
 - **Banner**: not sent (unit return)
 
 ## Follow-ups not done
