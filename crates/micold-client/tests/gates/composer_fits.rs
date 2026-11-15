@@ -1097,16 +1097,21 @@ fn hovering_files_mark_the_drawn_pane_only_when_it_accepts_input() {
     );
 }
 
-/// FR-003, SC-004: the model and permission selectors (the effort one is built alike) share one
-/// trigger, so their labels sit on one line and each keeps the chevron of `Select`'s trigger (feature 1792, T005).
+/// FR-003, SC-004: the model, effort and permission selectors share one trigger, so their labels
+/// sit on one line and each keeps the chevron of `Select`'s trigger, in that order (feature 1792,
+/// T005, T028). The pane's structured Claude Code session offers effort, so all three are named.
 #[test]
 fn the_model_and_permission_selectors_share_one_trigger_on_one_line() {
     use micold_client::ui::mode_control::MODE_LABEL;
     let (mut state, id) = pane();
     report(&mut state, id, TurnPhase::Idle, false, 0);
     state.composers.options_open = true;
+    assert!(state.offers_effort(id), "the pose offers effort");
+    // The effort trigger paints its label and value as one run.
+    let effort = state.effort_header(id);
     let (painted, _) = paint(themed(state, ColorScheme::Dark), id);
-    let ys: Vec<f32> = ["Model:", &format!("{MODE_LABEL}:")]
+    let labels = ["Model:", effort.as_str(), &format!("{MODE_LABEL}:")];
+    let ys: Vec<f32> = labels
         .iter()
         .map(|label| find(&painted, label).origin.y)
         .collect();
@@ -1114,9 +1119,31 @@ fn the_model_and_permission_selectors_share_one_trigger_on_one_line() {
         ys.iter().all(|y| (y - ys[0]).abs() < 0.5),
         "the selectors' labels are on different lines: {ys:?}"
     );
-    let chevrons = painted.iter().filter(|p| p.content == "\u{e5cf}").count();
+    // Each selector's label has its own chevron: the nearest one to its right on the same line,
+    // none shared, and the chevrons come in the labels' order (so a trigger missing its chevron
+    // cannot borrow a neighbour's and pass).
+    let chevrons: Vec<iced::Point> = painted
+        .iter()
+        .filter(|p| p.content == "\u{e5cf}")
+        .map(|p| p.origin)
+        .collect();
+    let mut taken: Vec<u32> = Vec::new();
+    for label in labels {
+        let at = find(&painted, label).origin;
+        let own = chevrons
+            .iter()
+            .filter(|c| c.x > at.x && (c.y - at.y).abs() < 8.0)
+            .min_by(|a, b| a.x.total_cmp(&b.x))
+            .unwrap_or_else(|| panic!("no select chevron beside `{label}`"));
+        assert!(
+            !taken.contains(&own.x.to_bits()),
+            "`{label}` shares a chevron"
+        );
+        taken.push(own.x.to_bits());
+    }
+    let xs: Vec<f32> = taken.iter().map(|b| f32::from_bits(*b)).collect();
     assert!(
-        chevrons >= 3,
-        "{chevrons} select chevrons for three selectors"
+        xs.windows(2).all(|w| w[0] < w[1]),
+        "the chevrons are not in Model, Effort, Permission order: {xs:?}"
     );
 }

@@ -71,8 +71,10 @@ None beyond T001: the trigger extraction is the P1 story's own work.
 
 ## Phase 6: Polish and cross-cutting (close unit; changes no code)
 
-- [ ] T022 Run quickstart Part A and the Part B visual pass (skill `visual-pass`); record the result in `specs/1792-structured-select-m3/evidence.md` (FR-012, SC-001, SC-002).
-- [ ] T023 Tick tasks; close or narrow #1765 (spec Assumptions) with a link to the merged work; confirm no literal colour, shape, duration or easing in `select_trigger.rs` and `composer.rs` via `tests/motion_tokens.rs` and `tests/ui_glyph_literals.rs` (SC-003); run `mise run duplication`; confirm `tests/material_boundary.rs` and `tests/one_overlay_implementation.rs` pass.
+- [x] T022a Run quickstart Part A and record it in `specs/1792-structured-select-m3/evidence.md` (FR-012, SC-001, SC-002); Part B is recorded per milestone: steps 2, 3, 5, 6 in `visual-pass-M3.md`; steps 1 (rest, hover, disabled, open) and 4 in `visual-pass-M1.md`, whose focus and pressed rows were not checked (T022b).
+- [ ] T022b Part B step 1 focus and pressed, and step 7 (narrow window, light and dark), as a visual run. NOT RUN: the forked `visual-pass` skill got no arguments from the close unit twice, so it ran nothing. Both states are pinned by tests with product mutants (T025, `evidence.md`); step 7's wrap by `at_a_narrow_width_the_row_ends_at_its_wrapped_height`.
+- [x] T023a Ticked tasks; confirmed `tests/motion_tokens.rs` and `tests/ui_glyph_literals.rs` (SC-003, no literal colour, shape, duration or easing in `select_trigger.rs` and `composer.rs`), `tests/material_boundary.rs` and `tests/one_overlay_implementation.rs` pass (see `evidence.md`).
+- [ ] T023b Close or narrow #1765 (spec Assumptions) with a link to the merged work (#1842, #1851, #1902), and run `mise run duplication`. NOT DONE: neither is possible from the cloud thread (no `mise`, no authenticated `gh`); listed under the ledger's Follow-ups not done.
 
 ## Dependencies
 
@@ -120,4 +122,17 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### Close unit (not a milestone)
 
-T022–T023 change no code (quickstart results, task ticks, duplication check): the close unit does them in the close PR.
+T022a–T023b change no code (quickstart results, task ticks, duplication check; T022b and T023b stay open): the close unit does them in the close PR.
+
+## Phase 7: TDD remediation (from `tdd/verification.md`, verdict FAIL)
+
+The feature is not done until T024 to T026 (the HIGH findings) are cleared. Paths are under `crates/micold-client/`.
+
+- [x] T024 [US3] Finding 1: pin `around_options` gaps. In `src/ui/composer_expand_tests.rs` add a pose with parts above and below the row (a notice plus a draft image or chip): collapsed height equals the height with no row, and the open row adds both gaps. Prove with the survivors: `ui/composer.rs:300` `between` to `false` and `:302` `gap(under)` to `gap(false)` must each turn it red, then restore. Run `scripts/build-lock.sh cargo test -p micold-client --lib -- expand_tests`.
+- [x] T025 [US1] (done: pressed and ring tests plus product mutants for each, deviation in `spec.md` FR-002) Finding 3: add tests in `src/ui/material/menu_select_anatomy.rs` for the `MenuSelect` trigger's keyboard-focus and pressed layers against `Select`'s (FR-002, FR-009), or, if `MenuSelect` is meant to show the button's ring, record that deviation in `spec.md` FR-002 and test the ring. Run `scripts/build-lock.sh cargo test -p micold-client --lib -- menu_select_anatomy`.
+- [x] T026 [US1] Finding 2: no red can be recovered for M1. Re-prove each M1 test by deliberate mutant (trigger geometry, hover layer, disabled guard, long-value ellipsis, empty-list guard) and record the results in `tdd/cycle-log.md` under an M1 heading, noting it is after the fact. Run `scripts/build-lock.sh cargo test -p micold-client --lib -- menu_select_anatomy`.
+- [ ] T027 [US2] (DECLINED, as at the M2 review: the parity test is geometry only by decision; `menu_panel` and `row_surface` are shared functions both controls call; ledger *Declined review findings*) Finding 6: extend `src/ui/material/picker_parity.rs` (`the_structured_select_menu_has_the_selects_panel_and_rows`) with a paint-level check of the selected row emphasis and an item state layer (US2 scenario 2, FR-004). Run `scripts/build-lock.sh cargo test -p micold-client --lib -- picker_parity`.
+- [x] T028 [US1] Finding 7: in `tests/gates/composer_fits.rs:1103` assert the model, effort and permission triggers by name (the pose's structured Claude Code session offers effort, so all three are named, in order) instead of `chevrons >= 3`. Run `scripts/build-lock.sh cargo test -p micold-client --test layout_snapshot -- the_model_and_permission_selectors`.
+- [x] T029 [US3] Findings 4 and 5: mutate the `reduce_motion` branch of `options_motion` (`ui/composer.rs:317`) and `palette.close_pickers()` / `close_mode_menus()` (`shell/composer.rs`) once each, confirm a test fails, restore, and update `tdd/cycle-log.md` (also fix the red command naming the removed `a_picker_opened_by_command_opens_the_options_row`). Run `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- shell::composer::tests`.
+- [x] T030 [US3] Finding 8: split `a_toggle_mid_way_reverses_from_the_current_height` (`src/ui/composer_expand_tests.rs:130`) into reversal and rapid-toggle tests, and name each entry point of `a_list_opened_with_the_row_collapsed_opens_the_row` (`src/shell/composer.rs:634`) in its own test. Run both targeted commands above.
+- [x] T031 Findings 9 and 10 (LOW): name the magic values in `composer_expand_tests.rs` and `menu_select_anatomy.rs`; correct `drift-M3.md` on the containment paths.

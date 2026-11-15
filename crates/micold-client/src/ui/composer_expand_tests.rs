@@ -10,7 +10,7 @@ use crate::ui::material::test_support::{renderer, roles, Mounted, FRAME_MS};
 use iced::advanced::widget::operation::focusable;
 use iced::advanced::{layout, mouse};
 use iced::widget::text;
-use iced::{Element, Event, Point, Size};
+use iced::{Element, Event, Length, Point, Size};
 use micold_core::tokens::motion::duration;
 
 use super::*;
@@ -22,6 +22,18 @@ const WIDE: Size = Size::new(1200.0, 800.0);
 const OVER: Duration = Duration::from_millis(duration::MEDIUM_2);
 /// Half a pixel, as the geometry gates allow.
 const TOLERANCE: f32 = 0.5;
+/// Fewest frames strictly between the two end heights for a ramp: the row takes ~300 ms at the
+/// frame step, so three is far below what it draws, yet above the one or two a jump would.
+const MIN_FRAMES_BETWEEN: usize = 3;
+/// A first frame within this fraction of the travel from the start has not jumped to the end.
+const JUMP_FRACTION: f32 = 0.5;
+/// A reversal may move the height by less than this fraction of the whole travel in one frame.
+const REVERSAL_STEP_FRACTION: f32 = 1.0 / 3.0;
+/// Pixels between the points `clicks_everywhere` presses: finer than the smallest control
+/// (about 24 px), so no control escapes the grid.
+const CLICK_GRID: f32 = 12.0;
+/// Where the click grid starts, inside the first control's edge.
+const CLICK_INSET: f32 = 2.0;
 
 fn posed(open: bool, reduce_motion: bool) -> (State, SessionId) {
     let (mut state, s) = structured_state();
@@ -102,10 +114,13 @@ fn opening_and_closing_take_the_standard_duration_without_a_jump() {
             .iter()
             .filter(|(_, h)| (h - shut).abs() > TOLERANCE && (h - full).abs() > TOLERANCE)
             .count();
-        assert!(between > 3, "too few heights between: {seen:?}");
+        assert!(
+            between > MIN_FRAMES_BETWEEN,
+            "too few heights between: {seen:?}"
+        );
         let first = seen[0].1;
         assert!(
-            (first - end).abs() > (full - shut) / 2.0,
+            (first - end).abs() > (full - shut) * JUMP_FRACTION,
             "the first frame jumped most of the way: {seen:?}"
         );
     }
@@ -124,15 +139,15 @@ fn under_reduce_motion_the_row_switches_in_one_step() {
     assert!((seen[0].1 - full).abs() <= TOLERANCE, "{seen:?} vs {full}");
 }
 
-/// T014 (FR-007, US3 scenario 3): a toggle mid-way reverses from the height reached, and rapid
-/// toggles leave the row settled where the last one points, never stuck half open.
+/// T014 (FR-007, US3 scenario 3): a toggle mid-way reverses from the height reached, without a
+/// jump, and the collapse never goes back up.
 #[test]
 fn a_toggle_mid_way_reverses_from_the_current_height() {
     let (closed, s) = posed(false, false);
     let (open, _) = posed(true, false);
     let shut = height(&Mounted::new_in(composer(&closed, s), WIDE));
     let full = height(&Mounted::new_in(composer(&open, s), WIDE));
-    let step = (full - shut) / 3.0;
+    let step = (full - shut) * REVERSAL_STEP_FRACTION;
 
     let mut m = Mounted::new_in(composer(&closed, s), WIDE);
     let mut clock = 0;
@@ -157,7 +172,18 @@ fn a_toggle_mid_way_reverses_from_the_current_height() {
         "the collapse went back up: {back:?}"
     );
     assert!((back.last().expect("frames ran").1 - shut).abs() <= TOLERANCE);
+}
 
+/// T014 (FR-007): rapid toggles leave the row settled where the last one points, never stuck
+/// half open.
+#[test]
+fn rapid_toggles_leave_the_row_where_the_last_one_points() {
+    let (closed, s) = posed(false, false);
+    let (open, _) = posed(true, false);
+    let full = height(&Mounted::new_in(composer(&open, s), WIDE));
+
+    let mut m = Mounted::new_in(composer(&closed, s), WIDE);
+    let mut clock = 0;
     for i in 0..9 {
         m.rebuild(composer(if i % 2 == 0 { &open } else { &closed }, s));
         run(&mut m, &mut clock, 0);
@@ -229,14 +255,14 @@ fn click(m: &mut Mounted<'_>, at: Point) -> Vec<String> {
 fn clicks_everywhere(m: &mut Mounted<'_>) -> Vec<String> {
     let size = m.node.bounds();
     let mut published = Vec::new();
-    let mut y = 2.0;
+    let mut y = CLICK_INSET;
     while y < size.height {
-        let mut x = 2.0;
+        let mut x = CLICK_INSET;
         while x < size.width {
             published.extend(click(m, Point::new(x, y)));
-            x += 12.0;
+            x += CLICK_GRID;
         }
-        y += 12.0;
+        y += CLICK_GRID;
     }
     published
 }
@@ -334,4 +360,53 @@ fn grow(closed: &State, open: &State, s: SessionId, room: Size) -> f32 {
         .expect("frames ran")
         .1;
     end - shut
+}
+
+/// Height of a fixed-size part, so the sums below are exact.
+const PART: f32 = 20.0;
+/// Height of the stand-in options row.
+const ROW: f32 = 30.0;
+
+/// `around_options` with `above`/`below` fixed-size parts and a row `ROW` high, at `open`.
+fn around(above: usize, below: usize, open: bool) -> f32 {
+    let (state, _) = posed(open, true);
+    let part = || -> Element<'_, Message> { Space::new().height(PART).width(Length::Fill).into() };
+    let options: Element<'_, Message> = Space::new().height(ROW).width(Length::Fill).into();
+    let el = around_options(
+        (0..above).map(|_| part()).collect(),
+        options,
+        (0..below).map(|_| part()).collect(),
+        &state,
+    );
+    let el: Element<'_, String> = el.map(|m| format!("{m:?}"));
+    let m = Mounted::new_in(el, WIDE);
+    height(&m)
+}
+
+/// T024 (FR-008): a collapsed row leaves the composer as tall as without it, with a part above,
+/// below, both or neither; open, it adds the room it needs on each side that has a part.
+#[test]
+fn the_collapsed_row_adds_no_gap_whichever_parts_surround_it() {
+    let gap = spacing::SM;
+    // (above, below, height without the row)
+    for (above, below, bare) in [
+        (0, 0, 0.0),
+        (1, 0, PART),
+        (0, 1, PART),
+        (1, 1, 2.0 * PART + gap),
+    ] {
+        let shut = around(above, below, false);
+        assert!(
+            (shut - bare).abs() <= TOLERANCE,
+            "{above} above, {below} below: collapsed {shut}, bare {bare}"
+        );
+        let full = around(above, below, true);
+        // The row brings one gap whenever a part is there (the other travels outside the reveal
+        // when both are).
+        let expected = bare + ROW + if above + below > 0 { gap } else { 0.0 };
+        assert!(
+            (full - expected).abs() <= TOLERANCE,
+            "{above} above, {below} below: open {full}, expected {expected}"
+        );
+    }
 }

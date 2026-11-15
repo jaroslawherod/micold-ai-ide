@@ -10,3 +10,5 @@ would ask, take the recommended flow and write the choice in the ledger's **Inpu
 is created.
 
 Who notifies: a supervised run sends no `PushNotification`; the supervisor sends the one notification for a batch of questions. An unsupervised run notifies as before.
+
+What the supervisor does when a supervised run stops: [supervisor-close-out.md](supervisor-close-out.md).

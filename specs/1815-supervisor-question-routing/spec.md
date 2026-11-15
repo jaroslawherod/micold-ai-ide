@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-14
 
-**Status**: Draft
+**Status**: Closed 2026-11-14 — shipped in PRs #1899, #1901, #1907, #1911, #1916 and the close PR
 
 **Input**: User description: "autopilot supervisor M4: route session questions to the user in one batch (issue #1815)"
 
