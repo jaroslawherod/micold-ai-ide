@@ -214,8 +214,11 @@ mod tests {
     use std::time::Duration;
 
     use micold_core::daemon_config::Kind;
-    use micold_core::orchestrator::{DaemonRecord, StoreError};
+    use micold_core::orchestrator::{
+        Claim, DaemonRecord, Health, LinkAnnouncement, MemoryRegistryStore, StoreError,
+    };
     use micold_core::protocol::routing::WireDaemonId;
+    use micold_core::protocol::version::PROTOCOL_VERSION;
 
     use super::*;
 
@@ -320,5 +323,45 @@ mod tests {
         drop(saving);
         saves.offer(snapshot(8));
         assert_eq!(*store.written.lock().unwrap(), [7]);
+    }
+
+    /// FR-004: a save that fails writes nothing, and the registry the links read is still right.
+    #[test]
+    fn a_failed_save_leaves_the_registry_in_memory_correct() {
+        let store = Arc::new(MemoryRegistryStore::default());
+        store.fail_saves(true);
+        let (saving, saves) =
+            SaveWorker::start(Arc::clone(&store) as Arc<dyn RegistryStore>).unwrap();
+        let shared = Shared::new(Arc::new(SystemClock), Registry::default(), saves);
+        let announcement = LinkAnnouncement {
+            format: 1,
+            id: WireDaemonId::new("a").unwrap(),
+            kind: Kind::Host,
+            name: "A".to_owned(),
+            protocol_version: PROTOCOL_VERSION,
+            capabilities: BTreeSet::new(),
+            tenant: None,
+        };
+
+        let link = shared.update(
+            |registry| match registry.claim(&announcement, shared.now()) {
+                Claim::Reserved { link, snapshot } => (link, Some(snapshot)),
+                other => panic!("expected a reservation, got {other:?}"),
+            },
+        );
+        shared.update(|registry| {
+            let confirmed = registry
+                .confirm(link, shared.now(), 1_000)
+                .expect("the reservation is current");
+            ((), Some(confirmed.snapshot))
+        });
+        drop(saving);
+
+        assert_eq!(store.saves(), 0, "every save failed");
+        assert!(store.stored().is_empty());
+        let listed = shared.registry().list();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].health, Health::Online);
+        assert_eq!(listed[0].last_seen, 1_000);
     }
 }

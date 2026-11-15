@@ -2,7 +2,7 @@
 
 # Micold AI IDE Constitution
 
-Micold AI IDE is a desktop, AI-assisted integrated development environment. This
+Micold AI IDE is an AI-assisted integrated development environment. This
 constitution defines the non-negotiable principles and constraints that govern its
 design, implementation, and evolution.
 
@@ -93,48 +93,55 @@ place that hosts sessions with no worktree of their own to answer for.
 
 ### IV. Local-First Storage (NON-NEGOTIABLE)
 
-All application and session state MUST live on the local filesystem. Core functionality
-MUST NOT depend on any cloud service or network availability.
+Local mode MUST work fully offline on one machine with no external service. All
+application and session state in local mode MUST live on the local filesystem.
 
-- The application MUST be fully functional offline.
+- Local mode MUST NOT depend on any cloud service, network availability, or separately
+  installed database server.
+- A network deployment is an explicit, opt-in mode: it MAY use PostgreSQL for persistence and
+  GitHub or Google sign-in for identity. It MUST NOT be the default, and local mode MUST
+  keep working without it.
 - The user owns and controls all data. Nothing is transmitted off-device without the
   user's explicit, informed opt-in.
 
 Rationale: A developer's code and working state are sensitive and must remain under the
 developer's control. Local-first storage guarantees privacy, availability without
-connectivity, and full ownership of data; any off-device transmission is an explicit,
-auditable choice rather than a default.
+connectivity, and full ownership of data; a shared network deployment serves teams that
+choose it, so any off-device transmission stays an explicit, auditable choice rather than a
+default.
 
-### V. Rust + iced Stack
+### V. TypeScript + React Native Client, Rust Core
 
-The application MUST be implemented in Rust and MUST use the iced framework for its GUI.
-No alternative GUI framework may be introduced.
+The user interface MUST be one TypeScript + React Native client that talks only to the
+orchestrator's API, through generated types. Core logic, daemons and the orchestrator MUST be
+implemented in Rust. The iced framework is retired; no other GUI framework may be introduced.
 
+- The client MUST NOT read or write application state except through the orchestrator's API,
+  and its API types MUST be generated from the Rust definitions, not hand-written.
 - The design MUST favor Rust's type system and ownership model to make invalid session
   and worktree states unrepresentable, rather than relying on runtime checks alone.
 
-Rationale: A single, deliberately constrained stack keeps the codebase coherent and
-leverages Rust's guarantees to enforce the other principles at compile time. Encoding
-session/worktree invariants in the type system turns whole categories of isolation bugs
-into build failures.
+Rationale: One client over one typed API keeps the UI coherent and lets the same client serve
+local and network deployments, while Rust keeps session and worktree invariants in the
+compiler. Generated types turn API drift between the two languages into build failures.
 
-### VI. Cross-Platform Parity
+### VI. Linux Daemons, Web Client Reach
 
-The application MUST run on Linux, macOS, and Windows with feature parity. No platform is
-a second-class target.
+The daemons and the orchestrator MUST run on Linux. The client MUST run on current Chromium,
+Firefox and Safari with feature parity. No supported browser is a second-class target.
 
-- Every user-facing feature MUST behave equivalently on all three platforms; a feature
-  is not "done" until it works on Linux, macOS, and Windows.
-- Platform-specific behavior MUST be isolated behind clear abstractions. Core logic MUST
-  remain platform-agnostic and MUST NOT branch on the host operating system directly.
-- CI MUST build and test the application on all three platforms, for every change able to
-  affect what is built or tested. A change whose every touched path is declared documentation
-  is exempt; the Cross-platform gate below carries the definition and the check that enforces
-  it.
+- Every user-facing feature MUST behave equivalently on all three browsers; a feature is
+  not "done" until it works on each.
+- Core logic MUST remain host-agnostic and MUST NOT branch on the browser or the host
+  operating system directly; differences are isolated behind clear abstractions.
+- CI MUST build and test the daemons and orchestrator on Linux, and the client on the three
+  browser engines, for every change able to affect what is built or tested. A change whose
+  every touched path is declared documentation is exempt; the Platform gate below carries
+  the definition and the check that enforces it.
 
-Rationale: Developers choose their own operating systems, and a tool that degrades on any
-of them fragments the user base and the codebase. Confining platform differences to thin,
-well-defined boundaries keeps the core testable once and portable everywhere.
+Rationale: Linux-only daemons remove two platform ports from a small team's workload, and a
+browser client reaches every desktop through one codebase. Confining browser differences to
+thin boundaries keeps the core testable once.
 
 ### VII. Documentation as a First-Class Citizen
 
@@ -161,42 +168,41 @@ MUST NOT fork one-off copies of a widget that a shared primitive already provide
   primitive MUST be created in (or promoted to) the shared library and consumed from
   there, rather than embedded privately in a single feature.
 - Shared components MUST honor the same guarantees as the rest of the UI: light/dark
-  theming (consistent with the iced-based app shell) and cross-platform parity
+  theming (consistent with the client shell) and browser parity
   (Principle VI).
-- **Builder-style API (mandatory).** Shared components MUST expose an object-oriented,
-  chainable builder API that mirrors iced's own widget idiom — NOT free/procedural
-  functions that take many positional parameters. Specifically:
-  - Each component is a public struct constructed with only its required inputs
-    (for example `IconButton::new(icon, on_press)`); optional configuration is applied
-    through chainable, `self`-consuming methods (for example `.tooltip(text)`,
-    `.disabled(true)`, `.size(px)`, `.roles(r)`).
-  - The chain terminates by converting into an `iced::Element` via
-    `impl From<Component> for Element<'_, Message>`, so call sites end in `.into()`,
-    exactly like iced's built-in `button` / `text_input` / `container` widgets.
-  - Theming stays first-class: the active `Roles` / color scheme is supplied through the
-    builder (a constructor argument or a `.roles(...)` / `.scheme(...)` method), preserving
-    the light/dark theming guarantee above.
+- **Typed props, React idiom (mandatory).** Shared components MUST expose a typed props
+  interface in the idiom of React — NOT free/procedural helpers that take many positional
+  parameters. Specifically:
+  - Each component is a function component with a named, typed props interface; required
+    inputs are required props (for example `<IconButton icon onPress />`) and optional
+    configuration is optional props (for example `tooltip`, `disabled`, `size`).
+  - Composition uses children and render props rather than boolean-flag sprawl, and call sites
+    never reach into a component's internals.
+  - Theming stays first-class: the active theme is supplied through context or a prop,
+    preserving the light/dark theming guarantee above.
 - The concrete catalog of components lives in the code and its documentation
   (Principle VII), NOT in this constitution. This principle governs the practice of
   reuse and the shape of component APIs, not a fixed inventory.
 
 Rationale: A shared component foundation keeps the UI coherent, reduces duplicated and
-divergent behavior, and makes theming and cross-platform fixes apply once rather than
+divergent behavior, and makes theming and browser fixes apply once rather than
 feature-by-feature. Mandating reuse at the principle level prevents the slow accretion of
-inconsistent one-off widgets that is expensive to reconcile later. Requiring the builder
-API on top of that matches iced's own idiom (consistency and discoverability), keeps
+inconsistent one-off widgets that is expensive to reconcile later. Requiring typed
+props on top of that matches the React idiom (consistency and discoverability), keeps
 optional parameters optional, and lets a component gain new configuration without breaking
 every call site — which itself removes a common excuse to fork a bespoke widget.
 
 ## Technology, Storage & Licensing Constraints
 
 - **Language**: Rust, stable toolchain, managed via `mise`.
-- **GUI**: iced. No other GUI framework is permitted.
-- **Persistence**: Local-only — plain files and/or an embedded store (e.g., SQLite or
-  sled). No external database and no separate server process may be required for core
-  functionality.
-- **Distribution**: The project is open source under an OSI-approved license. Every
-  release MUST provide builds for Linux, macOS, and Windows.
+- **Client**: TypeScript + React Native, talking only to the orchestrator API through generated
+  types. iced is retired; no other GUI framework is permitted.
+- **Persistence**: Local mode uses plain files and/or an embedded store (SQLite); no external
+  database and no separate server process may be required. An opt-in network deployment uses
+  PostgreSQL, with owner/tenant recorded on records from the start.
+- **Distribution**: The project is open source under an OSI-approved license. Every release
+  MUST provide Linux builds of the daemons and orchestrator as `ghcr.io/jaroslawherod/micold-*`
+  images built from this monorepo, and the web client.
 - **Dependencies**: Every dependency MUST be vetted for maintenance health and license
   compatibility before adoption. Prefer minimal, well-maintained crates; justify each
   addition against the principles above.
@@ -204,8 +210,8 @@ every call site — which itself removes a common excuse to fork a bespoke widge
 ## Development Workflow & Quality Gates
 
 - **TDD gate**: CI MUST run the full test suite on every change able to affect what is
-  built, linted, packaged, or tested, on Linux, macOS, and Windows. Merges are blocked
-  while the suite is red on any platform. This gate operationalizes Principle I.
+  built, linted, packaged, or tested, on Linux (and the client on Chromium, Firefox and
+  Safari). Merges are blocked while the suite is red on any of them. This gate operationalizes Principle I.
   - **Exemption — documentation-only changes.** A change whose every touched path is
     declared documentation MAY skip the suite entirely. The declaration is a single list
     in the repository (`.gitattributes`, attribute `micold-docs`), and the exemption holds
@@ -214,8 +220,8 @@ every call site — which itself removes a common excuse to fork a bespoke widge
     other path — source, manifest, lockfile, toolchain or tool configuration, build or
     helper script, workflow definition, or any file compiled into the binary — is NOT
     documentation, even when only its comments change.
-- **Cross-platform gate**: CI MUST build and test the application on all three supported
-  platforms, under the same scope and the same documentation-only exemption as the TDD
+- **Platform gate**: CI MUST build and test the daemons and orchestrator on Linux and the
+  client on all three supported browsers, under the same scope and the same documentation-only exemption as the TDD
   gate above. This gate operationalizes Principle VI.
 - **Documentation gate**: User-facing changes MUST update the user guide/docs in the same
   pull request, and the docs build MUST pass in CI. This gate operationalizes
@@ -236,7 +242,7 @@ every call site — which itself removes a common excuse to fork a bespoke widge
   of reusing or extending a shared UI primitive MUST be rejected in review, unless the
   divergence is explicitly justified and recorded. Additionally, a change that adds or edits
   a shared component using a free-function / many-positional-parameter signature instead of
-  the chainable builder-into-`Element` form (Principle VIII) MUST be rejected in review,
+  typed props in the React idiom (Principle VIII) MUST be rejected in review,
   unless explicitly justified and recorded. This gate operationalizes Principle VIII.
 - **Task-size gate**: Every task MUST be small enough for one person to implement in one
   working day, and a task that is not MUST be split before work starts. This applies to
@@ -270,4 +276,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.8.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-10-20
+**Version**: 2.0.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-11-15

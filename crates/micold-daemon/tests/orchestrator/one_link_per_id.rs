@@ -3,9 +3,10 @@
 
 use std::time::{Duration, Instant};
 
-use micold_core::orchestrator::{LinkVerdict, RefuseReason};
+use micold_core::orchestrator::{refusal_message, LinkVerdict, RefuseReason};
 use micold_core::protocol::keepalive::{LIVENESS_DEADLINE, PING_INTERVAL};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
+use micold_core::protocol::version::PROTOCOL_VERSION;
 
 use crate::support::{announcement, record_when, FakeDaemon, LinkedDaemon, Orchestrator, WITHIN};
 
@@ -108,7 +109,15 @@ async fn a_hello_after_the_replaced_link_answered_is_refused_already_linked() {
     match late.next().await {
         DaemonMsg::Refused {
             reason: RefusalReason::NotPermitted { detail },
-        } => assert!(detail.contains("already open"), "{detail}"),
+        } => assert_eq!(
+            detail,
+            refusal_message(
+                RefuseReason::AlreadyLinked,
+                &announced.id,
+                PROTOCOL_VERSION,
+                PROTOCOL_VERSION
+            )
+        ),
         other => panic!("expected an already-linked refusal, got {other:?}"),
     }
     late.expect_closed().await;

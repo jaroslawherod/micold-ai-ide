@@ -13,7 +13,7 @@ description: "Task list template for feature implementation"
 
 **Documentation**: Per Constitution Principle VII (Documentation as a First-Class Citizen), every user-facing user story MUST include a user-guide documentation task in the same change. A story is not "done" until its docs exist.
 
-**Cross-platform**: Per Constitution Principle VI (Cross-Platform Parity), features and their tests MUST run on Linux, macOS, and Windows. Keep platform-specific behavior behind abstractions; core logic stays platform-agnostic.
+**Platform**: Per Constitution Principle VI (Linux Daemons, Web Client Reach), daemons and orchestrator MUST run on Linux and the client on current Chromium, Firefox and Safari. Keep browser-specific behavior behind abstractions; core logic stays host-agnostic.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -166,7 +166,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
-- [ ] TXXX Verify build and full test suite pass on Linux, macOS, and Windows (Principle VI)
+- [ ] TXXX Verify build and full test suite pass on Linux and the three browsers (Principle VI)
 - [ ] TXXX Run quickstart.md validation
 
 ---
