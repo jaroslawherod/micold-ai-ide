@@ -23,7 +23,7 @@ use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use kube_real_support::forge::{Forge, Seen, USER};
+use kube_real_support::forge::{Forge, USER};
 use kube_real_support::*;
 use micold_client::daemon_config_delivery::GITHUB_TOKEN_PREFIX;
 use micold_core::connect::DaemonConnection;
@@ -500,22 +500,26 @@ fn kube_real_forge_accepts_only_the_run_secret() {
             .any(|r| r.path.ends_with("git-receive-pack") && r.accepted),
         "the push with the secret reaches the forge and is accepted"
     );
-    let refused = |r: &&Seen| !r.accepted;
-    let before = &seen[..seen_before];
-    assert_eq!(before[0].credential, None, "the first request is anonymous");
+    // The nine hand-written probes, in order, as the forge recorded them (git ran after
+    // `seen_before` was taken): exactly the right secret, as Basic or Bearer, is accepted.
+    let user = |u: &str, p: &str| Some((u.to_string(), p.to_string()));
+    let probes: Vec<_> = seen[..seen_before]
+        .iter()
+        .map(|r| (r.credential.clone(), r.accepted))
+        .collect();
     assert_eq!(
-        before[1].credential,
-        Some((USER.to_string(), "not-the-secret".to_string()))
-    );
-    assert!(
-        before
-            .iter()
-            .filter(refused)
-            .all(|r| r.credential != Some((USER.to_string(), secret.clone()))),
-        "no request carrying the run secret is refused: {before:?}"
-    );
-    assert!(
-        before.iter().any(|r| r.accepted && r.credential.is_some()),
-        "the right secret is accepted somewhere in the probes: {before:?}"
+        probes,
+        vec![
+            (None, false),
+            (user(USER, "not-the-secret"), false),
+            (user("someone", &secret), false),
+            (user(USER, &format!("{secret}x")), false),
+            (None, false),
+            (user(USER, &secret), true),
+            (user("Bearer", &secret), true),
+            (user("Bearer", &secret), true),
+            (None, false),
+        ],
+        "the forge recorded each probe's credential and verdict"
     );
 }

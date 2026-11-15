@@ -1,6 +1,7 @@
 ---
 feature: 1760-kube-scoped-token-flow
-verdict: FAIL
+verdict: FAIL # pre-remediation (audit at b8239ff8a); all findings cleared by T029-T033, see Remediation
+post_remediation_verdict: PASS
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # resolved: no overrides/ or presets/ copy exists
 verified_at: b8239ff8a # short SHA audited (branch 1760-kube-scoped-token-flow, M1-M3 merged)
 behaviors: 12 # 8 on the test list (U1-U8) + 4 found only in the cycle log / history (U9, A1, A2, V14)
@@ -135,7 +136,7 @@ Untested criteria: none. Tests tracing to nothing: none among the listed tests; 
 | 2 | Fixed (T029): recorded red in `cycle-log.md` cycle 11 (mutant `same` returns `true`: the wrong-secret request gets 200). |
 | 3 | Fixed (T031): unit red for the V14 pod relaxation recorded in cycle 11. |
 | 4 | Accepted: the live arms can only run in CI job `kube-cluster` (SC-004 by design). |
-| 5 | Fixed (T032): no request-count arithmetic in the forge test. |
+| 5 | Fixed (T032): no count of the requests git sends; the nine fixed probes are asserted one by one (credential and verdict), the push by path and verdict. |
 | 6 | Fixed (T030): `the_secret_limit_is_inclusive`; the `>=` mutant now fails it. |
 | 7 | Fixed (T033): the dial test split into three, no branch. |
 | 8-13 | Not done (T034, T035: LOW, tests-only): recorded in the ledger's *Follow-ups not done*. |
