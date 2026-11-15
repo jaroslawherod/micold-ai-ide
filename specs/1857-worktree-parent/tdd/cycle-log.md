@@ -72,3 +72,34 @@ Fix: `Scope::explain` (tools.rs) replaces the holder with generic wording when i
 scope; `describe_situation`, `describe_derived_collision`, `create_failure` and `list_branches` use
 it. After the fix: `-p micold-daemon --test mcp worktree_parent` 22 passed (both new tests green,
 the sibling case still named, `default` still sees the name).
+
+## M3 (T023-T025, T033)
+
+Honest account: `307e04e11` holds the test and the helper together, so git history shows no
+red-before-green. Red runs recorded after the fact; the first review round found the fixture used
+an invented `name` field, so the test was rebuilt on the real `list_worktrees` row shape
+(`ref`, `display_name`, `branch`, `path`, `status`, `session_count`, `parent`, `parent_state`;
+`tools.rs` `worktree_rows`) and the fixes below went test first.
+
+### The original T023 cases against origin/main
+
+`scripts/tests/supervisor-ownership.test.sh` as of `307e04e11`, run in a detached worktree of
+`origin/main` (no `runs-of-parent.sh`, no `Parent` column, no ownership text): 25 cases, 24 FAILED
+(helper missing: `No such file`; skill sections absent; the one pass is the usage-error case, which a
+missing script also exits 2 on). On the branch: 25 passed.
+
+### Review A F1-F6 and review B F2: test first
+
+Rebuilt test (39 cases) run against the branch's old script, skill and `supervisor.sh`: 20 FAILED.
+
+| Finding | Red on the old code | Green after |
+|---|---|---|
+| A F1: rows keyed by `ref`, not `name` | every list, check and orphans case: list printed `null`, `--check run-1` printed `refused: run-1 is not listed` | list, check, orphans print `ref` |
+| A F3: `--check` given the ledger's `Worktree` path | `--check /work/proj/run-1` refused as not listed | accepted by ref or path; a display name is still not an id |
+| A F2: orphan scan on a daemon-filtered list | skill lacked `worktrees-all.json` and `--orphans --rows`; filtered-list case documents that it shows no orphans | skill scans the unfiltered list |
+| A F4: empty input and `{}` | exit 0 (want 2); `[1, 2]` gave raw jq exit | all exit 2 `unreadable` |
+| A F5: `ledger set 12 Parent x` on an 8-column ledger | exit 0, wrote past the closing pipe | exit 2 naming the Parent column |
+| A F6 / B F2: stray `,.` in the relay text | relay-text case failed | plain sentences; `parent and siblings` kept |
+
+After: `bash scripts/tests/supervisor-ownership.test.sh` 39 cases, 0 failures; `supervisor.test.sh`
+269 cases, 0 failures.
