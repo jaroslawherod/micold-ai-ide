@@ -24,10 +24,13 @@ pub enum ParentChoice {
 }
 
 /// A link resolved for display: the parent's current name (its last one when removed) and state.
+/// `root` is a link to the project root, so a live worktree directory named `default` is told
+/// apart from it by the link, never by the name (spec 1945).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParentView {
     pub name: String,
     pub state: ParentState,
+    pub root: bool,
 }
 
 impl ParentView {
@@ -35,7 +38,7 @@ impl ParentView {
     /// directory name, and answers the parent's display name (a rename override), or itself.
     pub fn label(&self, display: impl Fn(&str) -> String) -> crate::worktree::ParentLabel {
         crate::worktree::ParentLabel {
-            name: if self.name == DEFAULT_NAME {
+            name: if self.root {
                 self.name.clone()
             } else {
                 display(&self.name)
@@ -135,15 +138,18 @@ pub fn views(ids: &Ids, links: &Links) -> BTreeMap<String, ParentView> {
                 ParentRef::Default => ParentView {
                     name: DEFAULT_NAME.into(),
                     state: ParentState::Known,
+                    root: true,
                 },
                 ParentRef::Worktree(parent) => match names.get(&parent) {
                     Some(name) if !link.removed => ParentView {
                         name: (*name).clone(),
                         state: ParentState::Known,
+                        root: false,
                     },
                     _ => ParentView {
                         name: link.last_name.clone(),
                         state: ParentState::Removed,
+                        root: false,
                     },
                 },
             };
@@ -156,7 +162,12 @@ pub fn views(ids: &Ids, links: &Links) -> BTreeMap<String, ParentView> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParentSide {
     /// A live parent; `recorded == false` is the implicit `default` of an unparented worktree.
-    Known { name: String, recorded: bool },
+    /// `root` is the project root, else a worktree named `name` (which may be `"default"`).
+    Known {
+        name: String,
+        recorded: bool,
+        root: bool,
+    },
     /// The parent was removed: no sessions, no siblings.
     Removed { last_name: String },
 }
@@ -185,21 +196,24 @@ pub fn neighbourhood(
     views: &BTreeMap<String, ParentView>,
     own: Option<&str>,
 ) -> Neighbourhood {
-    // The live parent of `dir`: the recorded one, else `default`. `None` when it was removed.
+    // The live parent of `dir` (`None` is the project root) and whether it was recorded: the
+    // recorded one, else the root. `None` when it was removed.
     let parent_of = |dir: &str| match views.get(dir) {
-        None => Some((DEFAULT_NAME, false)),
-        Some(v) if v.state == ParentState::Known => Some((v.name.as_str(), true)),
+        None => Some((None, false)),
+        Some(v) if v.state == ParentState::Known => {
+            Some(((!v.root).then_some(v.name.as_str()), true))
+        }
         Some(_) => None,
     };
     // A live directory named `default` is not the project root: it has no parent and no siblings,
-    // and is nobody's child.
-    let children_of = |name: &str| {
+    // and is nobody's child; a worktree recorded under it is its child.
+    let children_of = |parent: Option<&str>| {
         live.iter()
             .filter(|d| d.as_str() != DEFAULT_NAME)
-            .filter(|d| parent_of(d).is_some_and(|(p, _)| p == name))
+            .filter(|d| parent_of(d).is_some_and(|(p, _)| p == parent))
             .map(|d| Child {
                 name: d.clone(),
-                implicit: name == DEFAULT_NAME && parent_of(d).is_some_and(|(_, rec)| !rec),
+                implicit: parent.is_none() && parent_of(d).is_some_and(|(_, rec)| !rec),
             })
             .collect()
     };
@@ -207,23 +221,30 @@ pub fn neighbourhood(
         return Neighbourhood {
             parent: None,
             siblings: Vec::new(),
-            children: children_of(DEFAULT_NAME),
+            children: children_of(None),
         };
     };
-    if !live.contains(own) || own == DEFAULT_NAME {
+    if !live.contains(own) {
         return Neighbourhood::default();
     }
+    if own == DEFAULT_NAME {
+        return Neighbourhood {
+            children: children_of(Some(own)),
+            ..Neighbourhood::default()
+        };
+    }
     let (parent, siblings) = match parent_of(own) {
-        Some((name, recorded)) => (
+        Some((dir, recorded)) => (
             ParentSide::Known {
-                name: name.to_string(),
+                name: dir.unwrap_or(DEFAULT_NAME).to_string(),
                 recorded,
+                root: dir.is_none(),
             },
             live.iter()
                 .filter(|d| {
                     d.as_str() != own
                         && d.as_str() != DEFAULT_NAME
-                        && parent_of(d).is_some_and(|(p, _)| p == name)
+                        && parent_of(d).is_some_and(|(p, _)| p == dir)
                 })
                 .cloned()
                 .collect(),
@@ -238,7 +259,7 @@ pub fn neighbourhood(
     Neighbourhood {
         parent: Some(parent),
         siblings,
-        children: children_of(own),
+        children: children_of(Some(own)),
     }
 }
 
@@ -349,6 +370,15 @@ mod tests {
         ParentView {
             name: name.into(),
             state,
+            root: false,
+        }
+    }
+
+    /// A link to the project root.
+    fn root() -> ParentView {
+        ParentView {
+            root: true,
+            ..known("default")
         }
     }
 
@@ -381,7 +411,8 @@ mod tests {
             n.parent,
             Some(ParentSide::Known {
                 name: "default".into(),
-                recorded: false
+                recorded: false,
+                root: true
             })
         );
         assert_eq!(n.siblings, ["b"]);
@@ -390,14 +421,15 @@ mod tests {
 
     #[test]
     fn siblings_are_mutual_between_a_recorded_and_an_implicit_default_parent() {
-        let v = views_of(&[("d", known("default"))]);
+        let v = views_of(&[("d", root())]);
         let l = live(&["a", "b", "d"]);
         let from_d = neighbourhood(&l, &v, Some("d"));
         assert_eq!(
             from_d.parent,
             Some(ParentSide::Known {
                 name: "default".into(),
-                recorded: true
+                recorded: true,
+                root: true
             })
         );
         assert_eq!(from_d.siblings, ["a", "b"]);
@@ -424,7 +456,7 @@ mod tests {
     #[test]
     fn default_has_recorded_and_implicit_children_but_not_grandchildren_or_removed_ones() {
         let v = views_of(&[
-            ("d", known("default")),
+            ("d", root()),
             ("c", known("a")),
             ("r", view("gone", ParentState::Removed)),
         ]);
@@ -449,5 +481,30 @@ mod tests {
         assert!(a.siblings.is_empty(), "{a:?}");
         let root = neighbourhood(&l, &BTreeMap::new(), None);
         assert_eq!(root.children, [child("a", true)]);
+    }
+
+    #[test]
+    fn a_worktree_recorded_under_a_directory_named_default_is_its_child_not_the_roots() {
+        let l = live(&["a", "default", "k"]);
+        let v = views_of(&[("k", known("default"))]);
+        let k = neighbourhood(&l, &v, Some("k"));
+        assert_eq!(
+            k.parent,
+            Some(ParentSide::Known {
+                name: "default".into(),
+                recorded: true,
+                root: false
+            })
+        );
+        assert!(
+            k.siblings.is_empty(),
+            "the root's children are not siblings: {k:?}"
+        );
+        let dir = neighbourhood(&l, &v, Some("default"));
+        assert_eq!(dir.parent, None);
+        assert_eq!(dir.children, [child("k", false)]);
+        let root = neighbourhood(&l, &v, None);
+        assert_eq!(root.children, [child("a", true)]);
+        assert!(neighbourhood(&l, &v, Some("a")).siblings.is_empty());
     }
 }

@@ -82,6 +82,8 @@ pub async fn call(
             .unwrap_or_default()
     });
     let mut deferred = None;
+    // `send_parent_input`'s session and parent ref, once chosen (FR-018).
+    let mut reached = None;
     let result = match parsed {
         Ok(Operation::DeleteWorktree {
             worktree,
@@ -116,10 +118,17 @@ pub async fn call(
                     value
                 })
         }
+        Ok(Operation::SendParentInput { text }) => {
+            send_parent_input(&state, caller, text, &hangup, &mut reached).await
+        }
         Ok(operation) => dispatch(state, caller, operation, asked, &hangup).await,
         Err(error) => Err(error),
     };
-    if let Some(object) = audited {
+    if let Some(mut object) = audited {
+        let parent = reached.map(|(session, parent): (SessionId, String)| {
+            object = session.0.to_string();
+            parent
+        });
         let outcome = match &result {
             Ok(_) => "ok",
             Err(error) => error.category.as_str(),
@@ -129,6 +138,7 @@ pub async fn call(
             caller = %caller.0,
             op = %name,
             target = %object,
+            parent = parent.as_deref().map(tracing::field::display),
             outcome = %outcome,
             "tool call"
         );
@@ -296,9 +306,6 @@ async fn dispatch(
         }
         Operation::SendSessionInput { session, text } => {
             send_session_input(&state, caller, session, text, hangup).await
-        }
-        Operation::SendParentInput { text } => {
-            send_parent_input(&state, caller, text, hangup).await
         }
         Operation::ReadSessionOutput { session, lines } => {
             blocking(move || read_session_output(&state, caller, session, lines)).await
@@ -1883,12 +1890,26 @@ async fn send_session_input(
     text: NonEmptyText,
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
-    let (session, who, project, summary) = session_target(state, caller, target).await?;
+    let (_, who, project, summary) = session_target(state, caller, target).await?;
+    deliver_input(state, &who, &project, &summary, text, hangup).await
+}
+
+/// [`send_session_input`] past its resolution: `summary` is the target session of `project`, in
+/// the scope of `who`.
+async fn deliver_input(
+    state: &Arc<DaemonState>,
+    who: &Caller,
+    project: &ProjectSnapshot,
+    summary: &SessionSummary,
+    text: NonEmptyText,
+    hangup: &CancellationToken,
+) -> Result<Value, OpError> {
+    let session = summary.id;
     let confirm = cross_session_policy(
         state,
-        &who,
+        who,
         &Operation::SendSessionInput {
-            session: target,
+            session: SessionRef(session.0),
             text: text.clone(),
         },
     )?;
@@ -1928,7 +1949,7 @@ async fn send_session_input(
             ),
         ));
     }
-    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
+    confirm_session_op(state, who, project, summary, confirm, hangup).await?;
     let pty = running()?;
     if !Arc::ptr_eq(&pty, &asked_about) {
         return Err(not_running(session));
@@ -1940,32 +1961,47 @@ async fn send_session_input(
 }
 
 /// `send_parent_input` (spec 1945, contracts/mcp-neighbourhood.md, D4): the caller's parent and its
-/// target session, refused per the contract's table with nothing typed; then exactly
-/// [`send_session_input`] to that session, so its policy, confirmation, trust check and atomic
-/// submission apply unchanged (FR-008). The reply adds the session reached and the parent's ref.
+/// target session, refused per the contract's table with nothing typed; then exactly what
+/// [`send_session_input`] does with that session ([`deliver_input`]), so its policy, confirmation,
+/// trust check and atomic submission apply unchanged (FR-008). The caller, project and target are
+/// resolved once, from one snapshot. `reached` gets the session and the parent's ref once chosen,
+/// for the audit line; the reply adds both.
 async fn send_parent_input(
     state: &Arc<DaemonState>,
     caller: SessionId,
     text: NonEmptyText,
     hangup: &CancellationToken,
+    reached: &mut Option<(SessionId, String)>,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
-    let (target, parent) = blocking(move || {
-        let project = caller_project(&st, caller)?;
-        parent_session(&project, &st.worktree_parent_views(&project.path), caller)
+    let (who, project, summary, parent) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let views = st.worktree_parent_views(&project.path);
+        let modes = st.session_modes(&project.path);
+        let (target, parent) = parent_session(&project, &views, &modes, caller)?;
+        let summary = project
+            .sessions
+            .iter()
+            .find(|s| s.id == target)
+            .cloned()
+            .expect("parent_session picked a session of this project");
+        Ok((who, project, summary, parent))
     })
     .await?;
-    let mut reply = send_session_input(state, caller, SessionRef(target.0), text, hangup).await?;
-    reply["session"] = json!(target.0.to_string());
+    *reached = Some((summary.id, parent.clone()));
+    let mut reply = deliver_input(state, &who, &project, &summary, text, hangup).await?;
+    reply["session"] = json!(summary.id.0.to_string());
     reply["parent_worktree"] = json!(parent);
     Ok(reply)
 }
 
 /// The session `send_parent_input` from `caller` types into, and its parent worktree's ref, or the
-/// contract's refusal naming the cause (FR-007).
+/// contract's refusal naming the cause (FR-007). Only an AI CLI session is a target: a plain
+/// shell would run the text as a command (research R3).
 fn parent_session(
     project: &ProjectSnapshot,
     parents: &BTreeMap<String, ParentView>,
+    modes: &BTreeMap<SessionId, TerminalMode>,
     caller: SessionId,
 ) -> Result<(SessionId, String), OpError> {
     let undetermined = || {
@@ -1987,12 +2023,16 @@ fn parent_session(
     if !live.contains(own) {
         return Err(undetermined());
     }
+    if own == WorktreeRef::DEFAULT {
+        return Err(OpError::invalid_input(NAMED_DEFAULT_HAS_NO_PARENT));
+    }
     match neighbourhood(&live, parents, Some(own)).parent {
-        Some(ParentSide::Known { name, .. }) => {
-            let dir = (name != WorktreeRef::DEFAULT).then_some(name.as_str());
+        Some(ParentSide::Known { name, root, .. }) => {
+            let dir = (!root).then_some(name.as_str());
             let sessions = project
                 .sessions
                 .iter()
+                .filter(|s| modes.get(&s.id) == Some(&TerminalMode::AiCli))
                 .map(|s| (s.id, s.worktree_dir.as_deref(), &s.lifecycle));
             match parent_target(sessions, dir) {
                 Some(target) => Ok((target, name)),
@@ -2012,9 +2052,15 @@ fn parent_session(
     }
 }
 
+/// Why a session in a live worktree directory named `default` has no parent: the name is not the
+/// project root's.
+const NAMED_DEFAULT_HAS_NO_PARENT: &str =
+    "this session's worktree directory is named \"default\", \
+     which is not the project root, so it has no parent";
+
 /// The session a message to the parent worktree `parent` (`None` is `default`) reaches: the first
 /// `Running` one in `sessions`, which are in the project's catalog order (research R3), so repeated
-/// sends reach the same session.
+/// sends reach the same session. The caller passes only AI CLI sessions.
 fn parent_target<'a>(
     sessions: impl IntoIterator<Item = (SessionId, Option<&'a str>, &'a WireLifecycle)>,
     parent: Option<&str>,
@@ -2376,17 +2422,27 @@ impl Context<'_> {
             });
         }
         let near = neighbourhood(&live, self.parents, own);
-        let entry = |name: &str| {
-            let dir = (name != WorktreeRef::DEFAULT).then_some(name);
-            json!({"ref": name, "sessions": self.rows_in(dir)})
-        };
+        // `dir` is a worktree directory, `None` the project root; a live directory named
+        // `default` is a worktree like any other.
+        let entry = |dir: Option<&str>| json!({"ref": dir.unwrap_or(WorktreeRef::DEFAULT), "sessions": self.rows_in(dir)});
         let (parent, note) = match near.parent {
+            // Only the root, or a live directory named `default`, has no parent here.
             None => (
                 Value::Null,
-                own.is_none().then(|| "default has no parent".to_string()),
+                Some(
+                    match own {
+                        None => "default has no parent",
+                        Some(_) => NAMED_DEFAULT_HAS_NO_PARENT,
+                    }
+                    .to_string(),
+                ),
             ),
-            Some(ParentSide::Known { name, recorded }) => {
-                let mut parent = entry(&name);
+            Some(ParentSide::Known {
+                name,
+                recorded,
+                root,
+            }) => {
+                let mut parent = entry((!root).then_some(name.as_str()));
                 parent["state"] = json!("known");
                 parent["recorded"] = json!(recorded);
                 let note = (!recorded).then(|| {
@@ -2405,14 +2461,14 @@ impl Context<'_> {
             .siblings
             .iter()
             .filter(visible)
-            .map(|n| entry(n))
+            .map(|n| entry(Some(n)))
             .collect();
         let children: Vec<Value> = near
             .children
             .iter()
             .filter(|c| self.scope.allows(&c.name))
             .map(|c| {
-                let mut child = entry(&c.name);
+                let mut child = entry(Some(&c.name));
                 if c.implicit {
                     child["implicit"] = json!(true);
                 }
@@ -2420,7 +2476,7 @@ impl Context<'_> {
             })
             .collect();
         let mut out = json!({
-            "worktree": entry(own.unwrap_or(WorktreeRef::DEFAULT)),
+            "worktree": entry(own),
             "parent": parent,
             "siblings": siblings,
             "children": children,

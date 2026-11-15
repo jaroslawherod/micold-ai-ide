@@ -42,7 +42,8 @@ impl Fixture {
         Self::with(&[], &[]).await
     }
 
-    /// The fixture plus `extra` members `(directory, session, exists on disk)` and `links`.
+    /// The fixture plus `extra` members `(directory, session, exists on disk)` and `links`
+    /// `(child, parent)`; a parent `"default"` is the project root.
     pub(crate) async fn with(extra: &[(&str, u128, bool)], links: &[(&str, &str)]) -> Self {
         let project = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
@@ -76,12 +77,13 @@ impl Fixture {
             .set_cross_session_access(CrossSessionAccess::Auto)
             .unwrap();
         state.refresh_worktrees(project.path());
+        // `"default"` is the project root, as an MCP ref names it.
         for &(child, parent) in LINKS.iter().chain(links) {
-            state.record_worktree_parent(
-                project.path(),
-                child,
-                Some(&ParentChoice::Worktree(parent.into())),
-            );
+            let parent = match parent {
+                "default" => ParentChoice::Default,
+                dir => ParentChoice::Worktree(dir.into()),
+            };
+            state.record_worktree_parent(project.path(), child, Some(&parent));
         }
         let addr = serve_tool_server(&state, store.path().join("mcp")).await;
         Self {

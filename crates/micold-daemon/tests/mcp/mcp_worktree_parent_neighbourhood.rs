@@ -8,9 +8,13 @@
 use crate::mcp_support::{add_worktree, sid};
 use crate::mcp_worktree_parent_visibility::{Fixture, A, B, C, DEFAULT, P, X, Y};
 
+use micold_core::worktree_parent::ParentChoice;
 use serde_json::{json, Value};
 
 const IMPLICIT_NOTE: &str = "no recorded parent: \"default\" is taken as the parent for visibility";
+const NAMED_DEFAULT_NOTE: &str =
+    "this session's worktree directory is named \"default\", which is not the project root, so \
+     it has no parent";
 
 async fn near(f: &Fixture, caller: u128) -> Value {
     f.call(caller, "neighbourhood", json!({})).await
@@ -282,18 +286,41 @@ async fn a_send_from_an_unknown_worktree_is_refused() {
     );
 }
 
-/// A live worktree directory named `default` is not the project root: it has no parent to send to.
+/// A live worktree directory named `default` is not the project root: its own sessions are its
+/// `worktree`, it has no parent, and a send says why.
 #[tokio::test]
-async fn a_send_from_a_worktree_named_default_is_refused() {
+async fn a_worktree_named_default_is_its_own_worktree_and_a_send_from_it_is_refused() {
     let f = Fixture::with(&[("default", 16, true)], &[]).await;
-    assert_eq!(near(&f, 16).await["parent"], Value::Null);
+    let out = near(&f, 16).await;
+    assert_eq!(out["worktree"]["ref"], "default", "{out}");
+    assert_eq!(sessions(&out["worktree"]), [id(16)], "{out}");
+    assert_eq!(out["parent"], Value::Null);
+    assert_eq!(out["note"], NAMED_DEFAULT_NOTE, "{out}");
     let error = send_err(&f, 16).await;
     assert_eq!(error["category"], "invalid_input", "{error}");
+    assert_eq!(error["message"], NAMED_DEFAULT_NOTE, "{error}");
+}
+
+/// A recorded parent that is a live directory named `default` is that worktree: its sessions are
+/// listed, never the project root's, and the root's other children are not siblings. The directory
+/// lists the child back.
+#[tokio::test]
+async fn a_parent_directory_named_default_lists_its_own_sessions() {
+    let f = Fixture::with(&[("default", 16, true), ("K", 17, true)], &[]).await;
+    f.state.record_worktree_parent(
+        f._project.path(),
+        "K",
+        Some(&ParentChoice::Worktree("default".into())),
+    );
+    let out = near(&f, 17).await;
+    assert_eq!(out["parent"]["ref"], "default", "{out}");
+    assert_eq!(out["parent"]["recorded"], true, "{out}");
+    assert_eq!(sessions(&out["parent"]), [id(16)], "{out}");
+    assert_eq!(out["siblings"], json!([]), "{out}");
+    assert_eq!(refs(&near(&f, 16).await["children"]), ["K"]);
+    let root = near(&f, DEFAULT).await;
     assert!(
-        error["message"]
-            .as_str()
-            .unwrap()
-            .contains("no parent could be determined"),
-        "{error}"
+        !refs(&root["children"]).contains(&"K".to_string()),
+        "{root}"
     );
 }

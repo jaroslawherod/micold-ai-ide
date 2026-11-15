@@ -303,15 +303,17 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
     }
 }
 
-/// The target an audit line names for a call with `args`: the session, else the worktree, else
-/// the branch a new worktree is made from, else the reported comment, else `parent` for a send to
-/// the parent, whose session the daemon chooses.
-fn expected_target(args: &Value) -> String {
+/// The target an audit line names for `caller`'s successful call of `tool` with `args`: the
+/// session, else the worktree, else the branch a new worktree is made from, else the reported
+/// comment; for a send to the parent, the session the daemon chose (`default`'s, [`ROOT`]).
+fn expected_target(tool: &str, caller: SessionId, args: &Value) -> String {
+    if tool == "send_parent_input" {
+        return sibling(caller, ROOT).0.to_string();
+    }
     ["session", "worktree", "branch", "comment"]
         .iter()
         .find_map(|k| args[*k].as_str())
-        .or_else(|| args.get("text").map(|_| "parent"))
-        .expect("every call names a session, a worktree, a branch, a comment or a text")
+        .expect("every call names a session, a worktree, a branch or a comment")
         .to_string()
 }
 
@@ -407,7 +409,7 @@ async fn every_successful_mutating_call_writes_one_info_line() {
         assert_eq!(field(line, "outcome"), Some("ok"), "{line}");
         assert_eq!(
             field(line, "target"),
-            Some(expected_target(&args).as_str()),
+            Some(expected_target(tool, caller, &args).as_str()),
             "the line names what {tool} acted on: {line}"
         );
     }
@@ -498,6 +500,59 @@ async fn a_sent_text_never_reaches_the_log() {
     assert!(
         !logged.contains(TEXT_MARKER),
         "a sent text reached the log (FR-018)"
+    );
+}
+
+/// FR-018 for `send_parent_input`: once the parent's session is chosen, the line names it and the
+/// parent's ref, delivered or refused; a send refused before any session is chosen names only
+/// `parent`. The text is in no line of the log.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_text_sent_to_the_parent_never_reaches_the_log_and_the_line_names_the_session() {
+    use micold_core::mcp::policy::CrossSessionAccess;
+
+    let caller = sid(76);
+    let f = fixture(caller).await;
+    let send = json!({"text": TEXT_MARKER});
+    let before = audit_lines(caller).len();
+    // `default`'s session is not running yet: refused before a session is chosen.
+    let result = f.call(caller, "send_parent_input", send.clone()).await;
+    assert_eq!(result["isError"], json!(true), "{result}");
+    f.prepare("send_parent_input", caller).await;
+    let result = f.call(caller, "send_parent_input", send.clone()).await;
+    assert_eq!(result["isError"], json!(false), "{result}");
+    f.state
+        .set_cross_session_access(CrossSessionAccess::Off)
+        .unwrap();
+    let result = f.call(caller, "send_parent_input", send).await;
+    assert_eq!(result["isError"], json!(true), "{result}");
+
+    let lines: Vec<String> = audit_lines(caller)
+        .split_off(before)
+        .into_iter()
+        .filter(|line| field(line, "op") == Some("send_parent_input"))
+        .collect();
+    let [unchosen, delivered, refused] = lines.as_slice() else {
+        panic!("one line per send: {lines:#?}")
+    };
+    assert_eq!(field(unchosen, "outcome"), Some("conflict"), "{unchosen}");
+    assert_eq!(field(unchosen, "target"), Some("parent"), "{unchosen}");
+    assert_eq!(field(unchosen, "parent"), None, "{unchosen}");
+    assert_eq!(field(delivered, "outcome"), Some("ok"), "{delivered}");
+    assert_eq!(
+        field(refused, "outcome"),
+        Some("refused_by_policy"),
+        "{refused}"
+    );
+    let root = sibling(caller, ROOT).0.to_string();
+    for line in [delivered, refused] {
+        assert_eq!(field(line, "op"), Some("send_parent_input"), "{line}");
+        assert_eq!(field(line, "target"), Some(root.as_str()), "{line}");
+        assert_eq!(field(line, "parent"), Some("default"), "{line}");
+    }
+    let logged = String::from_utf8_lossy(&log().lock().unwrap()).into_owned();
+    assert!(
+        !logged.contains(TEXT_MARKER),
+        "a text sent to the parent reached the log (FR-018)"
     );
 }
 

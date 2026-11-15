@@ -358,7 +358,8 @@ impl Operation {
     pub fn audit_target(&self) -> String {
         match self {
             Operation::Whoami | Operation::Neighbourhood | Operation::ListBranches => String::new(),
-            // The session is chosen later, by the daemon; the line never holds the text.
+            // The session is chosen later, by the daemon, which names it here once chosen (with a
+            // `parent` field); the line never holds the text.
             Operation::SendParentInput { .. } => "parent".to_string(),
             Operation::ListWorktrees { parent } => parent
                 .as_ref()

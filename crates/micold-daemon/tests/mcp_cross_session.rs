@@ -48,6 +48,8 @@ const IDLE: u128 = 1;
 const X: u128 = 9;
 /// A session no project has.
 const UNKNOWN: u128 = 999;
+/// A plain shell in worktree `b`, ahead of any session created there (only in [`Sandbox::with`]).
+const SHELL: u128 = 20;
 
 /// What an agent sends; it must reach S2 and nothing else.
 const TEXT: &str = "run the tests";
@@ -98,6 +100,11 @@ struct Sandbox {
 
 impl Sandbox {
     async fn new() -> Self {
+        Self::with(Vec::new()).await
+    }
+
+    /// [`Self::new`] with `extra` sessions after S1 in the project's catalog.
+    async fn with(extra: Vec<micold_core::session::Session>) -> Self {
         let bin = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
@@ -127,7 +134,7 @@ impl Sandbox {
                 (
                     project.path().to_path_buf(),
                     true,
-                    vec![
+                    [
                         session(sid(IDLE), None, TerminalMode::AiCli, AiCli::ClaudeCode),
                         session(
                             sid(S1),
@@ -135,7 +142,10 @@ impl Sandbox {
                             TerminalMode::AiCli,
                             AiCli::ClaudeCode,
                         ),
-                    ],
+                    ]
+                    .into_iter()
+                    .chain(extra)
+                    .collect(),
                 ),
                 (
                     other.path().to_path_buf(),
@@ -1103,6 +1113,60 @@ async fn a_running_session_outside_the_scope_is_never_reached() {
     assert_eq!(error["category"], "conflict", "{error}");
     assert!(
         error["message"].as_str().unwrap().contains("\"b\""),
+        "{error}"
+    );
+    s.nothing_typed().await;
+}
+
+/// Research R3: a plain shell listed first in the parent worktree is never the target; the text
+/// reaches the parent's AI CLI session, and nothing is typed into the shell (where Enter would run it).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_shell_ahead_of_the_parents_ai_cli_session_is_never_reached() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::with(vec![session(
+        sid(SHELL),
+        Some("b"),
+        TerminalMode::Regular,
+        AiCli::ClaudeCode,
+    )])
+    .await;
+    s.link_caller_to("b");
+    s.child_ok("start_session", json!({"session": reference(sid(SHELL))}))
+        .await;
+    let shell_runs = || {
+        s.state
+            .primary_pty(sid(SHELL))
+            .is_some_and(|pty| pty.is_alive())
+    };
+    assert!(
+        wait_until(BOUND, shell_runs).await,
+        "the shell never started"
+    );
+    let ai = s.start_in("b", true).await;
+
+    let out = s.child_ok("send_parent_input", to_parent()).await;
+    assert_eq!(out, reached(ai, "b"));
+    s.typed_becomes(&format!("{TEXT}\n")).await;
+    assert_eq!(s.shown(sid(SHELL)), 0, "{:?}", s.screen(sid(SHELL)));
+}
+
+/// A live worktree directory literally named `default` that is the recorded parent is that
+/// worktree, never the project root: with only a root session running, nothing is typed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_parent_directory_named_default_is_not_the_project_root() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    add_worktree(s._project.path(), "default");
+    s.state.refresh_worktrees(s._project.path());
+    s.link_caller_to("default");
+    s.child_ok("start_session", json!({"session": reference(sid(IDLE))}))
+        .await;
+    s.ready(sid(IDLE)).await;
+
+    let error = s.child_err("send_parent_input", to_parent()).await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    assert!(
+        error["message"].as_str().unwrap().contains("\"default\""),
         "{error}"
     );
     s.nothing_typed().await;

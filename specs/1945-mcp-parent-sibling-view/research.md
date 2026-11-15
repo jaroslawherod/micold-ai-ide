@@ -16,8 +16,9 @@ the rule.
 argument is a typed `SessionRef` (UUID) validated by the parser.
 
 ## R3. Which parent session is the target
-**Decision**: the first `Running` session of the parent worktree in `project.sessions`, i.e. catalog
-order. That order is creation order except that a resumed session is pushed at the end
+**Decision**: the first `Running` AI CLI session (terminal mode `AiCli`) of the parent worktree in
+`project.sessions`, i.e. catalog order. A plain shell session is skipped: the submission's Enter would
+run the text as a command there, and the parent agent would never see it. That order is creation order except that a resumed session is pushed at the end
 (`catalog.rs` `replace_session`) and an adopted one is appended when discovered; it persists across
 restart, so the choice is stable between calls. No id tie-break: the order is total. `Session` has no
 creation timestamp; adding one needs a storage migration for no gain. Spec FR-006 and Assumptions
