@@ -980,9 +980,14 @@ impl Shell {
 /// The value of the line `key=value` a [`Shell::capture`] printed; `None` when there is none.
 pub fn field(seen: &str, key: &str) -> Option<String> {
     let prefix = format!("{key}=");
+    // A line may start with the prompt (`$ KEY=value`) when the command was typed before a
+    // fresh shell printed it; the echo of the command never holds `KEY=` (it is typed split).
     seen.lines()
-        .filter_map(|l| l.trim().strip_prefix(&prefix))
-        .map(str::to_string)
+        .filter_map(|l| {
+            let l = l.trim();
+            let at = l.find(&prefix)?;
+            (at == 0 || l[..at].ends_with(' ')).then(|| l[at + prefix.len()..].to_string())
+        })
         .next_back()
 }
 
