@@ -5455,13 +5455,21 @@ impl DaemonState {
         dir_name: &str,
         parent: Option<&micold_core::worktree_parent::ParentChoice>,
     ) {
-        let result = self
-            .lock()
-            .catalog
-            .record_worktree_parent(project, dir_name, parent);
-        if let Err(e) = result {
+        if let Err(e) = self.try_record_worktree_parent(project, dir_name, parent) {
             tracing::warn!(%e, "recording the worktree's parent failed");
         }
+    }
+
+    /// [`Self::record_worktree_parent`], with the failure returned for the caller to report.
+    pub fn try_record_worktree_parent(
+        &self,
+        project: &Path,
+        dir_name: &str,
+        parent: Option<&micold_core::worktree_parent::ParentChoice>,
+    ) -> std::io::Result<()> {
+        self.lock()
+            .catalog
+            .record_worktree_parent(project, dir_name, parent)
     }
 
     /// A worktree of `project` was deleted: its children become removed, its own entries go

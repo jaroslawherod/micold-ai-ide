@@ -50,8 +50,8 @@ description: "Task list for MCP parent/sibling view, neighbourhood tool and pare
 **Goal**: the parent link exists before the child's session starts; the supervisor skill points workers at the parent route.
 
 - [ ] T015 [US4] Test (failing) in `crates/micold-daemon/tests/mcp_cross_session.rs`: the new session's stub `claude` snapshots the parent link at start (catalog/app-state file or daemon query) and writes it into its marker; assert the marker holds the link (SC-004, US4.1)
-- [ ] T016 [US4] Test in `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs`: a create that fails before the worktree exists (missing CLI) records no link (US4.2); a session create that fails after the worktree exists keeps the link (FR-009); an app-path create records none
-- [ ] T017 [US4] Add `parent: Option<&ParentChoice>` to `StartDefinition` in `crates/micold-daemon/src/ops.rs`, record only `if let Some(parent)` between worktree create and session create; remove the post-call record for the session branch in `create_with_optional_session`; `crates/micold-daemon/src/server.rs` passes `parent: None` (D5)
+- [x] T016 [US4] (moved to M1, review A-F1) Test in `crates/micold-daemon/tests/mcp_create_session.rs` (it holds the stub-CLI sandbox `tests/mcp` lacks): a create that fails before the worktree exists (missing CLI) records no link (US4.2); a session create that fails after the worktree exists keeps the link (FR-009); an app-path create records none
+- [x] T017 [US4] (moved to M1, review A-F1; a failed link write is a `service_error` naming the worktree, no session started) Add `parent: Option<&ParentChoice>` to `StartDefinition` in `crates/micold-daemon/src/ops.rs`, record only `if let Some(parent)` between worktree create and session create; remove the post-call record for the session branch in `create_with_optional_session`; `crates/micold-daemon/src/server.rs` passes `parent: None` (D5)
 - [ ] T018 [US4] User guide: say the link is recorded before the session starts in `docs/user-guide/agent-tools.md`
 - [ ] T019 [US5] Tell workers to ask their parent with `send_parent_input` in `.claude/skills/autopilot-supervisor/SKILL.md`; add a grep check for the three items (neighbourhood tool, parent route, implicit parent) across guide and skill
 - [ ] T020 [US5] Add a note in `specs/1857-worktree-parent/spec.md` that 1945 amends FR-003 and FR-015
@@ -74,7 +74,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Unparented sessions see `default` and siblings 🎯 MVP
 
-- **Tasks**: T001–T005
+- **Tasks**: T001–T005, T016, T017
 - **Deliverable**: a session in a hand-made worktree lists `default`'s and its siblings' sessions and worktrees, and a removed-worktree session sees only itself.
 - **Satisfies**: US1 acceptance scenarios 1–5; FR-001, FR-002; SC-001, SC-005
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-core worktree_parent` and `scripts/build-lock.sh cargo test -p micold-daemon --test mcp worktree_parent`

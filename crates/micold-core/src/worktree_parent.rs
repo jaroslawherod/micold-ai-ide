@@ -14,7 +14,7 @@ pub type Ids = BTreeMap<String, WorktreeId>;
 pub type Links = BTreeMap<WorktreeId, ParentLink>;
 
 /// The name `default` has as a parent, in ref form.
-const DEFAULT_NAME: &str = "default";
+const DEFAULT_NAME: &str = crate::mcp::tools::WorktreeRef::DEFAULT;
 
 /// A parent as the creator names it: the project root, or a worktree by directory name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,12 +191,15 @@ pub fn neighbourhood(
         Some(v) if v.state == ParentState::Known => Some((v.name.as_str(), true)),
         Some(_) => None,
     };
+    // A live directory named `default` is not the project root: it has no parent and no siblings,
+    // and is nobody's child.
     let children_of = |name: &str| {
         live.iter()
+            .filter(|d| d.as_str() != DEFAULT_NAME)
             .filter(|d| parent_of(d).is_some_and(|(p, _)| p == name))
             .map(|d| Child {
                 name: d.clone(),
-                implicit: parent_of(d).is_some_and(|(_, recorded)| !recorded),
+                implicit: name == DEFAULT_NAME && parent_of(d).is_some_and(|(_, rec)| !rec),
             })
             .collect()
     };
@@ -207,7 +210,7 @@ pub fn neighbourhood(
             children: children_of(DEFAULT_NAME),
         };
     };
-    if !live.contains(own) {
+    if !live.contains(own) || own == DEFAULT_NAME {
         return Neighbourhood::default();
     }
     let (parent, siblings) = match parent_of(own) {
@@ -217,7 +220,11 @@ pub fn neighbourhood(
                 recorded,
             },
             live.iter()
-                .filter(|d| d.as_str() != own && parent_of(d).is_some_and(|(p, _)| p == name))
+                .filter(|d| {
+                    d.as_str() != own
+                        && d.as_str() != DEFAULT_NAME
+                        && parent_of(d).is_some_and(|(p, _)| p == name)
+                })
                 .cloned()
                 .collect(),
         ),
@@ -228,14 +235,10 @@ pub fn neighbourhood(
             Vec::new(),
         ),
     };
-    let mut children: Vec<Child> = children_of(own);
-    for c in &mut children {
-        c.implicit = false;
-    }
     Neighbourhood {
         parent: Some(parent),
         siblings,
-        children,
+        children: children_of(own),
     }
 }
 
@@ -435,5 +438,16 @@ mod tests {
     fn a_worktree_that_is_not_live_has_an_empty_neighbourhood() {
         let n = neighbourhood(&live(&["a"]), &BTreeMap::new(), Some("ghost"));
         assert_eq!(n, Neighbourhood::default());
+    }
+
+    #[test]
+    fn a_live_directory_named_default_is_not_the_project_root() {
+        let l = live(&["a", "default"]);
+        let own = neighbourhood(&l, &BTreeMap::new(), Some("default"));
+        assert_eq!(own, Neighbourhood::default());
+        let a = neighbourhood(&l, &BTreeMap::new(), Some("a"));
+        assert!(a.siblings.is_empty(), "{a:?}");
+        let root = neighbourhood(&l, &BTreeMap::new(), None);
+        assert_eq!(root.children, [child("a", true)]);
     }
 }

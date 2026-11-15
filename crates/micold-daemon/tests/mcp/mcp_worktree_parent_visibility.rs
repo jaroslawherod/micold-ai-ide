@@ -166,16 +166,44 @@ async fn siblings_are_mutual_between_a_recorded_and_an_implicit_default_parent()
     assert_eq!(row["worktree"], "D", "{row}");
 }
 
+/// `gone` is a child of `P` with a sibling `sib` and a child `kid`; its directory is removed
+/// behind the daemon's back and the daemon notices at its next refresh.
 #[tokio::test]
 async fn a_caller_whose_worktree_was_removed_sees_only_itself() {
-    let f = Fixture::with(&[("gone", 16, false)], &[]).await;
+    let f = Fixture::with(
+        &[("gone", 16, true), ("sib", 17, true), ("kid", 18, true)],
+        &[("gone", "P"), ("sib", "P"), ("kid", "gone")],
+    )
+    .await;
+    assert!(f.worktrees(16).await.contains(&"P".to_string()));
+    assert!(f.worktrees(16).await.contains(&"kid".to_string()));
+    let path = f._project.path().join(".claude/worktrees/gone");
+    let status = std::process::Command::new("git")
+        .current_dir(f._project.path())
+        .args(["worktree", "remove", "--force", path.to_str().unwrap()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    f.state.refresh_worktrees(f._project.path());
     assert!(f.worktrees(16).await.is_empty());
     assert_eq!(f.session_worktrees(16).await, ["gone"]);
-    assert_eq!(
-        f.error_category(16, "get_session", session_arg(DEFAULT))
-            .await,
-        "not_found"
-    );
+    for other in [DEFAULT, P, 17, 18] {
+        assert_eq!(
+            f.error_category(16, "get_session", session_arg(other))
+                .await,
+            "not_found",
+            "{other}"
+        );
+    }
+}
+
+/// The caller's worktree is on disk and linked but not in the daemon's cached list: fail closed.
+#[tokio::test]
+async fn a_caller_whose_worktree_is_missing_from_the_cached_list_sees_only_itself() {
+    let f = Fixture::with(&[("late", 16, false)], &[("late", "P")]).await;
+    add_worktree(f._project.path(), "late");
+    assert!(f.worktrees(16).await.is_empty());
+    assert_eq!(f.session_worktrees(16).await, ["late"]);
     assert_eq!(
         f.error_category(16, "get_session", session_arg(P)).await,
         "not_found"

@@ -1500,26 +1500,26 @@ async fn create_with_optional_session(
         // A terminal without bracketed paste still gets the prompt, as one plain submission.
         require_bracketed: false,
     });
-    let dir_name = names.dir_name.clone();
     let created = ops::create_worktree_with_session(
         state,
         project.to_path_buf(),
         names,
         mode,
         None,
-        ops::StartDefinition { cli, prompt: first },
+        ops::StartDefinition {
+            cli,
+            prompt: first,
+            parent,
+        },
     )
     .await;
-    // The worktree exists once the create succeeded, with or without its session (spec 1857).
-    if !matches!(
-        created,
-        Err(ops::WorktreeStartFailure::CliUnavailable(_) | ops::WorktreeStartFailure::Create(_))
-    ) {
-        state.record_worktree_parent(project, &dir_name, parent);
-    }
     let (session, typed, setup) = created.map_err(|failure| match failure {
         ops::WorktreeStartFailure::CliUnavailable(why) => OpError::service_error(why),
         ops::WorktreeStartFailure::Create(failure) => create_failure(scope, failure),
+        ops::WorktreeStartFailure::Link { dir_name, error } => OpError::service_error(format!(
+            "worktree \"{dir_name}\" was created, but its parent link could not be recorded: \
+             {error}; it has no session, and create_session starts one"
+        )),
         ops::WorktreeStartFailure::Session { dir_name, error } => OpError::service_error(format!(
             "worktree \"{dir_name}\" was created, but its session could not be: {error}; it has \
              no session, and create_session starts one"

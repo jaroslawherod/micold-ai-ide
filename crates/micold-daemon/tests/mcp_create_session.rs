@@ -1083,3 +1083,46 @@ async fn a_default_caller_creates_the_worktree_and_its_session_in_it() {
         .unwrap();
     assert_eq!(summary.worktree_dir.as_deref(), Some("feat-q"));
 }
+
+// --- Feature 1945, US4: the parent link is recorded before the session starts (FR-009) ------------
+
+/// A create with a session records the explicit parent link, and the worktree's own session runs
+/// only after it (the link is in the catalog when `create_worktree` replies, with the session).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_create_with_a_session_records_the_parent_link() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_first_prompt_bound(READY_BOUND);
+    let out = s
+        .worktree_ok(
+            sid(3),
+            json!({"branch": "feat-l", "ai_cli": "copilot", "parent": "default"}),
+        )
+        .await;
+    assert_eq!(out["parent"], "default", "{out}");
+    let views = s.state.worktree_parent_views(s.project.path());
+    let view = views.get("feat-l").expect("the link is recorded");
+    assert_eq!(view.name, "default");
+}
+
+/// A create that fails before the worktree exists records no link and mints no id.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_create_that_fails_before_the_worktree_exists_records_no_link() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    std::fs::remove_file(s.bin.path().join("pi")).unwrap();
+    let error = s
+        .worktree_err(json!({
+            "branch": "feat-n", "ai_cli": "pi", "prompt": PROMPT, "parent": "default"
+        }))
+        .await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    assert!(!s
+        .state
+        .worktree_parent_views(s.project.path())
+        .contains_key("feat-n"));
+    assert!(!s
+        .state
+        .worktree_ids(s.project.path())
+        .contains_key("feat-n"));
+}

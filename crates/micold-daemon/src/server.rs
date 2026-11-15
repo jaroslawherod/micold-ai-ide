@@ -2100,6 +2100,7 @@ where
                                     asked,
                                     require_bracketed: false,
                                 }),
+                                parent: None,
                             },
                         )
                         .await
@@ -2116,6 +2117,14 @@ where
                                 kind: ErrorKind::Refused,
                                 message: why,
                                 detail: None,
+                            }
+                        }
+                        Err(ops::WorktreeStartFailure::Link { dir_name, error }) => {
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::IoFailed,
+                                message: format!("the worktree's parent was not recorded: {error}"),
+                                detail: Some(dir_name),
                             }
                         }
                         Err(ops::WorktreeStartFailure::Session { dir_name, error }) => {
