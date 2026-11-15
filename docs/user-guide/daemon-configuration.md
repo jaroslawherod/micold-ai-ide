@@ -268,6 +268,29 @@ running and producing output, clients stay connected, and the daemon logs `orche
 once. When the orchestrator is back, the daemon is listed `online` again within 16 seconds, with no
 restart.
 
+A daemon the orchestrator refuses keeps trying, politely: it waits 15 seconds (plus up to 20 %) before
+each new attempt, whatever the reason, and never touches another daemon's link. The reasons are:
+
+| Reason | What it means | What to do |
+|---|---|---|
+| `refused-version-mismatch` | the daemon and the orchestrator speak different protocol versions; the orchestrator lists the daemon `needs-update` | upgrade the older side; the daemon links on its next attempt |
+| `refused-already-linked` | another link for the same daemon id is open | give each daemon its own `[daemon] id`; the first link is not disturbed |
+| `refused-hello` | the orchestrator accepted the announcement and then refused the handshake | the detail names why (for example, different builds) |
+
+A link that was up and is lost is dialled again after one second, then 2, 4, 8 and 15 seconds.
+
+To see where the link stands, run `micold-daemon remote status` on the daemon's machine. Its JSON line
+has a `link` object (absent when `[orchestrator_link]` is not enabled):
+
+```json
+"link": {"state": "refused-version-mismatch", "since": 1763200000, "detail": "daemon hostbox speaks protocol version 49; this orchestrator speaks 50"}
+```
+
+`state` is `not-linked`, `linking`, `linked` or one of the refusal reasons above; `since` is when the
+link entered it (Unix seconds); `detail` is the orchestrator's sentence for a refusal. The same line in
+words goes to stderr, for example `orchestrator link: refused-already-linked: a link for daemon hostbox is
+already open`. The daemon's log has one line each time the state changes, never one per retry.
+
 Rule:
 
 - **L1**: `orchestrator_link.socket` is not empty. Reported at the value.

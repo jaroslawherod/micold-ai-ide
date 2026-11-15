@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::argv::{self, Reach};
 use super::mismatch::ReplaceOffer;
 use super::provision::{ProvisionOptions, SshRunner};
+use crate::orchestrator::LinkStatus;
 
 /// The shape version of [`RemoteStatus`]; a reader that meets another one believes nothing of it.
 pub const STATUS_VERSION: u32 = 1;
@@ -40,6 +41,34 @@ pub struct RemoteStatus {
     pub running_sessions: u32,
     /// The endpoint it listens on.
     pub endpoint: String,
+    /// Where its orchestrator link stands (#1725, FR-012); absent when `[orchestrator_link]` is
+    /// not enabled, and in a file an older build wrote.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<LinkStatusReport>,
+}
+
+/// The `link` object of `status.json`: `{ "state", "since", "detail" }`. `state` is a word, not
+/// an enum, so a reader meets a newer build's state without refusing the whole file (and with it
+/// the replace offer).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkStatusReport {
+    /// [`LinkStatus::word`]: `not-linked`, `linking`, `linked` or `refused-<reason>`.
+    pub state: String,
+    /// When the link entered this state, in Unix seconds.
+    pub since: u64,
+    /// The orchestrator's refusal sentence; empty for every other state.
+    pub detail: String,
+}
+
+impl LinkStatusReport {
+    /// The report of `status`, entered at `since`, with the orchestrator's `detail`.
+    pub fn new(status: &LinkStatus, since: u64, detail: &str) -> Self {
+        Self {
+            state: status.word().to_owned(),
+            since,
+            detail: detail.to_owned(),
+        }
+    }
 }
 
 impl RemoteStatus {
@@ -152,6 +181,88 @@ mod tests {
     fn json_round_trips() {
         let status = RemoteStatus::parse(&json(2)).unwrap();
         assert_eq!(RemoteStatus::parse(&status.to_json()), Some(status));
+    }
+
+    #[test]
+    fn the_link_round_trips_as_state_since_and_detail() {
+        let mut status = RemoteStatus::parse(&json(0)).unwrap();
+        status.link = Some(LinkStatusReport {
+            state: "refused-version-mismatch".into(),
+            since: 1_700_000_000,
+            detail: "daemon hostbox speaks protocol version 49".into(),
+        });
+        let text = status.to_json();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            value["link"],
+            serde_json::json!({
+                "state": "refused-version-mismatch",
+                "since": 1_700_000_000_u64,
+                "detail": "daemon hostbox speaks protocol version 49",
+            })
+        );
+        assert_eq!(RemoteStatus::parse(&text), Some(status));
+    }
+
+    #[test]
+    fn a_file_without_a_link_still_parses_and_none_writes_no_field() {
+        assert_eq!(
+            STATUS_VERSION, 1,
+            "the field is additive: no new shape version"
+        );
+        let status = RemoteStatus::parse(&json(1)).expect("an older file parses");
+        assert_eq!(status.link, None);
+        assert!(
+            !status.to_json().contains("\"link\""),
+            "{}",
+            status.to_json()
+        );
+    }
+
+    #[test]
+    fn an_unknown_link_state_is_kept_not_refused() {
+        let text = json(0).replace(
+            "\"pid\"",
+            r#""link":{"state":"from-the-future","since":5,"detail":""},"pid""#,
+        );
+        let status = RemoteStatus::parse(&text).expect("a newer state still parses");
+        assert_eq!(status.link.unwrap().state, "from-the-future");
+        assert_eq!(offer_of(&text), ReplaceOffer::Available);
+    }
+
+    #[test]
+    fn a_link_status_reports_its_state_word() {
+        use crate::orchestrator::{LinkStatus, RefuseReason};
+        let report = LinkStatusReport::new(
+            &LinkStatus::Refused(RefuseReason::AlreadyLinked),
+            7,
+            "a link for daemon hostbox is already open",
+        );
+        assert_eq!(report.state, "refused-already-linked");
+        assert_eq!(
+            (report.since, report.detail.as_str()),
+            (7, "a link for daemon hostbox is already open")
+        );
+        let states: Vec<_> = [
+            LinkStatus::NotLinked,
+            LinkStatus::Linking,
+            LinkStatus::Linked,
+            LinkStatus::Refused(RefuseReason::VersionMismatch),
+            LinkStatus::HelloRefused("no".into()),
+        ]
+        .iter()
+        .map(|s| LinkStatusReport::new(s, 0, "").state)
+        .collect();
+        assert_eq!(
+            states,
+            [
+                "not-linked",
+                "linking",
+                "linked",
+                "refused-version-mismatch",
+                "refused-hello"
+            ]
+        );
     }
 
     struct Fake {
