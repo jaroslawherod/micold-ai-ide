@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Check the Helm chart deploy/helm/micold with no cluster (#1981, FR-005, SC-004).
 #
-#   chart-check.sh            helm lint and kubeconform over the default values and every
-#                             ci/*.yaml, then scripts/tests/chart-conformance.test.sh
+#   chart-check.sh            helm lint and kubeconform with every ci/*.yaml (ci/default.yaml is
+#                             the defaults), then scripts/tests/chart-conformance.test.sh
 #   chart-check.sh --image    build Dockerfile.orchestrator and smoke-run it as UID 65532 on a
 #                             read-only root (FR-001); needs docker
 #
@@ -17,8 +17,12 @@ set -euo pipefail
 
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
+# The smoke container, removed on exit whichever way the script ends.
+smoke_id=""
+remove_smoke() { [ -z "$smoke_id" ] || docker rm -f "$smoke_id" >/dev/null 2>&1 || true; }
+
 image_smoke() {
-  local tag="${MICOLD_ORCHESTRATOR_IMAGE:-ghcr.io/jaroslawherod/micold-orchestrator:dev}" id
+  local tag="${MICOLD_ORCHESTRATOR_IMAGE:-ghcr.io/jaroslawherod/micold-orchestrator:dev}"
   command -v docker >/dev/null 2>&1 || { echo "chart-check: --image needs docker" >&2; exit 1; }
   [ -f "$ROOT/Dockerfile.orchestrator" ] || { echo "chart-check: no $ROOT/Dockerfile.orchestrator" >&2; exit 1; }
   echo "== docker build -f Dockerfile.orchestrator -t $tag"
@@ -39,15 +43,15 @@ image_smoke() {
   echo "ok    entrypoint is micold-daemon orchestrator"
 
   # As the chart runs it: read-only root, the data and socket paths on writable mounts only.
-  id="$(docker run -d --read-only --user 65532:65532 --cap-drop ALL --security-opt no-new-privileges \
+  trap remove_smoke EXIT
+  smoke_id="$(docker run -d --read-only --user 65532:65532 --cap-drop ALL --security-opt no-new-privileges \
     --tmpfs /var/lib/micold:uid=65532,gid=65532 --tmpfs /run/micold:uid=65532,gid=65532 --tmpfs /tmp \
     "$tag" --data-dir=/var/lib/micold --socket=/run/micold/orchestrator.sock)"
-  trap 'docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
   sleep 3
   local running
-  running="$(docker inspect -f '{{.State.Running}}' "$id" || echo unknown)"
+  running="$(docker inspect -f '{{.State.Running}}' "$smoke_id" || echo unknown)"
   if [ "$running" != true ]; then
-    docker logs "$id" >&2 || true
+    docker logs "$smoke_id" >&2 || true
     echo "chart-check: the orchestrator exited instead of serving as UID 65532 on a read-only root" >&2
     exit 1
   fi
@@ -73,17 +77,19 @@ done
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-# One run per values set: the defaults (unless ci/default.yaml stands for them), then each ci/*.yaml.
+# One run per values file under ci/; ci/default.yaml (`{}`) is the chart's defaults, and required.
+[ -f "$CHART/ci/default.yaml" ] || {
+  echo "chart-check: $CHART/ci/default.yaml is missing (the defaults' values set, '{}')" >&2
+  exit 1
+}
 sets=()
-[ -e "$CHART/ci/default.yaml" ] || sets=(default)
 for f in "$CHART"/ci/*.yaml; do
-  [ -e "$f" ] && sets+=("ci/$(basename "$f")")
+  sets+=("ci/$(basename "$f")")
 done
 
 failed=0
 for set in "${sets[@]}"; do
-  args=()
-  [ "$set" = default ] || args=(-f "$CHART/$set")
+  args=(-f "$CHART/$set")
   echo "== $set"
   if ! helm lint --strict "$CHART" "${args[@]}"; then
     echo "chart-check: helm lint failed with $set" >&2

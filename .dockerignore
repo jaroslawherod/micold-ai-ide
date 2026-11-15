@@ -13,4 +13,4 @@ evals
 *.whl
 rust-toolchain.toml
 # Local secrets, gitignored too: never in a build context.
-.env*
+**/.env*

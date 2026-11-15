@@ -185,7 +185,12 @@ fi
 if render norepo --set image.repository=; then
   fail "an empty image.repository must be refused"
 else
-  ok "an empty image.repository is refused"
+  check "an empty image.repository is refused by name" "$work/norepo.err" "'/image/repository'"
+fi
+if render webrepooff --set web.image.repository=; then
+  ok "an empty web.image.repository is fine while web is off"
+else
+  fail "an empty web.image.repository is fine while web is off: $(cat "$work/webrepooff.err")"
 fi
 if render unknown --set database.url=x; then
   fail "an unknown value name must be refused by the schema"

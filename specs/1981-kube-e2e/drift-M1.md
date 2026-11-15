@@ -31,11 +31,12 @@ Recorded against `scripts/autopilot/plan-drift.sh specs/1981-kube-e2e M1`.
 
 - `.gitattributes` `micold-kube` also marks what the image is built from
   (`crates/micold-core/**`, `crates/micold-daemon/**`, `Cargo.toml`, `Cargo.lock`,
-  `.cargo/config.toml`, `.dockerignore`), the workflow and the two job-only tests, so a change
+  `.cargo/config.toml`, `.dockerignore`, `CHANGELOG.md` which core compiles in, and every
+  `crates/*/Cargo.toml`, which the workspace build reads), the workflow and the two job-only tests, so a change
   that breaks the image or the job runs `kube-chart` on its PR instead of first on main.
 - `scripts/gate.sh` runs `chart-check.sh` with `CHART_CHECK_CONFORMANCE=0` (the test loop runs the
-  conformance test), and `chart-check.sh` skips the implicit default set when `ci/default.yaml`
-  exists, so the gate renders each set once.
+  conformance test). `chart-check.sh` checks the `ci/*.yaml` sets only and requires
+  `ci/default.yaml` (`{}`) to stand for the defaults, so each set renders once.
 
 ## MISSING (planned, no change in the diff)
 

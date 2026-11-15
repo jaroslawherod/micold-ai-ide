@@ -29,6 +29,7 @@ new_chart() {
   mkdir -p "$1/templates" "$1/ci"
   printf 'apiVersion: v2\nname: fixture\nversion: 0.1.0\nappVersion: "1"\n' >"$1/Chart.yaml"
   printf 'replicas: 1\n' >"$1/values.yaml"
+  printf '{}\n' >"$1/ci/default.yaml"
   printf 'replicas: 2\n' >"$1/ci/two.yaml"
   printf '%s\n' "$2" >"$1/templates/deployment.yaml"
 }
@@ -54,6 +55,13 @@ new_chart "$work/good" "$deployment"
 out="$(CHART="$work/good" CHART_CHECK_CONFORMANCE=0 "$SCRIPT" 2>&1)"
 rc=$?
 if [ "$rc" -eq 0 ]; then ok "a valid chart passes"; else fail "a valid chart passes (exit $rc: $out)"; fi
+
+# No ci/default.yaml: the defaults would go unchecked, so the check refuses.
+new_chart "$work/nodefault" "$deployment"
+rm "$work/nodefault/ci/default.yaml"
+out="$(CHART="$work/nodefault" CHART_CHECK_CONFORMANCE=0 "$SCRIPT" 2>&1)"
+rc=$?
+if [ "$rc" -ne 0 ] && grep -q 'ci/default.yaml' <<<"$out"; then ok "a chart without ci/default.yaml is refused"; else fail "a chart without ci/default.yaml is refused (exit $rc: $out)"; fi
 
 # A template error: helm lint fails.
 new_chart "$work/syntax" "${deployment/\{\{ .Values.replicas \}\}/\{\{ .Values.replicas }"

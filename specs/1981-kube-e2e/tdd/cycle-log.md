@@ -75,3 +75,13 @@ Append only. Newest last.
   Service-selector check, classify cases for the image inputs, ci.yml and job-only tests.
 - green: `orchestrator::config` 4 passed; `chart-conformance: all 41 checks passed`;
   `classify-change: all 90 cases passed`; `chart-check: all 3 cases passed`.
+
+### Review A round 2 fixes
+
+- `chart-check.sh --image` cleanup trap now reads a global (`smoke_id`); exercised with a stub
+  `docker` on PATH: exit 0 and one `docker rm -f` of the smoke container.
+- `chart-check.test.sh` case "a chart without ci/default.yaml is refused"; conformance checks the
+  empty-repository error names `/image/repository` and that an empty `web.image.repository` renders
+  while web is off; classify cases for CHANGELOG.md and a member manifest.
+- green: `chart-conformance: all 42 checks passed`, `chart-check: all 4 cases passed`,
+  `classify-change: all 92 cases passed`, `install-kube-tools: all 7 cases passed`.

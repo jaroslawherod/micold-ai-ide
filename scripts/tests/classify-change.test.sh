@@ -302,6 +302,8 @@ kube_case "daemon source (image input)"  true  crates/micold-daemon/src/a.rs
 kube_case "core source (image input)"    true  crates/micold-core/src/a.rs
 kube_case "Cargo.lock (image input)"     true  Cargo.lock
 kube_case ".dockerignore"                true  .dockerignore
+kube_case "CHANGELOG.md (compiled in)"   true  CHANGELOG.md
+kube_case "member manifest"              true  crates/micold-client/Cargo.toml
 kube_case "ci.yml itself"                true  .github/workflows/ci.yml
 kube_case "client UI source"             false crates/micold-client/src/ui/a.rs
 kube_case "other deploy file"            false deploy/README.md

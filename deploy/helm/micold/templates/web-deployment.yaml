@@ -1,4 +1,7 @@
 {{- if .Values.web.enabled }}
+{{- if not .Values.web.image.repository }}
+{{- fail "web.enabled=true needs web.image.repository" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

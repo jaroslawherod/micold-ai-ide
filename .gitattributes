@@ -197,6 +197,8 @@ crates/micold-daemon/**               micold-kube
 /Cargo.lock                           micold-kube
 /.cargo/config.toml                   micold-kube
 /.dockerignore                        micold-kube
+/CHANGELOG.md                         micold-kube
+crates/*/Cargo.toml                   micold-kube
 # The workflow itself: an edit to the job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-kube
 crates/micold-e2e/**                  micold-kube

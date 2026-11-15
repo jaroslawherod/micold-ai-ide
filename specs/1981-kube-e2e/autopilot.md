@@ -46,15 +46,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan | 2 | scoped | af46640a697fa39efc4643087b4a875ff9152982 | b99f4c78af95f4dad1805307dae6165ce0f9da7b | CLEAN |
 | tasks | 1 | full | n/a | e7e613c5573b0aacf77dd0b865f2a0f06bb12567:76a663f4950b1e5ecac3627481decad6be462b8c | CHANGES: 4 MAJOR (F1-F4), 3 MINOR (F5-F7); all fixed, re-review pending |
 | tasks | 2 | scoped | 469a61270cd7ff81c61dd0847b774db5f8a7add3 | 31eb208412cadeb4b4503ef792e3e979a633bb3d | CLEAN |
-| M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 9 fixed, 1 declined (appVersion tag), 1 noted (socket dir mode, documented) |
+| M1 A (code-review high) | 2 | scoped | (fix commit) | bddf4e635cd5000ff61cda4c9101081df8458227:bb8c35ea2c6d251b8f1849f72cc1e4531a5acc00 | CHANGES: 2 MAJOR (smoke trap on a local var; pr_proven skip loses the main-push net), 8 MINOR; 9 fixed, 1 declined (M3 gate width) |
+| M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 8 fixed, 2 declined (appVersion tag; socket dir mode, documented) |
 | tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
+|---|---|---|---|
 | M1 | A r1 | `Chart.yaml` appVersion 0.18.0 is a tag nothing publishes; release-please does not bump it | No image is published by this epic; the release workflow (build, sign, push, version in step) is #1740's per the 1722 plan. README now says so and shows `--set image.tag=dev`. Follow-up recorded. |
 | M1 | A r1 | `endpoint_at` skips the owner-only 0700 directory check for an explicit `--socket` | An explicit path is the operator's choice, as `run_with` and `[orchestrator_link] socket` already are; in the chart it is a pod-private emptyDir. Documented on `endpoint_at`. |
-|---|---|---|---|
+| M1 | A r2 | image inputs in `micold-kube` will also widen M3's kind job | M3 (T019/T020) decides kube-e2e's gate; if the kind job should not run on every daemon change it splits an image attribute then. Today only kube-chart reads `kube_paths`. |
 
 ## Handover
 
