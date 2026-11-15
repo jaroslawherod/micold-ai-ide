@@ -23,4 +23,5 @@ mod every_test_file_is_wired;
 mod log_redaction;
 mod pasted_cleanup;
 mod project_registered_before_create;
+mod remote_prepare_link;
 mod run_group_persist;

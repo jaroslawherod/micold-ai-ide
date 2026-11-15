@@ -23,6 +23,14 @@ older than 6.7): `ssh` reports "remote port forwarding failed" and `ExitOnForwar
 connection with that text; the app shows it (FR-005). The daemon stays `offline`. A TCP fallback is not
 offered. For the basic image the repair is the two config lines.
 
+**Checked (M4, T036, by reading the config; no container runtime in the session that made the change)**:
+`ListenAddress 0.0.0.0` on port 2222 accepts the pod's loopback connection that `Cluster::port_forward`
+opens (the kubelet's forward connects to the pod's `127.0.0.1:2222`, which `0.0.0.0` covers); no change.
+The two lines are in `packaging/basic/sshd_config`, the content hash pin moved with them
+(`BASIC_IMAGE_CONTENT_HASH`); the published `BASIC_IMAGE` digest follows in the image's pin PR, and the
+image it names today defaults `AllowStreamLocalForwarding` to `yes`, so the link works on it meanwhile.
+The `ssh_real_link` suite starts its `sshd` with the same two lines.
+
 **Rejected**: a loopback TCP remote port (any local user of the remote reaches it; spec 489 R1 rejected the
 same shape); relying on the default silently (a later hardening of the file would break the link unnoticed).
 

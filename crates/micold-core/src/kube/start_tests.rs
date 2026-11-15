@@ -1423,6 +1423,7 @@ mod connect {
             timeout_secs: 15,
             build_id: "b".into(),
             client_build: "test".into(),
+            link: None,
         }
     }
 

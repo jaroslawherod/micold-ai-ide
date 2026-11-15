@@ -52,6 +52,14 @@ pub fn resolve_pinned() -> io::Result<Endpoint> {
     imp::resolve_pinned()
 }
 
+/// Create the runtime directory `dir` owner-only, or verify an existing one is ours and `0700`
+/// without repairing it: the guard [`resolve_pinned`] applies to `/tmp/micold-<uid>`, for a
+/// caller that names the directory (`remote prepare-link`'s tests, #1725).
+#[cfg(unix)]
+pub fn guard_runtime_dir(dir: &std::path::Path) -> io::Result<()> {
+    imp::resolve_in_predictable_dir(dir).map(|_| ())
+}
+
 /// The orchestrator's endpoint beside `daemon`'s, under other names, so both can run (#1724).
 pub fn orchestrator_beside(daemon: &Endpoint) -> Endpoint {
     Endpoint {

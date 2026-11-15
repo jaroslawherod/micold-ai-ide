@@ -102,15 +102,15 @@ fn program(platform: ClientPlatform) -> String {
     }
 }
 
-/// The common prefix, in order, then `--`, the host and the remote command. `relay` is the local
-/// port of the install relay, forwarded to the target's loopback; only [`install`] passes one, and
-/// only an install command lacks `ClearAllForwardings`.
+/// The common prefix, in order, then `--`, the host and the remote command. `forward` is the one
+/// remote forward: the install relay ([`install`]) or the orchestrator link ([`bridge_with_link`]);
+/// only a command carrying one lacks `ClearAllForwardings`.
 fn command(
     reach: &Reach,
     platform: ClientPlatform,
     connect_timeout_secs: u32,
     remote: &str,
-    forward: Option<Forward>,
+    forward: Option<Forward<'_>>,
 ) -> SshCommand {
     let mut args: Vec<String> = Vec::new();
     if matches!(reach, Reach::Pinned(_)) {
@@ -172,13 +172,20 @@ fn command(
             pinned.host.clone()
         }
     };
-    if let Some(Forward { relay_port }) = forward {
-        // A forward that cannot bind must end the command: the proxy address is then not ours.
+    if let Some(forward) = forward {
+        // A forward that cannot bind must end the command: the proxy address, or the link socket,
+        // is then not ours (FR-005).
         args.extend(["-o".into(), "ExitOnForwardFailure=yes".into()]);
-        args.extend([
-            "-R".into(),
-            format!("127.0.0.1:{RELAY_REMOTE_PORT}:127.0.0.1:{relay_port}"),
-        ]);
+        let spec = match forward {
+            Forward::InstallRelay { relay_port } => {
+                format!("127.0.0.1:{RELAY_REMOTE_PORT}:127.0.0.1:{relay_port}")
+            }
+            // One argv element, never parsed by a shell: the checked paths go to ssh as they are.
+            Forward::Link(AdmittedLink(link)) => {
+                format!("{}:{}", link.remote_socket, link.local_socket.display())
+            }
+        };
+        args.extend(["-R".into(), spec]);
     }
     args.push("--".into());
     args.push(host);
@@ -190,10 +197,215 @@ fn command(
     }
 }
 
-/// The one remote forward a command may carry: the install relay.
+/// The only two remote forwards a command may carry (FR-004): the install relay, and the
+/// orchestrator link. There is no free-form `-R`.
 #[derive(Clone, Copy)]
-struct Forward {
-    relay_port: u16,
+enum Forward<'a> {
+    /// The install relay: the target's loopback port to the client's relay.
+    InstallRelay { relay_port: u16 },
+    /// The orchestrator link: a Unix socket in the remote's runtime directory to the local
+    /// orchestrator's socket (#1725).
+    Link(&'a AdmittedLink),
+}
+
+/// Why the orchestrator link's forward cannot be opened (#1725, FR-005). The open fails with this
+/// message; it never runs silently without the forward.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LinkRefusal {
+    /// A socket path cannot be one end of `-R`.
+    Path {
+        /// `remote` or `local`.
+        end: &'static str,
+        /// The path as given.
+        path: String,
+        /// What is wrong with it.
+        why: &'static str,
+    },
+    /// `ssh -G` could not say what the user's configuration sets for the host.
+    ConfigUnreadable {
+        /// The host as entered.
+        host: String,
+        /// What `ssh -G` printed, or why it did not run.
+        detail: String,
+    },
+    /// The user's configuration sets port forwards for the host. `ClearAllForwardings` cannot be
+    /// scoped to "all but the link", so the link would open them too (research R2).
+    ConfiguredForwards {
+        /// The host as entered.
+        host: String,
+        /// The configured forward lines (`localforward ...`).
+        forwards: Vec<String>,
+    },
+    /// `remote prepare-link` failed or printed no path.
+    Prepare {
+        /// What it printed.
+        detail: String,
+    },
+    /// The remote end could not be bound: ssh ended the connection (`ExitOnForwardFailure`).
+    NotBound {
+        /// ssh's own text.
+        detail: String,
+    },
+}
+
+impl std::fmt::Display for LinkRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LinkRefusal::Path { end, path, why } => {
+                write!(f, "the {end} link socket {path:?} {why}")
+            }
+            LinkRefusal::ConfigUnreadable { host, detail } => write!(
+                f,
+                "ssh -G could not read your SSH configuration for {host}: {detail}"
+            ),
+            LinkRefusal::ConfiguredForwards { host, forwards } => write!(
+                f,
+                "your SSH configuration for {host} sets port forwards ({}); the link forward would open them too",
+                forwards.join("; ")
+            ),
+            LinkRefusal::Prepare { detail } => {
+                write!(f, "the remote could not prepare the link socket: {detail}")
+            }
+            LinkRefusal::NotBound { detail } => write!(
+                f,
+                "the remote SSH server did not bind the link socket (it needs AllowStreamLocalForwarding remote or yes): {detail}"
+            ),
+        }
+    }
+}
+
+/// The two ends of the orchestrator link's reverse forward (data-model.md, `LinkForward`). Both
+/// are checked when built, so no argv text is made from unchecked input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkForward {
+    remote_socket: String,
+    local_socket: PathBuf,
+}
+
+/// A socket path `-R` can carry as it is: absolute, and free of `:`, whitespace and control
+/// characters (ssh splits the forward on `:`).
+fn checked_socket(end: &'static str, path: &str) -> Result<(), LinkRefusal> {
+    let refuse = |why| {
+        Err(LinkRefusal::Path {
+            end,
+            path: path.to_string(),
+            why,
+        })
+    };
+    if !path.starts_with('/') {
+        return refuse("is not an absolute path");
+    }
+    if path.contains(':') {
+        return refuse("contains ':'");
+    }
+    if path.chars().any(char::is_whitespace) {
+        return refuse("contains whitespace");
+    }
+    if path.chars().any(char::is_control) {
+        return refuse("contains a control character");
+    }
+    Ok(())
+}
+
+impl LinkForward {
+    /// The forward from `remote_socket` (printed by `remote prepare-link`) to `local_socket` (the
+    /// orchestrator's socket on this machine).
+    pub fn new(remote_socket: &str, local_socket: &std::path::Path) -> Result<Self, LinkRefusal> {
+        checked_socket("remote", remote_socket)?;
+        let local = local_socket.to_str().ok_or_else(|| LinkRefusal::Path {
+            end: "local",
+            path: local_socket.display().to_string(),
+            why: "is not UTF-8",
+        })?;
+        checked_socket("local", local)?;
+        Ok(Self {
+            remote_socket: remote_socket.to_string(),
+            local_socket: local_socket.to_path_buf(),
+        })
+    }
+
+    /// The remote end.
+    pub fn remote_socket(&self) -> &str {
+        &self.remote_socket
+    }
+
+    /// The local end.
+    pub fn local_socket(&self) -> &std::path::Path {
+        &self.local_socket
+    }
+}
+
+/// A [`LinkForward`] cleared for its reach: a pinned reach reads no configuration, a user-config
+/// reach only once `ssh -G` showed no configured forward (research R2). Only this type opens the
+/// forward, so a bridge never drops `ClearAllForwardings` unchecked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedLink(LinkForward);
+
+impl AdmittedLink {
+    /// The forward.
+    pub fn forward(&self) -> &LinkForward {
+        &self.0
+    }
+}
+
+/// The `localforward`, `remoteforward` and `dynamicforward` lines of an `ssh -G` answer.
+pub fn configured_forwards(resolved: &str) -> Vec<String> {
+    resolved
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            let key = line.split_whitespace().next().unwrap_or_default();
+            ["localforward", "remoteforward", "dynamicforward"]
+                .iter()
+                .any(|k| key.eq_ignore_ascii_case(k))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+/// Clear `forward` for `reach`. `resolved` is the answer of [`resolve`] for a user-config reach:
+/// `Ok(stdout)`, or `Err(what it printed)` when it failed; `None` when it was not asked. A pinned
+/// reach (`-F none`) needs none.
+pub fn admit_link(
+    reach: &Reach,
+    forward: LinkForward,
+    resolved: Option<Result<&str, &str>>,
+) -> Result<AdmittedLink, LinkRefusal> {
+    link_config_allows(reach, resolved).map(|()| AdmittedLink(forward))
+}
+
+/// Whether `reach`'s configuration lets the link's forward drop `ClearAllForwardings`: always for
+/// a pinned reach; for a user-config reach only when `resolved` (see [`admit_link`]) is a
+/// successful `ssh -G` answer with no configured forward.
+pub fn link_config_allows(
+    reach: &Reach,
+    resolved: Option<Result<&str, &str>>,
+) -> Result<(), LinkRefusal> {
+    let Reach::UserConfig(target) = reach else {
+        return Ok(());
+    };
+    let host = target.host.clone();
+    let stdout = match resolved {
+        Some(Ok(stdout)) => stdout,
+        Some(Err(detail)) => {
+            return Err(LinkRefusal::ConfigUnreadable {
+                host,
+                detail: detail.trim().to_string(),
+            })
+        }
+        None => {
+            return Err(LinkRefusal::ConfigUnreadable {
+                host,
+                detail: "it was not asked".into(),
+            })
+        }
+    };
+    let forwards = configured_forwards(stdout);
+    if forwards.is_empty() {
+        Ok(())
+    } else {
+        Err(LinkRefusal::ConfiguredForwards { host, forwards })
+    }
 }
 
 /// `ssh -G`: the effective settings the user's configuration gives the target, no connection made.
@@ -240,7 +452,7 @@ pub fn install(
         platform,
         timeout,
         "sh -s",
-        relay_port.map(|relay_port| Forward { relay_port }),
+        relay_port.map(|relay_port| Forward::InstallRelay { relay_port }),
     )
 }
 
@@ -360,6 +572,40 @@ pub fn bridge_with_env(
     build: &str,
     env: &[(String, String)],
 ) -> SshCommand {
+    command(reach, platform, timeout, &bridge_remote(build, env), None)
+}
+
+/// [`bridge_with_env`] carrying the orchestrator link's reverse forward (#1725, FR-004): one
+/// `-R <remote>:<local>` with `ExitOnForwardFailure=yes`, and no other forward.
+pub fn bridge_with_link(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+    env: &[(String, String)],
+    link: &AdmittedLink,
+) -> SshCommand {
+    command(
+        reach,
+        platform,
+        timeout,
+        &bridge_remote(build, env),
+        Some(Forward::Link(link)),
+    )
+}
+
+/// The helper's `prepare-link`: makes the remote's owner-only runtime directory, removes a stale
+/// `orchestrator.sock` and prints the path the link's `-R` binds (contracts/dial.md).
+pub fn prepare_link(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+) -> SshCommand {
+    helper(reach, platform, timeout, build, "prepare-link")
+}
+
+fn bridge_remote(build: &str, env: &[(String, String)]) -> String {
     let mut remote = String::new();
     if !env.is_empty() {
         remote.push_str("env");
@@ -372,7 +618,7 @@ pub fn bridge_with_env(
         "\"{}/micold-daemon\" remote bridge",
         remote_dir(build)
     ));
-    command(reach, platform, timeout, &remote, None)
+    remote
 }
 
 #[cfg(test)]
@@ -731,5 +977,176 @@ mod tests {
             "entered fields override the file: {:?}",
             cmd.args
         );
+    }
+
+    fn link() -> LinkForward {
+        LinkForward::new(
+            "/tmp/micold-1000/orchestrator.sock",
+            std::path::Path::new("/run/user/1000/micold/orchestrator.sock"),
+        )
+        .unwrap()
+    }
+
+    fn admitted(reach: &Reach) -> AdmittedLink {
+        admit_link(reach, link(), Some(Ok("hostname build\nport 2222\n"))).unwrap()
+    }
+
+    #[test]
+    fn a_link_forward_takes_only_absolute_paths_without_colon_whitespace_or_control() {
+        let local = std::path::Path::new("/run/o.sock");
+        for (bad, why) in [
+            ("tmp/o.sock", "is not an absolute path"),
+            ("/tmp/a:b.sock", "contains ':'"),
+            ("/tmp/a b.sock", "contains whitespace"),
+            ("/tmp/a\tb.sock", "contains whitespace"),
+            ("/tmp/a\u{7}b.sock", "contains a control character"),
+        ] {
+            let refused = LinkForward::new(bad, local).unwrap_err();
+            assert_eq!(
+                refused,
+                LinkRefusal::Path {
+                    end: "remote",
+                    path: bad.into(),
+                    why
+                }
+            );
+            let refused = LinkForward::new("/tmp/o.sock", std::path::Path::new(bad)).unwrap_err();
+            assert!(
+                matches!(refused, LinkRefusal::Path { end: "local", why: w, .. } if w == why),
+                "{refused:?}"
+            );
+        }
+        let ok = LinkForward::new("/tmp/micold-1/orchestrator.sock", local).unwrap();
+        assert_eq!(ok.remote_socket(), "/tmp/micold-1/orchestrator.sock");
+        assert_eq!(ok.local_socket(), local);
+    }
+
+    #[test]
+    fn the_link_bridge_has_exactly_one_reverse_forward_and_exits_on_its_failure() {
+        for reach in [pinned(), target()] {
+            let cmd = bridge_with_link(
+                &reach,
+                ClientPlatform::Linux,
+                15,
+                "b",
+                &[],
+                &admitted(&reach),
+            );
+            let a = &cmd.args;
+            let r: Vec<usize> = (0..a.len()).filter(|i| a[*i] == "-R").collect();
+            assert_eq!(r.len(), 1, "one -R: {a:?}");
+            // The forward is one argv element, the two checked paths joined by `:`, unquoted for a
+            // shell because no shell parses it.
+            assert_eq!(
+                a[r[0] + 1],
+                "/tmp/micold-1000/orchestrator.sock:/run/user/1000/micold/orchestrator.sock"
+            );
+            for forbidden in ["-L", "-D", "-W", "-N", "-f"] {
+                assert!(!a.iter().any(|x| x == forbidden), "{forbidden}: {a:?}");
+            }
+            assert!(
+                a.windows(2)
+                    .any(|w| w[0] == "-o" && w[1] == "ExitOnForwardFailure=yes"),
+                "{a:?}"
+            );
+            assert!(
+                !a.iter().any(|x| x.contains("ClearAllForwardings")),
+                "{a:?}"
+            );
+            let at = a.iter().position(|x| x == "--").unwrap();
+            assert!(r[0] < at, "the forward is an option, before the host");
+            assert_eq!(
+                a.last(),
+                bridge(&reach, ClientPlatform::Linux, 15, "b").args.last(),
+                "the remote command is the bridge's"
+            );
+        }
+    }
+
+    #[test]
+    fn prepare_link_runs_the_helpers_prepare_link_from_the_build_directory_quoted() {
+        let cmd = prepare_link(&pinned(), ClientPlatform::Linux, 15, "1.0-abc");
+        assert_eq!(
+            cmd.args.last().unwrap(),
+            "\"$HOME/.micold/remote/1.0-abc/micold-daemon\" remote prepare-link"
+        );
+        assert!(cmd.args.contains(&"ClearAllForwardings=yes".to_string()));
+        assert!(!cmd.args.iter().any(|a| a == "-R"));
+    }
+
+    #[test]
+    fn a_pinned_reach_admits_the_link_without_asking_the_configuration() {
+        assert_eq!(
+            admit_link(&pinned(), link(), None).unwrap().forward(),
+            &link()
+        );
+    }
+
+    #[test]
+    fn a_user_config_reach_admits_the_link_only_when_ssh_g_shows_no_forward() {
+        let reach = target();
+        assert!(admit_link(&reach, link(), Some(Ok("hostname build\nuser me\n"))).is_ok());
+        let refused = admit_link(
+            &reach,
+            link(),
+            Some(Ok(
+                "hostname build\nlocalforward 8080 [127.0.0.1]:80\nDynamicForward 1080\n",
+            )),
+        )
+        .unwrap_err();
+        assert_eq!(
+            refused,
+            LinkRefusal::ConfiguredForwards {
+                host: "build".into(),
+                forwards: vec![
+                    "localforward 8080 [127.0.0.1]:80".into(),
+                    "DynamicForward 1080".into()
+                ],
+            }
+        );
+        let text = refused.to_string();
+        assert!(
+            text.contains("build") && text.contains("sets port forwards"),
+            "{text}"
+        );
+        let refused =
+            admit_link(&reach, link(), Some(Ok("remoteforward /a.sock /b.sock\n"))).unwrap_err();
+        assert!(matches!(refused, LinkRefusal::ConfiguredForwards { .. }));
+    }
+
+    #[test]
+    fn a_failed_or_missing_ssh_g_fails_the_link_naming_the_cause() {
+        let refused = admit_link(
+            &target(),
+            link(),
+            Some(Err("Bad configuration option: foo\n")),
+        )
+        .unwrap_err();
+        assert_eq!(
+            refused,
+            LinkRefusal::ConfigUnreadable {
+                host: "build".into(),
+                detail: "Bad configuration option: foo".into(),
+            }
+        );
+        assert!(refused
+            .to_string()
+            .contains("Bad configuration option: foo"));
+        assert!(matches!(
+            admit_link(&target(), link(), None),
+            Err(LinkRefusal::ConfigUnreadable { .. })
+        ));
+    }
+
+    #[test]
+    fn every_other_command_still_clears_forwardings_and_names_the_relay_as_its_own_shape() {
+        for reach in [target(), pinned()] {
+            assert!(bridge(&reach, ClientPlatform::Linux, 15, "b")
+                .args
+                .contains(&"ClearAllForwardings=yes".to_string()));
+        }
+        let relay = install(&pinned(), ClientPlatform::Linux, 15, Some(5555));
+        let at = relay.args.iter().position(|a| a == "-R").unwrap();
+        assert_eq!(relay.args[at + 1], "127.0.0.1:17728:127.0.0.1:5555");
     }
 }

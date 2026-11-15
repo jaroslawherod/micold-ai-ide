@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1725
-- **Worktree branch**: claude/project-thread-2igsm0
+- **Worktree branch**: claude/project-thread-t27ol0
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M3 review B (orchestrator), then open the M3 PR from pr-title.md/pr-body.md
+- **Next step**: M4 review A, gates, PR files (unit); then review B (orchestrator), PR
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
 | #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
 | #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
+| #1976 | M3 backoff + link status | merged (squash) | 2880eeb17 |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
-| M3 | T021–T027 | full | Refusals back off; link status observable (US5) | pending (branch claude/project-thread-2igsm0) | implemented, review A clean; awaiting review B, PR |
-| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
+| M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
+| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | pending (branch claude/project-thread-t27ol0) | implemented; review A, gates running |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
 
 ## Decisions
