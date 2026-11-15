@@ -53,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 1 | M3 | 54c815ff4ec16aacf2c524791e3dd9ef03f74a2e | - | CLEAN (run by the unit itself, no Agent tool; no findings) |
 | Review B | 1 | M3 | f605b7957964614c4420c157052e572f55317bc5 | 9c260155a70445ffa2edd421d0e8fa60cd6eb132:f605b7957964614c4420c157052e572f55317bc5 | CHANGES (F1 drift-M3.md, F2 cycle-log fixed) |
 | Review B | 2 | M3 | c2aee869706cbfe157fbe85e9b89632ed6745fd8 | 091dd5b5cc6ddbb2fe6ca0d006b9b30d5e6f3f40:c2aee869706cbfe157fbe85e9b89632ed6745fd8 | CLEAN (round-1 F1, F2 confirmed fixed) |
+| Review A | 1 | M4 | aac52c7b450ebfcb3748a4e58f582c12c1751532 | 559fd0a3127a26b6ca0823a77f31d87f49dcd14e:aac52c7b450ebfcb3748a4e58f582c12c1751532 | CLEAN (run by the unit itself, no Agent tool; no findings) |
 
 ## Declined review findings
 
@@ -62,7 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 merged (#1922, squash 35ffa7c). Next: dispatch a milestone unit for M4 (T015–T019, T021) from a fresh cloud thread on its harness branch: merge this branch in first, then update the Worktree branch line to that branch. In cloud, units have no Agent tool, so the orchestrator runs review B (conformance, sonnet); remind the unit to add drift-M4.md and M4 cycles to tdd/cycle-log.md, which review B flagged as missing on M3.
+M4 pushed; review A clean, review B left to the orchestrator; scripts/gate.sh passed fmt and clippy, stopped at the missing cargo-nextest, so the workspace tests are left to CI (shell suites all pass). M4 is the last milestone: next the run's close and handoff.
 
 ## Open escalation
 
