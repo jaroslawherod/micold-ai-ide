@@ -64,7 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Cloud orchestrator thread handed over after M2 merged (2026-11-15, PR #1978, squash 1fb7d00e2; cloud rule: fresh thread per milestone). Next: M3 (T015, T018–T020), then close. M3 should also decide the `default`-named-directory follow-ups below. Cloud notes: units have no Agent tool, so the orchestrator dispatches review A (code-review high, opus; re-rounds sonnet) and review B (conformance, sonnet) and sends findings to a fresh part unit; merge by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on netns tests (advisory, commented on #1965 and #1978); `diff coverage` (80%) is required. nextest must be installed per thread from the GitHub release.
 
 ## Open escalation
 
