@@ -2,7 +2,7 @@
 
 ## close-out-report.sh
 `scripts/autopilot/close-out-report.sh <worktree-dir>... [--supervisor-ledger <file>] [--live <path>]...
-[--no-live-sessions]`
+[--no-live-sessions] [--parent <ref> --rows <file>]`
 
 Markdown on stdout, exit 0 (also for zero runs). Sections, always present, in this order:
 
@@ -19,10 +19,15 @@ Markdown on stdout, exit 0 (also for zero runs). Sections, always present, in th
 - Remaining: <one line per item>       (a run whose verify exits 2 or 3 gives one error line here)
 ## Escalated
 ### #<issue> <branch>
+- PRs: ...
 - <the escalation block's Question line>
 ## Safe to remove
 - <path> | none
 ```
+
+With `--parent <ref> --rows <file>` (the `list_worktrees` rows) only runs that `runs-of-parent.sh <ref> --check <path>` calls own are
+reported, and each entry has a `- Parent: <ref>` line after its heading (FR-016); `--parent` and `--rows` go together (exit 2 otherwise
+or on unreadable rows). `--live` and `--no-live-sessions` are for the Safe to remove section (M4).
 
 A run is under Completed only when `verify-run.sh` returns `VERIFIED`. A run that is not `VERIFIED` and has a block in the
 supervisor ledger's `## Escalations` (also when verify exits 2 or 3) is under Escalated and not under Not done. Precedence: Completed, then Escalated, then Not done. A run absent from

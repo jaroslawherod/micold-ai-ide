@@ -20,3 +20,22 @@ Append only. Newest last.
 - green: `verify-run.sh` lists every PR run-status.sh reports not MERGED once, refuses several
   ledgers with exit 3, maps a run-status.sh failure to NOT DONE, and needs state `done` for VERIFIED
   → `close-out: 25 cases, 0 failed`.
+
+## Cycle 3 — M3 report: US3.1 to US3.3, FR-008..FR-010, SC-002 (T013 → T014)
+
+- tests: report cases in `close-out.test.sh`: two verified runs (one entry each: issue, PRs, decisions
+  by user/agent, interventions, tokens), open-PR run only under Not done, escalated section with the
+  Question line, `none` / `unknown` without interventions or tokens, zero runs and absent supervisor
+  ledger (empty sections, exit 0), a run that regresses after being reported done moves to Not done,
+  errored runs never abort the report.
+- red: the file run before `close-out-report.sh` existed → all report cases failed with exit 127
+  (`close-out-report.sh: No such file or directory`); the earlier 62 cases still passed.
+- green: `close-out-report.sh` added (T014) → report cases pass.
+
+## Cycle 4 — M3 parent filtering, FR-016 (T020)
+
+- tests: three runs (own parent, another parent, none) plus a removed-parent row; `--parent` without
+  `--rows` and unreadable rows exit 2.
+- red: same run, the script absent → exit 127 for each case, written in the same red pass as cycle 3.
+- green: `--parent <ref> --rows <file>` calls `runs-of-parent.sh --check` per run and names the parent
+  → `close-out: 78 cases, 0 failed`.
