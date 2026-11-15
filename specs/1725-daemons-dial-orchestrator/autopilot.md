@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9qx3oe
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: milestone M1 (T001–T015), in a fresh thread via `/speckit-autopilot resume`
+- **Next step**: open the M1 PR (title and body in pr-title.md/pr-body.md), review B, merge; then M2 (T016–T020)
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | | pending |
+| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | | PR pending (unit done: gate green, review A clean; review B by the orchestrator) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | pending |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
@@ -47,6 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 2 | plan fix diff | 51d50295e396f5546030a0ebf185e54f3e96e8b6 | f357f1489081de54ce559264732119f2099ffded:edb515ca275e9528697839235b08037de5e4f1e7 | CLEAN (scoped, sonnet); one MINOR comment fixed, prose only |
 | Tasks review | 1 | design | 4e9b7e7f8147a6ca39abdb4a0aed819f5efedbb4 | 4efebc3b7d308f99107399a0d9913f9b32676e64:c30e1ae59e0d06bb201b6b3de8d70a51e5540c91 | CHANGES: 5 MAJOR (test wiring, ssh_real feature flag, Verify filters, FR-002 test, needs-update case), 3 MINOR; all fixed |
 | Tasks review | 2 | design fix diff | 4e9b7e7f8147a6ca39abdb4a0aed819f5efedbb4 | 4efebc3b7d308f99107399a0d9913f9b32676e64:c30e1ae59e0d06bb201b6b3de8d70a51e5540c91 | CLEAN (scoped, sonnet) |
+| Review A | 1 | M1 | 33282fd3e765197a84e2a71662bfbe17495b266d | b3bf65678531ba19356823ba4f311526cffc200c:33282fd3e765197a84e2a71662bfbe17495b266d | CHANGES: 1 MAJOR (no test of server::run wiring), 3 MINOR; all fixed |
+| Review A | 2 | M1 | e409f3f94ab32375a0471df628d084758dbe070c | 7dd654c35687f155ee415a77652480b8e758db7a:9b353509ca3082b429e161fcd3ea3bbfae7cbc68 | CLEAN (fix diff, sonnet); later commit only skips the pure dial rules in the no-outbound scan (no_outbound.rs, docs) |
 
 ## Declined review findings
 
@@ -56,9 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-2026-11-15, design thread: design PR #1969 squash-merged (1d36b93ff); origin/main merged back into the branch, diff vs main is ledger only. Next: M1 (T001–T015, tier full) in a fresh cloud thread running `/speckit-autopilot resume` on this branch.
-
-Cloud notes for the next thread: `autopilot-unit`/`autopilot-reviewer` types are offered, but units have no Agent tool, so they run reviewers headless with the prompt FIRST: `claude -p "<prompt>" --agent autopilot-reviewer --model <m> --permission-mode auto --allowedTools "Read,Grep,Glob,Bash(git *),Bash(grep *),Bash(ls *)"`. Units write pr-title.md/pr-body.md and push; the orchestrator opens the PR via GitHub MCP (attribution block first), marks it ready, waits on the `ci complete` check-run via `gh api .../commits/<head>/check-runs` (REST), checks the ledger's review Head differs from the PR head only in ledger files, and squash-merges via MCP with expectedHeadSha. Then `git merge origin/main` (never rebase or force-push) and check `git diff --stat origin/main HEAD` shows only ledger files. `setup-plan.sh` resolved the wrong feature dir once; pass paths explicitly. Milestone units: name drift-M<K>.md and tdd/cycle-log.md in the brief, run plan-drift.sh before returning; the orchestrator runs review B (sonnet, rubrics/conformance.md) itself.
+None. M1 unit finished 2026-11-15: T001–T015 ticked, drift-M1.md and tdd/cycle-log.md written, plan-drift clean, `scripts/gate.sh` green at the pushed tree, review A clean (round 2). Left to the orchestrator: open the PR from pr-title.md/pr-body.md, dispatch review B (conformance), wait for CI, merge, `git merge origin/main`. Environment notes: the disk holds about 30 GB, so the full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` and `cargo-nextest` (installed with `cargo install cargo-nextest --locked`) and `openssh-client` (`ssh-keygen`) on the machine.
 
 ## Open escalation
 
