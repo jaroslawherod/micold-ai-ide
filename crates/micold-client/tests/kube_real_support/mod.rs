@@ -846,6 +846,46 @@ impl Shell {
         shell
     }
 
+    /// Another session of the stand-in `claude` in the worktree `work` made, with its first shell
+    /// instance opened (a new session's input serial starts at 0).
+    pub async fn open_another_session(
+        conn: &mut DaemonConnection,
+        project: &Path,
+        seen: &mut String,
+    ) -> Self {
+        let OperationResult::SessionCreated { session } = request(
+            conn,
+            ClientMsg::SessionCreate {
+                req: 4,
+                project: project.to_path_buf(),
+                worktree_dir: "feature-x".into(),
+                provider: micold_core::session::AiCli::ClaudeCode,
+                allow_additional_session: true,
+                kind: Default::default(),
+                permission_mode: Default::default(),
+            },
+            4,
+            seen,
+        )
+        .await
+        else {
+            panic!("a second session is created")
+        };
+        conn.send(Frame::Control(ClientMsg::SessionStart {
+            session,
+            allow_additional_session: true,
+        }))
+        .await
+        .expect("start the second session");
+        let mut shell = Self {
+            session,
+            serial: 0,
+            instance: SHELL,
+        };
+        shell.attach(conn, project).await;
+        shell
+    }
+
     /// Open the session's shell instance `instance` and type into that one from now on: another
     /// terminal of the same session, with its own process tree.
     pub async fn switch(

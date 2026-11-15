@@ -173,3 +173,4 @@ Append only. Newest last.
   revert commit the orchestrator pushes on request; none is on the branch.
 - refactor: `Shell` (open, step, new `switch` and `capture`) moved from `kube_real_toolchain.rs` into
   `kube_real_support/mod.rs` so both tests share it.
+- M3 review fixes: `in_clone` git calls clear `credential.helper` and set `GIT_TERMINAL_PROMPT=0` (one `git_in` helper); the client-log scan also looks for the base64 of each secret and of the token store files; the env/home check now also runs in a second session (`Shell::open_another_session`). The live test is unrun here (no cluster).

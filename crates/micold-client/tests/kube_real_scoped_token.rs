@@ -210,6 +210,14 @@ impl Pod {
     }
 }
 
+/// The text of every file in a token store, to look for its encodings in the log.
+fn store_texts(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .expect("the token store lists")
+        .filter_map(|e| std::fs::read_to_string(e.ok()?.path()).ok())
+        .collect()
+}
+
 /// The pod's file for the token `name`: in the startup Secret's mount, which is outside the home.
 fn token_file(name: &str) -> String {
     format!("{STARTUP_ENV_MOUNT}/{GITHUB_TOKEN_PREFIX}{name}")
@@ -222,12 +230,14 @@ async fn kube_real_scoped_token() {
         return;
     };
     let log = capture_log();
+    let mut file_texts: Vec<String> = Vec::new();
     let (secret, other_secret) = (run_secret("run"), run_secret("other"));
     let forge = Forge::start(&secret, &[GRANTED, ELSEWHERE]).expect("the fake forge starts");
     let mut client = client();
 
     // A: opt-in on, a token filtered to the project's repository.
     let store = token_store(&[("kube-run", &secret, &[GRANTED])]);
+    file_texts.extend(store_texts(store.path()));
     let mut a = pod(
         &mut client,
         suite,
@@ -285,14 +295,17 @@ async fn kube_real_scoped_token() {
     for r in requests.iter().filter_map(|r| r.credential.as_ref()) {
         assert_eq!((r.0.as_str(), r.1.as_str()), (USER, secret.as_str()), "A");
     }
-    // The pod holds nothing else, in two terminals of the session.
+    // The pod holds nothing else, in two terminals of the session and in a second session.
     let file = token_file("kube-run");
-    for (i, instance) in [None, Some(ShellInstanceId(2))].into_iter().enumerate() {
-        if let Some(instance) = instance {
-            a.shell.switch(&mut a.conn, &a.project, instance).await;
+    let mut second = Shell::open_another_session(&mut a.conn, &a.project, &mut String::new()).await;
+    for i in 0..3 {
+        let shell = if i == 2 { &mut second } else { &mut a.shell };
+        if i == 1 {
+            shell
+                .switch(&mut a.conn, &a.project, ShellInstanceId(2))
+                .await;
         }
-        let facts =
-            session_env_and_home(&mut a.conn, &mut a.shell, &format!("FACTS{i}"), &file).await;
+        let facts = session_env_and_home(&mut a.conn, shell, &format!("FACTS{i}"), &file).await;
         assert_eq!(facts.env_secret_lines, 0, "A shell {i}: secret in env");
         assert_eq!(facts.ssh_auth_sock_lines, 0, "A shell {i}: SSH_AUTH_SOCK");
         assert!(!facts.home_has_ssh, "A shell {i}: ~/.ssh exists");
@@ -313,6 +326,7 @@ async fn kube_real_scoped_token() {
     // C: opt-in on, but the only token is filtered to another repository. It is delivered (the
     // daemon has that repository too) and the helper still offers nothing for the granted one.
     let store = token_store(&[("kube-other", &other_secret, &[ELSEWHERE])]);
+    file_texts.extend(store_texts(store.path()));
     let mut c = pod(
         &mut client,
         suite,
@@ -349,6 +363,7 @@ async fn kube_real_scoped_token() {
 
     // D: opt-in off: the same store the opt-in would have delivered from, and no key in the pod.
     let store = token_store(&[("kube-run", &secret, &[GRANTED])]);
+    file_texts.extend(store_texts(store.path()));
     let mut d = pod(
         &mut client,
         suite,
@@ -373,9 +388,16 @@ async fn kube_real_scoped_token() {
         !text.is_empty(),
         "the client's log output was captured (another subscriber is installed?)"
     );
+    use base64::Engine;
+    let encode = |s: &str| base64::engine::general_purpose::STANDARD.encode(s);
+    let needles: Vec<String> = [&secret, &other_secret]
+        .into_iter()
+        .chain(file_texts.iter())
+        .flat_map(|s| [s.clone(), encode(s), encode(&format!("{USER}:{s}"))])
+        .collect();
     let leaked: Vec<&str> = text
         .lines()
-        .filter(|l| l.contains(&secret) || l.contains(&other_secret))
+        .filter(|l| needles.iter().any(|n| l.contains(n.as_str())))
         .collect();
     assert!(leaked.is_empty(), "secret in the client log: {leaked:?}");
 }
@@ -432,16 +454,17 @@ fn kube_real_forge_accepts_only_the_run_secret() {
     // Real git works against it with the secret, push and pull, and not without.
     let seen_before = forge.requests().len();
     let work = tempfile::tempdir().unwrap();
-    let git = |args: &[&str]| {
+    let git_in = |dir: &std::path::Path, args: &[&str]| {
         std::process::Command::new("git")
             .args(["-c", "user.name=t", "-c", "user.email=t@t"])
             .args(["-c", "credential.helper="])
             .args(args)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .current_dir(work.path())
+            .current_dir(dir)
             .output()
             .unwrap()
     };
+    let git = |args: &[&str]| git_in(work.path(), args);
     let with = forge
         .local_url(GRANTED)
         .replace("http://", &format!("http://{USER}:{secret}@"));
@@ -449,14 +472,7 @@ fn kube_real_forge_accepts_only_the_run_secret() {
     assert!(!git(&["clone", "-q", &without, "none"]).status.success());
     assert!(git(&["clone", "-q", &with, "clone"]).status.success());
     let clone = work.path().join("clone");
-    let in_clone = |args: &[&str]| {
-        std::process::Command::new("git")
-            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
-            .args(args)
-            .current_dir(&clone)
-            .output()
-            .unwrap()
-    };
+    let in_clone = |args: &[&str]| git_in(&clone, args);
     assert!(in_clone(&["commit", "-q", "--allow-empty", "-m", "x"])
         .status
         .success());
