@@ -22,7 +22,7 @@
   queries need, as the 1722 plan decided).
 - **Risk and fallback**: if task 1's spike shows `Any` cannot take `$n` on SQLite, `Migrator` on
   `AnyConnection`, or a needed type, fall back to the generic-over-`DB` form behind the same
-  `Database` wrapper; the traits and tests do not change.
+  `StoreHandle` wrapper; the traits and tests do not change.
 
 ## R3 Runtime-checked queries, not `query!`
 
