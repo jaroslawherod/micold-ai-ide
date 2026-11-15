@@ -28,3 +28,6 @@ Paths changed beyond those the tasks of M4 name, with the reason.
 - MISSING `contracts/dial.md`, `research.md`: both are this feature's spec files
   (`specs/1725-daemons-dial-orchestrator/`), named by T029 (the contract the test follows, unchanged)
   and T036 (R1, updated with the `ListenAddress` check).
+- UNPLANNED `crates/micold-core/src/kube/fake_host.rs` (gate fix): the fake pod host answers
+  `remote prepare-link` itself with a fixed remote path, so the client's `kube_daemon_*` tests,
+  whose pod starts now open the link (T035), keep their scripted answers unchanged.

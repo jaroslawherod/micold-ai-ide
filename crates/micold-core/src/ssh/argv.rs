@@ -134,8 +134,13 @@ fn command(
         "ServerAliveInterval=15",
         "ServerAliveCountMax=3",
     ];
-    if forward.is_none() {
-        options.insert(0, "ClearAllForwardings=yes");
+    match forward {
+        None => options.insert(0, "ClearAllForwardings=yes"),
+        // Explicit, so a user's `ClearAllForwardings yes` cannot clear the link's `-R` and let the
+        // bridge run without it (on the command line the first value wins). Configured forwards
+        // were refused before ([`link_config_allows`]).
+        Some(Forward::Link(_)) => options.insert(0, "ClearAllForwardings=no"),
+        Some(Forward::InstallRelay { .. }) => {}
     }
     for option in options {
         args.extend(["-o".into(), option.into()]);
@@ -1050,9 +1055,11 @@ mod tests {
                 "{a:?}"
             );
             assert!(
-                !a.iter().any(|x| x.contains("ClearAllForwardings")),
-                "{a:?}"
+                a.windows(2)
+                    .any(|w| w[0] == "-o" && w[1] == "ClearAllForwardings=no"),
+                "a configured `ClearAllForwardings yes` must not clear the link: {a:?}"
             );
+            assert!(!a.iter().any(|x| x == "ClearAllForwardings=yes"), "{a:?}");
             let at = a.iter().position(|x| x == "--").unwrap();
             assert!(r[0] < at, "the forward is an option, before the host");
             assert_eq!(

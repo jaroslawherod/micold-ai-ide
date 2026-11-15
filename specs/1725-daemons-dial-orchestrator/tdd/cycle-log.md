@@ -247,3 +247,15 @@ failed before the implementation.
   test opens no link).
 - refactor: the TCP/Unix listener check counts only sockets `sshd` processes hold (the remote
   daemon's own loopback ports are not the forward's).
+
+### Review A fixes (M4, round 1: CHANGES, 2 MAJOR, 2 MINOR)
+
+- F1: a user's `ClearAllForwardings yes` would clear the link's `-R`. Test first in the same edit:
+  `the_link_bridge_has_exactly_one_reverse_forward_and_exits_on_its_failure` asserts
+  `-o ClearAllForwardings=no`; green: `command()` passes it for `Forward::Link` → `-- ssh::argv
+  provision:: kube::` 272 passed.
+- F2: prose only (research R2 superseded by T028; ledger Decisions).
+- F3: the scenario-3 test is named for what it covers and asserts `LinkRefusal::Prepare`.
+- Scoped gate: `kube_daemon_*` client tests (21) panicked `unscripted ssh run`: the core fake pod
+  host (`kube/fake_host.rs`) now answers `remote prepare-link` itself → `--tests kube_daemon` green;
+  `ssh_real_link` 4 passed.

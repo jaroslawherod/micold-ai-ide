@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
-| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | pending (branch claude/project-thread-t27ol0) | implemented; review A, gates running |
+| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | pending (branch claude/project-thread-t27ol0) | implemented; review A fixed; full gate; awaiting review B + A round 2, PR |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
 
 ## Decisions
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+- M4: a user-config host whose `ssh -G` shows a configured forward, or fails, fails the open with a message (tasks.md T028), not "connect without the link" (research R2, plan ledger line). Review A F2 flagged that this stops SSH hosts with a `LocalForward`/`RemoteForward`/`DynamicForward` from connecting through the app. Kept: T028 is the later, more specific artifact and FR-005 says the connection never runs silently without the forward. Reversible in one `match` in `provision::admit_link`; the orchestrator may ask the user.
 
 ## Review rounds
 
@@ -58,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M2 | d120a5c13b499fc7f04b3d9a923813229864c532 | 43ea938da69a7ebd31566488c5881cbcc07b885c:d120a5c13b499fc7f04b3d9a923813229864c532 | MINOR-ONLY: 2 MINOR declined (orchestrator, sonnet); Verify 7 passed, no plan drift |
 | Review A | 1 | M3 | 11cf6ef6aacaa53f201f8e063e94ea6e94dcdaeb | b6c2d388a5ead6484138edc3efa314604677c7e0:02fd9250fb4dd000800238ca044234da717f8a4b | MINOR-ONLY: CLEAN with 3 MINOR (refused-to-absent change not logged, spawn_as public seam, SC-004 log test could not catch a per-retry line); all fixed in 11cf6ef6a, no new round (MINOR only) |
 | Review B | 1 | M3 | 7f09644ad | HEAD | CLEAN (orchestrator, sonnet): 1 MINOR accepted (T022 never red; cycle 10 records mutation checks); Verify 7+53 passed, no plan drift |
+- M4 review A round 1 (opus, headless, snapshot 5d226ed04ff2b56679eb538fb78df9e077fde4a1:e7dbd2a39a4bba360d2f05781b9e794843ecd9a0): CHANGES, 2 MAJOR, 2 MINOR. F1 fixed (`ClearAllForwardings=no` on the link, argv test); F2 fixed, prose only (research R2 marked superseded by T028; behaviour kept, see Decisions); F3 fixed (test renamed, asserts `Prepare`); F4 declined. Fix diff is code (F1): round 2 left to the orchestrator with review B (sonnet).
 
 ## Declined review findings
 
@@ -66,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | spec | Spec review 1 | none | all six findings fixed |
 | M2 | Review B 1 | F1 MINOR: outage tests' session/client half has no red mutant | log states it; the behaviour predates M2 and the test is a regression guard |
 | M2 | Review B 1 | F2 MINOR: `pub struct Detached` is test-only API | recorded in drift-M2.md; daemon crate is internal, no public API surface |
+- M4 A F4 (second `ssh -G` per user-config connection): declined; it only reads files under a 5 s bound, and carrying the first answer through `ProvisionOptions` couples the timeout probe to the link; not worth the coupling.
 
 ## Handover
 

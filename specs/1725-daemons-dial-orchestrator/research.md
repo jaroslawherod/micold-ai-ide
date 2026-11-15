@@ -44,9 +44,12 @@ the daemon's link ends and the heartbeat shows `offline` (US3) with no extra tea
 cannot be scoped to "all but this `-R`". A `Reach::Pinned` target uses `-F none`, so no configured forward
 exists. For `Reach::UserConfig` the link step first reads the effective settings (`ssh -G`, `argv::resolve`, already
 used by the connection check) and, if the host's configuration sets any `localforward`, `remoteforward` or
-`dynamicforward`, does not open the link forward: the connection still opens without it, the daemon stays
-`offline`, and the app shows "link not opened: your SSH configuration for <host> sets port forwards". FR-005
-(no other destination) wins over the link.
+`dynamicforward`, does not open the link forward. **Superseded by tasks.md T028 (M4)**, which this
+decision first read as "the connection still opens without it": the open fails with a message naming the
+configured forwards (`LinkRefusal::ConfiguredForwards`), and a failing `ssh -G` fails it naming its text,
+so the connection never runs without the forward. FR-005 (no other destination) wins over the link. The
+link's command passes `ClearAllForwardings=no` explicitly, so a configured `ClearAllForwardings yes`
+cannot clear the `-R` (M4 review A).
 
 **Rejected**: a second, dedicated `ssh -N` process (two connections to supervise, two lifetimes to keep
 equal; the app already restarts the bridge on a drop through `ssh::reconnect`); a ControlMaster `-O forward`

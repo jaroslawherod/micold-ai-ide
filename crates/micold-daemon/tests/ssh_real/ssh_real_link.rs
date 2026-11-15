@@ -353,11 +353,12 @@ async fn ssh_real_link_the_forward_offers_the_orchestrator_socket_only() {
     stop_remote_daemon();
 }
 
-/// Scenario 3: a remote endpoint the forward cannot take fails the open with a message, and no
-/// bridge runs without the forward.
+/// Scenario 3: a remote endpoint the forward cannot take (a directory `prepare-link` cannot remove)
+/// fails the open with a message, and no bridge runs without the forward. ssh's own bind failure is
+/// the `AllowStreamLocalForwarding no` test's.
 #[tokio::test(flavor = "multi_thread")]
-async fn ssh_real_link_a_taken_remote_endpoint_fails_the_open_with_a_message() {
-    let test = "ssh_real_link_a_taken_remote_endpoint_fails_the_open_with_a_message";
+async fn ssh_real_link_an_endpoint_prepare_link_cannot_clear_fails_the_open_with_a_message() {
+    let test = "ssh_real_link_an_endpoint_prepare_link_cannot_clear_fails_the_open_with_a_message";
     let Some(host) = Sshd::start_with(LINK_SSHD)
         .map_err(|e| eprintln!("SKIP {test}: {e}"))
         .ok()
@@ -389,6 +390,15 @@ async fn ssh_real_link_a_taken_remote_endpoint_fails_the_open_with_a_message() {
     assert!(
         reason.contains("orchestrator link could not be opened"),
         "{reason}"
+    );
+    assert!(
+        matches!(
+            failure.cause,
+            provision::FailureCause::LinkForward(
+                micold_core::ssh::argv::LinkRefusal::Prepare { .. }
+            )
+        ),
+        "the remote step refused it: {failure:?}"
     );
     assert!(
         micold_core::spawn::running_daemon_pid(&resolve_pinned().unwrap()).is_none(),
