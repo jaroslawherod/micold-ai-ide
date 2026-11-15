@@ -2,8 +2,7 @@
 //! `[orchestrator_link] enabled = true` dials the local orchestrator and is listed `online`; with
 //! no link configured nothing is spawned, opened or logged.
 
-use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -17,10 +16,9 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::orchestrator_link::spawn;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
-use tracing_subscriber::fmt::MakeWriter;
 
 use crate::support::{record_when, within, Orchestrator};
-use crate::{config, link_to, FakeOrchestrator};
+use crate::{config, link_to, Captured, FakeOrchestrator};
 
 async fn status_is(handle: &micold_daemon::orchestrator_link::LinkHandle, want: LinkStatus) {
     within("the status settles", async {
@@ -64,26 +62,6 @@ async fn a_daemon_started_before_the_orchestrator_links_without_a_restart() {
     let orchestrator = Orchestrator::start_in(dir).await;
     record_when(&orchestrator, "hostbox", |r| r["health"] == "online").await;
     status_is(&handle, LinkStatus::Linked).await;
-}
-
-#[derive(Clone, Default)]
-struct Captured(Arc<Mutex<Vec<u8>>>);
-
-impl io::Write for Captured {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> MakeWriter<'a> for Captured {
-    type Writer = Captured;
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
-    }
 }
 
 /// FR-010, SC-005: no table, a disabled table or an empty `socket`: no task, no socket, no log.

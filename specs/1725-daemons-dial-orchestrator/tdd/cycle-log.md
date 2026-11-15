@@ -77,3 +77,33 @@ failed before the implementation.
   `claim_failed(Dropped)`), `Welcome` and both `Refused`; the steady loop's two sends use it too →
   `--test orchestrator_dial` 14 passed, `--test orchestrator` 50 passed.
 - refactor: none beyond the steady loop's sends moving onto the one helper.
+
+### Cycle 7 — sessions survive an outage; the link returns by itself (T016 → T019, FR-008, SC-003)
+
+- tests: `crates/micold-daemon/tests/orchestrator_dial/outage.rs`, three tests on a paused clock:
+  `an_orchestrator_outage_changes_nothing_for_a_session_or_its_client` (scenario 1: a real PTY
+  counting `tick_<n>`, a client viewing it over `server::serve_connection`, a 30 s outage: the session
+  is alive and registered, the client is still connected and gets newer output, `orchestrator link
+  lost` is logged exactly once), `a_daemon_is_online_within_16_s_of_the_orchestrator_returning`
+  (scenario 2), `a_restart_while_linked_is_accepted_as_the_restored_record` (scenario 3: one record,
+  same fields, no `Refused`/`HelloRefused` status ever seen).
+- red: not observed. M1's link task already reads only `DaemonConfig` and its status cell and logs on
+  change, so the tests passed on their first run (`--test orchestrator_dial` 17 passed). Recorded as
+  test-after for behaviour M1 delivered; strength checked with deliberate mutants instead, each
+  restored after (`--test orchestrator_dial outage`):
+  - log every `NotLinked` (drop the `status == self.logged` guard, match `(_, NotLinked)`) →
+    scenario 1 FAILED, `the loss is logged once` `left: 16`;
+  - failure delay `.max(25 s)` in `RetryPolicy::after_failure` → scenario 2 FAILED,
+    `online 21.02s after the return`;
+  - `return` after a lost link (no redial) → scenarios 2 and 3 FAILED, `the status settles: nothing
+    within 20s`.
+  No mutant reaches the session or client half of scenario 1 from the link code: the task holds no
+  `DaemonState`, which is what T019 asks; the half is kept as a regression guard.
+- found while writing it: a thread-local `tracing` subscriber missed the link task's events whenever
+  another outage test ran in parallel (deterministic `left: 0` with the three outage tests, pass
+  alone); `Captured::for_this_thread` in `main.rs` installs one global subscriber that routes each
+  event to its thread's capture. Not a product bug.
+- green: T019 needed no change in `orchestrator_link/mod.rs`.
+- refactor: `Captured` moved from `host.rs` to `main.rs` so both stories share it.
+- quickstart §A step 4, by hand with the real binaries (host daemon, `orchestrator` process, 30 s
+  stop): daemon still running, `orchestrator link lost` logged once, `online 0.6 s after the return`.

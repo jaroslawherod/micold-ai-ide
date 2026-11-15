@@ -5,12 +5,17 @@
 #[path = "../orchestrator/support.rs"]
 mod support;
 
+#[path = "../support/conn.rs"]
+mod conn;
+
 mod host;
+mod outage;
 mod process;
 mod stalled;
 
+use std::io;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -21,6 +26,7 @@ use micold_core::orchestrator::{decode_first_frame, FirstFrame, LinkAnnouncement
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tracing_subscriber::fmt::MakeWriter;
 
 use support::preamble_codec;
 
@@ -146,5 +152,74 @@ impl Wire {
             Frame::Control(msg) => msg,
             other => panic!("expected a control frame, got {other:?}"),
         }
+    }
+}
+
+/// Log output, captured for a test's assertions.
+#[derive(Clone, Default)]
+pub struct Captured(pub Arc<Mutex<Vec<u8>>>);
+
+impl Captured {
+    /// What this thread logs from now on, at `DEBUG` and above, through one process-wide
+    /// subscriber that hands each event to its thread's capture (and drops it on a thread with
+    /// none). A thread-local subscriber misses events whose callsites a parallel test registered
+    /// first; a global one does not. A `#[tokio::test]` runtime polls its tasks on its own thread.
+    pub fn for_this_thread() -> Self {
+        static GLOBAL: std::sync::Once = std::sync::Once::new();
+        GLOBAL.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .with_writer(|| ThisThread)
+                .with_ansi(false)
+                .with_max_level(tracing::Level::DEBUG)
+                .finish();
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("the first global subscriber");
+        });
+        let captured = Self::default();
+        CAPTURE.with(|slot| *slot.borrow_mut() = Some(captured.clone()));
+        captured
+    }
+
+    /// Everything written so far.
+    pub fn text(&self) -> String {
+        String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+    }
+}
+
+impl io::Write for Captured {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> MakeWriter<'a> for Captured {
+    type Writer = Captured;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+thread_local! {
+    static CAPTURE: std::cell::RefCell<Option<Captured>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Writes to the current thread's [`Captured`], if it has one.
+struct ThisThread;
+
+impl io::Write for ThisThread {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        CAPTURE.with(|slot| {
+            if let Some(captured) = slot.borrow_mut().as_mut() {
+                captured.0.lock().unwrap().extend_from_slice(buf);
+            }
+        });
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }

@@ -263,6 +263,11 @@ socket  = "/run/user/1000/micold/orchestrator.sock"  # optional
 The daemon never opens a new port for the link: it only connects out. The dial runs in the background,
 so a slow or absent orchestrator never delays a client. A lost link is dialled again by itself.
 
+Stopping or restarting the orchestrator does not touch the daemon's sessions or clients: sessions keep
+running and producing output, clients stay connected, and the daemon logs `orchestrator link lost`
+once. When the orchestrator is back, the daemon is listed `online` again within 16 seconds, with no
+restart.
+
 Rule:
 
 - **L1**: `orchestrator_link.socket` is not empty. Reported at the value.

@@ -694,6 +694,19 @@ SSH reconnect). The first delay after a lost link may grow by up to 20 %. A refu
 up`, `orchestrator link lost`, a refusal with its reason), never every retry. It reads only the
 configuration and holds no lock a session waits on, so an orchestrator outage never touches a session.
 
+While the orchestrator is down or restarting, every session keeps running and producing output and
+every client stays connected: the link is the only thing that ends, and the daemon logs
+`orchestrator link lost` once. When the orchestrator listens again the daemon links by itself, with
+no restart, within 16 seconds (the 15-second capped delay plus the dial). An orchestrator restarted
+on the same registry lists the daemon as the record it restored, `offline` until the re-dial and then
+`online`: the old link ended with the old process, so the claim is not refused as already linked and
+no second record appears.
+
+The orchestrator's own sends during the handshake (the verdict, `Welcome`, a `Hello` refusal) are
+bounded by the same 9-second deadline as its pings (`send_bounded` in `orchestrator/link.rs`). A dialer
+that keeps the connection open and stops reading is dropped at the deadline, and the id it reserved
+is free for the next claim.
+
 Container, SSH-host and pod daemons reach the orchestrator through a reverse forward of the connection
 that holds them; that is covered when it lands.
 

@@ -52,11 +52,11 @@ description: "Task list for feature 1725: daemons dial the orchestrator"
 
 **Independent Test**: a daemon with a producing session and a client; stop the orchestrator, start it, the daemon is `online` again within 16 s.
 
-- [ ] T016 [US4] Write failing integration tests in `crates/micold-daemon/tests/orchestrator_dial/outage.rs`: with a session producing output and a connected client, stop the orchestrator for 30 s (paused clock) and assert session and client are unchanged (scenario 1, SC-003); `online` within 16 s of its return (scenario 2); an orchestrator restart while linked makes the daemon re-dial and be accepted as the restored record, with no `AlreadyLinked` refusal and no duplicate (scenario 3)
+- [X] T016 [US4] Write failing integration tests in `crates/micold-daemon/tests/orchestrator_dial/outage.rs`: with a session producing output and a connected client, stop the orchestrator for 30 s (paused clock) and assert session and client are unchanged (scenario 1, SC-003); `online` within 16 s of its return (scenario 2); an orchestrator restart while linked makes the daemon re-dial and be accepted as the restored record, with no `AlreadyLinked` refusal and no duplicate (scenario 3)
 - [X] T017 [US4] Write a failing integration test in `crates/micold-daemon/tests/orchestrator_dial/stalled.rs` for FR-011: a dialer that stalls (never reads) at each of the four bounded sends (`refuse`, `Accepted`, `Welcome`, `Refused`), one case each; the orchestrator link ends within `LIVENESS_DEADLINE` and the id reservation is released (`claim_failed`)
 - [X] T018 [US4] Add `send_bounded(framed, item)` (`timeout(LIVENESS_DEADLINE, framed.send(item))` mapped to `io::ErrorKind::TimedOut`) in `crates/micold-daemon/src/orchestrator/link.rs` and use it for `refuse`, `Accepted`, `Welcome` and `Refused`
-- [ ] T019 [US4] Make T016 pass in `crates/micold-daemon/src/orchestrator_link/mod.rs`: the task reads only `DaemonConfig` and its own status cell, takes no `DaemonState` lock a session waits on, and keeps the log-on-change of T013 (FR-008)
-- [ ] T020 [US4] Document the outage behaviour (sessions keep running, the link returns by itself, the 16 s bound) in `docs/user-guide/daemon-configuration.md` and `docs/daemon.md`
+- [X] T019 [US4] Make T016 pass in `crates/micold-daemon/src/orchestrator_link/mod.rs`: the task reads only `DaemonConfig` and its own status cell, takes no `DaemonState` lock a session waits on, and keeps the log-on-change of T013 (FR-008)
+- [X] T020 [US4] Document the outage behaviour (sessions keep running, the link returns by itself, the 16 s bound) in `docs/user-guide/daemon-configuration.md` and `docs/daemon.md`
 
 ## Phase 5: User Story 5 - A refusal or a crowd does not turn the daemon into a hot loop (P2)
 
