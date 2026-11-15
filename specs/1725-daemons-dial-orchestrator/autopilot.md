@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2igsm0
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M3 review B (orchestrator), then open the M3 PR from pr-title.md/pr-body.md
+- **Next step**: milestone M4 (T028–T037), in a fresh thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
 | #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
 | #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
+| #1976 | M3 refusal back-off + link status | merged (squash) | 2880eeb17df5910c8252793dbce4243631bb40a2 |
 
 ## Milestones
 
@@ -67,6 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B 1 | F2 MINOR: `pub struct Detached` is test-only API | recorded in drift-M2.md; daemon crate is internal, no public API surface |
 
 ## Handover
+
+2026-11-15, M3 thread (branch claude/project-thread-2igsm0): PR #1976 squash-merged (2880eeb17) on green `ci complete` (mutants advisory, red as before). Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) CLEAN, 1 MINOR accepted. Unit ~180k tokens, one part. Gate.sh fails only `autopilot.test.sh facts: caps the callers` in cloud (CI green). Next: M4 (T028–T037, tier full) in a fresh cloud thread running `/speckit-autopilot resume`; update the Worktree branch line.
 
 2026-11-15, M3 unit (branch claude/project-thread-2igsm0, previous PR #1975 merged at 1e9b379e3c749ce740aefcf0bd6a118991b3506a): T021–T027 done and ticked; cycles 8–10 and review A fixes in tdd/cycle-log.md; drift-M3.md written, plan-drift clean. Review A (opus, headless) CLEAN with 3 MINOR, all fixed in 11cf6ef6a. Not run by the unit (orchestrator runs them): review B, visual pass (nothing visible changed). PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review B on origin/main...HEAD, then open the PR.
 2026-11-15, M2 thread (branch claude/project-thread-itbg1f): PR #1975 squash-merged (1e9b379e3) on green `ci complete`. Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) MINOR-ONLY, 2 MINOR declined. Mutants (advisory) red again from the job's environment, not the diff: baseline failed on netns test (`unshare -rn` unavailable); on M1 it was documentation_is_not_read (no .git in the copy). Reported to the coordinator for a chore. origin/main merged back; diff vs main is ledger only. Next: M3 (T021–T027, tier full) in a fresh cloud thread running `/speckit-autopilot resume` (update the Worktree branch line to that thread's branch). Unit took ~250k tokens over ~73 min in one part.
