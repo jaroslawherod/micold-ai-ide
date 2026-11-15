@@ -1,32 +1,32 @@
 <!-- claude-projects-attribution: {"github_login":"jaroslawherod"} -->
-_Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_01RyHdfvmnDGyHasLedRFLeQ?thread=cmsg_01RyHdfvmnDGyHasLedRFLeQVywo8xFvzy2nyDFzeziRa1)_
+_Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_01RyHdfvmnDGyHasLedRFLeQ?thread=cmsg_01RyHdfvmnDGyHasLedRFLeQGaQeWLC839ddYbhWSNyrDu)_
 
-## Milestone M4 of 5 — daemons dial the orchestrator (specs/1725-daemons-dial-orchestrator)
+## Milestone M5 of 5 — daemons dial the orchestrator (specs/1725-daemons-dial-orchestrator)
 
-**Deliverable**: when the app opens its SSH connection with the link request, it opens one reverse forward. The container, SSH-host and pod daemons behind that forward are listed `online` with their own kind, and the forward reaches nothing else.
-**Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --features ssh-real-runtime --test ssh_real ssh_real_link -- --test-threads=1` (rootless `sshd`; quickstart §B steps 1, 3, 5); unit tests `scripts/build-lock.sh cargo test -p micold-core argv`
-**Tasks**: T028–T037 · **Satisfies**: US2 scenarios 1–4; FR-004, FR-005; SC-001 (four kinds), SC-006
+**Deliverable**: killing the app's SSH connection shows the daemon `offline` within 10 s, and reopening it shows `online` within 16 s with the daemon pid unchanged, including after a `kill -9` and an immediate reopen.
+**Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --features ssh-real-runtime --test ssh_real ssh_real_link -- --test-threads=1` (rootless `sshd`; quickstart §B steps 2, 4)
+**Tasks**: T038–T040 · **Satisfies**: US3 scenarios 1–3; FR-009; SC-002
 
-- `argv::LinkForward` checks both socket paths. `Forward` is now an enum with two shapes, the install relay and the link. `bridge_with_link` adds `-o ExitOnForwardFailure=yes -o ClearAllForwardings=no -R <remote>:<local>`. `prepare_link` builds the remote step's command. `admit_link` / `link_config_allows` hold the `ssh -G` rule for user-config hosts.
-- `micold-daemon remote prepare-link` creates or verifies the owner-only pinned directory, removes `orchestrator.sock` and prints its path.
-- `ProvisionOptions.link: Option<LinkRequest>`. `start_step` runs `ssh -G` (user-config reach only), then `prepare-link`, then the bridge with the forward. Every refusal is `FailureCause::LinkForward`, including ssh's `remote port forwarding failed`.
-- The client sets `link` at its three construction sites (Unix clients only).
-- `packaging/basic/sshd_config` gains `AllowStreamLocalForwarding remote` and `StreamLocalBindUnlink yes`. The content-hash pin moved with it; the published image digest follows in the image pin PR.
-- **Behaviour change to check**: an SSH host whose own configuration sets a `LocalForward`, `RemoteForward` or `DynamicForward` now fails to connect through the app. A host whose `ssh -G` fails also fails. In both cases the message names the cause (tasks.md T028). research.md R2 originally said "connect without the link", and review A F2 flagged the difference. The ledger records the decision under *Decisions*. Reverting it is one `match` in `provision::admit_link`.
+- Two `ssh_real_link` tests against a real `sshd`:
+  - `SIGTERM` on the app's link `ssh`: the daemon is `offline` within 10 s and the directly linked host daemon stays `online`. While the forward is down, the remote `status.json` stays `not-linked` with one `since`, the log gains no line per retry, and the loss is logged once. After a reopen the daemon is `online` within 16 s, with the same pid and no duplicate record.
+  - `SIGKILL` and an immediate reopen: the daemon links again within 16 s, and is still linked past the heartbeat deadline, so the link runs through the new forward. Same pid, one record.
+- One in-process test (`orchestrator_dial/outage.rs`, paused clock). With a stale `orchestrator.sock`, the daemon is a quiet connect failure for 45 s: `NotLinked`, 0 attempts, and no log line at any level. A listener there then links within 16 s.
+- The tests drive the harness orchestrator's hand-moved `TestClock` with real time (`RealTime`), so its heartbeat deadline runs out as a real one's does.
+- T039 changed no product code. `prepare-link` already removes a stale socket (M4), and a refused connect was already quiet `NotLinked` with the 1, 2, 4, 8, 15 s backoff. See drift-M5.md and tdd/cycle-log.md cycle 15, which also records a mutation check.
+- Docs: `docs/daemon.md` and `docs/user-guide/daemon-configuration.md` now give the offline and reconnect timings and the stale-forward troubleshooting.
 
 ## Agent review
-- Review A (code-review, high, opus, headless): CHANGES with 2 MAJOR and 2 MINOR. Three were fixed and one declined:
-  - F1: the forward is now kept when the user's configuration sets `ClearAllForwardings yes`. The link's argv passes `ClearAllForwardings=no`.
-  - F2: research R2 was updated to match T028 (a prose-only fix).
-  - F3: the scenario-3 test was renamed and now asserts the `Prepare` refusal.
-  - F4: declined. The second `ssh -G` only reads files.
-- Round 2 on the F1 fix and review B (conformance, sonnet): run by the orchestrator.
+- Review A (code-review, high, opus, headless): CLEAN with 3 MINOR, all fixed:
+  - F1: the `SIGKILL` test now times the return on the daemon's side, as a new link with a later `since`.
+  - F2: a comment now gives the right clock step.
+  - F3: the docs no longer claim the test proves a live old session.
+- Review B (conformance, sonnet): run by the orchestrator.
 
 ## Local gate
-`scripts/gate.sh` (CI's order) at 4c34d54: fmt, clippy (core, workspace) and `cargo nextest` (13214 tests) green. `scripts/tests/autopilot.test.sh` failed in this sandbox with a different set of `facts:` cases on each run (1 case, then 7). Their output shows git's own `push negotiation failed` against the test's local remote. No script changed in this diff, so CI validates that part. `ssh_real_link`: 4 passed against a real rootless `sshd` (installed in this session). A mutant that ignores `opts.link` makes all 4 fail. In the whole `ssh_real` suite, `ssh_real_an_unreachable_host_fails_within_the_connection_timeout` fails in this cloud sandbox (`ConnectionRefused` for the unroutable address). That test opens no link. No container runtime was available: `mise run image` / `test-sandbox` were not run (sshd_config changed), so CI's sandbox job covers it. Visual pass: not applicable (nothing visible).
+Local gate: scoped only, full gate left to CI. `scripts/gate.sh` passed fmt and clippy, then stopped at `cargo nextest`, which is not installed in the cloud container. Also run: `cargo test -p micold-daemon --test orchestrator_dial` passed 25. `--features ssh-real-runtime --test ssh_real ssh_real_link -- --test-threads=1` passed 6, against `openssh-server` installed in the sandbox. Nothing visible changed, so there was no visual pass.
 
 Refs #1725
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-https://claude.ai/code/session_01NCdYvKyGYTBua2wMPbNp6R
+https://claude.ai/code/session_01NCdYvMABuGGKd9weFcWVxL

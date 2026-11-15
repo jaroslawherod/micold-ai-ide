@@ -289,6 +289,24 @@ text.
 The forward needs a Unix remote and a Unix computer running the application (as SSH hosts do, feature
 489); a Windows application opens no forward.
 
+Because the link of a container, SSH-host or pod daemon rides on the application's SSH connection, the
+orchestrator lists that daemon `offline` within 10 seconds of the connection ending (closed, killed or
+the network lost), while every other daemon stays as it was. The daemon itself keeps running with its
+sessions. Reopen the connection and it is `online` again within 16 seconds, as the same daemon and the
+same record, with no restart. Until then it keeps trying quietly, after 1, 2, 4, 8, then every 15
+seconds, and logs only `orchestrator link lost`, once.
+
+If a reopened connection does not bring it back:
+
+- `micold-daemon remote status` on the remote prints the link's state. `not-linked` means its dials
+  find no orchestrator: the forward is not open. Check that the connection is open in the application,
+  and that the remote's SSH server allows it (`AllowStreamLocalForwarding`, above).
+- A socket left behind by a killed connection (`orchestrator.sock` in the daemon's runtime directory,
+  `/tmp/micold-<uid>` on Linux) is harmless: the next connection removes it before it opens the
+  forward. A directory or a file there that cannot be removed fails the connection with a message
+  naming the orchestrator link; remove it by hand.
+- A state starting `refused-` is the orchestrator's answer, not the forward's: see the reasons below.
+
 Stopping or restarting the orchestrator does not touch the daemon's sessions or clients: sessions keep
 running and producing output, clients stay connected, and the daemon logs `orchestrator link lost`
 once. When the orchestrator is back, the daemon is listed `online` again within 16 seconds, with no
