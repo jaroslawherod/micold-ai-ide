@@ -1013,8 +1013,7 @@ pub async fn session_env_and_home(
     token_file: &str,
 ) -> SessionFacts {
     let cmd = format!(
-        r#"S=$(sed -n 's/^token=//p' {token_file} | head -n1); test -n "$S" || echo NOSECRET"="1; echo ENVSECRET"="$(env | grep -cF -- "$S"); echo ENVSSH"="$(env | grep -c '^SSH_AUTH_SOCK='); echo HOMEDIR"="$HOME; echo HOMELS"="$(ls -A "$HOME" | tr '
-' ,); echo HOMESSH"="$(test -e "$HOME/.ssh" && echo 1 || echo 0); echo HOMEHITS"="$(grep -rlF -- "$S" "$HOME" 2>/dev/null | wc -l)"#
+        r#"S=$(sed -n 's/^token=//p' {token_file} | head -n1); test -n "$S" || echo NOSECRET"="1; echo ENVSECRET"="$(env | grep -cF -- "$S"); echo ENVSSH"="$(env | grep -c '^SSH_AUTH_SOCK='); echo HOMEDIR"="$HOME; echo HOMELS"="$(ls -A "$HOME" | tr '\n' ,); echo HOMESSH"="$(test -e "$HOME/.ssh" && echo 1 || echo 0); echo HOMEHITS"="$(grep -rlF -- "$S" "$HOME" 2>/dev/null | wc -l)"#
     );
     let seen = shell.capture(conn, tag, &cmd, 120).await;
     assert!(

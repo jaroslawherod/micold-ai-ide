@@ -175,3 +175,4 @@ Append only. Newest last.
   `kube_real_support/mod.rs` so both tests share it.
 - M3 review fixes: `in_clone` git calls clear `credential.helper` and set `GIT_TERMINAL_PROMPT=0` (one `git_in` helper); the client-log scan also looks for the base64 of each secret and of the token store files; the env/home check now also runs in a second session (`Shell::open_another_session`). The live test is unrun here (no cluster).
 - 2026-11-15 CI red (kube-cluster, 715d8488f): push, pull and helper offers passed; the env check timed out because opening the second session replaced the viewed terminals before shells 1 and 2 were checked. The second session now opens only for the third check.
+- 2026-11-15 CI red (kube-cluster, e296b13c7): the env check's command held a literal newline (`tr '<newline>' ,`), so the shell printed a `> ` continuation prompt before each fact and `field` found no `ENVSECRET`; now `tr '\\n' ,`.
