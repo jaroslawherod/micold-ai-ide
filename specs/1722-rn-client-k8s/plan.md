@@ -432,16 +432,17 @@ M6 and M7 to retirement.
 9. Sign-in (Q-C, 2026-11-15): **yes**, GitHub and Google on a network, the local access link on
    loopback, no passwords; and the application should become **multi-user** at some point (see
    [Toward multi-user](#toward-multi-user)).
+10. Permissions (Q-D, 2026-11-15): **yes**, three global roles in v1; grants come with multi-user.
+11. Repository and names (Q-E, 2026-11-15): **keep the monorepo**: the client (`apps/client/`,
+    `packages/protocol/`), the chart (`deploy/helm/micold`) and the Rust crates live in this
+    repository; images publish from it to `ghcr.io/jaroslawherod/micold-orchestrator` and
+    `ghcr.io/jaroslawherod/micold-web`.
 
 ## Open questions for jaro
 
-- **Q-D — Per-daemon grants**: three global roles for "basic permissions". OK?
 - **Q-F — Local mode storage**: PostgreSQL for every network deployment. For the loopback-only
   local mode, SQLite through the same traits (no server to run), or Postgres everywhere (one code
   path, but a local Postgres to install)? Recommendation: SQLite locally.
-- **Q-E — Names**: the image namespace (`ghcr.io/jaroslawherod/…`) and the public host name pattern
-  in the chart's examples.
-
 Also planned without a question (say if you disagree): an owner screen listing signed-in browsers
 with sign-out per browser (N3), linking a GitHub and a Google identity to one user, and
 accessibility to WCAG 2.2 AA with screen-reader labels on every control.
