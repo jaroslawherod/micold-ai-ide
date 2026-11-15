@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1948
 - **Worktree branch**: claude/project-thread-ns6vcg
 - **Started**: 2026-11-15
-- **Phase**: tasks (written, awaiting review)
-- **Next step**: design PR open; await merge, then M1
+- **Phase**: design merged
+- **Next step**: milestone M1 (T001–T013), in a fresh thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1967 | Design (spec, plan, tasks) | open (draft) | |
+| #1967 | Design (spec, plan, tasks) | merged (squash) | f5f8e812ae7b2eaf30aed5b465c90ab832f9b3ce |
 
 ## Milestones
 
@@ -56,13 +56,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-| #1967 | Design (spec, plan, tasks) | open (draft) | |
+| #1967 | Design (spec, plan, tasks) | merged (squash) | f5f8e812ae7b2eaf30aed5b465c90ab832f9b3ce |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
 
 ## Handover
 
-None. Tasks written and committed; analyze findings I1, G1, U1, R1 fixed (spec FR-007/FR-009/FR-006 wording, plan Migrations SQLite retry, T001/T035). Next: orchestrator dispatches the tasks reviewer on the snapshot above; then close checklists (requirements.md has no unchecked items), scripts/gate.sh specs-only, open the design PR.
+Design PR #1967 squash-merged 2026-11-15 as f5f8e812 (CI `ci complete` green; verdict head 51d20197 differed only in this ledger). Branch claude/project-thread-ns6vcg has origin/main merged in. Next: a fresh cloud thread runs `/speckit-autopilot resume` and dispatches milestone M1 (T001–T013) with previous PR #1967 / f5f8e812. Cloud notes: preflight fails only on mise and gh auth; units have no Agent tool, so the orchestrator dispatches every reviewer; merge via GitHub MCP squash with expectedHeadSha.
 
 ## Open escalation
 
