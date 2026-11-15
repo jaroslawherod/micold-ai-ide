@@ -4,7 +4,9 @@
 use crate::support::sidebar_fixture::{deliver, listed, session_at, state_with_active, worktree};
 use micold_client::app::{Message, State};
 use micold_client::features::sidebar::{more_menu_items, MoreAction};
-use micold_client::features::sidebar_group_actions::{update, Msg, NamingTarget, GROUP_MENU_ITEMS};
+use micold_client::features::sidebar_group_actions::{
+    group_menu_items, step_menu_items, update, Movable, Msg, NamingTarget,
+};
 use micold_client::keymap::{is_new_group_chord, Key, Mods};
 use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroupId};
 use std::path::PathBuf;
@@ -350,8 +352,11 @@ fn deleting_a_group_returns_its_worktrees_and_touches_no_worktree_or_session() {
 
 #[test]
 fn the_group_menu_offers_rename_and_delete_and_acts_on_its_group() {
-    assert_eq!(GROUP_MENU_ITEMS, ["Rename", "Delete"]);
     let mut state = grouped();
+    assert_eq!(
+        menu_labels(&state, 0),
+        ["Rename", "Delete", "Move up", "Move down", "Collapse"]
+    );
     send(&mut state, Msg::MenuOpened(UserGroupId(0), (40, 60)));
     let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
     assert!(
@@ -763,4 +768,357 @@ fn new_group_from_a_move_menu_leaves_an_open_dialog_and_its_draft_alone() {
     let draft = state.sidebar_groups.naming.as_ref().expect("still open");
     assert_eq!(draft.target, NamingTarget::Rename(UserGroupId(0)));
     assert_eq!(draft.text, "Half typed");
+}
+
+// ---- Reorder by the menu (US4; contract C6; test list A16 to A18, U24, U26) ----
+
+fn menu_labels(state: &State, group: u64) -> Vec<String> {
+    group_menu_items(state, UserGroupId(group))
+        .into_iter()
+        .map(|entry| entry.label)
+        .collect()
+}
+
+/// Which of **Move up** and **Move down** are enabled for `what`.
+fn steps_enabled(state: &State, what: Movable) -> Vec<(String, bool)> {
+    step_menu_items(state, &what)
+        .into_iter()
+        .map(|entry| (entry.label, entry.message.is_some()))
+        .collect()
+}
+
+fn up_down(up: bool, down: bool) -> Vec<(String, bool)> {
+    vec![("Move up".into(), up), ("Move down".into(), down)]
+}
+
+fn drawn_dirs(state: &State) -> Vec<String> {
+    use micold_client::features::sidebar::SidebarEntry;
+    state
+        .sidebar_list()
+        .iter()
+        .map(|entry| match entry {
+            SidebarEntry::Worktree(node) => node.worktree.dir_name.clone(),
+            SidebarEntry::UserGroup(header) => format!("[{}]", header.name),
+            _ => "-".into(),
+        })
+        .collect()
+}
+
+#[test]
+fn move_up_and_down_move_a_row_one_place_in_its_list_and_save() {
+    let mut state = grouped();
+    send(&mut state, Msg::MoveUp(Movable::Item(wt_item("b"))));
+    assert_eq!(items_of(&state, 0), vec![wt_item("b"), wt_item("a")]);
+    assert!(state
+        .sidebar
+        .layouts_unsaved
+        .contains(&PathBuf::from(PROJECT)));
+    send(&mut state, Msg::MoveDown(Movable::Item(wt_item("b"))));
+    assert_eq!(items_of(&state, 0), vec![wt_item("a"), wt_item("b")]);
+    assert_eq!(
+        drawn_dirs(&state),
+        ["-", "[Work]", "a", "b", "c"],
+        "the order stays on redraw"
+    );
+}
+
+#[test]
+fn move_up_and_down_are_disabled_at_the_ends_and_change_nothing_there() {
+    let mut state = grouped();
+    assert_eq!(
+        steps_enabled(&state, Movable::Item(wt_item("a"))),
+        up_down(false, true)
+    );
+    assert_eq!(
+        steps_enabled(&state, Movable::Item(wt_item("b"))),
+        up_down(true, false)
+    );
+    assert_eq!(
+        steps_enabled(&state, Movable::Item(wt_item("c"))),
+        up_down(false, false),
+        "alone in the ungrouped list"
+    );
+    assert_eq!(
+        steps_enabled(&state, Movable::Item(wt_item(""))),
+        Vec::<(String, bool)>::new(),
+        "Default is offered none"
+    );
+    let before = state.sidebar_layout().cloned();
+    send(&mut state, Msg::MoveUp(Movable::Item(wt_item("a"))));
+    send(&mut state, Msg::MoveDown(Movable::Item(wt_item("c"))));
+    assert_eq!(state.sidebar_layout().cloned(), before);
+    assert!(state.sidebar.layouts_unsaved.is_empty());
+}
+
+#[test]
+fn move_up_reaches_rows_the_layout_never_held_in_their_drawn_order() {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("a"), listed("b"), listed("c")]);
+    assert_eq!(
+        steps_enabled(&state, Movable::Item(wt_item("c"))),
+        up_down(true, false)
+    );
+    send(&mut state, Msg::MoveUp(Movable::Item(wt_item("c"))));
+    assert_eq!(drawn_dirs(&state), ["-", "a", "c", "b"]);
+}
+
+#[test]
+fn a_groups_move_up_and_down_reorder_the_groups_with_their_rows() {
+    let mut state = grouped();
+    named(&mut state, "Later");
+    assert_eq!(
+        steps_enabled(&state, Movable::Group(UserGroupId(0))),
+        up_down(false, true)
+    );
+    assert_eq!(
+        steps_enabled(&state, Movable::Group(UserGroupId(1))),
+        up_down(true, false)
+    );
+    send(&mut state, Msg::MenuOpened(UserGroupId(1), (40, 60)));
+    send(&mut state, Msg::MoveUp(Movable::Group(UserGroupId(1))));
+    assert!(
+        state.sidebar_groups.group_menu.is_none(),
+        "the pick closes the menu"
+    );
+    assert_eq!(
+        drawn_dirs(&state),
+        ["-", "[Later]", "[Work]", "a", "b", "c"]
+    );
+    let entries: Vec<_> = group_menu_items(&state, UserGroupId(1))
+        .into_iter()
+        .filter(|entry| entry.label.starts_with("Move"))
+        .map(|entry| entry.message)
+        .collect();
+    assert_eq!(
+        entries,
+        vec![None, Some(Msg::MoveDown(Movable::Group(UserGroupId(1))))],
+        "the group menu's entries are the same, disabled at the ends"
+    );
+}
+
+#[test]
+fn a_worktree_and_a_run_group_menu_end_their_move_entries_with_move_up_and_down() {
+    use crate::support::sidebar_fixture::run_group;
+    let mut state = grouped();
+    state.runs.groups.push(run_group(1, "grp", &["g-1", "g-2"]));
+    for item in [wt_item("a"), LayoutItem::Run(state.runs.groups[0].id)] {
+        let labels: Vec<String> = micold_client::ui::sidebar::move_items(&state, &item)
+            .into_iter()
+            .map(|entry| entry.label)
+            .collect();
+        assert_eq!(
+            labels[labels.len() - 2..],
+            ["Move up".to_string(), "Move down".to_string()],
+            "{item:?}: {labels:?}"
+        );
+    }
+}
+
+// ---- Collapse and persistence (US6; contracts C5, C6a; test list A23 to A25, U28, U29) ----
+
+#[test]
+fn toggling_a_header_hides_its_rows_keeps_the_header_and_saves() {
+    let mut state = grouped();
+    send(&mut state, Msg::Toggle(UserGroupId(0)));
+    assert_eq!(drawn_dirs(&state), ["-", "[Work]", "c"]);
+    assert!(state.sidebar_layout().unwrap().groups[0].collapsed);
+    assert!(state
+        .sidebar
+        .layouts_unsaved
+        .contains(&PathBuf::from(PROJECT)));
+    assert_eq!(menu_labels(&state, 0)[4], "Expand");
+    send(&mut state, Msg::Toggle(UserGroupId(0)));
+    assert_eq!(drawn_dirs(&state), ["-", "[Work]", "a", "b", "c"]);
+    assert_eq!(menu_labels(&state, 0)[4], "Collapse");
+    let before = state.sidebar_layout().cloned();
+    send(&mut state, Msg::Toggle(UserGroupId(7)));
+    assert_eq!(
+        state.sidebar_layout().cloned(),
+        before,
+        "a gone group toggles nothing"
+    );
+}
+
+#[test]
+fn the_group_menus_collapse_entry_toggles_and_closes_the_menu() {
+    let mut state = grouped();
+    send(&mut state, Msg::MenuOpened(UserGroupId(0), (40, 60)));
+    let collapse = group_menu_items(&state, UserGroupId(0))
+        .into_iter()
+        .find(|entry| entry.label == "Collapse")
+        .and_then(|entry| entry.message)
+        .expect("enabled");
+    send(&mut state, collapse);
+    assert!(state.sidebar_groups.group_menu.is_none());
+    assert_eq!(drawn_dirs(&state), ["-", "[Work]", "c"]);
+}
+
+#[test]
+fn a_reveal_of_a_row_in_a_collapsed_group_expands_that_group() {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("a"), listed("b"), listed("c")]);
+    let id = session_at(&mut state, worktree("b"));
+    let mut layout = SidebarLayout::default();
+    layout.create("Work").unwrap();
+    layout.create("Later").unwrap();
+    layout.groups[0].items = vec![wt_item("a"), wt_item("b")];
+    layout.groups[0].collapsed = true;
+    layout.groups[1].collapsed = true;
+    state.sidebar_layout_loaded(PathBuf::from(PROJECT), layout);
+    state.session.active = Some(id);
+    state.sidebar.viewport_height = 400;
+    state.sidebar.pending_reveal_scroll = true;
+    assert!(
+        state.reveal_ready(),
+        "the row is there to reach once its group opens"
+    );
+    let groups = &state.sidebar_layout().unwrap().groups;
+    assert_eq!(
+        (groups[0].collapsed, groups[1].collapsed),
+        (false, true),
+        "only the group holding the row opens"
+    );
+    assert!(drawn_dirs(&state).contains(&"b".to_string()));
+}
+
+#[test]
+fn order_and_collapsed_state_survive_a_save_and_a_reload() {
+    use micold_core::store::JsonFileStore;
+    let mut state = grouped();
+    named(&mut state, "Later");
+    send(&mut state, Msg::MoveUp(Movable::Group(UserGroupId(1))));
+    send(&mut state, Msg::MoveUp(Movable::Item(wt_item("b"))));
+    send(&mut state, Msg::Toggle(UserGroupId(1)));
+    let held = state.sidebar_layout().cloned().unwrap();
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("state.json");
+    JsonFileStore::at(path.clone())
+        .save_layout(std::path::Path::new(PROJECT), &held)
+        .expect("saved");
+    let loaded = JsonFileStore::at(path).load_layout(std::path::Path::new(PROJECT));
+    assert_eq!(
+        loaded, held,
+        "groups, order, members and collapsed state come back (SC-003)"
+    );
+    let mut restarted = grouped();
+    restarted.sidebar_layout_loaded(PathBuf::from(PROJECT), loaded);
+    assert_eq!(drawn_dirs(&restarted), drawn_dirs(&state));
+}
+
+#[test]
+fn a_stored_assignment_to_a_worktree_that_is_gone_is_ignored_on_load() {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("a"), listed("c")]);
+    let mut layout = SidebarLayout::default();
+    layout.create("Work").unwrap();
+    layout.groups[0].items = vec![wt_item("gone"), wt_item("a")];
+    layout.ungrouped = vec![wt_item("c")];
+    state.sidebar_layout_loaded(PathBuf::from(PROJECT), layout);
+    assert_eq!(drawn_dirs(&state), ["-", "[Work]", "a", "c"]);
+}
+
+// ---- No state grouping (US7; FR-013, SC-005; test list A19, A26) ----
+
+#[test]
+fn a_grouped_worktree_cycling_through_every_card_state_keeps_its_group_and_place() {
+    use crate::support::sidebar_fixture::{card_state_steps, five_states};
+    use micold_client::features::overview::location_card_state;
+    use micold_client::features::sidebar::SidebarEntry;
+    let mut state = five_states();
+    let mut layout = SidebarLayout::default();
+    layout.create("Work").unwrap();
+    layout.create("Later").unwrap();
+    layout.groups[0].items = vec![wt_item("work"), wt_item("idle"), wt_item("act")];
+    layout.groups[1].items = vec![wt_item("done")];
+    layout.ungrouped = vec![wt_item("attn")];
+    state.sidebar_layout_loaded(PathBuf::from(PROJECT), layout);
+    let baseline = drawn_dirs(&state);
+    assert_eq!(
+        baseline,
+        ["-", "[Work]", "work", "idle", "act", "[Later]", "done", "attn"]
+    );
+    let card = |state: &State| location_card_state(state, &worktree("idle"), Some("feat/idle")).0;
+    let mut seen = vec![card(&state)];
+    for step in card_state_steps("idle") {
+        step(&mut state);
+        seen.push(card(&state));
+        assert_eq!(drawn_dirs(&state), baseline, "at {:?}", seen.last());
+    }
+    seen.sort_by_key(|c| format!("{c:?}"));
+    seen.dedup();
+    assert_eq!(seen.len(), 5, "all five card states were visited: {seen:?}");
+    // US7-2: every header is a user group the layout holds, named by the user, never a state.
+    let names: Vec<String> = state
+        .sidebar_list()
+        .iter()
+        .filter_map(|entry| match entry {
+            SidebarEntry::UserGroup(header) => Some(header.name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, ["Work", "Later"]);
+    for state_name in [
+        "Idle",
+        "Working",
+        "Done",
+        "NeedsAttention",
+        "NeedsAction",
+        "Needs",
+    ] {
+        assert!(
+            !names.iter().any(|n| n.contains(state_name)),
+            "{state_name}"
+        );
+    }
+}
+
+// ---- The group menu by keyboard (C6; test list U30; ledger follow-up on menu focus) ----
+
+fn highlighted(state: &State) -> Option<usize> {
+    state
+        .sidebar_groups
+        .group_menu
+        .and_then(|menu| menu.highlighted)
+}
+
+#[test]
+fn a_keyboard_opened_group_menu_highlights_its_first_entry_and_steps_over_disabled_ones() {
+    let mut state = grouped();
+    send(&mut state, Msg::MenuKeyed(UserGroupId(0), (40, 60)));
+    assert_eq!(highlighted(&state), Some(0), "Rename holds the keyboard");
+    let forward = |state: &mut State, forward: bool| send(state, Msg::MenuMoved { forward });
+    forward(&mut state, true);
+    assert_eq!(highlighted(&state), Some(1));
+    forward(&mut state, true);
+    assert_eq!(
+        highlighted(&state),
+        Some(4),
+        "Move up and Move down are disabled: Collapse"
+    );
+    forward(&mut state, true);
+    assert_eq!(highlighted(&state), Some(0), "wraps");
+    forward(&mut state, false);
+    assert_eq!(highlighted(&state), Some(4));
+    send(&mut state, Msg::MenuActivated);
+    assert!(state.sidebar_groups.group_menu.is_none());
+    assert!(
+        state.sidebar_layout().unwrap().groups[0].collapsed,
+        "Collapse ran"
+    );
+}
+
+#[test]
+fn a_pointer_opened_group_menu_takes_the_keyboard_at_the_first_arrow() {
+    let mut state = grouped();
+    send(&mut state, Msg::MenuOpened(UserGroupId(0), (40, 60)));
+    assert_eq!(highlighted(&state), None);
+    send(&mut state, Msg::MenuActivated);
+    assert!(
+        state.sidebar_groups.group_menu.is_some(),
+        "nothing highlighted, nothing run"
+    );
+    send(&mut state, Msg::MenuMoved { forward: true });
+    assert_eq!(highlighted(&state), Some(0));
+    send(&mut state, Msg::MenuActivated);
+    assert!(state.sidebar_groups.naming.is_some(), "Rename ran");
 }

@@ -16,11 +16,13 @@
 //! first report is where the drag starts from, and at [`ACTIVATION_PX`] from it the drag is
 //! active; below that the release is the click it always was (the row's own press selects). While
 //! active, [`hit_test`] over the drawn rows turns each report into the [`DropSpot`]: the target
-//! the sidebar highlights and the row edge its insertion marker is on. The release, heard through
+//! the sidebar highlights and the row edge its insertion marker is on. A dragged group header
+//! lands between the groups instead ([`group_hit_test`], FR-019). The release, heard through
 //! the window, commits; Escape, the window losing focus, a release over no target, or the dragged
 //! row leaving the sidebar ends it with no change. A drag Escape or the focus loss ended still
 //! holds the dragged row's release back until the button is up ([`State::held`]), so letting go
-//! over that row is no click either.
+//! over that row is no click either; the next press lets go of it whatever it arms, so a release
+//! the window never heard leaves no row inert.
 //!
 //! # Messages
 //!
@@ -39,7 +41,7 @@ pub const ACTIVATION_PX: u32 = 4;
 pub enum Dragged {
     /// A worktree row or a run group's row, which moves as one unit with its runs (FR-016).
     Item(LayoutItem),
-    /// A user group, by its header. It lands between headers, which arrives with US4.
+    /// A user group, by its header. It lands between the groups (US4).
     Group(UserGroupId),
 }
 
@@ -88,6 +90,9 @@ pub struct DropSpot {
     pub marker: usize,
     /// Whether the marker is on that row's bottom edge rather than its top.
     pub below: bool,
+    /// For a dragged group: its new position among the groups ([`DropTarget::GroupSlot`]). Then
+    /// no list is highlighted and `list`, `before` and `after` name nothing.
+    pub slot: Option<usize>,
 }
 
 /// Everything the user does while dragging.
@@ -185,6 +190,7 @@ pub fn hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<Dro
             after: None,
             marker: span.row,
             below: true,
+            slot: None,
         });
     };
     Some(if y < span.top + span.height / 2.0 {
@@ -194,6 +200,7 @@ pub fn hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<Dro
             after: None,
             marker: span.row,
             below: false,
+            slot: None,
         }
     } else {
         DropSpot {
@@ -202,14 +209,58 @@ pub fn hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<Dro
             after: Some(item),
             marker: last,
             below: true,
+            slot: None,
         }
     })
+}
+
+/// The place a dragged group header dropped at height `y` lands (FR-019, C3): over a group, its
+/// header and the rows it shows, before that group in the block's upper half and after it in the
+/// lower half, the marker on the header's top edge or under the block's last row. Default, the
+/// ungrouped rows and the space below are no place for a group.
+pub fn group_hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<DropSpot> {
+    let spans = entry_spans(heights, entries);
+    let lists = entry_lists(entries);
+    let mut slot = 0;
+    let mut at = 0;
+    while at < spans.len() {
+        let Some(Some(id)) = lists[at] else {
+            at += 1;
+            continue;
+        };
+        let end = (at..spans.len())
+            .take_while(|&e| lists[e] == Some(Some(id)))
+            .last()
+            .unwrap_or(at);
+        let (top, bottom) = (spans[at].top, spans[end].top + spans[end].height);
+        if y >= top && y < bottom + ROW_GAP {
+            let before = y < top + (bottom - top) / 2.0;
+            return Some(DropSpot {
+                list: None,
+                before: None,
+                after: None,
+                marker: if before {
+                    spans[at].row
+                } else {
+                    spans[end].row + spans[end].rows - 1
+                },
+                below: !before,
+                slot: Some(if before { slot } else { slot + 1 }),
+            });
+        }
+        slot += 1;
+        at = end + 1;
+    }
+    None
 }
 
 /// This feature's reducer (shape A).
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
     match msg {
         Msg::Pressed(dragged) => {
+            // Any press means the button went down again: a row still held after a cancel whose
+            // release the window never heard is let go (M4 review B r2).
+            state.sidebar_drag.held = None;
             if can_drag(state, &dragged) {
                 state.sidebar_drag = State {
                     armed: Some(dragged),
@@ -279,12 +330,16 @@ fn moved(state: &mut crate::app::State, at: Option<(u32, u32)>) {
     if !state.sidebar_drag.active {
         return;
     }
-    state.sidebar_drag.over = match (&state.sidebar_drag.armed, at) {
-        (Some(Dragged::Item(_)), Some((_, y))) => {
-            let entries = state.sidebar_list();
-            hit_test(y as f32, &row_heights(&entries), &entries)
-        }
-        _ => None,
+    let Some((_, y)) = at else {
+        state.sidebar_drag.over = None;
+        return;
+    };
+    let entries = state.sidebar_list();
+    let heights = row_heights(&entries);
+    state.sidebar_drag.over = match &state.sidebar_drag.armed {
+        Some(Dragged::Item(_)) => hit_test(y as f32, &heights, &entries),
+        Some(Dragged::Group(_)) => group_hit_test(y as f32, &heights, &entries),
+        None => None,
     };
 }
 
@@ -299,26 +354,22 @@ fn moved_far(from: (u32, u32), to: (u32, u32)) -> bool {
 /// change. The drag ends either way.
 fn released(state: &mut crate::app::State) -> Vec<Outcome> {
     let drag = std::mem::take(&mut state.sidebar_drag);
-    let (Some(Dragged::Item(item)), true, Some(spot)) = (drag.armed, drag.active, drag.over) else {
+    let (Some(dragged), true, Some(spot)) = (drag.armed, drag.active, drag.over) else {
         return Vec::new();
     };
     let Some(project) = state.workspace.active.clone() else {
         return Vec::new();
     };
+    let item = match dragged {
+        Dragged::Group(id) => return group_released(state, project, id, &spot),
+        Dragged::Item(item) => item,
+    };
     if !state.layout_item_exists(&item) {
         return Vec::new();
     }
-    let mut layout = state
-        .sidebar_layout()
-        .cloned()
-        .unwrap_or_else(SidebarLayout::default);
     // A drawn row the layout does not hold yet is ungrouped, after the held ones, where the
     // sidebar draws it: placed there so the marker's neighbours have a place to count from.
-    for entry in &state.sidebar_list() {
-        if let Some(drawn) = layout_item(entry) {
-            layout.adopt(&drawn);
-        }
-    }
+    let mut layout = state.sidebar_layout_placed();
     let Some(to) = drop_target(&layout, &spot) else {
         return Vec::new();
     };
@@ -329,6 +380,24 @@ fn released(state: &mut crate::app::State) -> Vec<Outcome> {
     // A drop on a collapsed group opens it, to show the row that landed (C4, FR-018).
     if let Some(group) = layout.groups.iter_mut().find(|g| Some(g.id) == spot.list) {
         group.collapsed = false;
+    }
+    vec![Outcome::SidebarLayoutChanged { project, layout }]
+}
+
+/// A dragged group released over `spot`: it takes that place among the groups, its rows with it.
+/// Its own place, or a group that is gone, changes nothing.
+fn group_released(
+    state: &crate::app::State,
+    project: std::path::PathBuf,
+    id: UserGroupId,
+    spot: &DropSpot,
+) -> Vec<Outcome> {
+    let (Some(slot), Some(held)) = (spot.slot, state.sidebar_layout()) else {
+        return Vec::new();
+    };
+    let mut layout = held.clone();
+    if layout.move_group(id, slot).is_err() || layout == *held {
+        return Vec::new();
     }
     vec![Outcome::SidebarLayoutChanged { project, layout }]
 }

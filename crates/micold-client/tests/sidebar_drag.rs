@@ -418,19 +418,120 @@ fn a_run_group_row_is_dragged_and_dropped_as_one_unit() {
 }
 
 #[test]
-fn a_group_header_arms_a_group_drag_that_drops_nowhere_yet() {
+fn a_group_header_arms_a_group_drag_that_lands_between_headers_only() {
     let mut state = grouped();
-    let before = layout(&state);
     start(&mut state, Dragged::Group(PLAY));
     assert_eq!(state.sidebar_drag.armed, Some(Dragged::Group(PLAY)));
+    let c = entry_at(&state, row("c"));
+    hover(&mut state, c, 0.25);
+    assert_eq!(
+        state.sidebar_drag.over, None,
+        "a group lands between headers, never in the ungrouped list"
+    );
+    let work = entry_at(&state, header(WORK));
+    hover(&mut state, work, 0.25);
+    let spot = state
+        .sidebar_drag
+        .over
+        .clone()
+        .expect("above Work's header");
+    assert_eq!(spot.slot, Some(0), "before the first group");
+    assert!(!spot.below, "the marker on the top edge of Work's header");
+    let b = entry_at(&state, row("b"));
+    hover(&mut state, b, 0.75);
+    let spot = state
+        .sidebar_drag
+        .over
+        .clone()
+        .expect("in Work's lower half");
+    assert_eq!(spot.slot, Some(1), "after Work, its rows included");
+    assert!(spot.below);
+}
+
+// ---- T037: reorder by drag (US4, FR-019, C3) --------------------------------------------------
+
+#[test]
+fn a_row_dragged_over_a_header_gets_a_list_place_never_a_group_slot() {
+    let state = grouped();
+    let entries = state.sidebar_list();
+    let heights = row_heights(&entries);
+    let work = entries.iter().position(header(WORK)).unwrap();
+    let span = entry_spans(&heights, &entries)[work];
+    let spot = hit_test(span.top + span.height * 0.25, &heights, &entries).unwrap();
+    assert_eq!((spot.list, spot.slot), (Some(WORK), None));
+}
+
+#[test]
+fn dropping_a_group_header_among_the_groups_reorders_them_with_their_rows() {
+    let mut state = grouped();
+    start(&mut state, Dragged::Group(PLAY));
+    let work = entry_at(&state, header(WORK));
+    hover(&mut state, work, 0.25);
+    send(&mut state, Msg::Released);
+    let order: Vec<UserGroupId> = layout(&state).groups.iter().map(|g| g.id).collect();
+    assert_eq!(order, vec![PLAY, WORK]);
+    assert_eq!(
+        items_of(&state, WORK),
+        vec![wt("a"), wt("b")],
+        "its rows go with it"
+    );
+    assert!(saved(&state));
+    let drawn: Vec<usize> = [header(PLAY), header(WORK)]
+        .into_iter()
+        .map(|m| entry_at(&state, m))
+        .collect();
+    assert!(drawn[0] < drawn[1], "the sidebar draws the new order");
+    assert!(
+        entry_at(&state, row("a")) > drawn[1],
+        "Work's rows under Work"
+    );
+}
+
+#[test]
+fn a_group_dropped_on_its_own_place_changes_nothing() {
+    let mut state = grouped();
+    let before = layout(&state);
+    start(&mut state, Dragged::Group(WORK));
     let a = entry_at(&state, row("a"));
     hover(&mut state, a, 0.25);
     assert_eq!(
-        state.sidebar_drag.over, None,
-        "a group lands between headers (M5), not in a list"
+        state.sidebar_drag.over.as_ref().and_then(|s| s.slot),
+        Some(0)
     );
     send(&mut state, Msg::Released);
     assert_eq!(layout(&state), before);
+    assert!(!saved(&state));
+}
+
+#[test]
+fn a_row_dropped_in_its_own_list_takes_the_marked_place_and_keeps_it_on_redraw() {
+    let mut state = grouped();
+    drop_on(&mut state, wt("e"), row("c"), 0.25);
+    assert_eq!(layout(&state).ungrouped, vec![wt("e"), wt("c"), wt("d")]);
+    drop_on(&mut state, wt("a"), row("b"), 0.75);
+    assert_eq!(items_of(&state, WORK), vec![wt("b"), wt("a")]);
+    let redrawn = state.sidebar_list();
+    assert_eq!(
+        redrawn,
+        state.sidebar_list(),
+        "the order stays on every redraw"
+    );
+    assert!(entry_at(&state, row("e")) < entry_at(&state, row("c")));
+}
+
+/// Review B r2 (M4) MINOR: a row held after a cancel whose release never reached the window is
+/// let go by the next press, whatever that press arms.
+#[test]
+fn any_press_lets_go_of_a_row_held_after_a_cancel() {
+    let mut state = dragging_over_a_target();
+    send(&mut state, Msg::Cancelled);
+    assert!(state.sidebar_drag.holds(&Dragged::Item(wt("c"))));
+    send(&mut state, Msg::Pressed(Dragged::Item(wt(""))));
+    assert!(
+        !state.sidebar_drag.holds(&Dragged::Item(wt("c"))),
+        "a press Default cannot arm still lets go"
+    );
+    assert!(!state.sidebar_drag.listens());
 }
 
 // ---- T031: cancelling (US5, FR-009, FR-018, SC-002) -------------------------------------------
