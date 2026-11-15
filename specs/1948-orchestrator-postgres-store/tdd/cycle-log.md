@@ -81,10 +81,15 @@ failed before the implementation, or says why it had none.
 
 - test: `store_migrations.rs` `a_directory_with_a_space_and_non_ascii_letters_opens`,
   `an_existing_loose_file_is_tightened_to_owner_only` (new)
-- red: none, test-after admission: both were written with the review A findings (non-ASCII URL
-  bytes, an existing file keeping mode 0644) after the code, and pass with the fixes in place; the
-  fixes (percent-encoding every non-unreserved byte, `set_permissions(0o600)`) are in the same commit
-- green: 36 passed
+- red: shown after the fact by reverting each fix in turn (the tests were written after the code, test-after admission), then restoring it:
+  (a) `sqlite_url` with the raw path instead of percent-encoding:
+  `a_directory_with_a_space_and_non_ascii_letters_opens ... FAILED`, `Unavailable { target:
+  ".../josé data?x#y/orchestrator/orchestrator.db", reason: "error with configuration: unknown query
+  parameter `x#y/orchestrator/orchestrator.db?mode` while parsing connection URL" }`;
+  (b) `create_owner_only` without `set_permissions` on an existing file:
+  `an_existing_loose_file_is_tightened_to_owner_only ... FAILED`, `assertion left == right failed
+  left: 420 right: 384` (0644 stays, 0600 expected). Both fixes restored byte for byte.
+- green: 36 passed; both tests pass again with the fixes restored
 - refactor: `kind` written with `name_of` like `health`; `save` opens with a no-op `DELETE` so it holds
   the write lock from its start; `map_error` maps only constraint violations to `Refused`;
   `run_forward` retries only an "already exists", "locked" or "busy" failure; `SqliteBackend::reopen`
