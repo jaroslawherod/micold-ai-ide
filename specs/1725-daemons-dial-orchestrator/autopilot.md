@@ -10,13 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1725
 - **Worktree branch**: claude/project-thread-71llv0
 - **Started**: 2026-11-15
-- **Phase**: design-pr
-- **Next step**: orchestrator opens the design PR from pr-title.md and pr-body.md; then milestone M1
+- **Phase**: milestones
+- **Next step**: milestone M1 (T001–T015), in a fresh thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
 
 ## Milestones
 
@@ -55,7 +56,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+2026-11-15, design thread: design PR #1969 squash-merged (1d36b93ff); origin/main merged back into the branch, diff vs main is ledger only. Next: M1 (T001–T015, tier full) in a fresh cloud thread running `/speckit-autopilot resume` on this branch.
+
+Cloud notes for the next thread: `autopilot-unit`/`autopilot-reviewer` types are offered, but units have no Agent tool, so they run reviewers headless with the prompt FIRST: `claude -p "<prompt>" --agent autopilot-reviewer --model <m> --permission-mode auto --allowedTools "Read,Grep,Glob,Bash(git *),Bash(grep *),Bash(ls *)"`. Units write pr-title.md/pr-body.md and push; the orchestrator opens the PR via GitHub MCP (attribution block first), marks it ready, waits on the `ci complete` check-run via `gh api .../commits/<head>/check-runs` (REST), checks the ledger's review Head differs from the PR head only in ledger files, and squash-merges via MCP with expectedHeadSha. Then `git merge origin/main` (never rebase or force-push) and check `git diff --stat origin/main HEAD` shows only ledger files. `setup-plan.sh` resolved the wrong feature dir once; pass paths explicitly. Milestone units: name drift-M<K>.md and tdd/cycle-log.md in the brief, run plan-drift.sh before returning; the orchestrator runs review B (sonnet, rubrics/conformance.md) itself.
 
 ## Open escalation
 
