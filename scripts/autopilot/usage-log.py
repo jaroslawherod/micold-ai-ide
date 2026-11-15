@@ -60,7 +60,8 @@ def row_of(data):
         "input_tokens": use("input_tokens"),
         "output_tokens": use("output_tokens"),
         "context_used_tokens": first(meta, ("context_usage", "used_tokens")),
-        "claude_reply_count": use("claude_reply_count", "reply_count"),
+        "claude_reply_count": first(meta, ("claude_reply_count",))
+        or use("claude_reply_count", "reply_count"),
         "parent_session_id": first(ccr, ("parent_session_id",), ("lineage", "parent_session_id")),
         "recent_action": first(meta, ("recent_action",)),
     }
