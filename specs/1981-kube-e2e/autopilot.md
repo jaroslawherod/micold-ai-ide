@@ -35,8 +35,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec | n/a | 3d44f8b336c799ba30e46d236c626356b3939dc1:a089ee32c8f892cce0e56df14602c477047c6834 | CHANGES: 3 MAJOR (F1 F2 F3), 3 MINOR; all fixed, not re-reviewed |
+| spec | 2 | scoped | 5c0712c5da20b4c7631132c4264657df9548e803 | 6b26e7bcb50218985959800c72c608652ee03be7 | CLEAN |
 
 ## Declined review findings
 
