@@ -28,7 +28,7 @@ Scope: the daemon and its MCP tools only; the iced app is being sunset and chang
 
 ### Session 2026-11-15
 
-- Q: What do an unparented worktree's sessions see? → A: (jaro, 2026-11-15) An unparented worktree is treated as a child of `default` for visibility only. No link is recorded. Its sessions see `default`'s sessions and the other unparented worktrees as siblings. This amends spec 1857 FR-003 and FR-015 (last sentence) for visibility.
+- Q: What do an unparented worktree's sessions see? → A: (jaro, 2026-11-15) An unparented worktree is treated as a child of `default` for visibility only. No link is recorded. Its sessions see `default`'s sessions and, as siblings, every other worktree whose parent is `default`, recorded or implicit. This amends spec 1857 FR-003 and FR-015 (last sentence) for visibility.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -52,7 +52,10 @@ not only itself.
 3. **Given** a worktree `D` whose recorded parent is `default`, **When** the session in `A` lists
    sessions, **Then** `D`'s sessions are visible: `D` and `A` share the parent `default`, recorded
    or implicit, so they are siblings.
-4. **Given** the view of scenario 1, **When** the session in `A` addresses a session in `B` through
+4. **Given** a worktree `D` whose recorded parent is `default`, **When** the session in `D` lists
+   sessions, **Then** it sees the unparented worktrees `A` and `B` and their sessions as siblings,
+   but not their children. Siblings are mutual.
+5. **Given** the view of scenario 1, **When** the session in `A` addresses a session in `B` through
    any tool, **Then** the tool accepts it as it does any visible session.
 
 ---
@@ -75,12 +78,13 @@ unparented worktree, and from one whose parent was deleted.
    **When** it calls the tool, **Then** the answer holds `W`, `P` with state `known`, `P`'s
    sessions, `S1` and `S2` with their sessions, and `K` with its sessions.
 2. **Given** a session in an unparented worktree, **When** it calls the tool, **Then** the answer
-   names `default` as the parent, marks it as implicit (no recorded parent), and lists the other
-   unparented worktrees as siblings.
+   names `default` as the parent, marks it as implicit (no recorded parent), and lists as siblings
+   every other worktree whose parent is `default`, recorded or implicit.
 3. **Given** a session whose parent worktree was deleted, **When** it calls the tool, **Then** the
    parent is reported with state `removed`, no parent sessions, and no siblings.
 4. **Given** a session in `default`, **When** it calls the tool, **Then** it gets its own
-   worktree, no parent, and its direct children; the answer says `default` has no parent.
+   worktree, no parent, and its direct children, which include the unparented worktrees, each marked
+   implicit; the answer says `default` has no parent.
 5. **Given** any caller, **When** it calls the tool, **Then** nothing outside its FR-015 scope
    appears in the answer.
 
@@ -172,7 +176,10 @@ to the parent, and the implicit `default` parent.
 
 - **FR-001**: For visibility only, a worktree with no recorded parent MUST be treated as a child of
   `default`, in every tool that applies the spec 1857 FR-015 limit. No parent link MUST be
-  recorded by this, and listings MUST keep omitting `parent` for it (spec 1857 FR-008).
+  recorded by this, and listings MUST keep omitting `parent` for it (spec 1857 FR-008). This amends spec 1857 FR-003 (visibility only; still no recorded link) and
+  replaces the last sentence of its FR-015. Siblings are mutual: a caller whose recorded parent is
+  `default` sees the unparented worktrees and their sessions as siblings, not their children. For a
+  caller in `default`, the unparented worktrees are among its direct children.
 - **FR-002**: A caller in an unparented worktree MUST see `default`, the other worktrees whose
   parent is `default` (recorded or implicit) and their sessions, its own worktree, and its direct
   children. It MUST NOT see a worktree whose recorded parent is another worktree.
@@ -184,7 +191,7 @@ to the parent, and the implicit `default` parent.
   taken as its parent for visibility, and MUST say when the caller is in `default` and has no parent.
 - **FR-005**: The tool MUST list nothing outside the caller's FR-015 scope as amended by FR-001.
 - **FR-006**: A tool MUST send text to the caller's parent without a session id. The target is the
-  session in the parent worktree chosen by a deterministic rule that is documented (Assumptions);
+  session in the parent worktree the earliest-created live session in the parent worktree, ties broken by the lowest session id;
   the answer MUST name the session reached.
 - **FR-007**: The parent message tool MUST refuse, sending nothing, when the parent worktree has no
   session, when the parent was removed, and when the caller is in `default`; each refusal MUST state
@@ -222,9 +229,7 @@ to the parent, and the implicit `default` parent.
 
 ## Assumptions
 
-- The deterministic choice among several parent sessions: the session that was created first
-  (lowest creation order); if the daemon holds no creation order, the lowest session id. The plan
-  fixes which, and the guide states it.
+- Several parent sessions: the earliest-created live session wins, ties by lowest session id (FR-006); the guide states it.
 - The tool names are chosen in the plan; only the behaviour is specified here.
 - Messaging reuses the existing input path of the send-input tool, so its policy checks, "session
   gone" refusal and atomic delivery apply unchanged.
