@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vhhrxe
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: milestone M4 (T015–T019, T021) in a fresh thread
+- **Next step**: orchestrator opens the M4 PR from the scratchpad title and body, runs review B, waits for CI and merges; M4 is the last milestone, then close and handoff
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
 | M2 | T009–T012 | full | follow-up.sh and cap | #1915 | merged |
 | M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | merged |
-| M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
+| M4 | T015–T019, T021 | full | safe-to-remove.sh and rules | (to open) | in review |
 
 ## Decisions
 
