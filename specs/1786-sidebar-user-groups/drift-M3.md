@@ -10,3 +10,5 @@
 | `crates/micold-client/src/ui/sidebar.rs` | `move_items`, the menu items drawn from `move_menu_items`. |
 | `crates/micold-client/tests/gates/sidebar_group_header_fits.rs` | One field for the new `GroupHeaderNode.hidden`. |
 | `crates/micold-client/tests/fixtures/layout_snapshot.txt` | Regenerated (`UPDATE_LAYOUT_SNAPSHOT=1`): the `worktree-menu-open` state has one more entry, "Move to new group…", so its panel is 48 dp taller (256 to 304). |
+
+`MISSING crates/micold-client/src/features/worktree.rs`: the move entries are built where the worktree and run group menus are built, in `ui/mod.rs` (`location_menu_items` and the run group menu); `worktree.rs` keeps the menu state and needed no change.

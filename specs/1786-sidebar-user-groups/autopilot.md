@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
-| M3 | T024–T028 | full | Move to group from the menu | #… | implemented, gate and push in progress |
+| M3 | T024–T028 | full | Move to group from the menu | #… | pushed, awaiting review B, visual pass and PR |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
@@ -63,9 +63,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CHANGES (2 MAJOR fixed: drift-M2.md, T040 names keyboard opener; 2 MINOR fixed) |
 | Review B M2 | 2 | M2 | 4c3288732b05a7f614473ad3c58c82a7467a151b | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc:4c3288732b05a7f614473ad3c58c82a7467a151b | CLEAN (scoped re-review of da2697f8e, 4c3288732) |
 | Visual pass M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CLEAN (PASS; screenshots /mnt/project-files/issue-1786/m2-*.png; later fixes docs only) |
-| M3 diff (A, code-review high) | 1 | origin/main...working tree | 2f9d3665853d6d3d41fa9ac8d8b5135f74db9cfd | 2687a887a67c6a031fda6a8fb6897ee53fe046fd:2f9d3665853d6d3d41fa9ac8d8b5135f74db9cfd | CHANGES (5 fixed: header counted gone rows as hidden, choosing the row's own list reordered it, New group over an open dialog closed it, `listed` ignored filters and rebuilt the tree, the adopt rule copied in two places (now `SidebarLayout::adopt`); 3 declined) |
 | Review B M3 | — | conformance | — | — | PENDING (orchestrator runs it; no Agent tool in this cloud thread) |
 | Visual pass M3 | — | quickstart | — | — | PENDING (orchestrator runs it) |
+| M3 diff (A, code-review high) | 1 | origin/main...HEAD | 23a411d07f6a30308c2923efb6e0cee3278f1fc4 | 2687a887a67c6a031fda6a8fb6897ee53fe046fd:2f9d3665853d6d3d41fa9ac8d8b5135f74db9cfd | CHANGES (5 fixed: header counted gone rows as hidden, choosing the row's own list reordered it, New group over an open dialog closed it, listed ignored filters, adopt rule copied twice; 3 declined) |
 
 ## Declined review findings
 
