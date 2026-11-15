@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-nytitb
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: merge #1922 (M3) on green CI, then M4 in a fresh thread
+- **Next step**: milestone M4 (T015–T019, T021) in a fresh thread
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1867 | design | merged | 749d63f |
 | #1909 | M1 | merged | 7c96443 |
 | #1915 | M2 | merged | 46f7263 |
+| #1922 | M3 | merged | 35ffa7c |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
 | M2 | T009–T012 | full | follow-up.sh and cap | #1915 | merged |
-| M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | reviewed, awaiting CI |
+| M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | merged |
 | M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
 
 ## Decisions
@@ -61,7 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 merged (#1922, squash 35ffa7c). Next: dispatch a milestone unit for M4 (T015–T019, T021) from a fresh cloud thread on its harness branch: merge this branch in first, then update the Worktree branch line to that branch. In cloud, units have no Agent tool, so the orchestrator runs review B (conformance, sonnet); remind the unit to add drift-M4.md and M4 cycles to tdd/cycle-log.md, which review B flagged as missing on M3.
 
 ## Open escalation
 
