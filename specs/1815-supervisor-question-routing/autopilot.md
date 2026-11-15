@@ -65,7 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 1 MAJOR (T021 names supervisor-route.sh; plan-drift exit 0) fixed, 1 MINOR declined |
 | Review A | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: only failed lifecycle demoted; left as is) |
 | Review B | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: contracts/routing-cli.md route target row predates round-1 fixes; close unit updates it) |
-| Review close | 1 | close | e826f648bca63196fc72fb36a149f25c4f3319ca | 2b0b8d2:e826f648bca63196fc72fb36a149f25c4f3319ca | CLEAN (2 MINOR: drift-M1 base wording, PR title; left) |
+| Review close | 1 | close | e826f648bca63196fc72fb36a149f25c4f3319ca | not taken (reviewed head e826f648b) | CLEAN (2 MINOR: drift-M1 base wording, PR title; left) |
 | Review close | 2 | close | caa363637366355cd921db52cfbdb81f20e72b33 | e099910a3089cbd581a8839f3f0d207b5c8dd2bd:caa363637366355cd921db52cfbdb81f20e72b33 | CLEAN (1 MINOR: verification.md remediation note, added) |
 
 ## Declined review findings
