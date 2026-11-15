@@ -21,6 +21,8 @@ Command: `scripts/build-lock.sh cargo test -p micold-client --lib -- expand_test
 | `at_a_narrow_width_the_row_ends_at_its_wrapped_height` | T018 | grew by 90.2, not row 82.2 plus gap (first assertion form) |
 | `a_picker_opened_by_command_opens_the_options_row` | D1 | "/model opens the row" |
 
+Note (close unit): `a_toggle_mid_way_reverses_from_the_current_height` is now the reversal half only; the nine rapid toggles are `rapid_toggles_leave_the_row_where_the_last_one_points`, and `a_picker_opened_by_command_opens_the_options_row` became `the_model_command_opens_the_row`, `the_effort_command_opens_the_row` and the two trigger-press tests in `shell/composer.rs`. The splits moved existing assertions: they ran green at once, with no new red.
+
 ### Green
 
 T019 (`around_options`, `options_motion` in `ui/composer.rs`), T020 (`State::options_toggled` in

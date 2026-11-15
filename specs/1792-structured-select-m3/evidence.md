@@ -2,7 +2,7 @@
 
 ## Part A (automated), run by the close unit on the merged tree plus the close PR's tests
 
-`scripts/build-lock.sh cargo test -p micold-client --lib -- <filter>`: `menu_select` 10 passed, `picker_parity` 7, `composer` 11, `expand` 40; `--test main -- motion_tokens ui_glyph_literals one_overlay_implementation` 15 passed (SC-003); `--test material_boundary` 6 passed; `--test layout_snapshot -- the_model_and_permission_selectors` passed. `mise run duplication` was NOT run (no `mise` in the cloud thread; T023b stays open); CI is the gate of record. After the round 1 fixes: `--lib -- expand_tests menu_select` 20 passed, `--bin micold-ai-ide -- shell::composer::tests` 11 passed, `--test layout_snapshot -- the_model_and_permission_selectors` passed (it now names Model, Effort and Permissions, in order), `cargo clippy -p micold-client --all-targets -D warnings` clean.
+`scripts/build-lock.sh cargo test -p micold-client --lib -- <filter>`: `menu_select` 10 passed, `picker_parity` 7, `composer` 11, `expand` 40; `--test main -- motion_tokens ui_glyph_literals one_overlay_implementation` 15 passed (SC-003); `--test material_boundary` 6 passed; `--test layout_snapshot -- the_model_and_permission_selectors` passed. `mise run duplication` was NOT run (no `mise` in the cloud thread; T023b stays open); CI is the gate of record. After the round 1 fixes (a different filter from the counts above, so not comparable): `--lib -- expand_tests menu_select` 20 passed, `--bin micold-ai-ide -- shell::composer::tests` 11 passed, `--test layout_snapshot -- the_model_and_permission_selectors` passed (it now names Model, Effort and Permissions, in order), `cargo clippy -p micold-client --all-targets -D warnings` clean.
 
 ## Part B (visual pass), recorded per milestone
 

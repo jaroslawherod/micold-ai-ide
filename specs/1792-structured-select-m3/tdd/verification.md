@@ -185,7 +185,7 @@ note). Counts in the frontmatter treat US1.2 as one criterion partly covered.
 The verdict above is as audited (FAIL). Post-remediation, after review round 1 of the close PR, by finding:
 
 - 1 (T024): cleared; both `around_options` survivors run red in the close unit.
-- 2 (T026): cleared; all five M1 mutants run (`tdd/cycle-log.md`). Two first survived (disabled chevron colour, long-value ellipsis) and each is now killed by a strengthened test.
+- 2 (T026): cleared; every M1 mutant in the cycle log's table is run (geometry, hover layer, disabled press guard, empty list, ellipsis, disabled chevron colour, plus the pressed and focus mutants in `micold-material` `button.rs`, which are reverted and so leave no diff). Two first survived (disabled chevron colour, long-value ellipsis) and each is now killed by a strengthened test.
 - 3 (T025): cleared; pressed and ring tests proved red by product mutants (the `Ripple` wrap, the focus `Indicator`); the ring deviation is in `spec.md` FR-002.
 - 4, 5 (T029): cleared; `close_pickers()` and `close_mode_menus()` mutants both red; `reduce_motion` already proved.
 - 6 (T027): DECLINED, as at M2 (geometry-only parity by decision; ledger *Declined review findings*). Criterion US2.2 stays covered by geometry only.

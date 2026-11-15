@@ -71,7 +71,7 @@ None beyond T001: the trigger extraction is the P1 story's own work.
 
 ## Phase 6: Polish and cross-cutting (close unit; changes no code)
 
-- [x] T022a Run quickstart Part A and record it in `specs/1792-structured-select-m3/evidence.md` (FR-012, SC-001, SC-002); Part B steps 2, 3, 5, 6 and 4 are recorded per milestone (`visual-pass-M1.md`, `visual-pass-M3.md`).
+- [x] T022a Run quickstart Part A and record it in `specs/1792-structured-select-m3/evidence.md` (FR-012, SC-001, SC-002); Part B is recorded per milestone: steps 2, 3, 5, 6 in `visual-pass-M3.md`; steps 1 (rest, hover, disabled, open) and 4 in `visual-pass-M1.md`, whose focus and pressed rows were not checked (T022b).
 - [ ] T022b Part B step 1 focus and pressed, and step 7 (narrow window, light and dark), as a visual run. NOT RUN: the forked `visual-pass` skill got no arguments from the close unit twice, so it ran nothing. Both states are pinned by tests with product mutants (T025, `evidence.md`); step 7's wrap by `at_a_narrow_width_the_row_ends_at_its_wrapped_height`.
 - [x] T023a Ticked tasks; confirmed `tests/motion_tokens.rs` and `tests/ui_glyph_literals.rs` (SC-003, no literal colour, shape, duration or easing in `select_trigger.rs` and `composer.rs`), `tests/material_boundary.rs` and `tests/one_overlay_implementation.rs` pass (see `evidence.md`).
 - [ ] T023b Close or narrow #1765 (spec Assumptions) with a link to the merged work (#1842, #1851, #1902), and run `mise run duplication`. NOT DONE: neither is possible from the cloud thread (no `mise`, no authenticated `gh`); listed under the ledger's Follow-ups not done.
@@ -122,7 +122,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### Close unit (not a milestone)
 
-T022–T023 change no code (quickstart results, task ticks, duplication check): the close unit does them in the close PR.
+T022a–T023b change no code (quickstart results, task ticks, duplication check; T022b and T023b stay open): the close unit does them in the close PR.
 
 ## Phase 7: TDD remediation (from `tdd/verification.md`, verdict FAIL)
 
