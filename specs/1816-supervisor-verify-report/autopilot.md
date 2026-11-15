@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9puqm3
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: M2 PR open, wait on CI then squash-merge; M3, M4 wait on #1860
+- **Next step**: milestone M3 (T013–T014, T020) once #1860 merges, in a fresh thread
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1867 | design | merged | 749d63f |
 | #1909 | M1 | merged | 7c96443 |
+| #1915 | M2 | merged | 46f7263 |
 
 ## Milestones
 
@@ -57,7 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 implemented (T009–T012 ticked): scripts/autopilot/supervisor-ledger.sh, follow-up.sh, follow-up cases in scripts/tests/close-out.test.sh (50 pass). Review A and Review B are to be dispatched by the orchestrator (a cloud unit cannot spawn subagents); they are not run. Next: reviews, PR, merge. M3, M4 stay blocked on #1860.
+M2 merged (#1915, squash 46f7263). Next: when #1860 has merged, dispatch a milestone unit for M3 from a fresh cloud thread on its harness branch; update the Worktree branch line to that branch. Until then M3 and M4 stay blocked.
 
 ## Open escalation
 
