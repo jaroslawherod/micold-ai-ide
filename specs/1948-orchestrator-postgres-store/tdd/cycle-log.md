@@ -94,3 +94,10 @@ failed before the implementation, or says why it had none.
   the write lock from its start; `map_error` maps only constraint violations to `Refused`;
   `run_forward` retries only an "already exists", "locked" or "busy" failure; `SqliteBackend::reopen`
   drops the old handle first
+
+## M2 Cycle 3: error-path tests added after the fact (CI diff coverage)
+
+Seven tests in `store_migrations.rs` (see drift-M2.md) cover the schema-error mapping, unopenable
+paths, `map_error` and the registry's corrupt-row and driver-error branches. They were written
+after the code, for the diff-coverage gate, against behaviour that already existed: each passed on
+first run and none was shown red by breaking its branch.

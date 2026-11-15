@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | #1970 | M1 | merged | bfb463f60 |
+| #1980 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
-| M2 | T014–T020 | full | SQLite handle, schema, registry store | | review B, PR pending |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | PR open |
 | M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
 | M5 | T032–T035 | full | Migration safety | | pending |

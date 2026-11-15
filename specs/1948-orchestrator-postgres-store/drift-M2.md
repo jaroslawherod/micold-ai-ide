@@ -35,3 +35,11 @@ Recorded against `scripts/autopilot/plan-drift.sh specs/1948-orchestrator-postgr
 - `crates/micold-daemon/tests/orchestrator/no_outbound.rs` (a guard test, changed): the source scan
   now skips `crates/micold-daemon/src/orchestrator/db/`, because the pool's `connect` opens a
   database, not a daemon; the scan failed on it in the full gate. Everything else stays scanned.
+- UNPLANNED test additions for CI diff coverage, all in
+  `crates/micold-daemon/tests/orchestrator/store_migrations.rs`:
+  `a_recorded_migration_whose_checksum_changed_is_a_named_schema_error`,
+  `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` (pins today's
+  `Failed`; M5/T035 changes it to `DatabaseNewer`), `a_file_that_is_not_a_database_is_unavailable_and_names_the_file`,
+  `a_directory_where_the_file_belongs_is_unavailable`, `a_data_dir_that_is_a_regular_file_is_unavailable`,
+  `map_error_refuses_a_violated_constraint_and_reports_anything_else_unavailable`,
+  `a_registry_over_a_dropped_table_is_unavailable_and_a_bad_row_is_corrupt`.
