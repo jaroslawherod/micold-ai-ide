@@ -1553,9 +1553,13 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     ) {
         subs.push(review_key_listener());
     }
+    // Feature 1786 (C6): an open group menu takes Up, Down, Enter and Space, as a card menu does.
+    if state.sidebar_groups.group_menu.is_some() {
+        subs.push(group_menu_key_listener());
+    }
     // Feature 813 (FR-014, R13): arrow keys move between the cards while the Overview is open.
     // Feature 972 (FR-010): with a card menu open the same keys drive the menu instead.
-    if state.overview.open {
+    if state.overview.open && state.sidebar_groups.group_menu.is_none() {
         subs.push(if state.overview.card_menu.is_some() {
             card_menu_key_listener()
         } else {
@@ -1623,6 +1627,24 @@ fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
 /// focused card (which drops its own claims while a menu is open) leaves Enter and Space to it.
 fn card_menu_key_listener() -> Subscription<Message> {
     iced::keyboard::listen().filter_map(card_menu_key)
+}
+
+/// Up, Down, Enter and Space, heard while a group header's menu is open (feature 1786, C6).
+fn group_menu_key_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(group_menu_key)
+}
+
+/// The group menu's message for a key, as [`card_menu_key`] gives the card menu's. A named
+/// function for the same `TypeId` reason as [`escape_message`].
+fn group_menu_key(event: iced::keyboard::Event) -> Option<Message> {
+    use crate::features::sidebar_group_actions::Msg;
+    let Message::Overview(card) = card_menu_key(event)? else {
+        return None;
+    };
+    Some(Message::SidebarGroups(match card {
+        crate::features::overview::Msg::CardMenuMoved { forward, .. } => Msg::MenuMoved { forward },
+        _ => Msg::MenuActivated,
+    }))
 }
 
 /// The card menu's message for a key: Down and Up move the highlight, Enter and Space run it. The

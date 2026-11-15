@@ -674,6 +674,7 @@ fn menu_at<'a>(
     items: Vec<material::MenuItem<Message>>,
     dismissed: Message,
     r: Roles,
+    highlighted: Option<usize>,
 ) -> cdk::overlay::Surface<'a, Message> {
     let (x, y) = crate::features::project::clamp_menu_anchor(
         anchor,
@@ -681,6 +682,7 @@ fn menu_at<'a>(
         state.window.window_size,
     );
     material::MenuOverlay::new(items, dismissed, r)
+        .highlighted(highlighted)
         .anchor(iced::Point::new(x as f32, y as f32))
         .into()
 }
@@ -696,50 +698,77 @@ pub fn empty_area_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surf
         Message::SidebarGroups(Msg::New),
     )];
     let dismissed = Message::SidebarGroups(Msg::EmptyAreaMenuDismissed);
-    Some(menu_at(state, anchor, items, dismissed, r))
+    Some(menu_at(state, anchor, items, dismissed, r, None))
 }
 
-/// A user group header's menu (feature 1786, C6): **Rename** and **Delete**, at the press point.
-/// `None` while it is closed.
+/// A user group header's menu (feature 1786, C6): its
+/// [`group_menu_items`](crate::features::sidebar_group_actions::group_menu_items) at the press
+/// point, or where the keyboard opened it, with the keyboard's entry highlighted. `None` while it
+/// is closed.
 pub fn group_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'a, Message>> {
-    use crate::features::sidebar_group_actions::{Msg, GROUP_MENU_ITEMS};
+    use crate::features::sidebar_group_actions::{group_menu_items, Msg};
     let menu = state.sidebar_groups.group_menu?;
-    let items = vec![
-        material::MenuItem::new(
-            Icon::Rename,
-            GROUP_MENU_ITEMS[0],
-            Message::SidebarGroups(Msg::Rename(menu.group)),
-        ),
-        material::MenuItem::new(
-            Icon::Delete,
-            GROUP_MENU_ITEMS[1],
-            Message::SidebarGroups(Msg::Delete(menu.group)),
-        ),
-    ];
+    let items = group_menu_items(state, menu.group)
+        .into_iter()
+        .map(|entry| menu_entry(group_menu_icon(&entry.label), entry))
+        .collect();
     let dismissed = Message::SidebarGroups(Msg::MenuDismissed);
-    Some(menu_at(state, menu.anchor, items, dismissed, r))
+    Some(menu_at(
+        state,
+        menu.anchor,
+        items,
+        dismissed,
+        r,
+        menu.highlighted,
+    ))
+}
+
+/// The glyph of a group menu entry, by its words.
+fn group_menu_icon(label: &str) -> Icon {
+    match label {
+        "Rename" => Icon::Rename,
+        "Delete" => Icon::Delete,
+        "Move up" => Icon::MoveUp,
+        "Move down" => Icon::MoveDown,
+        _ => Icon::SelectChevron,
+    }
+}
+
+/// A menu item for one of the group feature's entries; disabled when it sends nothing.
+fn menu_entry(
+    icon: Icon,
+    entry: crate::features::sidebar_group_actions::MenuEntry,
+) -> material::MenuItem<Message> {
+    material::MenuItem {
+        message: entry.message.map(Message::SidebarGroups),
+        ..material::MenuItem::new(icon, entry.label, Message::NoOp)
+    }
 }
 
 /// The **Move to group** entries of a worktree's or run group's menu (feature 1786, C6, FR-010,
 /// FR-016): one item per [`move_menu_items`](crate::features::sidebar_group_actions::move_menu_items)
-/// entry for `item`, none for the project root.
+/// entry for `item`, then **Move up** and **Move down**; none for the project root.
 pub fn move_items(
     state: &State,
     item: &micold_core::sidebar_layout::LayoutItem,
 ) -> Vec<material::MenuItem<Message>> {
-    use crate::features::sidebar_group_actions::{move_menu_items, MoveTarget, Msg};
-    move_menu_items(state, item)
+    use crate::features::sidebar_group_actions::{
+        move_menu_items, step_menu_items, Movable, MoveTarget, Msg,
+    };
+    let moves = move_menu_items(state, item).into_iter().map(|entry| {
+        let icon = match entry.target {
+            MoveTarget::NewGroup => Icon::AddWorktree,
+            _ => Icon::Overview,
+        };
+        let label = entry.menu_label();
+        let message = Message::SidebarGroups(Msg::Move(item.clone(), entry.target));
+        material::MenuItem::new(icon, label, message)
+    });
+    // **Move up** / **Move down** (FR-010), disabled at the ends of the row's list.
+    let steps = step_menu_items(state, &Movable::Item(item.clone()))
         .into_iter()
-        .map(|entry| {
-            let icon = match entry.target {
-                MoveTarget::NewGroup => Icon::AddWorktree,
-                _ => Icon::Overview,
-            };
-            let label = entry.menu_label();
-            let message = Message::SidebarGroups(Msg::Move(item.clone(), entry.target));
-            material::MenuItem::new(icon, label, message)
-        })
-        .collect()
+        .map(|entry| menu_entry(group_menu_icon(&entry.label), entry));
+    moves.chain(steps).collect()
 }
 
 /// What choosing `action` on the more menu does: the message today's header button sent (FR-015).
@@ -754,6 +783,19 @@ pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Mess
             Message::SidebarGroups(crate::features::sidebar_group_actions::Msg::New)
         }
     }
+}
+
+/// Where a group header's menu hangs when the keyboard opens it (feature 1786, C6): beside the
+/// sidebar's trailing edge, level with the bottom of the header, `top` down the list's content.
+/// The menu is clamped into the window from there like any other.
+fn header_menu_anchor(state: &State, top: f32) -> (u16, u16) {
+    let list_top = f32::from(more_menu_fallback_anchor(state).1);
+    let header = micold_core::tokens::density::height(
+        micold_core::tokens::density::LIST_ROW_BASE,
+        crate::features::sidebar::SIDEBAR_DENSITY,
+    );
+    let y = list_top + top + header - state.sidebar.scroll_offset as f32;
+    (state.sidebar_width_px(), y.max(list_top).round() as u16)
 }
 
 /// Where the more menu hangs when no pointer press reported its trigger's corner (a keyboard
@@ -970,9 +1012,30 @@ fn build_items(
     // each is in decides whether it wears the drop highlight.
     let top_level = depth == 0 && run.is_none();
     let lists = crate::features::sidebar_drag::entry_lists(&entries);
-    let target = state.sidebar_drag.over.as_ref().map(|spot| spot.list);
+    // A dragged group lands between the groups and highlights no list (FR-019).
+    let target = state
+        .sidebar_drag
+        .over
+        .as_ref()
+        .filter(|spot| spot.slot.is_none())
+        .map(|spot| spot.list);
     // Where each entry's rows start in `items`, and whether they wear the drop highlight.
     let mut spans: Vec<(usize, bool)> = Vec::new();
+    // Where each entry sits in the list, for a group menu the keyboard opens (C6).
+    let has_groups = entries
+        .iter()
+        .any(|e| matches!(e, crate::features::sidebar::SidebarEntry::UserGroup(_)));
+    let tops: Vec<f32> = if top_level && has_groups {
+        crate::features::sidebar_drag::entry_spans(
+            &crate::features::sidebar::row_heights(&entries),
+            &entries,
+        )
+        .iter()
+        .map(|span| span.top)
+        .collect()
+    } else {
+        Vec::new()
+    };
 
     for (index_in_list, entry) in entries.into_iter().enumerate() {
         let highlighted =
@@ -1004,10 +1067,20 @@ fn build_items(
             }
             crate::features::sidebar::SidebarEntry::UserGroup(header) => {
                 // Feature 1786 (C5): the header at the one-line row height `row_heights` gives it.
-                // A press arms a group drag (FR-019).
+                // A press arms a group drag (FR-019). It is a Tab stop: its twisty, a click,
+                // Enter and Space toggle it, the Menu key and Shift+F10 open its menu (FR-011,
+                // C6); while a group menu is open Enter and Space run the menu's highlighted entry.
                 let id = header.id;
-                items.push(
+                use crate::features::sidebar_group_actions::Msg as GroupMsg;
+                let press = if state.sidebar_groups.group_menu.is_some() {
+                    GroupMsg::MenuActivated
+                } else {
+                    GroupMsg::Toggle(id)
+                };
+                let top = tops.get(index_in_list).copied().unwrap_or(0.0);
+                let item: TreeItem<'static, Message> =
                     crate::ui::material::GroupHeader::new(header.name)
+                        .on_toggle(Message::SidebarGroups(GroupMsg::Toggle(id)))
                         .on_primary_press(
                             move |_| Message::SidebarDrag(DragMsg::Pressed(Dragged::Group(id))),
                             Message::SidebarDrag(DragMsg::Released),
@@ -1029,7 +1102,15 @@ fn build_items(
                                 )
                             }
                         })
-                        .into(),
+                        .into();
+                items.push(
+                    item.tab_stop()
+                        .on_press(Message::SidebarGroups(press))
+                        .on_menu_key(Message::SidebarGroups(GroupMsg::MenuKeyed(
+                            id,
+                            header_menu_anchor(state, top),
+                        )))
+                        .keyboard_focus(false, |_| Message::NoOp),
                 );
                 continue;
             }
@@ -2304,6 +2385,7 @@ mod tests {
                 after: None,
                 marker: 2,
                 below: false,
+                slot: None,
             }),
             held: None,
         };
@@ -2355,6 +2437,49 @@ mod tests {
             inert(&rows(&state, r)),
             0,
             "a press not yet a drag keeps it"
+        );
+    }
+
+    /// Feature 1786 (T039, T040, FR-011, C6): a group header is a Tab stop; Enter and Space toggle
+    /// it (its press, as the Overview row's), and the Menu key or Shift+F10 opens its menu with
+    /// the keyboard on the first entry. While the menu is open Enter and Space run the menu's
+    /// highlighted entry instead, as the card menu's keys do.
+    #[test]
+    fn a_group_header_is_a_tab_stop_that_toggles_and_opens_its_menu_by_keyboard() {
+        use crate::features::sidebar_group_actions::Msg as GroupMsg;
+        use micold_core::sidebar_layout::{SidebarLayout, UserGroupId};
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        let mut layout = SidebarLayout::default();
+        layout.create("Work").unwrap();
+        state.sidebar_layout_loaded(std::path::PathBuf::from("/repo"), layout);
+        let header = |state: &State| {
+            let items = rows(state, r);
+            let item = row_labelled(&items, "Work");
+            (
+                item.tab_stop,
+                item.on_press.clone(),
+                item.on_menu_key.clone(),
+            )
+        };
+        let (tab_stop, press, menu_key) = header(&state);
+        assert!(tab_stop, "Tab reaches the header");
+        assert_eq!(
+            press,
+            Some(Message::SidebarGroups(GroupMsg::Toggle(UserGroupId(0))))
+        );
+        let Some(Message::SidebarGroups(GroupMsg::MenuKeyed(UserGroupId(0), _))) = menu_key else {
+            panic!("the Menu key opens the group menu: {menu_key:?}");
+        };
+        state.update(menu_key.unwrap());
+        assert_eq!(
+            state.sidebar_groups.group_menu.and_then(|m| m.highlighted),
+            Some(0)
+        );
+        assert_eq!(
+            header(&state).1,
+            Some(Message::SidebarGroups(GroupMsg::MenuActivated)),
+            "with the menu open, Enter runs its highlighted entry"
         );
     }
 

@@ -1920,11 +1920,41 @@ impl crate::app::State {
 
     /// Whether an armed reveal can drain now: armed, the viewport laid out (a height of `0` means
     /// unknown, contract §6.3) and a row to reach (research R7).
+    ///
+    /// Feature 1786 (FR-017, U29): a row a collapsed user group hides is reached by expanding that
+    /// group, and only that one; the change is saved like any other.
     pub fn reveal_ready(&mut self) -> bool {
         if !self.sidebar.pending_reveal_scroll || self.sidebar.viewport_height == 0 {
             return false;
         }
-        self.current_session_is_listed()
+        self.current_session_is_listed() || self.expand_group_holding_reveal()
+    }
+
+    /// Expand the collapsed user group whose rows hold the row the reveal reaches, if one does.
+    fn expand_group_holding_reveal(&mut self) -> bool {
+        let (Some(project), Some(layout)) = (
+            self.workspace.active.clone(),
+            self.sidebar_layout().cloned(),
+        ) else {
+            return false;
+        };
+        let entries = self.sidebar_entries();
+        let holding = layout
+            .groups
+            .iter()
+            .filter(|g| g.collapsed)
+            .find_map(|group| {
+                let mut open = layout.clone();
+                open.set_collapsed(group.id, false).ok()?;
+                let rows =
+                    apply_layout(entries.clone(), &open, |item| self.layout_item_exists(item));
+                self.reveal_row(&rows).map(|_| open)
+            });
+        let Some(open) = holding else {
+            return false;
+        };
+        self.sidebar_layout_changed(project, open);
+        true
     }
 
     /// The row the reveal scroll reaches (feature 803, contracts/ui.md U3): the row a navigation
@@ -1963,6 +1993,19 @@ impl crate::app::State {
     /// The active project's user-group layout, if the store gave one (feature 1786).
     pub fn sidebar_layout(&self) -> Option<&SidebarLayout> {
         self.sidebar.layouts.get(self.workspace.active.as_ref()?)
+    }
+
+    /// The held layout with every drawn row it does not hold yet placed where the sidebar draws it,
+    /// at the end of the ungrouped list (feature 1786): what a drop or a **Move up** / **Move
+    /// down** counts places in. The project root is no item, so it is never placed.
+    pub fn sidebar_layout_placed(&self) -> SidebarLayout {
+        let mut layout = self.sidebar_layout().cloned().unwrap_or_default();
+        for entry in &self.sidebar_list() {
+            if let Some(drawn) = layout_item(entry) {
+                layout.adopt(&drawn);
+            }
+        }
+        layout
     }
 
     /// The store's layout for `project` arrived (feature 1786): kept for the project, replacing
