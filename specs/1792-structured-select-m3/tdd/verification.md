@@ -182,4 +182,16 @@ note). Counts in the frontmatter treat US1.2 as one criterion partly covered.
 
 ## Remediation by the close unit (not a re-audit)
 
-The verdict above is as audited. Cleared in the close PR: findings 1 (T024, both survivors now red), 3 (T025, pressed and ring tests; deviation stays in research.md), 7 (T028), 10. Partly cleared: 2 (T026, after-the-fact mutants, one survivor). Left open as follow-ups: 4, 5 (T029), 6 (T027), 8 (T030), 9 (T031 magic values, partly), 11.
+The verdict above is as audited (FAIL). Post-remediation, after review round 1 of the close PR, by finding:
+
+- 1 (T024): cleared; both `around_options` survivors run red in the close unit.
+- 2 (T026): cleared; all five M1 mutants run (`tdd/cycle-log.md`). Two first survived (disabled chevron colour, long-value ellipsis) and each is now killed by a strengthened test.
+- 3 (T025): cleared; pressed and ring tests proved red by product mutants (the `Ripple` wrap, the focus `Indicator`); the ring deviation is in `spec.md` FR-002.
+- 4, 5 (T029): cleared; `close_pickers()` and `close_mode_menus()` mutants both red; `reduce_motion` already proved.
+- 6 (T027): DECLINED, as at M2 (geometry-only parity by decision; ledger *Declined review findings*). Criterion US2.2 stays covered by geometry only.
+- 7 (T028): cleared; Model, Effort and Permissions are named, in order.
+- 8 (T030): cleared; the two eager tests are split, one test per entry point.
+- 9, 10 (T031): cleared; magic values named.
+- 11 and the manual rows: not re-audited. Still open: the focus and pressed visual run and step 7 (T022b), #1765 and `mise run duplication` (T023b); see the ledger's Follow-ups not done.
+
+The mutants were run by the close unit; this is not an independent re-audit, so the verdict is not re-issued as PASS here: the open items are outside the test-strength findings.

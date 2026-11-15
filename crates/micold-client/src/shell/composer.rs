@@ -627,60 +627,81 @@ mod tests {
         );
     }
 
-    /// Feature 1792 D1: `/model` or `/effort` sent with the row collapsed opens the list *and*
-    /// the row, so the list has its trigger; so does a press on a trigger while the row collapses
-    /// (review A M3 F1), and the row's state is written each time.
-    #[test]
-    fn a_list_opened_with_the_row_collapsed_opens_the_row() {
-        use micold_client::features::permission_prompts::Msg as PromptsMsg;
-        use micold_core::settings::FakeSettingsStore;
+    /// Whether the row state last written to `store` is open.
+    fn written_open(store: &micold_core::settings::FakeSettingsStore) -> bool {
+        store
+            .saves()
+            .last()
+            .is_some_and(|x| x.composer_options_open)
+    }
+
+    /// A window whose settings store is a fake, and the store.
+    fn app_with_store() -> (
+        App,
+        SessionId,
+        std::sync::Arc<micold_core::settings::FakeSettingsStore>,
+    ) {
         let (mut app, _rx, s) = app_with_session();
-        let store = std::sync::Arc::new(FakeSettingsStore::new());
+        let store = std::sync::Arc::new(micold_core::settings::FakeSettingsStore::new());
         app.caps = app.caps.clone().with_settings(store.clone());
-        let written = |store: &FakeSettingsStore| {
-            store
-                .saves()
-                .last()
-                .is_some_and(|x| x.composer_options_open)
-        };
-        let collapse = |app: &mut App| {
-            if app.core.composers.options_open {
-                let _ = update(app, Msg::OptionsToggled(s));
-            }
-            assert!(!app.core.composers.options_open);
-        };
+        (app, s, store)
+    }
 
-        app.core.composers.edited(s, "/model".to_string(), (0, 6));
+    /// Collapse the row if it is open.
+    fn collapse(app: &mut App, s: SessionId) {
+        if app.core.composers.options_open {
+            let _ = update(app, Msg::OptionsToggled(s));
+        }
+        assert!(!app.core.composers.options_open);
+    }
+
+    /// Feature 1792 D1: `/model` or `/effort` sent with the row collapsed opens the list *and*
+    /// the row, so the list has its trigger, and the row's state is written. A press on a trigger
+    /// while the row collapses does the same (review A M3 F1): one test per entry point.
+    fn a_command_opens_its_list_and_the_row(command: &str, list_open: fn(&App, SessionId) -> bool) {
+        let (mut app, s, store) = app_with_store();
+        collapse(&mut app, s);
+        app.core
+            .composers
+            .edited(s, command.to_string(), (0, command.len()));
         let _ = update(&mut app, Msg::SendRequested(s));
+        assert!(list_open(&app, s), "{command} opens its list");
         assert!(
-            app.core.composers.palette.picker(s).is_some(),
-            "/model opens its list"
+            app.core.composers.options_open && written_open(&store),
+            "{command} opens the row"
         );
-        assert!(
-            app.core.composers.options_open && written(&store),
-            "/model opens the row"
-        );
+    }
 
-        collapse(&mut app);
-        app.core.composers.edited(s, "/effort".to_string(), (0, 7));
-        let _ = update(&mut app, Msg::SendRequested(s));
-        assert!(
-            app.core.effort_picker.picker(s).is_some(),
-            "/effort opens its list"
-        );
-        assert!(
-            app.core.composers.options_open && written(&store),
-            "/effort opens the row"
-        );
+    #[test]
+    fn the_model_command_opens_the_row() {
+        a_command_opens_its_list_and_the_row("/model", |app, s| {
+            app.core.composers.palette.picker(s).is_some()
+        });
+    }
 
-        collapse(&mut app);
+    #[test]
+    fn the_effort_command_opens_the_row() {
+        a_command_opens_its_list_and_the_row("/effort", |app, s| {
+            app.core.effort_picker.picker(s).is_some()
+        });
+    }
+
+    #[test]
+    fn pressing_the_effort_trigger_opens_the_row() {
+        let (mut app, s, store) = app_with_store();
+        collapse(&mut app, s);
         let _ = update(&mut app, Msg::EffortPickerToggled(s));
         assert!(
-            app.core.composers.options_open && written(&store),
+            app.core.composers.options_open && written_open(&store),
             "the effort trigger"
         );
+    }
 
-        collapse(&mut app);
+    #[test]
+    fn pressing_the_mode_trigger_opens_the_row() {
+        use micold_client::features::permission_prompts::Msg as PromptsMsg;
+        let (mut app, s, store) = app_with_store();
+        collapse(&mut app, s);
         let _ = crate::shell::permission_prompts::update(
             &mut app,
             PromptsMsg::ModeMenuToggled {
@@ -690,7 +711,7 @@ mod tests {
         );
         assert!(app.core.permission_prompts.mode_menu(s).is_some());
         assert!(
-            app.core.composers.options_open && written(&store),
+            app.core.composers.options_open && written_open(&store),
             "the mode trigger"
         );
     }

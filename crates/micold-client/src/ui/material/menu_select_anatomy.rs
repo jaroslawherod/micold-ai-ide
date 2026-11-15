@@ -6,11 +6,15 @@
 //! now [`SelectTrigger`](super::SelectTrigger), so these tests compare it to a [`Select`] in each
 //! state rather than restating any figure. In-crate because `material` is `pub(crate)`.
 
+use std::time::Duration;
+
 use iced::{mouse, Color, Element, Length, Point, Size};
 
 use super::test_support::{roles, Mounted};
 use super::{style, MenuSelect, MenuSelectRow, Select};
 
+/// How long after a press the sampled ripple has spread to the container's top edge.
+const RIPPLE_SPREAD_MS: u64 = 150;
 const ROOM: Size = Size::new(300.0, 200.0);
 
 /// A selector reading `Model:` over `title`, `width` wide, in the given state.
@@ -165,26 +169,74 @@ fn a_disabled_trigger_looks_disabled_and_ignores_the_pointer() {
     assert_eq!(click(&mut off), vec!["toggle"]);
 }
 
+/// The width the long-value test gives the trigger.
+const TRIGGER_WIDTH: f32 = 200.0;
+/// The pixel columns the chevron sits in at `TRIGGER_WIDTH`: its 24 px glyph box and the trailing
+/// padding, short of the 2 px outline at the right edge. Text never reaches them.
+const CHEVRON_COLUMNS: std::ops::Range<u32> = 160..198;
+
 /// FR-011: a long value gives way to the chevron, it does not push it out.
 #[test]
 fn a_long_value_is_cut_and_the_chevron_stays_visible() {
-    let width = Length::Fixed(200.0);
+    let width = Length::Fixed(TRIGGER_WIDTH);
     let long = "an exceedingly long model name that cannot possibly fit in two hundred dp";
     let mut short = Mounted::new_in(selector("a", width, false, false), ROOM);
     let mut cut = Mounted::new_in(selector(long, width, false, false), ROOM);
     assert_eq!(short.container().height, cut.container().height);
-    assert_eq!(cut.container().width, 200.0);
+    assert_eq!(cut.container().width, TRIGGER_WIDTH);
+    let said: String = cut.painted_text().into_iter().map(|p| p.content).collect();
+    assert!(
+        said.contains('\u{2026}'),
+        "the value was not cut with an ellipsis: {said:?}"
+    );
     let (a, b) = (
         pixels(&mut short, mouse::Cursor::Unavailable),
         pixels(&mut cut, mouse::Cursor::Unavailable),
     );
     let h = cut.container().height as u32;
-    let trailing: Vec<_> = (160..198)
+    let trailing: Vec<_> = CHEVRON_COLUMNS
         .flat_map(|x| (0..h).map(move |y| (x, y)))
         .collect();
     assert!(
         trailing.iter().all(|&(x, y)| at(&a, x, y) == at(&b, x, y)),
         "the chevron's column changed with the value's length"
+    );
+}
+
+/// How far the strongest pixel in the chevron's columns sits from the container fill beside it,
+/// summed over the channels: the chevron's contrast against its own container.
+fn chevron_contrast(field: &mut Mounted<'_>) -> i32 {
+    let buf = pixels(field, mouse::Cursor::Unavailable);
+    let h = field.container().height as u32;
+    let fill = at(&buf, CHEVRON_COLUMNS.start, 2);
+    CHEVRON_COLUMNS
+        .flat_map(|x| (2..h - 2).map(move |y| (x, y)))
+        .map(|(x, y)| {
+            let p = at(&buf, x, y);
+            (0..3)
+                .map(|c| (i32::from(p[c]) - i32::from(fill[c])).abs())
+                .sum()
+        })
+        .max()
+        .expect("the chevron's columns hold pixels")
+}
+
+/// FR-002, US1 scenario 3 (T026, the M1 mutant that survived): a disabled trigger draws its
+/// chevron in the dimmed colour, so it reads fainter against its container than a live one's.
+#[test]
+fn a_disabled_trigger_dims_its_chevron() {
+    let live = chevron_contrast(&mut Mounted::new_in(
+        selector("a", Length::Fixed(TRIGGER_WIDTH), false, false),
+        ROOM,
+    ));
+    let off = chevron_contrast(&mut Mounted::new_in(
+        selector("a", Length::Fixed(TRIGGER_WIDTH), false, true),
+        ROOM,
+    ));
+    assert!(live > 0, "the live chevron is drawn in these columns");
+    assert!(
+        off * 2 < live,
+        "the disabled chevron is not dimmed: contrast {off} against the live {live}"
     );
 }
 
@@ -214,19 +266,27 @@ fn an_empty_option_list_opens_no_menu() {
     assert!(some.floats(), "a list with rows should float its menu");
 }
 
-/// FR-002, US1 scenario 2: pressing the trigger paints a layer of its own, not the hover one.
+/// FR-002, US1 scenario 2: pressing the trigger paints a ripple of its own: at the press point the
+/// held pixel differs from both the hovered and the resting one (a press drops the hover layer).
 #[test]
 fn pressing_the_trigger_paints_a_layer_other_than_hover() {
     let mut f = plain(false, false);
     let at_centre = centre(&f);
+    let rest = pixels(&mut f, mouse::Cursor::Unavailable);
     let over = pixels(&mut f, mouse::Cursor::Available(at_centre));
     f.press(at_centre);
+    // Well into the ripple's spread, so it has reached the sampled point.
+    f.tick(
+        f.origin + Duration::from_millis(RIPPLE_SPREAD_MS),
+        mouse::Cursor::Available(at_centre),
+    );
     let held = pixels(&mut f, mouse::Cursor::Available(at_centre));
-    let y = f.container().height as u32 / 2;
-    assert_ne!(at(&over, 2, y), at(&held, 2, y), "pressed looks like hover");
+    let (x, y) = (at_centre.x as u32, at_centre.y as u32);
+    assert_ne!(at(&over, x, y), at(&held, x, y), "pressed looks like hover");
+    assert_ne!(at(&rest, x, y), at(&held, x, y), "pressed looks like rest");
 }
 
-/// FR-002, US1 scenario 2 (deviation in `research.md`, M1): the trigger shows the button's
+/// FR-002, US1 scenario 2 (deviation recorded in `spec.md` FR-002 and `research.md`, M1; product mutants in `tdd/cycle-log.md`): the trigger shows the button's
 /// keyboard ring when it takes focus, since no focus signal reaches the filled field's layer.
 #[test]
 fn keyboard_focus_on_the_trigger_draws_a_ring() {

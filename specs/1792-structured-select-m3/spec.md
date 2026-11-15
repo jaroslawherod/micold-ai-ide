@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: Closed 2026-11-14 — shipped in PRs #1842, #1851, #1902 (design #1836); close PR #1919
+**Status**: Closed 2026-11-14 — shipped in PRs #1842, #1851, #1902 (design #1836); close PR #1919; open follow-ups: T022b (visual run), T023b (#1765, duplication), see the ledger
 
 **Input**: User description: "feat: structured view: Material 3 select input and expand animation for the model, effort and permissions settings (#1792)"
 
@@ -80,7 +80,7 @@ When the user opens the model, effort or permissions settings, they grow from th
 ### Functional Requirements
 
 - **FR-001**: The structured view's select input MUST use the Material 3 container shape, outline or fill, label and trailing arrow, taken from the app's existing Material 3 tokens.
-- **FR-002**: The select MUST show distinct Material 3 state layers for hover, focus, pressed and disabled.
+- **FR-002**: The select MUST show distinct Material 3 state layers for hover, focus, pressed and disabled. Deviation (M1): the structured `MenuSelect` trigger is a `SelectTrigger` inside a bare `Button`, which owns press, keyboard and ripple, so its pressed feedback is the button's ripple over the hover layer and its keyboard focus is the button's ring, not the filled field's focus layer (no focus signal reaches the trigger; research.md, M1 T001). Tests: `pressing_the_trigger_paints_a_layer_other_than_hover`, `keyboard_focus_on_the_trigger_draws_a_ring`.
 - **FR-003**: The model, effort and permissions settings MUST all use this select with the same look.
 - **FR-004**: The select's option menu MUST use the Material 3 menu look, including per-option state layers and the selected option's emphasis.
 - **FR-005**: Opening the model, effort or permissions settings MUST animate as an expand from the trigger to the full height; closing MUST collapse the same way.

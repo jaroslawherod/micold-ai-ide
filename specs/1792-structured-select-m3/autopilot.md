@@ -79,6 +79,8 @@ M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy c
 | A | 3 | M3 | 11ba14eefb44c852011f1dc86dffca39d646b0f4 | 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 | MINOR-ONLY (fix diff 3ce8964c9..8107980c1, code-review medium: 8 doc/record findings, no code bug; fixed in 11ba14eef: visual-pass table and step 5 note consistent, collapse readings explained, core reduce_motion doc names the row, note says composer's, ValidSettings doc points at core; prose and UI text only, no new round) |
 | B | 2 | M3 | 64c99464d08f6210785fd53dde78255d812c2980 | 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 | CHANGES (F1 MAJOR three settings paths unrecorded in drift-M3.md; F2 MINOR step 5 visual re-check due) |
 | B | 3 | M3 | 16e8a681667d58af49025c849a82d254bf358403 | 6083dd1716343295c327e0fb1ae3a691a75b0e52:16e8a681667d58af49025c849a82d254bf358403 | CLEAN (docs-only fix diff 64c99464d..16e8a6816, sonnet: drift recorded, step 5 PASS on clean build) |
+| review A | 1 | 1919 | c86609ed2127eccbbc95cecf3c3ad72507a24746 | 6a4ec58fbfb162db2f55154435eb1c45bd4c8919:c86609ed2127eccbbc95cecf3c3ad72507a24746 | CHANGES |
+| review B | 1 | 1919 | c86609ed2127eccbbc95cecf3c3ad72507a24746 | 6a4ec58fbfb162db2f55154435eb1c45bd4c8919:c86609ed2127eccbbc95cecf3c3ad72507a24746 | CHANGES |
 
 - Close review (code-review medium via the Skill tool, no Agent tool in this cloud unit; not a fresh autopilot-reviewer): 10 findings. Fixed: chevron pairing in composer_fits (distinct nearest chevron per label), ROW constant, focus test no longer sends Tab, cycle-log wording on the focus/pressed proof, T026/T023 tick text, verification.md remediation addendum. Declined: spec Status line (close.md requires it; open follow-ups are listed below); drift-M3.md wording kept (the audit found no changed paths in containment.rs). Test and doc fixes only.
 
@@ -92,6 +94,7 @@ M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy c
 | M3 | A1 | F3 another session's picker loses focus target | The press or key that toggles the row already took focus from the other session's filter field (a text field unfocuses on a press outside it; the keyboard toggle needs the settings button focused). |
 | M3 | A1 | F4 no per-session key on the track | One row flag per window: a session switched in mid-flight continues toward the same target its row must reach; `restart_on` would replay the grow from zero on every switch, which is worse. Separate composers keep separate tracks (T015). |
 | M3 | A1 | F5 `/model` focus while the row is still at 0 | The filter field is in the menu overlay, which `Expand::overlay` forwards at any progress, so the focus operation reaches it; the visual pass checks `/model` while hidden. |
+| Close | tdd-verify 6 / T027 | paint-level menu parity | Declined as at M2 (above): the parity test is geometry only by decision; `menu_panel` and `row_surface` are shared functions both controls call, so the panel and rows cannot drift apart in paint; a draw dump is out of proportion. |
 | M3 | A1 | F6 hidden row built every frame | Required by design: the track must live in the tree (research R3); three small controls per composer. |
 
 ## Handover
@@ -118,8 +121,8 @@ Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
 
-- Close unit: speckit-tdd-verify verdict FAIL (tdd/verification.md). Cleared in the close PR: findings 1, 3, 7, 10, 2 in part. Open: 4 and 5 (T029 mutation checks of `reduce_motion` and `close_pickers`), 6 (T027 paint-level menu parity), 8 (T030 split eager tests), 9 (magic values, partly), 11; and a surviving M1 mutant (disabled chevron colour).
-- Close unit, not done from the cloud: close or narrow #1765 with a link to #1842/#1851/#1902 (spec Assumptions); `mise run duplication`; `branch-start.sh` refused (gh unauthenticated), the branch was already on the merged base.
+- Close unit: speckit-tdd-verify verdict FAIL (tdd/verification.md). After review round 1 fixes: findings 1-5, 7-10 cleared in the close PR (mutants run, tests split and strengthened, see tdd/cycle-log.md); 6 (T027) declined (below). Still open, not tests: T022b (visual run of focus/pressed and narrow-window step 7: the forked visual-pass skill received no arguments and ran nothing, twice) and T023b.
+- Close unit, not done from the cloud: close or narrow #1765 with a link to #1842/#1851/#1902 (spec Assumptions) (T023b); `mise run duplication` (T023b); `branch-start.sh` refused (gh unauthenticated), the branch was already on the merged base.
 
 - Process: review B round 1's mutation check (`options_motion` mutated) ran while the visual-pass worker built its release client in the same worktree; the binary (21:36:03) carried the mutant, the revert came at 21:36:15, so step 5 failed on a mutated build. A mutation check and a build for a visual pass must not share a worktree at once. Evidence: visual-pass-M3.md, *Step 5 re-check*.
 - Parity test (M2) compares geometry only; colour, elevation and state-layer paint are not compared. T011 was green first run, T012 skipped.
