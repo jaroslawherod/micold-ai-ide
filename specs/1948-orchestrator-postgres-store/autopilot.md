@@ -11,20 +11,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8aowf1
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M1 PR #1970 CI green, squash-merge; then M2 in a fresh thread
+- **Next step**: M2 (fresh thread, `/speckit-autopilot resume`)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
-| #1970 | M1 | open (draft) | |
+| #1970 | M1 | merged | bfb463f60 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | open, reviews CLEAN |
+| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | | pending |
 | M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
@@ -61,15 +61,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
-| #1970 | M1 | open (draft) | |
+| #1970 | M1 | merged | bfb463f60 |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
 
 ## Handover
 
-None. M1 done and committed (6d4d88cad), full gate green on it, plan-drift clean (drift-M1.md), cycle-log written. Review B (conformance, sonnet) pending: the orchestrator dispatches it, then opens the PR from pr-M1.md. Next unit: M2.
-
-
+M1 merged (PR #1970, squash bfb463f60). Next: dispatch the M2 milestone unit (T014–T020, Tier full) in a fresh thread; set the Worktree branch line to that thread's branch. M3 follow-ups are under *Follow-ups not done*. Cloud: mutants-on-the-diff baseline fails on any micold-core diff (no .git in the cargo-mutants copy); advisory, commented on #1970.
 
 ## Open escalation
 
