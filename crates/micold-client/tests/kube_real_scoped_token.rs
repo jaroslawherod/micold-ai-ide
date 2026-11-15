@@ -297,14 +297,24 @@ async fn kube_real_scoped_token() {
     }
     // The pod holds nothing else, in two terminals of the session and in a second session.
     let file = token_file("kube-run");
-    let mut second = Shell::open_another_session(&mut a.conn, &a.project, &mut String::new()).await;
+    // The second session is opened only after the first session's checks: opening it makes its
+    // terminal the only one viewed, so the first session's grid stops streaming.
+    let mut second = None;
     for i in 0..3 {
-        let shell = if i == 2 { &mut second } else { &mut a.shell };
         if i == 1 {
-            shell
+            a.shell
                 .switch(&mut a.conn, &a.project, ShellInstanceId(2))
                 .await;
         }
+        if i == 2 {
+            second = Some(
+                Shell::open_another_session(&mut a.conn, &a.project, &mut String::new()).await,
+            );
+        }
+        let shell = match second.as_mut() {
+            Some(s) => s,
+            None => &mut a.shell,
+        };
         let facts = session_env_and_home(&mut a.conn, shell, &format!("FACTS{i}"), &file).await;
         assert_eq!(facts.env_secret_lines, 0, "A shell {i}: secret in env");
         assert_eq!(facts.ssh_auth_sock_lines, 0, "A shell {i}: SSH_AUTH_SOCK");

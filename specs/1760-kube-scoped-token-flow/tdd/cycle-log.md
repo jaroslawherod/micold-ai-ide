@@ -174,3 +174,4 @@ Append only. Newest last.
 - refactor: `Shell` (open, step, new `switch` and `capture`) moved from `kube_real_toolchain.rs` into
   `kube_real_support/mod.rs` so both tests share it.
 - M3 review fixes: `in_clone` git calls clear `credential.helper` and set `GIT_TERMINAL_PROMPT=0` (one `git_in` helper); the client-log scan also looks for the base64 of each secret and of the token store files; the env/home check now also runs in a second session (`Shell::open_another_session`). The live test is unrun here (no cluster).
+- 2026-11-15 CI red (kube-cluster, 715d8488f): push, pull and helper offers passed; the env check timed out because opening the second session replaced the viewed terminals before shells 1 and 2 were checked. The second session now opens only for the third check.
