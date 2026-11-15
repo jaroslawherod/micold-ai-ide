@@ -2123,7 +2123,7 @@ pub async fn kube_attempt(
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
     // The values stay `SecretToken`s until here, and only ever go into the startup Secret;
     // `daemon.toml` names their files.
-    let secret_files: Vec<(String, String)> = delivered.files.to_vec();
+    let secret_files: Vec<(String, String)> = (delivered.files.iter().cloned()).collect();
     crate::daemon_config_delivery::check_secret_size(
         [delivered.env.as_deref(), git_config.as_deref()]
             .into_iter()
