@@ -21,4 +21,4 @@
 - [x] No implementation details leak
 
 ## Notes
-- Tool names and the several-sessions rule are left to the plan (Assumptions).
+- Tool names are left to the plan; the several-sessions rule is fixed by FR-006 (first live session in catalog order).

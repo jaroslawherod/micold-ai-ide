@@ -33,12 +33,12 @@ description: "Task list for MCP parent/sibling view, neighbourhood tool and pare
 
 - [ ] T006 [US2] [US3] Catalog tests (failing) in `crates/micold-core/tests/mcp_tools_catalog.rs`: both tools listed, parse, extra arguments rejected
 - [ ] T007 [US2] [US3] Add `Operation::{Neighbourhood, SendParentInput}`, TOOLS entries and parsing in `crates/micold-core/src/mcp/tools.rs`; the variants in `crates/micold-core/src/mcp/policy.rs` (Neighbourhood allowed, SendParentInput gated as `SendSessionInput`)
-- [ ] T008 [US2] Daemon integration tests (failing) in new `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs`: `neighbourhood` for recorded, unparented, removed and `default` callers, caller with several sessions, nothing outside scope (US2, FR-003..005, SC-002, SC-005)
+- [ ] T008 [US2] Daemon integration tests (failing) in new `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs` (register `mod mcp_worktree_parent_neighbourhood;` in `crates/micold-daemon/tests/mcp/main.rs`): `neighbourhood` for recorded, unparented, removed and `default` callers, caller with several sessions, an unknown-worktree caller (empty lists and the note "this session's worktree is not known to the daemon"), nothing outside scope (US2, FR-003..005, SC-002, SC-005)
 - [ ] T009 [US2] Implement `Context::neighbourhood()` and its `read_call` dispatch in `crates/micold-daemon/src/mcp/tools.rs` per `contracts/mcp-neighbourhood.md` (rows via `session_row`, `recorded`, `note`)
 - [ ] T010 [US3] Unit test (failing) for `parent_target` (several sessions, catalog order, non-`Running` skipped, none) beside the function in `crates/micold-daemon/src/mcp/tools.rs`
-- [ ] T011 [US3] Add `parent_target` and `send_parent_input` (refusals per the contract table, then delegate to `send_session_input`, add `session` and `parent_worktree`) in `crates/micold-daemon/src/mcp/tools.rs` (D4)
-- [ ] T012 [US3] Refusal tests (failing, then green after T011) in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs`: `default` caller, removed parent, no running session, unknown worktree; nothing typed
-- [ ] T013 [US3] Delivery tests in `crates/micold-daemon/tests/mcp_cross_session.rs` (`#![cfg(unix)]`, stub `claude`): delivery to one and to several parent sessions (same session twice), implicit `default` parent, policy `Off` and `ConfirmEachSend`, scope (FR-006..008, SC-003)
+- [ ] T011 [US3] Refusal tests (failing) in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs`: `default` caller, removed parent, no running session, unknown worktree; nothing typed
+- [ ] T012 [US3] Delivery tests (failing) in `crates/micold-daemon/tests/mcp_cross_session.rs` (`#![cfg(unix)]`, stub `claude`): delivery to one and to several parent sessions (same session twice), implicit `default` parent, policy `Off` and `ConfirmEachSend`, scope (FR-006..008, SC-003)
+- [ ] T013 [US3] Add `parent_target` and `send_parent_input` (refusals per the contract table, then delegate to `send_session_input`, add `session` and `parent_worktree`) in `crates/micold-daemon/src/mcp/tools.rs` (D4)
 - [ ] T014 [US2] [US3] User guide: tool table rows for both tools and the several-parent-sessions rule in `docs/user-guide/agent-tools.md`
 
 **Checkpoint**: `quickstart.md` steps 1-3 pass.
@@ -50,7 +50,7 @@ description: "Task list for MCP parent/sibling view, neighbourhood tool and pare
 **Goal**: the parent link exists before the child's session starts; the supervisor skill points workers at the parent route.
 
 - [ ] T015 [US4] Test (failing) in `crates/micold-daemon/tests/mcp_cross_session.rs`: the new session's stub `claude` snapshots the parent link at start (catalog/app-state file or daemon query) and writes it into its marker; assert the marker holds the link (SC-004, US4.1)
-- [ ] T016 [US4] Test in `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs`: a create that fails before the worktree exists (missing CLI) records no link (US4.2); an app-path create records none
+- [ ] T016 [US4] Test in `crates/micold-daemon/tests/mcp/mcp_worktree_parent.rs`: a create that fails before the worktree exists (missing CLI) records no link (US4.2); a session create that fails after the worktree exists keeps the link (FR-009); an app-path create records none
 - [ ] T017 [US4] Add `parent: Option<&ParentChoice>` to `StartDefinition` in `crates/micold-daemon/src/ops.rs`, record only `if let Some(parent)` between worktree create and session create; remove the post-call record for the session branch in `create_with_optional_session`; `crates/micold-daemon/src/server.rs` passes `parent: None` (D5)
 - [ ] T018 [US4] User guide: say the link is recorded before the session starts in `docs/user-guide/agent-tools.md`
 - [ ] T019 [US5] Tell workers to ask their parent with `send_parent_input` in `.claude/skills/autopilot-supervisor/SKILL.md`; add a grep check for the three items (neighbourhood tool, parent route, implicit parent) across guide and skill
@@ -95,6 +95,6 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T015–T020
 - **Deliverable**: a created worktree's parent link exists before its session starts, and the guide and supervisor skill describe the new tools.
 - **Satisfies**: US4 acceptance scenarios 1–2; US5 acceptance scenarios 1–2; FR-009, FR-010; SC-004
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_cross_session`; `grep -n "send_parent_input" docs/user-guide/agent-tools.md .claude/skills/autopilot-supervisor/SKILL.md`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp worktree_parent`; `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_cross_session`; `grep -n "send_parent_input" docs/user-guide/agent-tools.md .claude/skills/autopilot-supervisor/SKILL.md`
 - **Depends on**: M2
 - **Tier**: full
