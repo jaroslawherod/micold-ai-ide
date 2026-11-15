@@ -1534,7 +1534,9 @@ fn orchestrator_link_is_independent_of_the_orchestrator_rules() {
     // `[orchestrator]` beside a bad link reports L1 only.
     let bad_orch =
         host("[orchestrator_link]\nenabled = true\n[orchestrator]\nurl = \"http://o\"\n");
-    assert!(errors(&bad_orch).iter().all(|e| e.rule.starts_with('O')));
+    let orch_errors = errors(&bad_orch);
+    assert!(!orch_errors.is_empty() && orch_errors.iter().all(|e| e.rule.starts_with('O')));
     let bad_link = host(&format!("{ORCH_PAIR}[orchestrator_link]\nsocket = \"\"\n"));
-    assert!(errors(&bad_link).iter().all(|e| e.rule == "L1"));
+    let link_errors = errors(&bad_link);
+    assert!(!link_errors.is_empty() && link_errors.iter().all(|e| e.rule == "L1"));
 }

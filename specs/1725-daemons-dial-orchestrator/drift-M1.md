@@ -11,3 +11,6 @@ Paths changed beyond those the tasks of M1 name, with the reason.
 - Capabilities announced: the constant `["sessions"]` (`orchestrator_link/mod.rs`); no source for
   them exists in the daemon yet and the spec only requires the field be announced. Tenant is `None`,
   which the registry lists as `default`.
+- MISSING `crates/micold-daemon/tests/orchestrator/main.rs`: T001 said "reuse or extract" the helpers;
+  they are reused by `#[path = "../orchestrator/support.rs"]`, so that `main.rs` is not touched.
+- MISSING `data-model.md`: a spec file named in T004's text, not a code path; nothing to change.

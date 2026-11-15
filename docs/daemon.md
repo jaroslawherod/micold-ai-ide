@@ -677,7 +677,7 @@ namespaces or `strace` are unavailable.
 A daemon with `[orchestrator_link] enabled = true` dials the orchestrator and is listed `online` there.
 The orchestrator never dials a daemon; this is the daemon's side of that link.
 
-For a host daemon the dial goes straight to the local orchestrator socket (a named pipe on Windows):
+For a host daemon the dial goes straight to the local orchestrator socket:
 `socket` from the table, else `orchestrator.sock` beside the daemon's own socket. The daemon runs one
 background task, started once its listener is bound and never awaited, so a client is served as fast as
 without it. The task:

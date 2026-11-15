@@ -46,3 +46,16 @@ failed before the implementation.
 
 - `connect::hello_message` extracted from `handshake_with`, so the dialer's `Hello` and a client's
   cannot drift. `orchestrator::endpoint()` delegates to `endpoint::orchestrator_endpoint()`.
+
+### Cycle 5 — review A F1: the wiring in `server::run` (T014)
+
+- tests: `tests/orchestrator_dial/process.rs`, two tests against the real `micold-daemon --config`
+  process: `a_daemon_process_with_the_link_enabled_is_listed_online`,
+  `a_daemon_process_with_no_link_configured_never_dials`.
+- red: mutant, both `spawn_for` calls in `server.rs` replaced by a comment →
+  `--test orchestrator_dial process::` → the enabled test failed (`proc` never became ready after 20 s);
+  the no-dial test passed, as it should. Restored.
+- green: both pass with the wiring in place (10 passed in the binary).
+- also from review A: the host endpoint assertion no longer compares against `resolve()` (another
+  test sets `XDG_RUNTIME_DIR`: the first scoped gate failed there), `orchestrator_link_is_independent…`
+  asserts its error lists are non-empty, a warning when an enabled link's endpoint cannot be resolved.

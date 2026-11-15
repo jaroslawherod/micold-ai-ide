@@ -63,7 +63,11 @@ pub fn spawn(config: &Arc<DaemonConfig>) -> Option<LinkHandle> {
     {
         return None;
     }
-    let endpoint = link_endpoint(config.daemon.kind, link.socket.as_deref()).ok()?;
+    let endpoint = link_endpoint(config.daemon.kind, link.socket.as_deref())
+        .inspect_err(|e| {
+            tracing::warn!(error = %e, "orchestrator link enabled but its endpoint cannot be resolved");
+        })
+        .ok()?;
     let announcement = announcement(config);
     let (tx, status) = watch::channel(LinkStatus::NotLinked);
     let task = tokio::spawn(run(DialAddress::Local(endpoint), announcement, tx));

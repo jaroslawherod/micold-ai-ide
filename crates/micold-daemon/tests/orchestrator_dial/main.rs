@@ -6,6 +6,7 @@
 mod support;
 
 mod host;
+mod process;
 
 use std::path::Path;
 use std::sync::Arc;
