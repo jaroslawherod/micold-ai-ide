@@ -49,22 +49,8 @@ snapshots. The next unit sets it back to None.>
 
 ## Open escalation
 
-None. <or, one question:>
-
-```
-- **Category**: <number and name from rules/escalation.md>
-- **Question**: <one sentence>
-- **Options**:
-  1. <label> (Recommended) — <description>
-  2. <label> — <description>
-- **Recommended**: <label> — <reason>
-- **Evidence**: <paths, commands, results>
-- **Banner**: sent <date>
-```
-
-<A batch: `### Q1`, `### Q2`... each holding Question, Options, Recommended and Evidence; Category and
-Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
+None.
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+Spec review not run (no Agent tool in the spec unit); dispatch it before clarify.
