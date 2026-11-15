@@ -8,6 +8,10 @@ use super::DEFAULT_TENANT;
 use crate::daemon_config::Kind;
 use crate::protocol::routing::WireDaemonId;
 
+/// The owner of a record that exists before any user does (#1948): the first owner user takes it
+/// over.
+pub const UNOWNED: &str = "unowned";
+
 /// Whether the orchestrator can reach a daemon right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
