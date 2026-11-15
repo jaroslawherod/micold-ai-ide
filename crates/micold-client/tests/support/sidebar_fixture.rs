@@ -226,3 +226,49 @@ pub fn five_states() -> State {
     );
     state
 }
+
+/// A change of the worktree `dir`'s state, applied to the state.
+pub type CardStep = Box<dyn Fn(&mut State)>;
+
+/// The changes that walk the worktree `dir` of [`five_states`], idle with no session and no pull
+/// request, through the other four card states in turn: Done, NeedsAttention, Working and
+/// NeedsAction (features 1718 and 1786, SC-005).
+pub fn card_state_steps(dir: &'static str) -> Vec<CardStep> {
+    use micold_core::protocol::messages::ActivitySignal;
+    use micold_core::pull_request::{CheckStatus, PrState};
+    use micold_core::session::SessionLifecycle;
+    let branch = move || format!("feat/{dir}");
+    vec![
+        Box::new(move |s| pr_read(s, &branch(), PrState::Merged, true)),
+        Box::new(move |s| {
+            s.pr_status.removable.remove(&branch());
+            pr_read(
+                s,
+                &branch(),
+                PrState::Open {
+                    checks: CheckStatus::Failing,
+                },
+                false,
+            );
+        }),
+        Box::new(move |s| {
+            s.pr_status.statuses.remove(&branch());
+            session_in(
+                s,
+                worktree(dir),
+                SessionLifecycle::Running,
+                ActivitySignal::Working,
+                false,
+            );
+        }),
+        Box::new(move |s| {
+            session_in(
+                s,
+                worktree(dir),
+                SessionLifecycle::Running,
+                ActivitySignal::AwaitingInput,
+                true,
+            );
+        }),
+    ]
+}

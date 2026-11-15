@@ -155,7 +155,10 @@ pub struct TreeItem<'a, M> {
     /// (feature 803, FR-010): the row wears the focus ring, shown as keyboard focus.
     keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,
     /// Whether the row is a stop in the Tab order of its own (feature 1125, [`TreeItem::tab_stop`]).
-    tab_stop: bool,
+    pub(crate) tab_stop: bool,
+    /// What the Menu key and Shift+F10 send while a Tab stop holds the keyboard (feature 1786,
+    /// [`TreeItem::on_menu_key`]).
+    pub on_menu_key: Option<M>,
     /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
     /// R13, [`TreeItem::key`]). Crate-visible so a host's tests can check every row has one.
     pub(crate) key: Option<u64>,
@@ -214,6 +217,7 @@ impl<'a, M> TreeItem<'a, M> {
             row_tint: None,
             keyboard_focus: None,
             tab_stop: false,
+            on_menu_key: None,
             key: None,
             drop_marker: None,
             inert: false,
@@ -259,6 +263,14 @@ impl<'a, M> TreeItem<'a, M> {
     /// send its press. A row with no press stays out of the Tab order.
     pub fn tab_stop(mut self) -> Self {
         self.tab_stop = true;
+        self
+    }
+
+    /// Send `message` for the Menu key or Shift+F10 while the row, a [`Self::tab_stop`], holds the
+    /// keyboard: the row's own menu opened by keyboard (feature 1786, C6; the card menu's keys,
+    /// feature 972).
+    pub fn on_menu_key(mut self, message: M) -> Self {
+        self.on_menu_key = Some(message);
         self
     }
 
@@ -895,6 +907,14 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         wrapper = wrapper
                             .key(iced::keyboard::key::Named::Enter, msg.clone())
                             .key(iced::keyboard::key::Named::Space, msg);
+                    }
+                    if let Some(menu) = item.on_menu_key.clone().filter(|_| answers_keys) {
+                        use iced::keyboard::{key::Named, Modifiers};
+                        wrapper = wrapper.key(Named::ContextMenu, menu.clone()).chord(
+                            Named::F10,
+                            Modifiers::SHIFT,
+                            menu,
+                        );
                     }
                     wrapper
                         .focused(focused)

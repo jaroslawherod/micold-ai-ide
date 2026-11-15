@@ -286,3 +286,71 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   `layout_snapshot` 180, `feature_registration_cost` 7.
 - refactor: the run group fixture of `a_run_group_row_wears_the_worst_state_of_its_runs` is the
   shared `with_run_group` helper.
+
+## Cycle 16: core reorder and step (T035, T036; A16 to A18, U24, U25)
+
+- test: `micold-core sidebar_layout::tests::move_group_takes_its_items_along_and_counts_the_index_before_the_removal`,
+  `move_group_refuses_an_unknown_group_and_changes_nothing`,
+  `step_item_moves_one_place_in_its_list_and_the_others_keep_their_order`,
+  `step_item_at_either_end_of_its_list_changes_nothing`, `step_item_refuses_what_it_cannot_place`,
+  `step_group_moves_one_place_and_changes_nothing_at_the_ends`.
+- red: `cargo test -p micold-core --lib sidebar_layout` -> 27 errors, `E0599 no method named
+  move_group / step_item / step_group / can_step_item / can_step_group`.
+- green: `move_group` (index before the removal, clamped, as `move_item`), `step_item` and
+  `step_group` (`Ok(false)` at the ends, nothing changed), `can_step_item` / `can_step_group` for
+  the menus, one `stepped` helper. `29 passed`.
+- refactor: `group_index` shared by the group operations.
+
+## Cycle 17: core collapse (T039 core; A23, U28)
+
+- test: `sidebar_layout::tests::set_collapsed_marks_only_that_group_and_keeps_its_items`.
+- red: `E0599 no method named set_collapsed`.
+- green: `set_collapsed(id, bool)`, `UnknownGroup` for a gone group. `30 passed`.
+
+## Cycle 18: client reorder, collapse, keyboard menu, no state grouping (T037 to T041)
+
+- test: `tests/sidebar_drag.rs` `a_group_header_arms_a_group_drag_that_lands_between_headers_only`
+  (replaces `..._that_drops_nowhere_yet`), `a_row_dragged_over_a_header_gets_a_list_place_never_a_group_slot`,
+  `dropping_a_group_header_among_the_groups_reorders_them_with_their_rows`,
+  `a_group_dropped_on_its_own_place_changes_nothing`,
+  `a_row_dropped_in_its_own_list_takes_the_marked_place_and_keeps_it_on_redraw`,
+  `any_press_lets_go_of_a_row_held_after_a_cancel` (ledger follow-up, M4 review B r2);
+  `tests/sidebar_group_actions.rs` the Move up/down, collapse, reveal, save/reload, stale load,
+  card-state cycle and keyboard menu tests listed in test-list.md A16 to A27, U24 to U30;
+  `ui::sidebar::tests::a_group_header_is_a_tab_stop_that_toggles_and_opens_its_menu_by_keyboard`.
+- red: `cargo check -p micold-client --tests` -> `no variant MoveUp / MoveDown / Toggle /
+  MenuKeyed / MenuMoved / MenuActivated`, `unresolved imports group_menu_items, step_menu_items,
+  Movable`, `no field highlighted on GroupMenu`, `no field slot on DropSpot`, `no field
+  on_menu_key on TreeItem`, `field tab_stop of TreeItem is private`.
+- then one red at run time: `a_worktree_and_a_run_group_menu_...` panicked in the fixture, `a group
+  takes 2 to 8 runs, not 1` (the test's run group, fixed to two runs).
+- green: `DropSpot::slot` and `group_hit_test` (a group's block, header and shown rows, upper half
+  before it, lower half after it; no place over Default or the ungrouped rows), `group_released`
+  via `move_group`; `Pressed` clears `held` first; `Movable`, `Msg::MoveUp/MoveDown/Toggle`,
+  `step_menu_items` and `group_menu_items` (Rename, Delete, Move up, Move down, Collapse/Expand),
+  `GroupMenu::highlighted` with `MenuKeyed`, `MenuMoved` (skips disabled entries, wraps) and
+  `MenuActivated`; `State::sidebar_layout_placed` (the drop's adopt loop, now shared) and
+  `reveal_ready` expanding the one collapsed group that holds the reveal row; `TreeItem::on_menu_key`
+  (Menu key, Shift+F10) and the header as a Tab stop whose press toggles, or runs the menu's
+  highlighted entry while a group menu is open; the group menu key listener. `--test main`
+  sidebar/overview/navigation filters `585 passed`, `--lib ui::` `882 passed`,
+  `feature_registration_cost` `7 passed`.
+- T041 (A19, A26) is a regression guard: green on arrival, as the task says.
+- refactor: the card-state walk of `sidebar_state.rs::a_location_cycling_through_every_card_state_never_moves`
+  is the shared `sidebar_fixture::card_state_steps`, which T041's test reuses.
+
+## Cycle 19: full gate fixes
+
+- red: `scripts/gate.sh` -> 4 failed of 13151: `layout_snapshot::the_layout_matches_the_committed_fixture`
+  (`worktree-menu-open`: the row menu is two entries taller, `240.0 304.0` -> `240.0 400.0`),
+  `overlay_registry::the_keyboard_subscription_names_no_surface` (`Message::Overview(card)`,
+  `Message::SidebarGroups(matchcard` named in `ui::subscription`),
+  `root_state_is_shared::component_local_paths_are_pinned_or_moved` (`state.sidebar_drag.held`),
+  and `micold-daemon session_extras::tests::a_signed_commit_succeeds_with_the_delivered_key`
+  (`ssh-keygen` not installed in the container; installed, no code change).
+- green: the snapshot regenerated deliberately (the **Move up** / **Move down** entries); one
+  `menu_key` map (Down, Up, Enter, Space) that `card_menu_key` and `group_menu_key` both turn into
+  their own feature's message, each a single `Some(Message::…(msg))` return, the group one exempt
+  beside the card one; `sidebar_drag.held` pinned in `COMPONENT_LOCAL` by
+  `any_press_lets_go_of_a_row_held_after_a_cancel`. Targeted `--test main` 107 passed,
+  `layout_snapshot` 180 passed.

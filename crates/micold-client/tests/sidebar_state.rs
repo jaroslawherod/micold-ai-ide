@@ -1062,47 +1062,13 @@ mod flat_list {
     /// the drawn list never changes identity or order, and always equals `sidebar_entries()`.
     #[test]
     fn a_location_cycling_through_every_card_state_never_moves() {
-        use super::support::sidebar_fixture::pr_read;
-        use micold_core::pull_request::{CheckStatus, PrState};
+        use super::support::sidebar_fixture::card_state_steps;
         let mut state = five_states();
         let baseline = listed_rows(&state);
         let roles = micold_core::tokens::roles(micold_core::theme::ColorScheme::Light);
         let mut seen = vec![card_of(&state, "idle")];
         let mut tints = vec![row_tint(seen[0], &roles)];
-        type Step = Box<dyn Fn(&mut State)>;
-        let steps: Vec<Step> = vec![
-            Box::new(|s| pr_read(s, "feat/idle", PrState::Merged, true)),
-            Box::new(|s| {
-                s.pr_status.removable.remove("feat/idle");
-                pr_read(
-                    s,
-                    "feat/idle",
-                    PrState::Open {
-                        checks: CheckStatus::Failing,
-                    },
-                    false,
-                );
-            }),
-            Box::new(|s| {
-                s.pr_status.statuses.remove("feat/idle");
-                session_in(
-                    s,
-                    worktree("idle"),
-                    SessionLifecycle::Running,
-                    ActivitySignal::Working,
-                    false,
-                );
-            }),
-            Box::new(|s| {
-                session_in(
-                    s,
-                    worktree("idle"),
-                    SessionLifecycle::Running,
-                    ActivitySignal::AwaitingInput,
-                    true,
-                );
-            }),
-        ];
+        let steps = card_state_steps("idle");
         for step in &steps {
             step(&mut state);
             seen.push(card_of(&state, "idle"));

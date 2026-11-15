@@ -36,7 +36,7 @@ pub struct GroupHeader<M> {
 
 impl<M> GroupHeader<M> {
     /// The header of the group named `name`. It draws a twisty only once it has an
-    /// [`on_toggle`](Self::on_toggle): collapsing arrives with feature 1786's US6.
+    /// [`on_toggle`](Self::on_toggle) (feature 1786, US6).
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),

@@ -1,5 +1,5 @@
-//! The user's own sidebar groups: creating one, and later renaming, deleting and moving into one
-//! (feature 1786, US1; contracts C2, C6a; research R6, R9).
+//! The user's own sidebar groups: creating, renaming, deleting, moving into, reordering and
+//! collapsing them (feature 1786, US1, US2, US4, US6; contracts C2, C5, C6, C6a; research R6, R9).
 //!
 //! # What this feature owns
 //!
@@ -13,9 +13,10 @@
 //!
 //! `New`, `Rename`, `Delete`, `TextChanged`, `Confirmed`, `Cancelled`; the sidebar's empty-area menu
 //! (`EmptyAreaMenuOpened`, `EmptyAreaMenuDismissed`), whose one item is **New group…** (C6a); the
-//! group header's menu (`MenuOpened`, `MenuDismissed`), whose items are **Rename** and **Delete**
-//! (C6); and `Move`, the **Move to group** entries of a worktree's or run group's menu
-//! ([`move_menu_items`], FR-010, FR-016).
+//! group header's menu (`MenuOpened`, `MenuKeyed`, `MenuMoved`, `MenuActivated`, `MenuDismissed`),
+//! whose items are [`group_menu_items`] (C6); `Move`, the **Move to group** entries of a
+//! worktree's or run group's menu ([`move_menu_items`], FR-010, FR-016); `MoveUp` and `MoveDown`
+//! ([`step_menu_items`], FR-010, FR-019); and `Toggle`, a header's collapse (FR-011).
 
 use crate::app::Message;
 use crate::features::Outcome;
@@ -37,16 +38,78 @@ pub struct State {
     pub group_menu: Option<GroupMenu>,
 }
 
-/// An open group header menu: which group it acts on and the window point it hangs from.
+/// An open group header menu: which group it acts on, the window point it hangs from, and the
+/// entry the keyboard is on ([`group_menu_items`]' index), if any.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GroupMenu {
     pub group: UserGroupId,
     pub anchor: (u16, u16),
+    pub highlighted: Option<usize>,
 }
 
-/// The group menu's items, in order (C6). Move up, Move down and Collapse join with the milestones
-/// that add them.
-pub const GROUP_MENU_ITEMS: [&str; 2] = ["Rename", "Delete"];
+/// What **Move up** and **Move down** move: a row the layout places, or a group (FR-010, FR-019).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Movable {
+    /// A worktree row or a run group's row, within its list.
+    Item(LayoutItem),
+    /// A user group, among the groups.
+    Group(UserGroupId),
+}
+
+/// One entry of a menu this feature fills: its words and what choosing it sends; `None` draws it
+/// disabled.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuEntry {
+    pub label: String,
+    pub message: Option<Msg>,
+}
+
+impl MenuEntry {
+    fn new(label: &str, message: Option<Msg>) -> Self {
+        Self {
+            label: label.to_owned(),
+            message,
+        }
+    }
+}
+
+/// **Move up** and **Move down** for `what`, each disabled at its end of the list (contract C6).
+/// The project root is never an item, so it is offered neither (FR-015). A row the layout does not
+/// hold yet steps from where the sidebar draws it.
+pub fn step_menu_items(state: &crate::app::State, what: &Movable) -> Vec<MenuEntry> {
+    if matches!(what, Movable::Item(LayoutItem::Worktree(dir)) if dir.is_empty()) {
+        return Vec::new();
+    }
+    let layout = state.sidebar_layout_placed();
+    let can = |by| match what {
+        Movable::Item(item) => state.layout_item_exists(item) && layout.can_step_item(item, by),
+        Movable::Group(id) => layout.can_step_group(*id, by),
+    };
+    vec![
+        MenuEntry::new("Move up", can(-1).then(|| Msg::MoveUp(what.clone()))),
+        MenuEntry::new("Move down", can(1).then(|| Msg::MoveDown(what.clone()))),
+    ]
+}
+
+/// A group header's menu, in order (C6, C6a): **Rename**, **Delete**, **Move up**, **Move down**,
+/// then **Collapse** or **Expand**. Empty for a group the open project does not have.
+pub fn group_menu_items(state: &crate::app::State, id: UserGroupId) -> Vec<MenuEntry> {
+    let Some(group) = state.sidebar_layout().and_then(|layout| layout.group(id)) else {
+        return Vec::new();
+    };
+    let fold = if group.collapsed {
+        "Expand"
+    } else {
+        "Collapse"
+    };
+    let mut entries = vec![
+        MenuEntry::new("Rename", Some(Msg::Rename(id))),
+        MenuEntry::new("Delete", Some(Msg::Delete(id))),
+    ];
+    entries.extend(step_menu_items(state, &Movable::Group(id)));
+    entries.push(MenuEntry::new(fold, Some(Msg::Toggle(id))));
+    entries
+}
 
 /// What the naming dialog names (data-model.md, *NamingDraft*).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,6 +200,20 @@ pub enum Msg {
     Delete(UserGroupId),
     /// A group header was right-clicked at this window point (C6).
     MenuOpened(UserGroupId, (u16, u16)),
+    /// The Menu key or Shift+F10 on a focused group header: its menu opens at this window point
+    /// with the keyboard on its first entry (C6, 803).
+    MenuKeyed(UserGroupId, (u16, u16)),
+    /// Down (`forward`) or Up in the open group menu: the keyboard moves to the next enabled entry.
+    MenuMoved { forward: bool },
+    /// Enter or Space in the open group menu: its highlighted entry runs.
+    MenuActivated,
+    /// **Move up** from a row's or a group's menu: one place up its list (FR-010).
+    MoveUp(Movable),
+    /// **Move down** from a row's or a group's menu: one place down its list.
+    MoveDown(Movable),
+    /// A header's twisty, Enter or Space on a focused header, or **Collapse** / **Expand** from its
+    /// menu: the group's rows hide or show again, and the state is saved (FR-011).
+    Toggle(UserGroupId),
     /// The group menu was dismissed.
     MenuDismissed,
     /// The naming field was edited.
@@ -176,17 +253,23 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         Msg::New => new_started(state),
         Msg::Rename(id) => rename_started(state, id),
         Msg::Delete(id) => return deleted(state, id),
-        Msg::MenuOpened(group, anchor) => {
-            // Only a group the open project has.
-            if !state
-                .sidebar_layout()
-                .is_some_and(|layout| layout.group(group).is_some())
-            {
-                return Vec::new();
+        Msg::MenuOpened(group, anchor) => return menu_opened(state, group, anchor, false),
+        Msg::MenuKeyed(group, anchor) => return menu_opened(state, group, anchor, true),
+        Msg::MenuMoved { forward } => menu_moved(state, forward),
+        Msg::MenuActivated => {
+            let chosen = state.sidebar_groups.group_menu.and_then(|menu| {
+                group_menu_items(state, menu.group)
+                    .into_iter()
+                    .nth(menu.highlighted?)?
+                    .message
+            });
+            if let Some(chosen) = chosen {
+                return update(state, chosen);
             }
-            state.sidebar_groups.group_menu = Some(GroupMenu { group, anchor });
-            return crate::features::surface_opened(true, GroupContextMenu::ID);
         }
+        Msg::MoveUp(what) => return stepped(state, &what, -1),
+        Msg::MoveDown(what) => return stepped(state, &what, 1),
+        Msg::Toggle(id) => return toggled(state, id),
         Msg::MenuDismissed => state.sidebar_groups.group_menu = None,
         Msg::TextChanged(text) => {
             if let Some(draft) = &mut state.sidebar_groups.naming {
@@ -208,6 +291,100 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         Msg::EmptyAreaMenuDismissed => state.sidebar_groups.empty_menu = None,
     }
     Vec::new()
+}
+
+/// Open the group menu of `group` at `anchor`, with the keyboard on its first enabled entry when
+/// `keyed`. Only for a group the open project has.
+fn menu_opened(
+    state: &mut crate::app::State,
+    group: UserGroupId,
+    anchor: (u16, u16),
+    keyed: bool,
+) -> Vec<Outcome> {
+    if !state
+        .sidebar_layout()
+        .is_some_and(|layout| layout.group(group).is_some())
+    {
+        return Vec::new();
+    }
+    state.sidebar_groups.group_menu = Some(GroupMenu {
+        group,
+        anchor,
+        highlighted: None,
+    });
+    if keyed {
+        menu_moved(state, true);
+    }
+    crate::features::surface_opened(true, GroupContextMenu::ID)
+}
+
+/// Move the open group menu's highlight to the next (`forward`) or previous enabled entry,
+/// wrapping; from no highlight, to the first or the last.
+fn menu_moved(state: &mut crate::app::State, forward: bool) {
+    let Some(menu) = state.sidebar_groups.group_menu else {
+        return;
+    };
+    let enabled: Vec<usize> = group_menu_items(state, menu.group)
+        .iter()
+        .enumerate()
+        .filter_map(|(at, entry)| entry.message.as_ref().map(|_| at))
+        .collect();
+    let Some(&last) = enabled.last() else {
+        return;
+    };
+    let len = enabled.len();
+    let next = match menu
+        .highlighted
+        .and_then(|h| enabled.iter().position(|&at| at == h))
+    {
+        None if forward => enabled[0],
+        None => last,
+        Some(p) if forward => enabled[(p + 1) % len],
+        Some(p) => enabled[(p + len - 1) % len],
+    };
+    if let Some(menu) = &mut state.sidebar_groups.group_menu {
+        menu.highlighted = Some(next);
+    }
+}
+
+/// **Move up** / **Move down** (`by` -1 / 1): closes the menu it was picked from, then moves the
+/// row or group one place in its list. At the end of the list, or for a row or group that is gone,
+/// nothing changes and nothing is saved.
+fn stepped(state: &mut crate::app::State, what: &Movable, by: isize) -> Vec<Outcome> {
+    close_row_menus(state);
+    let Some(project) = state.workspace.active.clone() else {
+        return Vec::new();
+    };
+    let mut layout = state.sidebar_layout_placed();
+    let moved = match what {
+        Movable::Item(item) => {
+            state.layout_item_exists(item) && layout.step_item(item, by) == Ok(true)
+        }
+        Movable::Group(id) => layout.step_group(*id, by) == Ok(true),
+    };
+    if !moved {
+        return Vec::new();
+    }
+    vec![Outcome::SidebarLayoutChanged { project, layout }]
+}
+
+/// Collapse an expanded group or expand a collapsed one (FR-011), closing a menu it was picked
+/// from. A group that is gone changes nothing.
+fn toggled(state: &mut crate::app::State, id: UserGroupId) -> Vec<Outcome> {
+    close_row_menus(state);
+    let (Some(project), Some(mut layout)) = (
+        state.workspace.active.clone(),
+        state.sidebar_layout().cloned(),
+    ) else {
+        return Vec::new();
+    };
+    let Some(collapsed) = layout.group(id).map(|group| group.collapsed) else {
+        return Vec::new();
+    };
+    if layout.set_collapsed(id, !collapsed).is_err() {
+        return Vec::new();
+    }
+    vec![Outcome::SidebarLayoutChanged { project, layout }]
 }
 
 /// **New group…** opens an empty draft; with no project open there is nothing to group. Not over
