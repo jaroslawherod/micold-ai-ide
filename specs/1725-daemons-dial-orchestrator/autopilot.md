@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-itbg1f
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: milestone M2 (T016–T020): implemented (T016–T020 ticked); scoped gate, review A, full gate, then the PR
+- **Next step**: orchestrator opens the M2 PR from pr-title.md/pr-body.md on claude/project-thread-itbg1f, runs review B, waits on CI and merges; then M3 (T021–T027)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
-| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | implementing (base 8921b6167, #1971 merge) |
+| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | PR pending (branch pushed; full gate green at b38d5f3d28c050b447d51114fb8786a22fa53960; review A CLEAN + 3 MINOR fixed) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
