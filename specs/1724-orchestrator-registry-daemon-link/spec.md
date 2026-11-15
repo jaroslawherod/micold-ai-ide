@@ -191,7 +191,9 @@ both are listed (offline until they relink); a daemon with sessions still holds 
 - **FR-008**: The orchestrator MUST NOT initiate any outbound connection to a daemon; a test with
   outbound connections blocked passes. (FR-003)
 - **FR-009**: The orchestrator going down MUST NOT stop, alter or lose any daemon's sessions; the
-  orchestrator holds no session state.
+  orchestrator holds no session state. This holds by construction (US5 scenario 2): the orchestrator
+  has no code path that reaches a daemon's sessions, and `the_orchestrator_keeps_no_session_state_to_lose`
+  asserts only what the orchestrator itself keeps.
 - **FR-010**: Existing behaviour MUST NOT change: `micold-daemon` without the `orchestrator`
   argument serves exactly as before.
 

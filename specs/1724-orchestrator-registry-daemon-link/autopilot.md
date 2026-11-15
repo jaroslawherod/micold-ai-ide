@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
 | #1898 | M5 | merged | da60fabfaa8264ac0b74d9b9deee5865339b694f |
 | #1908 | M6 | merged | 6a02088c387e1c055a2c03802d2f4a998c61a037 |
-| close | Close | opened by the orchestrator | — |
+| #1963 | Close | draft | — |
 
 ## Milestones
 
@@ -88,6 +88,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | pending |
 | Review A | 4 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: scoped, drift-M6 row only; PR #1908 |
 | Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: ci.yml recorded in drift-M6, plan-drift exits 0; PR #1908 |
+| Close review | 1 | 1963 | 83671bb27db53d4405ff6a0f934f10a608ca431e | 39f3036892eadb6ed23e7268c6d719bb8fefde78:83671bb27db53d4405ff6a0f934f10a608ca431e | CHANGES: F1-F4 MAJOR fixed (real-time bounds in harness, T050 annotated, T006 red by hand, Shared::update test), F5-F7 MINOR fixed |
 
 ## Declined review findings
 

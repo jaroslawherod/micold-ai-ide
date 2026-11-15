@@ -177,10 +177,10 @@ was editing `tests/orchestrator/`, so the failing set there reflects that tree.
 | T004 `DaemonRecord` name | `let name = name.trim();` -> `let name = name;` (`record.rs`) | 3 failed: `name_is_trimmed`, `blank_name_falls_back_to_the_id`, `registry::confirm_upserts_the_record_online_with_the_wall_time` |
 | T004 `TenantId` default | `if trimmed.is_empty()` -> `if false` (`record.rs`) | 2 failed: `missing_or_blank_tenant_is_the_default`, `an_empty_stored_tenant_reads_as_the_default` |
 | T005 `announce` format default | `current_format()` returns `ANNOUNCEMENT_FORMAT + 1` | 1 failed: `unknown_fields_are_ignored_and_optional_ones_default` (`announce.rs:187`) |
-| T006 basic `Registry` | `record.last_seen = wall_secs` in `confirm` -> the name trim break above also fails `confirm_upserts_the_record_online_with_the_wall_time`; a `last_seen` break was not recorded (the pattern matched twice and the script skipped it) | Covered only by the T004 name row; no dedicated T006 red. |
+| T006 basic `Registry` | `record.last_seen = wall_secs` -> `0` in `Registry::confirm` (`registry.rs:361`), by hand | `cargo test -p micold-core --lib registry`: 32 passed, 14 failed, among them `registry::confirm_upserts_the_record_online_with_the_wall_time` |
 | T017 `Heartbeat` expiry once | `self.expired = true` -> `false` in `tick` (`liveness.rs`) | 9+ failed (output truncated at 12 lines), among them `expires_once_at_the_deadline_then_keeps_probing`, `an_answer_reports_the_return_once_and_restarts_the_deadline`, `a_silent_link_goes_offline_once_with_its_last_seen_unchanged` |
 | T017 `answered` reports the return | `std::mem::take(&mut self.expired)` -> `false` | 3 failed: `an_answer_reports_the_return_once_and_restarts_the_deadline` (`liveness.rs:117`), `a_silent_link_that_answers_during_a_reservation_keeps_the_id`, `a_version_failure_never_overwrites_an_old_link_that_answered` |
-| T018 `PROTOCOL_VERSION` | 82 -> 83 | No red: 2138 passed. No core lib test pins the number (the test T018 names is not in the lib); not investigated further here. |
+| T018 `PROTOCOL_VERSION` | 82 -> 83 (`protocol/version.rs`) | `cargo test -p micold-core --test main protocol_roundtrip`: 49 passed, 1 failed: `protocol_roundtrip::the_protocol_version_is_81`. No core lib test pins it (the earlier lib-only run, 2138 passed, missed it). |
 | T011 not hosted | `NOT_HOSTED` text -> `unsupported` (`query.rs`) | 1 failed: `not_hosted::a_session_start_is_refused_not_hosted` |
 | T012 `parse_mode` | `arg == "orchestrator"` -> `arg != ""` | 1 failed: `dispatch::any_other_argument_is_the_daemon` (3 passed) |
 | T020 heartbeat `last_seen` | `record.last_seen = wall_secs` in `Registry::answered` removed | Failed: `an_offline_daemons_next_frame_brings_it_back_online`, `a_silent_daemon_does_not_change_the_record_of_one_that_answered`, `a_silent_daemon_lists_offline_with_its_last_answers_time`, `netns::link_and_heartbeat_pass_with_outbound_connections_blocked` |
@@ -191,11 +191,10 @@ Not given a red here, and why:
 - T010 (test harness): its use is every daemon-side row above; no separate break was made.
 - T019 (`ClientMsg::LinkPong` ignored by the daemon) and T022 (`DaemonMsg::LinkPing` ignored by the
   client): no red is possible. Both matches keep a `_ => {}` wildcard, so deleting the explicit arm
-  changes nothing observable (T022 is already recorded above; T019 has the same shape at
-  `server.rs`). The client side is being addressed by T047.
-- T018 codec round trips: no break made; the version row above survived.
+  changes nothing observable (T019 has the same shape at `server.rs`). The client side is being addressed by T047.
+- T018 codec round trips: no break made; the version pin row above is red.
 - The T017 `Heartbeat` and the T005 refusal and preamble-timeout behaviours beyond the rows shown
   were not broken one by one.
 
-So this does not meet T050's "every behavior has a red recorded": T006 (dedicated), T010, T018, T019
-and T022 have none, and the T018 version pin is a surviving break.
+T050's "every behavior has a red recorded" is met except T010, T019 and T022, which have none and are accepted
+as deviations (see `verification.md`, "Close resolution").

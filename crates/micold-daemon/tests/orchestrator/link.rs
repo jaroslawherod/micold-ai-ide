@@ -1,7 +1,7 @@
 //! The link task's own timers (contracts/link.md): a connection that sends nothing is closed at the
 //! deadline, a reservation without a `Hello` is released then, and a link whose transport closed
 //! after the deadline ends its task. All run on tokio's paused clock, so the nine seconds cost
-//! nothing; a mutant that stretches a timer makes the paused clock reach `WITHIN` first.
+//! nothing; the waits are bounded in real time, and a stretched timer fails the deadline bound.
 
 use std::time::Duration;
 
@@ -16,6 +16,20 @@ fn alive_tasks() -> usize {
         .num_alive_tasks()
 }
 
+/// Closed at the deadline, neither before nor long after: a stretched timer would still close
+/// on the paused clock, only later in virtual time.
+fn assert_closed_at_the_deadline(started: tokio::time::Instant) {
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed >= LIVENESS_DEADLINE,
+        "closed too early: {elapsed:?}"
+    );
+    assert!(
+        elapsed <= LIVENESS_DEADLINE + Duration::from_secs(1),
+        "closed too late: {elapsed:?}"
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_connection_that_sends_no_preamble_is_closed_at_the_deadline() {
     let orchestrator = Orchestrator::start().await;
@@ -24,7 +38,7 @@ async fn a_connection_that_sends_no_preamble_is_closed_at_the_deadline() {
 
     silent.expect_closed_without_verdict().await;
 
-    assert!(started.elapsed() >= LIVENESS_DEADLINE, "closed too early");
+    assert_closed_at_the_deadline(started);
 }
 
 #[tokio::test(start_paused = true)]
@@ -38,7 +52,7 @@ async fn an_accepted_link_that_never_sends_hello_is_closed_and_its_reservation_r
 
     stalled.expect_closed().await;
 
-    assert!(started.elapsed() >= LIVENESS_DEADLINE, "closed too early");
+    assert_closed_at_the_deadline(started);
     // The test's own clock never moved, so only the link task can have released the id.
     assert!(orchestrator.daemons().await.is_empty());
     let _linked = FakeDaemon::link(&orchestrator, &announcement("a")).await;

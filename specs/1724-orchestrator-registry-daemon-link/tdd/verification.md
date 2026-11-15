@@ -179,9 +179,21 @@ Re-run of the checks, not of the audit: the verdict above stands for the history
 
 - F2, F3, F4 (preamble and `Hello` timeouts, loop exits): new tests in `crates/micold-daemon/tests/orchestrator/link.rs`; five mutants of `link.rs` each turn a test red. `preamble_expired` and its unit test were unused by production code and are deleted (T044).
 - F5: `the_link_ping_arm_is_spelled_out_in_on_daemon_event` guards the arm by source text (the wildcard makes it behaviourally identical); a mutant fails it.
-- F6, F8 to F13, F15, F17: fixed in the daemon orchestrator tests (see T048, T051 to T053).
-- F7: store.rs test module reworked; a mutant fails the replacement.
-- F1: `tdd/cycle-log.md` "Retroactive red" records reds for T003, T004, T005, T011, T012, T017, T020. Accepted deviations: T006 and T010 (no separate break possible: exercised only through the wire suite), T019 and T022 (the client and server matches keep their `_ => {}` wildcard, so no behavioural red exists; the source-text guard of F5 covers the arm), T018 (bumping `PROTOCOL_VERSION` fails the integration test `the_protocol_version_is_81` in `crates/micold-core/tests/protocol_roundtrip.rs`, which pins 82, not a core lib test).
+- F6, F8 to F13, F15, F17: fixed in the daemon orchestrator tests (see T048, T051 to T053). The paused-clock waits in the harness are bounded by real time (`within` in `support.rs`), not by a virtual `timeout`, so auto-advance cannot reach the test's own limit before a close is observed; the deadline tests also bound the close from above.
+- F7: store.rs test module reworked; a mutant fails the replacement. The in-memory correctness after a failed save moved to `a_failed_save_leaves_the_registry_in_memory_correct` in `crates/micold-daemon/src/orchestrator/mod.rs`, which drives `Shared::update` with a failing store (T049).
+- F1: `tdd/cycle-log.md` "Retroactive red" records reds for T003, T004, T005, T011, T012, T017, T020. T006 has a hand-made red (breaking `record.last_seen = wall_secs` in `Registry::confirm` fails `registry::confirm_upserts_the_record_online_with_the_wall_time`; `cargo test -p micold-core --lib registry`: 32 passed, 14 failed). Accepted deviations: T010 (exercised only through the wire suite), T019 and T022 (the client and server matches keep their `_ => {}` wildcard, so no behavioural red exists; the source-text guard of F5 covers the arm), T018 (bumping `PROTOCOL_VERSION` 82 to 83 fails `protocol_roundtrip::the_protocol_version_is_81`: `cargo test -p micold-core --test main protocol_roundtrip`, 49 passed, 1 failed; it is not a core lib test).
 - F14 (`no_outbound.rs` into `crates/micold-core/tests/`): declined; the scan covers both crates' orchestrator sources and needs the daemon crate's path, so it stays beside the netns proof.
 - F16 (shared announcement builders): declined; the builders live in separate crates' test modules and a shared one would need a new dev-dependency for four lines.
 - F13: the netns proof fails where a tool is missing only when `CI` is set; a developer host skips it with a `::warning::` line, so `mise run gate` is unaffected. `MICOLD_ALLOW_NETNS_SKIP` lifts the CI failure.
+
+### Mutants recorded in the close (as reported by the remediation workers; not re-run by the close unit)
+
+| Mutant | File | Fails |
+| --- | --- | --- |
+| E: preamble timeout to 86400 s | `crates/micold-daemon/src/orchestrator/link.rs` | `a_connection_that_sends_no_preamble_is_closed_at_the_deadline` |
+| F: `Hello` timeout to 86400 s | `link.rs` | `an_accepted_link_that_never_sends_hello_is_closed_and_its_reservation_released`, `a_daemon_that_announces_no_tenant_lists_the_default`, both netns runs (+1) |
+| G: the three loop exits deleted | `link.rs` | `a_closed_link_past_the_deadline_ends_its_task_with_no_relink` |
+| H: `closed()` removed | `link.rs` | `a_daemon_gone_before_it_reads_welcome_frees_its_id_at_once` and the relink tests |
+| check interval to 15 s | `link.rs` | `a_silent_daemon_lists_offline_within_one_check_interval_of_the_deadline` |
+| F5: the `LinkPing` arm commented out | `crates/micold-client/src/daemon_sync.rs` | `the_link_ping_arm_is_spelled_out_in_on_daemon_event` only (65 passed, 1 failed) |
+| F7: `last` recorded only after a successful write | `crates/micold-core/src/orchestrator/store.rs` | the new store test at `store.rs:407` (9 passed, 1 failed) |
