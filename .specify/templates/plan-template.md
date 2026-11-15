@@ -46,11 +46,11 @@ deviation in Complexity Tracking):
 - [ ] **I. Test-First (NON-NEGOTIABLE)**: Every unit of production code is preceded by a failing, reviewed test (Red-Green-Refactor). No code path is planned without covering tests.
 - [ ] **II. Multi-Session Support**: New state is scoped per session; sessions stay independently addressable, persisted, restorable, and leak no state into one another.
 - [ ] **III. Worktree Integration**: File/VCS operations are worktree-aware; the app owns worktree create/switch/cleanup with no manual git steps required of the user; every session maps to a worktree or to the project root as the sanctioned "Default" location — no other non-worktree location is used.
-- [ ] **IV. Local-First Storage (NON-NEGOTIABLE)**: All state lives on the local filesystem; the feature works fully offline; nothing leaves the device without explicit opt-in.
-- [ ] **V. Rust + iced Stack**: Implemented in Rust with iced only; invalid session/worktree states are made unrepresentable via the type system.
-- [ ] **VI. Cross-Platform Parity**: Feature behaves equivalently on Linux, macOS, and Windows; platform-specific code sits behind clear abstractions; CI covers all three for any change able to affect the build.
+- [ ] **IV. Local-First Storage (NON-NEGOTIABLE)**: Local mode works fully offline on one machine with no external service; any network deployment (PostgreSQL, GitHub/Google sign-in) is opt-in and never the default; nothing leaves the device without explicit opt-in.
+- [ ] **V. TypeScript + React Native Client, Rust Core**: UI is the one TypeScript + React Native client talking only to the orchestrator API through generated types; core, daemons and orchestrator are Rust; invalid session/worktree states are made unrepresentable via the type system.
+- [ ] **VI. Linux Daemons, Web Client Reach**: Daemons and orchestrator run on Linux; the client behaves equivalently on current Chromium, Firefox and Safari; browser-specific code sits behind clear abstractions; CI covers all of them for any change able to affect the build.
 - [ ] **VII. Documentation First-Class**: User-facing changes include user-guide docs in the same change; docs are in-repo and verified in CI.
-- [ ] **VIII. Reusable UI Component Foundation**: UI is built from shared, reusable primitives; new widgets are added to (or promoted into) the shared library and reused, not forked as feature-local one-offs; shared components honor theming and cross-platform parity; shared components expose a chainable **builder** API terminating in `.into()` (iced widget idiom), not free functions with many positional parameters.
+- [ ] **VIII. Reusable UI Component Foundation**: UI is built from shared, reusable primitives; new components are added to (or promoted into) the shared library and reused, not forked as feature-local one-offs; shared components honor theming and browser parity; shared components expose typed props in the React idiom, not free functions with many positional parameters.
 
 ## Project Structure
 

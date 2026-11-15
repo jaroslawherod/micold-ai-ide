@@ -394,6 +394,14 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
         "terminal_period_marker — the terminal period's marker text is the session feature's to \
          say; the selection copies it as drawn, a pure read (feature 1550, #943 FR-023)",
     ),
+    (
+        "sidebar_drag",
+        "sidebar",
+        "SidebarEntry, row_heights, layout_item, ROW_GAP — the drag's hit test measures the drawn \
+         list by the sidebar's own row metrics and names its rows by the sidebar's own item rule, \
+         so a drop lands on the row the pointer is over; pure reads, no sidebar state is written \
+         (feature 1786, contract C3)",
+    ),
 ];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.

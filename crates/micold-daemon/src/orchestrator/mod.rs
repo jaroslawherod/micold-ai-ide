@@ -114,11 +114,7 @@ impl Shared {
 
 /// The orchestrator's own endpoint: beside the daemon's, under other names, so both can run.
 fn endpoint() -> io::Result<Endpoint> {
-    let daemon = micold_core::endpoint::resolve()?;
-    Ok(Endpoint {
-        socket_path: daemon.socket_path.with_file_name("orchestrator.sock"),
-        lock_path: daemon.lock_path.with_file_name("orchestrator.lock"),
-    })
+    micold_core::endpoint::orchestrator_endpoint()
 }
 
 /// Run the orchestrator on the user's endpoint until the process is stopped, keeping its registry
@@ -161,13 +157,59 @@ pub async fn run_with(
     serve(endpoint, clock, store).await
 }
 
+/// The registry `store` holds, restored, and the saving thread that keeps it: what every link
+/// task shares.
+fn start(
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+) -> io::Result<(SaveWorker, Arc<Shared>)> {
+    let registry = Registry::restore(store.load().map_err(io::Error::other)?);
+    let (saving, saves) = SaveWorker::start(store)?;
+    Ok((saving, Arc::new(Shared::new(clock, registry, saves))))
+}
+
+/// An orchestrator with no listener: the caller hands it each connection, which is served by the
+/// same link task `run_with` spawns, on one shared registry. Tests use it for transports a socket
+/// cannot produce, such as a pipe whose reader stops reading.
+pub struct Detached {
+    shared: Arc<Shared>,
+    // Unlike `serve`'s link tasks, the futures `Detached::serve` returns can outlive this: once it
+    // is dropped, a snapshot they hand over is no longer written.
+    _saving: SaveWorker,
+}
+
+impl Detached {
+    /// An orchestrator on `clock`, with the registry `store` holds.
+    pub fn new(clock: Arc<dyn Clock>, store: Arc<dyn RegistryStore>) -> io::Result<Self> {
+        let (saving, shared) = start(clock, store)?;
+        Ok(Self {
+            shared,
+            _saving: saving,
+        })
+    }
+
+    /// Serve one connection until it ends, as an accepted one is.
+    pub fn serve<S>(
+        &self,
+        stream: S,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send + 'static
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
+        link::serve_connection(Arc::clone(&self.shared), stream)
+    }
+}
+
 async fn serve(
     endpoint: Endpoint,
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
     // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
-    let registry = Registry::restore(store.load().map_err(io::Error::other)?);
+    // Declared before `links`, so dropped after them: when this future ends, the link tasks are
+    // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
+    // writes the registry file after that.
+    let (_saving, shared) = start(clock, store)?;
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {
@@ -180,11 +222,6 @@ async fn serve(
             ))
         }
     };
-    // Declared before `links`, so dropped after them: when this future ends, the link tasks are
-    // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
-    // writes the registry file after that.
-    let (_saving, saves) = SaveWorker::start(store)?;
-    let shared = Arc::new(Shared::new(clock, registry, saves));
     let mut links = tokio::task::JoinSet::new();
     loop {
         while links.try_join_next().is_some() {}
@@ -214,8 +251,11 @@ mod tests {
     use std::time::Duration;
 
     use micold_core::daemon_config::Kind;
-    use micold_core::orchestrator::{DaemonRecord, StoreError};
+    use micold_core::orchestrator::{
+        Claim, DaemonRecord, Health, LinkAnnouncement, MemoryRegistryStore, StoreError,
+    };
     use micold_core::protocol::routing::WireDaemonId;
+    use micold_core::protocol::version::PROTOCOL_VERSION;
 
     use super::*;
 
@@ -320,5 +360,45 @@ mod tests {
         drop(saving);
         saves.offer(snapshot(8));
         assert_eq!(*store.written.lock().unwrap(), [7]);
+    }
+
+    /// FR-004: a save that fails writes nothing, and the registry the links read is still right.
+    #[test]
+    fn a_failed_save_leaves_the_registry_in_memory_correct() {
+        let store = Arc::new(MemoryRegistryStore::default());
+        store.fail_saves(true);
+        let (saving, saves) =
+            SaveWorker::start(Arc::clone(&store) as Arc<dyn RegistryStore>).unwrap();
+        let shared = Shared::new(Arc::new(SystemClock), Registry::default(), saves);
+        let announcement = LinkAnnouncement {
+            format: 1,
+            id: WireDaemonId::new("a").unwrap(),
+            kind: Kind::Host,
+            name: "A".to_owned(),
+            protocol_version: PROTOCOL_VERSION,
+            capabilities: BTreeSet::new(),
+            tenant: None,
+        };
+
+        let link = shared.update(
+            |registry| match registry.claim(&announcement, shared.now()) {
+                Claim::Reserved { link, snapshot } => (link, Some(snapshot)),
+                other => panic!("expected a reservation, got {other:?}"),
+            },
+        );
+        shared.update(|registry| {
+            let confirmed = registry
+                .confirm(link, shared.now(), 1_000)
+                .expect("the reservation is current");
+            ((), Some(confirmed.snapshot))
+        });
+        drop(saving);
+
+        assert_eq!(store.saves(), 0, "every save failed");
+        assert!(store.stored().is_empty());
+        let listed = shared.registry().list();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].health, Health::Online);
+        assert_eq!(listed[0].last_seen, 1_000);
     }
 }

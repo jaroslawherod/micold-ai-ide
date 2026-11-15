@@ -27,6 +27,26 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 /// Long enough for a loaded machine, short enough that a hang fails the test.
 pub const WITHIN: Duration = Duration::from_secs(20);
 
+/// Await `fut`, panicking with `what` when it has not finished after [`WITHIN`] of real time.
+/// Not `tokio::time::timeout`: on a paused clock that timer is virtual, so auto-advance jumps to
+/// it whenever the runtime is idle, even while a read is still waiting on real I/O.
+pub async fn within<F: std::future::Future>(what: &str, fut: F) -> F::Output {
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    let (late_tx, late_rx) = tokio::sync::oneshot::channel::<()>();
+    std::thread::spawn(move || {
+        if finished.recv_timeout(WITHIN) == Err(std::sync::mpsc::RecvTimeoutError::Timeout) {
+            let _ = late_tx.send(());
+        }
+    });
+    tokio::select! {
+        out = fut => {
+            drop(done);
+            out
+        }
+        Ok(()) = late_rx => panic!("{what}: nothing within {WITHIN:?}"),
+    }
+}
+
 /// A clock the test moves by hand.
 pub struct TestClock {
     base: Instant,
@@ -160,9 +180,8 @@ impl Orchestrator {
             .send(Bytes::from_static(br#"{"query":"list"}"#))
             .await
             .expect("the query is sent");
-        let frame = tokio::time::timeout(WITHIN, framed.next())
+        let frame = within("the listing arrives", framed.next())
             .await
-            .expect("the listing arrives")
             .expect("the connection answers")
             .expect("a frame");
         serde_json::from_slice(&frame).expect("the listing is JSON")
@@ -238,12 +257,20 @@ impl FakeDaemon {
     /// Send `body` as the preamble and read the verdict.
     pub async fn announce_raw(&mut self, body: Vec<u8>) -> LinkVerdict {
         self.framed.send(Bytes::from(body)).await.expect("sent");
-        let frame = tokio::time::timeout(WITHIN, self.framed.next())
+        let frame = within("a verdict arrives", self.framed.next())
             .await
-            .expect("a verdict arrives")
             .expect("the connection answers")
             .expect("a frame");
         serde_json::from_slice(&frame).expect("a verdict")
+    }
+
+    /// Read until the orchestrator closes the connection with no verdict; panics if it stays open
+    /// for [`WITHIN`] of real time.
+    pub async fn expect_closed_without_verdict(&mut self) {
+        match within("the orchestrator closes the connection", self.framed.next()).await {
+            None | Some(Err(_)) => {}
+            Some(Ok(frame)) => panic!("a verdict nobody asked for: {frame:?}"),
+        }
     }
 
     /// Announce, expect `Accepted`, and switch to the wire codec.
@@ -308,9 +335,8 @@ impl LinkedDaemon {
     }
 
     pub async fn next(&mut self) -> DaemonMsg {
-        let frame = tokio::time::timeout(WITHIN, self.framed.next())
+        let frame = within("a frame arrives", self.framed.next())
             .await
-            .expect("a frame arrives")
             .expect("the connection stays open")
             .expect("a decodable frame");
         match frame {
@@ -322,10 +348,7 @@ impl LinkedDaemon {
     /// Read until the orchestrator closes the connection, skipping pings; panics if it stays open.
     pub async fn expect_closed(&mut self) {
         loop {
-            match tokio::time::timeout(WITHIN, self.framed.next())
-                .await
-                .expect("the orchestrator closes the connection")
-            {
+            match within("the orchestrator closes the connection", self.framed.next()).await {
                 None | Some(Err(_)) => return,
                 Some(Ok(_)) => {}
             }

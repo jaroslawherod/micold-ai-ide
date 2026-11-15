@@ -1,1 +1,1 @@
-#1724: feat: `micold-daemon orchestrator` — registry, daemon link, heartbeat, offline (M6)
+#1724: feat: `micold-daemon orchestrator` — registry, daemon link, heartbeat, offline (close)

@@ -243,6 +243,62 @@ daemon.toml:12:1: `[orchestrator]` needs `enrollment_token_file`, or `cert_file`
 daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https scheme
 ```
 
+### `[orchestrator_link]`
+
+Makes this daemon dial the orchestrator (#1725), so the orchestrator lists it `online`. Independent
+of `[orchestrator]`: neither table needs the other.
+
+```toml
+[orchestrator_link]
+enabled = true                                       # default false
+socket  = "/run/user/1000/micold/orchestrator.sock"  # optional
+```
+
+- `enabled`: the daemon dials only when this is `true`. The default is `false`, and with the table
+  absent the daemon behaves exactly as before: no task, no connection, no extra log line.
+- `socket`: the orchestrator's local socket. Absent, a host daemon dials the orchestrator's own socket
+  (`orchestrator.sock` beside the daemon's socket); the other kinds dial `orchestrator.sock` in their
+  per-user runtime directory.
+
+The daemon never opens a new port for the link: it only connects out. The dial runs in the background,
+so a slow or absent orchestrator never delays a client. A lost link is dialled again by itself.
+
+Stopping or restarting the orchestrator does not touch the daemon's sessions or clients: sessions keep
+running and producing output, clients stay connected, and the daemon logs `orchestrator link lost`
+once. When the orchestrator is back, the daemon is listed `online` again within 16 seconds, with no
+restart.
+
+A daemon the orchestrator refuses keeps trying, politely: it waits 15 seconds (plus up to 20 %) before
+each new attempt, whatever the reason, and never touches another daemon's link. The reasons are:
+
+| Reason | What it means | What to do |
+|---|---|---|
+| `refused-version-mismatch` | the daemon and the orchestrator speak different protocol versions; the orchestrator lists the daemon `needs-update` | upgrade the older side; the daemon links on its next attempt |
+| `refused-already-linked` | another link for the same daemon id is open | give each daemon its own `[daemon] id`; the first link is not disturbed |
+| `refused-hello` | the orchestrator accepted the announcement and then refused the handshake | the detail names why (for example, different builds) |
+
+A link that was up and is lost is dialled again after one second, then 2, 4, 8 and 15 seconds.
+
+To see where the link stands, run `micold-daemon remote status` on the daemon's machine. Its JSON line
+has a `link` object (absent when `[orchestrator_link]` is not enabled):
+
+```json
+"link": {"state": "refused-version-mismatch", "since": 1763200000, "detail": "daemon hostbox speaks protocol version 49; this orchestrator speaks 50"}
+```
+
+`state` is `not-linked`, `linking`, `linked` or one of the refusal reasons above; `since` is when the
+link entered it (Unix seconds); `detail` is the orchestrator's sentence for a refusal. The same line in
+words goes to stderr, for example `orchestrator link: refused-already-linked: a link for daemon hostbox is
+already open`. The daemon's log has one line each time the state changes, never one per retry.
+
+Rule:
+
+- **L1**: `orchestrator_link.socket` is not empty. Reported at the value.
+
+```text
+daemon.toml:7:10: `orchestrator_link.socket` is empty: give a path, or remove the key to use the default
+```
+
 ### `[session]` and `[network]`
 
 | Key | Default | Meaning |

@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: claude/project-thread-430lii
 - **Started**: 2026-11-11
-- **Phase**: milestone M6
-- **Next step**: M6 Review A round 2 (scoped, sonnet), then PR (orchestrator opens it)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
 | #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
 | #1898 | M5 | merged | da60fabfaa8264ac0b74d9b9deee5865339b694f |
+| #1908 | M6 | merged | 6a02088c387e1c055a2c03802d2f4a998c61a037 |
+| #1963 | Close | open (squash on green) | — |
 
 ## Milestones
 
@@ -33,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
 | M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | merged |
-| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | in progress |
+| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #1908 | merged |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
 
@@ -86,6 +88,8 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | pending |
 | Review A | 4 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: scoped, drift-M6 row only; PR #1908 |
 | Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: ci.yml recorded in drift-M6, plan-drift exits 0; PR #1908 |
+| Close review | 1 | 1963 | 83671bb27db53d4405ff6a0f934f10a608ca431e | 39f3036892eadb6ed23e7268c6d719bb8fefde78:83671bb27db53d4405ff6a0f934f10a608ca431e | CHANGES: F1-F4 MAJOR fixed (real-time bounds in harness, T050 annotated, T006 red by hand, Shared::update test), F5-F7 MINOR fixed |
+| Close review | 2 | 1963 | f9754dde4ebb29d1aaf9099b68da7cee3e36aab7 | 92cca31905cd5a882c0d2384d71216382630aacf:f9754dde4ebb29d1aaf9099b68da7cee3e36aab7 | CLEAN: scoped (sonnet), F1-F7 fixed; link:: heartbeat 15x green |
 
 ## Declined review findings
 

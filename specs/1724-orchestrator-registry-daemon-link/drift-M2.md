@@ -18,3 +18,5 @@ regression guards, not red-first tests. The "Red first" clause of T022 is waived
 
 `steady` checks on a real-time `tokio::time::interval(CHECK_INTERVAL)`; only the deadline reads the
 injected clock (`Shared::now`). The heartbeat tests wait about 2 s of real time.
+
+| `crates/micold-core/tests/schema_hash.rs` | The protocol-81 bump changes the wire schema hash this test pins (T021); the pin is updated, nothing else. |

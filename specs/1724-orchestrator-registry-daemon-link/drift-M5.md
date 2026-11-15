@@ -9,3 +9,5 @@
 | `crates/micold-daemon/src/orchestrator/mod.rs`, `save.rs` | Review A round 1 F2/F3: plan.md says the caller saves "after unlocking through one saver"; the write now runs on one dedicated thread (`save.rs`, `SaveWorker`) that a link hands its snapshot to, and snapshots handed over during a write are coalesced to the newest. So no fsync runs on a runtime worker, and a ping answer that moves only `last_seen` is still persisted (FR-004 keeps last seen in the store) without blocking accept or a link's timers. `serve` keeps link tasks in a `JoinSet` and owns the worker, dropped after it: stopping the orchestrator aborts the links, writes what is waiting and joins the thread, so nothing writes the registry file afterwards. `run_with` takes the store. |
 | `crates/micold-daemon/tests/orchestrator/not_hosted.rs` | `child_count` moved to `support.rs`; `no_child_process_is_spawned` holds the `CHILDREN` lock. |
 | `crates/micold-core/src/orchestrator/mod.rs` | `pub mod store` and its re-exports. |
+
+Full path for the `save.rs` row above (close check): `crates/micold-daemon/src/orchestrator/save.rs` is the dedicated saving thread (Review A round 1 F2/F3).

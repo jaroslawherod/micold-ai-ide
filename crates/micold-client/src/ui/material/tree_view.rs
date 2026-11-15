@@ -21,6 +21,8 @@ use std::num::NonZeroUsize;
 /// (BUG-008).
 type OnKeyboardFocus<'a, M> = Box<dyn Fn(bool) -> M + 'a>;
 type OnRightPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
+/// What a left press of a row also becomes, built from the press point in window coordinates.
+type OnPress<'a, M> = OnRightPress<'a, M>;
 
 /// What a row says about unread sessions (feature 039 FR-018, feature 575).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -93,6 +95,12 @@ pub struct TreeItem<'a, M> {
     /// explaining that a row's position "the view does not know" — which was a description of this
     /// missing parameter. `cdk::ContextArea` has published the point since feature 012's BUG-005.
     pub on_right_press: Option<OnRightPress<'a, M>>,
+    /// What a left press of the row also becomes, built from the press point in window
+    /// coordinates, beside the row's own `on_press` (which fires on the release): a drag arming
+    /// (feature 1786, contract C3).
+    /// The message sent on a left release over the row rides with it: the drag's release, for one
+    /// that arrives with its press.
+    pub on_primary_press: Option<(OnPress<'a, M>, M)>,
     /// Message emitted when the pointer enters the row (feature 008 hover-reveal).
     pub on_hover: Option<M>,
     /// Message emitted when the pointer leaves the row (feature 008 hover-reveal).
@@ -147,15 +155,33 @@ pub struct TreeItem<'a, M> {
     /// (feature 803, FR-010): the row wears the focus ring, shown as keyboard focus.
     keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,
     /// Whether the row is a stop in the Tab order of its own (feature 1125, [`TreeItem::tab_stop`]).
-    tab_stop: bool,
+    pub(crate) tab_stop: bool,
+    /// What the Menu key and Shift+F10 send while a Tab stop holds the keyboard (feature 1786,
+    /// [`TreeItem::on_menu_key`]).
+    pub on_menu_key: Option<M>,
     /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
     /// R13, [`TreeItem::key`]). Crate-visible so a host's tests can check every row has one.
     pub(crate) key: Option<u64>,
+    /// The drag's insertion marker, on this row's top or bottom edge (feature 1786, US3-4).
+    /// Drawn over the row, so marking a row moves nothing.
+    pub drop_marker: Option<MarkerEdge>,
+    /// Whether the row's press is held back: it keeps its button and its look, but a release over
+    /// it lets go of the press without pressing (feature 1786: the row a drag is carrying).
+    pub inert: bool,
     /// A role the label is always drawn in, whatever the view's roles (feature 1786: a user
     /// group's header, [`GroupHeader`](super::GroupHeader)). `None` for every other row.
     heading_role: Option<TypeRole>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
+}
+
+/// Which edge of a row the drag's insertion marker sits on (feature 1786).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerEdge {
+    /// Above the row: the dragged row lands before it.
+    Top,
+    /// Below the row: the dragged row lands after it (the list's last row).
+    Bottom,
 }
 
 impl<'a, M> TreeItem<'a, M> {
@@ -177,6 +203,7 @@ impl<'a, M> TreeItem<'a, M> {
             leading_chip: None,
             trailing_chip: None,
             on_right_press: None,
+            on_primary_press: None,
             on_hover: None,
             on_unhover: None,
             trailing_custom: None,
@@ -190,7 +217,10 @@ impl<'a, M> TreeItem<'a, M> {
             row_tint: None,
             keyboard_focus: None,
             tab_stop: false,
+            on_menu_key: None,
             key: None,
+            drop_marker: None,
+            inert: false,
             heading_role: None,
             _marker: std::marker::PhantomData,
         }
@@ -233,6 +263,14 @@ impl<'a, M> TreeItem<'a, M> {
     /// send its press. A row with no press stays out of the Tab order.
     pub fn tab_stop(mut self) -> Self {
         self.tab_stop = true;
+        self
+    }
+
+    /// Send `message` for the Menu key or Shift+F10 while the row, a [`Self::tab_stop`], holds the
+    /// keyboard: the row's own menu opened by keyboard (feature 1786, C6; the card menu's keys,
+    /// feature 972).
+    pub fn on_menu_key(mut self, message: M) -> Self {
+        self.on_menu_key = Some(message);
         self
     }
 
@@ -334,6 +372,28 @@ impl<'a, M> TreeItem<'a, M> {
     /// window coordinates — what a menu anchor takes (feature 008 context menu; FR-029d).
     pub fn on_right_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.on_right_press = Some(Box::new(f));
+        self
+    }
+
+    /// Emit `f(point)` on a left press of the row and `release` on a left release over it, both
+    /// beside the row's own press, which still fires on the release (feature 1786, contract C3).
+    pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a, release: M) -> Self {
+        self.on_primary_press = Some((Box::new(f), release));
+        self
+    }
+
+    /// Hold the row's presses back while `inert`: the row keeps its buttons and its look, but a
+    /// release over it lets go of the press without pressing, the row's own, its twisty's and its
+    /// actions' (feature 1786, the row a drag is carrying). Keyboard presses are not held: a drag
+    /// is a pointer gesture.
+    pub fn inert(mut self, inert: bool) -> Self {
+        self.inert = inert;
+        self
+    }
+
+    /// Draw the drag's insertion marker on this row's `edge` (feature 1786, US3-4).
+    pub fn drop_marker(mut self, edge: MarkerEdge) -> Self {
+        self.drop_marker = Some(edge);
         self
     }
 
@@ -808,7 +868,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 // Ripples from wherever the row was clicked. A row is the most-pressed surface in
                 // this application, so it is the one where a flat colour swap is most obviously not
                 // Material (FR-024c).
-                super::Ripple::new(
+                let ripple = super::Ripple::new(
                     button(body)
                         // §7.2's horizontal padding follows the density, so a dense row is tighter
                         // as well as shorter. Vertical padding is zero deliberately: the height is
@@ -826,11 +886,14 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         .on_press(msg),
                     r.on_surface,
                     shape::FULL,
-                )
-                .into()
+                );
+                ripple.into()
             } else {
                 body
             };
+            // Always wrapped, so holding the release back changes no widget mid-press. It holds
+            // the whole row's content, the row's own press and the twisty's and the actions' alike.
+            let row_el: Element<'a, M> = ContextArea::new(row_el).hold_release(item.inert).into();
 
             // The keyboard's focus ring, over the row's own shape (feature 803, FR-010).
             // A Tab stop with a press: Tab reaches it, Enter and Space press it.
@@ -844,6 +907,14 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         wrapper = wrapper
                             .key(iced::keyboard::key::Named::Enter, msg.clone())
                             .key(iced::keyboard::key::Named::Space, msg);
+                    }
+                    if let Some(menu) = item.on_menu_key.clone().filter(|_| answers_keys) {
+                        use iced::keyboard::{key::Named, Modifiers};
+                        wrapper = wrapper.key(Named::ContextMenu, menu.clone()).chord(
+                            Named::F10,
+                            Modifiers::SHIFT,
+                            menu,
+                        );
                     }
                     wrapper
                         .focused(focused)
@@ -921,15 +992,40 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             } else {
                 styled
             };
-            let interactive: Element<'a, M> = match item.on_right_press {
-                Some(build) => ContextArea::new(hovering).on_secondary_press(build).into(),
-                None => hovering,
-            };
+            let interactive: Element<'a, M> =
+                if item.on_right_press.is_some() || item.on_primary_press.is_some() {
+                    let mut area = ContextArea::new(hovering);
+                    if let Some(build) = item.on_right_press {
+                        area = area.on_secondary_press(build);
+                    }
+                    if let Some((build, release)) = item.on_primary_press {
+                        area = area
+                            .on_primary_press(build)
+                            .on_primary_release(move || release.clone());
+                    }
+                    area.into()
+                } else {
+                    hovering
+                };
             // A row-level location tooltip (feature 010, FR-010) wraps everything, including any
             // right-click/hover interaction area above.
             let final_el: Element<'a, M> = match item.row_tooltip {
                 Some(tip) => super::Tooltip::new(interactive, tip, r).into(),
                 None => interactive,
+            };
+            // The insertion marker over the row's edge, laid over it so no row moves.
+            let final_el: Element<'a, M> = match item.drop_marker {
+                Some(edge) => iced::widget::stack![
+                    final_el,
+                    container(super::DropMarker::new(r))
+                        .height(Length::Fill)
+                        .align_y(match edge {
+                            MarkerEdge::Top => iced::alignment::Vertical::Top,
+                            MarkerEdge::Bottom => iced::alignment::Vertical::Bottom,
+                        })
+                ]
+                .into(),
+                None => final_el,
             };
             rows.push((key, final_el));
         }

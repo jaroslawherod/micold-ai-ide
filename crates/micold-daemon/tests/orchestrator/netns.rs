@@ -12,9 +12,10 @@
 //!    that socket) and to nothing else, so the orchestrator never dialled a daemon at any address.
 //!
 //! Scope: Linux only (a namespace and `strace` have no counterpart on macOS or Windows; the source
-//! scan in `no_outbound.rs` covers every platform). Each part skips with a `::warning::` line where
-//! the tool or unprivileged user namespaces are unavailable locally, and fails when `CI` is set:
-//! CI installs `strace` and lifts the AppArmor user-namespace restriction, so it must run there.
+//! scan in `no_outbound.rs` covers every platform). Where the tool or unprivileged user namespaces
+//! are unavailable, each part fails when `CI` is set (so CI never passes it silently) and otherwise
+//! skips with a `::warning::` line. CI installs `strace`, lifts the AppArmor user-namespace
+//! restriction, and never sets `MICOLD_ALLOW_NETNS_SKIP`.
 
 #![cfg(target_os = "linux")]
 
@@ -27,6 +28,8 @@ use crate::support::children_quiet_blocking;
 
 /// Set in the re-executed binary so it runs the tests instead of spawning itself again.
 const INSIDE: &str = "MICOLD_ORCHESTRATOR_NETNS";
+/// Set to skip the proof on a CI host that cannot run it, instead of failing.
+const ALLOW_SKIP: &str = "MICOLD_ALLOW_NETNS_SKIP";
 /// A loopback port the outer test listens on; inside the namespace it must be unreachable.
 const LOOPBACK_PORT: &str = "MICOLD_ORCHESTRATOR_NETNS_PORT";
 
@@ -34,7 +37,7 @@ const LOOPBACK_PORT: &str = "MICOLD_ORCHESTRATOR_NETNS_PORT";
 /// would make its filter match nothing and the run would pass empty.
 const MUST_RUN: [&str; 3] = [
     "link_and_list::a_linked_daemon_is_listed_online_with_every_field ... ok",
-    "heartbeat::a_silent_daemon_lists_offline_and_its_next_frame_brings_it_back ... ok",
+    "heartbeat::an_offline_daemons_next_frame_brings_it_back_online ... ok",
     "netns::outbound_connections_are_blocked_in_the_namespace ... ok",
 ];
 
@@ -45,12 +48,13 @@ fn can_run(tool: &[&str]) -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
-/// A tool this proof needs is missing. Locally that skips, loudly; in CI (`CI` set) it fails, so a
-/// runner that lacks `strace` or user namespaces cannot turn the proof into a silent pass.
+/// A tool this proof needs is missing. That fails, so a host that lacks `strace` or user
+/// namespaces cannot turn the proof into a silent pass in CI; a local run on such a host skips it
+/// loudly (`MICOLD_ALLOW_NETNS_SKIP` also lifts the failure in CI).
 fn unavailable(why: &str) {
     assert!(
-        std::env::var_os("CI").is_none(),
-        "the FR-008 netns proof cannot run in CI: {why}"
+        std::env::var_os("CI").is_none() || std::env::var_os(ALLOW_SKIP).is_some(),
+        "the FR-008 netns proof cannot run in CI ({why})"
     );
     eprintln!("::warning::SKIPPED the FR-008 netns proof: {why}");
 }
@@ -156,13 +160,13 @@ fn the_orchestrator_connects_to_nothing_but_its_own_socket() {
         connects.iter().any(|l| l.contains("orchestrator.sock")),
         "the trace saw no link at all, so it proves nothing:\n{traced}"
     );
-    // The namespace probe below is this test binary's own deliberate TCP connect: not the orchestrator.
     let strangers: Vec<_> = connects
         .iter()
         .filter(|l| !l.contains("orchestrator.sock") && !l.contains("sin_port=htons("))
         .collect();
     // The namespace probe is this test binary's own deliberate TCP connect, to TEST-NET-1 and to the
-    // loopback listener: the only IP destinations allowed. The orchestrator made no other.
+    // loopback listener: the only IP destinations allowed. The orchestrator made no other. The
+    // filter above leaves out every IP connect, so this one is what covers them.
     let ip_strangers: Vec<_> = connects
         .iter()
         .filter(|l| l.contains("sin_port=htons(") || l.contains("sin6_port=htons("))
