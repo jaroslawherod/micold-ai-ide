@@ -93,6 +93,13 @@ pub struct TreeItem<'a, M> {
     /// explaining that a row's position "the view does not know" — which was a description of this
     /// missing parameter. `cdk::ContextArea` has published the point since feature 012's BUG-005.
     pub on_right_press: Option<OnRightPress<'a, M>>,
+    /// What a left press of the row also becomes, built from the press point in window
+    /// coordinates, beside the row's own `on_press` (which fires on the release): a drag arming
+    /// (feature 1786, contract C3).
+    pub on_primary_press: Option<OnRightPress<'a, M>>,
+    /// Sent on a left release over the row, beside its own `on_press`: the drag's release, for one
+    /// that arrives with its press (feature 1786, contract C3).
+    pub on_primary_release: Option<M>,
     /// Message emitted when the pointer enters the row (feature 008 hover-reveal).
     pub on_hover: Option<M>,
     /// Message emitted when the pointer leaves the row (feature 008 hover-reveal).
@@ -151,11 +158,23 @@ pub struct TreeItem<'a, M> {
     /// What the row is, for its widget state to follow it when the list moves it (feature 1125,
     /// R13, [`TreeItem::key`]). Crate-visible so a host's tests can check every row has one.
     pub(crate) key: Option<u64>,
+    /// The drag's insertion marker, on this row's top or bottom edge (feature 1786, US3-4).
+    /// Drawn over the row, so marking a row moves nothing.
+    pub drop_marker: Option<MarkerEdge>,
     /// A role the label is always drawn in, whatever the view's roles (feature 1786: a user
     /// group's header, [`GroupHeader`](super::GroupHeader)). `None` for every other row.
     heading_role: Option<TypeRole>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
+}
+
+/// Which edge of a row the drag's insertion marker sits on (feature 1786).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerEdge {
+    /// Above the row: the dragged row lands before it.
+    Top,
+    /// Below the row: the dragged row lands after it (the list's last row).
+    Bottom,
 }
 
 impl<'a, M> TreeItem<'a, M> {
@@ -177,6 +196,8 @@ impl<'a, M> TreeItem<'a, M> {
             leading_chip: None,
             trailing_chip: None,
             on_right_press: None,
+            on_primary_press: None,
+            on_primary_release: None,
             on_hover: None,
             on_unhover: None,
             trailing_custom: None,
@@ -191,6 +212,7 @@ impl<'a, M> TreeItem<'a, M> {
             keyboard_focus: None,
             tab_stop: false,
             key: None,
+            drop_marker: None,
             heading_role: None,
             _marker: std::marker::PhantomData,
         }
@@ -334,6 +356,20 @@ impl<'a, M> TreeItem<'a, M> {
     /// window coordinates — what a menu anchor takes (feature 008 context menu; FR-029d).
     pub fn on_right_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.on_right_press = Some(Box::new(f));
+        self
+    }
+
+    /// Emit `f(point)` on a left press of the row and `release` on a left release over it, both
+    /// beside the row's own press, which still fires on the release (feature 1786, contract C3).
+    pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a, release: M) -> Self {
+        self.on_primary_press = Some(Box::new(f));
+        self.on_primary_release = Some(release);
+        self
+    }
+
+    /// Draw the drag's insertion marker on this row's `edge` (feature 1786, US3-4).
+    pub fn drop_marker(mut self, edge: MarkerEdge) -> Self {
+        self.drop_marker = Some(edge);
         self
     }
 
@@ -921,15 +957,41 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             } else {
                 styled
             };
-            let interactive: Element<'a, M> = match item.on_right_press {
-                Some(build) => ContextArea::new(hovering).on_secondary_press(build).into(),
-                None => hovering,
-            };
+            let interactive: Element<'a, M> =
+                if item.on_right_press.is_some() || item.on_primary_press.is_some() {
+                    let mut area = ContextArea::new(hovering);
+                    if let Some(build) = item.on_right_press {
+                        area = area.on_secondary_press(build);
+                    }
+                    if let Some(build) = item.on_primary_press {
+                        area = area.on_primary_press(build);
+                    }
+                    if let Some(release) = item.on_primary_release {
+                        area = area.on_primary_release(move || release.clone());
+                    }
+                    area.into()
+                } else {
+                    hovering
+                };
             // A row-level location tooltip (feature 010, FR-010) wraps everything, including any
             // right-click/hover interaction area above.
             let final_el: Element<'a, M> = match item.row_tooltip {
                 Some(tip) => super::Tooltip::new(interactive, tip, r).into(),
                 None => interactive,
+            };
+            // The insertion marker over the row's edge, laid over it so no row moves.
+            let final_el: Element<'a, M> = match item.drop_marker {
+                Some(edge) => iced::widget::stack![
+                    final_el,
+                    container(super::DropMarker::new(r))
+                        .height(Length::Fill)
+                        .align_y(match edge {
+                            MarkerEdge::Top => iced::alignment::Vertical::Top,
+                            MarkerEdge::Bottom => iced::alignment::Vertical::Bottom,
+                        })
+                ]
+                .into(),
+                None => final_el,
             };
             rows.push((key, final_el));
         }

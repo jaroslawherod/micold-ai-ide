@@ -51,6 +51,9 @@ type OnPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 /// bottom-left corner, in window pixels.
 type OnBounds<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 
+/// What a release is turned into.
+type OnRelease<'a, M> = Box<dyn Fn() -> M + 'a>;
+
 /// Wraps `content` and reports a secondary click on it.
 ///
 /// Builder form (Principle VIII): `ContextArea::new(content).on_secondary_press(|(x, y)| msg)`.
@@ -59,6 +62,7 @@ pub struct ContextArea<'a, M> {
     on_secondary_press: Option<OnPress<'a, M>>,
     on_primary_press: Option<OnPress<'a, M>>,
     on_primary_bounds: Option<OnBounds<'a, M>>,
+    on_primary_release: Option<OnRelease<'a, M>>,
 }
 
 impl<'a, M: 'a> ContextArea<'a, M> {
@@ -69,6 +73,7 @@ impl<'a, M: 'a> ContextArea<'a, M> {
             on_secondary_press: None,
             on_primary_press: None,
             on_primary_bounds: None,
+            on_primary_release: None,
         }
     }
 
@@ -108,6 +113,15 @@ impl<'a, M: 'a> ContextArea<'a, M> {
     /// Feature 026's start menu had it the other way round and opened at the window origin (T089).
     pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.on_primary_press = Some(Box::new(f));
+        self
+    }
+
+    /// Publish `f()` when the primary (left) button is released over the content, captured by the
+    /// child or not. The release half of [`Self::on_primary_press`], for a press that arms a drag:
+    /// a release arriving in the press's own event batch is heard here even before a window
+    /// listener for it exists (feature 1786, contract C3).
+    pub fn on_primary_release(mut self, f: impl Fn() -> M + 'a) -> Self {
+        self.on_primary_release = Some(Box::new(f));
         self
     }
 }
@@ -166,6 +180,11 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
                 shell.publish(build(point));
             }
         }
+        if let Some(build) = &self.on_primary_release {
+            if reported_release(event, over.is_some()) {
+                shell.publish(build());
+            }
+        }
         if let Some(build) = &self.on_primary_bounds {
             if let Some(corner) = reported_corner(event, over.is_some(), layout.bounds()) {
                 shell.publish(build(corner));
@@ -218,6 +237,14 @@ fn reported_press(
         return None;
     }
     over.map(|p| (p.x as u16, p.y as u16))
+}
+
+/// Whether `event` is a primary release over the area.
+fn reported_release(event: &Event, over: bool) -> bool {
+    over && matches!(
+        event,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+    )
 }
 
 /// The bottom-left corner of `bounds` when `event` is a primary press and `over` is true.
@@ -350,5 +377,15 @@ mod tests {
             ),
             None
         );
+    }
+
+    /// The release half: only the primary button's release, and only over the area.
+    #[test]
+    fn a_primary_release_over_the_area_reports() {
+        let release = |button| Event::Mouse(mouse::Event::ButtonReleased(button));
+        assert!(reported_release(&release(mouse::Button::Left), true));
+        assert!(!reported_release(&release(mouse::Button::Left), false));
+        assert!(!reported_release(&release(mouse::Button::Right), true));
+        assert!(!reported_release(&left_press(), true));
     }
 }

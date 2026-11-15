@@ -30,6 +30,7 @@ pub struct GroupHeader<M> {
     roles: Roles,
     key: Option<u64>,
     on_right_press: Option<OnRightPress<M>>,
+    on_primary_press: Option<(OnRightPress<M>, M)>,
 }
 
 impl<M> GroupHeader<M> {
@@ -45,6 +46,7 @@ impl<M> GroupHeader<M> {
             roles: micold_core::tokens::DARK,
             key: None,
             on_right_press: None,
+            on_primary_press: None,
         }
     }
 
@@ -86,6 +88,13 @@ impl<M> GroupHeader<M> {
         self
     }
 
+    /// Emit `f(point)` when the header is pressed with the left button and `release` when it is
+    /// released over it: a group drag arming (feature 1786, FR-019).
+    pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'static, release: M) -> Self {
+        self.on_primary_press = Some((Box::new(f), release));
+        self
+    }
+
     /// What the row is, for its widget state to follow it when the list moves it.
     pub fn key(mut self, key: u64) -> Self {
         self.key = Some(key);
@@ -119,6 +128,9 @@ impl<'a, M: 'a> From<GroupHeader<M>> for TreeItem<'a, M> {
         }
         if let Some(on_right_press) = header.on_right_press {
             item = item.on_right_press(on_right_press);
+        }
+        if let Some((on_press, release)) = header.on_primary_press {
+            item = item.on_primary_press(on_press, release);
         }
         item
     }

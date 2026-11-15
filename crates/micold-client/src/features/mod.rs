@@ -391,6 +391,7 @@ pub mod session_strip;
 pub mod settings;
 pub mod setup;
 pub mod sidebar;
+pub mod sidebar_drag;
 pub mod sidebar_group_actions;
 pub mod structured_insights;
 pub mod structured_transcript;

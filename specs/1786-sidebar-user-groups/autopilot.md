@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vc038y
 - **Started**: 2026-11-11
 - **Phase**: milestones (M4)
-- **Next step**: M4 (T029–T034): dispatch the milestone unit
+- **Next step**: M4 (T029–T034): review A fixes, gate, then the orchestrator's review B and visual pass
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
-| M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
+| M4 | T029–T034 | full | Drag between lists and cancel | #… | in progress (M3 merge cae50ef59 recorded) |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
 

@@ -294,7 +294,7 @@ impl SidebarLayout {
     }
 
     /// The list `item` is in (`None` for `ungrouped`) and its position there.
-    fn locate(&self, item: &LayoutItem) -> Option<(Option<UserGroupId>, usize)> {
+    pub fn locate(&self, item: &LayoutItem) -> Option<(Option<UserGroupId>, usize)> {
         self.groups
             .iter()
             .find_map(|group| {

@@ -176,3 +176,56 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
 - green: `GroupHeaderNode.hidden`, `GroupHeader::hidden`, `count_words(count, hidden)`: `n`, `n of m`
   or `empty`.
 - refactor: none.
+
+## Cycle 10: the drag reducer and hit test (A10–A15, A27 in part, U20–U23; T029, T030)
+
+- test: `tests/sidebar_drag.rs` (`a_press_arms_*`, `a_move_of_four_pixels_*`,
+  `the_list_pointer_is_ignored_until_*`, `the_hit_test_finds_only_*`, `the_spans_follow_*`,
+  `over_a_target_the_spot_carries_the_marker_*`, `dropping_*`, `a_dropped_worktree_keeps_its_sessions_*`,
+  `a_drop_on_a_collapsed_group_*`, `a_drop_on_the_rows_own_place_*`, `a_drop_below_the_rows_own_place_*`,
+  `default_never_arms`, `rows_a_tag_filter_hides_*`, `a_run_group_row_is_dragged_*`,
+  `a_group_header_arms_a_group_drag_*`); `tests/features_sidebar_drag.rs` (isolation, SC-004).
+- red: `cargo check -p micold-client --test main` -> 31 errors: `E0432` unresolved import
+  `micold_client::features::sidebar_drag` (2), `E0599` no variant `Message::SidebarDrag` (2),
+  `E0609` no field `sidebar_drag` on `State` (27).
+- green: `features/sidebar_drag.rs` (`State`, `Dragged`, `DropSpot`, `Msg`, `entry_spans`,
+  `entry_lists`, `hit_test`, `update`); `Message::SidebarDrag` and the `sidebar_drag`
+  field in `app.rs`; `SidebarLayout::locate` made public in the core for the drop's index and the
+  no-op check. `cargo test -p micold-client --test main sidebar_drag` -> `25 passed; 0 failed`
+  on the first run after the module compiled.
+- refactor: `sidebar::ROW_GAP` made public rather than repeated, so the hit test and the scroll
+  arithmetic measure the same gap.
+
+## Cycle 11: cancelling the drag (A20–A22; T031, T032)
+
+- test: `tests/sidebar_drag.rs` (`escape_ends_the_drag_with_no_change`,
+  `a_release_outside_every_target_changes_nothing`, `the_dragged_worktree_vanishing_*`,
+  `a_release_after_the_dragged_worktree_vanished_*`, `escape_with_no_drag_keeps_its_meaning`,
+  `losing_the_window_focus_cancels_the_drag`). Each compares `sidebar_list()` or the layout before
+  and after (SC-002).
+- red: written in the same file as cycle 10, so the same 31 compile errors; the Escape test then
+  needed `on_escape` to answer `Message::SidebarDrag(Msg::Cancelled)` while a drag is active.
+- green: the cancel paths in `sidebar_drag::update` (`Cancelled`, a release with `over = None`,
+  `still_there` on every pointer message and on the release) and one `on_escape` arm in `app.rs`
+  after the registry, guarded by `sidebar_drag.active`.
+- refactor: none.
+
+## Cycle 12: the glue (T033)
+
+- test: `ui::sidebar::tests::rows_and_headers_arm_a_drag_default_does_not_and_the_target_list_is_highlighted`,
+  `shell::subscriptions::tests::sidebar_drag_message_follows_the_pointer_and_ends_on_release_or_blur`,
+  `micold-material cdk::context_area::tests::a_primary_release_over_the_area_reports`.
+- red: written beside the glue (Principle I exception for view glue); each fails without its line:
+  no `on_primary_press` on a row leaves `arming` at 0, no `drop_highlight` leaves `lit` at 0.
+- green: `TreeItem::on_primary_press` and `GroupHeader::on_primary_press` (press point and release
+  through `cdk::ContextArea`, whose new `on_primary_release` hears a release that comes in the
+  press's own batch); `ui::sidebar` arms top-level worktree rows, run group rows and headers, tints
+  the target list, puts `DropMarker` on the edge of the row `over.marker` names
+  (`TreeItem::drop_marker`), and wraps the list in a `mouse_area` that reports the pointer's
+  height while the drag is active; `shell/subscriptions.rs` follows the pointer, the release and
+  the focus loss while a press is armed.
+- refactor: the first glue drew the marker in a `stack` over the whole list. The stack added a
+  layout level above every row and broke the layout snapshot and the gates that address rows by
+  path (`context_menu_anchor`, `tooltip_clears_its_row`: "no node at 0/0/0/1/0/0/0/2/0/0/8").
+  The marker moved onto the row it marks, laid over the row's edge, and the `mouse_area`, which
+  adds no layout node, stayed; the paths are as before.
