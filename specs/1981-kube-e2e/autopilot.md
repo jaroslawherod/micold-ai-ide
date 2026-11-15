@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan | 2 | scoped | af46640a697fa39efc4643087b4a875ff9152982 | b99f4c78af95f4dad1805307dae6165ce0f9da7b | CLEAN |
 | tasks | 1 | full | n/a | e7e613c5573b0aacf77dd0b865f2a0f06bb12567:76a663f4950b1e5ecac3627481decad6be462b8c | CHANGES: 4 MAJOR (F1-F4), 3 MINOR (F5-F7); all fixed, re-review pending |
 | tasks | 2 | scoped | 469a61270cd7ff81c61dd0847b774db5f8a7add3 | 31eb208412cadeb4b4503ef792e3e979a633bb3d | CLEAN |
+| tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
 
 ## Declined review findings
 
