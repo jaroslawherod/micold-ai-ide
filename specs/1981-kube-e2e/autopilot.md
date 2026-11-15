@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ltu9ny
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M1 (#1982) milestone unit.
+- **Next step**: M1 (#1982): full local gate not run (about 5 GB of free disk); orchestrator dispatches review B, opens the PR from specs/1981-kube-e2e/pr-M1.md, waits on CI (kube-chart runs live for the first time: helm/kubeconform pins and the image build are proven only there).
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #… | review A done, PR pending |
+| M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #… | review A CLEAN (r3); review B and PR pending |
 | M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | pending |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | pending |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | tasks | 1 | full | n/a | e7e613c5573b0aacf77dd0b865f2a0f06bb12567:76a663f4950b1e5ecac3627481decad6be462b8c | CHANGES: 4 MAJOR (F1-F4), 3 MINOR (F5-F7); all fixed, re-review pending |
 | tasks | 2 | scoped | 469a61270cd7ff81c61dd0847b774db5f8a7add3 | 31eb208412cadeb4b4503ef792e3e979a633bb3d | CLEAN |
 | M1 A (code-review high) | 2 | scoped | (fix commit) | bddf4e635cd5000ff61cda4c9101081df8458227:bb8c35ea2c6d251b8f1849f72cc1e4531a5acc00 | CHANGES: 2 MAJOR (smoke trap on a local var; pr_proven skip loses the main-push net), 8 MINOR; 9 fixed, 1 declined (M3 gate width) |
+| M1 A (code-review high) | 3 | scoped | (fix commit) | cbba162d5b20441d5f920eec269f7ec432a34a65:12c6d39d415b4c76ddbb1a7a0c81cec4b4601bed | CLEAN: 5 MINOR; 2 fixed (norepo pattern tolerant of older helm; ci/default.yaml must be `{}`), 3 left (fail-safe kube_paths on an unclassifiable proven push; created-not-started smoke container; schema reformat) |
 | M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 8 fixed, 2 declined (appVersion tag; socket dir mode, documented) |
 | tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
 

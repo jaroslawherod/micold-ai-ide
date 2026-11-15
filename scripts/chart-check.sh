@@ -82,6 +82,10 @@ trap 'rm -rf "$work"' EXIT
   echo "chart-check: $CHART/ci/default.yaml is missing (the defaults' values set, '{}')" >&2
   exit 1
 }
+if [ "$(grep -v '^[[:space:]]*#' "$CHART/ci/default.yaml" | tr -d '[:space:]')" != '{}' ]; then
+  echo "chart-check: $CHART/ci/default.yaml must be '{}' (it stands for the chart's defaults)" >&2
+  exit 1
+fi
 sets=()
 for f in "$CHART"/ci/*.yaml; do
   sets+=("ci/$(basename "$f")")

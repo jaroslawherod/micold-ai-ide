@@ -185,7 +185,9 @@ fi
 if render norepo --set image.repository=; then
   fail "an empty image.repository must be refused"
 else
-  check "an empty image.repository is refused by name" "$work/norepo.err" "'/image/repository'"
+  check "an empty image.repository is refused by name" "$work/norepo.err" 'image[./]repository'
+  refute "the refusal is the orchestrator's image, not web's" "$work/norepo.err" 'web[./]image'
+
 fi
 if render webrepooff --set web.image.repository=; then
   ok "an empty web.image.repository is fine while web is off"
