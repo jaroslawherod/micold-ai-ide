@@ -16,6 +16,7 @@ mod mcp_endpoint;
 mod mcp_lifecycle_tools;
 mod mcp_read_tools;
 mod mcp_worktree_parent;
+mod mcp_worktree_parent_neighbourhood;
 mod mcp_worktree_parent_visibility;
 mod merged_branch_check;
 mod ops_extraction;

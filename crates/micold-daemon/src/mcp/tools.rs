@@ -297,6 +297,9 @@ async fn dispatch(
         Operation::SendSessionInput { session, text } => {
             send_session_input(&state, caller, session, text, hangup).await
         }
+        Operation::SendParentInput { text } => {
+            send_parent_input(&state, caller, text, hangup).await
+        }
         Operation::ReadSessionOutput { session, lines } => {
             blocking(move || read_session_output(&state, caller, session, lines)).await
         }
@@ -392,6 +395,7 @@ fn read_call(
     };
     match operation {
         Operation::Whoami => Ok(context.whoami()),
+        Operation::Neighbourhood => Ok(context.neighbourhood()),
         Operation::ListWorktrees { parent } => Ok(json!({
             "worktrees": context.list_worktrees(parent.as_ref())
         })),
@@ -415,6 +419,7 @@ fn read_call(
         | Operation::StartSession { .. }
         | Operation::RenameWorktree { .. }
         | Operation::SendSessionInput { .. }
+        | Operation::SendParentInput { .. }
         | Operation::StopSession { .. }
         | Operation::InterruptSession { .. }
         | Operation::DeleteSession { .. }
@@ -463,12 +468,7 @@ impl Scope {
         else {
             return Self::unrestricted();
         };
-        let live: BTreeSet<String> = project
-            .worktrees
-            .iter()
-            .map(|wt| wt.dir_name.clone())
-            .collect();
-        let near = neighbourhood(&live, parents, Some(own));
+        let near = neighbourhood(&live_dirs(project), parents, Some(own));
         let mut set = BTreeSet::from([own.to_string()]);
         if let Some(ParentSide::Known { name, .. }) = near.parent {
             set.insert(name);
@@ -536,6 +536,15 @@ impl Scope {
             )))
         }
     }
+}
+
+/// The directory names of `project`'s live worktrees.
+fn live_dirs(project: &ProjectSnapshot) -> BTreeSet<String> {
+    project
+        .worktrees
+        .iter()
+        .map(|wt| wt.dir_name.clone())
+        .collect()
 }
 
 /// What `caller` may see and address in `project`. **Blocking.**
@@ -1930,6 +1939,92 @@ async fn send_session_input(
     Ok(json!({}))
 }
 
+/// `send_parent_input` (spec 1945, contracts/mcp-neighbourhood.md, D4): the caller's parent and its
+/// target session, refused per the contract's table with nothing typed; then exactly
+/// [`send_session_input`] to that session, so its policy, confirmation, trust check and atomic
+/// submission apply unchanged (FR-008). The reply adds the session reached and the parent's ref.
+async fn send_parent_input(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    text: NonEmptyText,
+    hangup: &CancellationToken,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    let (target, parent) = blocking(move || {
+        let project = caller_project(&st, caller)?;
+        parent_session(&project, &st.worktree_parent_views(&project.path), caller)
+    })
+    .await?;
+    let mut reply = send_session_input(state, caller, SessionRef(target.0), text, hangup).await?;
+    reply["session"] = json!(target.0.to_string());
+    reply["parent_worktree"] = json!(parent);
+    Ok(reply)
+}
+
+/// The session `send_parent_input` from `caller` types into, and its parent worktree's ref, or the
+/// contract's refusal naming the cause (FR-007).
+fn parent_session(
+    project: &ProjectSnapshot,
+    parents: &BTreeMap<String, ParentView>,
+    caller: SessionId,
+) -> Result<(SessionId, String), OpError> {
+    let undetermined = || {
+        OpError::invalid_input(
+            "this session's worktree is not known to the daemon, so no parent could be determined",
+        )
+    };
+    let own = project
+        .sessions
+        .iter()
+        .find(|s| s.id == caller)
+        .expect("caller_project found the caller in this project")
+        .worktree_dir
+        .as_deref()
+        .ok_or_else(|| {
+            OpError::invalid_input("this session runs in \"default\", and default has no parent")
+        })?;
+    let live = live_dirs(project);
+    if !live.contains(own) {
+        return Err(undetermined());
+    }
+    match neighbourhood(&live, parents, Some(own)).parent {
+        Some(ParentSide::Known { name, .. }) => {
+            let dir = (name != WorktreeRef::DEFAULT).then_some(name.as_str());
+            let sessions = project
+                .sessions
+                .iter()
+                .map(|s| (s.id, s.worktree_dir.as_deref(), &s.lifecycle));
+            match parent_target(sessions, dir) {
+                Some(target) => Ok((target, name)),
+                None => Err(OpError::new(
+                    ErrorCategory::Conflict,
+                    format!(
+                        "the parent worktree \"{name}\" has no running session, so nothing was \
+                         typed; see neighbourhood"
+                    ),
+                )),
+            }
+        }
+        Some(ParentSide::Removed { last_name }) => Err(OpError::not_found(format!(
+            "the parent worktree \"{last_name}\" was removed, so nothing was typed"
+        ))),
+        None => Err(undetermined()),
+    }
+}
+
+/// The session a message to the parent worktree `parent` (`None` is `default`) reaches: the first
+/// `Running` one in `sessions`, which are in the project's catalog order (research R3), so repeated
+/// sends reach the same session.
+fn parent_target<'a>(
+    sessions: impl IntoIterator<Item = (SessionId, Option<&'a str>, &'a WireLifecycle)>,
+    parent: Option<&str>,
+) -> Option<SessionId> {
+    sessions
+        .into_iter()
+        .find(|(_, dir, lifecycle)| *dir == parent && matches!(lifecycle, WireLifecycle::Running))
+        .map(|(id, ..)| id)
+}
+
 /// `create_session` (contracts/mcp-tools.md): scope and the worktree, then the CLI's availability
 /// where the session would run, then the sidebar's own create and start (FR-009), then the
 /// optional first prompt once the CLI is ready for it (FR-017).
@@ -2247,13 +2342,16 @@ fn parent_choice(
 }
 
 impl Context<'_> {
-    fn whoami(&self) -> Value {
-        let me = self
-            .project
+    fn me(&self) -> &SessionSummary {
+        self.project
             .sessions
             .iter()
             .find(|s| s.id == self.caller)
-            .expect("caller_project found the caller in this project");
+            .expect("caller_project found the caller in this project")
+    }
+
+    fn whoami(&self) -> Value {
+        let me = self.me();
         json!({
             "session": self.caller.0.to_string(),
             "project": {
@@ -2263,6 +2361,84 @@ impl Context<'_> {
             "worktree": worktree_ref(me),
             "ai_cli": self.ai_cli(me),
         })
+    }
+
+    /// `neighbourhood` (spec 1945, contracts/mcp-neighbourhood.md): the caller's worktree, parent,
+    /// siblings and direct children, each with its sessions as `list_sessions` gives them, from the
+    /// same derivation as [`Scope`]. Rows pass the scope too, as a defence in depth (SC-005).
+    fn neighbourhood(&self) -> Value {
+        let own = self.me().worktree_dir.as_deref();
+        let live = live_dirs(self.project);
+        if own.is_some_and(|dir| !live.contains(dir)) {
+            return json!({
+                "worktree": null, "parent": null, "siblings": [], "children": [],
+                "note": "this session's worktree is not known to the daemon",
+            });
+        }
+        let near = neighbourhood(&live, self.parents, own);
+        let entry = |name: &str| {
+            let dir = (name != WorktreeRef::DEFAULT).then_some(name);
+            json!({"ref": name, "sessions": self.rows_in(dir)})
+        };
+        let (parent, note) = match near.parent {
+            None => (
+                Value::Null,
+                own.is_none().then(|| "default has no parent".to_string()),
+            ),
+            Some(ParentSide::Known { name, recorded }) => {
+                let mut parent = entry(&name);
+                parent["state"] = json!("known");
+                parent["recorded"] = json!(recorded);
+                let note = (!recorded).then(|| {
+                    "no recorded parent: \"default\" is taken as the parent for visibility"
+                        .to_string()
+                });
+                (parent, note)
+            }
+            Some(ParentSide::Removed { last_name }) => (
+                json!({"ref": last_name, "state": "removed", "recorded": true, "sessions": []}),
+                Some(format!("the parent worktree \"{last_name}\" was removed")),
+            ),
+        };
+        let visible = |name: &&String| self.scope.allows(name);
+        let siblings: Vec<Value> = near
+            .siblings
+            .iter()
+            .filter(visible)
+            .map(|n| entry(n))
+            .collect();
+        let children: Vec<Value> = near
+            .children
+            .iter()
+            .filter(|c| self.scope.allows(&c.name))
+            .map(|c| {
+                let mut child = entry(&c.name);
+                if c.implicit {
+                    child["implicit"] = json!(true);
+                }
+                child
+            })
+            .collect();
+        let mut out = json!({
+            "worktree": entry(own.unwrap_or(WorktreeRef::DEFAULT)),
+            "parent": parent,
+            "siblings": siblings,
+            "children": children,
+        });
+        if let Some(note) = note {
+            out["note"] = json!(note);
+        }
+        out
+    }
+
+    /// The rows of the sessions in worktree `dir` (`None` is `default`) that the caller may see.
+    fn rows_in(&self, dir: Option<&str>) -> Vec<Value> {
+        self.project
+            .sessions
+            .iter()
+            .filter(|s| s.worktree_dir.as_deref() == dir && self.scope.allows_session(s))
+            .map(|s| self.session_row(s))
+            .collect()
     }
 
     /// `default` first, then every worktree the sidebar lists.
@@ -2475,5 +2651,45 @@ fn activity_name(activity: &ActivitySignal) -> &'static str {
         ActivitySignal::Working => "working",
         ActivitySignal::AwaitingInput => "awaiting_input",
         ActivitySignal::Ended { .. } => "ended",
+    }
+}
+
+#[cfg(test)]
+mod parent_target_tests {
+    use super::*;
+
+    fn sid(n: u128) -> SessionId {
+        SessionId::from_uuid(uuid::Uuid::from_u128(n))
+    }
+
+    const RUNNING: WireLifecycle = WireLifecycle::Running;
+    const IDLE: WireLifecycle = WireLifecycle::Idle;
+
+    /// Spec 1945 D4, research R3: the first `Running` session of the parent worktree in catalog
+    /// order; sessions elsewhere and sessions not running are skipped.
+    #[test]
+    fn the_first_running_session_of_the_parent_worktree_in_catalog_order() {
+        let sessions = [
+            (sid(1), Some("P"), &IDLE),
+            (sid(2), Some("other"), &RUNNING),
+            (sid(3), None, &RUNNING),
+            (sid(4), Some("P"), &RUNNING),
+            (sid(5), Some("P"), &RUNNING),
+        ];
+        assert_eq!(parent_target(sessions, Some("P")), Some(sid(4)));
+        assert_eq!(
+            parent_target(sessions, Some("P")),
+            parent_target(sessions, Some("P")),
+            "the same session every time"
+        );
+        assert_eq!(parent_target(sessions, None), Some(sid(3)), "default");
+    }
+
+    #[test]
+    fn a_parent_with_no_running_session_has_no_target() {
+        let failed = WireLifecycle::InterruptedResumable;
+        let sessions = [(sid(1), Some("P"), &IDLE), (sid(2), Some("P"), &failed)];
+        assert_eq!(parent_target(sessions, Some("P")), None);
+        assert_eq!(parent_target(sessions, None), None);
     }
 }

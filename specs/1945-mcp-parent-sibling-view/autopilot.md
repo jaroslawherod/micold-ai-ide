@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1945
-- **Worktree branch**: claude/project-thread-x5s2f0
+- **Worktree branch**: claude/project-thread-3xuzmp
 - **Started**: 2026-11-15
-- **Phase**: implement M2
-- **Next step**: dispatch Milestone M2 unit (T006-T014) on branch claude/project-thread-x5s2f0, which has origin/main merged after M1
+- **Phase**: verify M2
+- **Next step**: open the M2 PR (body in the unit's return), then reviews A (code-review high) and B (conformance) on it; M1 merge SHA 2d713bcf7f9db032cfd15e828d4e4ead7a81fc2a recorded
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
-| M2 | T006–T014 | full | neighbourhood and send_parent_input tools | - | pending |
+| M2 | T006–T014 | full | neighbourhood and send_parent_input tools | - | implemented, gate green, PR to open |
 | M3 | T015, T018–T020 | full | Parent recorded before start; agents told | - | pending |
 
 ## Decisions
@@ -57,7 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Cloud orchestrator thread handed over after M1 merged (2026-11-15, cloud rule: fresh thread per milestone). Next: M2 then M3, then close. Cloud notes: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
+M2 unit (2026-11-15): T006–T014 done on claude/project-thread-3xuzmp, full gate green, pushed; PR not opened (gh unauthenticated), body written by the unit. Next: orchestrator opens the M2 PR, runs reviews A and B, sends findings back; then M3, then close. Earlier: cloud orchestrator thread handed over after M1 merged (cloud rule: fresh thread per milestone). Cloud notes: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 
 ## Open escalation
 

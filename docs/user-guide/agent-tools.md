@@ -27,6 +27,7 @@ These tools only read. None of them changes anything.
 | `get_session` | One session. A session that failed to start includes the reason; a session another session started names it in `origin` and `origin_state`; both tools give the worktree's `parent` and `parent_state` too |
 | `list_resumable_sessions` | Sessions the AI CLIs recorded for this project that the application does not list yet, newest first, with the worktree each ran in and whether it can be resumed (`resumable` or `unresumable`, with the reason). It takes `limit` (1 to 200, 50 unless given), `offset` and an optional `worktree`. It only reads (so a Default session may call it), and it touches none of the CLIs' files. `total` counts at most the 200 newest sessions, and `provider` names the AI CLI by its tool name, such as `claude_code`. Resuming one is done in the app |
 | `read_session_output` | The most recent lines of another session's terminal, as plain text: 200 lines unless the assistant asks for a different number, and never more than 2,000. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
+| `neighbourhood` | Where the calling session stands, in one call: its own worktree and sessions, its parent worktree (with `state`, `known` or `removed`, and `recorded`, which is `false` when no parent was recorded and `default` is taken as the parent) and the parent's sessions, its siblings and its direct children, each with its sessions as `list_sessions` gives them. A `note` says when the parent is implicit, was removed, or when the session runs in `default`, which has no parent; in `default` the children that have no recorded parent are marked `implicit`. It lists only what the session [can see](#which-worktrees-a-session-can-see) |
 
 Every worktree is listed, as it is in the sidebar; no name hides one.
 
@@ -40,6 +41,7 @@ These tools make changes, exactly as the sidebar does:
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is. Starting a session while another session of its worktree is starting or running fails with a conflict that names the running one (its name and id) and says to stop it first or to pass `allow_additional_session: true` (optional, default false) to run both on purpose; nothing is started. Policy and every other check still apply |
 | `send_session_input` | Types text into another session and submits it once, as if you had typed it there and pressed Enter. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
 | `report_review_comment` | Reports the outcome of one comment of a review you sent the session: applied, or answered with a reply saying why not. See [Reporting on review comments](#reporting-on-review-comments) |
+| `send_parent_input` | Types text into the calling session's parent, without a session id, as `send_session_input` does. See [Messaging the parent](#messaging-the-parent) |
 
 #### Starting the worktree's session with it
 
@@ -358,6 +360,22 @@ the worktrees [it can see](#which-worktrees-a-session-can-see); another one is "
 a session outside that set, an assistant asks its parent, which can see it or can ask its own
 parent in turn: the parent passes the message on with its own `send_session_input`. No tool offers
 a direct route around the rule, so sessions never communicate outside their own scope.
+
+### Messaging the parent
+
+`send_parent_input` takes only the text. It types it into a session of the calling session's
+parent worktree (the implicit `default` for a worktree with no recorded parent) and the result
+names the session it reached (`session`) and the parent worktree (`parent_worktree`).
+
+When the parent worktree has several sessions, the message goes to the first one that is running,
+in the order the project lists its sessions (the order they were created, resumed or adopted in,
+which a restart keeps). So repeated messages reach the same session while it runs.
+
+Nothing is typed, and the request says why, when the session runs in `default` (it has no
+parent), when the parent worktree was removed, or when no session of the parent worktree is
+running (the parent worktree is named). Everything else is as for `send_session_input`: the
+option above, the folder-trust check and the one submission apply in the same way, and at
+**Confirm each send** you are asked about the parent session by its name.
 
 ## Reporting on review comments
 

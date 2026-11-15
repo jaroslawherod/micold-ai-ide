@@ -98,6 +98,8 @@ fn sibling(caller: SessionId, n: u128) -> SessionId {
 }
 const SHELL: u128 = 100;
 const DOOMED: u128 = 200;
+/// A session in the project root: the caller's parent `default` (spec 1945, `send_parent_input`).
+const ROOT: u128 = 300;
 
 /// A repository with worktrees `b` and `c` and a free branch `taken`; `caller` is a session in
 /// `b` beside its [`sibling`]s and the AI sibling [`sibling_of`] names. A window answers every prompt with Allow.
@@ -133,6 +135,12 @@ async fn fixture(caller: SessionId) -> Fixture {
                 session(
                     sibling_of(caller),
                     Some("b"),
+                    TerminalMode::AiCli,
+                    AiCli::Copilot,
+                ),
+                session(
+                    sibling(caller, ROOT),
+                    None,
                     TerminalMode::AiCli,
                     AiCli::Copilot,
                 ),
@@ -185,6 +193,7 @@ impl Fixture {
         let target = match tool {
             "send_session_input" => sibling_of(caller),
             "interrupt_session" => sibling(caller, SHELL),
+            "send_parent_input" => sibling(caller, ROOT),
             "report_review_comment" => return Some(self.sent_comment(caller).await),
             _ => return None,
         };
@@ -288,17 +297,21 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
         "send_session_input" => {
             json!({"session": sibling_of(caller).0.to_string(), "text": TEXT_MARKER})
         }
+        // The caller's parent is `default`, where `prepare` starts a session.
+        "send_parent_input" => json!({"text": TEXT_MARKER}),
         other => panic!("no successful call for the mutating tool {other}: add one here"),
     }
 }
 
 /// The target an audit line names for a call with `args`: the session, else the worktree, else
-/// the branch a new worktree is made from, else the reported comment.
+/// the branch a new worktree is made from, else the reported comment, else `parent` for a send to
+/// the parent, whose session the daemon chooses.
 fn expected_target(args: &Value) -> String {
     ["session", "worktree", "branch", "comment"]
         .iter()
         .find_map(|k| args[*k].as_str())
-        .expect("every call names a session, a worktree, a branch or a comment")
+        .or_else(|| args.get("text").map(|_| "parent"))
+        .expect("every call names a session, a worktree, a branch, a comment or a text")
         .to_string()
 }
 
@@ -339,6 +352,11 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
                 json!({"session": sid(99).0.to_string(), "text": TEXT_MARKER}),
                 ErrorCategory::NotFound,
             ),
+        ],
+        // The parent `default` has a session, but nothing started it.
+        "send_parent_input" => vec![
+            (json!({}), ErrorCategory::InvalidInput),
+            (json!({"text": TEXT_MARKER}), ErrorCategory::Conflict),
         ],
         "report_review_comment" => vec![
             (json!({"outcome": "applied"}), ErrorCategory::InvalidInput),

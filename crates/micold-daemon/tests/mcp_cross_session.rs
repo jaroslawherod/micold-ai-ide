@@ -30,6 +30,7 @@ use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ConfirmOperation, DaemonMsg, SessionProcess};
 use micold_core::session::{AiCli, SessionId, ShellInstanceId, TerminalMode};
+use micold_core::worktree_parent::ParentChoice;
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
 
@@ -203,14 +204,62 @@ impl Sandbox {
             )
             .await;
         let s2 = SessionId::from_uuid(out["session"].as_str().unwrap().parse().unwrap());
+        self.ready(s2).await;
+        s2
+    }
+
+    /// Wait until `session`'s prompt is on its terminal.
+    async fn ready(&self, session: SessionId) {
         let deadline = Instant::now() + BOUND;
-        loop {
-            if self.screen(s2).last().map(String::as_str) == Some("ready>") {
-                return s2;
-            }
-            assert!(Instant::now() < deadline, "S2 never drew its prompt");
+        while self.screen(session).last().map(String::as_str) != Some("ready>") {
+            assert!(
+                Instant::now() < deadline,
+                "{session:?} never drew its prompt"
+            );
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
+    }
+
+    /// Call `tool` as S1 with the scope its recorded links give it (spec 1857, FR-015), not the
+    /// full view of [`Self::ok`]; it must succeed.
+    async fn child_ok(&self, tool: &str, args: Value) -> Value {
+        call_ok(self.addr, &credential(&self.state, sid(S1)), tool, args).await
+    }
+
+    /// [`Self::child_ok`]; it must fail.
+    async fn child_err(&self, tool: &str, args: Value) -> Value {
+        call_err(self.addr, &credential(&self.state, sid(S1)), tool, args).await
+    }
+
+    /// Record `parent` as the parent of S1's worktree `caller`.
+    fn link_caller_to(&self, parent: &str) {
+        self.state.record_worktree_parent(
+            self._project.path(),
+            "caller",
+            Some(&ParentChoice::Worktree(parent.into())),
+        );
+    }
+
+    /// A started session in `worktree`, created by S1 as a child; `additional` beside another one.
+    async fn start_in(&self, worktree: &str, additional: bool) -> SessionId {
+        let out = self
+            .child_ok(
+                "create_session",
+                json!({"worktree": worktree, "ai_cli": "claude_code",
+                       "allow_additional_session": additional}),
+            )
+            .await;
+        let session = SessionId::from_uuid(out["session"].as_str().unwrap().parse().unwrap());
+        self.ready(session).await;
+        session
+    }
+
+    /// How many lines of `session`'s terminal show [`TEXT`]: the terminal echoes what is typed.
+    fn shown(&self, session: SessionId) -> usize {
+        self.screen(session)
+            .iter()
+            .filter(|line| line.contains(TEXT))
+            .count()
     }
 
     /// S2's primary terminal as the service holds it, read without the tool under test.
@@ -943,4 +992,118 @@ async fn another_projects_session_or_worktree_is_not_found_like_an_unknown_ref()
         theirs.path.join(".claude/worktrees/elsewhere").is_dir(),
         "the other project's worktree was not deleted"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// send_parent_input (spec 1945, contracts/mcp-neighbourhood.md; US3; FR-006..FR-008, SC-003)
+// ---------------------------------------------------------------------------------------
+
+fn to_parent() -> Value {
+    json!({"text": TEXT})
+}
+
+/// The reply of a send that reached `session` in `parent`: `send_session_input`'s, plus both names.
+fn reached(session: SessionId, parent: &str) -> Value {
+    json!({"session": reference(session), "parent_worktree": parent})
+}
+
+/// US3 s1: the one session of the parent worktree gets the text, and the reply names it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn send_parent_input_types_into_the_one_session_of_the_parent_worktree() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.link_caller_to("b");
+    let s2 = s.start_in("b", false).await;
+
+    let out = s.child_ok("send_parent_input", to_parent()).await;
+    assert_eq!(out, reached(s2, "b"));
+    s.typed_becomes(&format!("{TEXT}\n")).await;
+}
+
+/// US3 s2: with two sessions in the parent worktree, both sends reach the first in catalog order.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_sends_to_a_parent_with_two_sessions_reach_the_same_first_session() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.link_caller_to("b");
+    let first = s.start_in("b", false).await;
+    let second = s.start_in("b", true).await;
+
+    for _ in 0..2 {
+        let out = s.child_ok("send_parent_input", to_parent()).await;
+        assert_eq!(out, reached(first, "b"));
+    }
+    s.typed_becomes(&format!("{TEXT}\n{TEXT}\n")).await;
+    assert!(
+        wait_until(BOUND, || s.shown(first) == 2).await,
+        "{:?}",
+        s.screen(first)
+    );
+    assert_eq!(s.shown(second), 0, "{:?}", s.screen(second));
+}
+
+/// US3 s4: a worktree with no recorded parent reaches `default`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_unparented_caller_reaches_its_implicit_parent_default() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.child_ok("start_session", json!({"session": reference(sid(IDLE))}))
+        .await;
+    s.ready(sid(IDLE)).await;
+
+    let out = s.child_ok("send_parent_input", to_parent()).await;
+    assert_eq!(out, reached(sid(IDLE), "default"));
+    s.typed_becomes(&format!("{TEXT}\n")).await;
+}
+
+/// FR-008: at Off the send is refused by policy, as `send_session_input` is, and nothing is typed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn at_off_send_parent_input_is_refused_by_policy_and_nothing_is_typed() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.link_caller_to("b");
+    s.start_in("b", false).await;
+    s.set_access(CrossSessionAccess::Off);
+
+    let error = s.child_err("send_parent_input", to_parent()).await;
+    assert_eq!(error["category"], "refused_by_policy", "{error}");
+    s.nothing_typed().await;
+}
+
+/// FR-008: at Confirm each send the user is asked about the parent session, by its label, and an
+/// allowed send is delivered.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn at_confirm_each_send_the_parent_send_waits_for_the_user_and_names_the_target() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.link_caller_to("b");
+    let s2 = s.start_in("b", false).await;
+    s.set_access(CrossSessionAccess::ConfirmEachSend);
+    let shown = answering_window(&s.state, true);
+
+    let out = s.child_ok("send_parent_input", to_parent()).await;
+    assert_eq!(out, reached(s2, "b"));
+    s.typed_becomes(&format!("{TEXT}\n")).await;
+    assert_one_send_prompt(&shown, &s.label(s2));
+}
+
+/// FR-008, SC-005: a running session outside the caller's scope is never the target, even when it
+/// is the only running one; the refusal names the parent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_running_session_outside_the_scope_is_never_reached() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.child_ok("start_session", json!({"session": reference(sid(IDLE))}))
+        .await;
+    s.ready(sid(IDLE)).await;
+    // Now `default` is S1's grandparent: out of its scope.
+    s.link_caller_to("b");
+
+    let error = s.child_err("send_parent_input", to_parent()).await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    assert!(
+        error["message"].as_str().unwrap().contains("\"b\""),
+        "{error}"
+    );
+    s.nothing_typed().await;
 }

@@ -36,3 +36,25 @@ Baseline: `micold-core --lib` 2149 passed, `micold-daemon --test mcp` 256 passed
 - Tests: `a_link_that_cannot_be_written_names_the_worktree_and_starts_no_session` (`tests/mcp_create_session.rs`, a project store refusing any catalog that holds a link) and `link_failure_tests::a_failed_link_write_is_an_io_failure_naming_the_worktree` (`server.rs`).
 - Red (mutation: `try_record_worktree_parent(..).ok()` in `ops::create_worktree_with_session`): the MCP test `FAILED` (no error reported).
 - Green: mutation reverted, both pass. The app path (`server.rs`) names no parent today, so no real create reaches its `Link` arm; its reply is extracted to `link_failed` and tested directly.
+
+## M2
+
+## Cycle 8: catalog and policy for the two tools (T006, T007)
+- Tests: `mcp_tools_catalog::neighbourhood_and_send_parent_input_parse_and_reject_extra_arguments`, the `SHIPPED`/`READ_TOOLS` lists, `mcp_policy::send_parent_input_is_decided_as_send_session_input`, `Neighbourhood` in the read-only proceed list.
+- Red: `cargo test -p micold-core --test main mcp_`: `error[E0599]: no variant ... named Neighbourhood / SendParentInput found for enum Operation` (5 errors).
+- Green: first run 116 passed, 1 failed (`report_review_comment_is_listed_after_send_session_input_as_the_contract_gives`: the new tool sat between them); moved after the report tool, 117 passed.
+
+## Cycle 9: `neighbourhood` and the `send_parent_input` refusals (T008, T009, T011)
+- Tests: `tests/mcp/mcp_worktree_parent_neighbourhood.rs` (recorded, unparented, removed, `default`, several sessions, unknown worktree, scope over every fixture caller; four refusals).
+- Red (daemon arms stubbed: `Neighbourhood => Ok(json!({}))`, `SendParentInput => service_error`): `--test mcp worktree_parent` 27 passed, 11 failed (every new test).
+- Green: 38 passed. Later a directory named `default` case was added for the `None` arm (diff coverage): 12 passed in the file.
+
+## Cycle 10: `parent_target` (T010)
+- Tests: `mcp::tools::parent_target_tests` (first running in catalog order, same twice, `default`; none running).
+- Red (mutation: the `Running` filter replaced by "not failed"): both `FAILED`. Written together with the function, so the red is by mutation.
+- Green: mutation reverted, 2 passed.
+
+## Cycle 11: delivery through `send_parent_input` (T012, T013)
+- Tests in `tests/mcp_cross_session.rs`: one parent session, two sessions reached twice at the first, implicit `default`, `Off`, `Confirm each send`, a running session outside the scope never reached.
+- Red (dispatch arm stubbed to `service_error` with the tests in place): `--test mcp_cross_session parent` 5 failed, 0 passed.
+- Green: `--test mcp_cross_session` 25 passed.

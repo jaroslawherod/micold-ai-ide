@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 /// The read-only tools, shipped in milestone M1.
-const READ_TOOLS: [&str; 7] = [
+const READ_TOOLS: [&str; 8] = [
     "whoami",
     "list_worktrees",
     "list_branches",
@@ -26,10 +26,11 @@ const READ_TOOLS: [&str; 7] = [
     "get_session",
     "list_resumable_sessions",
     "read_session_output",
+    "neighbourhood",
 ];
 
 /// The tools whose handlers ship by milestone M6, in catalog order.
-const SHIPPED: [&str; 17] = [
+const SHIPPED: [&str; 19] = [
     "whoami",
     "list_worktrees",
     "list_branches",
@@ -37,6 +38,7 @@ const SHIPPED: [&str; 17] = [
     "get_session",
     "list_resumable_sessions",
     "read_session_output",
+    "neighbourhood",
     "create_worktree",
     "rename_worktree",
     "delete_worktree",
@@ -46,6 +48,7 @@ const SHIPPED: [&str; 17] = [
     "interrupt_session",
     "send_session_input",
     "report_review_comment",
+    "send_parent_input",
     "delete_session",
 ];
 
@@ -174,6 +177,42 @@ fn the_read_tools_parse_their_arguments() {
         Operation::GetSession {
             session: SessionRef(id)
         }
+    );
+}
+
+/// Spec 1945 (contracts/mcp-neighbourhood.md): `neighbourhood` takes no argument, and
+/// `send_parent_input` takes exactly a non-empty `text`, never a session.
+#[test]
+fn neighbourhood_and_send_parent_input_parse_and_reject_extra_arguments() {
+    assert_eq!(
+        parse_call("neighbourhood", &json!({})).unwrap(),
+        Operation::Neighbourhood
+    );
+    assert_eq!(
+        parse_call("neighbourhood", &Value::Null).unwrap(),
+        Operation::Neighbourhood
+    );
+    invalid("neighbourhood", json!({"worktree": "A"}));
+    assert_eq!(
+        parse_call("send_parent_input", &json!({"text": "done"})).unwrap(),
+        Operation::SendParentInput {
+            text: NonEmptyText::new("done").unwrap()
+        }
+    );
+    invalid("send_parent_input", json!({}));
+    invalid("send_parent_input", json!({"text": ""}));
+    invalid("send_parent_input", json!({"text": 3}));
+    let id = Uuid::from_u128(7).to_string();
+    let message = invalid("send_parent_input", json!({"text": "hi", "session": id}));
+    assert!(message.contains("session"), "{message}");
+    assert!(is_mutating_tool("send_parent_input"));
+    assert!(!is_mutating_tool("neighbourhood"));
+    assert_eq!(
+        parse_call("send_parent_input", &json!({"text": "secret"}))
+            .unwrap()
+            .audit_target(),
+        "parent",
+        "the audit line names the parent, never the text"
     );
 }
 

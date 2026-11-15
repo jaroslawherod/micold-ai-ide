@@ -17,33 +17,33 @@ use micold_core::worktree_parent::ParentChoice;
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
 
-const DEFAULT: u128 = 1;
-const P: u128 = 10;
-const A: u128 = 11;
-const B: u128 = 12;
-const C: u128 = 13;
-const X: u128 = 14;
-const Y: u128 = 15;
+pub(crate) const DEFAULT: u128 = 1;
+pub(crate) const P: u128 = 10;
+pub(crate) const A: u128 = 11;
+pub(crate) const B: u128 = 12;
+pub(crate) const C: u128 = 13;
+pub(crate) const X: u128 = 14;
+pub(crate) const Y: u128 = 15;
 
 /// Worktree directory and session of each fixture member.
 const MEMBERS: [(&str, u128); 6] = [("P", P), ("A", A), ("B", B), ("C", C), ("X", X), ("Y", Y)];
 /// Child, parent.
 const LINKS: [(&str, &str); 4] = [("A", "P"), ("B", "P"), ("C", "A"), ("Y", "X")];
 
-struct Fixture {
-    state: Arc<DaemonState>,
+pub(crate) struct Fixture {
+    pub(crate) state: Arc<DaemonState>,
     addr: std::net::SocketAddr,
-    _project: tempfile::TempDir,
+    pub(crate) _project: tempfile::TempDir,
     _store: tempfile::TempDir,
 }
 
 impl Fixture {
-    async fn new() -> Self {
+    pub(crate) async fn new() -> Self {
         Self::with(&[], &[]).await
     }
 
     /// The fixture plus `extra` members `(directory, session, exists on disk)` and `links`.
-    async fn with(extra: &[(&str, u128, bool)], links: &[(&str, &str)]) -> Self {
+    pub(crate) async fn with(extra: &[(&str, u128, bool)], links: &[(&str, &str)]) -> Self {
         let project = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
         init_repo(project.path());
@@ -92,33 +92,45 @@ impl Fixture {
         }
     }
 
-    async fn call(&self, caller: u128, tool: &str, args: Value) -> Value {
+    pub(crate) async fn call(&self, caller: u128, tool: &str, args: Value) -> Value {
         call_ok(self.addr, &credential(&self.state, sid(caller)), tool, args).await
     }
 
-    async fn err(&self, caller: u128, tool: &str, args: Value) -> Value {
+    pub(crate) async fn err(&self, caller: u128, tool: &str, args: Value) -> Value {
         call_err(self.addr, &credential(&self.state, sid(caller)), tool, args).await
     }
 
-    async fn error_category(&self, caller: u128, tool: &str, args: Value) -> String {
+    pub(crate) async fn error_category(&self, caller: u128, tool: &str, args: Value) -> String {
         let error = self.err(caller, tool, args).await;
         error["category"].as_str().unwrap().to_string()
     }
 
+    /// Remove worktree `dir` behind the daemon's back; the daemon notices at its next refresh.
+    pub(crate) fn remove_worktree(&self, dir: &str) {
+        let path = self._project.path().join(".claude/worktrees").join(dir);
+        let status = std::process::Command::new("git")
+            .current_dir(self._project.path())
+            .args(["worktree", "remove", "--force", path.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(status.success());
+        self.state.refresh_worktrees(self._project.path());
+    }
+
     /// The refs `list_worktrees` returns to `caller`, `default` included.
-    async fn worktrees(&self, caller: u128) -> Vec<String> {
+    pub(crate) async fn worktrees(&self, caller: u128) -> Vec<String> {
         let out = self.call(caller, "list_worktrees", json!({})).await;
         sorted(out["worktrees"].as_array().unwrap(), "ref")
     }
 
     /// The worktrees of the sessions `list_sessions` returns to `caller`.
-    async fn session_worktrees(&self, caller: u128) -> Vec<String> {
+    pub(crate) async fn session_worktrees(&self, caller: u128) -> Vec<String> {
         let out = self.call(caller, "list_sessions", json!({})).await;
         sorted(out["sessions"].as_array().unwrap(), "worktree")
     }
 }
 
-fn sorted(rows: &[Value], key: &str) -> Vec<String> {
+pub(crate) fn sorted(rows: &[Value], key: &str) -> Vec<String> {
     let mut refs: Vec<String> = rows
         .iter()
         .map(|r| r[key].as_str().unwrap().to_string())
@@ -127,7 +139,7 @@ fn sorted(rows: &[Value], key: &str) -> Vec<String> {
     refs
 }
 
-fn session_arg(id: u128) -> Value {
+pub(crate) fn session_arg(id: u128) -> Value {
     json!({"session": sid(id).0.to_string()})
 }
 
@@ -177,14 +189,7 @@ async fn a_caller_whose_worktree_was_removed_sees_only_itself() {
     .await;
     assert!(f.worktrees(16).await.contains(&"P".to_string()));
     assert!(f.worktrees(16).await.contains(&"kid".to_string()));
-    let path = f._project.path().join(".claude/worktrees/gone");
-    let status = std::process::Command::new("git")
-        .current_dir(f._project.path())
-        .args(["worktree", "remove", "--force", path.to_str().unwrap()])
-        .status()
-        .unwrap();
-    assert!(status.success());
-    f.state.refresh_worktrees(f._project.path());
+    f.remove_worktree("gone");
     assert!(f.worktrees(16).await.is_empty());
     assert_eq!(f.session_worktrees(16).await, ["gone"]);
     for other in [DEFAULT, P, 17, 18] {

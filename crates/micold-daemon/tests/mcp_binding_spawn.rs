@@ -254,6 +254,7 @@ async fn a_claude_session_is_bound_and_answers_whoami_with_its_own_credential() 
         "get_session",
         "list_resumable_sessions",
         "read_session_output",
+        "neighbourhood",
         "create_worktree",
         "rename_worktree",
         "delete_worktree",
@@ -263,6 +264,7 @@ async fn a_claude_session_is_bound_and_answers_whoami_with_its_own_credential() 
         "interrupt_session",
         "send_session_input",
         "report_review_comment",
+        "send_parent_input",
         "delete_session",
     ];
     expected.sort_unstable();
