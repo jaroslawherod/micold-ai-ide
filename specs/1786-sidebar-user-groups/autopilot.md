@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1786
-- **Worktree branch**: claude/project-thread-vc038y
+- **Worktree branch**: claude/project-thread-swhfr3
 - **Started**: 2026-11-11
-- **Phase**: milestones (M4)
-- **Next step**: wait on CI for #1968 and squash-merge; then M5 (T035–T042) in a fresh thread
+- **Phase**: milestones (M5)
+- **Next step**: M5 (T035–T042): milestone unit running
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1905 | M1 | merged 2026-11-14 | b479914eb6744a3691cd90d805b7547e24464392 |
 | #1913 | M2 | merged 2026-11-15 | 6006f3e02039a34205aa3afad24a23e7a8d6b511 |
 | #1946 | M3 | merged 2026-11-15 | cae50ef59af4fac194e5559b72608cc0ac814a23 |
-| #1968 | M4 | open (draft) | — |
+| #1968 | M4 | merged 2026-11-15 | d1712abc888fad5ab736f08d5fb3e877bad784cf |
 
 ## Milestones
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
-| M4 | T029–T034 | full | Drag between lists and cancel | #1968 | PR open (draft) |
+| M4 | T029–T034 | full | Drag between lists and cancel | #1968 | merged |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
 
@@ -106,6 +106,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 None.
+
+M4 merged as #1968 (squash d1712abc8). Review A hit its round limit (D8: go on); orchestrator-run review B r1 found 2 MAJOR (fixed), r2 CLEAN with 1 MINOR in Follow-ups; visual pass PASS (/mnt/project-files/issue-1786/m4-*.png). Next: M5 (T035–T042) in a fresh thread; same cloud setup (orchestrator runs review B and visual pass; units write drift-M5.md and cycle-log; no `crate::features::<other>::` calls).
 
 ## Open escalation
 
