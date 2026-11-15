@@ -1,41 +1,46 @@
 <!-- claude-projects-attribution: {"github_login":"jaroslawherod"} -->
-_Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_01RyHdfvmnDGyHasLedRFLeQ?thread=cmsg_01RyHdfvmnDGyHasLedRFLeQ89eU7Xja8yPPBXmsk6YZbu)_
+_Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_01RyHdfvmnDGyHasLedRFLeQ?thread=cmsg_01RyHdfvmnDGyHasLedRFLeQ2cgV2rwRgxSy8KUemnrkPr)_
 
-## Milestone M2 of 5 — daemons dial the orchestrator (specs/1725-daemons-dial-orchestrator)
+## Milestone M3 of 5 — daemons dial the orchestrator (specs/1725-daemons-dial-orchestrator)
 
-**Deliverable**: stopping the orchestrator changes nothing for sessions or clients, the daemon is `online` again within 16 s of its return, and a stalled dialer no longer holds a link task or id reservation.
-**Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator_dial -- outage stalled`; quickstart §A step 4
-**Tasks**: T016–T020 · **Satisfies**: US4 scenarios 1–3; FR-008, FR-011; SC-003
+**Deliverable**: an orchestrator that refuses every attempt gets at most one attempt per capped delay, and `micold-daemon remote status` shows the link state and refusal reason.
+**Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator_dial -- refused status`; `scripts/build-lock.sh cargo test -p micold-core status`
+**Tasks**: T021–T027 · **Satisfies**: US5 scenarios 1–3; FR-007, FR-012; SC-004
 
 What changed:
-- `orchestrator/link.rs`: one `send_bounded(framed, item)` that is generic over the codec. It times out at `LIVENESS_DEADLINE` with `io::ErrorKind::TimedOut` and covers `refuse`, `Accepted`, `Welcome`, both `Refused` sends and the steady loop's ping and answer (FR-011).
-- `orchestrator/mod.rs`: `Detached` is an orchestrator with no listener that serves the connections it is handed. The stalled-dialer tests need a pipe smaller than one frame, which a socket cannot give. The set-up `serve` and `Detached` share is now one `start`.
+- `micold-core` `ssh/status.rs`: `RemoteStatus.link: Option<LinkStatusReport>` (`{ "state", "since", "detail" }`, `serde(default, skip_serializing_if)`). `STATUS_VERSION` is unchanged and an older file still parses. `state` is a word, not an enum, so an older reader that meets a newer state still parses the file and keeps the replace offer. `orchestrator/dial.rs`: `LinkStatus::word`.
+- `orchestrator_link/mod.rs`: the status cell is now `LinkState` (status, the refusal's sentence, `since`, attempt count). A retry refused the same way keeps its `since` and logs nothing. A refused daemon whose orchestrator goes away logs `orchestrator link not linked` once. Refusals already waited `jittered(after_refusal())` from M1. `spawn_as` (`#[doc(hidden)]`) lets a test announce another protocol version.
+- `runtime_status.rs` rewrites `status.json` when the session count or the link report changes. `server.rs` hands it the link's cell. `remote status` prints the JSON line (with `link`) on stdout and `orchestrator link: <state>: <detail>` on stderr (`remote::status_lines`).
 - New tests:
-  - `tests/orchestrator_dial/outage.rs`: a 30 s outage on a paused clock leaves a real PTY session producing output and its viewing client untouched and logs the loss once; the daemon is `online` again within 16 s; a restart while linked re-links as the restored record.
-  - `tests/orchestrator_dial/stalled.rs`: one stalled dialer for each of the four sends.
-- `orchestrator_link/mod.rs` is unchanged: M1's task already met T019. Plan drift is recorded in `drift-M2.md`.
-- Docs: `docs/daemon.md` and `docs/user-guide/daemon-configuration.md` describe the outage behaviour and the 16 s bound.
+  - `tests/orchestrator_dial/refused.rs`: on a paused 60 s clock, with each refusal way repeated twice, every gap between attempts is 15–18 s and there are at most 5 attempts, with one log line per change. Against the real orchestrator, an older daemon is listed `needs-update`, retries at the cap and logs once. A refused duplicate leaves the first link online. A lost link is re-dialled after 1–1.2 s once the backoff has grown. A refused link whose orchestrator goes away is logged once.
+  - `tests/orchestrator_dial/status.rs`: `status.json` and `remote status` carry the state and the refusal sentence. Without a link there is no `link` object.
+- Docs: `docs/user-guide/daemon-configuration.md` covers the retry delays, the refusal reasons and `remote status`. `docs/daemon.md` covers the cell, `status.json` and the log lines.
+- Plan drift is recorded in `drift-M3.md`.
 
-Evidence:
-- The tests in `stalled.rs` failed before the fix: all 4 timed out with `the link task ends: nothing within 20s`.
-- The tests in `outage.rs` passed on their first run, because M1 already had the behaviour. They were checked with three deliberate mutants, recorded in `tdd/cycle-log.md`, cycle 7:
-  - logging every retry fails the log-once check (`left: 16`);
-  - a 25 s retry delay fails the 16 s bound (`online 21.02s after the return`);
-  - no redial after a loss fails scenarios 2 and 3.
-- Quickstart §A step 4 was run by hand with the real binaries. After a 30 s stop the daemon was still running, logged `orchestrator link lost` once, and was listed `online` 0.6 s after the orchestrator came back.
+Evidence (`tdd/cycle-log.md`, cycles 8–10):
+- T021 was red before the fix: 6 compile errors.
+- The `status.rs` link test was red with the seams stubbed: `status.json is written: nothing within 20s`.
+- The `refused.rs` back-off tests passed on their first run, because M1 already had the delays. They were checked with mutants:
+  - refusal delay `after_failure`: `1s between attempts`;
+  - logging every retry: `no line per retry`;
+  - no reset on `Welcome`: `re-dialled 15s after the loss`.
 
 ## Agent review
-- Review A (headless `autopilot-reviewer`, opus, high): CLEAN with 3 MINOR findings, all fixed:
-  - a redundant `claim_failed`, since `Registry::closed` already releases the reservation;
-  - a misleading `Detached` comment and duplicated set-up;
-  - a thread-local log capture in the no-link test.
-- Review B (conformance, sonnet): run by the orchestrator after this PR opens.
+- Review A (headless `autopilot-reviewer`, opus, high): CLEAN with 3 MINOR findings, all fixed in 11cf6ef6a:
+  - a refused-to-absent change was not logged;
+  - `spawn_as` was a public seam (now `#[doc(hidden)]`);
+  - the SC-004 log check could not catch a line per retry.
+- Review B (conformance, sonnet): run by the orchestrator.
 
 ## Local gate
-`scripts/gate.sh` (CI's order: fmt, clippy, nextest workspace 13187 passed, doctests, the root-only tests as a normal user) passed at b38d5f3d2. No `cfg(target_os)` arm, sandbox or client code changed; nothing visual.
+`scripts/gate.sh` at 11cf6ef6a:
+- passed: fmt, clippy (core, then workspace, `-D warnings`), nextest workspace (13198 passed, 23 skipped) and doctests;
+- failed: one check in `scripts/tests/autopilot.test.sh` (`facts: caps the callers shown and flags truncation`: the review-facts caller scan found 0 callers in this container). This diff does not touch `scripts/` or `.claude/`, so CI is the gate for that check.
+
+Not run: no `cfg(target_os)` arm, sandbox or client code changed, and nothing visible changed.
 
 Refs #1725
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-https://claude.ai/code/session_01NCdYvMUp5TdNVXzpBPtnAN
+https://claude.ai/code/session_01NCdYvNysMGX37erHLqkbpp
