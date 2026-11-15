@@ -109,6 +109,24 @@ dir = "{{config_root}}"
 # the test binaries as a normal user; see scripts/run-unprivileged.sh.
 run = "scripts/gate.sh"
 
+# Diff guardrails (#1931). Opt-in, not part of `gate`: both need a tool outside the pinned toolchain
+# (`cargo install cargo-llvm-cov cargo-mutants --locked`, plus the llvm-tools-preview rustup component)
+# and take minutes. CI runs the same scripts on pull requests. Scope and threshold:
+# scripts/guardrails-scope.conf; docs/development/diff-guardrails.md.
+[tasks.coverage-diff]
+description = "Check that the lines this branch changed (daemon, orchestrator) are covered, vs origin/main [build-locked]"
+dir = "{{config_root}}"
+run = """
+set -e
+scripts/build-lock.sh cargo llvm-cov nextest -p micold-core -p micold-daemon --no-fail-fast --lcov --output-path lcov.info
+scripts/diff-coverage.py --lcov lcov.info --base "${BASE:-origin/main}"
+"""
+
+[tasks.mutants-diff]
+description = "Mutation-test the lines this branch changed (daemon, orchestrator), vs origin/main; minutes [build-locked]"
+dir = "{{config_root}}"
+run = "scripts/build-lock.sh scripts/mutants-diff.sh \"${BASE:-origin/main}\""
+
 # Duplication budget (issue #645). Not part of `gate`: jscpd is an npx download and similarity-rs a
 # `cargo install`, both outside the pinned toolchain, and the gate must stay offline and reproducible.
 # Measured 2026-10-16: jscpd 1.81% duplicated lines (272 clones, after #645), similarity-rs 701 pairs. The budgets

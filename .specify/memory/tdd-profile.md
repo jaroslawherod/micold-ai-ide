@@ -11,8 +11,8 @@ stacks:
     suite: scripts/build-lock.sh cargo test --workspace # `mise run test`, matches CI
     fast_subset: scripts/build-lock.sh cargo test -p micold-core --all-targets # `mise run test-core`
     watch: null # no cargo-watch, no bacon
-    coverage: null # no cargo-llvm-cov, no cargo-tarpaulin
-    mutation: null # no cargo-mutants
+    coverage: 'mise run coverage-diff' # cargo-llvm-cov nextest on core + daemon, then scripts/diff-coverage.py on the changed lines (#1931); `BASE=<ref>` overrides origin/main
+    mutation: 'mise run mutants-diff' # cargo mutants --in-diff on the branch diff, scoped by scripts/guardrails-scope.conf (#1931); minutes, opt-in
     acceptance: 'scripts/build-lock.sh cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1'
     property: null # no proptest, no quickcheck in Cargo.lock
     approval: homegrown env-gated snapshots (UPDATE_LAYOUT_SNAPSHOT, UPDATE_STYLE_SNAPSHOT)
@@ -144,8 +144,8 @@ unchecked. None of these were installed — adding one is a separate decision.
 
 | Capability | Ecosystem default | What cannot be proven without it |
 |---|---|---|
-| Coverage | `cargo-llvm-cov` | Which branches of a change are untested; the audit cannot show a line was executed. |
-| Mutation | `cargo-mutants` | Test *strength*. Without it, `/speckit.tdd.verify` must fall back to deliberate-mutant spot checks by hand. |
+| Coverage | `cargo-llvm-cov` | Installed on demand for `mise run coverage-diff` (#1931, `cargo install cargo-llvm-cov --locked` plus the `llvm-tools-preview` component); CI installs it pinned. Scope: daemon and orchestrator only. |
+| Mutation | `cargo-mutants` | Installed on demand for `mise run mutants-diff` (#1931, `cargo install cargo-mutants --locked`). Scope as above; elsewhere `/speckit.tdd.verify` falls back to deliberate-mutant spot checks by hand. |
 | Property-based | `proptest` | Invariants over generated input; every edge case has to be enumerated by hand. |
 | Watch mode | `cargo-watch` or `bacon` | Nothing correctness-wise — only the convenience of a re-run on save. |
 | Faster runner | `cargo-nextest` | Per-test isolation and a better failure report; libtest's output is adequate. |
