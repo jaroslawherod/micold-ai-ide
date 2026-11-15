@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1760
-- **Worktree branch**: claude/project-thread-9suuus
+- **Worktree branch**: claude/project-thread-berzgj
 - **Started**: 2026-11-12
 - **Phase**: milestones
 - **Next step**: close (fresh cloud thread)
