@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Started**: 2026-11-15
 - **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 - **Phase**: review M2
-- **Next step**: scoped re-review A round 3 of PR #1978 (fix diff since 87425df21: round 2's F1, F3, F4); review B round 1 was CLEAN
+- **Next step**: merge PR #1978 (M2) on green `ci complete`, then hand over for M3
 
 ## Pull requests
 
@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 1 | M2 | 45c59a68b | 9d35f00a:45c59a68b | CHANGES: 2 MAJOR, 3 MINOR (F1 shell target, F2 dir named `default` as parent, F3 own dir `default`, F4 audit target, F5 double resolve; all fixed in the next M2 commit) |
 | B | 1 | M2 | 45c59a68b | 9d35f00a:45c59a68b | CLEAN (1 MINOR: cycle 10 red by mutation, no fix needed) |
 | A | 2 | M2 (scoped, 45c59a68b..87425df21) | 87425df21 | - | CHANGES: 1 MAJOR, 3 MINOR (F1 scope keyed by the ref `default`: fixed, root kept apart from dir names; F3 shell-only parent wording: fixed; F4 scope check on the parent target: fixed; F2 dir named `default` excluded from the neighbourhood: not changed, carried to M3) |
+| A | 3 | M2 (scoped, 87425df21..e8805a8c4) | e8805a8c4ff759a20cbe0f614db8520ff3cde832 | - | CLEAN (sonnet, scoped; 3 MINOR carried to M3: shell-only wording, list_resumable_sessions filter and output refs collapse root vs dir named default) |
 
 ## Declined review findings
 
@@ -72,3 +73,4 @@ None.
 
 - M3: M2 review A round 2 F2 (MINOR): a live worktree directory named `default` is hard-excluded as a child, sibling and parent holder (`worktree_parent.rs` ~238, `d != DEFAULT_NAME`), so `neighbourhood` contradicts a recorded link for it and `send_parent_input` from it refuses "has no parent". Behaviour unchanged in M2. Decide in M3: reserve the name `default` (document it, refuse creating a worktree named `default`) or key the neighbourhood on the link.
 - M3: review A round 2 MINOR: an MCP create with no parent no longer calls `record(..., None)`, which used to retire a stale id/link under a reused directory name (ops.rs ~974). Decide in M3.
+- M3: M2 review A round 3 MINORs: (a) the "only shell sessions" refusal also fires when the parent's AI CLI sessions exist but are not Running (tools.rs ~2077); (b) `list_resumable_sessions` does not validate its filter with `scope.worktree`, and root and a dir named `default` both map to `default` (tools.rs ~1730); (c) output refs (`list_sessions`, `session_row`, `list_branches` `checked_out_in`) print `default` for both the root and a dir named `default`. Fold into the reserve-the-name decision above. Also: the F4 scope check in `send_parent_input` cannot fail; drop it or make it a `debug_assert!`; drift-M2.md appended rows lack a table header.
