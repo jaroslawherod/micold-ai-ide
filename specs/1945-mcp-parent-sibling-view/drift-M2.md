@@ -11,3 +11,5 @@
 Catalog order: `send_parent_input` is listed after `report_review_comment`, not beside `send_session_input`, because an existing contract test (`report_review_comment_is_listed_after_send_session_input_as_the_contract_gives`) pins the report tool right after `send_session_input`.
 
 `parent_target` takes `(id, worktree dir, lifecycle)` triples rather than `SessionSummary` rows, so its unit test needs no full summary; `None` is `default`, so a live directory literally named `default` never matches the project root.
+
+`MISSING contracts/mcp-neighbourhood.md`: reference only; the code follows it and it needed no change.
