@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-sufjt3
 - **Started**: 2026-11-11
 - **Phase**: milestones (M3)
-- **Next step**: M3 review B and visual pass (orchestrator), then open the PR from specs/1786-sidebar-user-groups/pr-M3.md
+- **Next step**: wait on CI for #1946 and squash-merge; then M4 (T029–T034) in a fresh thread
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
-| M3 | T024–T028 | full | Move to group from the menu | #… | pushed, awaiting review B, visual pass and PR |
+| M3 | T024–T028 | full | Move to group from the menu | #1946 | PR open (draft) |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
@@ -63,8 +63,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CHANGES (2 MAJOR fixed: drift-M2.md, T040 names keyboard opener; 2 MINOR fixed) |
 | Review B M2 | 2 | M2 | 4c3288732b05a7f614473ad3c58c82a7467a151b | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc:4c3288732b05a7f614473ad3c58c82a7467a151b | CLEAN (scoped re-review of da2697f8e, 4c3288732) |
 | Visual pass M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CLEAN (PASS; screenshots /mnt/project-files/issue-1786/m2-*.png; later fixes docs only) |
-| Review B M3 | — | conformance | — | — | PENDING (orchestrator runs it; no Agent tool in this cloud thread) |
-| Visual pass M3 | — | quickstart | — | — | PENDING (orchestrator runs it) |
+| Review B M3 | 1 | conformance | 6dbef3fb587ed1e6880555eb2d69a90ed0b77e12 | 6006f3e02039a34205aa3afad24a23e7a8d6b511:6dbef3fb587ed1e6880555eb2d69a90ed0b77e12 | CLEAN (3 MINOR left: Cycle 9 red shown by mutation only; T027 names features/worktree.rs, covered by drift-M3; ledger rows, now fixed) |
+| Visual pass M3 | 1 | M3 menu, keyboard, D7 count, themes | 6dbef3fb587ed1e6880555eb2d69a90ed0b77e12 | 6006f3e02039a34205aa3afad24a23e7a8d6b511:6dbef3fb587ed1e6880555eb2d69a90ed0b77e12 | PASS (screenshots /mnt/project-files/issue-1786/m3-*.png) |
 | M3 diff (A, code-review high) | 1 | origin/main...HEAD | 23a411d07f6a30308c2923efb6e0cee3278f1fc4 | 2687a887a67c6a031fda6a8fb6897ee53fe046fd:2f9d3665853d6d3d41fa9ac8d8b5135f74db9cfd | CHANGES (5 fixed: header counted gone rows as hidden, choosing the row's own list reordered it, New group over an open dialog closed it, listed ignored filters, adopt rule copied twice; 3 declined) |
 
 ## Declined review findings
@@ -87,7 +87,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 unit finished T024–T028 (all ticked). Core `SidebarLayout::move_item`/`adopt`/`holds`/`list_of`; client `Msg::Move`, `MoveTarget`, `move_menu_items`, `NamingTarget::NewAndMove`, the "Move to ..." entries in the worktree menu (and so the Overview card menu, the keyboard path) and the run group menu; the header count decision D7 (`n`, `n of m`, `empty`). Review A ran in round 1 (5 fixed, 3 declined). Review B and the visual pass are PENDING: this cloud thread has no Agent tool, so the orchestrator runs them after the unit returns and records their rounds above. Next: run them, fix any BLOCKER or MAJOR, open the PR from `specs/1786-sidebar-user-groups/pr-M3.md` (title `#1786: feat: sidebar: let the user create groups (M3)`), wait for CI and merge, then M4 (T029–T034). Four micold-core permission tests fail only as root (settings_refuses_save_over_failed_read, settings_write_is_logged, two in worktree_leftovers): ignore them.
+M3 unit finished T024–T028 (all ticked). Core `SidebarLayout::move_item`/`adopt`/`holds`/`list_of`; client `Msg::Move`, `MoveTarget`, `move_menu_items`, `NamingTarget::NewAndMove`, the "Move to ..." entries in the worktree menu (and so the Overview card menu, the keyboard path) and the run group menu; the header count decision D7 (`n`, `n of m`, `empty`). Review A ran in round 1 (5 fixed, 3 declined). The orchestrator then ran review B (CLEAN, 3 MINOR) and the visual pass (PASS) and opened draft PR #1946. Next: wait for CI and squash-merge #1946, then M4 (T029–T034) in a fresh thread. Four micold-core permission tests fail only as root (settings_refuses_save_over_failed_read, settings_write_is_logged, two in worktree_leftovers): ignore them.
 
 ## Open escalation
 
