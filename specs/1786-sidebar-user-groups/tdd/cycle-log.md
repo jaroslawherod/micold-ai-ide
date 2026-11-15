@@ -354,3 +354,14 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   beside the card one; `sidebar_drag.held` pinned in `COMPONENT_LOCAL` by
   `any_press_lets_go_of_a_row_held_after_a_cancel`. Targeted `--test main` 107 passed,
   `layout_snapshot` 180 passed.
+
+## Cycle 20: showcase drop highlight pose (T043)
+
+- red: `layout_snapshot::sidebar_group_header_fits::a_highlighted_group_header_keeps_its_row_and_its_words`
+  -> `E0432 unresolved import group_header_row_highlighted` (the pose did not exist). The drop marker
+  pose ("between two rows") shipped in M1 with `DropMarker`; it needed no change.
+- green: `group_header_row_highlighted` (one `group_header_list` builder shared with
+  `group_header_row`; the header's `TreeItem` gets the secondary-container `row_tint` the sidebar's
+  `drop_highlight` applies) and the `GroupHeader` entry's "drop highlight" pose in the catalogue.
+  `layout_snapshot` 181 passed, `showcase_completeness` 7, `showcase_captions` 46.
+- refactor: `group_header_row` and the highlighted one are two calls of one builder.
