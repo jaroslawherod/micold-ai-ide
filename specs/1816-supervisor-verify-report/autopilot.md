@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-nytitb
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: M3 PR (orchestrator opens it, then review B), then M4
+- **Next step**: merge #1922 (M3) on green CI, then M4 in a fresh thread
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
 | M2 | T009–T012 | full | follow-up.sh and cap | #1915 | merged |
-| M3 | T013–T014, T020 | full | close-out-report.sh | | implemented, review B pending |
+| M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | reviewed, awaiting CI |
 | M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
 
 ## Decisions
@@ -51,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 2 | M2 | 5c82564f98dc584383f89ef8ce4224b1ea48df01 | d6f38ac696c314114dabe21416b0901e18a02c2a:5c82564f98dc584383f89ef8ce4224b1ea48df01 | CLEAN (round-1 F1-F5 confirmed fixed) |
 | Review A | 1 | M3 | 54c815ff4ec16aacf2c524791e3dd9ef03f74a2e | - | CLEAN (run by the unit itself, no Agent tool; no findings) |
 | Review B | 1 | M3 | f605b7957964614c4420c157052e572f55317bc5 | 9c260155a70445ffa2edd421d0e8fa60cd6eb132:f605b7957964614c4420c157052e572f55317bc5 | CHANGES (F1 drift-M3.md, F2 cycle-log fixed) |
+| Review B | 2 | M3 | c2aee869706cbfe157fbe85e9b89632ed6745fd8 | 091dd5b5cc6ddbb2fe6ca0d006b9b30d5e6f3f40:c2aee869706cbfe157fbe85e9b89632ed6745fd8 | CLEAN (round-1 F1, F2 confirmed fixed) |
 
 ## Declined review findings
 
