@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1786
-- **Worktree branch**: claude/project-thread-swhfr3
+- **Worktree branch**: claude/project-thread-r3rop0
 - **Started**: 2026-11-11
-- **Phase**: milestones (M5)
-- **Next step**: M5 PR #1972: merge on green CI, then M6 in a fresh thread
+- **Phase**: milestones (M6)
+- **Next step**: M6 (T043, T045): dispatch the milestone unit in a fresh thread
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1913 | M2 | merged 2026-11-15 | 6006f3e02039a34205aa3afad24a23e7a8d6b511 |
 | #1946 | M3 | merged 2026-11-15 | cae50ef59af4fac194e5559b72608cc0ac814a23 |
 | #1968 | M4 | merged 2026-11-15 | d1712abc888fad5ab736f08d5fb3e877bad784cf |
+| #1972 | M5 | merged 2026-11-15 | 719e9f3b9cd09310ee41249f26d9603941c1f69e |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
 | M4 | T029–T034 | full | Drag between lists and cancel | #1968 | merged |
-| M5 | T035–T042 | full | Reorder, collapse, no state grouping | #1972 | review B and visual pass |
+| M5 | T035–T042 | full | Reorder, collapse, no state grouping | #1972 | merged |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
 
 ## Decisions
@@ -112,7 +113,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 None.
 
-M5 unit (cloud thread) on base d1712abc8 (#1968 merged): T035–T042 done and ticked, the M4 `held` follow-up folded in with its test, review A run inline (MINOR-ONLY, 2 MINOR in Follow-ups), full gate run by `scripts/gate.sh`, pushed; PR body at /mnt/project-files/issue-1786/m5-pr-body.md. Next: the orchestrator opens the PR, runs review B and the visual pass (quickstart §B 4–6; also the group menu by keyboard), merges; then M6.
+M5 merged as #1972 (squash 719e9f3b9). Review A inline MINOR-only; orchestrator-run review B r1 found 1 MAJOR (three UNPLANNED test paths missing from drift-M5.md, fixed, plan-drift clean); visual pass PASS (/mnt/project-files/issue-1786/m5-*.png; keyboard checks light only, card-state step covered by the T041 test). CI's first run failed only on a corrupt llvm-cov profile after all 13154 tests passed; green after merging main. Next: M6 (T043, T045: showcase poses and visual pass) in a fresh thread; same cloud setup (orchestrator runs review B and visual pass; units write drift-M6.md with every UNPLANNED path, tests included, and cycle-log; no `crate::features::<other>::` calls).
 
 ## Open escalation
 
