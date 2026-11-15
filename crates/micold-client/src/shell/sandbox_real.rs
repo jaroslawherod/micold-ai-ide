@@ -501,26 +501,29 @@ async fn sandbox_real_container_daemon_runs_a_session_end_to_end() {
         runtime,
         micold_core::sandbox::exec::SystemRunner,
     );
-    if let Err(e) = cli.remove(&ContainerId(container.clone())) {
-        // DIAGNOSTIC (temporary): the raw output of the failing remove.
-        for args in [
-            vec!["rm", "-f", container.as_str()],
-            vec!["--log-level=debug", "rm", "-f", container.as_str()],
-            vec!["ps", "-a"],
-        ] {
-            let out = std::process::Command::new(runtime.program())
-                .args(&args)
-                .output()
-                .unwrap();
-            eprintln!(
-                "DIAG {args:?} -> {:?}\nSTDOUT:\n{}\nSTDERR:\n{}",
-                out.status,
-                String::from_utf8_lossy(&out.stdout),
-                String::from_utf8_lossy(&out.stderr)
-            );
-        }
-        panic!("removing the container: {e}");
+    // DIAGNOSTIC (temporary): the raw output of the remove, before the adapter's own call.
+    for args in [
+        vec![
+            "inspect",
+            "--format",
+            "{{.State.Status}} {{.HostConfig.AutoRemove}}",
+            container.as_str(),
+        ],
+        vec!["--log-level=debug", "rm", "-f", container.as_str()],
+    ] {
+        let out = std::process::Command::new(runtime.program())
+            .args(&args)
+            .output()
+            .unwrap();
+        eprintln!(
+            "DIAG {args:?} -> {:?}\nSTDOUT:\n{}\nSTDERR:\n{}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
+    cli.remove(&ContainerId(container.clone()))
+        .unwrap_or_else(|e| panic!("removing the container: {e}"));
     assert_eq!(containers_named(runtime.program(), &container), 0);
     // Real time, so a run that skipped everything cannot pass for this one (#1281).
     eprintln!(
