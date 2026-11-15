@@ -1250,7 +1250,7 @@ async fn a_create_without_a_parent_retires_the_stale_id_of_a_reused_name() {
         Some(&ParentChoice::Worktree("feat-r".into())),
     );
     let stale = s.state.worktree_ids(project)["feat-r"];
-    micold_daemon::ops::create_worktree_with_session(
+    let (_session, _typed, _setup) = micold_daemon::ops::create_worktree_with_session(
         &s.state,
         project.to_path_buf(),
         DerivedNames {
