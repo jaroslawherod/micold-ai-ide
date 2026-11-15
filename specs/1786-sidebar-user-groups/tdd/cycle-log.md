@@ -229,3 +229,21 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   path (`context_menu_anchor`, `tooltip_clears_its_row`: "no node at 0/0/0/1/0/0/0/2/0/0/8").
   The marker moved onto the row it marks, laid over the row's edge, and the `mouse_area`, which
   adds no layout node, stayed; the paths are as before.
+
+## Cycle 13: review A fixes (rounds 1 to 3)
+
+- test: `tests/sidebar_drag.rs::the_hit_test_finds_only_*` (the marker of a header and of a lower
+  half sits on the target's own row, `below`), `escape_cancels_the_drag_before_a_surface_open_under_it`;
+  `ui::sidebar::tests::rows_and_headers_arm_*` (the whole target list is lit, marker edges, the
+  dragged row is `inert`); `cdk::context_area::tests::a_held_release_reaches_the_content_with_no_cursor`.
+- red: the header assertion failed against the first `hit_test` (`marker` was the next list's first
+  row, `below` absent: E0609 until the field existed); the Escape test failed while
+  `dismiss_topmost` closed the registry's surface first (`armed` still `Some`); the inert count
+  failed (3 against 2) when it picked a row with no press, which showed the count was the thing
+  measured.
+- green: `DropSpot.below`; `drop_highlight` tints each target entry's whole row range;
+  `drag_escape` read by `on_escape` and `dismiss_topmost`; `TreeItem::inert` and
+  `ContextArea::hold_release`, which hand the dragged row's button its release with no cursor, so
+  it lets go without pressing and keeps its look (round 2's disabled button kept a stale pressed
+  state, found in round 3).
+- refactor: `TreeItem`'s press point and release are one `Option<(OnPress, M)>`.
