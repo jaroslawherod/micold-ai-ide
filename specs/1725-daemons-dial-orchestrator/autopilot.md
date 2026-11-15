@@ -49,6 +49,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 2 | design fix diff | 4e9b7e7f8147a6ca39abdb4a0aed819f5efedbb4 | 4efebc3b7d308f99107399a0d9913f9b32676e64:c30e1ae59e0d06bb201b6b3de8d70a51e5540c91 | CLEAN (scoped, sonnet) |
 | Review A | 1 | M1 | 33282fd3e765197a84e2a71662bfbe17495b266d | b3bf65678531ba19356823ba4f311526cffc200c:33282fd3e765197a84e2a71662bfbe17495b266d | CHANGES: 1 MAJOR (no test of server::run wiring), 3 MINOR; all fixed |
 | Review A | 2 | M1 | e409f3f94ab32375a0471df628d084758dbe070c | 7dd654c35687f155ee415a77652480b8e758db7a:9b353509ca3082b429e161fcd3ea3bbfae7cbc68 | CLEAN (fix diff, sonnet); later commit only skips the pure dial rules in the no-outbound scan (no_outbound.rs, docs) |
+| Review B | 1 | M1 | 8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | 1f0940a172cbebd59b6fb65d90ab571ce84caf61:8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | CHANGES: 2 MAJOR drift records, 1 MINOR test; all fixed |
+| Review B | 2 | M1 | d7a3d1066f8747ae9388e8609854f959a72baea6 | f90edcff30b590fb73aed5b450becf8325d1114b:d7a3d1066f8747ae9388e8609854f959a72baea6 | CLEAN (fix diff, sonnet) |
 
 ## Declined review findings
 
