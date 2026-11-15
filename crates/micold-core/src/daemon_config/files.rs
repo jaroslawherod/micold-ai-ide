@@ -56,10 +56,19 @@ pub fn check_files(text: &str, origin: &str, config: &DaemonConfig) -> Vec<Confi
         }
     }
 
-    // V14: a secret must be owner-only.
+    // V14: a secret must be owner-only. A pod's secrets are Secret mounts the kubelet makes
+    // `root:<fsGroup>` mode 0440 so the daemon's group can read them; only "other" bits count there.
+    let wide = if config.daemon.kind == super::Kind::Kubernetes {
+        0o007
+    } else {
+        0o077
+    };
     let secrets = secret_entries(config);
     for (key, path) in secrets {
-        if let Some(mode) = super::resolved::readable_by_others(path) {
+        if let Some(mode) = super::resolved::mode_of(path)
+            .flatten()
+            .filter(|mode| mode & wide != 0)
+        {
             let severity = if sandbox {
                 Severity::Error
             } else {

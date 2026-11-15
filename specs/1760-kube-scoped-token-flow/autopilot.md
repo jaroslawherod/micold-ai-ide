@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
 | #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 | #1918 | M2 | merged | 110457c5aa066acdedbf5b089eb7b80bbd57f156 |
+| #1923 | M3 | draft, CI | - |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
 | M2 | T018–T019 | light | form tick and user guide | #1918 | merged |
-| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | built, in review |
+| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | built, CI red fixed (V14), awaiting CI |
 
 ## Decisions
 
@@ -57,6 +58,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | diff | b43df5f | same | CHANGES: F1 drift-M2.md, F2 cycle-log, F3 Verify line fixed (docs/prose only, no code change); F4 MINOR declined |
 | Review A | 1 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | MINOR-ONLY (F1 declined: spec fixes the label) |
 | Review B | 2 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (F1-F3 fixed in specs, Verify 122 passed) |
+| Review A M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CLEAN (3 MINOR, all fixed in 05c383ab7) |
+| Review B M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CHANGES: drift record fixed |
+| Review B M3 | 2 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CLEAN |
 
 ## Declined review findings
 
@@ -68,6 +72,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+2026-11-15 M3 red-CI unit (cloud): kube_real_scoped_token pod A never accepted on the socket. Root cause (production, M1): the pod's startup Secret mounts as 0440 (manifest defaultMode, fsGroup), and V14 (`check_files`) is an Error for sandbox kinds on any group/other bit, so the pod daemon refused its own `daemon.toml` naming the token file. Fixed test-first in `daemon_config/files.rs` (Kubernetes: only other bits count); test `v14_a_group_readable_secret_passes_in_a_pod_only`. Unverified on a live cluster (no docker); CI is the check. The diagnose output is empty because `kube_attempt` rolls the pod back before `diagnose` runs; not changed.
 
 2026-11-15 M3 unit (cloud, branch claude/project-thread-9suuus): previous PR #1918 merged at 110457c5aa066acdedbf5b089eb7b80bbd57f156. T021-T027 built (forge.rs, support helpers `token_store`/`start_with_tokens`/`Shell::capture`/`session_env_and_home`, `kube_real_scoped_token`, row 11 COVERED). fmt, clippy and the forge unit test green here; the live test can only run on CI `kube-cluster` (no kind here), so the first CI run is the real check and may need a fix unit (the shell-instance env, the helper probe and the pod commands were written without a cluster). No Review A/B run by the unit (no subagents). PR body at the scratchpad pr-body-m3.md. Next: orchestrator runs Review A (high) and B (sonnet), pushes the PR, watches `kube-cluster`, and on request a temporary revert commit for T026.
 2026-11-15 M2 orchestrator (cloud): PR #1918 squash-merged (110457c5aa066acdedbf5b089eb7b80bbd57f156) on green CI (incl. the real kube cluster job); main merged back into claude/project-thread-c875n9. Next: a fresh thread runs `/speckit-autopilot resume #1760` on this branch and dispatches the M3 milestone unit (T021–T027, Tier full, model omitted); previous PR #1918, merge SHA above. Then the close unit.
