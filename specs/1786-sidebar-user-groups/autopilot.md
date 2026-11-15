@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1786
-- **Worktree branch**: claude/project-thread-sufjt3
+- **Worktree branch**: claude/project-thread-vc038y
 - **Started**: 2026-11-11
-- **Phase**: milestones (M3)
-- **Next step**: wait on CI for #1946 and squash-merge; then M4 (T029–T034) in a fresh thread
+- **Phase**: milestones (M4)
+- **Next step**: M4 (T029–T034): dispatch the milestone unit
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1848 | Design | merged 2026-11-12 | 553474089e559f95557125168150c3a3abfdcc95 |
 | #1905 | M1 | merged 2026-11-14 | b479914eb6744a3691cd90d805b7547e24464392 |
 | #1913 | M2 | merged 2026-11-15 | 6006f3e02039a34205aa3afad24a23e7a8d6b511 |
+| #1946 | M3 | merged 2026-11-15 | cae50ef59af4fac194e5559b72608cc0ac814a23 |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
-| M3 | T024–T028 | full | Move to group from the menu | #1946 | PR open (draft) |
+| M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
@@ -88,6 +89,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 M3 unit finished T024–T028 (all ticked). Core `SidebarLayout::move_item`/`adopt`/`holds`/`list_of`; client `Msg::Move`, `MoveTarget`, `move_menu_items`, `NamingTarget::NewAndMove`, the "Move to ..." entries in the worktree menu (and so the Overview card menu, the keyboard path) and the run group menu; the header count decision D7 (`n`, `n of m`, `empty`). Review A ran in round 1 (5 fixed, 3 declined). The orchestrator then ran review B (CLEAN, 3 MINOR) and the visual pass (PASS) and opened draft PR #1946. Next: wait for CI and squash-merge #1946, then M4 (T029–T034) in a fresh thread. Four micold-core permission tests fail only as root (settings_refuses_save_over_failed_read, settings_write_is_logged, two in worktree_leftovers): ignore them.
+
+M3 merged as #1946 (squash cae50ef59). After review B one more commit (d360ecd8c) changed `close_row_menus` in `features/sidebar_group_actions.rs` to dismiss context menus through the overlay registry, because CI's `feature_registration_cost` test forbids a feature naming another feature's items. M4 units must avoid `crate::features::<other>::` calls for the same reason. Visual pass observed (not defects): ungrouped rows have no header and read as part of the last group; externally created worktrees appear only after restart.
 
 ## Open escalation
 
