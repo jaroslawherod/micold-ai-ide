@@ -73,6 +73,44 @@ scope; `describe_situation`, `describe_derived_collision`, `create_failure` and 
 it. After the fix: `-p micold-daemon --test mcp worktree_parent` 22 passed (both new tests green,
 the sibling case still named, `default` still sees the name).
 
+## Milestone M2 (T015-T017, #1859): red with the M2 logic stubbed out, green on the branch
+
+Honest account: the M2 tests (`crates/micold-client/tests/sidebar_parent.rs`) and the code landed
+in one commit (`b733a25c6`), so git history shows no red-before-green. This section records the red
+run after the fact (review B F1). Method: in the main checkout (a scratch worktree would have built
+a private ~20 GB target directory, more than the free disk), stub out the M2 logic in
+`crates/micold-client/src/features/worktree.rs` (`worktree_tags` pushes no `Tag::Parent`) and
+`crates/micold-client/src/features/sidebar.rs` (`from_token` parses no `parent:`, `matches_filters`
+ignores the parent dimension, `row_chips` adds no parent chip, `available_tag_filters` offers no
+parent), run `cargo test -p micold-client --test main sidebar_parent`, restore both files, run
+again. The new types (`TagFilter::Parent`, `RowChip::Parent`, `Tag::Parent`) stay so the tests
+compile; each test is red on behaviour, not on a build error.
+
+| Test | Stubbed | Branch |
+|---|---|---|
+| `a_worktree_with_a_parent_has_a_parent_tag_and_one_without_has_none` | FAILED: `tags("fix-c")` has no `Tag::Parent(sup)` | passed |
+| `the_row_shows_the_parent_name_and_marks_a_removed_parent` | FAILED: `row_chips("fix-c")` has no `RowChip::Parent("sup")` | passed |
+| `the_parent_filter_narrows_to_that_parents_direct_children` | FAILED: left all six worktrees, right `[feat-abc-1_a, fix-c]` | passed |
+| `the_default_parent_is_a_valid_filter_and_a_removed_parent_is_its_own` | FAILED: left all six, right `[feat-abc-2_b]` | passed |
+| `the_parent_filter_composes_with_the_issue_and_type_filters` | FAILED: left `[feat-abc-1_a, feat-abc-2_b]`, right `[feat-abc-1_a]` | passed |
+| `two_parent_filters_show_either_parents_children` | FAILED: left all six, right `[feat-abc-1_a, fix-c, feat-abc-2_b]` | passed |
+| `only_parents_that_have_children_are_offered` | FAILED: left `[]`, right `[default, old (removed), sup]` | passed |
+| `renaming_the_parent_updates_the_label_and_keeps_order` | FAILED: no `RowChip::Parent("Supervisor")` (its order assertion is a guard and held) | passed |
+| `the_launch_hook_names_a_live_parent` | FAILED: `parent:sup` is not a filter (Err) | passed |
+
+Stubbed: 0 passed, 9 failed. Branch: 9 passed.
+
+### Mutants
+
+Each edit in `crates/micold-client/src/features/sidebar.rs`, reverted after the run:
+
+| Mutant | Result |
+|---|---|
+| (a) `matches_filters` combines the parent and tag dimensions by OR when both are on (`by_parent \|\| by_tag`), against D8 | killed: 1 FAILED, `the_parent_filter_composes_with_the_issue_and_type_filters` (left `[feat-abc-1_a, fix-c, feat-abc-2_b]`, right `[feat-abc-1_a]`) |
+| (b) `available_tag_filters` offers every worktree as a parent, children or not | killed: 1 FAILED, `only_parents_that_have_children_are_offered` (`plain`, `fix-c` and the other childless worktrees offered) |
+
+No survivor, so no test was added.
+
 ## M3 (T023-T025, T033)
 
 Honest account: `307e04e11` holds the test and the helper together, so git history shows no

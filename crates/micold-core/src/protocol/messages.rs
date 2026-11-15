@@ -2112,6 +2112,8 @@ pub struct WorktreeSnapshot {
     pub path: PathBuf,
     /// Shown because the user asked for it, not because of where it lives (016 BUG-002, FR-027).
     pub included: bool,
+    /// Its parent, when it has one (spec 1857, FR-010): the sidebar's parent label and filter.
+    pub parent: Option<crate::worktree::ParentLabel>,
 }
 
 /// Worktree status (data-model §Worktree).

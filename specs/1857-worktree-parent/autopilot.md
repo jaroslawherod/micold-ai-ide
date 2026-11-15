@@ -1,17 +1,17 @@
-# Autopilot ledger — #1858 worktree-parent M1, M1b; #1860 M3
+# Autopilot ledger — worktree-parent M1, M1b (#1858), M2 (#1859), M3 (#1860)
 
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.
 
-- **Input**: Milestone M3 (#1860, Phase 7: T023-T026, T033) of specs/1857-worktree-parent/tasks.md; earlier: Milestone M1b (Phase 3b: T030-T032, FR-015, FR-016, FR-017) of specs/1857-worktree-parent/tasks.md; M1 merged earlier; labels: enhancement, flow:feature
+- **Input**: Milestone M2 (Phase 5: T015-T019) of specs/1857-worktree-parent/tasks.md; M1 (#1858) and M1b merged earlier; labels: enhancement, flow:feature
 - **Kind**: feature
 - **Effort**: default
 - **Supervised**: no
-- **Issue**: #1860 (M1, M1b: #1858)
-- **Worktree branch**: claude/project-thread-isaz3e
+- **Issue**: #1859
+- **Worktree branch**: claude/project-thread-rew3t5
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: merge (CI)
+- **Next step**: merge PR #1921 (CI)
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
 | #1912 | M1b | merged | 95fa459da7e2b4381424c66ba66f40454159a70b |
-| #1917 | M3 | open (draft) | — |
+| #1917 | M3 | merged | 2c3e7fd77e9305e8a801bcd8c2a61541480c23e1 |
+| #1921 | M2 | open | — |
 
 ## Milestones
 
@@ -28,7 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
 | M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | merged |
-| M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | #1917 | in-review |
+| M2 | T015–T019 | full | Sidebar parent label (current name, marked removed) and a parent filter that narrows and composes with the issue/type filter; no nesting; shared chip; user guide; visual pass of quickstart Part B | #1921 | in-review (T015-T019 done; review B CLEAN, visual pass PASS) |
+| M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | #1917 | merged |
 
 ## Decisions
 
@@ -41,6 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D5 | milestones | `default` as the target of `rename_worktree`/`delete_worktree` from a restricted caller | Stays `invalid_input` (argument validation in core, before any scope; reveals nothing); all other out-of-scope targets are `not_found` | agent-resolved | core mcp/tools.rs `not_default` |
 | D6 | milestones | Relay test (FR-017) | A message to the parent passes the scope check (fails only with `conflict`, no running process in the fixture); the typed-in path is covered by mcp_cross_session | agent-resolved | mcp_worktree_parent_visibility.rs |
 | D7 | milestones | Existing tests with a worktree caller listing unrelated worktrees | Fixtures changed: callers moved to the `default` session, or parent links added; behaviour under test unchanged | agent-resolved | mcp_read_tools.rs, mcp_lifecycle_tools.rs |
+| D8 | milestones | The parent filter and the existing OR filters | Parent chips are a second dimension: a worktree must be a child of ANY chosen parent AND match ANY chosen type/issue/untyped chip (when any is on); this is what "composes" and "narrows" mean. Documented in the user guide | agent-resolved | features/sidebar.rs `matches_filters`, tests/sidebar_parent.rs |
+| D9 | milestones | Filter key and label | `ParentLabel { name, removed }`, name being the parent's display name (the daemon resolves rename overrides); the filter keys on it, so a removed parent is its own chip. Wire: `WorktreeSnapshot.parent`, PROTOCOL_VERSION 82. `TagFilter` lost `Copy` since it carries the label | agent-resolved | core worktree.rs, protocol/version.rs |
 
 ## Review rounds
 
@@ -60,6 +64,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F4): F1 cycle-log M3 section with red runs, F2 = A F6, F3 T026 reworded to comments, F4 drift-M3.md; all fixed; round 2 to run by orchestrator |
 | A | 2 | M3 | b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | 4aed8e5fc120550f00e3254472dd2fbadfc597d2:b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | CLEAN (round 2 sonnet on fix diff; ownership 39, supervisor 269 passed) |
 | B | 2 | M3 | b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | 4aed8e5fc120550f00e3254472dd2fbadfc597d2:b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | CLEAN (round 2 sonnet on fix diff) |
+| A | 1 | M2 | afd98b48f3ac0d200e992af167138e8e3330c0dc | by-hand review of origin/main...HEAD (no subagent tool) | CLEAN no BLOCKER or MAJOR |
+| B | 1 | M2 | 68d2fd0f5 | conformance review of origin/main...HEAD | CHANGES (F1-F4) fixed: cycle-log M2 red run and two mutants (both killed), drift-M2.md and a `## Milestones` section in tasks.md, RunRow boxed instead of the allow, renamed-parent note in the user guide |
+| B | 2 | M2 | e05d5e719 | fix diff 68d2fd0f5..e05d5e719 (sonnet) | CLEAN: F1-F4 resolved; plan-drift.sh M2 no drift; clippy client clean. Visual pass T018 PASS (both Part B checks, screenshots in project files issue-1859/) |
 
 ## Declined review findings
 
@@ -86,3 +93,6 @@ None.
 
 - Tests that exercise tool behaviour use `full_view_credential` (tests/support/mcp.rs) or default callers; scope handling per tool is covered by `mcp_worktree_parent_visibility` only.
 - Record the parent inside the create path (review A F1/F2): closes the window where a new worktree is visible without its link and a concurrent child of it can be tombstoned.
+- M2 T018 (visual pass of quickstart Part B, record in quickstart.md) is not done: the orchestrator dispatches it with review B after the PR is open; the `MICOLD_SIDEBAR_FILTER=parent:<name>` hook pre-applies the parent filter for it.
+- An active parent filter whose parent is renamed keys on the old name and matches nothing until cleared (Clear filters in the empty message); same edge as any filter whose tag vanishes.
+- Verification run here: fmt, clippy core+workspace (-D warnings), core `--all-targets` (only 4 root-permission tests fail, unrelated), client lib + main + features_sidebar, daemon mcp worktree_parent. Full gate left to CI.

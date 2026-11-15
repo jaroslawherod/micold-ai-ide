@@ -28,6 +28,7 @@ fn state_with_selected_session() -> (State, SessionId) {
     });
     state.workspace.active = Some(path.clone());
     state.worktree.worktrees.push(Worktree {
+        parent: None,
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),

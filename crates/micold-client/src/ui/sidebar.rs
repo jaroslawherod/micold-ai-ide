@@ -343,11 +343,12 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
 }
 
 /// The human label for a tag filter chip.
-fn filter_label(filter: TagFilter) -> String {
+fn filter_label(filter: &TagFilter) -> String {
     match filter {
         TagFilter::Type(t) => t.as_str().to_string(),
         TagFilter::HasIssue => "issue".to_string(),
         TagFilter::Untyped => "untyped".to_string(),
+        TagFilter::Parent(parent) => format!("parent: {}", Tag::Parent(parent.clone()).label()),
     }
 }
 
@@ -363,12 +364,12 @@ fn filter_chip(
     // Feature 014: the pill styling that used to live here is now the shared `ToggleChip`
     // primitive, so this and the reveal chip below stay identical by construction rather than by
     // two copies drifting apart (Principle VIII Component-reuse gate).
-    let (fill, on) = match filter {
-        TagFilter::Type(t) => r.type_tag(t),
+    let (fill, on) = match &filter {
+        TagFilter::Type(t) => r.type_tag(*t),
         TagFilter::HasIssue => r.issue_tag(),
-        TagFilter::Untyped => material::chip_neutral_accent(r),
+        TagFilter::Untyped | TagFilter::Parent(_) => material::chip_neutral_accent(r),
     };
-    let label = filter_label(filter);
+    let label = filter_label(&filter);
     let chip = ToggleChip::new(
         label,
         Message::Sidebar(SidebarMsg::FilterToggled(filter)),
@@ -429,7 +430,7 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
                     // Selected while no filter is; pressing it clears every filter (US4.2, US4.3).
                     ChipBarChip::All => all(on),
                     ChipBarChip::Filter(filter) => takes_the_keyboard(
-                        filter_chip(filter, on, false, r),
+                        filter_chip(filter.clone(), on, false, r),
                         Message::Sidebar(SidebarMsg::FilterToggled(filter)),
                         r,
                     ),
@@ -454,9 +455,9 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
                 toggle.clone(),
                 r,
             ));
-            line.extend(bar.shown.iter().map(|&filter| {
+            line.extend(bar.shown.iter().cloned().map(|filter| {
                 takes_the_keyboard(
-                    filter_chip(filter, true, true, r),
+                    filter_chip(filter.clone(), true, true, r),
                     Message::Sidebar(SidebarMsg::FilterToggled(filter)),
                     r,
                 )
@@ -553,8 +554,9 @@ fn filter_panel(
 ) -> Element<'static, Message> {
     let chips: Vec<Element<'static, Message>> = available
         .iter()
-        .map(|&filter| {
-            let chip = filter_chip(filter, active.contains(&filter), false, r);
+        .cloned()
+        .map(|filter| {
+            let chip = filter_chip(filter.clone(), active.contains(&filter), false, r);
             if open {
                 takes_the_keyboard(chip, Message::Sidebar(SidebarMsg::FilterToggled(filter)), r)
             } else {
@@ -1241,7 +1243,7 @@ fn group_items(
         match run.row {
             RunRow::Worktree(node) => items.extend(build_items(
                 state,
-                vec![SidebarEntry::Worktree(node)],
+                vec![SidebarEntry::Worktree(*node)],
                 1,
                 Some((number, provider)),
                 at + items.len(),
@@ -1763,6 +1765,7 @@ mod tests {
         state.worktree.worktrees = ["feat-a", "fix-b"]
             .into_iter()
             .map(|dir| micold_core::worktree::Worktree {
+                parent: None,
                 dir_name: dir.into(),
                 path: std::path::Path::new("/repo/.claude/worktrees").join(dir),
                 branch: Some(dir.replace('-', "/")),
@@ -1800,6 +1803,7 @@ mod tests {
         ]
         .into_iter()
         .map(|dir| micold_core::worktree::Worktree {
+            parent: None,
             dir_name: dir.into(),
             path: std::path::Path::new("/repo/.claude/worktrees").join(dir),
             branch: Some(dir.replace('-', "/")),
@@ -1825,7 +1829,7 @@ mod tests {
         state.sidebar.filter_open = true;
         let chips: Vec<_> = available
             .iter()
-            .map(|&f| sidebar(SidebarMsg::FilterToggled(f)))
+            .map(|f| sidebar(SidebarMsg::FilterToggled(f.clone())))
             .collect();
         let open = tab_order(&state, head.len() + chips.len() + tail.len());
         assert_eq!(
@@ -1857,6 +1861,7 @@ mod tests {
         state.worktree.worktrees = ["feat-a", "feat-b"]
             .into_iter()
             .map(|dir| Worktree {
+                parent: None,
                 dir_name: dir.to_string(),
                 path: std::path::PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
                 branch: Some(format!("feat/{dir}")),
@@ -1903,6 +1908,7 @@ mod tests {
         state.worktree.worktrees = ["idle", "done", "work", "attn", "act"]
             .into_iter()
             .map(|dir| Worktree {
+                parent: None,
                 dir_name: dir.to_string(),
                 path: std::path::PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
                 branch: Some(format!("feat/{dir}")),

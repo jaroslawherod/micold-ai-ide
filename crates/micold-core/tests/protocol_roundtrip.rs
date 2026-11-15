@@ -554,6 +554,7 @@ fn sample_catalog() -> CatalogSnapshot {
             is_git_repo: true,
             available: true,
             worktrees: vec![WorktreeSnapshot {
+                parent: None,
                 daemon: Default::default(),
                 dir_name: "feat-x".into(),
                 branch: Some("feat/x".into()),
@@ -994,7 +995,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
 
 #[test]
 fn the_protocol_version_is_81() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 81);
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 82);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -3093,6 +3094,7 @@ fn daemon(id: &str) -> micold_core::protocol::routing::WireDaemonId {
 
 fn sample_worktree() -> WorktreeSnapshot {
     WorktreeSnapshot {
+        parent: None,
         daemon: Default::default(),
         dir_name: "feat-x".into(),
         branch: Some("feat/x".into()),

@@ -311,6 +311,9 @@ pub enum Tag {
     /// On-disk health, injected at render time for non-`Valid` worktrees (FR-011). Never
     /// produced by [`parse_tags`].
     Status(WorktreeStatus),
+    /// The worktree's parent (spec 1857, FR-010), injected by the caller like [`Tag::Status`].
+    /// Never produced by [`parse_tags`].
+    Parent(crate::worktree::ParentLabel),
 }
 
 impl Tag {
@@ -321,6 +324,8 @@ impl Tag {
             Self::Type(t) => t.as_str().to_string(),
             Self::Issue(key) => key.clone(),
             Self::Status(status) => status.label().unwrap_or_default().to_string(),
+            Self::Parent(parent) if parent.removed => format!("{} (removed)", parent.name),
+            Self::Parent(parent) => parent.name.clone(),
         }
     }
 }

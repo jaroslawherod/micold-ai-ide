@@ -20,6 +20,7 @@ fn project() -> PathBuf {
 
 fn managed(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: project().join(".claude/worktrees").join(dir_name),
         branch: Some(branch.to_string()),
@@ -30,6 +31,7 @@ fn managed(dir_name: &str, branch: &str) -> Worktree {
 
 fn elsewhere(dir_name: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: PathBuf::from("/somewhere/else").join(dir_name),
         branch: Some(format!("feat/{dir_name}")),

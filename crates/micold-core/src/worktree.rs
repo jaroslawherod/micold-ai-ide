@@ -77,6 +77,16 @@ impl ParentLink {
     }
 }
 
+/// A worktree's parent as the sidebar shows it (spec 1857, FR-010): the parent's current display
+/// name, and whether it has been removed (then `name` is the last one it had).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ParentLabel {
+    /// The parent's name: `default` for the project root, else the worktree's display name.
+    pub name: String,
+    /// The parent worktree no longer exists (FR-006).
+    pub removed: bool,
+}
+
 /// Health of a discovered worktree on disk (FR-018a). Enum, not bools, so the sidebar can
 /// render an explicit state and block session-start at the type level (Principle V).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -153,6 +163,9 @@ pub struct Worktree {
     /// The list shows these by location as well as by name (FR-029): a folder name alone says
     /// nothing about where a worktree the app did not create actually is.
     pub included: bool,
+    /// The worktree's parent, when it has one (spec 1857, FR-010). Filled from the daemon's
+    /// catalog; absent for a worktree no tool created with a parent.
+    pub parent: Option<ParentLabel>,
 }
 
 impl Worktree {
@@ -288,6 +301,7 @@ pub fn reconcile(
         let dir_name = folder_name(&rec.path);
         registered_dirs.push(dir_name.clone());
         out.push(Worktree {
+            parent: None,
             dir_name,
             path: rec.path.clone(),
             branch: rec.branch.clone(),
@@ -301,6 +315,7 @@ pub fn reconcile(
         if !registered_dirs.contains(name) {
             registered_dirs.push(name.clone());
             out.push(Worktree {
+                parent: None,
                 dir_name: name.clone(),
                 path: worktrees_root.join(name),
                 branch: None,
@@ -325,6 +340,7 @@ pub fn reconcile(
         let dir_name = unique_dir_name(&rec.path, &registered_dirs);
         registered_dirs.push(dir_name.clone());
         out.push(Worktree {
+            parent: None,
             dir_name,
             path: rec.path.clone(),
             branch: rec.branch.clone(),
@@ -1196,6 +1212,7 @@ pub fn create_worktree(
     }
 
     Ok(Worktree {
+        parent: None,
         dir_name: names.dir_name.clone(),
         path: target_path.to_path_buf(),
         branch: Some(names.branch.clone()),

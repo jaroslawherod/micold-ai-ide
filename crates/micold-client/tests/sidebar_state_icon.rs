@@ -32,6 +32,7 @@ const FEATURE_Y: &str = "feat-y";
 
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: Path::new(REPO).join(".claude/worktrees").join(dir),
         branch: Some(format!("feat/{dir}")),

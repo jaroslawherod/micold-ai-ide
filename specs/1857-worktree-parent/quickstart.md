@@ -14,5 +14,7 @@ Prerequisite: a built daemon and a project with the micold tools connected (`doc
 1. Parent label appears on child rows only, with the parent's display name; renaming the parent updates it.
 2. A removed parent shows as removed. The parent filter narrows to one parent and composes with the issue filter.
 
+Visual pass recorded 2026-11-15 (Xvfb + lavapipe, 1280 px wide, debug build of this branch, fixture repo with parents `feat-1900_alpha-parent` and `feat-1902_beta-parent`, a `default` child, an orphan child of a removed parent, and a hand-made worktree). B1 PASS: only child rows carry a parent chip and parent rows have none (`b1-parent-label-light.png`); after giving the parent the display name "Alpha Renamed" both children show it (`b1-renamed-parent-light.png`, `b1-renamed-parent-dark.png`). B2 PASS: the orphan shows `chore-gone-parent (removed)` and its own filter chip lists only it (`b2-filter-popover-dark.png`, `b2-removed-parent-filter-dark.png`); `parent:Alpha Renamed` narrows to its two direct children (`b2-parent-filter-light.png`) and adding `issue` leaves only the issue child (`b2-parent-and-issue-filter-light.png`). Screenshots are in `/mnt/project-files/issue-1859/`. Not covered: transitions. The rename was applied through the state file and a restart, not the rename dialog.
+
 **Part C: supervisor** (M3; fixture shell tests)
 1. A fixture list with runs of two parents: the supervisor rule selects only its own and refuses actions on the other.

@@ -11,6 +11,31 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 **Documentation**: each user-facing story carries its user-guide task (Constitution VII).
 **Milestones** (one GitHub issue each): **M1** MCP and persistence (Phases 1-4, 6; US1, US2, US3, US5), **M2** sidebar UI (Phase 5; US4; blocked by M1), **M3** supervisor integration (Phase 7; blocked by M1; consumed by #1813, #1814, #1816).
 
+## Milestones
+
+Each milestone merges to `main` on its own (speckit-autopilot). The ledger
+(`specs/1857-worktree-parent/autopilot.md`) records their PRs.
+
+### M1 — MCP and persistence (#1858)
+
+- **Tasks**: T001–T014, T020–T022
+- **Satisfies**: US1, US2, US3, US5
+
+### M1b — Visibility by parent (#1858)
+
+- **Tasks**: T030–T032
+- **Satisfies**: FR-015, FR-016, FR-017
+
+### M2 — Sidebar parent label and filter (#1859)
+
+- **Tasks**: T015–T019
+- **Satisfies**: US4
+
+### M3 — Supervisor integration
+
+- **Tasks**: T023–T026, T033
+- **Satisfies**: FR-013
+
 ## Format: `- [ ] [TaskID] [P?] [Story?] Description with file path`
 
 ## Phase 1: Setup (M1)
@@ -56,11 +81,11 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 
 **Independent test**: `quickstart.md` Part B.
 
-- [ ] T015 [P] [US4] Add failing client tests in `crates/micold-client/src/features/sidebar.rs` (test module): worktrees with a parent get a parent tag, unparented none; removed parent tag marked removed; `TagFilter::Parent` narrows to that parent's direct children and composes with `HasIssue`/`Type`; `available_tag_filters` lists only parents that have children; renaming the parent updates the label; state grouping and stable order unchanged (specs 1125, 1718)
-- [ ] T016 [US4] Surface `parent` and `parent_state` to the client snapshot through the existing worktree view model (`crates/micold-core/src/worktree.rs` `Worktree`, filled from the daemon catalog in `crates/micold-daemon/src/catalog.rs`)
-- [ ] T017 [US4] Add the parent tag in `worktree_tags` (`crates/micold-client/src/features/worktree.rs`) using the shared tag chip, `TagFilter::Parent` and its entry in `available_tag_filters` (`crates/micold-client/src/features/sidebar.rs`); T015 green; no feature-local widget (Constitution VIII)
-- [ ] T018 [US4] Run the `visual-pass` skill for `quickstart.md` Part B and record the result in `specs/1857-worktree-parent/quickstart.md`
-- [ ] T019 [US4] Document the label and filter in `docs/user-guide/worktrees-and-sessions.md`
+- [x] T015 [P] [US4] Add failing client tests in `crates/micold-client/src/features/sidebar.rs` (test module): worktrees with a parent get a parent tag, unparented none; removed parent tag marked removed; `TagFilter::Parent` narrows to that parent's direct children and composes with `HasIssue`/`Type`; `available_tag_filters` lists only parents that have children; renaming the parent updates the label; state grouping and stable order unchanged (specs 1125, 1718)
+- [x] T016 [US4] Surface `parent` and `parent_state` to the client snapshot through the existing worktree view model (`crates/micold-core/src/worktree.rs` `Worktree`, filled from the daemon catalog in `crates/micold-daemon/src/catalog.rs`)
+- [x] T017 [US4] Add the parent tag in `worktree_tags` (`crates/micold-client/src/features/worktree.rs`) using the shared tag chip, `TagFilter::Parent` and its entry in `available_tag_filters` (`crates/micold-client/src/features/sidebar.rs`); T015 green; no feature-local widget (Constitution VIII)
+- [x] T018 [US4] Run the `visual-pass` skill for `quickstart.md` Part B and record the result in `specs/1857-worktree-parent/quickstart.md`
+- [x] T019 [US4] Document the label and filter in `docs/user-guide/worktrees-and-sessions.md`
 
 ## Phase 6: User Story 5 - Sessions report the parent (Priority: P3) (M1)
 
