@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ns6vcg
 - **Started**: 2026-11-15
 - **Phase**: plan (written, awaiting review)
-- **Next step**: plan round-2 re-review (sonnet, fix diff since round-1 snapshot), then tasks unit
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | spec | d3937c8969e34c08a0ce2f78559cde430b5c65f9 | 09cb2cfc0a611043c58abc651afcc426257803e6:d65a0b90b4bab89ddf4da88fcd33c56490018866 | CHANGES: 5 MAJOR 3 MINOR, all fixed |
 | Spec | 2 | spec | 69983c1058338b7230c9e70066dc73eca578a606 | 1faf1b6e8adebd019dd1d2e6f8675ad1d5a15b12:d3937c8969e34c08a0ce2f78559cde430b5c65f9 | CLEAN (2 MINOR fixed, prose only) |
 | Plan | 1 | plan | (pending commit) | 039972fca59028890bb8b22565c8ee7ab6bca81a:b1cd1965e0f01444b33b7d262dbda5e068ff3b06 | CHANGES: 1 BLOCKER 1 MAJOR 3 MINOR, all fixed |
-| Plan | 2 | plan fix diff | (this commit) | 1c7862375e7765f0e55c0e9fc8331fd4e4c8c56b:8123b3e49d68aa61553fe7273ad201b44137eebf | pending (orchestrator dispatches sonnet re-review) |
+| Plan | 2 | plan fix diff | (this commit) | 1c7862375e7765f0e55c0e9fc8331fd4e4c8c56b:8123b3e49d68aa61553fe7273ad201b44137eebf | CLEAN (1 MINOR fixed, prose only) |
 
 ## Declined review findings
 

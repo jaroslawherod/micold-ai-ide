@@ -23,7 +23,7 @@ pub enum StoreError {
 ```rust
 pub trait RegistryStore: Send + Sync {
     fn load(&self) -> Result<Vec<DaemonRecord>, StoreError>;             // exists
-    fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError>;  // exists: replace the tenant's set, one transaction
+    fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError>;  // exists: replace the whole set (all tenants), one transaction
     fn upsert(&self, record: &DaemonRecord) -> Result<(), StoreError>;   // default: load, replace by id, save
     fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError>;     // default likewise; true when a row went
     fn reassign_unowned(&self, tenant: &TenantId, owner: &UserId) -> Result<u64, StoreError>; // default: load/save over `owner`; SQL: daemons, projects, sessions
