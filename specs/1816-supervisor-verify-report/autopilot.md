@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M3 | f605b7957964614c4420c157052e572f55317bc5 | 9c260155a70445ffa2edd421d0e8fa60cd6eb132:f605b7957964614c4420c157052e572f55317bc5 | CHANGES (F1 drift-M3.md, F2 cycle-log fixed) |
 | Review B | 2 | M3 | c2aee869706cbfe157fbe85e9b89632ed6745fd8 | 091dd5b5cc6ddbb2fe6ca0d006b9b30d5e6f3f40:c2aee869706cbfe157fbe85e9b89632ed6745fd8 | CLEAN (round-1 F1, F2 confirmed fixed) |
 | Review A | 1 | M4 | aac52c7b450ebfcb3748a4e58f582c12c1751532 | 559fd0a3127a26b6ca0823a77f31d87f49dcd14e:aac52c7b450ebfcb3748a4e58f582c12c1751532 | CLEAN (run by the unit itself, no Agent tool; no findings) |
+| Review B | 1 | M4 | fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | 0304b3be1b61d1a7d48bbe5f9bd29530158b477e:fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | CHANGES (F1 drift-M4 supervised.md row, fixed) |
+| Review B | 2 | M4 | 687cb19ef26a1bcc4426a45313c02f6d243dac46 | 31953c17169a2901ae3a57ebdcded71fcf78ca3d:687cb19ef26a1bcc4426a45313c02f6d243dac46 | CLEAN (round-1 F1 confirmed fixed) |
 
 ## Declined review findings
 
