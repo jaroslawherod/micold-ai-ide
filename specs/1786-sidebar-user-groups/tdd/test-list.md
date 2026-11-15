@@ -25,24 +25,24 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | A7 | Move to group Ungrouped moves the row to the ungrouped list | US2-2, FR-010 | example | DONE | tests/sidebar_group_actions.rs::moving_to_ungrouped_takes_the_row_out_of_its_group |
 | A8 | With no group, the menu offers only New group… which creates and moves | US2-3, FR-010 | example | DONE | tests/sidebar_group_actions.rs::new_group_from_the_move_menu_creates_the_group_and_moves_the_row_into_it, with_no_group_the_move_menu_offers_only_new_group |
 | A9 | The whole move is possible with keyboard only | US2-4, SC-006 | example | DONE | tests/sidebar_group_actions.rs::a_keyboard_user_moves_a_row_through_the_card_menu_with_no_pointer |
-| A10 | Drop of a row on a group assigns it at the marked position | US3-1, FR-006 | example | PENDING | tasks T029, T030 |
-| A11 | Drop on another group moves it out of the first | US3-2, FR-006 | example | PENDING | tasks T029, T030 |
-| A12 | Drop on the ungrouped list removes it from its group | US3-3, FR-006 | example | PENDING | tasks T029, T030 |
-| A13 | Over a valid target highlight and marker are drawn, over an invalid place neither | US3-4, FR-008 | example | PENDING | tasks T029, T030, T033 |
-| A14 | A dropped worktree keeps its sessions listed with it | US3-5, FR-007 | example | PENDING | tasks T029, T030 |
-| A15 | Drop on a collapsed group assigns the row and expands the group | US3-6, FR-018 | example | PENDING | tasks T029, T030 |
+| A10 | Drop of a row on a group assigns it at the marked position | US3-1, FR-006 | example | DONE | tests/sidebar_drag.rs::dropping_an_ungrouped_row_on_a_group_assigns_it_at_the_marked_place_and_saves, dropping_on_a_header_puts_the_row_first_in_its_group |
+| A11 | Drop on another group moves it out of the first | US3-2, FR-006 | example | DONE | tests/sidebar_drag.rs::dropping_on_another_group_moves_the_row_out_of_the_first |
+| A12 | Drop on the ungrouped list removes it from its group | US3-3, FR-006 | example | DONE | tests/sidebar_drag.rs::dropping_on_the_ungrouped_rows_removes_the_row_from_its_group |
+| A13 | Over a valid target highlight and marker are drawn, over an invalid place neither | US3-4, FR-008 | example | DONE | tests/sidebar_drag.rs::over_a_target_the_spot_carries_the_marker_and_over_none_nothing_is_drawn; ui::sidebar::tests::rows_and_headers_arm_a_drag_default_does_not_and_the_target_list_is_highlighted |
+| A14 | A dropped worktree keeps its sessions listed with it | US3-5, FR-007 | example | DONE | tests/sidebar_drag.rs::a_dropped_worktree_keeps_its_sessions_listed_with_it |
+| A15 | Drop on a collapsed group assigns the row and expands the group | US3-6, FR-018 | example | DONE | tests/sidebar_drag.rs::a_drop_on_a_collapsed_group_assigns_the_row_and_expands_the_group |
 | A16 | Reordering within a list gives the dropped position, others keep relative order | US4-1, FR-006 | example | PENDING | tasks T035, T036, T037, T038 |
 | A17 | Group header drop among groups reorders groups with their rows | US4-2, FR-019 | example | PENDING | tasks T035, T036, T037, T038 |
 | A18 | Move up/Move down moves a row or group one place | US4-3, FR-010 | example | PENDING | tasks T035, T036, T037, T038 |
 | A19 | A card state change moves no row | US4-4, US7-1, FR-013, SC-005 | example | PENDING | tasks T041 |
-| A20 | Escape during drag ends it with no change | US5-1, FR-009 | example | PENDING | tasks T031, T032 |
-| A21 | Drop outside a valid target changes nothing | US5-2, FR-009 | example | PENDING | tasks T031, T032 |
-| A22 | Removal of the dragged worktree before the drop ends the drag with no change | US5-3, FR-018 | example | PENDING | tasks T031, T032 |
+| A20 | Escape during drag ends it with no change | US5-1, FR-009 | example | DONE | tests/sidebar_drag.rs::escape_ends_the_drag_with_no_change, losing_the_window_focus_cancels_the_drag |
+| A21 | Drop outside a valid target changes nothing | US5-2, FR-009 | example | DONE | tests/sidebar_drag.rs::a_release_outside_every_target_changes_nothing |
+| A22 | Removal of the dragged worktree before the drop ends the drag with no change | US5-3, FR-018 | example | DONE | tests/sidebar_drag.rs::the_dragged_worktree_vanishing_ends_the_drag_with_no_change_and_no_error, a_release_after_the_dragged_worktree_vanished_changes_nothing |
 | A23 | Collapse hides rows and keeps the header; expand shows them | US6-1, FR-011 | example | PENDING | tasks T039, T040 |
 | A24 | Layout, order and collapsed state survive a restart | US6-2, FR-012, SC-003 | example | PENDING | tasks T002, T003, T004, T005, T039 |
 | A25 | A stale assignment is ignored on load | US6-3, FR-018 | example | PENDING | tasks T002, T003, T039 |
 | A26 | No header names a state | US7-2, FR-013 | example | PENDING | tasks T041 |
-| A27 | A run group row is dragged and dropped as one unit; a group header arms for group drag | FR-016, FR-019 | example | PENDING | tasks T029, T037 |
+| A27 | A run group row is dragged and dropped as one unit; a group header arms for group drag | FR-016, FR-019 | example | PARTIAL | tests/sidebar_drag.rs::a_run_group_row_is_dragged_and_dropped_as_one_unit, a_group_header_arms_a_group_drag_that_drops_nowhere_yet; the drop between headers is T037 (M5) |
 | A28 | A worktree added or removed while running appears in ungrouped or leaves its group | FR-005, FR-018 | example | DONE | tests/sidebar_tree.rs::user_groups::a_worktree_added_while_running_is_ungrouped_and_a_removed_one_leaves_its_group |
 
 ## Inner loop: unit behaviors
@@ -68,10 +68,10 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | DONE | micold-core sidebar_layout::tests::move_item_into_a_group_removes_it_from_where_it_was, move_item_clamps_an_index_past_the_end, move_item_within_its_list_counts_the_index_before_the_removal |
 | U18 | move_item UnknownItem and IsDefault errors; run group moves as one | FR-015, FR-016 | example | DONE | micold-core sidebar_layout::tests::move_item_refuses_what_it_cannot_place_and_changes_nothing, a_run_group_moves_as_one_item |
 | U19 | all outcomes keep each item in exactly one list | SC-002 | example | DONE | micold-core sidebar_layout::tests::every_outcome_keeps_each_item_in_exactly_one_list |
-| U20 | press arms, movement under 4 px is a click, at 4 px activates (both sides) | C3 | example | PENDING | tasks T029, T030 |
-| U21 | hit_test returns Some only over valid places, otherwise None; hidden rows not targets | C3 | example | PENDING | tasks T029, T030 |
-| U22 | Default, chip bar, Overview never arm | C3, FR-015 | example | PENDING | tasks T029, T030 |
-| U23 | drop on own position changes nothing | C4 | example | PENDING | tasks T029, T030 |
+| U20 | press arms, movement under 4 px is a click, at 4 px activates (both sides) | C3 | example | DONE | tests/sidebar_drag.rs::a_press_arms_and_a_move_under_four_pixels_stays_a_click, a_move_of_four_pixels_activates_the_drag |
+| U21 | hit_test returns Some only over valid places, otherwise None; hidden rows not targets | C3 | example | DONE | tests/sidebar_drag.rs::the_hit_test_finds_only_group_headers_group_rows_and_ungrouped_rows, rows_a_tag_filter_hides_are_no_targets_and_keep_their_stored_place |
+| U22 | Default, chip bar, Overview never arm | C3, FR-015 | example | DONE | tests/sidebar_drag.rs::default_never_arms; ui::sidebar::tests::rows_and_headers_arm_a_drag_default_does_not_and_the_target_list_is_highlighted (the chip bar and the Overview row are no TreeView rows and carry no press) |
+| U23 | drop on own position changes nothing | C4 | example | DONE | tests/sidebar_drag.rs::a_drop_on_the_rows_own_place_changes_nothing, a_drop_below_the_rows_own_place_in_its_list_lands_after_the_row_it_was_dropped_under |
 | U24 | step_item/step_group move one place and refuse at the ends | FR-010 | example | PENDING | tasks T035, T036 |
 | U25 | move_group reorders groups; hit_test GroupSlot only for a dragged group | FR-019 | example | PENDING | tasks T035, T036, T037, T038 |
 | U26 | Move up/down menu items disabled at the ends | C6 | example | PENDING | tasks T037, T038 |

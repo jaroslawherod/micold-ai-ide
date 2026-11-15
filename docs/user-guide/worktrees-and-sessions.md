@@ -429,6 +429,28 @@ stays open and nothing moves.
 You do not need the pointer: open the Overview, move to the worktree's card, press the Menu key (or
 Shift+F10), use the Up and Down arrows to the entry, and press Enter.
 
+#### Drag a row between lists
+
+You can also drag a worktree or a run group's row with the pointer. Press it and move a few pixels;
+a plain click still selects the row as before. While you drag, the list the row would land in is
+filled with a highlight, and a line marks the place:
+
+- Over a group's header, an empty group's included, the row would land first in that group.
+- Over a row, it would land just above that row when you are over its upper half and just below it
+  over its lower half: in that row's group, or among the ungrouped rows.
+
+Release to drop it there. It leaves the group it was in, and its sessions stay with it and keep
+running. A drop on a collapsed group opens the group, so you see the row that landed. Dropping a row
+on its own place changes nothing.
+
+Rows a tag filter hides are not places to drop on; they keep their place in their group. The
+**Default** row cannot be dragged, and over it nothing is highlighted.
+
+To cancel a drag, press Escape, or release where nothing is highlighted, such as Default, the space
+below the last row or anywhere outside the sidebar. If the worktree you are dragging is removed
+meanwhile, from another window for example, the drag ends quietly. In each case every row stays
+where it was.
+
 ### Agent worktrees
 
 AI coding assistants create worktrees of their own inside your project, in the same

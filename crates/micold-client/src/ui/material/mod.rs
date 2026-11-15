@@ -167,7 +167,7 @@ pub use terminal_pane::target_offset_delta;
 pub use terminal_pane::GridSizeReporter;
 pub use terminal_pane::TerminalPane;
 pub use toleration_list::TolerationList;
-pub use tree_view::{Selection, TreeItem, TreeView};
+pub use tree_view::{MarkerEdge, Selection, TreeItem, TreeView};
 pub use typeahead::Typeahead;
 pub use usage_indicator::UsageIndicator;
 

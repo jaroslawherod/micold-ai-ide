@@ -51,6 +51,9 @@ type OnPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 /// bottom-left corner, in window pixels.
 type OnBounds<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 
+/// What a release is turned into.
+type OnRelease<'a, M> = Box<dyn Fn() -> M + 'a>;
+
 /// Wraps `content` and reports a secondary click on it.
 ///
 /// Builder form (Principle VIII): `ContextArea::new(content).on_secondary_press(|(x, y)| msg)`.
@@ -59,6 +62,8 @@ pub struct ContextArea<'a, M> {
     on_secondary_press: Option<OnPress<'a, M>>,
     on_primary_press: Option<OnPress<'a, M>>,
     on_primary_bounds: Option<OnBounds<'a, M>>,
+    on_primary_release: Option<OnRelease<'a, M>>,
+    hold_release: bool,
 }
 
 impl<'a, M: 'a> ContextArea<'a, M> {
@@ -69,6 +74,8 @@ impl<'a, M: 'a> ContextArea<'a, M> {
             on_secondary_press: None,
             on_primary_press: None,
             on_primary_bounds: None,
+            on_primary_release: None,
+            hold_release: false,
         }
     }
 
@@ -110,6 +117,24 @@ impl<'a, M: 'a> ContextArea<'a, M> {
         self.on_primary_press = Some(Box::new(f));
         self
     }
+
+    /// Publish `f()` when the primary (left) button is released over the content, captured by the
+    /// child or not. The release half of [`Self::on_primary_press`], for a press that arms a drag:
+    /// a release arriving in the press's own event batch is heard here even before a window
+    /// listener for it exists (feature 1786, contract C3).
+    pub fn on_primary_release(mut self, f: impl Fn() -> M + 'a) -> Self {
+        self.on_primary_release = Some(Box::new(f));
+        self
+    }
+
+    /// While `hold`, the content sees a primary release with no cursor: a button inside that was
+    /// pressed lets go of its press without pressing (feature 1786: releasing a drag over the row
+    /// it carries is not also a click). The button keeps its `on_press`, so it neither changes
+    /// look nor keeps a stale pressed state.
+    pub fn hold_release(mut self, hold: bool) -> Self {
+        self.hold_release = hold;
+        self
+    }
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
@@ -145,7 +170,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
             &mut tree.children[0],
             event,
             layout,
-            cursor,
+            child_cursor(event, self.hold_release, cursor),
             renderer,
             clipboard,
             shell,
@@ -164,6 +189,11 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
                 // Not captured: the child's own `on_press` is what this press is for, and it has
                 // already run. This only says where it landed.
                 shell.publish(build(point));
+            }
+        }
+        if let Some(build) = &self.on_primary_release {
+            if reported_release(event, over.is_some()) {
+                shell.publish(build());
             }
         }
         if let Some(build) = &self.on_primary_bounds {
@@ -218,6 +248,28 @@ fn reported_press(
         return None;
     }
     over.map(|p| (p.x as u16, p.y as u16))
+}
+
+/// The cursor the content sees: none for a primary release while `hold`, else `cursor`.
+fn child_cursor(event: &Event, hold: bool, cursor: mouse::Cursor) -> mouse::Cursor {
+    if hold
+        && matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+        )
+    {
+        mouse::Cursor::Unavailable
+    } else {
+        cursor
+    }
+}
+
+/// Whether `event` is a primary release over the area.
+fn reported_release(event: &Event, over: bool) -> bool {
+    over && matches!(
+        event,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+    )
 }
 
 /// The bottom-left corner of `bounds` when `event` is a primary press and `over` is true.
@@ -350,5 +402,26 @@ mod tests {
             ),
             None
         );
+    }
+
+    /// A held release reaches the content with no cursor, so a pressed button lets go without
+    /// pressing; anything else, or an unheld release, keeps the cursor.
+    #[test]
+    fn a_held_release_reaches_the_content_with_no_cursor() {
+        let at = mouse::Cursor::Available(Point::new(3.0, 4.0));
+        let release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+        assert_eq!(child_cursor(&release, true, at), mouse::Cursor::Unavailable);
+        assert_eq!(child_cursor(&release, false, at), at);
+        assert_eq!(child_cursor(&left_press(), true, at), at);
+    }
+
+    /// The release half: only the primary button's release, and only over the area.
+    #[test]
+    fn a_primary_release_over_the_area_reports() {
+        let release = |button| Event::Mouse(mouse::Event::ButtonReleased(button));
+        assert!(reported_release(&release(mouse::Button::Left), true));
+        assert!(!reported_release(&release(mouse::Button::Left), false));
+        assert!(!reported_release(&release(mouse::Button::Right), true));
+        assert!(!reported_release(&left_press(), true));
     }
 }

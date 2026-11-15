@@ -7,6 +7,7 @@ use crate::features::session::{PressTarget, StartIntent};
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
 use crate::features::sidebar::{hover_holds, row_selected, RowRef, RowSelection, SelectableRow};
+use crate::features::sidebar_drag::{Dragged, Msg as DragMsg};
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
@@ -97,29 +98,33 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         None
     };
 
-    let tree: Element<'_, Message> = TreeView::new(build_items(state, entries, 0, None, 0, r), r)
-        // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
-        // the worktree count visible without scrolling does not drop. A named step on the shared
-        // density scale, not a bespoke shrink (FR-026c).
-        //
-        // Read from `features::sidebar` rather than named here, because the row metrics that decide
-        // where to scroll are computed from the same constant (feature 024). Two copies of it would
-        // agree until one of them changed, and the disagreement would be a scroll landing slightly
-        // off — with nothing on screen to say why.
-        .density(crate::features::sidebar::SIDEBAR_DENSITY)
-        .label_role(TypeRole::SidebarName)
-        // The current session's row is marked by the selected fill *and* by a heavier name
-        // (feature 024, FR-003a). Two channels rather than one, because the fill is a colour and
-        // the row beside it can be hovered — a state layer is also a fill change, and the two must
-        // stay tellable apart without relying on hue.
-        .selected_label_role(TypeRole::SidebarSessionCurrent)
-        // The row the user is on is filled with the primary container (feature 1125, FR-010).
-        .selection(material::Selection::Primary)
-        .into();
+    let tree: Element<'_, Message> = TreeView::new(
+        with_drop_marker(state, build_items(state, entries, 0, None, 0, r)),
+        r,
+    )
+    // The sidebar is the one list at `dense` (§7.2, FR-026a): 36dp rows rather than 48dp, so
+    // the worktree count visible without scrolling does not drop. A named step on the shared
+    // density scale, not a bespoke shrink (FR-026c).
+    //
+    // Read from `features::sidebar` rather than named here, because the row metrics that decide
+    // where to scroll are computed from the same constant (feature 024). Two copies of it would
+    // agree until one of them changed, and the disagreement would be a scroll landing slightly
+    // off — with nothing on screen to say why.
+    .density(crate::features::sidebar::SIDEBAR_DENSITY)
+    .label_role(TypeRole::SidebarName)
+    // The current session's row is marked by the selected fill *and* by a heavier name
+    // (feature 024, FR-003a). Two channels rather than one, because the fill is a colour and
+    // the row beside it can be hovered — a state layer is also a fill change, and the two must
+    // stay tellable apart without relying on hue.
+    .selected_label_role(TypeRole::SidebarSessionCurrent)
+    // The row the user is on is filled with the primary container (feature 1125, FR-010).
+    .selection(material::Selection::Primary)
+    .into();
     let list: Element<'_, Message> = match hint {
         Some(hint) => column![tree, hint].spacing(spacing::SM).into(),
         None => tree,
     };
+    let list = drag_layer(state, list);
     // Scroll the list when it exceeds the sidebar height, with a thin themed scrollbar.
     // The list gets a little right padding so rows never sit under the scrollbar.
     let body: Element<'_, Message> = Scrollable::new(
@@ -201,6 +206,45 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         .width(Length::Fixed(width))
         .height(Length::Fill)
         .into()
+}
+
+/// The drag's insertion marker on the edge of the drawn row `sidebar_drag.over` names (feature
+/// 1786, US3-4): the top of the row the dragged row would land before, the bottom of a header or of
+/// the row it would land after. Each item is one drawn row, as `row_heights` counts them.
+fn with_drop_marker(
+    state: &State,
+    mut items: Vec<TreeItem<'static, Message>>,
+) -> Vec<TreeItem<'static, Message>> {
+    let Some(spot) = state.sidebar_drag.over.as_ref() else {
+        return items;
+    };
+    if let Some(item) = items.get_mut(spot.marker) {
+        item.drop_marker = Some(if spot.below {
+            crate::ui::material::MarkerEdge::Bottom
+        } else {
+            crate::ui::material::MarkerEdge::Top
+        });
+    }
+    items
+}
+
+/// The list reporting, while a press is armed, the pointer in its content to the drag (feature
+/// 1786, contract C3): it activates the drag and feeds the hit test. Only while armed, so the idle
+/// window still hears no pointer. The area is always there and adds no layout node, so a drag
+/// starting or ending keeps the rows' widget state, the pressed row's included.
+fn drag_layer<'a>(state: &State, list: Element<'a, Message>) -> Element<'a, Message> {
+    let mut area = iced::widget::mouse_area(list);
+    if state.sidebar_drag.armed.is_some() {
+        area = area
+            .on_move(|point| {
+                Message::SidebarDrag(DragMsg::Moved(Some((
+                    point.x.max(0.0) as u32,
+                    point.y.max(0.0) as u32,
+                ))))
+            })
+            .on_exit(Message::SidebarDrag(DragMsg::Moved(None)));
+    }
+    area.into()
 }
 
 /// What the rows' selected look is read from (feature 1125, FR-009).
@@ -922,8 +966,18 @@ fn build_items(
     let in_view = crate::features::attention::in_view(&state.attention);
     let project_root = state.workspace.active.as_deref();
     let now = unix_now();
+    // Feature 1786 (C3): the top-level rows are what a drag carries and where it lands; the list
+    // each is in decides whether it wears the drop highlight.
+    let top_level = depth == 0 && run.is_none();
+    let lists = crate::features::sidebar_drag::entry_lists(&entries);
+    let target = state.sidebar_drag.over.as_ref().map(|spot| spot.list);
+    // Where each entry's rows start in `items`, and whether they wear the drop highlight.
+    let mut spans: Vec<(usize, bool)> = Vec::new();
 
-    for entry in entries {
+    for (index_in_list, entry) in entries.into_iter().enumerate() {
+        let highlighted =
+            top_level && target.is_some() && lists.get(index_in_list).copied().flatten() == target;
+        spans.push((items.len(), highlighted));
         // Feature 040 (FR-001): the pull request of this row's branch, as the marks the shared
         // indicator draws. `None` for every row when nothing is held, and the row is then built
         // exactly as it was.
@@ -950,13 +1004,21 @@ fn build_items(
             }
             crate::features::sidebar::SidebarEntry::UserGroup(header) => {
                 // Feature 1786 (C5): the header at the one-line row height `row_heights` gives it.
+                // A press arms a group drag (FR-019).
+                let id = header.id;
                 items.push(
                     crate::ui::material::GroupHeader::new(header.name)
+                        .on_primary_press(
+                            move |_| Message::SidebarDrag(DragMsg::Pressed(Dragged::Group(id))),
+                            Message::SidebarDrag(DragMsg::Released),
+                        )
                         .collapsed(header.collapsed)
                         .count(header.count)
                         .hidden(header.hidden)
                         .roles(r)
                         .key(row_key(RowKey::UserGroup(header.id)))
+                        // The header a drag carries holds its release back (C3, US5-1).
+                        .inert(state.sidebar_drag.holds(&Dragged::Group(id)))
                         .on_right_press({
                             let id = header.id;
                             move |point| {
@@ -1042,8 +1104,16 @@ fn build_items(
                 Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
         }
+        // Feature 1786 (C3, US5-1): the row being dragged holds its press back while the drag is
+        // active, and after a cancel until the button is up, so releasing over it is not also a
+        // click; it keeps its button, so it does not move.
+        let dragging = state.sidebar_drag.holds(&Dragged::Item(
+            micold_core::sidebar_layout::LayoutItem::Worktree(dir.clone()),
+        ));
         if let Some(main) = node.main_session() {
-            item = item.on_press(Message::Session(SessionMsg::Selected(main)));
+            item = item
+                .on_press(Message::Session(SessionMsg::Selected(main)))
+                .inert(dragging);
         }
         // The row holding the viewed session when it draws no sub-row for it, or the row the
         // Overview sent the user to; none while the Overview is open (feature 1125, FR-009).
@@ -1097,6 +1167,14 @@ fn build_items(
                 ),
                 unread,
             ));
+        // Feature 1786 (C3): a top-level worktree row arms a drag; a run's row moves with its
+        // group's, so it does not.
+        if top_level {
+            item = drag_source(
+                item,
+                micold_core::sidebar_layout::LayoutItem::Worktree(dir.clone()),
+            );
+        }
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The
@@ -1188,6 +1266,7 @@ fn build_items(
         }
     }
 
+    drop_highlight(&mut items, &spans, r);
     items
 }
 
@@ -1225,6 +1304,37 @@ fn with_keyboard_focus(
             Message::Sidebar(SidebarMsg::KeyboardRowLeft)
         }
     })
+}
+
+/// A row a press arms a drag of `item` from (feature 1786, contract C3). The release is published
+/// by the row too, for one that arrives in the press's own event batch.
+fn drag_source(
+    item: TreeItem<'static, Message>,
+    dragged: micold_core::sidebar_layout::LayoutItem,
+) -> TreeItem<'static, Message> {
+    item.on_primary_press(
+        move |_| Message::SidebarDrag(DragMsg::Pressed(Dragged::Item(dragged.clone()))),
+        Message::SidebarDrag(DragMsg::Released),
+    )
+}
+
+/// Fill every row of the entries `spans` marks (each entry's first row in `items`, and whether it
+/// is in the list a drag would drop into) with the secondary container: the drop highlight
+/// (feature 1786, US3-4), the whole list at once, its session and run rows included.
+fn drop_highlight<M>(items: &mut [TreeItem<'static, M>], spans: &[(usize, bool)], r: Roles) {
+    let ends = spans
+        .iter()
+        .skip(1)
+        .map(|(start, _)| *start)
+        .chain([items.len()]);
+    for (&(start, highlighted), end) in spans.iter().zip(ends) {
+        if !highlighted {
+            continue;
+        }
+        for item in &mut items[start..end] {
+            item.row_tint = Some((r.secondary_container, r.on_secondary_container));
+        }
+    }
 }
 
 /// `item` with the row tint of `state` (feature 1718, FR-010 to FR-012): none for Working and Idle.
@@ -1272,26 +1382,35 @@ fn group_items(
             },
         }
     }));
-    let mut items = vec![with_keyboard_focus(
+    // Feature 1786 (FR-016): the group's row is dragged as one unit with its runs; while it is,
+    // its release is held back, so letting go over it does not toggle it (C3, US5-1).
+    let dragged = micold_core::sidebar_layout::LayoutItem::Run(group.id);
+    let held = state.sidebar_drag.holds(&Dragged::Item(dragged.clone()));
+    let group_row = drag_source(
         tinted(
             TreeItem::new(0, group.name.clone(), r.on_surface),
             group_state,
             r,
         )
-        .state_icon(StateIcon::new(group_state, r))
-        .tags(tags)
-        .row_tooltip(crate::features::sidebar::with_state_line(
-            group.name.clone(),
-            group_state,
-        ))
-        .on_right_press({
-            let id = group.id;
-            move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
-        })
-        .expandable(
-            group.expanded,
-            Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
-        ),
+        .inert(held),
+        dragged,
+    );
+    let mut items = vec![with_keyboard_focus(
+        group_row
+            .state_icon(StateIcon::new(group_state, r))
+            .tags(tags)
+            .row_tooltip(crate::features::sidebar::with_state_line(
+                group.name.clone(),
+                group_state,
+            ))
+            .on_right_press({
+                let id = group.id;
+                move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
+            })
+            .expandable(
+                group.expanded,
+                Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
+            ),
         false,
         RowKey::RunGroup(group.id),
     )];
@@ -2099,13 +2218,9 @@ mod tests {
         assert_eq!(tooltip.lines().last(), Some("Working"), "{tooltip:?}");
     }
 
-    /// Feature 1718 (FR-004, G6): a run group's row shows the worst state over its runs, as icon,
-    /// tint and the last line of its tooltip.
-    #[test]
-    fn a_run_group_row_wears_the_worst_state_of_its_runs() {
+    /// A run group `grp` whose runs are the worktrees `dirs`, numbered from 1.
+    fn with_run_group(state: &mut State, dirs: &[&str]) {
         use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
-        let r = tokens::roles(ColorScheme::Dark);
-        let mut state = five_state_project();
         let run = |number: u8, dir: &str| Run {
             number,
             provider: AiCli::ClaudeCode,
@@ -2128,9 +2243,22 @@ mod tests {
             base_branch: "main".into(),
             base_commit: "abc".into(),
             created: std::time::SystemTime::UNIX_EPOCH,
-            runs: vec![run(1, "work"), run(2, "act")],
+            runs: dirs
+                .iter()
+                .zip(1..)
+                .map(|(dir, number)| run(number, dir))
+                .collect(),
         })
         .expect("valid group")];
+    }
+
+    /// Feature 1718 (FR-004, G6): a run group's row shows the worst state over its runs, as icon,
+    /// tint and the last line of its tooltip.
+    #[test]
+    fn a_run_group_row_wears_the_worst_state_of_its_runs() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        with_run_group(&mut state, &["work", "act"]);
         let items = rows(&state, r);
         let group = row_labelled(&items, "grp");
         assert_eq!(
@@ -2142,5 +2270,152 @@ mod tests {
             Some((r.error_container, r.on_error_container))
         );
         assert_eq!(group.row_tooltip.as_deref(), Some("grp\nNeeds action"));
+    }
+
+    /// Feature 1786 (C3, U22, US3-4): a worktree row and a group header arm a drag and Default
+    /// never does; while a drag is over a group, its header and rows wear the drop highlight and
+    /// no other row does.
+    #[test]
+    fn rows_and_headers_arm_a_drag_default_does_not_and_the_target_list_is_highlighted() {
+        use crate::features::sidebar_drag::{DropSpot, State as Drag};
+        use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroupId};
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        let mut layout = SidebarLayout::default();
+        layout.create("Work").unwrap();
+        layout.groups[0].items = vec![LayoutItem::Worktree("done".into())];
+        state.sidebar_layout_loaded(std::path::PathBuf::from("/repo"), layout);
+        let items = rows(&state, r);
+        assert!(items[0].on_primary_press.is_none(), "Default never arms");
+        assert!(row_labelled(&items, "Work").on_primary_press.is_some());
+        let arming = items
+            .iter()
+            .filter(|i| i.on_primary_press.is_some())
+            .count();
+        assert_eq!(arming, 6, "the header and the five worktree rows");
+
+        state.sidebar_drag = Drag {
+            armed: Some(Dragged::Item(LayoutItem::Worktree("idle".into()))),
+            from: None,
+            active: true,
+            over: Some(DropSpot {
+                list: Some(UserGroupId(0)),
+                before: None,
+                after: None,
+                marker: 2,
+                below: false,
+            }),
+            held: None,
+        };
+        let highlight = Some((r.secondary_container, r.on_secondary_container));
+        let items = rows(&state, r);
+        assert_eq!(row_labelled(&items, "Work").row_tint, highlight);
+        let lit = items.iter().filter(|i| i.row_tint == highlight).count();
+        assert_eq!(lit, 2, "the header and its one row");
+
+        use crate::ui::material::MarkerEdge;
+        let marked = with_drop_marker(&state, rows(&state, r));
+        let edges: Vec<_> = marked.iter().map(|i| i.drop_marker).collect();
+        assert_eq!(
+            edges[2],
+            Some(MarkerEdge::Top),
+            "on the top of the row it lands before"
+        );
+        assert_eq!(edges.iter().flatten().count(), 1, "one marker");
+        if let Some(spot) = &mut state.sidebar_drag.over {
+            spot.below = true;
+        }
+        let marked = with_drop_marker(&state, rows(&state, r));
+        assert_eq!(
+            marked[2].drop_marker,
+            Some(MarkerEdge::Bottom),
+            "below: its bottom edge"
+        );
+
+        // The dragged row holds its press back while the drag is active (no click on release).
+        let inert = |items: &[TreeItem<'static, Message>]| {
+            items
+                .iter()
+                .filter(|i| i.on_press.is_some() && i.inert)
+                .count()
+        };
+        assert_eq!(
+            inert(&rows(&state, r)),
+            0,
+            "`idle` is dragged, and has no press"
+        );
+        state.sidebar_drag.armed = Some(Dragged::Item(LayoutItem::Worktree("work".into())));
+        assert_eq!(
+            inert(&rows(&state, r)),
+            1,
+            "the dragged row presses nothing"
+        );
+        state.sidebar_drag.active = false;
+        assert_eq!(
+            inert(&rows(&state, r)),
+            0,
+            "a press not yet a drag keeps it"
+        );
+    }
+
+    /// Feature 1786 (C3, US5-1, FR-009; review B r1 F1, F2): the row a drag carries, of every
+    /// kind (a worktree row, a run group's row, a group header), holds its release back while the
+    /// drag is active and still after Escape or a focus loss ends it, until the button is up, so
+    /// the release over it is neither a click nor a toggle.
+    #[test]
+    fn the_dragged_row_of_every_kind_holds_its_release_until_the_button_is_up() {
+        use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroupId};
+        let r = tokens::roles(ColorScheme::Dark);
+        let mut state = five_state_project();
+        with_run_group(&mut state, &["done", "attn"]);
+        let mut layout = SidebarLayout::default();
+        layout.create("Work").unwrap();
+        state.sidebar_layout_loaded(std::path::PathBuf::from("/repo"), layout);
+        let run = LayoutItem::Run(state.runs.groups[0].id);
+        let send = |state: &mut State, msg: DragMsg| {
+            state.update(Message::SidebarDrag(msg));
+        };
+        let held = |state: &State| -> Vec<(String, bool)> {
+            rows(state, r)
+                .iter()
+                .filter(|i| i.inert)
+                .map(|i| (i.label.clone(), i.on_press.is_some()))
+                .collect()
+        };
+        let worktree = Dragged::Item(LayoutItem::Worktree("work".into()));
+        for (dragged, label, escape) in [
+            (worktree, None, true),
+            (Dragged::Item(run), Some("grp"), false),
+            (Dragged::Group(UserGroupId(0)), Some("Work"), false),
+        ] {
+            assert!(held(&state).is_empty(), "nothing is held before the press");
+            send(&mut state, DragMsg::Pressed(dragged.clone()));
+            send(&mut state, DragMsg::Moved(Some((20, 100))));
+            send(&mut state, DragMsg::Moved(Some((20, 110))));
+            assert!(state.sidebar_drag.active, "{dragged:?} is dragged");
+            let during = held(&state);
+            assert_eq!(during.len(), 1, "{dragged:?}: {during:?}");
+            if let Some(label) = label {
+                assert_eq!(during[0].0, label);
+            } else {
+                assert!(during[0].1, "the worktree row has a press to hold back");
+            }
+            if escape {
+                state.update(Message::EscapePressed);
+            } else {
+                send(&mut state, DragMsg::Cancelled);
+            }
+            assert!(!state.sidebar_drag.active, "the drag ended");
+            assert_eq!(
+                held(&state),
+                during,
+                "{dragged:?}: held until the button is up"
+            );
+            send(&mut state, DragMsg::Released);
+            assert!(
+                held(&state).is_empty(),
+                "{dragged:?}: the release let it go"
+            );
+        }
     }
 }
