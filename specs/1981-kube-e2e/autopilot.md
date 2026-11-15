@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1981
 - **Worktree branch**: claude/project-thread-pcdbm7
 - **Started**: 2026-11-15
-- **Phase**: clarify
-- **Next step**: Run the clarify unit on Q1 and Q2 in spec.md. Spec review (rubrics/spec.md, opus, round 1) NOT yet run: the spec unit had no Agent tool.
+- **Phase**: plan
+- **Next step**: Plan unit. Q1/Q2 settled (D1, D2). Spec round-1 fixes need a sonnet re-review of the fix diff.
 
 ## Pull requests
 
@@ -29,13 +29,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D1 | clarify | … | … | agent-resolved / user | <path#section, or "AskUserQuestion YYYY-MM-DD"> |
+| D1 | clarify | How does the test daemon reach the orchestrator? | Test-only daemon container sharing the emptyDir socket | agent-resolved (orchestrator; jaro can overturn) | spec.md FR-011 |
+| D2 | clarify | Default chart state mode? | `file` on a PVC; sqlite/postgres fail rendering until #1948/#1740 | agent-resolved (orchestrator; jaro can overturn) | spec.md FR-017 |
 
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
-| Review B M1 | 1 | M1 | <git rev-parse HEAD, 40 hex> | <review-snapshot.sh tree:head> | CHANGES: 2 MAJOR |
+| Spec | 1 | spec | n/a | 3d44f8b336c799ba30e46d236c626356b3939dc1:a089ee32c8f892cce0e56df14602c477047c6834 | CHANGES: 3 MAJOR (F1 F2 F3), 3 MINOR; all fixed, not re-reviewed |
 
 ## Declined review findings
 
@@ -53,4 +54,4 @@ None.
 
 ## Follow-ups not done
 
-Spec review not run (no Agent tool in the spec unit); dispatch it before clarify.
+None.

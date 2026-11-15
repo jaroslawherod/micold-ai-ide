@@ -5,4 +5,4 @@
 - [x] Success criteria are measurable
 - [x] Edge cases cover empty/failure input, concurrency (two daemons), browser differences (ui suite)
 - [x] Out-of-scope items are listed; ownership split with #1740, #1742, #1732, #1954 is stated
-- [ ] Open clarifications: Q1 (FR-011 link transport for the first suite), Q2 (FR-017 default state mode). Two markers, resolved by the clarify unit
+- [x] No open clarifications: Q1 and Q2 settled as agent decisions D1 and D2 (ledger)

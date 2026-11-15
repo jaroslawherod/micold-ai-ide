@@ -41,9 +41,9 @@ A maintainer runs `helm install` of `deploy/helm/micold` into a cluster and gets
 
 **Acceptance Scenarios**:
 
-1. **Given** default values, **When** the chart is rendered, **Then** it yields a Deployment (`replicas: 1`, `strategy: Recreate`), a Service and a ConfigMap, with `runAsNonRoot`, UID 65532, read-only root FS, no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp, and an `emptyDir` at `/tmp`.
+1. **Given** default values, **When** the chart is rendered, **Then** it yields a Deployment (`replicas: 1`, `strategy: Recreate`), a Service and a PersistentVolumeClaim, with `runAsNonRoot`, UID 65532, read-only root FS, no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp, and an `emptyDir` at `/tmp`.
 2. **Given** `web.enabled=false` (default), **When** rendered, **Then** no web resource exists; **Given** `web.enabled=true` with an image, **Then** a web Deployment and Service render.
-3. **Given** each state mode (`state.mode=file`, `sqlite`, `postgres`), **When** rendered, **Then** `file`/`sqlite` mount a PersistentVolumeClaim or `emptyDir` at the data directory, and `postgres` requires `database.existingSecret` and renders without a volume; `postgres` without the secret fails rendering with a message naming the value.
+3. **Given** `state.mode=file` (the only mode this epic supports), **When** rendered, **Then** a PersistentVolumeClaim (or `emptyDir` when `state.persistence.enabled=false`) is mounted at the data directory the orchestrator is configured with (FR-019). **Given** any other `state.mode` (`sqlite`, `postgres`), **Then** rendering fails with a message saying the mode is not available yet and naming #1948 and #1740. The value shape `state.mode` and `database.existingSecret` is reserved so those issues fill it in.
 
 ---
 
@@ -74,10 +74,10 @@ A maintainer sees tests that drive the orchestrator's real API inside the cluste
 
 **Acceptance Scenarios**:
 
-1. **Given** the installed chart, **When** the suite calls `/healthz` and `/readyz` on the ops port, **Then** both answer 200 and `/readyz` answers non-200 before the registry loads.
+1. **Given** the installed chart, **When** the suite calls `/healthz` and `/readyz` on the ops port, **Then** both answer 200. (Not-ready before the registry loads is proven by an integration test with a slow or failing injected store, FR-015; the orchestrator restores the registry before binding, so a cluster test cannot observe it.)
 2. **Given** the installed chart, **When** a test daemon link connects to the orchestrator and registers, **Then** a listing query returns that daemon, and after it disconnects the listing shows it offline.
 3. **Given** `state.mode=file` on a PVC, **When** the orchestrator pod is deleted and its replacement is ready, **Then** the registry still lists the daemon registered before.
-4. **Given** a corrupt registry file on the volume, **When** the pod starts, **Then** it fails to become ready and its log names the file (existing FR-004 behaviour, now proven in the cluster).
+4. **Given** a corrupt registry file on the volume, **When** the pod starts, **Then** it never becomes Ready (probe or restart loop) and its log names the file (existing FR-004 behaviour, now proven in the cluster).
 
 ---
 
@@ -98,6 +98,7 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 
 ### Edge Cases
 
+- Fresh, empty PVC (empty registry): the pod becomes Ready and the listing is empty.
 - Cluster already exists from an aborted run: the harness reuses or recreates it by name, never leaves two.
 - Image not loaded into kind (`ImagePullBackOff`): the harness fails with the image name, not a generic timeout.
 - Two e2e runs on one machine: distinct cluster names via `MICOLD_E2E_CLUSTER`; one build at a time through `scripts/build-lock.sh` (shared target directory).
@@ -112,22 +113,23 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 ### Functional Requirements
 
 - **FR-001**: The repository MUST contain a Dockerfile that builds the orchestrator image from the workspace, running `micold-daemon orchestrator` as UID 65532 on a distroless `cc` base, tagged `ghcr.io/jaroslawherod/micold-orchestrator` (`:dev` locally).
-- **FR-002**: The chart `deploy/helm/micold` MUST render the orchestrator Deployment, Service and ConfigMap with the security context of User Story 1, and MUST take image repository, tag and pull policy as values.
-- **FR-003**: The chart MUST support state modes `file`, `sqlite` and `postgres` as in User Story 1 and MUST reject `postgres` without `database.existingSecret`.
+- **FR-002**: The chart `deploy/helm/micold` MUST render the orchestrator Deployment, Service and PersistentVolumeClaim with the security context of User Story 1, and MUST take image repository, tag and pull policy as values.
+- **FR-003**: The chart MUST support only `state.mode=file` and MUST fail rendering for any other mode as in User Story 1. It reserves the value names `state.mode` and `database.existingSecret` per the 1722 plan; the `sqlite` and `postgres` modes belong to #1948 and #1740.
 - **FR-004**: The chart MUST contain a `web` component, disabled by default, rendering nothing when disabled.
 - **FR-005**: `helm lint` and `kubeconform` (pinned versions, checksums) MUST run on the chart for default values and every values file under `deploy/helm/micold/ci/`, in CI on every chart or Dockerfile change and in `mise run gate`'s chart step where the tools exist.
 - **FR-006**: The orchestrator MUST offer an ops HTTP listener, off unless an address is configured (`--ops-addr` / config key), serving `GET /healthz` (200 when the event loop answers) and `GET /readyz` (200 only after the registry is loaded and the link listener is bound). It MUST NOT serve anything else; `/metrics` is #1742's.
 - **FR-007**: The chart MUST wire `startupProbe`, `readinessProbe` (`/readyz`) and `livenessProbe` (`/healthz`) to the ops port.
 - **FR-008**: One script (`scripts/e2e-kind.sh`) MUST create the kind cluster, build and `kind load` the image, install the chart with a values file, run the selected suites, and clean up, locally and in CI alike; `mise run e2e-kind` MUST call it.
 - **FR-009**: CI MUST run the script in a `kube-e2e` job, with `kind` and `kubectl` installed by the same pinned-sha256 step as `kube-cluster` (extracted to one shared script or composite so the pins live once), uploading logs on failure.
-- **FR-010**: The e2e tests MUST be a Rust test target (`crates/micold-e2e`, not in the default workspace test set unless `MICOLD_E2E=1`) that talks to the cluster through `kubectl port-forward` or an in-cluster test pod, and MUST skip with a stated reason unless the harness set `MICOLD_E2E=1`.
-- **FR-011**: The API suite MUST reach the link protocol the way a real daemon does. [NEEDS CLARIFICATION: Q1, how the test daemon reaches the orchestrator. Options: (a) a `micold-daemon` sidecar-style test pod sharing the orchestrator's socket through an `emptyDir` volume; (b) wait for a TCP/mTLS link listener (#1729) and connect over a Service. Recommended: (a) for the epic's first milestone because it needs no new production code, and (b) as a follow-up suite when #1729 lands.]
+- **FR-010**: The e2e tests MUST be a Rust test target (`crates/micold-e2e`, a workspace member whose tests all skip unless `MICOLD_E2E=1`, so `cargo test --workspace` stays green with no cluster) that talks to the cluster through `kubectl port-forward` or an in-cluster test pod, and MUST report the skip reason when not run by the harness.
+- **FR-011**: The API suite MUST reach the link protocol the way a real daemon does: the orchestrator pod gets a second, test-only `micold-daemon` container (enabled by a CI values file) that shares the orchestrator's `emptyDir` socket volume. Decision D1 (agent-resolved, jaro can overturn). A network-link variant follows when #1729 lands.
 - **FR-012**: The API suite MUST cover: ops endpoints, register and list, offline after disconnect, two concurrent daemons, restart persistence on a PVC, corrupt-registry refusal.
 - **FR-013**: The suites MUST be directories under `crates/micold-e2e/tests/` (`ops`, `link`, `restart`, later `network`, `ui`) plus `e2e/ui/` for Playwright, selected by `MICOLD_E2E_SUITES`; a suite blocked on another issue MUST exist as a documented, skipping placeholder naming the issue.
 - **FR-014**: The harness MUST save pod logs, `kubectl describe` output and events on failure and CI MUST upload them.
 - **FR-015**: Diff coverage of `micold-daemon` and `micold-core` code this epic adds (the ops listener) MUST meet the repository's 80% guardrail through ordinary tests that need no cluster.
 - **FR-016**: The chart's database value names and the image name MUST match `specs/1722-rn-client-k8s/plan.md` so #1740 extends this chart; a conformance test (rendered template check) MUST fail when a name drifts.
-- **FR-017**: [NEEDS CLARIFICATION: Q2, the default `state.mode` for the chart and the e2e run. Recommended: `file` with a PVC, because it is what the orchestrator supports today; `sqlite` and `postgres` rendering is tested, their live e2e arrive with #1948's later milestones.]
+- **FR-017**: The default and only `state.mode` is `file` on a PVC (Decision D2, agent-resolved, jaro can overturn); `sqlite` and `postgres` arrive with #1948 and #1740.
+- **FR-019**: A release build of `micold-daemon orchestrator` MUST accept its data directory (`--data-dir`), its local-socket path (`--socket`) and its ops address (`--ops-addr`) as flags, each also settable by environment (`MICOLD_ORCHESTRATOR_DATA_DIR`, `MICOLD_ORCHESTRATOR_SOCKET`, `MICOLD_ORCHESTRATOR_OPS_ADDR`); today the data directory comes from `micold_core::paths::data_dir()` (XDG/HOME, test-env override only) and the socket from `endpoint::resolve()`. Flags win over environment, environment over the defaults. M1 delivers the data dir and socket, M3 the ops address. No config file is added: the chart sets flags and env on the container, so no ConfigMap is needed in this epic. Fixed container paths: data `/var/lib/micold`, socket `/run/micold/orchestrator.sock` (an `emptyDir` at `/run/micold`, shared with the test daemon container per FR-011), ops `0.0.0.0:9090`. A chart render test MUST assert the volume mount path equals the `--data-dir` argument.
 - **FR-018**: Documentation MUST say how to run the suite locally (`docs/development/kube-e2e.md`), what skips where, and how to add a suite.
 
 ### Key Entities
@@ -142,7 +144,7 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 
 - **SC-001**: A maintainer with docker, kind and kubectl runs one command and gets a pass or fail verdict for the deployed orchestrator, with no manual cluster step.
 - **SC-002**: The `kube-e2e` CI job finishes within 20 minutes on a warm cache and leaves no cluster behind.
-- **SC-003**: Breaking the chart or the image (wrong command, wrong user, missing volume) fails the suite in 100% of the five seeded breakages listed in the quickstart.
+- **SC-003**: Breaking the chart or the image (wrong command, wrong user, missing volume, wrong data-dir flag, wrong ops port) fails the suite in 100% of the five seeded breakages listed here.
 - **SC-004**: Chart lint and schema checks complete in under 1 minute with no cluster.
 - **SC-005**: Adding a new suite (network API, UI) needs no change outside its own directory, the suite list and the values file.
 - **SC-006**: The ops listener's added lines have at least 80% diff coverage.
@@ -151,9 +153,9 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 
 | Milestone | Delivers | Needs a live cluster to prove |
 |---|---|---|
-| M1 Image and chart | FR-001 to FR-005, FR-016 | no (lint, kubeconform, template tests) |
+| M1 Image and chart | FR-001 to FR-005, FR-016, FR-019 (data dir and socket) | no (lint, kubeconform, template tests) |
 | M2 kind harness | FR-008 to FR-010 (harness, local task, CI job with a smoke "install and wait Ready"), FR-014, FR-018 | yes, one CI round |
-| M3 Ops endpoints | FR-006, FR-007, FR-015 | unit/integration no; probes in M2's smoke |
+| M3 Ops endpoints | FR-006, FR-007, FR-015, FR-019 (ops address) | unit/integration no; probes in M2's smoke |
 | M4 API e2e suite | FR-011 to FR-013, FR-017 | yes |
 | M5 Network API and UI slots | Placeholder suites, then real tests as #1732 and #1954 land (US4) | yes, later |
 
