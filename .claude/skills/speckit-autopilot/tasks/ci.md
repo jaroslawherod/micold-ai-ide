@@ -4,8 +4,8 @@ When: `wait-merge.sh` printed `RED` outside this flow's code, `CHECKLESS` or `ME
 
 ## Red outside this flow's code
 
-To tell whose code is red, never read a long log yourself: a `"haiku"` helper subagent reads the
-CI log, gate log or report and returns only its failures.
+To tell whose code is red, never read a long log yourself: dispatch an `autopilot-worker`
+(`"sonnet"`) per [../rules/delegate.md](../rules/delegate.md) (*Triage a CI or job log*); it returns ~40 lines.
 
 Every state has a dwell limit: `scripts/autopilot/pr-state.sh <pr>` says whether the PR is past
 it and the action ([waiting.md](../rules/waiting.md), *PR states and dwell limits*). Run it when
