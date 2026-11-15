@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1859
-- **Worktree branch**: claude/project-thread-rew3t5
+- **Worktree branch**: claude/project-thread-lcys26
 - **Started**: 2026-11-13
-- **Phase**: milestones
-- **Next step**: merge PR #1921 (CI)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,7 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
 | #1912 | M1b | merged | 95fa459da7e2b4381424c66ba66f40454159a70b |
 | #1917 | M3 | merged | 2c3e7fd77e9305e8a801bcd8c2a61541480c23e1 |
-| #1921 | M2 | open | — |
+| #1921 | M2 | merged | c53be1dc9c4c6a1770519b31489a693cc8c316ed |
+| close | Close (spec Closed, analyze fixes, TDD verification) | open | — |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
 | M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | merged |
-| M2 | T015–T019 | full | Sidebar parent label (current name, marked removed) and a parent filter that narrows and composes with the issue/type filter; no nesting; shared chip; user guide; visual pass of quickstart Part B | #1921 | in-review (T015-T019 done; review B CLEAN, visual pass PASS) |
+| M2 | T015–T019 | full | Sidebar parent label (current name, marked removed) and a parent filter that narrows and composes with the issue/type filter; no nesting; shared chip; user guide; visual pass of quickstart Part B | #1921 | merged |
 | M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | #1917 | merged |
 
 ## Decisions
@@ -68,6 +69,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 1 | M2 | 68d2fd0f5 | conformance review of origin/main...HEAD | CHANGES (F1-F4) fixed: cycle-log M2 red run and two mutants (both killed), drift-M2.md and a `## Milestones` section in tasks.md, RunRow boxed instead of the allow, renamed-parent note in the user guide |
 | B | 2 | M2 | e05d5e719 | fix diff 68d2fd0f5..e05d5e719 (sonnet) | CLEAN: F1-F4 resolved; plan-drift.sh M2 no drift; clippy client clean. Visual pass T018 PASS (both Part B checks, screenshots in project files issue-1859/) |
 
+| Close | by hand | close diff (specs only) | working tree | no subagent tool in this unit; analyze C1/I1/I3/A1/T1/T2 fixed in spec, plan, tasks; docs only |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -91,8 +94,10 @@ None.
 
 ## Follow-ups not done
 
+- TDD verification verdict FAIL (test-after, `tdd/verification.md`): T035-T041 in tasks.md Phase 9 (message-delivery assertion, explicit `parent: default`, MCP delete tombstones children, FR-003/005/012 and relocation tests, four surviving mutants, sidebar rename test, supervisor-ownership word checks). Test-strength only, no new behaviour.
+- Spec-analysis items left: U1 (scope of a child whose parent is removed, unresolvable caller), G1 (no story/SC for visibility), G2 (no FR-012 test, no relocation fixture).
+
 - Tests that exercise tool behaviour use `full_view_credential` (tests/support/mcp.rs) or default callers; scope handling per tool is covered by `mcp_worktree_parent_visibility` only.
 - Record the parent inside the create path (review A F1/F2): closes the window where a new worktree is visible without its link and a concurrent child of it can be tombstoned.
-- M2 T018 (visual pass of quickstart Part B, record in quickstart.md) is not done: the orchestrator dispatches it with review B after the PR is open; the `MICOLD_SIDEBAR_FILTER=parent:<name>` hook pre-applies the parent filter for it.
 - An active parent filter whose parent is renamed keys on the old name and matches nothing until cleared (Clear filters in the empty message); same edge as any filter whose tag vanishes.
 - Verification run here: fmt, clippy core+workspace (-D warnings), core `--all-targets` (only 4 root-permission tests fail, unrelated), client lib + main + features_sidebar, daemon mcp worktree_parent. Full gate left to CI.

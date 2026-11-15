@@ -105,17 +105,31 @@ Each milestone merges to `main` on its own (speckit-autopilot). The ledger
 
 ## Phase 8: Polish and tracking
 
-- [ ] T027 Run `mise run gate`; resolve fmt, clippy and test failures
-- [ ] T028 Run `speckit-analyze` for spec, plan and tasks consistency and fix findings
-- [ ] T029 Create the three milestone issues with Blocked by / Blocks relations, and update #1817 (checklist, dependencies), #1813 (sets the parent on every worktree it creates), #1814 and #1816 (find runs by parent, never touch another parent), and #1814 (recovery case for a supervised session over the context cap: `/clear` then `/speckit-autopilot resume`)
+- [x] T027 Run `mise run gate`; resolve fmt, clippy and test failures (cloud: `scripts/gate.sh` fmt and clippy green; the test step needed `cargo-nextest`, installed, then the disk filled; the full test run is left to CI, the close diff touches only specs/)
+- [x] T028 Run `speckit-analyze` for spec, plan and tasks consistency and fix findings
+- [x] T029 Create the three milestone issues (existing: M1/M1b #1858, M2 #1859, M3 #1860 with Blocked by in their bodies; notes already on #1813, #1814, #1816, #1817, and #1814's body carries the recovery case) with Blocked by / Blocks relations, and update #1817 (checklist, dependencies), #1813 (sets the parent on every worktree it creates), #1814 and #1816 (find runs by parent, never touch another parent), and #1814 (recovery case for a supervised session over the context cap: `/clear` then `/speckit-autopilot resume`)
 
 ## Dependencies
 
 - Phase 1 -> Phase 2 -> Phases 3, 4, 6 (M1; Phase 4 and 6 after Phase 3's create path exists).
-- M2 (Phase 5) after M1's T016 inputs exist (T008, T009, T013).
+- M1b (Phase 3b, T030-T032) after M1's create and list paths (T007-T009); T033 after T031.
+- M2 (Phase 5) after M1's row shape exists (T008, T009, T013).
 - M3 (Phase 7) after M1 (T009 for the row shape); #1813 starts after M1 (needs the default parent on creation), #1814 and #1816 after M3.
 - Parallel: T002 with T004; T006 with T007; T011 with T012; T015 with M1 docs; T023 with M2.
 
 ## Implementation strategy
 
 MVP: Phases 1-3 (record, list, filter). Then Phase 4 (durability, removed), Phase 6 (sessions), M2 and M3 in parallel once M1 merges.
+
+## Phase 9: TDD remediation
+
+**Verdict FAIL** (`tdd/verification.md`, audited at `c53be1dc9`): T034 is done (test-after debt accepted and recorded in `tdd/cycle-log.md`); T035-T041 are open follow-ups. Findings 2-9 below close coverage gaps; none may weaken an existing test.
+
+- [x] T034 [F1, F6] Write `specs/1857-worktree-parent/tdd/test-list.md` (behaviors B1-B13 of `tdd/verification.md`, each with its tests and the criterion it traces), and record in `tdd/cycle-log.md` that M1, M1b, M2 and M3 were test-after and which behaviors were re-proven by mutant; re-run `/speckit-tdd-verify specs/1857-worktree-parent` and expect no `NO_TEST` and a stated, accepted `TEST_AFTER` debt
+- [ ] T035 [F2] Make `a_message_to_an_out_of_scope_session_is_refused_while_the_parent_is_reachable` (`crates/micold-daemon/tests/mcp/mcp_worktree_parent_visibility.rs:188`) assert delivery to the parent (a sandbox-backed fixture as in `mcp_cross_session`), not only "not `not_found`"; prove with `scripts/build-lock.sh cargo test -p micold-daemon --test mcp a_message_to_an_out_of_scope_session`
+- [ ] T036 [F3] Add a daemon test that a root caller passing `parent: "default"` to `create_worktree` succeeds with `("default","known")`, beside `mcp_worktree_parent.rs:223`; prove with `scripts/build-lock.sh cargo test -p micold-daemon --test mcp worktree_parent`
+- [ ] T037 [F4] Add a test that deleting a parent through the MCP `delete_worktree` tool leaves its children `parent_state: "removed"`; prove with the same command as T036
+- [ ] T038 [F5] Add tests for FR-005 child rename, FR-003 (a worktree created through the app op has no parent) and FR-012 (a parent is not readable or writable across projects), and either a relocation test for US2 AC3 / SC-002 or amend the spec to drop the relocation promise; prove with `scripts/build-lock.sh cargo test -p micold-daemon --test mcp worktree_parent`
+- [ ] T039 [F7] In `crates/micold-core/src/worktree_parent.rs` add unit tests that fail for mutants M1, M3, M4 and M8 of `tdd/verification.md` (self-parent guard, orphan-link sweep, `ParentView::label` for `default`, parent id reuse in `record`), and remove or test the dead `last_name` refresh (`:83-85`); prove with `scripts/build-lock.sh cargo test -p micold-core --lib worktree_parent` and re-run the eight mutants
+- [ ] T040 [F8] Replace `renaming_the_parent_updates_the_label_and_keeps_order` (`crates/micold-client/tests/sidebar_parent.rs:147`) with one that drives the rename through the catalog snapshot to the row chip; prove with `scripts/build-lock.sh cargo test -p micold-client --test main sidebar_parent`
+- [ ] T041 [F9] Replace the word-presence checks in `scripts/tests/supervisor-ownership.test.sh:72-81` with checks of behavior, or record in the test why wording is the contract; prove with `bash scripts/tests/supervisor-ownership.test.sh`

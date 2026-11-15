@@ -141,3 +141,11 @@ Rebuilt test (39 cases) run against the branch's old script, skill and `supervis
 
 After: `bash scripts/tests/supervisor-ownership.test.sh` 39 cases, 0 failures; `supervisor.test.sh`
 269 cases, 0 failures.
+
+## Close: test-after debt (T034)
+
+M1, M1b, M2 and M3 were test-after (see each milestone's account above). The close-unit TDD
+verification (`verification.md`) verdict is FAIL on that evidence alone: no weakened or skipped test,
+no HIGH smell. Core `worktree_parent.rs` was mutated (8 hand-made mutants, 4 killed, 4 judged
+equivalent or dead code by reading). The debt is accepted for this spec; T035-T041 (coverage gaps)
+stay open as follow-ups in autopilot.md.
