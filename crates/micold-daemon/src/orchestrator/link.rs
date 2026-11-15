@@ -17,7 +17,7 @@ use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, Ref
 use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::settings::Settings;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio_util::codec::{Encoder, Framed, LengthDelimitedCodec};
 
 use super::{query, Shared};
 use crate::server::daemon_build;
@@ -102,9 +102,8 @@ where
             PROTOCOL_VERSION,
         ),
     };
-    framed
-        .send(Bytes::from(serde_json::to_vec(&verdict).map_err(invalid)?))
-        .await
+    let body = Bytes::from(serde_json::to_vec(&verdict).map_err(invalid)?);
+    send_bounded(framed, body).await
 }
 
 async fn after_claim<S>(
@@ -117,7 +116,10 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let accepted = serde_json::to_vec(&LinkVerdict::Accepted).map_err(invalid)?;
-    framed.send(Bytes::from(accepted)).await?;
+    if let Err(e) = send_bounded(&mut framed, Bytes::from(accepted)).await {
+        shared.update(|registry| registry.claim_failed(link, ClaimFailure::Dropped));
+        return Err(e);
+    }
     // From here the frames are the wire protocol's.
     let mut framed = framed.map_codec(|_| DaemonCodec::new());
 
@@ -171,10 +173,7 @@ where
     if let Err(reason) = handshake::evaluate_introduction(&intro, &expectation) {
         // Released before the refusal is written, so a listing read after it sees the outcome.
         shared.update(|registry| registry.claim_failed(link, claim_failure(&reason)));
-        return framed
-            .send(Frame::Control(DaemonMsg::Refused { reason }))
-            .await
-            .map_err(io::Error::other);
+        return send_bounded(&mut framed, Frame::Control(DaemonMsg::Refused { reason })).await;
     }
     // Refused when the token expired or a replaced silent link answered meanwhile: either way
     // this link closes. A live old link is named, so the daemon learns why without redialling;
@@ -192,23 +191,19 @@ where
                 announcement.protocol_version,
                 PROTOCOL_VERSION,
             );
-            return framed
-                .send(Frame::Control(DaemonMsg::Refused {
-                    reason: RefusalReason::NotPermitted { detail },
-                }))
-                .await
-                .map_err(io::Error::other);
+            let refused = DaemonMsg::Refused {
+                reason: RefusalReason::NotPermitted { detail },
+            };
+            return send_bounded(&mut framed, Frame::Control(refused)).await;
         }
     }
-    framed
-        .send(Frame::Control(DaemonMsg::Welcome {
-            daemon_build: daemon_build(),
-            catalog: CatalogSnapshot::default(),
-            settings: crate::catalog::wire_settings(&Settings::default()),
-            plan_usage: None,
-        }))
-        .await
-        .map_err(io::Error::other)?;
+    let welcome = DaemonMsg::Welcome {
+        daemon_build: daemon_build(),
+        catalog: CatalogSnapshot::default(),
+        settings: crate::catalog::wire_settings(&Settings::default()),
+        plan_usage: None,
+    };
+    send_bounded(&mut framed, Frame::Control(welcome)).await?;
 
     steady(shared, framed, link).await
 }
@@ -225,17 +220,24 @@ fn claim_failure(reason: &RefusalReason) -> ClaimFailure {
     }
 }
 
-/// Send one frame, giving up after the liveness deadline: a peer that keeps the socket open but
-/// stops reading must not stall the loop, or the timer would never mark it offline. `false` when
-/// the send failed or timed out.
-async fn send_bounded<S>(framed: &mut Framed<S, DaemonCodec>, msg: DaemonMsg) -> bool
+/// Send one frame, giving up after the liveness deadline (FR-011): a peer that keeps the socket
+/// open but stops reading must not hold the link task, its reservation or the steady loop, whose
+/// timer would then never mark it offline. A send not done by then is `TimedOut`.
+async fn send_bounded<S, C, I>(framed: &mut Framed<S, C>, item: I) -> io::Result<()>
 where
-    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    S: AsyncWrite + Unpin,
+    C: Encoder<I>,
+    C::Error: Into<io::Error>,
 {
-    matches!(
-        tokio::time::timeout(LIVENESS_DEADLINE, framed.send(Frame::Control(msg))).await,
-        Ok(Ok(()))
-    )
+    tokio::time::timeout(LIVENESS_DEADLINE, framed.send(item))
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("a frame was not written within {LIVENESS_DEADLINE:?}"),
+            )
+        })?
+        .map_err(Into::into)
 }
 
 /// The steady state (contracts/link.md, step 4): every inbound frame is an answer, a timer sends
@@ -286,7 +288,7 @@ where
                     Frame::Control(ClientMsg::Goodbye) => end(&mut open),
                     Frame::Control(msg) => {
                         if let Some(answer) = query::not_hosted(&msg) {
-                            if !send_bounded(&mut framed, answer).await {
+                            if send_bounded(&mut framed, Frame::Control(answer)).await.is_err() {
                                 end(&mut open);
                             }
                         }
@@ -304,7 +306,8 @@ where
                     _ if !open && expired => return Ok(()),
                     LinkAction::SendPing if open => {
                         nonce += 1;
-                        if !send_bounded(&mut framed, DaemonMsg::LinkPing { nonce }).await {
+                        let ping = Frame::Control(DaemonMsg::LinkPing { nonce });
+                        if send_bounded(&mut framed, ping).await.is_err() {
                             end(&mut open);
                         }
                     }

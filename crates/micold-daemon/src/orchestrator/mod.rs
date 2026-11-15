@@ -157,6 +157,38 @@ pub async fn run_with(
     serve(endpoint, clock, store).await
 }
 
+/// An orchestrator with no listener: the caller hands it each connection, which is served by the
+/// same link task `run_with` spawns, on one shared registry. Tests use it for transports a socket
+/// cannot produce, such as a pipe whose reader stops reading.
+pub struct Detached {
+    shared: Arc<Shared>,
+    // Dropped after `shared`'s users: see `serve`.
+    _saving: SaveWorker,
+}
+
+impl Detached {
+    /// An orchestrator on `clock`, with the registry `store` holds.
+    pub fn new(clock: Arc<dyn Clock>, store: Arc<dyn RegistryStore>) -> io::Result<Self> {
+        let registry = Registry::restore(store.load().map_err(io::Error::other)?);
+        let (saving, saves) = SaveWorker::start(store)?;
+        Ok(Self {
+            shared: Arc::new(Shared::new(clock, registry, saves)),
+            _saving: saving,
+        })
+    }
+
+    /// Serve one connection until it ends, as an accepted one is.
+    pub fn serve<S>(
+        &self,
+        stream: S,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send + 'static
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
+        link::serve_connection(Arc::clone(&self.shared), stream)
+    }
+}
+
 async fn serve(
     endpoint: Endpoint,
     clock: Arc<dyn Clock>,

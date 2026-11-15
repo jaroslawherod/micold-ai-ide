@@ -7,6 +7,7 @@ mod support;
 
 mod host;
 mod process;
+mod stalled;
 
 use std::path::Path;
 use std::sync::Arc;

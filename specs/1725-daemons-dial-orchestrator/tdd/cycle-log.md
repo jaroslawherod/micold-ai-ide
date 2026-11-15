@@ -59,3 +59,21 @@ failed before the implementation.
 - also from review A: the host endpoint assertion no longer compares against `resolve()` (another
   test sets `XDG_RUNTIME_DIR`: the first scoped gate failed there), `orchestrator_link_is_independent…`
   asserts its error lists are non-empty, a warning when an enabled link's endpoint cannot be resolved.
+
+## Milestone M2 (T016–T020)
+
+### Cycle 6 — the handshake sends are bounded (T017 → T018, FR-011)
+
+- tests: `crates/micold-daemon/tests/orchestrator_dial/stalled.rs`, four tests, one per send
+  (`refuse`, `Accepted`, `Welcome`, `Refused`), each over an 8-byte in-memory pipe the dialer stops
+  reading, on a paused clock. They drive the orchestrator through the new `orchestrator::Detached`
+  (a socket buffers far more than one frame, so it cannot stall a send); the structural seam was
+  added before the tests ran.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator_dial stalled` →
+  `0 passed; 4 failed`, each `panicked at …/support.rs:46:29: the link task ends: nothing within 20s`.
+- green: `send_bounded(framed, item)` in `orchestrator/link.rs`, generic over the codec
+  (`timeout(LIVENESS_DEADLINE, framed.send(item))`, elapsed → `io::ErrorKind::TimedOut`), used for
+  `refuse`, `Accepted` (a timed-out `Accepted` releases the reservation with
+  `claim_failed(Dropped)`), `Welcome` and both `Refused`; the steady loop's two sends use it too →
+  `--test orchestrator_dial` 14 passed, `--test orchestrator` 50 passed.
+- refactor: none beyond the steady loop's sends moving onto the one helper.
