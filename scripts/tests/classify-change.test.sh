@@ -85,6 +85,7 @@ run_gate() {
 }
 run_pkg() { run_gate packaging "$@"; }
 run_dr() { run_gate daemon_runtime "$@"; }
+run_kube() { run_gate kube_paths "$@"; }
 
 # --- documentation-only ------------------------------------------------------------------------
 
@@ -275,6 +276,40 @@ rm -rf "$d"
 
 d="$(new_repo)"
 run_dr "empty diff" false "$d" HEAD HEAD
+rm -rf "$d"
+
+# --- kube paths (#1981) --------------------------------------------------------------------------
+
+kube_case() { # <name> <want> <path>
+  local d
+  d="$(new_repo)"
+  mkdir -p "$d/$(dirname "$3")"; printf 'a\n' > "$d/$3"; commit_in "$d" kube
+  run_kube "$1" "$2" "$d" HEAD~1 HEAD
+  rm -rf "$d"
+}
+kube_case "chart template"               true  deploy/helm/micold/templates/deployment.yaml
+kube_case "chart values"                 true  deploy/helm/micold/values.yaml
+kube_case "orchestrator Dockerfile"      true  Dockerfile.orchestrator
+kube_case "kind harness"                 true  scripts/e2e-kind.sh
+kube_case "pinned kube tools"            true  scripts/install-kube-tools.sh
+kube_case "chart check"                  true  scripts/chart-check.sh
+kube_case "chart conformance test"       true  scripts/tests/chart-conformance.test.sh
+kube_case "e2e crate source"             true  crates/micold-e2e/src/lib.rs
+kube_case "e2e crate test"               true  crates/micold-e2e/tests/link/main.rs
+kube_case "daemon source"                false crates/micold-daemon/src/a.rs
+kube_case "other deploy file"            false deploy/README.md
+kube_case "other script"                 false scripts/test-kube.sh
+kube_case "documentation only"           false docs/page.md
+
+d="$(new_repo)"
+printf 'a\n' > "$d/docs/page.md"; commit_in "$d" docs
+run_kube "unresolvable base ref" true "$d" origin/nope HEAD
+run_kube "all-zero base" true "$d" 0000000000000000000000000000000000000000 HEAD
+run_kube "FORCE_FULL_CI over docs" true "$d" HEAD~1 HEAD FORCE_FULL_CI=1
+rm -rf "$d"
+
+d="$(new_repo)"
+run_kube "empty diff" false "$d" HEAD HEAD
 rm -rf "$d"
 
 echo

@@ -15,6 +15,7 @@ use interprocess::local_socket::traits::tokio::Listener as _;
 use micold_core::endpoint::Endpoint;
 use micold_core::orchestrator::{JsonRegistryStore, Registry, RegistryStore, Snapshot};
 
+pub mod config;
 pub mod link;
 pub mod query;
 mod save;
@@ -112,27 +113,22 @@ impl Shared {
     }
 }
 
-/// The orchestrator's own endpoint: beside the daemon's, under other names, so both can run.
-fn endpoint() -> io::Result<Endpoint> {
-    micold_core::endpoint::orchestrator_endpoint()
+/// Run the orchestrator where `config` says until the process is stopped, keeping its registry
+/// in `orchestrator/registry.json` under its data directory.
+pub async fn run(config: config::OrchestratorConfig) -> io::Result<()> {
+    let store = Arc::new(JsonRegistryStore::in_data_dir(&config.data_dir));
+    serve(config.endpoint, Arc::new(SystemClock), store).await
 }
 
-/// Run the orchestrator on the user's endpoint until the process is stopped, keeping its registry
-/// in `orchestrator/registry.json` under the data directory.
-pub async fn run() -> io::Result<()> {
-    let endpoint = endpoint()?;
-    let data_dir = micold_core::paths::data_dir().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            "no data directory to keep the orchestrator registry in",
-        )
-    })?;
-    let store = Arc::new(JsonRegistryStore::in_data_dir(&data_dir));
-    serve(endpoint, Arc::new(SystemClock), store).await
-}
-
-/// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
-pub fn main() -> io::Result<()> {
+/// The `orchestrator` argument's whole run: `args` are the arguments after `orchestrator`
+/// (`--data-dir`, `--socket`, each also settable by environment). Settings, a runtime, then
+/// [`run`]. Returns only on an error.
+pub fn main(args: &[OsString]) -> io::Result<()> {
+    let config = config::OrchestratorConfig::from_args_env(
+        args,
+        &|name| std::env::var_os(name),
+        &config::SystemDefaults,
+    )?;
     // Stderr only: the orchestrator keeps no log file. `try_init` so a second call is harmless.
     let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -141,7 +137,7 @@ pub fn main() -> io::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(run())
+        .block_on(run(config))
 }
 
 /// Run the orchestrator on `socket` with `clock` and `store` (tests pass their own).
@@ -150,11 +146,7 @@ pub async fn run_with(
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
-    let endpoint = Endpoint {
-        lock_path: socket.with_extension("lock"),
-        socket_path: socket,
-    };
-    serve(endpoint, clock, store).await
+    serve(config::endpoint_at(socket), clock, store).await
 }
 
 /// The registry `store` holds, restored, and the saving thread that keeps it: what every link

@@ -1,0 +1,41 @@
+{{- if .Values.web.enabled }}
+{{- if not .Values.web.image.repository }}
+{{- fail "web.enabled=true needs web.image.repository" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "micold.fullname" . }}-web
+  labels:
+    {{- include "micold.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "micold.selectorLabels" (list . "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "micold.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "micold.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: web
+          image: {{ include "micold.image" (list . .Values.web.image) | quote }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.web.containerPort }}
+          securityContext:
+            {{- include "micold.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

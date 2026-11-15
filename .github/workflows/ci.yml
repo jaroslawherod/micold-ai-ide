@@ -54,6 +54,8 @@ jobs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       packaging: ${{ steps.verdict.outputs.packaging }}
       daemon_runtime: ${{ steps.verdict.outputs.daemon_runtime }}
+      # #1981: a path declared `micold-kube` (chart, orchestrator image, kind harness) changed.
+      kube_paths: ${{ steps.verdict.outputs.kube_paths }}
       # #956: the `full-ci` label as a boolean.
       full_ci: ${{ steps.verdict.outputs.full_ci }}
       # #959: a push to main whose tree a merged pull request's run already proved. True skips what
@@ -122,6 +124,7 @@ jobs:
           DOCS_ONLY: ${{ steps.verdict.outputs.docs_only }}
           PACKAGING: ${{ steps.verdict.outputs.packaging }}
           DAEMON_RUNTIME: ${{ steps.verdict.outputs.daemon_runtime }}
+          KUBE_PATHS: ${{ steps.verdict.outputs.kube_paths }}
           REASON: ${{ steps.verdict.outputs.reason }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
@@ -139,6 +142,8 @@ jobs:
             echo "Packaging paths touched: \`${PACKAGING:-unavailable}\`"
             echo
             echo "Daemon-runtime paths touched: \`${DAEMON_RUNTIME:-unavailable}\`"
+            echo
+            echo "Kube paths touched: \`${KUBE_PATHS:-unavailable}\`"
             if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
               echo
               echo '<details><summary>Paths that made this code-affecting</summary>'
@@ -717,6 +722,39 @@ jobs:
       - name: Run the real-cluster tests
         run: scripts/test-kube.sh
 
+  kube-chart:
+    name: helm chart and orchestrator image (linux)
+    # #1981 (FR-005): the chart's lint, schema and conformance checks, and the orchestrator image's
+    # build and smoke run, with no cluster. Pull requests run it only when a path declared
+    # `micold-kube` changed (or the `full-ci` label forces `kube_paths=true`); main pushes and the
+    # nightly schedule always run it. A skipped job satisfies `ci-complete`.
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm and kubeconform at pinned versions
+        run: |
+          set -euo pipefail
+          scripts/install-kube-tools.sh helm kubeconform
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The pinned-tools script's own cases
+        run: scripts/tests/install-kube-tools.test.sh
+      - name: The chart check's own cases
+        run: scripts/tests/chart-check.test.sh
+      - name: Lint, validate and conformance-test the chart
+        # What `mise run chart-check` runs.
+        run: scripts/chart-check.sh
+      - name: Build the orchestrator image and run it as UID 65532
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: scripts/chart-check.sh --image
+
   assertions:
     name: assertion freeze
     needs: classify
@@ -863,7 +901,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -888,6 +926,7 @@ jobs:
           CONTAINERDAEMON: ${{ needs.container-daemon.result }}
           SSHREMOTE: ${{ needs.ssh-remote.result }}
           KUBECLUSTER: ${{ needs.kube-cluster.result }}
+          KUBECHART: ${{ needs.kube-chart.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
           # #1931: the guardrails; whether each blocks is the workflow-level GUARDRAIL_* switch.
@@ -915,6 +954,7 @@ jobs:
           check container-daemon "$CONTAINERDAEMON"
           check ssh-remote "$SSHREMOTE"
           check kube-cluster "$KUBECLUSTER"
+          check kube-chart "$KUBECHART"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           guardrail diff-coverage "$DIFFCOVERAGE" "$GUARDRAIL_COVERAGE_BLOCK"
@@ -932,6 +972,7 @@ jobs:
             echo "| container-daemon | \`$CONTAINERDAEMON\` | yes |"
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
             echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
+            echo "| kube-chart | \`$KUBECHART\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
             echo "| diff-coverage | \`$DIFFCOVERAGE\` | $GUARDRAIL_COVERAGE_BLOCK |"

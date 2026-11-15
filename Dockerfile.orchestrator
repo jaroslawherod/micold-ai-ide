@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+# The orchestrator image (#1981, FR-001): `micold-daemon orchestrator` on distroless cc, UID 65532.
+# Named by specs/1722-rn-client-k8s/plan.md: ghcr.io/jaroslawherod/micold-orchestrator (`:dev`
+# locally and in CI). Build from the repository root:
+#
+#   docker build -f Dockerfile.orchestrator -t ghcr.io/jaroslawherod/micold-orchestrator:dev .
+#
+# The builder is the Debian 12 (bookworm) rust image, so the binary's glibc matches the
+# distroless cc-debian12 runtime. Both bases are digest-pinned; bump them together.
+
+FROM docker.io/library/rust:1.97-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS builder
+WORKDIR /src
+COPY . .
+# .cargo/config.toml points the target dir at target-shared/ for the checkouts; the image builds
+# into its own. rust-toolchain.toml is left out by .dockerignore, so the image's toolchain builds.
+ENV CARGO_TARGET_DIR=/build/target
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release --locked -p micold-daemon --bin micold-daemon \
+    && install -m 0755 /build/target/release/micold-daemon /micold-daemon
+
+FROM gcr.io/distroless/cc-debian12:nonroot@sha256:9dac0a79194e45a7da0158a9c6da57b217585af0786db3845d1f0ec1a0dd182f
+COPY --from=builder /micold-daemon /micold-daemon
+USER 65532:65532
+ENTRYPOINT ["/micold-daemon", "orchestrator"]

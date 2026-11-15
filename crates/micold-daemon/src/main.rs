@@ -26,7 +26,7 @@ fn main() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     match micold_daemon::orchestrator::parse_mode(&args) {
         micold_daemon::orchestrator::Mode::Orchestrator => {
-            if let Err(e) = micold_daemon::orchestrator::main() {
+            if let Err(e) = micold_daemon::orchestrator::main(&args[1..]) {
                 eprintln!("micold-daemon: orchestrator: {e}");
                 std::process::exit(1);
             }

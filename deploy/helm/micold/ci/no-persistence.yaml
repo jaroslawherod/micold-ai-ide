@@ -1,0 +1,4 @@
+# No PersistentVolumeClaim: the data directory is an emptyDir and the registry is lost with the pod.
+state:
+  persistence:
+    enabled: false

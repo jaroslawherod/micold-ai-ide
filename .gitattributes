@@ -172,6 +172,22 @@ crates/micold-client/tests/support/fake_github.rs micold-daemon-runtime
 # The workflow itself: an edit to a job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-daemon-runtime
 
+# The kube set (#1981).
+#
+# `micold-kube` marks paths that can change what the chart and kind jobs of ci.yml check: the Helm
+# chart, the orchestrator image, the kind harness, the pinned kube tools and the e2e crate. Pull
+# requests run `kube-chart` only when a change touches the set -- or carries `full-ci` -- and main
+# pushes always run it. The failure direction is "run it". Read by scripts/classify-change.sh
+# (`kube_paths=` output), pinned by scripts/tests/classify-change.test.sh.
+deploy/helm/**                        micold-kube
+/Dockerfile.orchestrator              micold-kube
+scripts/e2e-kind.sh                   micold-kube
+scripts/install-kube-tools.sh         micold-kube
+# The chart job's own check and its conformance test.
+scripts/chart-check.sh                micold-kube
+scripts/tests/chart-conformance.test.sh micold-kube
+crates/micold-e2e/**                  micold-kube
+
 # What a user can see, and what documents it (Constitution Principle VII).
 #
 # `micold-user-facing` marks the paths whose change a reader of the user guide could notice;

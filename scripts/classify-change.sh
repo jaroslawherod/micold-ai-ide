@@ -3,7 +3,7 @@
 #
 #   classify-change.sh <base-ref> <head-ref>
 #
-# Writes `docs_only=`, `packaging=`, `daemon_runtime=` and `reason=` to stdout in GITHUB_OUTPUT
+# Writes `docs_only=`, `packaging=`, `daemon_runtime=`, `kube_paths=` and `reason=` to stdout in GITHUB_OUTPUT
 # form, and any non-documentation paths to stderr so a surprising full run explains itself in the job log.
 #
 # Contract: specs/023-docs-only-ci-skip/contracts/classify-change.md
@@ -14,7 +14,7 @@
 # output rather than a one-off `paths:` filter: a boolean that is true when ANY touched path carries
 # the attribute. `packaging` (attribute `micold-packaging`) gates no job since #1897;
 # `daemon_runtime` (attribute `micold-daemon-runtime`, #954) gates the sandbox real-runtime and
-# remote-sshd jobs. Unlike `docs_only`, which is true only when EVERY path matches, these err
+# remote-sshd jobs; `kube_paths` (attribute `micold-kube`, #1981) gates the chart and kind jobs. Unlike `docs_only`, which is true only when EVERY path matches, these err
 # towards running: every failure path lands on `true`.
 #
 # Two rules govern everything below:
@@ -33,12 +33,13 @@
 
 set -uo pipefail
 
-# verdict <docs_only> <reason> [packaging] [daemon_runtime]; the path gates default to true, the
-# safe side.
+# verdict <docs_only> <reason> [packaging] [daemon_runtime] [kube_paths]; the path gates default
+# to true, the safe side.
 verdict() {
   printf 'docs_only=%s\n' "$1"
   printf 'packaging=%s\n' "${3:-true}"
   printf 'daemon_runtime=%s\n' "${4:-true}"
+  printf 'kube_paths=%s\n' "${5:-true}"
   printf 'reason=%s\n' "$2"
   exit 0
 }
@@ -93,7 +94,7 @@ then
 fi
 
 if [ ! -s "$work/changed" ]; then
-  verdict true "no files changed" false false
+  verdict true "no files changed" false false false
 fi
 
 # `check-attr --stdin -z` answers for every path in one call. Its output is NUL-separated triples:
@@ -118,6 +119,7 @@ touches() { # <attribute>
 }
 packaging="$(touches micold-packaging)"
 daemon_runtime="$(touches micold-daemon-runtime)"
+kube_paths="$(touches micold-kube)"
 
 total=0
 docs=0
@@ -137,7 +139,7 @@ if [ "$total" -eq 0 ]; then
 fi
 
 if [ "$docs" -eq "$total" ]; then
-  verdict true "$total documentation path(s)" "$packaging" "$daemon_runtime"
+  verdict true "$total documentation path(s)" "$packaging" "$daemon_runtime" "$kube_paths"
 fi
 
 {
@@ -145,4 +147,5 @@ fi
   printf '%s' "$offenders" | sed 's/^/  /'
 } >&2
 
-verdict false "$((total - docs)) non-documentation path(s) of $total" "$packaging" "$daemon_runtime"
+verdict false "$((total - docs)) non-documentation path(s) of $total" "$packaging" "$daemon_runtime" \
+  "$kube_paths"
