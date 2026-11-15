@@ -92,7 +92,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M3 — Parent recorded before the child starts, agents told
 
-- **Tasks**: T015–T020
+- **Tasks**: T015, T018–T020
 - **Deliverable**: a created worktree's parent link exists before its session starts, and the guide and supervisor skill describe the new tools.
 - **Satisfies**: US4 acceptance scenarios 1–2; US5 acceptance scenarios 1–2; FR-009, FR-010; SC-004
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp worktree_parent`; `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_cross_session`; `grep -n "send_parent_input" docs/user-guide/agent-tools.md .claude/skills/autopilot-supervisor/SKILL.md`
