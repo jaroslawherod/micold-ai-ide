@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1909 | M1 | merged | 7c96443 |
 | #1915 | M2 | merged | 46f7263 |
 | #1922 | M3 | merged | 35ffa7c |
+| #1924 | M4 | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
 | M2 | T009–T012 | full | follow-up.sh and cap | #1915 | merged |
 | M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | merged |
-| M4 | T015–T019, T021 | full | safe-to-remove.sh and rules | (to open) | in review |
+| M4 | T015–T019, T021 | full | safe-to-remove.sh and rules | #1924 | in review |
 
 ## Decisions
 
