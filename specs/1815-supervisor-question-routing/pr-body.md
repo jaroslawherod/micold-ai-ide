@@ -1,16 +1,13 @@
-## Milestone M4 of 4 — supervisor-question-routing (specs/1815-supervisor-question-routing)
+## Close 1815 — supervisor-question-routing (specs/1815-supervisor-question-routing)
 
-**Deliverable**: `route target` exists; a supervisor whose session list reports a parent relays the question to it, and a `not_found` refusal falls back to the user.
-**Verify**: `bash scripts/tests/supervisor.test.sh` prints no FAIL (282 cases)
-**Tasks**: T020–T022 · **Satisfies**: US4 scenarios 1–4, FR-012, FR-013
+All four milestones are merged (#1901, #1907, #1911, #1916). This PR closes the spec.
 
-`route target --sessions <list_sessions JSON> --me <id>` reads only the daemon's `parent` (a worktree name) of the `--me` row and maps it to a session of that worktree: `parent <id>`, else `user` (no parent, `default`, no matching session). SKILL.md gains an *Upward relay* paragraph and a step 3 pointer.
+- spec.md `**Status**` set to Closed.
+- contracts/routing-cli.md: the `route target` row now states the M4 round-1 rules (list shape, `is_caller` fallback, `parent_state`, `default` via worktree lookup, live over failed).
+- drift-M1.md records the plan-drift false positive (reference files from the design PR).
+- Ledger: Phase `done`, Next step `handoff`, follow-up cleared.
 
-## Agent review
-Round 1: A CHANGES (2 MAJOR, 2 MINOR) and B CHANGES (1 MAJOR, 1 MINOR), all fixed except B F2 (light tier, no cycle log: declined). Fixes: `route target` accepts the daemon's `{"sessions":[...]}` shape, resolves a `default` parent through the worktree lookup, honours `parent_state`, prefers a live session and falls back to the `is_caller` row; T021 names supervisor-route.sh. Round 2 pending.
-
-## Local gate
-Cloud thread: no mise; CI is the gate. `supervisor.test.sh` passes.
+plan-drift: M1 recorded in drift-M1.md, M2, M3, M4 clean. Converge skipped: Review B CLEAN for every milestone. No code or tests changed; CI is the gate.
 
 Refs #1815
 

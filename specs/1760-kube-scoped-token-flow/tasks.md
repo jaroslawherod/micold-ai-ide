@@ -32,8 +32,8 @@
 - [X] T015 [P] [US1] Test: token keys land in the `<name>-startup` Secret, are replaced at the next start, a token deleted in Settings disappears, the Secret is deleted when no key remains, and the first token added or last removed changes the pod's Secret volume (FR-010), in `micold-core/src/kube/start_tests.rs`; a characterization test (may be green at once, the live revert check T026 is the red evidence); fix `start.rs` only if red.
 - [X] T016 [P] [US1] Test: `KubeDaemonDraft.github_tokens` maps both ways through `of(settings)` and `settings()`, in `micold-client/src/features/daemons_kube.rs`.
 - [X] T017 [US1] Add the draft field and mapping in `micold-client/src/features/daemons_kube.rs`.
-- [ ] T018 [US1] Test (geometry/UI): the tick row after **Allowed credentials** has the label `GitHub tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can read them)` and the help line, in `micold-client/src/ui/settings/daemons.rs` tests.
-- [ ] T019 [US1] Add the tick row (reuse the checkbox-row builder of the allowed-credentials list) in `micold-client/src/ui/settings/daemons.rs`, then run quickstart §B (visual-pass) for the row and add the tick wording in `docs/user-guide/kubernetes-daemons.md`.
+- [X] T018 [US1] Test (geometry/UI): the tick row after **Allowed credentials** has the label `GitHub tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can read them)` and the help line, in `micold-client/src/ui/settings/daemons.rs` tests.
+- [X] T019 [US1] Add the tick row (reuse the checkbox-row builder of the allowed-credentials list) in `micold-client/src/ui/settings/daemons.rs`, then run quickstart §B (visual-pass) for the row and add the tick wording in `docs/user-guide/kubernetes-daemons.md`.
 - [X] T020 [US1] User guide (ships in M1 with the setting, `features/**` is user-facing; word it around the `github_tokens` key in `daemons.json`, no mention of a form tick until M2): the opt-in and its exposure wording, replace the "Until you paste a GitHub token" paragraph in `docs/user-guide/kubernetes-daemons.md`; add the pod note in `docs/user-guide/settings.md#github-tokens`.
 
 ## Phase 4: User Story 2 and 3 - The pod holds only the scoped credential; the kind test asserts it (P1/P2)
@@ -75,7 +75,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T018–T019
 - **Deliverable**: Settings -> Daemons -> a Kubernetes daemon shows the **GitHub tokens** tick (off by default, label names the exposure) (the user guide, shipped in M1 with the setting, gets the tick's wording in T019).
 - **Satisfies**: FR-008 (the label and help, exposure wording); Constitution VII
-- **Verify**: quickstart §B; `scripts/build-lock.sh cargo test -p micold-client features::daemons_kube`
+- **Verify**: quickstart §B; `scripts/build-lock.sh cargo test -p micold-client --test main -- daemons_section_geometry features_daemons`
 - **Depends on**: M1
 - **Tier**: light
 

@@ -14,7 +14,7 @@ MCP or `run-status.sh`, and exit 2 on a usage error or malformed ledger (as `sup
 | `route compose <issue>` | first line `session <id>` (the only send target, SC-004), then the answer message: `<n>. <answer>` per question (a free-text escalation: the bare answer), plus the leading `--by supervisor` word only when every row is `resolved` by the supervisor | 0 complete; 1 incomplete, prints `missing: <n> ...` (FR-008a) |
 | `route sent <issue> <epoch>` | nothing; sets Sent on the issue's rows | 0 |
 | `route overdue --now <epoch> --ceiling <s>` | issues whose Sent is set and older than the ceiling | 0 |
-| `route target --sessions <file> --me <id>` | `parent <id>` when that row has a non-empty `parent`, else `user` | 0; 2 file unreadable |
+| `route target --sessions <file> --me <id>` | `parent <id>`, else `user`. The file is the `list_sessions` JSON, a bare array or `{"sessions":[...]}`. The row is `--me`'s, else the `is_caller` row. `parent` is the parent worktree's name: it maps to a session of that worktree (a `default` parent too), excluding the row itself, a live session preferred over a failed one. `user` when `parent` is empty, `parent_state` is given and not `known`, or no session matches | 0; 2 file unreadable |
 | `route drop <issue>` | nothing; removes the issue's rows | 0 |
 | `route table` | the Routing section | 0 |
 
