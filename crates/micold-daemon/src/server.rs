@@ -84,6 +84,8 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
     })?;
     tracing::info!(addr = %addr, "listening (sandboxed)");
     serve_configured_projects(&state);
+    // Not awaited: serving clients never waits for the orchestrator (#1725, FR-001).
+    drop(crate::orchestrator_link::spawn_for(&state));
 
     // The same rule as the host process, over a different transport (FR-018). A container whose
     // daemon has nobody connected is a container burning a machine's memory for nobody; because the
@@ -387,6 +389,8 @@ pub async fn run() -> io::Result<()> {
             }
             crate::runtime_status::spawn(Arc::clone(&state), endpoint.clone());
             serve_configured_projects(&state);
+            // Not awaited: serving clients never waits for the orchestrator (#1725, FR-001).
+            drop(crate::orchestrator_link::spawn_for(&state));
             serve_interprocess(state, *bound).await
         }
     }

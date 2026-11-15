@@ -526,6 +526,7 @@ impl Checker<'_, '_> {
         self.git();
         self.tokens();
         self.orchestrator();
+        self.orchestrator_link();
     }
 
     fn at(&mut self, rule: &'static str, path: &str, message: String) {
@@ -1061,6 +1062,26 @@ impl Checker<'_, '_> {
                 "O5",
                 "`[orchestrator]` needs `enrollment_token_file`, or `cert_file` and `key_file`: \
                  add one"
+                    .to_string(),
+            );
+        }
+    }
+
+    /// L1 (#1725): `orchestrator_link.socket` is not empty. Reads nothing of `[orchestrator]`.
+    fn orchestrator_link(&mut self) {
+        let Some(link) = &self.config.orchestrator_link else {
+            return;
+        };
+        if link
+            .socket
+            .as_ref()
+            .is_some_and(|s| s.as_os_str().is_empty())
+        {
+            self.at(
+                "L1",
+                "orchestrator_link.socket",
+                "`orchestrator_link.socket` is empty: give a path, or remove the key to use the \
+                 default"
                     .to_string(),
             );
         }
