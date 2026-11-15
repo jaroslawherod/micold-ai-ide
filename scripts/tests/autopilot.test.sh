@@ -669,7 +669,7 @@ rm -rf .claude/agents
 cd "$ROOT"
 
 # context-hook.py: tells the caller its context passed the cap, on a ledger branch, without nagging.
-d="$(new_repo)"; cd "$d/wt"; C="$S/context-hook.py"; export TMPDIR="$d/tmp"; mkdir -p "$TMPDIR" "$d/s1/subagents"
+d="$(new_repo)"; cd "$d/wt"; C="$S/context-hook.py"; export TMPDIR="$d/tmp" AUTOPILOT_CLOUD=0; mkdir -p "$TMPDIR" "$d/s1/subagents"
 usage() { printf '{"type":"assistant","message":{"id":"%s","model":"claude-x","usage":{"input_tokens":%s,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}}}\n' "$1" "$2"; }
 usage a 170000 > "$d/s1/subagents/agent-u1.jsonl"; usage a 90000 > "$d/s1/subagents/agent-u2.jsonl"; usage a 160000 > "$d/s1.jsonl"
 chook() { jq -n --arg t "$d/s1.jsonl" --arg c "$PWD" --arg a "${1:-}" '{transcript_path:$t,cwd:$c,session_id:"s1"} + (if $a == "" then {} else {agent_id:$a} end)' | "$C"; }
@@ -689,6 +689,19 @@ usage a 240000 > "$d/s1/subagents/agent-p1.jsonl"
 pchook() { jq -n --arg t "$d/s1.jsonl" --arg c "$d/prep" '{transcript_path:$t,cwd:$c,session_id:"s1",agent_id:"p1"}' | "$C"; }
 check "context hook is silent in a worktree outside any run" 0 '^$' pchook
 check "context hook tells a prep unit in another worktree to hand over" 0 '240000 tokens.*STATUS: HANDOVER' env CLAUDE_PROJECT_DIR="$d/wt" bash -c "$(declare -f pchook); d='$d' C='$C' pchook"
+usage a 150000 > "$d/s1.jsonl"
+check "context hook: cloud orchestrator is silent under 180k" 0 '^$' env AUTOPILOT_CLOUD=1 bash -c "$(declare -f chook); d='$d' C='$C' chook"
+usage a 185000 > "$d/s1.jsonl"
+check "context hook: cloud orchestrator default cap is 180k, with a hard handover" 0 '185000 tokens, over the 180000 cap.*Handover.*commit, push.*fresh thread.*/speckit-autopilot resume.*stop' env AUTOPILOT_CLOUD=1 bash -c "$(declare -f chook); d='$d' C='$C' chook"
+rm -f "$TMPDIR"/autopilot-context-s1
+check "context hook: cloud orchestrator cap can be overridden" 0 'over the 100000 cap' env AUTOPILOT_CLOUD=1 AUTOPILOT_ORCH_CAP=100000 bash -c "$(declare -f chook); d='$d' C='$C' chook"
+rm -f "$TMPDIR"/autopilot-context-s1
+mv specs/042-x/autopilot.md specs/042-x/elsewhere.md
+check "context hook: cloud main thread fires without a ledger" 0 '185000 tokens.*Handover' env AUTOPILOT_CLOUD=1 bash -c "$(declare -f chook); d='$d' C='$C' chook"
+rm -f "$TMPDIR"/autopilot-context-s1
+check "context hook: local orchestrator without a ledger stays silent" 0 '^$' chook
+mv specs/042-x/elsewhere.md specs/042-x/autopilot.md
+usage a 160000 > "$d/s1.jsonl"
 check "context hook ignores a missing transcript" 0 '^$' chook nope
 check "ask.md skips AskUserQuestion over the cap" 0 'do not call' grep -A3 'Restart small' "$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"
 

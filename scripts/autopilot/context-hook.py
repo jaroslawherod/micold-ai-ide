@@ -11,7 +11,11 @@ prints nothing. Over it, and only on a branch an autopilot ledger names, it prin
 PostToolUse `additionalContext` that tells the caller to hand over. It repeats only after the
 context grew by another AUTOPILOT_CONTEXT_STEP tokens (default 20000), so it does not nag on every
 call. The cap is AUTOPILOT_CONTEXT_CAP, default 150000 for a unit as in context.py; the orchestrator's
-is AUTOPILOT_ORCH_CAP, default 80000.
+is AUTOPILOT_ORCH_CAP, default 80000 locally and 180000 in a cloud thread (rules/cloud.md: no `mise` or
+`gh` on PATH; AUTOPILOT_CLOUD=1|0 overrides the detection). A cloud thread starts at ~95-120k, so 80k
+would always be over; 14 of 56 threads ended above 165k. There, over the cap the message is a hard
+handover, and it fires for the main thread even when no ledger names the branch (the ledger may not
+exist yet, and the thread's cost is the same).
 
 Batching: in measured runs, a lone read-only call right after another cost 3.8M and 5.9M cost_eq a
 run, a tenth of it, at about 100k of context each. When the caller's last AUTOPILOT_BATCH_RUN
@@ -24,6 +28,7 @@ import glob
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -84,6 +89,14 @@ def lone_reads(requests, read_only):
     return n
 
 
+def is_cloud():
+    """A cloud thread, as rules/cloud.md detects it: no `mise` or no `gh`. AUTOPILOT_CLOUD=1|0 wins."""
+    forced = os.environ.get("AUTOPILOT_CLOUD")
+    if forced in ("0", "1"):
+        return forced == "1"
+    return not (shutil.which("mise") and shutil.which("gh"))
+
+
 def on_ledger_branch(cwd):
     """True when cwd, or the session's own directory, is on a branch a ledger names. A unit that
     prepares a later milestone works in another worktree, on a branch no ledger names: measured
@@ -122,7 +135,8 @@ def main():
         return 0
     # The orchestrator is told earlier than a unit: after an idle wait it re-writes all of its context
     # to the cache, and in the 430 run those rebuilds were 23% of the cost.
-    default_cap = "150000" if agent else os.environ.get("AUTOPILOT_ORCH_CAP", "80000")
+    cloud = is_cloud()
+    default_cap = "150000" if agent else os.environ.get("AUTOPILOT_ORCH_CAP", "180000" if cloud else "80000")
     cap = int(os.environ.get("AUTOPILOT_CONTEXT_CAP", default_cap))
     step = int(os.environ.get("AUTOPILOT_CONTEXT_STEP", "20000"))
     ctx, requests = last_requests(transcript)
@@ -150,8 +164,8 @@ def main():
                         "(`grep -n a f; grep -n b g`). A search whose end you cannot foresee goes to an `Explore` "
                         "subagent.")
 
-    if ctx >= cap and on_ledger_branch(hook.get("cwd") or "."):
-        msg = over_cap(ctx, cap, step, agent, who)
+    if ctx >= cap and (on_ledger_branch(hook.get("cwd") or ".") or (cloud and not agent)):
+        msg = over_cap(ctx, cap, step, agent, who, cloud)
         if msg:
             msgs.append(msg)
     if msgs:
@@ -159,7 +173,7 @@ def main():
     return 0
 
 
-def over_cap(ctx, cap, step, agent, who):
+def over_cap(ctx, cap, step, agent, who, cloud=False):
     state = Path(tempfile.gettempdir()) / f"autopilot-context-{who}"
     try:
         if ctx < int(state.read_text()) + step:
@@ -176,6 +190,11 @@ def over_cap(ctx, cap, step, agent, who):
                 "If you are an autopilot unit: finish the step in hand, then follow rules/context.md *Hand over at 150k* now "
                 "(run checkpoint.sh, write *Handover* in the ledger, commit, return `STATUS: HANDOVER`). "
                 "Any other subagent: stop exploring and return your answer.")
+    if cloud:
+        return (f"autopilot context: {ctx} tokens, over the {cap} cap. Hand over now, whatever the step: write "
+                "*Handover* in the ledger (done, next step, open findings, PR), commit, push, ask the user for a "
+                "fresh thread that runs `/speckit-autopilot resume`, and stop. Do not carry on: every further call "
+                "re-reads all of it, and an idle wait re-writes it to the cache.")
     return (f"autopilot context: {ctx} tokens, over the {cap} cap. Tell the user in one line that `/clear` then "
             "`/speckit-autopilot resume` would restart the orchestrator small, and carry on. If a question for "
             "the user is next, do not call `AskUserQuestion` (it blocks the session, so they cannot `/clear`): "
