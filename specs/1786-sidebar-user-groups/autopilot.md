@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-swhfr3
 - **Started**: 2026-11-11
 - **Phase**: milestones (M5)
-- **Next step**: M5 (T035–T042): milestone unit running
+- **Next step**: M5 pushed on claude/project-thread-swhfr3; orchestrator: open the M5 PR (body /mnt/project-files/issue-1786/m5-pr-body.md), review B and the visual pass (quickstart §B steps 4–6), merge; then M6
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
 | M4 | T029–T034 | full | Drag between lists and cancel | #1968 | merged |
-| M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
+| M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pushed, PR to open (base d1712abc8) |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
 
 ## Decisions
@@ -46,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D6 | implement M2 | T022 says the group menu opens "by the 803 chord", but no row menu has a keyboard opener | The menu opens by right click; its items are keyboard-operable like any menu. The keyboard opener lands with the header's tab stop in T040 (M5), which now names it (803 chord / Menu key on the focused header, with its test); U30 is PARTIAL | agent-resolved | tasks.md T040; test-list U30 |
 | D7 | implement M3 | Is a header's count the group's members or the rows shown under the active filter? | The rows shown, with the hidden members said aloud: `n` while none is hidden, `n of m` while a tag filter hides some, `empty` only for a group that holds no member. A group is not empty because a filter hides its members, and the count never claims rows the list does not draw (C3: hidden rows are not targets, their stored places stay). A member whose worktree is gone is not counted as hidden | agent-resolved | spec.md edge cases (empty group; tag filter hides worktrees); contracts/sidebar-groups.md C3, C5; tests `a_header_counts_the_rows_shown_*` |
 | D8 | implement M4 | Review A of M4 still found a MAJOR in round 3 (fixed, not re-reviewed): go on to review B and the visual pass, or hold M4? (escalation category 5) | Go on (option 1) | agent-resolved, orchestrator | review B round 1 covered the post-round-3 commits (head c4df81448) |
+| D9 | implement M5 | Which keys open the group menu from a focused header, and what does a click on the header do? | The Menu key and Shift+F10, the card menu's keys (feature 972); the menu opens with the keyboard on its first enabled entry, Up/Down skip disabled entries, Enter/Space run it. A click on the header toggles it, like Enter/Space and the twisty (the header's press is the toggle, as the Overview row's press is its action) | agent-resolved | crates/micold-client/src/ui/sidebar.rs `header_menu_anchor`; tests a_keyboard_opened_group_menu_* |
 
 ## Review rounds
 
@@ -75,6 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CHANGES (2 MAJOR, 1 MINOR, all fixed in 888b042f1: a release after Escape or a focus loss mid-drag selected the dragged row; run group rows and headers were never held; Moved(None) left from stale) |
 | Visual pass M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CLEAN (PASS, all six checks; screenshots /mnt/project-files/issue-1786/m4-*.png) |
 | Review B M4 | 2 | M4 | 2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | db4fe07eeef99d8f15b6953a5d3d8bb01ae3a136:2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | CLEAN (scoped to fix diff c4df81448..2f2bcd226; 1 MINOR left: held survives a blur released outside the window until the next press) |
+| M5 diff (A, inline review high) | 1 | M5 | 5cfbd81007b825218f9669e87bd41e8fac21d5b9 | 8035a9b69f57deb6769c9ecfa55d121303c1965e:5cfbd81007b825218f9669e87bd41e8fac21d5b9 | MINOR-ONLY (2 MINOR, recorded: Move up/down under a tag filter can swap with a hidden row; a reveal-opened group is saved with the next message) |
 
 ## Declined review findings
 
@@ -107,7 +109,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 None.
 
-M4 merged as #1968 (squash d1712abc8). Review A hit its round limit (D8: go on); orchestrator-run review B r1 found 2 MAJOR (fixed), r2 CLEAN with 1 MINOR in Follow-ups; visual pass PASS (/mnt/project-files/issue-1786/m4-*.png). Next: M5 (T035–T042) in a fresh thread; same cloud setup (orchestrator runs review B and visual pass; units write drift-M5.md and cycle-log; no `crate::features::<other>::` calls).
+M5 unit (cloud thread) on base d1712abc8 (#1968 merged): T035–T042 done and ticked, the M4 `held` follow-up folded in with its test, review A run inline (MINOR-ONLY, 2 MINOR in Follow-ups), full gate run by `scripts/gate.sh`, pushed; PR body at /mnt/project-files/issue-1786/m5-pr-body.md. Next: the orchestrator opens the PR, runs review B and the visual pass (quickstart §B 4–6; also the group menu by keyboard), merges; then M6.
 
 ## Open escalation
 
@@ -115,8 +117,9 @@ None.
 
 ## Follow-ups not done
 
-- M4 review B r2 MINOR: after a window blur mid-drag with the button released outside the window, `sidebar_drag` `held` stays set (row inert) until the next press; a press that `can_drag` rejects does not clear it. Clear `held` on any `Pressed`.
 
-- M5 (T040): the visual pass could not see keyboard focus move into a pointer-opened menu (group menu and worktree-row menu alike: Down/Tab showed no highlight, Return hit the button underneath). Check menu keyboard focus when the header tab stop and keyboard opener land.
+- Menu keyboard focus (M4 visual pass, checked in M5): the group menu now has its own keyboard model (`GroupMenu::highlighted`, Up/Down/Enter/Space through a key listener, opened by keyboard on its first entry; tests a_keyboard_opened_group_menu_*, a_pointer_opened_group_menu_*). The worktree-row and run-group menus still have none: a pointer-opened row menu shows no highlight for Down and Return reaches the widget under it. App-wide (no sidebar row menu has a keyboard model; the Overview card menu is the keyboard path, feature 972), so not fixed here; the M5 visual pass should confirm the group menu.
+- M5 review A MINOR: under a tag filter, Move up/Move down step within the stored list, so they can swap with a hidden row and show no change.
+- M5 review A MINOR: a reveal that opens a collapsed group marks the layout unsaved after the shell's save step of that message, so it is written with the next message.
 - Seen in the M2 visual pass, not isolated: after Ctrl+Shift+G (New group) the More menu stayed open behind the naming dialog and after Create.
 
