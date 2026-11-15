@@ -112,6 +112,7 @@ crates/micold-core/src/provision/mod.rs          # start_step: run prepare_link,
 crates/micold-client/src/daemon.rs               # the three ProvisionOptions construction sites set `link` (app side, minimal)
 packaging/basic/sshd_config                      # + AllowStreamLocalForwarding remote, StreamLocalBindUnlink yes
 docs/user-guide/daemon-configuration.md, docs/daemon.md
+crates/micold-daemon/Cargo.toml                  # + [[test]] orchestrator_dial (autotests = false)
 crates/micold-daemon/tests/orchestrator_dial/    # NEW test binary
 crates/micold-daemon/tests/ssh_real/ssh_real_link.rs  # NEW, four kinds + drop/return
 ```

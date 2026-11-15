@@ -14,7 +14,7 @@ Part A is by hand with no SSH; Part B uses a rootless `sshd`. There is no visual
 
 ## B. Through a forward (Linux, `ssh_real` suite)
 
-`scripts/gate.sh` does not run it; run `cargo test -p micold-daemon --test ssh_real -- link` per the suite's
+`scripts/gate.sh` does not run it; run `cargo test -p micold-daemon --features ssh-real-runtime --test ssh_real ssh_real_link -- --test-threads=1` per the suite's
 README (rootless `sshd` on loopback, real `ssh`).
 
 1. Four daemons (host, container, ssh, pod: pod = a second loopback `sshd`): each `online` once, own kind.

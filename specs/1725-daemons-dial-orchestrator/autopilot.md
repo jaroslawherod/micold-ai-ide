@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | pending |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
-| M5 | T038–T040 | light | Drop shows offline, reopen restores online (US3) | | pending |
+| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
 
 ## Decisions
 
