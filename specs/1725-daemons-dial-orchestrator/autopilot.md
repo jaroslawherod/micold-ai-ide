@@ -11,19 +11,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9qx3oe
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: open the M1 PR (title and body in pr-title.md/pr-body.md), review B, merge; then M2 (T016–T020)
+- **Next step**: milestone M2 (T016–T020), in a fresh thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
+| #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | | PR pending (unit done: gate green, review A clean; review B by the orchestrator) |
+| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | pending |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
@@ -60,7 +61,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. M1 unit finished 2026-11-15: T001–T015 ticked, drift-M1.md and tdd/cycle-log.md written, plan-drift clean, `scripts/gate.sh` green at the pushed tree, review A clean (round 2). Left to the orchestrator: open the PR from pr-title.md/pr-body.md, dispatch review B (conformance), wait for CI, merge, `git merge origin/main`. Environment notes: the disk holds about 30 GB, so the full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` and `cargo-nextest` (installed with `cargo install cargo-nextest --locked`) and `openssh-client` (`ssh-keygen`) on the machine.
+2026-11-15, M1 thread: PR #1971 squash-merged (8921b6167) on green `ci complete` (mutants advisory, red). Review B (orchestrator, sonnet) round 1 CHANGES (2 MAJOR missing drift records, 1 MINOR I/O-test scope; all fixed in d7a3d1066), round 2 CLEAN. origin/main merged back; diff vs main is ledger only. Next: M2 (T016–T020, tier full) in a fresh cloud thread running `/speckit-autopilot resume` on this branch (update the Worktree branch line if the thread's branch differs).
+
+Cloud notes: same as the design handover. Units have no Agent tool: they run review A headless (`claude -p "<prompt>" --agent autopilot-reviewer --model <m> --permission-mode auto --allowedTools "Read,Grep,Glob,Bash(git *),Bash(grep *),Bash(ls *)"`); the orchestrator runs review B (sonnet, rubrics/conformance.md) and a sonnet worker for its fixes. Brief units to record every UNPLANNED path (tests included) in drift-M<K>.md and run plan-drift.sh. Full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`; cargo-nextest and openssh-client may need installing. Open the PR via GitHub MCP from pr-title.md/pr-body.md (attribution block first), draft=false, wait on `ci complete` via `gh api .../commits/<head>/check-runs`, squash with expectedHeadSha, then `git merge origin/main` and check the diff is ledger only.
 
 ## Open escalation
 
