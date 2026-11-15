@@ -286,6 +286,7 @@ register! {
             crate::features::sidebar::SidebarMoreMenu,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::quick_switch::QuickSwitcherDialog => crate::ui::quick_switcher::dialog,
     crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
@@ -300,6 +301,7 @@ register! {
             crate::features::worktree::WorktreeContextMenu,
             crate::features::overview::OverviewCardMenu,
             crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     // Feature 972: the Overview card's menu acts on a location as the row menus do, so it and they
     // (with the start menu) replace each other — one context menu at a time (R2, FR-014).
@@ -311,6 +313,7 @@ register! {
             crate::features::session::SessionContextMenu,
             crate::features::session::SessionStartMenu,
             crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
     // The switcher is deliberately absent: this menu is opened by right-clicking a row *inside*
@@ -325,6 +328,7 @@ register! {
             crate::features::runs::GroupContextMenu,
             crate::features::overview::OverviewCardMenu,
             crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::project::ProjectSelectorDialog => crate::ui::project_selector::dialog,
     crate::features::project::ProjectSwitcher {
@@ -333,6 +337,7 @@ register! {
             crate::features::sidebar::SidebarMoreMenu,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
     crate::features::session::ConfirmLinkOpenDialog => crate::ui::confirm_link_open::dialog,
@@ -376,6 +381,16 @@ register! {
             crate::features::worktree::WorktreeContextMenu,
             crate::features::runs::GroupContextMenu,
             crate::features::overview::OverviewCardMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
+    },
+    // Feature 1786 (C6): a user group header's menu is one more row menu, and replaces the others.
+    crate::features::sidebar_group_actions::GroupContextMenu {
+        displaces:
+            crate::features::project::ProjectContextMenu,
+            crate::features::worktree::WorktreeContextMenu,
+            crate::features::runs::GroupContextMenu,
+            crate::features::overview::OverviewCardMenu,
+            crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
     },
     crate::features::sidebar::SidebarMoreMenu {
         displaces:
@@ -383,6 +398,7 @@ register! {
             crate::features::project::ProjectSwitcher,
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     // The setup output view (feature 1289, contract U4).
     crate::features::setup::SetupOutputDialog => crate::ui::setup_output::dialog,
@@ -395,6 +411,7 @@ register! {
             crate::features::runs::GroupContextMenu,
             crate::features::overview::OverviewCardMenu,
             crate::features::sidebar_group_actions::SidebarEmptyAreaMenu,
+            crate::features::sidebar_group_actions::GroupContextMenu,
     },
     crate::features::worktree::RenameWorktreeDialog => crate::ui::worktree_rename::dialog,
     crate::features::worktree_form::AddWorktreeDialog => crate::ui::worktree_form::dialog,

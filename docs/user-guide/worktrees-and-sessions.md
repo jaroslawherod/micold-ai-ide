@@ -404,6 +404,15 @@ does not fit; point at it to read it whole), then how many rows it holds, or **e
 is empty. A group never stands for a state: a worktree keeps its group whatever its sessions are
 doing.
 
+To rename or delete a group, right-click its header and choose **Rename** or **Delete**.
+
+- **Rename** opens the same dialog with the group's current name. The same rules apply: a blank
+  name, or the name of another group, is refused with the reason and the group keeps its name.
+  Typing only different capitals of its own name is fine. The worktrees stay in the group.
+- **Delete** removes the header at once; there is nothing to confirm because nothing is lost. Every
+  worktree in the group goes back to the ungrouped list, after the ones already there. No worktree
+  and no session is deleted, stopped or changed: a group only arranges the sidebar.
+
 ### Agent worktrees
 
 AI coding assistants create worktrees of their own inside your project, in the same

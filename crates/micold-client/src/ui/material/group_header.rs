@@ -16,6 +16,9 @@ use micold_core::tokens::Roles;
 /// The words a group with no rows shows in place of its count.
 const EMPTY_GROUP: &str = "empty";
 
+/// What a right-click turns into: the press point, in window coordinates, to a message.
+type OnRightPress<M> = Box<dyn Fn((u16, u16)) -> M>;
+
 /// A user group's header row. Build with [`GroupHeader::new`], then turn it into a [`TreeItem`]
 /// (`.into()`) and put it in a [`TreeView`].
 pub struct GroupHeader<M> {
@@ -25,6 +28,7 @@ pub struct GroupHeader<M> {
     count: usize,
     roles: Roles,
     key: Option<u64>,
+    on_right_press: Option<OnRightPress<M>>,
 }
 
 impl<M> GroupHeader<M> {
@@ -38,6 +42,7 @@ impl<M> GroupHeader<M> {
             count: 0,
             roles: micold_core::tokens::DARK,
             key: None,
+            on_right_press: None,
         }
     }
 
@@ -65,6 +70,13 @@ impl<M> GroupHeader<M> {
         self
     }
 
+    /// Emit `f(point)` when the header is right-clicked, `point` being the press in window
+    /// coordinates: where the group menu hangs.
+    pub fn on_right_press(mut self, f: impl Fn((u16, u16)) -> M + 'static) -> Self {
+        self.on_right_press = Some(Box::new(f));
+        self
+    }
+
     /// What the row is, for its widget state to follow it when the list moves it.
     pub fn key(mut self, key: u64) -> Self {
         self.key = Some(key);
@@ -80,7 +92,7 @@ fn count_words(count: usize) -> String {
     }
 }
 
-impl<'a, M> From<GroupHeader<M>> for TreeItem<'a, M> {
+impl<'a, M: 'a> From<GroupHeader<M>> for TreeItem<'a, M> {
     fn from(header: GroupHeader<M>) -> Self {
         let r = header.roles;
         let words = count_words(header.count);
@@ -93,6 +105,9 @@ impl<'a, M> From<GroupHeader<M>> for TreeItem<'a, M> {
         }
         if let Some(key) = header.key {
             item = item.key(key);
+        }
+        if let Some(on_right_press) = header.on_right_press {
+            item = item.on_right_press(on_right_press);
         }
         item
     }

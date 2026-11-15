@@ -17,10 +17,10 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | id | behavior | traces | kind | state | test |
 |---|---|---|---|---|---|
 | A1 | New group with a valid name adds a header holding no worktree | US1-1, FR-001 | example | DONE | tests/sidebar_group_actions.rs::a_valid_name_adds_a_header_holding_no_worktree_and_saves |
-| A2 | Renaming a group changes the header name and keeps its worktrees | US1-2, FR-002 | example | PENDING | tasks T020, T021 |
-| A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | PENDING | tasks T020, T021 |
-| A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | PENDING | tasks T011, T020 |
-| A5 | Duplicate name is refused with a visible message, state kept | US1-5, FR-004 | example | PENDING | tasks T011, T020 |
+| A2 | Renaming a group changes the header name and keeps its worktrees | US1-2, FR-002 | example | DONE | tasks T020, T021 |
+| A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | DONE | tasks T020, T021 |
+| A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | DONE | tasks T011, T020 |
+| A5 | Duplicate name is refused with a visible message, state kept | US1-5, FR-004 | example | DONE | tasks T011, T020 |
 | A6 | Move to group via menu moves the row under that group | US2-1, FR-010 | example | PENDING | tasks T026, T027 |
 | A7 | Move to group Ungrouped moves the row to the ungrouped list | US2-2, FR-010 | example | PENDING | tasks T026, T027 |
 | A8 | With no group, the menu offers only New group… which creates and moves | US2-3, FR-010 | example | PENDING | tasks T026, T027 |
@@ -63,8 +63,8 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | DONE | tests/sidebar_tree.rs::user_groups::a_run_group_sits_in_a_user_group_as_one_unit, row_metrics_count_headers_and_navigation_skips_them |
 | U13 | create trims, ids monotonic and never reused | FR-004 | example | DONE | micold-core sidebar_layout::tests::create_trims_the_name_and_adds_an_empty_group_last, created_ids_grow_and_are_never_reused |
 | U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | DONE | micold-core sidebar_layout::tests::create_refuses_a_blank_name_and_changes_nothing, create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing |
-| U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | PENDING | tasks T018, T019 |
-| U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | PENDING | tasks T018, T019 |
+| U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | DONE | tasks T018, T019 |
+| U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | DONE | tasks T018, T019 |
 | U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | PENDING | tasks T024, T025 |
 | U18 | move_item UnknownItem and IsDefault errors; run group moves as one | FR-015, FR-016 | example | PENDING | tasks T024, T025 |
 | U19 | all outcomes keep each item in exactly one list | SC-002 | example | PENDING | tasks T024, T025 |
@@ -78,7 +78,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U27 | move_menu_items lists each group, Ungrouped, New group…; none for Default | C6, FR-010 | example | PENDING | tasks T026, T027 |
 | U28 | set_collapsed; Enter/Space on a header toggles; menu Collapse/Expand | FR-011 | example | PENDING | tasks T039, T040 |
 | U29 | reveal_ready expands the group holding the target | FR-017 | example | PENDING | tasks T039, T040 |
-| U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | PENDING | tasks T020, T021 |
+| U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | PARTIAL: items operable (done); the keyboard opener is T040 (M5) | tasks T020, T021, T040 |
 | U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | DONE | tests/sidebar_group_actions.rs::new_group_is_on_the_more_menu_with_no_worktree_needed, no_project_open_offers_no_new_group, the_new_group_chord_is_primary_shift_g_and_on_the_shortcut_sheet (empty-area menu still open, T014) |
 
 ## Out of scope

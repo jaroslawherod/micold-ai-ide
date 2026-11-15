@@ -43,12 +43,12 @@ Create (scenarios 1, 4, 5 on create):
 
 Rename and delete (scenarios 2, 3):
 
-- [ ] T018 [U15][U16] [US1] Tests in `crates/micold-core/src/sidebar_layout.rs`: `rename(id, name)` with `Blank`, `Duplicate` (own current name is not a duplicate), `UnknownGroup`; `delete(id)` appends the group's items to the end of `ungrouped` in their order, `UnknownGroup` otherwise (C1). Red first.
-- [ ] T019 [U15][U16] [US1] Implement `rename` and `delete` in `crates/micold-core/src/sidebar_layout.rs` (depends on T018).
-- [ ] T020 [A2][A3][A4][A5][U30] [US1] Tests in `crates/micold-client/tests/sidebar_group_actions.rs`: rename through the draft keeps members; blank/duplicate rename refused with message; delete returns members to ungrouped and the worktree and session lists are unchanged (SC-004, FR-003, FR-014); group menu offers Rename, Delete, opens by keyboard (803); both save. Red first.
-- [ ] T021 [A2][A3][U30] [US1] Add `Msg::Rename`, `Msg::Delete` and `GroupContextMenu` (Rename, Delete; Move up/Move down are added by T038 and Collapse/Expand by T040) to `crates/micold-client/src/features/sidebar_group_actions.rs`; register `GroupContextMenu` (layer ContextMenu) in `crates/micold-client/src/overlay/registry.rs` (depends on T019, T020).
-- [ ] T022 [US1] Glue in `crates/micold-client/src/ui/sidebar.rs`: open the group menu from the header by right click and by the 803 chord; `crates/micold-client/src/main.rs` routing (depends on T021).
-- [ ] T023 [US1] User guide: renaming and deleting a group (sessions are never touched) in `docs/user-guide/worktrees-and-sessions.md`.
+- [x] T018 [U15][U16] [US1] Tests in `crates/micold-core/src/sidebar_layout.rs`: `rename(id, name)` with `Blank`, `Duplicate` (own current name is not a duplicate), `UnknownGroup`; `delete(id)` appends the group's items to the end of `ungrouped` in their order, `UnknownGroup` otherwise (C1). Red first.
+- [x] T019 [U15][U16] [US1] Implement `rename` and `delete` in `crates/micold-core/src/sidebar_layout.rs` (depends on T018).
+- [x] T020 [A2][A3][A4][A5][U30] [US1] Tests in `crates/micold-client/tests/sidebar_group_actions.rs`: rename through the draft keeps members; blank/duplicate rename refused with message; delete returns members to ungrouped and the worktree and session lists are unchanged (SC-004, FR-003, FR-014); group menu offers Rename, Delete (its items are keyboard-operable); both save. The keyboard opener (803 chord / Menu key) moved to T040 per D6. Red first.
+- [x] T021 [A2][A3][U30] [US1] Add `Msg::Rename`, `Msg::Delete` and `GroupContextMenu` (Rename, Delete; Move up/Move down are added by T038 and Collapse/Expand by T040) to `crates/micold-client/src/features/sidebar_group_actions.rs`; register `GroupContextMenu` (layer ContextMenu) in `crates/micold-client/src/overlay/registry.rs` (depends on T019, T020).
+- [x] T022 [US1] Glue in `crates/micold-client/src/ui/sidebar.rs`: open the group menu from the header by right click (the keyboard opener moved to T040 per D6); routing runs through the existing `Message::SidebarGroups` arm in `app.rs` (M1), not `main.rs` (depends on T021).
+- [x] T023 [US1] User guide: renaming and deleting a group (sessions are never touched) in `docs/user-guide/worktrees-and-sessions.md`.
 
 ## Phase 4: User Story 2 - Assign a worktree without dragging (P1)
 
@@ -78,7 +78,7 @@ Rename and delete (scenarios 2, 3):
 - [ ] T037 [A27] [A16][A17][A18][U25][U26] [US4] Tests in `crates/micold-client/tests/sidebar_drag.rs` and `sidebar_group_actions.rs`: `hit_test` yields `GroupSlot` between headers only when the dragged item is a group, `Group/Ungrouped` index for in-list reorder; "Move up"/"Move down" in worktree, run group and group menus, disabled at the ends; order survives a redraw. Red first.
 - [ ] T038 [A16][A17][A18][U25][U26] [US4] Implement `GroupSlot` hit-test in `crates/micold-client/src/features/sidebar_drag.rs` and `Msg::MoveUp/MoveDown` plus menu items in `crates/micold-client/src/features/sidebar_group_actions.rs` and `crates/micold-client/src/features/worktree.rs` (depends on T036, T037).
 - [ ] T039 [A23][A24][A25][U28][U29] [US6] Tests: core `set_collapsed`; client Enter/Space on a focused header toggles; group menu "Collapse"/"Expand"; `reveal_ready` expands the holding group; collapsed state and layout round trip through `save_layout`/`load_layout` (restart, SC-003); stale assignment ignored on load. Files `crates/micold-core/src/sidebar_layout.rs`, `crates/micold-client/tests/sidebar_group_actions.rs`, `sidebar_layout_store.rs`. Red first.
-- [ ] T040 [A23][U28][U29] [US6] Implement `set_collapsed`, `Msg::Toggle`, header tab stop with Enter/Space, menu entry in `crates/micold-core/src/sidebar_layout.rs`, `crates/micold-client/src/features/sidebar_group_actions.rs`, `crates/micold-client/src/features/navigation.rs` (depends on T039).
+- [ ] T040 [A23][U28][U29] [US6] Implement `set_collapsed`, `Msg::Toggle`, header tab stop with Enter/Space, open the group context menu from the keyboard (803 chord / Menu key on the focused header) with its test (moved here from T020/T022 per D6), menu entry in `crates/micold-core/src/sidebar_layout.rs`, `crates/micold-client/src/features/sidebar_group_actions.rs`, `crates/micold-client/src/features/navigation.rs` (depends on T039).
 - [ ] T041 [A19][A26] [US7] Test in `crates/micold-client/tests/sidebar_group_actions.rs`: cycle one grouped worktree through all five card states, group and position identical at each step (SC-005, FR-013); regression guard, green on arrival; walk every `SidebarEntry::UserGroup` header and role and assert none is keyed by a card state (US7-2).
 - [ ] T042 [US4] User guide: reordering, collapsing, persistence across restarts in `docs/user-guide/worktrees-and-sessions.md`.
 
@@ -119,7 +119,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T018–T023
 - **Deliverable**: the group header menu renames and deletes a group; delete returns its worktrees to the ungrouped list and touches no session.
 - **Satisfies**: US1 acceptance scenarios 2, 3 and rename refusals; FR-002, FR-003; SC-004
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test main sidebar_group_actions`
 - **Depends on**: M1
 - **Tier**: full
 
@@ -128,7 +128,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T024–T028
 - **Deliverable**: a worktree or run group menu offers "Move to group" (groups, Ungrouped, New group…) and the row moves, by keyboard too.
 - **Satisfies**: US2 acceptance scenarios 1–4; FR-005, FR-010 (Move to group), FR-016 (menu); SC-002, SC-006
-- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions`
+- **Verify**: `mise run test-core`; `scripts/build-lock.sh cargo test -p micold-client --test main sidebar_group_actions`
 - **Depends on**: M2
 - **Tier**: full
 

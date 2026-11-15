@@ -215,6 +215,30 @@ impl SidebarLayout {
         Ok(id)
     }
 
+    /// Rename the group `id` to `name`, trimmed. Its own current name is not a duplicate (FR-002,
+    /// FR-004).
+    pub fn rename(&mut self, id: UserGroupId, name: &str) -> Result<(), LayoutError> {
+        self.group(id).ok_or(LayoutError::UnknownGroup)?;
+        let name = self.valid_name(name, Some(id))?;
+        if let Some(group) = self.groups.iter_mut().find(|group| group.id == id) {
+            group.name = name;
+        }
+        Ok(())
+    }
+
+    /// Delete the group `id`; its items return to the end of `ungrouped`, in their order, and none
+    /// is dropped (FR-003, C1).
+    pub fn delete(&mut self, id: UserGroupId) -> Result<(), LayoutError> {
+        let at = self
+            .groups
+            .iter()
+            .position(|group| group.id == id)
+            .ok_or(LayoutError::UnknownGroup)?;
+        let group = self.groups.remove(at);
+        self.ungrouped.extend(group.items);
+        Ok(())
+    }
+
     /// `name` trimmed, or why it cannot name a group: blank, or already the name of a group other
     /// than `except` (FR-004).
     fn valid_name(&self, name: &str, except: Option<UserGroupId>) -> Result<String, LayoutError> {
@@ -448,5 +472,63 @@ mod tests {
                 "a refused create leaves the layout as it was (C2)"
             );
         }
+    }
+
+    #[test]
+    fn rename_changes_the_name_and_keeps_the_members_and_position() {
+        let mut layout = sample();
+        assert_eq!(layout.rename(UserGroupId(1), "  Office "), Ok(()));
+        assert_eq!(layout.groups[0].name, "Office", "the name is trimmed");
+        assert_eq!(layout.groups[0].items.len(), 2, "its worktrees stay in it");
+        assert!(layout.groups[0].collapsed, "nothing else about it changes");
+        assert_eq!(layout.groups[1].name, "Later");
+    }
+
+    #[test]
+    fn rename_to_its_own_current_name_is_not_a_duplicate() {
+        let mut layout = sample();
+        assert_eq!(layout.rename(UserGroupId(1), "work"), Ok(()));
+        assert_eq!(layout.groups[0].name, "work", "only the case changed");
+    }
+
+    #[test]
+    fn a_refused_rename_leaves_the_layout_as_it_was() {
+        for (id, name, error) in [
+            (1, "   ", LayoutError::Blank),
+            (1, " later ", LayoutError::Duplicate),
+            (9, "Fresh", LayoutError::UnknownGroup),
+        ] {
+            let mut layout = sample();
+            assert_eq!(layout.rename(UserGroupId(id), name), Err(error));
+            assert_eq!(layout, sample(), "a refused rename changes nothing (C2)");
+        }
+    }
+
+    #[test]
+    fn delete_appends_the_items_to_ungrouped_in_their_order() {
+        let mut layout = sample();
+        assert_eq!(layout.delete(UserGroupId(1)), Ok(()));
+        assert_eq!(layout.groups.len(), 1);
+        assert_eq!(layout.groups[0].id, UserGroupId(2));
+        assert_eq!(
+            layout.ungrouped,
+            vec![
+                worktree("fix-b"),
+                worktree("feat-a"),
+                LayoutItem::Run(GroupId(Uuid::from_u128(7)))
+            ],
+            "the group's rows return after the ones already ungrouped (FR-003)"
+        );
+        assert_eq!(layout.next_id, 3, "its id is never reused");
+    }
+
+    #[test]
+    fn deleting_an_unknown_group_is_refused_and_changes_nothing() {
+        let mut layout = sample();
+        assert_eq!(
+            layout.delete(UserGroupId(9)),
+            Err(LayoutError::UnknownGroup)
+        );
+        assert_eq!(layout, sample());
     }
 }
