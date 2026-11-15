@@ -191,7 +191,7 @@ to the parent, and the implicit `default` parent.
   taken as its parent for visibility, and MUST say when the caller is in `default` and has no parent.
 - **FR-005**: The tool MUST list nothing outside the caller's FR-015 scope as amended by FR-001.
 - **FR-006**: A tool MUST send text to the caller's parent without a session id. The target is the
-  session in the parent worktree the earliest-created live session in the parent worktree, ties broken by the lowest session id;
+  earliest-created live session in the parent worktree, ties broken by the lowest session id;
   the answer MUST name the session reached.
 - **FR-007**: The parent message tool MUST refuse, sending nothing, when the parent worktree has no
   session, when the parent was removed, and when the caller is in `default`; each refusal MUST state

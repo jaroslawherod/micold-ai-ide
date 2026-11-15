@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-x5s2f0
 - **Started**: 2026-11-15
 - **Phase**: spec
-- **Next step**: spec review round 2 (sonnet, fix diff only), then clarify unit; add a note to specs/1857-worktree-parent/spec.md pointing to 1945 at close
+- **Next step**: clarify done (no questions); next: plan unit; add a note to specs/1857-worktree-parent/spec.md pointing to 1945 at close
 
 ## Pull requests
 
@@ -33,7 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
-| Spec | 1 | spec.md | b61cbd6b756d0a69410a906fb4d73026183d9d08 | 45981247472c178d3a281f97d0df0d2ea12c268b:214f266cddafb8d31574e169e83779f56cf41864 | CHANGES: 3 MAJOR, 2 MINOR (all fixed; F1-F3 re-review pending) |
+| Spec | 1 | spec.md | 214f266cddafb8d31574e169e83779f56cf41864 | 45981247472c178d3a281f97d0df0d2ea12c268b:214f266cddafb8d31574e169e83779f56cf41864 | CHANGES: 3 MAJOR, 2 MINOR (all fixed in 78ada4fd) |
+| Spec | 2 | spec.md (fix diff, sonnet) | 78ada4fd75dd1ca8e7c8ff1aebf16e466acde566 | - | CLEAN, 1 MINOR (FR-006 sentence; fixed in clarify unit) |
 
 ## Declined review findings
 
