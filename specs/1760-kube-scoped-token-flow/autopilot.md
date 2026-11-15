@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1760
-- **Worktree branch**: claude/project-thread-c875n9
+- **Worktree branch**: claude/project-thread-9suuus
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M3 (fresh cloud thread)
+- **Next step**: M3 review (A high, B sonnet by the orchestrator), CI `kube-cluster`, then merge
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
 | M2 | T018–T019 | light | form tick and user guide | #1918 | merged |
-| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
+| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | built, in review |
 
 ## Decisions
 
@@ -69,6 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+2026-11-15 M3 unit (cloud, branch claude/project-thread-9suuus): previous PR #1918 merged at 110457c5aa066acdedbf5b089eb7b80bbd57f156. T021-T027 built (forge.rs, support helpers `token_store`/`start_with_tokens`/`Shell::capture`/`session_env_and_home`, `kube_real_scoped_token`, row 11 COVERED). fmt, clippy and the forge unit test green here; the live test can only run on CI `kube-cluster` (no kind here), so the first CI run is the real check and may need a fix unit (the shell-instance env, the helper probe and the pod commands were written without a cluster). No Review A/B run by the unit (no subagents). PR body at the scratchpad pr-body-m3.md. Next: orchestrator runs Review A (high) and B (sonnet), pushes the PR, watches `kube-cluster`, and on request a temporary revert commit for T026.
 2026-11-15 M2 orchestrator (cloud): PR #1918 squash-merged (110457c5aa066acdedbf5b089eb7b80bbd57f156) on green CI (incl. the real kube cluster job); main merged back into claude/project-thread-c875n9. Next: a fresh thread runs `/speckit-autopilot resume #1760` on this branch and dispatches the M3 milestone unit (T021–T027, Tier full, model omitted); previous PR #1918, merge SHA above. Then the close unit.
 
 2026-11-14 M2 orchestrator (cloud): draft PR #1918 opened via MCP. Review A r1 (fresh, high) MINOR-only; Review B r1 CHANGES fixed in 72a62c7 (specs only), r2 CLEAN, Verify 122 passed. Visual pass (quickstart §B) PASS in light and dark at b43df5f, screenshots /mnt/project-files/issue-1760/m2-b1-*.png; the cycle-log line "visual pass pending" is superseded by this entry. Next: squash-merge #1918 on green, merge main back, then M3.

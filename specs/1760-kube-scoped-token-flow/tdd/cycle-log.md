@@ -155,3 +155,21 @@ Append only. Newest last.
   features_daemons_kube features_daemons::` -> `130 passed`, then `features_daemons::` -> `89 passed`.
 - refactor: none needed.
 - visual pass (T019, quickstart §B): pending, run by the orchestrator.
+
+## Cycle 10: M3 the kind test (T021-T027)
+
+- test: `tests/kube_real_scoped_token.rs` `kube_real_forge_accepts_only_the_run_secret` (T021, no
+  cluster: 401 with `WWW-Authenticate` for no, wrong-user, wrong-secret and malformed credentials;
+  200 for Basic `x-access-token:<secret>`; the REST listing under `/user/repos` and
+  `/api/v3/user/repos` with a Bearer; a real `git clone` without the secret fails, with it clones and
+  pushes) and `kube_real_scoped_token` (T025, live).
+- green: forge test `2 passed` locally (`--features kube-real-runtime --test kube_real_scoped_token`;
+  the live test prints `SKIP ... kind is not installed` here). fmt and clippy (client, all targets and
+  `--features kube-real-runtime --tests`, `-D warnings`) clean; `every_test_file_is_wired` passes.
+- live evidence (T026): this container has no docker/kind/kubectl, so the live arms run only in CI job
+  `kube-cluster` (`scripts/test-kube.sh` exports `MICOLD_KUBE_TEST_REQUIRED=1` and runs
+  `kube_real_`, which matches the new test, so a missing tool fails it instead of skipping). The
+  revert check (token keys of T014 commented out, the push in arm A must fail) is left to a temporary
+  revert commit the orchestrator pushes on request; none is on the branch.
+- refactor: `Shell` (open, step, new `switch` and `capture`) moved from `kube_real_toolchain.rs` into
+  `kube_real_support/mod.rs` so both tests share it.
