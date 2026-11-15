@@ -25,7 +25,9 @@ A raw job log read by the orchestrator or a unit is re-read on every later call.
 and ask for at most ~40 lines back: the failing step, the failing tests, the decisive lines.
 
 1. Get the step list: `gh run view <run> --json jobs` or, with no authenticated `gh`, the GitHub
-   MCP `actions_get` (`method: get_workflow_job`). Pick the step whose conclusion is `failure`.
+   MCP `actions_list` (`method: list_workflow_jobs`, the run id) to find the failed job, then
+   `actions_get` (`method: get_workflow_job`) for its steps. Pick the step whose conclusion is
+   `failure`.
 2. Fetch that step's log: `gh run view <run> --log-failed`, or MCP `get_job_logs` with
    `return_content: true` (blob URLs return 403 in the cloud). An oversized result is saved to a
    tool-results JSON file: `jq -r .logs_content <file> > "$SCRATCHPAD/job.log"`.
@@ -34,4 +36,3 @@ and ask for at most ~40 lines back: the failing step, the failing tests, the dec
 4. Return: failing job and step, failing test names, the decisive lines. Nothing else.
 
 The same applies to any long log a debugging unit needs (a gate log is already read with `grep`).
-
