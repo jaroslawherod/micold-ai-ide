@@ -23,7 +23,7 @@ use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use kube_real_support::forge::{Forge, USER};
+use kube_real_support::forge::{Forge, Seen, USER};
 use kube_real_support::*;
 use micold_client::daemon_config_delivery::GITHUB_TOKEN_PREFIX;
 use micold_core::connect::DaemonConnection;
@@ -494,15 +494,28 @@ fn kube_real_forge_accepts_only_the_run_secret() {
     assert!(forge.branch(GRANTED, "pushed").is_some());
     let seen = forge.requests();
     assert!(seen.len() > seen_before);
-    assert!(seen[seen_before..]
-        .iter()
-        .any(|r| r.path.ends_with("git-receive-pack") && r.accepted));
-    let seen = &seen[..seen_before];
-    assert_eq!(seen.len(), 1 + 4 + 1 + 2 + 1);
-    assert_eq!(seen[0].credential, None);
+    assert!(
+        seen[seen_before..]
+            .iter()
+            .any(|r| r.path.ends_with("git-receive-pack") && r.accepted),
+        "the push with the secret reaches the forge and is accepted"
+    );
+    let refused = |r: &&Seen| !r.accepted;
+    let before = &seen[..seen_before];
+    assert_eq!(before[0].credential, None, "the first request is anonymous");
     assert_eq!(
-        seen[1].credential,
+        before[1].credential,
         Some((USER.to_string(), "not-the-secret".to_string()))
     );
-    assert_eq!(seen.iter().filter(|r| r.accepted).count(), 3, "{seen:?}");
+    assert!(
+        before
+            .iter()
+            .filter(refused)
+            .all(|r| r.credential != Some((USER.to_string(), secret.clone()))),
+        "no request carrying the run secret is refused: {before:?}"
+    );
+    assert!(
+        before.iter().any(|r| r.accepted && r.credential.is_some()),
+        "the right secret is accepted somewhere in the probes: {before:?}"
+    );
 }

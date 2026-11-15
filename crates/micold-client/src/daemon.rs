@@ -2492,11 +2492,10 @@ mod tests {
     }
 
     /// #1760 T010: the projects dial is the saved projects' GitHub repositories, lower-cased,
-    /// sorted and once each, and with the opt-in on a change of them changes the Kubernetes
-    /// actor's identity; with it off they pick nothing, so the identity stays (no re-dial).
+    /// sorted and once each. Its part in the actor's identity is the two tests below.
     #[test]
-    fn the_projects_dial_is_the_saved_repositories_and_part_of_the_identity() {
-        use micold_core::daemons::{FileSettings, ProjectSetting};
+    fn the_projects_dial_is_the_saved_repositories() {
+        use micold_core::daemons::ProjectSetting;
         let project = |path: &str, remote: Option<&str>| ProjectSetting {
             path: path.into(),
             remote: remote.map(String::from),
@@ -2511,34 +2510,54 @@ mod tests {
         let dial = super::ProjectsDial::of(&projects);
         let shown: Vec<String> = dial.0.iter().map(ToString::to_string).collect();
         assert_eq!(shown, ["acme/app", "zed/repo"]);
+    }
 
-        for opted_in in [true, false] {
-            let mut registry = DaemonRegistry::default();
-            let mut settings =
-                micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
-            settings.github_tokens = opted_in;
-            let id = registry
-                .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
-                .unwrap();
-            let mut states = DaemonStates::default();
-            states.insert(id, DaemonState::Starting);
-            let dir = std::path::Path::new("/nonexistent");
-            let before = actor_specs(&registry, &states, dir, None);
-            let file = FileSettings {
-                projects: projects.to_vec(),
-                ..FileSettings::default()
-            };
-            registry.set_file(id, file).unwrap();
-            let after = actor_specs(&registry, &states, dir, None);
-            if opted_in {
-                assert_ne!(before[0], after[0]);
-                assert!(
-                    matches!(&after[0].dial, Dial::Kubernetes { projects, .. } if *projects == dial)
-                );
-            } else {
-                assert_eq!(before[0], after[0], "off: saved projects are no identity");
-            }
-        }
+    /// The dial's projects, saved to a Kubernetes daemon, as its actor spec sees them: the spec
+    /// before and after `projects` are saved.
+    fn specs_around_saving_projects(
+        opted_in: bool,
+    ) -> (super::ActorSpec, super::ActorSpec, super::ProjectsDial) {
+        use micold_core::daemons::{FileSettings, ProjectSetting};
+        let projects = vec![ProjectSetting {
+            path: "/w/a".into(),
+            remote: Some("https://github.com/acme/App".into()),
+        }];
+        let dial = super::ProjectsDial::of(&projects);
+        let mut registry = DaemonRegistry::default();
+        let mut settings = micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
+        settings.github_tokens = opted_in;
+        let id = registry
+            .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
+            .unwrap();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let dir = std::path::Path::new("/nonexistent");
+        let before = actor_specs(&registry, &states, dir, None).remove(0);
+        let file = FileSettings {
+            projects,
+            ..FileSettings::default()
+        };
+        registry.set_file(id, file).unwrap();
+        let after = actor_specs(&registry, &states, dir, None).remove(0);
+        (before, after, dial)
+    }
+
+    /// With the opt-in on, saving a project changes the Kubernetes actor's identity.
+    #[test]
+    fn the_projects_dial_changes_the_identity_with_the_opt_in_on() {
+        let (before, after, dial) = specs_around_saving_projects(true);
+        assert_ne!(
+            before, after,
+            "an opted-in daemon re-dials on a new project"
+        );
+        assert!(matches!(&after.dial, Dial::Kubernetes { projects, .. } if *projects == dial));
+    }
+
+    /// With the opt-in off, saved projects pick nothing, so the identity stays (no re-dial).
+    #[test]
+    fn the_projects_dial_is_no_identity_with_the_opt_in_off() {
+        let (before, after, _) = specs_around_saving_projects(false);
+        assert_eq!(before, after, "off: saved projects are no identity");
     }
 
     /// The answer to the drift prompt is part of the actor's identity, so giving it restarts the

@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1760
 - **Worktree branch**: claude/project-thread-berzgj
 - **Started**: 2026-11-12
-- **Phase**: milestones
-- **Next step**: close (fresh cloud thread)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 | #1918 | M2 | merged | 110457c5aa066acdedbf5b089eb7b80bbd57f156 |
 | #1923 | M3 | merged | 9287b8ea78e6784543c07b69f2c91685fffe7197 |
+| (close) | close the spec | to open | |
 
 ## Milestones
 
@@ -74,6 +75,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+None. (Close unit 2026-11-15 ran in a cloud thread: speckit-tdd-verify FAIL cleared except LOW T034/T035; no converge, a CLEAN review B exists for M1-M3; plan-drift M1 recorded by full paths, M2 and M3 clean. Close PR number: set when the orchestrator opens it.)
+
+Previous handovers, kept for the record:
+
 2026-11-15 M3 orchestrator (cloud): PR #1923 squash-merged (9287b8ea78e6784543c07b69f2c91685fffe7197) on all-green CI (kube-cluster and podman included); main merged back into claude/project-thread-9suuus. Next: a fresh thread runs `/speckit-autopilot resume #1760` on this branch and dispatches the close unit (model omitted); previous PR #1923, merge SHA above. Note for the close: kube_real_concurrent once failed with `mv: cannot stat .../ai-clis/offered.json.part` on the revert-check run only (90564a406); not seen on other runs.
 
 2026-11-15 M3 orchestrator (cloud, branch claude/project-thread-9suuus): PR #1923. kube-cluster CI found a production bug from M1 (V14 refused the pod's 0440 startup Secret mount; fixed in 7929a0413, Review A r2 CLEAN) and three harness bugs in the env check (second session replaced the viewed terminals, a literal newline in `tr`, a leading prompt before a fact), fixed in e296b13c7, f1fc4ef50, 6392eda61; kube-cluster green at 6392eda61. T026: a temporary commit with the token keys off (90564a406) turned `kube_real_scoped_token` red at "A: the token is delivered" (left: [], right: ["github-token-kube-run"]), right before the push; reverted. `container daemon end to end (podman, linux)` is red on main too (rootless podman permission at container removal), not this PR's. Next: squash-merge #1923, merge main back, then the close unit.
@@ -104,3 +109,5 @@ None.
 
 - Spec prose (tasks.md T020, data-model, plan, research R2) calls the store `daemons.json`; there is no such file: the daemon registry is the `daemons` list of `settings.json`. The user guide (T020) names `settings.json`; the spec artifacts were left as they are.
 - docs/user-guide/sandboxed-daemon.md promises a sandbox pushes with a pasted token, but no client code delivers `[[github.tokens]]` to a container (deliver_container) either; separate follow-up.
+- Close unit: T034 (store changed between two starts, name-based keys through `kube_attempt`) and T035 (loosen exact-TOML and call-string assertions, rule-stating messages, split the shell loop at `kube_real_scoped_token.rs:303`, test that `kube_attempt` receives the dial's projects) from `tdd/verification.md` findings 8-13, all LOW; tests only.
+- `kube_real_concurrent` once failed with `mv: cannot stat .../ai-clis/offered.json.part` (revert-check run 90564a406 only). Not this feature: `crates/micold-core/src/provision/ai_cli.rs:214,428` writes `offered.json.part` under a fixed name and `mv`s it, so two provisioning runs at once in one pod (concurrent sessions) can race for the same temp file. Pre-existing and untouched by #1760; worth its own issue (unique temp name, e.g. with the pid).
