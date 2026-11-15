@@ -345,31 +345,31 @@ Persistence (an opt-in network orchestrator stores its state in PostgreSQL; loca
 ## Milestones and dependencies
 
 Done: #1723, #1728; #1724 M1–M4 merged (M5 store, M6 pending). Open in M1/M2: #1724, #1725, #1726,
-#1727, #1729, #1730, #1731. Numbers `N1`… are proposed new issues ([issues.md](issues.md)).
+#1727, #1729, #1730, #1731. Names `N1`… come from [issues.md](issues.md); created ones carry their issue number.
 
 | Milestone | Delivers | Issues | Depends on | Estimate |
 |---|---|---|---|---|
 | **M1** (unchanged) | Local orchestrator | #1724, #1725, #1726, #1727 | — | in progress |
 | **M2** (unchanged) | mTLS daemons anywhere | #1729, #1730, #1731 | #1724, #1728 | 4–6 weeks |
-| **M3 — Network API, storage, auth, roles** | PostgreSQL store, authorized JSON API, GitHub/Google sign-in, local access link, roles, audit | N1 (constitution), N16 (PostgreSQL store), #1732 (revised), #1733 (replaced), #1734 (revised) | #1726 (routing); N16 on #1724's M5 trait; #1733 on N16 | 5–7 weeks |
-| **M4a — Client foundation** | Expo web app, M3 theme, sign-in, sidebar and overview, local mode serving, CI | N2 (tokens to TS), #1735 (replaced), N9 (local mode) | N1, #1732, #1733 | 3–4 weeks |
-| **M4b — Structured Claude Code sessions** | Transcript, composer, prompts, pickers, lifecycle, attention, quick switcher, admin screens, Claude credentials status | #1736, #1737, #1738, #1739, N3, N10 | M4a, #1734 | 5–7 weeks |
-| **M5 — Kubernetes** | Images, Helm chart, gateway and link Service, probes, metrics, kind CI | #1742 (first), #1740 (replaced), N4 (web image) | #1742 on #1732; #1740 on #1730, #1734, #1742, N4; N4 on #1735 | 3–4 weeks |
-| **M6 — Parity v1.1** | Changes review, PR/Jira chips, history and runs, plan usage, setup output, sandbox status | N5, N6 | M4b | 4–6 weeks |
-| **M7 — Parity v2 and retirement** | Provisioning in the orchestrator, secret settings, Kubernetes view, large editor; then the iced app removed | N11, N12, N13 | M6; N13 on N11, N12 | 5–8 weeks |
+| **M3 — Network API, storage, auth, roles** | PostgreSQL store, authorized JSON API, GitHub/Google sign-in, local access link, roles, audit | N1 (#1949, constitution), N16 (#1948, PostgreSQL store), #1732 (revised), #1733 (replaced), #1734 (revised) | #1726 (routing); N16 (#1948) on #1724's M5 trait; #1733 on N16 (#1948) | 5–7 weeks |
+| **M4a — Client foundation** | Expo web app, M3 theme, sign-in, sidebar and overview, local mode serving, CI | N2 (#1950, tokens to TS), #1735 (replaced), N9 (#1951, local mode) | N1 (#1949), #1732, #1733 | 3–4 weeks |
+| **M4b — Structured Claude Code sessions** | Transcript, composer, prompts, pickers, lifecycle, attention, quick switcher, admin screens, Claude credentials status | #1736, #1737, #1738, #1739, N3 (#1953), N10 (#1952) | M4a, #1734 | 5–7 weeks |
+| **M5 — Kubernetes** | Images, Helm chart, gateway and link Service, probes, metrics, kind CI | #1742 (first), #1740 (replaced), N4 (#1954, web image) | #1742 on #1732; #1740 on #1730, #1734, #1742, N4 (#1954); N4 (#1954) on #1735 | 3–4 weeks |
+| **M6 — Parity v1.1** | Changes review, PR/Jira chips, history and runs, plan usage, setup output, sandbox status | N5 (#1955), N6 (#1956) | M4b | 4–6 weeks |
+| **M7 — Parity v2 and retirement** | Provisioning in the orchestrator, secret settings, Kubernetes view, large editor; then the iced app removed | N11 (#1957), N12 (#1958), N13 (#1959) | M6; N13 (#1959) on N11 (#1957), N12 (#1958) | 5–8 weeks |
 | **Later** | Native mobile app; structured adapters for other providers; HA orchestrator | N7, N14, N15 | jaro's go-ahead | — |
 
 ```text
 #1724 ─▶ #1725 ─▶ #1726 ─┬─▶ #1727
                          └─▶ #1732 ─▶ #1733 ─▶ #1734
-#1724 (M5 store trait) ─▶ N16 ─▶ #1733      #1732 ─▶ #1742
+#1724 (M5 store trait) ─▶ #1948 ─▶ #1733      #1732 ─▶ #1742
 #1728 ✓ ─▶ #1729 ─▶ #1730 ─▶ #1731
-N1, N2, #1732, #1733 ─▶ #1735 ─▶ N9
-#1734, #1735 ─▶ N3 ;  #1735 ─▶ N10
+#1949, #1950, #1732, #1733 ─▶ #1735 ─▶ #1951
+#1734, #1735 ─▶ #1953 ;  #1735 ─▶ #1952
 #1735 ─▶ #1736 ─▶ #1737 ;  #1736 ─▶ #1739 ;  #1735 ─▶ #1738
-#1736 ─▶ N5 ;  #1735 ─▶ N6 ;  #1735 ─▶ N4
-#1730, #1734, #1742, N4 ─▶ #1740
-#1726, #1734 ─▶ N11 ;  #1734 ─▶ N12 ;  N5, N6, N11, N12 ─▶ N13
+#1736 ─▶ #1955 ;  #1735 ─▶ #1956 ;  #1735 ─▶ #1954
+#1730, #1734, #1742, #1954 ─▶ #1740
+#1726, #1734 ─▶ #1957 ;  #1734 ─▶ #1958 ;  #1955, #1956, #1957, #1958 ─▶ #1959
 ```
 
 M4a and M2 can run in parallel once #1732 and #1733 land; M5 can start on #1742 as soon as #1732

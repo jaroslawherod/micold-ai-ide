@@ -1,8 +1,8 @@
 # Proposed issue changes for the web client and Kubernetes revision
 
-**Created 2026-11-14, revision 2** (after jaro's answers). Not applied: jaro approves this list first,
-then the changes are made to the GitHub issues of epic #1722 (bodies, titles, "blocked by"
-relations, milestones). Labels as in `specs/orchestrator/issues.md`: `flow:feature` (or
+**Created 2026-11-14, revision 2** (after jaro's answers). **Applied 2026-11-15**: the new issues
+are created (numbers beside each N-name), the updated issues edited and #1741 closed. The changes were made to the GitHub issues of epic #1722 (bodies, titles,
+"blocked by" relations, milestones). Labels as in `specs/orchestrator/issues.md`: `flow:feature` (or
 `flow:chore`) plus `effort:high` or `effort:low`. Every body ends with the common footer:
 
 > Plan: `specs/orchestrator/` and `specs/1722-rn-client-k8s/` (spec.md, plan.md). Implement test-first
@@ -26,22 +26,22 @@ PR titles follow the project rule: `#<issue>: <issue title>`.
 | #1740 | replace | feat: Kubernetes deployment — orchestrator image, Helm chart, Gateway API, LoadBalancer for daemon links, PostgreSQL, secrets as files |
 | #1741 | close as not planned | the desktop app is retired instead (N13) |
 | #1742 | update | feat: health, readiness and metrics endpoints, rate limits, bandwidth caps, graceful shutdown |
-| N1 | new | chore: constitution 2.0.0 — the web client replaces iced; Linux-only daemons; PostgreSQL for network deployments |
-| N2 | new | feat: `micold-tokens-ts` — the design tokens as a generated TypeScript theme |
-| N3 | new | feat: web client — users, invites, roles, signed-in browsers; daemons list, enrollment and revoke (owner) |
-| N4 | new | feat: web client image and its place in the Helm chart |
-| N5 | new | feat: web client — changes and diff review |
-| N6 | new | feat: web client — PR and Jira status, history and runs, plan usage, setup output, sandbox status |
+| N1 (#1949) | new | chore: constitution 2.0.0 — the web client replaces iced; Linux-only daemons; PostgreSQL for network deployments |
+| N2 (#1950) | new | feat: `micold-tokens-ts` — the design tokens as a generated TypeScript theme |
+| N3 (#1953) | new | feat: web client — users, invites, roles, signed-in browsers; daemons list, enrollment and revoke (owner) |
+| N4 (#1954) | new | feat: web client image and its place in the Helm chart |
+| N5 (#1955) | new | feat: web client — changes and diff review |
+| N6 (#1956) | new | feat: web client — PR and Jira status, history and runs, plan usage, setup output, sandbox status |
 | N7 | future | feat: native mobile app from the same code base (not before jaro's go-ahead) |
-| N9 | new | feat: local mode — the orchestrator serves the web client on loopback with a one-time access link; user service unit |
-| N10 | new | feat: Claude credentials per daemon — API key or provider file, sign-in state shown in the client; no Claude login in Micold |
-| N11 | new | feat: daemon provisioning moves into the orchestrator (container, SSH host, Kubernetes pod) |
-| N12 | new | feat: web client — secret settings (GitHub, Jira, environment), Kubernetes view, large editor |
-| N13 | new | chore: retire the iced desktop app (remove `micold-client`, `micold-material`, packaging, docs) |
-| N14 | future | feat: structured adapters for Codex, Copilot, Pi and OpenCode (after Claude Code; does not block N13) |
+| N9 (#1951) | new | feat: local mode — the orchestrator serves the web client on loopback with a one-time access link; user service unit |
+| N10 (#1952) | new | feat: Claude credentials per daemon — API key or provider file, sign-in state shown in the client; no Claude login in Micold |
+| N11 (#1957) | new | feat: daemon provisioning moves into the orchestrator (container, SSH host, Kubernetes pod) |
+| N12 (#1958) | new | feat: web client — secret settings (GitHub, Jira, environment), Kubernetes view, large editor |
+| N13 (#1959) | new | chore: retire the iced desktop app (remove `micold-client`, `micold-material`, packaging, docs) |
+| N14 | future | feat: structured adapters for Codex, Copilot, Pi and OpenCode (after Claude Code; does not block N13 (#1959)) |
 | N15 | future | feat: several orchestrator replicas — Postgres link directory and replica-to-replica forwarding |
 | N17 | future | feat: multi-user — each user owns their daemons, projects and sessions; sharing; per-user quotas |
-| N16 | new | feat: PostgreSQL store for the orchestrator (sqlx, migrations, store traits; SQLite for local mode) |
+| N16 (#1948) | new | feat: PostgreSQL store for the orchestrator (sqlx, migrations, store traits; SQLite for local mode) |
 
 The earlier N8 (terminal view) is dropped: structured view only.
 
@@ -160,7 +160,7 @@ link to this plan.
 
 ## New issues
 
-### N1 — chore: constitution 2.0.0
+### N1 (#1949) — chore: constitution 2.0.0
 
 - **Milestone**: M3 · **Depends on**: — · **Labels**: `flow:chore`, `effort:low`
 - **Body**: Principle V replaced: the UI is one TypeScript + React Native client talking only to the
@@ -171,46 +171,46 @@ link to this plan.
   VIII's builder-API clause becomes "typed props, React idiom". Technology constraints (GUI,
   Persistence, Distribution) updated.
 
-### N2 — feat: `micold-tokens-ts`
+### N2 (#1950) — feat: `micold-tokens-ts`
 
 - **Milestone**: M4a · **Depends on**: — · **Covers**: FR-034
 - **Body**: A pure `tokens::ts::module()` beside `tokens::css` and a `micold-tokens-ts` binary writing
   `apps/client/src/theme/tokens.generated.ts` (colour roles light and dark, type scale, shape,
   elevation, motion, state layers); unit tests like `tokens/css.rs`; drift check in the gate.
 
-### N3 — feat: web client — users, invites, roles; daemons
+### N3 (#1953) — feat: web client — users, invites, roles; daemons
 
 - **Milestone**: M4b · **Depends on**: #1734, #1735 · **Covers**: FR-032, FR-036
 - **Body**: Owner screens to invite by GitHub login or Google email with a role, change roles, remove
   users, link a second identity, read the audit log, list signed-in browsers and sign one out; list
   daemons with state and Claude sign-in state, create enrollment tokens, revoke.
 
-### N4 — feat: web client image and Helm values
+### N4 (#1954) — feat: web client image and Helm values
 
 - **Milestone**: M5 · **Depends on**: #1735 · **Covers**: FR-027R
 - **Body**: Static image of the web export behind an unprivileged static server with CSP and cache
   headers; Deployment, Service, PodDisruptionBudget and optional HPA in the chart.
 
-### N5 — feat: web client — changes and diff review
+### N5 (#1955) — feat: web client — changes and diff review
 
 - **Milestone**: M6 · **Depends on**: #1736 · **Covers**: FR-040
 - **Body**: the iced app's Changes view (file tree, filters, diffs, reviewed marks), then review
   replies; stacked on narrow screens.
 
-### N6 — feat: web client — PR and Jira status, history, plan usage, setup, sandbox
+### N6 (#1956) — feat: web client — PR and Jira status, history, plan usage, setup, sandbox
 
 - **Milestone**: M6 · **Depends on**: #1735 · **Covers**: FR-040
 - **Body**: PR and Jira chips, history and parallel runs, plan usage, setup output and sandbox status,
   read from the daemons.
 
-### N9 — feat: local mode
+### N9 (#1951) — feat: local mode
 
 - **Milestone**: M4a · **Depends on**: #1733, #1735 · **Covers**: FR-021R, FR-033R
 - **Body**: `micold-daemon orchestrator --serve-web` binds 127.0.0.1, serves the web bundle from the
   API's origin, prints a one-time access link, and exchanges it for an owner session cookie. A
   systemd user unit starts it on login. Stores on SQLite through N16's traits.
 
-### N10 — feat: Claude credentials per daemon
+### N10 (#1952) — feat: Claude credentials per daemon
 
 - **Milestone**: M4b · **Depends on**: #1735 · **Covers**: FR-043
 - **Body**: The daemon configuration names an Anthropic API key file or Bedrock, Vertex or Foundry
@@ -220,7 +220,7 @@ link to this plan.
   docs. Micold offers no Claude login and never collects, stores or relays a Claude credential; the
   docs quote Anthropic's terms and point to Anthropic for edge cases.
 
-### N11 — feat: daemon provisioning in the orchestrator
+### N11 (#1957) — feat: daemon provisioning in the orchestrator
 
 - **Milestone**: M7 · **Depends on**: #1726, #1734 · **Covers**: FR-044
 - **Body**: Move `micold_core::provision` (806) and the Kubernetes runtime (686) behind a
@@ -228,13 +228,13 @@ link to this plan.
   actions in the web client (add, start, stop, remove). The pod provisioner uses a ServiceAccount
   with a namespaced Role in one sessions namespace, off by default in the chart.
 
-### N12 — feat: web client — secret settings, Kubernetes view, large editor
+### N12 (#1958) — feat: web client — secret settings, Kubernetes view, large editor
 
 - **Milestone**: M7 · **Depends on**: #1734, #1735 · **Covers**: FR-044
 - **Body**: GitHub and Jira tokens and environment settings written through the orchestrator to the
   daemon that uses them, never read back in full; the Kubernetes live view; the large editor.
 
-### N13 — chore: retire the iced desktop app
+### N13 (#1959) — chore: retire the iced desktop app
 
 - **Milestone**: M7 · **Depends on**: N5, N6, N11, N12 (not on N14: jaro, 2026-11-15) · **Labels**: `flow:chore`,
   `effort:high` · **Covers**: FR-044, SC-014
@@ -242,7 +242,7 @@ link to this plan.
   `crates/micold-material`, the iced dependency, AppImage/deb packaging, desktop notifications and
   their docs; keep the tokens in `micold-core`. Close #1741.
 
-### N16 — feat: PostgreSQL store for the orchestrator
+### N16 (#1948) — feat: PostgreSQL store for the orchestrator
 
 - **Milestone**: M3 · **Depends on**: #1724 (M5 `RegistryStore` trait) · **Covers**: FR-042, FR-046
 - **Body**: `sqlx` with `PgPool`; migrations in `crates/micold-daemon/migrations/` applied on start,
