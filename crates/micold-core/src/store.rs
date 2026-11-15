@@ -26,9 +26,11 @@ use crate::session::{
     AiCli, PermissionMode, Session, SessionId, SessionKind, SessionLabel, SessionLocation,
     TerminalMode,
 };
+use crate::sidebar_layout::SidebarLayout;
 use crate::structured::effort::EffortChoice;
 use crate::structured::model::ModelChoice;
 use crate::workspace::Workspace;
+use crate::worktree::{ParentLink, WorktreeId};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
@@ -167,6 +169,24 @@ pub trait ProjectStore {
     /// Delete a project's run groups when the project is forgotten (feature 483, W5). The
     /// default, for stores that persist nothing, has nothing to delete and succeeds.
     fn remove_runs(&self, _project_path: &Path) -> io::Result<()> {
+        Ok(())
+    }
+
+    /// A project's sidebar layout (feature 1786, contract C7). The default, for stores that
+    /// persist nothing, is no groups.
+    fn load_layout(&self, _project_path: &Path) -> SidebarLayout {
+        SidebarLayout::default()
+    }
+
+    /// Persist a project's sidebar layout. The default, for stores that persist nothing, keeps
+    /// nothing and succeeds.
+    fn save_layout(&self, _project_path: &Path, _layout: &SidebarLayout) -> io::Result<()> {
+        Ok(())
+    }
+
+    /// Delete a project's sidebar layout, when the project is forgotten. A missing file is not an
+    /// error. The default, for stores that persist nothing, succeeds.
+    fn remove_layout(&self, _project_path: &Path) -> io::Result<()> {
         Ok(())
     }
 
@@ -599,6 +619,9 @@ impl StoredCatalog {
             bindings: BTreeMap::new(),
             // Feature 533: per project, filled in by `load` from each project's own state file.
             issue_sources: BTreeMap::new(),
+            // Spec 1857: likewise; the legacy catalog fallback leaves them empty.
+            worktree_ids: BTreeMap::new(),
+            worktree_parents: BTreeMap::new(),
         }
     }
 }
@@ -674,6 +697,17 @@ struct StoredProjectState {
         deserialize_with = "lenient_issue_source"
     )]
     issue_source: Option<crate::jira::IssueProvider>,
+    /// The stable id of each worktree (spec 1857, FR-014): `dir_name` to id.
+    ///
+    /// `#[serde(default)]`, omitted when empty and no `schema_version` bump, for the reason
+    /// `last_session` records; a file without it loads with none and ids are minted lazily on the
+    /// first worktree refresh (`contracts/storage-parent.md`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    worktree_ids: BTreeMap<String, WorktreeId>,
+    /// The parent link of each child worktree (spec 1857), keyed by the child's id; same
+    /// serialization rules as `worktree_ids`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    worktree_parents: BTreeMap<WorktreeId, ParentLink>,
 }
 
 /// A stored issue source this build cannot read is no memory (feature 533, FR-016): it reads as
@@ -714,12 +748,23 @@ impl StoredProjectState {
                 .map(PaneLayout::to_json_value),
             bindings: ws.bindings.get(project_path).cloned().unwrap_or_default(),
             issue_source: ws.issue_sources.get(project_path).copied(),
+            worktree_ids: ws
+                .worktree_ids
+                .get(project_path)
+                .cloned()
+                .unwrap_or_default(),
+            worktree_parents: ws
+                .worktree_parents
+                .get(project_path)
+                .cloned()
+                .unwrap_or_default(),
         }
     }
 }
 
 /// How a single project's state file resolved (bugfix BUG-001; mirrors [`LoadStatus`] but scoped
 /// to one project rather than the whole catalog, per FR-012a's fault-isolation guarantee).
+#[allow(clippy::large_enum_variant)] // a transient load result, never stored in a collection
 enum ProjectStateLoad {
     /// The file existed and parsed — its data is authoritative for this project.
     Found(StoredProjectState),
@@ -1097,9 +1142,14 @@ impl JsonFileStore {
 
     /// Directory holding every project's run groups (feature 483): `runs/` beside `reviews/`.
     fn runs_dir(&self) -> PathBuf {
+        self.sibling_dir("runs")
+    }
+
+    /// The directory `name` beside the catalog file, where the per-project files of one kind live.
+    fn sibling_dir(&self, name: &str) -> PathBuf {
         match self.path.parent() {
-            Some(parent) => parent.join("runs"),
-            None => PathBuf::from("runs"),
+            Some(parent) => parent.join(name),
+            None => PathBuf::from(name),
         }
     }
 
@@ -1125,6 +1175,41 @@ impl JsonFileStore {
         write_atomic(&path, &file.to_json())
     }
 
+    /// A project's sidebar layout file (feature 1786): `layouts/<project id>.json` beside `runs/`.
+    /// `pub` so tests can find it.
+    pub fn layouts_path(&self, project_path: &Path) -> PathBuf {
+        self.sibling_dir("layouts")
+            .join(format!("{}.json", project_id(project_path)))
+    }
+
+    /// Delete a project's sidebar layout (feature 1786): it goes with a forgotten project, so the
+    /// same path added again starts with no groups. A missing file is not an error.
+    pub fn remove_layout(&self, project_path: &Path) -> io::Result<()> {
+        match std::fs::remove_file(self.layouts_path(project_path)) {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        }
+    }
+
+    /// Load a project's sidebar layout (feature 1786, C7). Never fails: a missing file is no
+    /// groups; an unparseable or other-version one is kept aside as `<name>.corrupt` and no groups
+    /// load (FR-018).
+    pub fn load_layout(&self, project_path: &Path) -> SidebarLayout {
+        read_or_quarantine(
+            &self.layouts_path(project_path),
+            SidebarLayout::try_from_json,
+        )
+    }
+
+    /// Write a project's sidebar layout atomically (temp file, then rename).
+    pub fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
+        let path = self.layouts_path(project_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_atomic(&path, &layout.to_json())
+    }
+
     /// Delete a project's runs file (feature 483, W5). An already-absent file is success.
     pub fn remove_runs(&self, project_path: &Path) -> io::Result<()> {
         match std::fs::remove_file(self.runs_path(project_path)) {
@@ -1136,10 +1221,7 @@ impl JsonFileStore {
     /// Directory holding every project's setup records and logs, and the run id counter
     /// (feature 1289): `setup/` beside `runs/`.
     pub fn setup_dir(&self) -> PathBuf {
-        match self.path.parent() {
-            Some(parent) => parent.join("setup"),
-            None => PathBuf::from("setup"),
-        }
+        self.sibling_dir("setup")
     }
 
     /// The file holding the next setup run id, unique across the daemon (data-model §RunId).
@@ -1333,6 +1415,18 @@ impl ProjectStore for JsonFileStore {
         JsonFileStore::remove_runs(self, project_path)
     }
 
+    fn load_layout(&self, project_path: &Path) -> SidebarLayout {
+        JsonFileStore::load_layout(self, project_path)
+    }
+
+    fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
+        JsonFileStore::save_layout(self, project_path, layout)
+    }
+
+    fn remove_layout(&self, project_path: &Path) -> io::Result<()> {
+        JsonFileStore::remove_layout(self, project_path)
+    }
+
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
     fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
         JsonFileStore::remove_project_state(self, project_path)
@@ -1473,6 +1567,22 @@ impl ProjectStore for JsonFileStore {
                             .bindings
                             .insert(project.path.clone(), state.bindings);
                     }
+                    // Spec 1857: absent in a file written before the feature, which is "no ids and
+                    // no parents yet".
+                    if state.worktree_ids.is_empty() {
+                        workspace.worktree_ids.remove(&project.path);
+                    } else {
+                        workspace
+                            .worktree_ids
+                            .insert(project.path.clone(), state.worktree_ids);
+                    }
+                    if state.worktree_parents.is_empty() {
+                        workspace.worktree_parents.remove(&project.path);
+                    } else {
+                        workspace
+                            .worktree_parents
+                            .insert(project.path.clone(), state.worktree_parents);
+                    }
                     match state.issue_source {
                         Some(source) => {
                             workspace.issue_sources.insert(project.path.clone(), source);
@@ -1510,6 +1620,8 @@ impl ProjectStore for JsonFileStore {
                     workspace.pane_layouts.remove(&project.path);
                     workspace.bindings.remove(&project.path);
                     workspace.issue_sources.remove(&project.path);
+                    workspace.worktree_ids.remove(&project.path);
+                    workspace.worktree_parents.remove(&project.path);
                 }
             }
         }
@@ -1631,6 +1743,8 @@ struct FakeStoreState {
     reviews: BTreeMap<PathBuf, ReviewFile>,
     /// Run groups per project, as `save_runs` left them.
     runs: BTreeMap<PathBuf, RunsFile>,
+    /// Sidebar layouts per project, as `save_layout` left them (feature 1786).
+    layouts: BTreeMap<PathBuf, SidebarLayout>,
 }
 
 impl FakeProjectStore {
@@ -1797,6 +1911,34 @@ impl ProjectStore for FakeProjectStore {
             .lock()
             .expect("fake lock")
             .runs
+            .remove(project_path);
+        Ok(())
+    }
+
+    fn load_layout(&self, project_path: &Path) -> SidebarLayout {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .get(project_path)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .insert(project_path.to_path_buf(), layout.clone());
+        Ok(())
+    }
+
+    fn remove_layout(&self, project_path: &Path) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
             .remove(project_path);
         Ok(())
     }
@@ -2129,5 +2271,103 @@ mod setup_store_tests {
             "the corrupt record is kept aside"
         );
         assert!(!path.exists());
+    }
+}
+
+#[cfg(test)]
+mod worktree_parent_tests {
+    //! Spec 1857 (`contracts/storage-parent.md`): worktree ids and parent links in the project state.
+
+    use super::*;
+    use crate::worktree::ParentRef;
+    use serde_json::json;
+
+    fn workspace_with_links(project: &Path) -> (Workspace, WorktreeId, WorktreeId) {
+        let (parent, child) = (WorktreeId::mint(), WorktreeId::mint());
+        let ws = Workspace {
+            projects: vec![Project::new(
+                project.to_path_buf(),
+                false,
+                Availability::Available,
+            )],
+            worktree_ids: BTreeMap::from([(
+                project.to_path_buf(),
+                BTreeMap::from([("p".to_string(), parent), ("c".to_string(), child)]),
+            )]),
+            worktree_parents: BTreeMap::from([(
+                project.to_path_buf(),
+                BTreeMap::from([(
+                    child,
+                    ParentLink {
+                        parent: ParentRef::Worktree(parent),
+                        removed: false,
+                        last_name: "p".into(),
+                    },
+                )]),
+            )]),
+            ..Default::default()
+        };
+        (ws, parent, child)
+    }
+
+    #[test]
+    fn ids_and_parent_links_round_trip_through_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("project");
+        std::fs::create_dir(&project).unwrap();
+        let store = JsonFileStore::at(dir.path().join("projects.json"));
+        let (ws, parent, child) = workspace_with_links(&project);
+
+        store.save(&ws).unwrap();
+        let loaded = store.load().workspace;
+
+        assert_eq!(loaded.worktree_ids[&project]["p"], parent);
+        let link = &loaded.worktree_parents[&project][&child];
+        assert_eq!(link.parent, ParentRef::Worktree(parent));
+        assert!(!link.removed);
+        assert_eq!(link.last_name, "p");
+    }
+
+    #[test]
+    fn both_maps_are_omitted_when_empty_and_a_file_without_them_loads_empty() {
+        let project = Path::new("/project");
+        let state = StoredProjectState::from_workspace(&Workspace::default(), project);
+        let json = serde_json::to_value(&state).unwrap();
+        assert!(json.get("worktree_ids").is_none(), "{json}");
+        assert!(json.get("worktree_parents").is_none(), "{json}");
+
+        let old: StoredProjectState =
+            serde_json::from_str(r#"{"schema_version":1,"sessions":[]}"#).unwrap();
+        assert!(old.worktree_ids.is_empty() && old.worktree_parents.is_empty());
+    }
+
+    #[test]
+    fn the_stored_form_matches_the_contract() {
+        let project = Path::new("/project");
+        let (ws, parent, child) = workspace_with_links(project);
+        let state = StoredProjectState::from_workspace(&ws, project);
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(json["worktree_ids"]["p"], json!(parent));
+        assert_eq!(
+            json["worktree_parents"][json!(child).as_str().unwrap()],
+            json!({"parent": {"worktree": parent}, "removed": false, "last_name": "p"})
+        );
+        let root = ParentLink {
+            parent: ParentRef::Default,
+            removed: false,
+            last_name: String::new(),
+        };
+        assert_eq!(serde_json::to_value(&root).unwrap()["parent"], "default");
+    }
+
+    #[test]
+    fn the_legacy_catalog_fallback_leaves_them_empty() {
+        let catalog = r#"{"schema_version":1,"projects":[{"path":"/legacy","display_name":"l",
+            "is_git_repo":false,"worktree_display_names":{"feat-x":"X"}}]}"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("projects.json");
+        std::fs::write(&path, catalog).unwrap();
+        let ws = JsonFileStore::at(path).load().workspace;
+        assert!(ws.worktree_ids.is_empty() && ws.worktree_parents.is_empty());
     }
 }

@@ -3,9 +3,9 @@
 ## Part A: automated
 ```sh
 mise run test-core                                  # sidebar_layout unit tests
-scripts/build-lock.sh cargo test -p micold-client --test sidebar_group_actions
-scripts/build-lock.sh cargo test -p micold-client --test sidebar_drag
-scripts/build-lock.sh cargo test -p micold-client --test sidebar_layout_store
+scripts/build-lock.sh cargo test -p micold-client --test main sidebar_
+scripts/build-lock.sh cargo test -p micold-client --test main layout_snapshot
+scripts/build-lock.sh cargo test -p micold-core sidebar_layout
 mise run gate                                       # before pushing
 ```
 Expected: all pass; red before green per task order.

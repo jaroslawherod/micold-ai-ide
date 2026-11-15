@@ -58,11 +58,11 @@ pub(crate) fn location_nodes(state: &State) -> Vec<(SessionLocation, LocationNod
             SidebarEntry::Group(group) if group.expanded => {
                 for run in group.runs {
                     if let RunRow::Worktree(node) = run.row {
-                        nodes.push((node.location(), LocationNode::Worktree(node)));
+                        nodes.push((node.location(), LocationNode::Worktree(*node)));
                     }
                 }
             }
-            SidebarEntry::Group(_) => {}
+            SidebarEntry::Group(_) | SidebarEntry::UserGroup(_) => {}
         }
     }
     nodes

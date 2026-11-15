@@ -951,7 +951,23 @@ fn kube_sections<'a>(
     if let Some(message) = error_of(state, "allowed") {
         allowed = allowed.push(caution(message, roles));
     }
-    let credentials: Vec<Element<'a, Message>> = vec![allowed.into()];
+    let github_tokens = FieldGroup::new("GitHub tokens", roles)
+        .note(
+            "Off by default. Only tokens whose repository matches a saved project of this daemon \
+             are sent (a token with no repository filter is sent too, though its reach may not \
+             include the project), replaced at each start, removed with the pod.",
+        )
+        .push(
+            Checkbox::new(
+                "GitHub tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the \
+                 namespace, and etcd, can read them)",
+                kube.github_tokens,
+                roles,
+            )
+            .track_focus(FieldId::DaemonKubeGithubTokens, focused)
+            .on_toggle(|on| Message::Daemons(DaemonsMsg::GithubTokensToggled(on))),
+        );
+    let credentials: Vec<Element<'a, Message>> = vec![allowed.into(), github_tokens.into()];
 
     let errors = [
         error_of(state, "cpu_request"),

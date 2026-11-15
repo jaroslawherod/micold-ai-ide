@@ -50,12 +50,8 @@ impl Seen {
 /// started with `CreateProcessW`, which refuses a `.cmd` (`%1 is not a valid Win32 application`,
 /// os error 193) — a batch file is not an executable image, and there is no room to wrap it in
 /// `cmd.exe /C`: `spawn_shell` runs `COMSPEC` with no arguments of its own.
-#[cfg(not(windows))]
 const STAND_IN: &str = "claude";
-#[cfg(windows)]
-const STAND_IN: &str = "claude.exe";
 
-#[cfg(not(windows))]
 fn write_stand_in(dir: &Path) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
@@ -69,67 +65,6 @@ fn write_stand_in(dir: &Path) -> PathBuf {
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
         .expect("make the stand-in executable");
     path
-}
-
-#[cfg(windows)]
-fn write_stand_in(dir: &Path) -> PathBuf {
-    let path = dir.join(STAND_IN);
-    std::fs::copy(compiled_stand_in(), &path).expect("copy the stand-in next to the dumps");
-    path
-}
-
-/// Compile the stand-in once per test process and hand out its path.
-#[cfg(windows)]
-fn compiled_stand_in() -> &'static Path {
-    use std::sync::OnceLock;
-
-    /// Prints nothing and parses nothing: it writes its environment where it was told, then
-    /// renames, so a reader never sees a half-written dump.
-    const SOURCE: &str = r#"
-fn main() {
-    let dump = std::env::var("MICOLD_IDENTITY_DUMP").expect("MICOLD_IDENTITY_DUMP");
-    let mut out = String::new();
-    for (key, value) in std::env::vars_os() {
-        out.push_str(&format!("{}={}\n", key.to_string_lossy(), value.to_string_lossy()));
-    }
-    let partial = format!("{dump}.tmp");
-    std::fs::write(&partial, out).expect("write the dump");
-    std::fs::rename(&partial, &dump).expect("publish the dump");
-}
-"#;
-
-    static STAND_IN_EXE: OnceLock<PathBuf> = OnceLock::new();
-    STAND_IN_EXE.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("micold-identity-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("a directory for the stand-in");
-        let source = dir.join("stand_in.rs");
-        std::fs::write(&source, SOURCE).expect("write the stand-in's source");
-        let exe = dir.join(STAND_IN);
-        // `rustc` beside the `cargo` that is running this test, so a toolchain that is not on
-        // `PATH` still resolves.
-        let rustc = std::env::var_os("RUSTC")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("CARGO")
-                    .map(PathBuf::from)
-                    .and_then(|cargo| cargo.parent().map(|dir| dir.join("rustc.exe")))
-                    .filter(|rustc| rustc.exists())
-            })
-            .unwrap_or_else(|| PathBuf::from("rustc"));
-        let out = Command::new(&rustc)
-            .arg(&source)
-            .arg("-o")
-            .arg(&exe)
-            .output()
-            .unwrap_or_else(|err| panic!("run {}: {err}", rustc.display()));
-        assert!(
-            out.status.success(),
-            "compile the stand-in with {}: {}",
-            rustc.display(),
-            String::from_utf8_lossy(&out.stderr)
-        );
-        exe
-    })
 }
 
 /// Re-execute `test` with `inherited` in its environment and `include` as the sessions' include
@@ -153,7 +88,7 @@ fn sessions_seeing_os(
 
     let mut path = OsString::from(dir.path());
     if let Some(rest) = std::env::var_os("PATH") {
-        path.push(if cfg!(windows) { ";" } else { ":" });
+        path.push(":");
         path.push(rest);
     }
     let mut child = Command::new(std::env::current_exe().expect("the test binary"));
@@ -173,7 +108,7 @@ fn sessions_seeing_os(
                 .join(";"),
         )
         .env("PATH", path)
-        .env(if cfg!(windows) { "COMSPEC" } else { "SHELL" }, &stand_in);
+        .env("SHELL", &stand_in);
     let out = child.output().expect("run the child");
     assert!(
         out.status.success(),

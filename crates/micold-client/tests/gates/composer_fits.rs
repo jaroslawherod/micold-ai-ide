@@ -126,9 +126,33 @@ fn find<'p>(painted: &'p [Overflow], content: &str) -> &'p Overflow {
         })
 }
 
+/// The `content` drawn under the transcript (in the composer); panics, listing what is drawn, when
+/// none is.
+///
+/// Paint order is not screen order: a part drawn inside a reveal (`expand`, the session options
+/// row since feature 1792) paints on its own layer after the base, so a word the sidebar also
+/// shows ("Default") would otherwise be found there first.
+fn find_under<'p>(painted: &'p [Overflow], transcript: Rectangle, content: &str) -> &'p Overflow {
+    painted
+        .iter()
+        .find(|p| {
+            p.content == content && p.origin.y >= transcript.y + transcript.height - TOLERANCE
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "`{content}` is drawn under the transcript {transcript:?}: {:?}",
+                painted
+                    .iter()
+                    .filter(|p| p.content == content)
+                    .map(|p| p.origin)
+                    .collect::<Vec<_>>()
+            )
+        })
+}
+
 /// `content` is drawn under the transcript and inside the window.
 fn under_the_transcript(painted: &[Overflow], transcript: Rectangle, content: &str) {
-    let text = find(painted, content);
+    let text = find_under(painted, transcript, content);
     assert!(
         text.origin.y >= transcript.y + transcript.height - TOLERANCE,
         "`{content}` at {:?} is under the transcript {transcript:?}",
@@ -709,7 +733,7 @@ fn the_mode_control_offers_the_four_modes_and_shows_the_sessions_mode() {
             under_the_transcript(&painted, transcript, &format!("{MODE_LABEL}:"));
             under_the_transcript(&painted, transcript, mode.label());
             let send = find(&painted, "Send");
-            let shown = find(&painted, mode.label());
+            let shown = find_under(&painted, transcript, mode.label());
             assert!(
                 shown.origin.y < send.origin.y,
                 "the mode sits in the options row, above the input row: {:?} vs {:?}",
@@ -762,7 +786,8 @@ fn pressing_the_mode_control_opens_the_four_modes_and_picking_one_asks_for_it() 
     let closed_painted =
         lay::painted_text_settled_at(lay::view_of(&closed), &mut renderer, WINDOW).0;
     // The trigger is the control showing the current mode, not the field label beside it.
-    let trigger = find(&closed_painted, PermissionMode::Default.label());
+    let transcript = viewport(&closed, transcript_scroll_id(id));
+    let trigger = find_under(&closed_painted, transcript, PermissionMode::Default.label());
     let at = iced::Point::new(
         trigger.origin.x + trigger.natural_width / 2.0,
         trigger.origin.y + trigger.natural_height / 2.0,
@@ -998,11 +1023,7 @@ fn the_add_attachment_tooltip_names_the_action_and_the_shortcut() {
     let under = StateUnderTest::new(state);
     let (tip, _) =
         lay::painted_text_hovering_at(lay::view_of(&under), &mut lay::renderer(), &path, WINDOW);
-    let wanted = if cfg!(target_os = "macos") {
-        "Add attachment (Cmd+Shift+A)"
-    } else {
-        "Add attachment (Ctrl+Shift+A)"
-    };
+    let wanted = "Add attachment (Ctrl+Shift+A)";
     assert!(
         tip.iter()
             .any(|p| p.layer == lay::Layer::Overlay && p.content == wanted),
@@ -1076,16 +1097,21 @@ fn hovering_files_mark_the_drawn_pane_only_when_it_accepts_input() {
     );
 }
 
-/// FR-003, SC-004: the model and permission selectors (the effort one is built alike) share one
-/// trigger, so their labels sit on one line and each keeps the chevron of `Select`'s trigger (feature 1792, T005).
+/// FR-003, SC-004: the model, effort and permission selectors share one trigger, so their labels
+/// sit on one line and each keeps the chevron of `Select`'s trigger, in that order (feature 1792,
+/// T005, T028). The pane's structured Claude Code session offers effort, so all three are named.
 #[test]
 fn the_model_and_permission_selectors_share_one_trigger_on_one_line() {
     use micold_client::ui::mode_control::MODE_LABEL;
     let (mut state, id) = pane();
     report(&mut state, id, TurnPhase::Idle, false, 0);
     state.composers.options_open = true;
+    assert!(state.offers_effort(id), "the pose offers effort");
+    // The effort trigger paints its label and value as one run.
+    let effort = state.effort_header(id);
     let (painted, _) = paint(themed(state, ColorScheme::Dark), id);
-    let ys: Vec<f32> = ["Model:", &format!("{MODE_LABEL}:")]
+    let labels = ["Model:", effort.as_str(), &format!("{MODE_LABEL}:")];
+    let ys: Vec<f32> = labels
         .iter()
         .map(|label| find(&painted, label).origin.y)
         .collect();
@@ -1093,9 +1119,31 @@ fn the_model_and_permission_selectors_share_one_trigger_on_one_line() {
         ys.iter().all(|y| (y - ys[0]).abs() < 0.5),
         "the selectors' labels are on different lines: {ys:?}"
     );
-    let chevrons = painted.iter().filter(|p| p.content == "\u{e5cf}").count();
+    // Each selector's label has its own chevron: the nearest one to its right on the same line,
+    // none shared, and the chevrons come in the labels' order (so a trigger missing its chevron
+    // cannot borrow a neighbour's and pass).
+    let chevrons: Vec<iced::Point> = painted
+        .iter()
+        .filter(|p| p.content == "\u{e5cf}")
+        .map(|p| p.origin)
+        .collect();
+    let mut taken: Vec<u32> = Vec::new();
+    for label in labels {
+        let at = find(&painted, label).origin;
+        let own = chevrons
+            .iter()
+            .filter(|c| c.x > at.x && (c.y - at.y).abs() < 8.0)
+            .min_by(|a, b| a.x.total_cmp(&b.x))
+            .unwrap_or_else(|| panic!("no select chevron beside `{label}`"));
+        assert!(
+            !taken.contains(&own.x.to_bits()),
+            "`{label}` shares a chevron"
+        );
+        taken.push(own.x.to_bits());
+    }
+    let xs: Vec<f32> = taken.iter().map(|b| f32::from_bits(*b)).collect();
     assert!(
-        chevrons >= 3,
-        "{chevrons} select chevrons for three selectors"
+        xs.windows(2).all(|w| w[0] < w[1]),
+        "the chevrons are not in Model, Effort, Permission order: {xs:?}"
     );
 }

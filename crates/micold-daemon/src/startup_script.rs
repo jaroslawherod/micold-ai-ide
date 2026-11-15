@@ -54,13 +54,10 @@ impl StartupPlan {
             .map_or(DEFAULT_TIMEOUT_SECS, |n| n.clamp(1, 3600) as u32);
         Self {
             script_file: startup.script_file.clone(),
-            shell: startup.shell.clone().unwrap_or_else(|| {
-                PathBuf::from(if cfg!(windows) {
-                    "powershell.exe"
-                } else {
-                    "/bin/sh"
-                })
-            }),
+            shell: startup
+                .shell
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("/bin/sh")),
             timeout: Duration::from_secs(u64::from(secs)),
             on_failure: startup.on_failure.unwrap_or(OnFailure::Refuse),
             export_env: startup.export_env.unwrap_or(true),
@@ -195,7 +192,7 @@ pub fn exportable(name: &OsStr, value: &OsStr, ctx: &RunContext<'_>) -> bool {
     if (key == "TZ" && ctx.time_zone_configured) || (key == "HOME" && ctx.home_configured) {
         return false;
     }
-    !is_inherited_terminal_identity(&key, &value.to_string_lossy(), cfg!(windows))
+    !is_inherited_terminal_identity(&key, &value.to_string_lossy(), false)
 }
 
 fn reason_of(end: &ScriptEnd) -> Option<StartupReason> {
@@ -241,10 +238,6 @@ fn create_private_dir(dir: &Path) -> std::io::Result<()> {
             .create(dir)?;
         let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
         Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        std::fs::create_dir_all(dir)
     }
 }
 
@@ -447,11 +440,7 @@ mod tests {
         assert_eq!(plan.timeout, Duration::from_secs(300));
         assert_eq!(plan.on_failure, OnFailure::Refuse);
         assert!(plan.export_env);
-        assert!(plan.shell.ends_with(if cfg!(windows) {
-            "powershell.exe"
-        } else {
-            "sh"
-        }));
+        assert!(plan.shell.ends_with("sh"));
     }
 
     #[test]

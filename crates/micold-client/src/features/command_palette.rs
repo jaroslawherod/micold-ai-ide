@@ -544,6 +544,12 @@ impl State {
         self.pickers.remove(&session);
     }
 
+    /// Close every session's model picker (the options row that holds them collapsed, feature
+    /// 1792).
+    pub fn close_pickers(&mut self) {
+        self.pickers.clear();
+    }
+
     /// Forget `session` (it is gone).
     pub fn forget(&mut self, session: SessionId) {
         self.palettes.remove(&session);

@@ -1237,6 +1237,60 @@ async fn the_extras_are_keys_of_the_startup_secret() {
         .is_none());
 }
 
+/// #1760 (T015, FR-010): delivered GitHub tokens are keys of the startup secret: the set is
+/// replaced at each start (a changed value and a token deleted in Settings both show), the secret
+/// goes when no key is left, and the pod, whose startup secret volume is always mounted (optional),
+/// is kept throughout: the kubelet updates the mounted directory. Characterization: `start.rs`
+/// already does this for any `secret_files`.
+#[tokio::test(start_paused = true)]
+async fn github_token_keys_are_replaced_withdrawn_and_removed_with_the_startup_secret() {
+    let fake = cluster();
+    let (keys, client) = (FakeKeyGen::default(), client("c1"));
+    let (s, n) = (settings(), names());
+    let token = |key: &str, value: &str| (key.to_string(), value.to_string());
+    let data = |fake: &FakeCluster| {
+        fake.manifest(NS, ObjectKind::Secret, &n.startup_secret())
+            .map(|secret| secret["stringData"].clone())
+    };
+    let mut request = start_request(&fake, &s, &n, &keys, &client, DriftChoice::Ask, &no_files);
+    let first = [token("github-token-0", "A"), token("github-token-1", "B")];
+    request.secret_files = &first;
+    ready(start(&request, &mut |_| {}).await);
+    assert_eq!(
+        data(&fake),
+        Some(serde_json::json!({ "github-token-0": "A", "github-token-1": "B" }))
+    );
+    let pod = fake.manifest(NS, ObjectKind::Pod, &n.pod()).unwrap();
+    let volume = pod["spec"]["volumes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["secret"]["secretName"] == n.startup_secret().as_str())
+        .expect("the startup secret volume")
+        .clone();
+    assert_eq!(volume["secret"]["optional"], true);
+
+    let second = [token("github-token-0", "A2")];
+    request.secret_files = &second;
+    ready(start(&request, &mut |_| {}).await);
+    assert!(fake
+        .calls()
+        .contains(&format!("replace Secret {}", n.startup_secret())));
+    assert_eq!(
+        data(&fake),
+        Some(serde_json::json!({ "github-token-0": "A2" }))
+    );
+
+    request.secret_files = &[];
+    ready(start(&request, &mut |_| {}).await);
+    assert_eq!(data(&fake), None, "no key left, no secret");
+    assert_eq!(
+        deletes(&fake),
+        [format!("delete Secret {}", n.startup_secret())],
+        "the pod is kept"
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn nothing_allowed_creates_no_credential_secret_and_reads_no_file() {
     let fake = cluster();

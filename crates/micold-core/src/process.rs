@@ -22,72 +22,23 @@ use std::time::{Duration, Instant};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
-#[cfg(windows)]
-use crate::win_job::JobHandle;
-
-/// `CREATE_NO_WINDOW` process creation flag: the child gets no console window.
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
 /// Keep a spawned console program from opening a console window. Returns the command for chaining.
-#[cfg(windows)]
-pub fn no_window(cmd: &mut Command) -> &mut Command {
-    use std::os::windows::process::CommandExt;
-    cmd.creation_flags(CREATE_NO_WINDOW)
-}
-
-/// Keep a spawned console program from opening a console window. Returns the command for chaining.
-#[cfg(not(windows))]
 pub fn no_window(cmd: &mut Command) -> &mut Command {
     cmd
 }
 
-/// The named mutex a running app holds. `packaging/windows/micold-ai-ide.iss` names the same one in
-/// `AppMutex`; `Local\` scopes it to the signed-in session, so another account's app does not block
-/// this account's install.
+/// The named mutex a running app held for the Windows installer's `AppMutex` check (Windows support
+/// was dropped in #1897).
 pub const APP_MUTEX_NAME: &str = "Local\\MicoldAIIDE";
 
 /// Proof that this process announced itself to the installer. The announcement ends on drop.
-pub struct RunningMarker {
-    #[cfg(windows)]
-    mutex: windows_sys::Win32::Foundation::HANDLE,
-}
+pub struct RunningMarker {}
 
 /// Announce that an app process is running, for the installer's `AppMutex` check. `None` off
 /// Windows, and on Windows when the mutex cannot be created -- the app still runs, the installer
 /// just cannot see it.
-#[cfg(windows)]
-pub fn announce_running() -> Option<RunningMarker> {
-    use windows_sys::Win32::System::Threading::CreateMutexW;
-
-    let name: Vec<u16> = APP_MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
-    // SAFETY: `name` is NUL-terminated and outlives the call; null security attributes are the
-    // documented default. Opening an existing mutex (another client instance holds it) also succeeds and
-    // returns a handle of our own, which is what keeps the name alive while either process runs.
-    let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
-    if mutex.is_null() {
-        return None;
-    }
-    Some(RunningMarker { mutex })
-}
-
-/// Announce that an app process is running, for the installer's `AppMutex` check. `None` off
-/// Windows, and on Windows when the mutex cannot be created -- the app still runs, the installer
-/// just cannot see it.
-#[cfg(not(windows))]
 pub fn announce_running() -> Option<RunningMarker> {
     None
-}
-
-#[cfg(windows)]
-impl Drop for RunningMarker {
-    fn drop(&mut self) {
-        // SAFETY: the handle came from a successful `CreateMutexW` and is closed only here. The
-        // name disappears with its last handle.
-        unsafe {
-            windows_sys::Win32::Foundation::CloseHandle(self.mutex);
-        }
-    }
 }
 
 /// How long to poll a spawned child's exit status before considering it hung (feature 011,
@@ -162,9 +113,6 @@ fn kill_process_group(pid: u32) {
 struct TreeKill {
     #[cfg(unix)]
     pid: u32,
-    /// `None` when the job could not be created; the child alone is killed then.
-    #[cfg(windows)]
-    job: Option<JobHandle>,
 }
 
 impl TreeKill {
@@ -175,20 +123,13 @@ impl TreeKill {
             use std::os::unix::process::CommandExt;
             cmd.process_group(0);
         }
-        #[cfg(not(unix))]
-        let _ = cmd;
     }
 
     /// The tree of `child`, captured as soon as it exists.
     fn capture(child: &std::process::Child) -> Self {
-        #[cfg(not(any(unix, windows)))]
-        let _ = child;
         Self {
             #[cfg(unix)]
             pid: child.id(),
-            // Windows' counterpart to the process group, assigned as soon as the child exists.
-            #[cfg(windows)]
-            job: JobHandle::capture(child),
         }
     }
 
@@ -197,11 +138,6 @@ impl TreeKill {
     fn kill_tree(&self) {
         #[cfg(unix)]
         kill_process_group(self.pid);
-        // The job takes the whole tree, including anything holding the child's pipes.
-        #[cfg(windows)]
-        if let Some(job) = &self.job {
-            job.terminate();
-        }
     }
 
     /// Whether the tree's head has exited and is a zombie not yet reaped (Unix: `waitid` with
@@ -226,15 +162,11 @@ impl TreeKill {
                 looked != 0 || info.si_pid() != 0
             }
         }
-        #[cfg(not(unix))]
-        false
     }
 
     /// Kill the whole tree, then `child` itself, for the case where the job could not be created.
     fn kill(&self, child: &mut std::process::Child) {
         self.kill_tree();
-        #[cfg(not(unix))]
-        let _ = child.kill();
         #[cfg(unix)]
         let _ = child;
     }
@@ -515,15 +447,12 @@ impl StreamingChild {
             // Unix reaps only a child the look saw exited, after the kill above: one that exits
             // between the look and the reap would be reaped with its tree still running (#1856).
             // It is seen on the next pass instead.
-            if cfg!(unix) && !exited {
+            if !exited {
                 continue;
             }
             match self.child.try_wait() {
                 Ok(Some(status)) => {
                     *reaped = true;
-                    // The job handle outlives the reap, so Windows kills the tree after it.
-                    #[cfg(not(unix))]
-                    self.shared.tree.kill(&mut self.child);
                     break Ok(status);
                 }
                 Ok(None) => {}
@@ -630,77 +559,6 @@ mod tests {
             .flat_map(|(_, bytes)| bytes)
             .collect();
         assert_eq!(got, b"one two");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn no_window_sets_flag() {
-        // The documented value; a typo here would compile and silently open windows again.
-        assert_eq!(CREATE_NO_WINDOW, 0x0800_0000);
-
-        let status = no_window(Command::new("cmd").args(["/c", "exit 0"]))
-            .status()
-            .expect("spawn `cmd /c exit 0`");
-
-        assert!(
-            status.success(),
-            "`cmd /c exit 0` must still run and exit 0, got {status:?}"
-        );
-    }
-
-    /// The app mutex is machine-session-wide, so the two cases below take turns rather than see each
-    /// other's marker.
-    #[cfg(windows)]
-    static APP_MUTEX_CASES: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// Whether a mutex named [`APP_MUTEX_NAME`] exists right now, as the installer's `AppMutex` asks.
-    #[cfg(windows)]
-    fn app_mutex_exists() -> bool {
-        use windows_sys::Win32::Foundation::CloseHandle;
-        use windows_sys::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_SYNCHRONIZE};
-
-        let name: Vec<u16> = APP_MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
-        // SAFETY: `name` is NUL-terminated and outlives the call; a non-null handle is closed at once.
-        unsafe {
-            let handle = OpenMutexW(SYNCHRONIZATION_SYNCHRONIZE, 0, name.as_ptr());
-            if handle.is_null() {
-                return false;
-            }
-            CloseHandle(handle);
-            true
-        }
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn announce_running_holds_the_app_mutex() {
-        // E7.1: the installer finds a running app by this mutex and asks the user to close it.
-        let _turn = APP_MUTEX_CASES.lock().unwrap_or_else(|e| e.into_inner());
-        let marker = announce_running();
-
-        assert!(
-            app_mutex_exists(),
-            "while the marker is held, OpenMutexW({APP_MUTEX_NAME:?}) must succeed"
-        );
-        drop(marker);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn dropping_the_marker_releases_the_app_mutex() {
-        // E7.1: once the app exits, the installer must not keep asking the user to close it.
-        let _turn = APP_MUTEX_CASES.lock().unwrap_or_else(|e| e.into_inner());
-        let marker = announce_running();
-        assert!(
-            marker.is_some(),
-            "announce_running must return a marker on Windows"
-        );
-        drop(marker);
-
-        assert!(
-            !app_mutex_exists(),
-            "after the marker is dropped, OpenMutexW({APP_MUTEX_NAME:?}) must fail"
-        );
     }
 
     /// #1642: mise starts rustup in a process group of its own, so the group kill alone left the

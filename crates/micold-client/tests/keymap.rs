@@ -146,13 +146,6 @@ fn ctrl_u_is_0x15_not_0x51() {
 
 #[test]
 fn reserved_focus_out_chord_releases_focus() {
-    #[cfg(target_os = "macos")]
-    let mods = Mods {
-        logo: true,
-        shift: true,
-        ..Mods::NONE
-    };
-    #[cfg(not(target_os = "macos"))]
     let mods = Mods {
         ctrl: true,
         shift: true,
@@ -166,13 +159,6 @@ fn reserved_focus_out_chord_releases_focus() {
 
 #[test]
 fn new_terminal_instance_chord_is_detected() {
-    #[cfg(target_os = "macos")]
-    let mods = Mods {
-        logo: true,
-        shift: true,
-        ..Mods::NONE
-    };
-    #[cfg(not(target_os = "macos"))]
     let mods = Mods {
         ctrl: true,
         shift: true,
@@ -209,7 +195,6 @@ fn new_terminal_instance_chord_does_not_fire_on_plain_t_or_shift_t() {
 fn new_terminal_instance_chord_takes_precedence_over_printable_handling() {
     // On non-macOS, Ctrl+Shift+T without the chord check would otherwise fall through to a
     // control-chord/printable path; confirm the chord wins outright.
-    #[cfg(not(target_os = "macos"))]
     {
         let mods = Mods {
             ctrl: true,
@@ -223,21 +208,13 @@ fn new_terminal_instance_chord_takes_precedence_over_printable_handling() {
 
 // ---- Overview chord (feature 813, FR-011, SC-006) ----
 
-/// The platform's primary modifier plus Shift (`Cmd+Shift` on macOS, else `Ctrl+Shift`).
+/// The primary modifier plus Shift (`Ctrl+Shift`).
 fn primary_shift() -> Mods {
-    #[cfg(target_os = "macos")]
-    let mods = Mods {
-        logo: true,
-        shift: true,
-        ..Mods::NONE
-    };
-    #[cfg(not(target_os = "macos"))]
-    let mods = Mods {
+    Mods {
         ctrl: true,
         shift: true,
         ..Mods::NONE
-    };
-    mods
+    }
 }
 
 #[test]
@@ -278,7 +255,6 @@ fn overview_chord_needs_shift_and_no_alt() {
         ctrl: true,
         ..Mods::NONE
     };
-    #[cfg(not(target_os = "macos"))]
     {
         let out = encode(&ki(Key::Char('o'), ctrl, None), TermMode::default());
         assert_eq!(bytes(out), vec![0x0f]);
@@ -302,9 +278,6 @@ fn route_key_sends_the_overview_chord_to_the_toggle_focused_or_not() {
 
 #[test]
 fn overview_chord_label_names_the_platform_chord() {
-    #[cfg(target_os = "macos")]
-    assert_eq!(micold_client::keymap::overview_chord_label(), "Cmd+Shift+O");
-    #[cfg(not(target_os = "macos"))]
     assert_eq!(
         micold_client::keymap::overview_chord_label(),
         "Ctrl+Shift+O"
@@ -314,12 +287,6 @@ fn overview_chord_label_names_the_platform_chord() {
 /// Feature 1126 R13: the "+"'s tooltip names the platform's chord, Cmd on macOS.
 #[test]
 fn new_terminal_chord_label_names_the_platform_chord() {
-    #[cfg(target_os = "macos")]
-    assert_eq!(
-        micold_client::keymap::new_terminal_chord_label(),
-        "Cmd+Shift+T"
-    );
-    #[cfg(not(target_os = "macos"))]
     assert_eq!(
         micold_client::keymap::new_terminal_chord_label(),
         "Ctrl+Shift+T"
@@ -363,12 +330,6 @@ fn is_overview_full_screen_chord_is_primary_shift_f_only() {
 
 #[test]
 fn overview_full_screen_chord_label_names_the_platform_chord() {
-    #[cfg(target_os = "macos")]
-    assert_eq!(
-        micold_client::keymap::overview_full_screen_chord_label(),
-        "Cmd+Shift+F"
-    );
-    #[cfg(not(target_os = "macos"))]
     assert_eq!(
         micold_client::keymap::overview_full_screen_chord_label(),
         "Ctrl+Shift+F"
@@ -379,12 +340,6 @@ fn overview_full_screen_chord_label_names_the_platform_chord() {
 
 #[test]
 fn copy_paste_chords() {
-    #[cfg(target_os = "macos")]
-    let mods = Mods {
-        logo: true,
-        ..Mods::NONE
-    };
-    #[cfg(not(target_os = "macos"))]
     let mods = Mods {
         ctrl: true,
         shift: true,
@@ -547,8 +502,8 @@ fn removing_an_end_marker_cannot_assemble_another_one() {
 fn chord_mods() -> Mods {
     Mods {
         shift: true,
-        ctrl: cfg!(not(target_os = "macos")),
-        logo: cfg!(target_os = "macos"),
+        ctrl: true,
+        logo: false,
         ..Mods::NONE
     }
 }
@@ -659,7 +614,6 @@ fn existing_reserved_chords_are_unchanged() {
             want
         );
     }
-    #[cfg(not(target_os = "macos"))]
     for (c, want) in [('c', KeyOutput::Copy), ('v', KeyOutput::Paste)] {
         assert_eq!(
             encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default()),
@@ -672,8 +626,8 @@ fn existing_reserved_chords_are_unchanged() {
 fn the_wrong_platform_modifier_is_not_a_pane_chord() {
     let wrong = Mods {
         shift: true,
-        ctrl: cfg!(target_os = "macos"),
-        logo: cfg!(not(target_os = "macos")),
+        ctrl: false,
+        logo: true,
         ..Mods::NONE
     };
     let out = encode(&ki(Key::Char('d'), wrong, None), TermMode::default());
@@ -818,7 +772,6 @@ fn the_other_primary_shift_chords_are_unchanged_by_the_navigation_chords() {
             "{key:?} keeps its pane action"
         );
     }
-    #[cfg(not(target_os = "macos"))]
     for (c, want) in [('c', KeyOutput::Copy), ('v', KeyOutput::Paste)] {
         let out = encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default());
         assert_eq!(out, want, "Ctrl+Shift+{c} keeps copy/paste");
@@ -1106,10 +1059,7 @@ fn the_primary_modifier_is_cmd_on_macos_and_ctrl_elsewhere() {
         logo: true,
         ..Mods::NONE
     };
-    if cfg!(target_os = "macos") {
-        assert!(primary_held(logo));
-        assert!(!primary_held(ctrl()));
-    } else {
+    {
         assert!(primary_held(ctrl()));
         assert!(!primary_held(logo));
     }
@@ -1154,7 +1104,7 @@ fn a_review_press_carries_the_produced_text_and_every_modifier() {
     assert_eq!(dead.key, PressKey::Other);
     let ctrl_j = review_press(&ki(Key::Char('j'), ctrl(), Some("\n")), false);
     assert_eq!(ctrl_j.key, PressKey::Other, "a control character is no key");
-    assert_eq!(ctrl_j.primary, !cfg!(target_os = "macos"));
+    assert!(ctrl_j.primary);
     let two = review_press(&ki(Key::Char('a'), Mods::NONE, Some("ab")), false);
     assert_eq!(two.key, PressKey::Other);
 }
@@ -1290,36 +1240,6 @@ fn arrow(named: NamedKey, mods: Mods) -> KeyInput {
 
 /// The running platform's Back and Forward presses (H1), each with its direction.
 fn history_presses() -> Vec<(KeyInput, HistoryDir)> {
-    #[cfg(target_os = "macos")]
-    let presses = vec![
-        (
-            kp(Key::Char('['), PhysicalKey::BracketLeft, cmd()),
-            HistoryDir::Back,
-        ),
-        (
-            kp(Key::Char(']'), PhysicalKey::BracketRight, cmd()),
-            HistoryDir::Forward,
-        ),
-        // Another layout types something else on the same keys: the position decides.
-        (
-            kp(Key::Char('ü'), PhysicalKey::BracketLeft, cmd()),
-            HistoryDir::Back,
-        ),
-        (
-            kp(Key::Char('+'), PhysicalKey::BracketRight, cmd()),
-            HistoryDir::Forward,
-        ),
-        // No code from the platform: the logical key decides, as `nav_chord`'s fallback.
-        (
-            kp(Key::Char('['), PhysicalKey::Other, cmd()),
-            HistoryDir::Back,
-        ),
-        (
-            kp(Key::Char(']'), PhysicalKey::Other, cmd()),
-            HistoryDir::Forward,
-        ),
-    ];
-    #[cfg(not(target_os = "macos"))]
     let presses = vec![
         (arrow(NamedKey::ArrowLeft, alt()), HistoryDir::Back),
         (arrow(NamedKey::ArrowRight, alt()), HistoryDir::Forward),
@@ -1365,13 +1285,6 @@ fn history_near_misses() -> Vec<KeyInput> {
         kp(Key::Char('['), PhysicalKey::BracketLeft, ctrl()),
         kp(Key::Char('x'), PhysicalKey::Other, cmd()),
     ];
-    // The other platform's form.
-    #[cfg(target_os = "macos")]
-    misses.extend([
-        arrow(NamedKey::ArrowLeft, alt()),
-        arrow(NamedKey::ArrowRight, alt()),
-    ]);
-    #[cfg(not(target_os = "macos"))]
     misses.extend([
         kp(Key::Char('['), PhysicalKey::BracketLeft, cmd()),
         kp(Key::Char(']'), PhysicalKey::BracketRight, cmd()),
@@ -1481,13 +1394,7 @@ fn the_back_and_forward_labels_name_both_platform_forms() {
         ("Alt+→".to_string(), "Cmd+]".to_string())
     );
     for dir in [HistoryDir::Back, HistoryDir::Forward] {
-        let (other, mac) = history_key_labels(dir);
-        let want = if cfg!(target_os = "macos") {
-            mac
-        } else {
-            other
-        };
-        assert_eq!(history_key_label(dir), want, "{dir:?}");
+        assert_eq!(history_key_label(dir), history_key_labels(dir).0, "{dir:?}");
     }
 }
 

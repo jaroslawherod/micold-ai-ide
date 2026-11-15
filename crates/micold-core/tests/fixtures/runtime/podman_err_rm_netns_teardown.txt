@@ -1,0 +1,3 @@
+Error: cleaning up container 91aae58cae9964eaa589d74581d79098600930daf91b8e296841a2f6e62504ee: removing container 91aae58cae9964eaa589d74581d79098600930daf91b8e296841a2f6e62504ee network: 1 error occurred:
+	* rootless netns: kill network process: permission denied
+

@@ -68,6 +68,7 @@ pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_vie
 /// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has
 /// no reason to be public.
 pub use sandbox_status::{attempt_line, stage_line, StageLine};
+pub mod group_naming;
 pub(crate) mod project_selector;
 pub(crate) mod rename;
 pub(crate) mod rename_dialog;
@@ -946,6 +947,7 @@ pub fn view_with<'a>(
         .push_maybe(review_overflow)
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
+        .push_maybe(sidebar::empty_area_menu(state, roles))
         .push_maybe(group_menu)
         .push_maybe(session_menu)
         .push_maybe(card_menu)
@@ -1667,6 +1669,12 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
             crate::features::overview::Msg::FullScreenToggled {
                 settings_open: false,
             },
+        ));
+    }
+    // Feature 1786 (C6a): New group, with no worktree needed.
+    if crate::keymap::is_new_group_chord(&input.key, input.mods) {
+        return Some(Message::SidebarGroups(
+            crate::features::sidebar_group_actions::Msg::New,
         ));
     }
     if crate::keymap::is_switcher_chord(&input) {

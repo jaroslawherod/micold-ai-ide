@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Record the answer to a supervised run's open escalation: one *Decisions* row per question (By `user`),
+# Record the answer to a supervised run's open escalation: one *Decisions* row per question (By `user`, or `--by`),
 # then *Open escalation* back to `None.`. The only writer of those rows.
 #
-# Usage: answer.sh <ledger> <answer-text>     (the text after the word `resume`)
+# Usage: answer.sh [--by <who>] <ledger> <answer-text>     (the text after the word `resume`)
+#   --by <who>: the By cell of every row (default `user`; `supervisor` for `resume --by supervisor`)
 #   a batch (`### Q<n>` subsections) takes one line per question, `<n>. <answer>` or `<n>: <answer>`
 # Exit: 0 recorded (rows printed) · 2 batch answer misses or repeats a question number (ledger
 #       unchanged) · 3 no open escalation (`ignored: no open escalation`, ledger unchanged)
 # Contract: specs/1812-supervisor-run-status/contracts/supervised-escalation.md
 set -uo pipefail
-[ $# -eq 2 ] && [ -f "$1" ] || { echo "usage: answer.sh <ledger> <answer-text>" >&2; exit 2; }
+by=user
+if [ "${1:-}" = "--by" ]; then
+  [ $# -ge 2 ] && [ -n "$2" ] || { echo "usage: answer.sh [--by <who>] <ledger> <answer-text>" >&2; exit 2; }
+  by="$2"; shift 2
+fi
+[ $# -eq 2 ] && [ -f "$1" ] || { echo "usage: answer.sh [--by <who>] <ledger> <answer-text>" >&2; exit 2; }
 ledger="$1"; answer="$2"
 
 section() { awk -v h="## $1" '$0 == h { f = 1; next } f && /^## / { exit } f' "$ledger"; }
@@ -26,7 +32,7 @@ n=${last:-0}
 rows=""
 add_row() {  # add_row <question> <answer> <evidence>
   n=$((n + 1))
-  rows+="| D$n | $phase | $(cell "$1") | $(cell "$2") | user | $(cell "$3") |"$'\n'
+  rows+="| D$n | $phase | $(cell "$1") | $(cell "$2") | $(cell "$by") | $(cell "$3") |"$'\n'
 }
 
 qs="$(grep -oE '^### Q[0-9]+' <<<"$esc" | grep -oE '[0-9]+')"

@@ -47,6 +47,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
 
 fn worktree(dir: &str, status: Wire, name: &str) -> WorktreeSnapshot {
     WorktreeSnapshot {
+        parent: None,
         daemon: Default::default(),
         dir_name: dir.to_string(),
         branch: Some(format!("feat/{dir}")),

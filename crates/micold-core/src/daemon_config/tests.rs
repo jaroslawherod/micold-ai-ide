@@ -147,11 +147,7 @@ fn defaults_for_tokens_clis_and_startup() {
     assert_eq!(startup.on_failure, OnFailure::Refuse);
     assert_eq!(startup.run, RunPolicy::EveryStart);
     assert!(startup.export_env);
-    let shell = if cfg!(windows) {
-        "powershell.exe"
-    } else {
-        "/bin/sh"
-    };
+    let shell = "/bin/sh";
     assert_eq!(startup.shell, PathBuf::from(shell));
 }
 
@@ -954,6 +950,35 @@ fn v14_a_wide_secret_is_a_warning_on_host_and_an_error_in_a_container() {
         assert_eq!(finding.line, line_of(&text, &file.display().to_string()));
         assert_eq!(finding.column, 14, "V14 points at the path value");
     }
+}
+
+/// A pod's Secret mounts are `root:<fsGroup>` mode 0440 (the manifest's `defaultMode`), so the
+/// daemon's group reads them: V14 must not refuse that, only a file others can read.
+#[cfg(unix)]
+#[test]
+fn v14_a_group_readable_secret_passes_in_a_pod_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = |file: &std::path::Path| {
+        format!(
+            "[[github.tokens]]\nname = \"a\"\ntoken_file = \"{}\"\n",
+            file.display()
+        )
+    };
+    let group = secret_file(dir.path(), "group", 0o440);
+    let other = secret_file(dir.path(), "other", 0o644);
+    let v14 = |text: &str| {
+        check_files(text, ORIGIN, &ok(text))
+            .into_iter()
+            .any(|f| f.rule == "V14" && f.severity == Severity::Error)
+    };
+    let pod =
+        |file: &std::path::Path| KUBERNETES.replace("[auth]", &format!("{}\n[auth]", body(file)));
+    assert!(!v14(&pod(&group)), "a pod's 0440 token is accepted");
+    assert!(v14(&pod(&other)), "a pod's world-readable token is refused");
+    assert!(
+        v14(&container(&body(&group))),
+        "a container still needs 0600"
+    );
 }
 
 #[cfg(unix)]

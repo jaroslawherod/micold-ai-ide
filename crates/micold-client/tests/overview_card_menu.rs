@@ -34,6 +34,7 @@ fn project_path() -> PathBuf {
 
 fn worktree(dir: &str, status: WorktreeStatus, included: bool) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),

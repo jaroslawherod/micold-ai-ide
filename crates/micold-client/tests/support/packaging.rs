@@ -79,35 +79,3 @@ pub const FONT_LICENCES: &[&str] = &[
     "assets/fonts/LICENSE",
     "assets/fonts/PROVENANCE.md",
 ];
-
-/// The file name at the end of a path, with either separator (Inno Setup paths use `\`).
-pub fn basename(path: &str) -> &str {
-    path.rsplit(['\\', '/']).next().unwrap_or(path)
-}
-
-/// The `(Source, DestDir)` pairs of an Inno Setup script's `[Files]` section, quotes stripped and
-/// `;` comment lines skipped. A line without a `DestDir:` pairs its source with `""`.
-pub fn iss_file_entries(script: &str) -> Vec<(&str, &str)> {
-    let mut in_files = false;
-    let mut entries = Vec::new();
-    for line in script.lines().map(str::trim) {
-        if line.is_empty() || line.starts_with(';') {
-            continue;
-        }
-        if line.starts_with('[') {
-            in_files = line.eq_ignore_ascii_case("[Files]");
-            continue;
-        }
-        if !in_files || !line.starts_with("Source:") {
-            continue;
-        }
-        let param = |name: &str| {
-            line.split(';')
-                .map(str::trim)
-                .find_map(|part| part.strip_prefix(name))
-                .map_or("", |value| value.trim().trim_matches('"'))
-        };
-        entries.push((param("Source:"), param("DestDir:")));
-    }
-    entries
-}

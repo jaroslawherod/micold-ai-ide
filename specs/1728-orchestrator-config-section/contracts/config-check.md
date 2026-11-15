@@ -12,7 +12,7 @@ Exit 0 when valid, 2 when any error. Each error: `file:line:column: <message>` (
 | V4 | relative or empty path | the value | must be an absolute path |
 | type | wrong value type | the value | serde type error |
 | V15 (`--files`) | file missing or not a regular file | the value | error |
-| V14 (`--files`) | `key_file`/token readable by others | the key | warning (host, ssh), error (container, pod) |
+| V14 (`--files`) | `key_file`/token readable by others | the key | warning (host, ssh), error (container, pod; a pod counts only other bits, its Secret mounts are 0440 via `defaultMode`/`fsGroup`) |
 
 Resolved view block (absent without the table):
 

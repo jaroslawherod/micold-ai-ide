@@ -99,6 +99,7 @@ pub async fn attempt_with(
             settings,
             None,
             &Default::default(),
+            &[],
             DriftChoice::Ask,
             &sink,
         )

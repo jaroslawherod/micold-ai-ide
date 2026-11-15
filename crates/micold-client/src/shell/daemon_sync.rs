@@ -1522,6 +1522,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         status: micold_core::worktree::WorktreeStatus::Valid,
                         // The app made this one, so it is not an inclusion (016 BUG-002).
                         included: false,
+                        parent: None,
                     },
                 )));
             }
@@ -1593,6 +1594,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                             branch: worktree.branch,
                             status: wire_to_worktree_status(worktree.status),
                             included: worktree.included,
+                            parent: worktree.parent,
                         },
                     )));
                 }
@@ -2375,6 +2377,17 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         }
         // The orchestrator's heartbeat probe (#1724): only an orchestrator link answers it.
         DaemonMsg::LinkPing { .. } => {}
+        // A program copied with OSC 52 (#1720): the window showing that session puts it on the
+        // system clipboard.
+        DaemonMsg::ClipboardStore { session, content } if app.active_daemon() == Some(daemon) => {
+            if let Some(outcome) = micold_client::features::session::clipboard_store_outcome(
+                app.core.session.active,
+                session,
+                content,
+            ) {
+                follow_up = Task::batch([follow_up, crate::shell::clipboard::interpret(outcome)]);
+            }
+        }
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }

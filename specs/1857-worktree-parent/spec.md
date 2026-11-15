@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft
+**Status**: Closed 2026-11-15 — shipped in PRs #1873, #1912, #1917, #1921, and the close PR
 
 **Input**: User description: "Worktree parent registration (MCP + sidebar) and supervisor support (issue #1857)"
 
@@ -30,6 +30,8 @@ user in the app, or before this feature).
 - Q: Sidebar nesting or label? → A: Label plus a filter (see Assumptions); no user question needed, the repo's state grouping and stable ordering rule nesting out.
 - Q: Keep `origin`? → A: Yes, unchanged and independent (FR-011).
 
+- Q: Should a session's MCP view be limited by parent? → A: Yes (user, 2026-11-14): a session sees and addresses only its parent and siblings; its own children are added so a parent can watch the runs it started (FR-015). `default` sees all. This replaces the earlier advisory-only decision and the proposed `children` row field (not added).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A supervisor finds its own runs (Priority: P1)
@@ -52,7 +54,7 @@ none.
 2. **Given** a session running in worktree `W`, **When** it creates a worktree without naming a
    parent, **Then** the new worktree's parent is `W`.
 3. **Given** a session in any worktree, **When** it creates a worktree and names parent `P`
-   explicitly, **Then** the parent is `P`, not the caller's worktree.
+   explicitly (subject to FR-016), **Then** the parent is `P`, not the caller's worktree.
 4. **Given** a worktree created by the user in the app, **When** worktrees are listed, **Then** it
    shows no parent.
 5. **Given** worktrees with a parent, **When** a caller lists worktrees filtered by a parent,
@@ -194,8 +196,23 @@ state, a session in `default` reports none.
 - **FR-011**: The parent link MUST be independent of the session `origin` link: both are kept,
   neither is derived from the other, and each keeps its own removed handling.
 - **FR-012**: An agent MUST NOT be able to read or write a parent for a worktree of another
-  project, and the feature MUST NOT widen what a caller may do to a worktree (the parent is
-  information, not permission).
+  project, and the feature MUST NOT widen what a caller may do to a worktree.
+- **FR-015**: A session calling the tools from a worktree other than `default` MUST see and be able
+  to address only the sessions and worktrees related to it by parent: its own worktree, its parent,
+  its siblings (same parent) and its direct children. Anything else is reported as not found, in
+  every tool that lists, reads or addresses a session or worktree (listing, reading output, sending
+  input, interrupting, creating a session, renaming, deleting). A session in `default` sees and
+  addresses everything, as today; it is exempt from this limit only, not from the constitution's
+  ban on a Default session renaming or removing a worktree (those stay refused, test
+  `a_default_session_is_refused_rename_worktree`). An unparented worktree's session sees itself and its children.
+- **FR-016**: A non-`default` caller MUST be able to name only a worktree it can see as the explicit
+  `parent` of a new worktree; it cannot name `default` or a worktree outside its set.
+- **FR-017**: Communication outside a session's scope MUST go through the hierarchy: a session that
+  needs to reach one it cannot see asks its parent, and the parent passes it on (to its own parent
+  or to the target if the target is in the parent's scope). No tool offers a direct route around
+  FR-015. The daemon enforces the first half (no tool bypasses FR-015; tested in
+  `mcp_worktree_parent_visibility`); the relay itself is a skill convention (supervisor skill, #1860),
+  not enforced by the daemon.
 - **FR-013**: The user guide for the agent tools MUST describe the parent, its default, the
   override, the removed state and the filter, and the supervisor skills MUST be told to use the
   parent to find their runs and to leave runs with another parent alone.
@@ -235,8 +252,10 @@ state, a session in `default` reports none.
   it follows the project through restart and relocation. A git-config location is not used.
 - Re-parenting is out of scope: the user's recourse is to delete and recreate the worktree. Revisit
   if a supervisor needs to adopt user-started runs.
-- The parent is advisory. The supervisor honouring "never touch a run with another parent" is a
-  rule of its skill, not an enforced permission.
+- The parent is the basis of visibility (FR-015), enforced by the daemon for every caller except one
+  in `default`. A supervisor running in `default` is not limited by it, so its skill still lists
+  runs by `parent` and leaves other runs alone; a supervisor running in its own worktree, and every
+  worker it starts, is limited by the daemon.
 - The sidebar presents the parent as a label and a filter, not as nesting of worktree rows under
   parent rows, because the sidebar already groups by state and keeps a stable order; nesting would
   conflict with both. Rows of a supervisor's runs stay in their state group.

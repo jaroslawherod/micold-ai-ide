@@ -74,6 +74,9 @@ pub struct GithubTokenSetting {
     pub token_file: PathBuf,
     /// Empty = every repository the token reaches (the key is left out).
     pub repos: Vec<RepoPattern>,
+    /// The forge (a host name or base URL); `None` leaves the key out, so the daemon uses
+    /// `github.com`. Only a test forge sets it (#1760 R5).
+    pub host: Option<String>,
 }
 
 impl GithubTokenSetting {
@@ -88,6 +91,7 @@ impl GithubTokenSetting {
                     token_file: store.token_file(&name)?,
                     name,
                     repos: pat.repos,
+                    host: None,
                 })
             })
             .collect()
@@ -314,6 +318,7 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
             let list: Vec<String> = token.repos.iter().map(|p| quote(&p.to_string())).collect();
             let _ = writeln!(out, "repos = [{}]", list.join(", "));
         }
+        key_str(&mut out, "host", &token.host);
     }
     for project in &settings.projects {
         out.push_str("\n[[projects]]\n");

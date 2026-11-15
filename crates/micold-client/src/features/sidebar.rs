@@ -66,6 +66,7 @@ use micold_core::overview::CardState;
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
+use micold_core::sidebar_layout::{LayoutItem, SidebarLayout, UserGroupId};
 use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
 use std::collections::{BTreeMap, BTreeSet};
@@ -150,6 +151,13 @@ pub struct State {
     /// The row a navigation chord gave the sidebar's keyboard (feature 803, contracts/ui.md U3):
     /// the reveal scroll reaches it rather than the current session's row.
     pub keyboard_row: Option<RowRef>,
+    /// Each project's user-group layout (feature 1786), by project path: loaded from the store
+    /// when the project is entered and saved after every committed group operation (R9). A
+    /// project with no entry has no groups.
+    pub layouts: BTreeMap<std::path::PathBuf, SidebarLayout>,
+    /// The projects whose held layout changed and is not yet written to the store; the shell
+    /// saves and clears them after the message that changed them (research R9).
+    pub layouts_unsaved: BTreeSet<std::path::PathBuf>,
 }
 
 /// A sidebar row named by what it shows, not by its position, so it survives the list arriving
@@ -194,6 +202,22 @@ pub enum SidebarEntry {
     Default(DefaultNode),
     /// A run group's row with its runs one level in (feature 483, G1–G3).
     Group(GroupNode),
+    /// A user group's header (feature 1786, contract C5): its member rows follow it in the list
+    /// as entries of their own while it is expanded. It names no state (FR-013).
+    UserGroup(GroupHeaderNode),
+}
+
+/// A user group's header row (feature 1786, contract C5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupHeaderNode {
+    /// The group.
+    pub id: UserGroupId,
+    /// Its name, as the user gave it.
+    pub name: String,
+    /// Whether its rows are hidden under it (FR-011).
+    pub collapsed: bool,
+    /// How many of its rows the list holds now, shown whether or not it is collapsed.
+    pub count: usize,
 }
 
 impl SidebarEntry {
@@ -205,6 +229,7 @@ impl SidebarEntry {
             SidebarEntry::Group(group) => group.runs.iter().any(
                 |run| matches!(&run.row, RunRow::Worktree(node) if node.location() == *location),
             ),
+            SidebarEntry::UserGroup(_) => false,
         }
     }
 }
@@ -242,8 +267,9 @@ pub struct RunNode {
 /// What a run row is made of.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunRow {
-    /// The run's worktree, with the usual tags and session children.
-    Worktree(WorktreeNode),
+    /// The run's worktree, with the usual tags and session children. Boxed: the node is far larger
+    /// than `NoWorktree` (clippy `large_enum_variant`).
+    Worktree(Box<WorktreeNode>),
     /// The run has no worktree row: it failed while creating it, or is still creating it, or the
     /// sidebar's filters hide it. A leaf with no worktree menu (G1a).
     NoWorktree,
@@ -276,13 +302,16 @@ pub enum MoreAction {
     AttachExisting,
     /// Open the Run in parallel dialog (feature 483).
     RunInParallel,
+    /// **New group…** (feature 1786, contract C6a).
+    NewGroup,
 }
 
 /// The more menu's items, top to bottom (contract S3).
-pub const MORE_MENU: [MoreAction; 3] = [
+pub const MORE_MENU: [MoreAction; 4] = [
     MoreAction::Refresh,
     MoreAction::AttachExisting,
     MoreAction::RunInParallel,
+    MoreAction::NewGroup,
 ];
 
 /// One item of the more menu as the view draws it: the header button's tooltip and enabled rule,
@@ -320,6 +349,8 @@ pub fn more_menu_items(project_active: bool, refreshing: bool) -> Vec<MoreMenuIt
                 MoreAction::RunInParallel => {
                     ("Run in parallel…", "Run in parallel…", project_active)
                 }
+                // Feature 1786 (C6a): needs a project, never a worktree.
+                MoreAction::NewGroup => ("New group…", "New group…", project_active),
             };
             MoreMenuItem {
                 action,
@@ -332,7 +363,7 @@ pub fn more_menu_items(project_active: bool, refreshing: bool) -> Vec<MoreMenuIt
 }
 
 /// One chip of the chip bar (feature 1125, FR-014): **All**, or one tag filter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChipBarChip {
     All,
     Filter(TagFilter),
@@ -349,7 +380,7 @@ pub fn chip_bar_chips(
         .chain(
             available
                 .iter()
-                .map(|&filter| (ChipBarChip::Filter(filter), active.contains(&filter))),
+                .map(|filter| (ChipBarChip::Filter(filter.clone()), active.contains(filter))),
         )
         .collect()
 }
@@ -386,8 +417,8 @@ pub fn collapsed_bar(
     }
     let mut on: Vec<TagFilter> = available
         .iter()
-        .copied()
         .filter(|f| active.contains(f))
+        .cloned()
         .collect();
     let overflow = on.len().saturating_sub(fit);
     on.truncate(fit);
@@ -402,6 +433,54 @@ pub fn collapsed_bar(
 /// **Run in parallel** was chosen: the root opens the dialog for the active project.
 pub fn run_in_parallel() -> Vec<crate::features::Outcome> {
     vec![crate::features::Outcome::RunInParallelRequested]
+}
+
+/// The item a user-group layout names `entry` by (feature 1786, research R2): a worktree by its
+/// `dir_name`, a run group by its id. Default and a header are never items (FR-015).
+pub fn layout_item(entry: &SidebarEntry) -> Option<LayoutItem> {
+    match entry {
+        SidebarEntry::Worktree(node) => Some(LayoutItem::Worktree(node.worktree.dir_name.clone())),
+        SidebarEntry::Group(group) => Some(LayoutItem::Run(group.id)),
+        SidebarEntry::Default(_) | SidebarEntry::UserGroup(_) => None,
+    }
+}
+
+/// Arrange the stable-order `entries` by `layout` (feature 1786, contract C5): Default first, then
+/// each group's header and, while it is expanded, its rows in stored order, then the ungrouped rows
+/// in saved order. The layout is fitted to the listed rows first ([`SidebarLayout::reconcile`] on a
+/// copy), so a row it does not know lands among the ungrouped in stable order and a row hidden by a
+/// tag filter or gone from disk is skipped while its stored place stays. Reads no state (FR-013).
+pub fn apply_layout(entries: Vec<SidebarEntry>, layout: &SidebarLayout) -> Vec<SidebarEntry> {
+    if layout.is_empty() {
+        return entries;
+    }
+    let live: Vec<LayoutItem> = entries.iter().filter_map(layout_item).collect();
+    let mut layout = layout.clone();
+    layout.reconcile(&live);
+    let mut rows: std::collections::HashMap<LayoutItem, SidebarEntry> =
+        std::collections::HashMap::new();
+    let mut out = Vec::new();
+    for entry in entries {
+        match layout_item(&entry) {
+            Some(item) => {
+                rows.insert(item, entry);
+            }
+            None => out.push(entry),
+        }
+    }
+    for group in &layout.groups {
+        out.push(SidebarEntry::UserGroup(GroupHeaderNode {
+            id: group.id,
+            name: group.name.clone(),
+            collapsed: group.collapsed,
+            count: group.items.len(),
+        }));
+        if !group.collapsed {
+            out.extend(group.items.iter().filter_map(|item| rows.remove(item)));
+        }
+    }
+    out.extend(layout.ungrouped.iter().filter_map(|item| rows.remove(item)));
+    out
 }
 
 /// Put the runs of `groups` under their group rows (feature 483, G1–G3).
@@ -429,7 +508,7 @@ pub fn arrange_groups(
                 let row = match at.and_then(|i| entries[i].take().map(|e| (i, e))) {
                     Some((i, SidebarEntry::Worktree(node))) => {
                         first = Some(first.map_or(i, |f: usize| f.min(i)));
-                        RunRow::Worktree(node)
+                        RunRow::Worktree(Box::new(node))
                     }
                     _ => RunRow::NoWorktree,
                 };
@@ -717,6 +796,7 @@ impl SidebarEntry {
                     .filter(|session| micold_core::attention::counts_as_unread(session, in_view))
                     .count();
             }
+            SidebarEntry::UserGroup(_) => return 0,
         };
         sessions
             .iter()
@@ -727,7 +807,7 @@ impl SidebarEntry {
 
 /// A tag filter the sidebar can apply (feature 008, FR-024). Typed so an impossible filter is
 /// unrepresentable (Principle V); ordered so it lives in a `BTreeSet`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TagFilter {
     /// Match worktrees of a specific conventional type.
     Type(ConventionalType),
@@ -735,6 +815,9 @@ pub enum TagFilter {
     HasIssue,
     /// Match worktrees whose name does not follow the convention (no type tag).
     Untyped,
+    /// Match the direct children of one parent (spec 1857, FR-010). Unlike the others it narrows:
+    /// see [`matches_filters`].
+    Parent(micold_core::worktree::ParentLabel),
 }
 
 /// The environment variable that pre-applies sidebar tag filters at launch.
@@ -750,12 +833,21 @@ pub enum TagFilter {
 pub const FILTER_ENV_VAR: &str = "MICOLD_SIDEBAR_FILTER";
 
 impl TagFilter {
-    /// Parse one filter token: a conventional type (`feat`, `fix`, …), `issue`, or `untyped`.
+    /// Parse one filter token: a conventional type (`feat`, `fix`, …), `issue`, `untyped`, or
+    /// `parent:<name>` for the live parent of that name (`parent:default` is the project root).
     pub fn from_token(token: &str) -> Option<Self> {
         match token {
             "issue" => Some(Self::HasIssue),
             "untyped" => Some(Self::Untyped),
-            other => ConventionalType::from_token(other).map(Self::Type),
+            other => match other.strip_prefix("parent:") {
+                Some(name) if !name.is_empty() => {
+                    Some(Self::Parent(micold_core::worktree::ParentLabel {
+                        name: name.to_string(),
+                        removed: false,
+                    }))
+                }
+                _ => ConventionalType::from_token(other).map(Self::Type),
+            },
         }
     }
 }
@@ -763,7 +855,8 @@ impl TagFilter {
 /// The filters named by [`FILTER_ENV_VAR`]'s value: a comma-separated list of tokens.
 ///
 /// - `None`, empty, or all-whitespace → no filters, and the application starts normally.
-/// - `"fix"`, `"fix,docs"`, `"issue"`, `"untyped"` → those filters, in the order given.
+/// - `"fix"`, `"fix,docs"`, `"issue"`, `"untyped"`, `"parent:sup"` → those filters, in the order
+///   given.
 /// - anything else → `Err` naming the variable, the bad token, and the grammar.
 ///
 /// A malformed value is an error rather than a silent "no filter", for the reason the frame probe
@@ -787,7 +880,7 @@ pub fn filters_from_env_value(raw: Option<&str>) -> Result<Vec<TagFilter>, Strin
         let filter = TagFilter::from_token(token).ok_or_else(|| {
             format!(
                 "{FILTER_ENV_VAR}: {token:?} is not a filter. Expected a comma-separated list of \
-                 conventional types ({}), `issue`, or `untyped`.",
+                 conventional types ({}), `issue`, `untyped`, or `parent:<name>`.",
                 ConventionalType::ALL
                     .iter()
                     .map(|t| t.as_str())
@@ -801,17 +894,36 @@ pub fn filters_from_env_value(raw: Option<&str>) -> Result<Vec<TagFilter>, Strin
 }
 
 /// Whether a worktree with `tags` passes the active `filters` (feature 008, FR-025). An empty
-/// filter set shows everything; otherwise a worktree matches if it satisfies ANY active filter
-/// (logical OR).
+/// filter set shows everything. The type, issue and untyped filters match if ANY is satisfied
+/// (logical OR). The parent filters are a second dimension (spec 1857, FR-010): when any is on, the
+/// worktree must also be a direct child of ANY chosen parent, so a parent filter narrows what the
+/// others select instead of adding to it.
 pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
-    if filters.is_empty() {
-        return true;
-    }
-    filters.iter().any(|f| match f {
-        TagFilter::Type(t) => tags.iter().any(|tag| matches!(tag, Tag::Type(x) if x == t)),
-        TagFilter::HasIssue => tags.iter().any(|tag| matches!(tag, Tag::Issue(_))),
-        TagFilter::Untyped => !tags.iter().any(|tag| matches!(tag, Tag::Type(_))),
-    })
+    let parents: Vec<_> = filters
+        .iter()
+        .filter_map(|f| match f {
+            TagFilter::Parent(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    let others: Vec<_> = filters
+        .iter()
+        .filter(|f| !matches!(f, TagFilter::Parent(_)))
+        .collect();
+    let by_parent = parents.is_empty() || parents.iter().any(|p| has_parent(tags, p));
+    let by_tag = others.is_empty()
+        || others.iter().any(|f| match f {
+            TagFilter::Type(t) => tags.iter().any(|tag| matches!(tag, Tag::Type(x) if x == t)),
+            TagFilter::HasIssue => tags.iter().any(|tag| matches!(tag, Tag::Issue(_))),
+            TagFilter::Untyped => !tags.iter().any(|tag| matches!(tag, Tag::Type(_))),
+            TagFilter::Parent(_) => false,
+        });
+    by_parent && by_tag
+}
+
+fn has_parent(tags: &[Tag], parent: &micold_core::worktree::ParentLabel) -> bool {
+    tags.iter()
+        .any(|tag| matches!(tag, Tag::Parent(p) if p == parent))
 }
 
 /// Whether a location's row is shown open (feature 024, contract §1.1).
@@ -892,6 +1004,7 @@ pub fn row_heights(rows: &[SidebarEntry]) -> Vec<f32> {
                     }
                 }
             }
+            SidebarEntry::UserGroup(_) => heights.push(one_line),
         }
     }
     heights
@@ -1014,6 +1127,10 @@ pub fn row_index(rows: &[SidebarEntry], target: &RowRef) -> Option<usize> {
                 }
                 found
             }
+            SidebarEntry::UserGroup(_) => {
+                row += 1;
+                None
+            }
         };
         if found.is_some() {
             return found;
@@ -1088,6 +1205,7 @@ pub fn location_row(rows: &[SidebarEntry], target: &SessionLocation) -> Option<u
                     }
                 }
             }
+            SidebarEntry::UserGroup(_) => row += 1,
         }
     }
     None
@@ -1479,13 +1597,15 @@ pub enum RowChip {
     OutsideThisApp,
     /// A merged pull request holds all its work (feature 040, FR-015).
     CanBeRemoved,
+    /// The worktree's parent, by its current name, `(removed)` when it is gone (spec 1857, FR-010).
+    Parent(String),
 }
 
 impl RowChip {
     /// The words the chip shows.
     pub fn label(&self) -> String {
         match self {
-            Self::Status(label) | Self::Daemon(label) => label.clone(),
+            Self::Status(label) | Self::Daemon(label) | Self::Parent(label) => label.clone(),
             Self::CurrentSession => "current session".into(),
             Self::OutsideThisApp => "outside this app".into(),
             Self::CanBeRemoved => "can be removed".into(),
@@ -1503,6 +1623,12 @@ pub fn row_chips(node: &WorktreeNode, removable: bool) -> Vec<RowChip> {
         .filter(|tag| matches!(tag, Tag::Status(_)))
         .map(|tag| RowChip::Status(tag.label()))
         .collect();
+    chips.extend(
+        node.tags
+            .iter()
+            .filter(|tag| matches!(tag, Tag::Parent(_)))
+            .map(|tag| RowChip::Parent(tag.label())),
+    );
     if node.shown_for_current_session {
         chips.push(RowChip::CurrentSession);
     }
@@ -1616,7 +1742,7 @@ impl crate::app::State {
         };
         let facts = crate::links::LabelFacts {
             runtime_missing: container && self.settings.runtime_missing,
-            paths_mapped: container && cfg!(windows),
+            paths_mapped: false,
             lost_sessions: self.active_sessions().iter().any(|s| {
                 s.location.is_worktree(key)
                     && !s.archived
@@ -1799,8 +1925,34 @@ impl crate::app::State {
 
     /// The sidebar's drawn list (feature 1718, FR-001): every location row in the stable order of
     /// [`Self::sidebar_entries`], whatever the card states. Empty when no project is open.
+    ///
+    /// Feature 1786 (contract C5): the active project's user-group layout is applied here, not in
+    /// [`Self::sidebar_entries`], so the Overview's cards, which walk the stable entries, keep
+    /// every location whether or not its group is collapsed.
     pub fn sidebar_list(&self) -> Vec<SidebarEntry> {
-        self.sidebar_entries()
+        let entries = self.sidebar_entries();
+        match self.sidebar_layout() {
+            Some(layout) => apply_layout(entries, layout),
+            None => entries,
+        }
+    }
+
+    /// The active project's user-group layout, if the store gave one (feature 1786).
+    pub fn sidebar_layout(&self) -> Option<&SidebarLayout> {
+        self.sidebar.layouts.get(self.workspace.active.as_ref()?)
+    }
+
+    /// The store's layout for `project` arrived (feature 1786): kept for the project, replacing
+    /// whatever was held.
+    pub fn sidebar_layout_loaded(&mut self, project: std::path::PathBuf, layout: SidebarLayout) {
+        self.sidebar.layouts.insert(project, layout);
+    }
+
+    /// A user-group operation changed `project`'s layout (feature 1786): kept, and marked for the
+    /// shell's save (research R9).
+    pub fn sidebar_layout_changed(&mut self, project: std::path::PathBuf, layout: SidebarLayout) {
+        self.sidebar.layouts_unsaved.insert(project.clone());
+        self.sidebar.layouts.insert(project, layout);
     }
 
     /// The sidebar's keyboard left the row a navigation chord gave it, or the current session
@@ -1956,7 +2108,8 @@ impl crate::app::State {
 
     /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a
     /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
-    /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
+    /// `Untyped` if any worktree lacks a type, and a `Parent` per parent that has children (spec
+    /// 1857). Order: types first, then HasIssue, Untyped, then parents by name.
     ///
     /// Sourced from every worktree (552): an `agent-<hex>` worktree is listed like any other, so
     /// its missing type is a real `Untyped` row.
@@ -1964,6 +2117,7 @@ impl crate::app::State {
         let mut types = BTreeSet::new();
         let mut has_issue = false;
         let mut has_untyped = false;
+        let mut parents = BTreeSet::new();
         for worktree in &self.worktree.worktrees {
             let tags = worktree_tags(worktree);
             let mut typed = false;
@@ -1975,6 +2129,9 @@ impl crate::app::State {
                     }
                     Tag::Issue(_) => has_issue = true,
                     Tag::Status(_) => {}
+                    Tag::Parent(parent) => {
+                        parents.insert(parent.clone());
+                    }
                 }
             }
             if !typed {
@@ -1988,6 +2145,7 @@ impl crate::app::State {
         if has_untyped {
             out.push(TagFilter::Untyped);
         }
+        out.extend(parents.into_iter().map(TagFilter::Parent));
         out
     }
 }

@@ -39,14 +39,6 @@ fn sh(script: &str) -> CommandBuilder {
     cmd.arg(script);
     cmd
 }
-/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
-#[cfg(windows)]
-fn sh(script: &str) -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/c");
-    cmd.arg(script);
-    cmd
-}
 
 /// A regular-terminal session at the project root, so the spawn under test is `spawn_shell` and no
 /// AI CLI has to be on `PATH` for this to be about supervision.

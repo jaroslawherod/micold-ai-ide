@@ -28,6 +28,8 @@ pub fn modal<'a>(
             required: draft
                 .required
                 .state_in(&draft.required_fields(), FieldId::RenameProjectName),
+            confirm: "Rename",
+            error: None,
             on_input: |t| Message::Project(ProjectMsg::RenameTextChanged(t)),
             on_confirm: Message::Project(ProjectMsg::RenameConfirmed),
             on_cancel: Message::Project(ProjectMsg::RenameCancelled),

@@ -96,11 +96,6 @@ impl DialAddress {
     }
 }
 
-// macOS `sockaddr_un.sun_path` is 104 bytes, 103 usable (research R1.2). Overruns surface as an
-// opaque EINVAL, so we assert the budget up front instead.
-#[cfg(target_os = "macos")]
-const SUN_PATH_MAX: usize = 103;
-
 #[cfg(unix)]
 mod imp {
     use super::*;
@@ -108,13 +103,11 @@ mod imp {
     use std::os::unix::fs::PermissionsExt;
     // Gated for the same reason as `euid` below: only the non-macOS paths read an owner off a
     // metadata, so an ungated import warns on the one platform that never uses it.
-    #[cfg(not(target_os = "macos"))]
     use std::os::unix::fs::MetadataExt;
 
     /// The current effective uid. Only the non-macOS paths (Linux/other-Unix `resolve` and
     /// `verify_owned_0700`) consult it; macOS keys the endpoint on `$HOME`, so gate it off there to
     /// avoid a dead-code warning.
-    #[cfg(not(target_os = "macos"))]
     fn euid() -> u32 {
         // SAFETY: `geteuid` is always safe — it takes no arguments and cannot fail.
         unsafe { libc::geteuid() }
@@ -145,7 +138,6 @@ mod imp {
     /// fresh directory is verified too, cheaply, because `mkdir`'s mode is masked by the umask and a
     /// `0700` umask would leave it `0000`; the point is that the verifier is now the only way past
     /// this function.
-    #[cfg(not(target_os = "macos"))]
     fn guard_predictable_dir(dir: &std::path::Path) -> io::Result<()> {
         use std::os::unix::fs::DirBuilderExt;
         match fs::DirBuilder::new().mode(0o700).create(dir) {
@@ -161,7 +153,6 @@ mod imp {
     /// Verify a *predictable, world-writable-parent* directory is ours and locked down. Uses
     /// `symlink_metadata` (not `metadata`) to defeat a planted symlink; requires `uid == euid` and
     /// mode exactly `0o700`. Any failure bails loudly (protocol.md §1, FR-030).
-    #[cfg(not(target_os = "macos"))]
     pub(super) fn verify_owned_0700(dir: &std::path::Path) -> io::Result<()> {
         let meta = fs::symlink_metadata(dir)?;
         if !meta.is_dir() {
@@ -215,46 +206,13 @@ mod imp {
     /// guarding is what lets a test drive this path against a directory it can make hostile. Driving
     /// the real `resolve()` would mean making the *actual* `/tmp/micold-<uid>` world-writable on the
     /// machine running the suite, next to a daemon that may be using it (BUG-019).
-    #[cfg(not(target_os = "macos"))]
     pub(super) fn resolve_in_predictable_dir(dir: &std::path::Path) -> io::Result<Endpoint> {
         guard_predictable_dir(dir)?;
         Ok(endpoint_in(dir))
     }
 
-    #[cfg(not(target_os = "macos"))]
     pub(super) fn resolve_pinned() -> io::Result<Endpoint> {
         resolve_in_predictable_dir(&PathBuf::from(format!("/tmp/micold-{}", euid())))
-    }
-
-    #[cfg(target_os = "macos")]
-    pub(super) fn resolve_pinned() -> io::Result<Endpoint> {
-        resolve()
-    }
-
-    #[cfg(target_os = "macos")]
-    pub(super) fn resolve() -> io::Result<Endpoint> {
-        let home = std::env::var_os("HOME")
-            .filter(|v| !v.is_empty())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is unset"))?;
-        let dir = PathBuf::from(home).join(".micold").join("run");
-        ensure_dir_mode(&dir, 0o700)?;
-        let ep = Endpoint {
-            socket_path: dir.join("d.sock"),
-            lock_path: dir.join("daemon.lock"),
-        };
-        // Assert the sun_path budget so an overrun is loud, not an opaque EINVAL at bind time.
-        let len = ep.socket_path.as_os_str().len();
-        if len > super::SUN_PATH_MAX {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "socket path is {len} bytes, exceeds macOS sun_path budget of {} — \
-                     fall back to _CS_DARWIN_USER_CACHE_DIR",
-                    super::SUN_PATH_MAX
-                ),
-            ));
-        }
-        Ok(ep)
     }
 
     // Other Unix (e.g. BSD): treat like Linux's XDG/tmp policy.
@@ -263,7 +221,6 @@ mod imp {
         resolve_in_predictable_dir(&PathBuf::from(format!("/tmp/micold-{}", euid())))
     }
 
-    #[cfg(any(target_os = "linux", not(target_os = "macos")))]
     fn endpoint_in(dir: &std::path::Path) -> Endpoint {
         Endpoint {
             socket_path: dir.join("daemon.sock"),
@@ -272,227 +229,9 @@ mod imp {
     }
 }
 
-/// The current user's SID as a string (`S-1-5-21-...`): what the Windows pipe name is keyed on and
-/// what its DACL grants (research R1, R2).
-#[cfg(windows)]
-pub fn user_sid() -> io::Result<String> {
-    imp::user_sid()
-}
-
-/// The name of the event that asks this user's session service to stop (feature 041, stop-request
-/// contract §3): `Local\Micold.Daemon.Stop.<user SID>`. The service creates it at start; its
-/// "Restart service" sender and the installer open it by this name. The SID keeps two users'
-/// services apart, as it does in the pipe's name.
-#[cfg(windows)]
-pub fn stop_event_name() -> io::Result<String> {
-    Ok(format!(r"Local\Micold.Daemon.Stop.{}", user_sid()?))
-}
-
-/// The SID of the user the process `pid` runs as. Access denied when this user may not query it,
-/// which a process of another account usually is. Not found once the process has exited, even
-/// while a handle someone else holds keeps its pid openable.
-#[cfg(windows)]
-pub fn process_user_sid(pid: u32) -> io::Result<String> {
-    imp::process_user_sid(pid)
-}
-
-#[cfg(windows)]
-mod imp {
-    use super::*;
-
-    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE, STILL_ACTIVE};
-    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
-    use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
-    use windows_sys::Win32::System::Threading::{
-        GetCurrentProcess, GetExitCodeProcess, OpenProcess, OpenProcessToken,
-        PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
-    /// Closes a process or token handle on every return path.
-    struct Handle(HANDLE);
-
-    impl Drop for Handle {
-        fn drop(&mut self) {
-            // SAFETY: the handle came from a successful `OpenProcess` or `OpenProcessToken` and is
-            // closed only here.
-            unsafe {
-                CloseHandle(self.0);
-            }
-        }
-    }
-
-    /// Frees the string `ConvertSidToStringSidW` allocated.
-    struct LocalString(*mut u16);
-
-    impl Drop for LocalString {
-        fn drop(&mut self) {
-            // SAFETY: the pointer came from `ConvertSidToStringSidW`, whose contract is `LocalFree`.
-            unsafe {
-                LocalFree(self.0.cast());
-            }
-        }
-    }
-
-    pub(super) fn user_sid() -> io::Result<String> {
-        // The token, not `%USERNAME%`: nothing in the environment may choose whose pipe this is
-        // (data-model, "No environment variable influences the Windows endpoint").
-        // SAFETY: `GetCurrentProcess` returns a pseudo-handle that needs no closing.
-        token_user_sid(unsafe { GetCurrentProcess() })
-    }
-
-    pub(super) fn process_user_sid(pid: u32) -> io::Result<String> {
-        // SAFETY: plain call; a null return is handled, and the handle is closed by `Handle`.
-        let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-        if raw.is_null() {
-            return Err(io::Error::last_os_error());
-        }
-        let process = Handle(raw);
-        let mut exit_code = 0u32;
-        // SAFETY: `process` was opened with `PROCESS_QUERY_LIMITED_INFORMATION`, which this call
-        // needs; `exit_code` is a local out value.
-        if unsafe { GetExitCodeProcess(process.0, &mut exit_code) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        if exit_code != STILL_ACTIVE as u32 {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("process {pid} has exited"),
-            ));
-        }
-        token_user_sid(process.0)
-    }
-
-    /// The string SID of the user `process` runs as.
-    fn token_user_sid(process: HANDLE) -> io::Result<String> {
-        let mut raw: HANDLE = std::ptr::null_mut();
-        // SAFETY: `raw` is a local out pointer; a zero return leaves it unset and is handled.
-        if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let token = Handle(raw);
-
-        let mut needed = 0u32;
-        // SAFETY: a null buffer of length 0 is the documented size query; it fails and sets `needed`.
-        unsafe { GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed) };
-        if needed == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // u64 words keep the buffer aligned for TOKEN_USER's pointer field.
-        let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
-        // SAFETY: `buffer` holds at least `needed` bytes and outlives every use of the SID below.
-        let ok = unsafe {
-            GetTokenInformation(
-                token.0,
-                TokenUser,
-                buffer.as_mut_ptr().cast(),
-                needed,
-                &mut needed,
-            )
-        };
-        if ok == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: a successful `TokenUser` query wrote a TOKEN_USER at the start of `buffer`.
-        let sid = unsafe { (*(buffer.as_ptr() as *const TOKEN_USER)).User.Sid };
-
-        let mut wide: *mut u16 = std::ptr::null_mut();
-        // SAFETY: `sid` points into `buffer`; `wide` is a local out pointer freed by `LocalString`.
-        if unsafe { ConvertSidToStringSidW(sid, &mut wide) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let wide = LocalString(wide);
-        // SAFETY: the string is NUL-terminated and stays allocated until `wide` drops.
-        let len = (0..)
-            .take_while(|&i| unsafe { *wide.0.add(i) } != 0)
-            .count();
-        let chars = unsafe { std::slice::from_raw_parts(wide.0, len) };
-        String::from_utf16(chars).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    }
-
-    /// Windows has one location, so the pinned endpoint is the ordinary one.
-    pub(super) fn resolve_pinned() -> io::Result<Endpoint> {
-        resolve()
-    }
-
-    pub(super) fn resolve() -> io::Result<Endpoint> {
-        let sid = user_sid()?;
-        Ok(Endpoint {
-            socket_path: PathBuf::from(format!(r"\\.\pipe\Micold.Daemon.{sid}")),
-            // The pipe itself is the single-instance guard (interprocess creates it with
-            // FILE_FLAG_FIRST_PIPE_INSTANCE). This path is the pid record the stop path reads
-            // (FR-023), beside the app's local data: `%LOCALAPPDATA%\micold-ai-ide\run`.
-            lock_path: run_dir()?.join("micold-daemon.pid"),
-        })
-    }
-
-    fn run_dir() -> io::Result<PathBuf> {
-        let dirs = crate::paths::project_dirs().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "no local app data directory for this user",
-            )
-        })?;
-        // `data_local_dir` is `...\micold-ai-ide\data`; the run directory is its sibling.
-        let base = dirs.data_local_dir().parent().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, "local app data has no parent")
-        })?;
-        let run = base.join("run");
-        std::fs::create_dir_all(&run)?;
-        Ok(run)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The pipe name's prefix; the user's SID follows it (contracts/windows-endpoint.md, E1).
-    #[cfg(windows)]
-    const PIPE_PREFIX: &str = r"\\.\pipe\Micold.Daemon.";
-
-    #[cfg(windows)]
-    #[test]
-    fn resolve_creates_a_usable_endpoint_pair() {
-        // E1.1: the pipe is keyed on the user's SID, so two users on one machine never share it.
-        let ep = resolve().expect("resolve endpoint");
-        let name = ep.socket_path.to_str().expect("a pipe name is UTF-8");
-        let sid = name
-            .strip_prefix(PIPE_PREFIX)
-            .unwrap_or_else(|| panic!("pipe name {name:?} should start with {PIPE_PREFIX:?}"));
-        let digits = sid.strip_prefix("S-1-").unwrap_or("");
-        assert!(
-            !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-'),
-            "pipe name {name:?} should end in a string SID matching ^S-1-[0-9-]+$"
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn resolve_puts_the_pid_record_in_the_local_run_dir() {
-        // E1.2: the pid record the stop path reads (FR-023), beside the app's local data.
-        let ep = resolve().expect("resolve endpoint");
-        let tail = std::path::Path::new(r"micold-ai-ide\run\micold-daemon.pid");
-        assert!(
-            ep.lock_path.ends_with(tail),
-            "lock path {:?} should end in {tail:?}",
-            ep.lock_path
-        );
-        assert!(
-            ep.lock_path.parent().is_some_and(|dir| dir.is_dir()),
-            "resolve must create the directory of {:?}",
-            ep.lock_path
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn resolve_is_stable() {
-        // E1.3: the client and the daemon resolve independently and must meet at one pipe.
-        assert_eq!(
-            resolve().expect("first resolve"),
-            resolve().expect("second resolve")
-        );
-    }
 
     #[cfg(unix)]
     #[test]
@@ -505,11 +244,7 @@ mod tests {
         let ep = resolve().expect("resolve endpoint");
         // The socket file name is shortened on macOS to fit the 103-byte `sun_path` budget
         // (`d.sock`); every other Unix uses `daemon.sock`. Assert the platform's own name.
-        let expected = if cfg!(target_os = "macos") {
-            "d.sock"
-        } else {
-            "daemon.sock"
-        };
+        let expected = "daemon.sock";
         assert!(
             ep.socket_path.ends_with(expected),
             "socket path {:?} should end with {expected}",

@@ -23,20 +23,12 @@ use portable_pty::CommandBuilder;
 /// What a terminal sends for Enter: a newline through a Unix PTY, a carriage return through ConPTY.
 #[cfg(unix)]
 const ENTER: &str = "\n";
-#[cfg(windows)]
-const ENTER: &str = "\r";
 
 /// A primary that stays alive and echoes nothing on its own, so its screen tells it apart from a
 /// shell instance's.
 #[cfg(unix)]
 fn quiet_primary() -> CommandBuilder {
     CommandBuilder::new("cat")
-}
-#[cfg(windows)]
-fn quiet_primary() -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/q");
-    cmd
 }
 
 fn visible_text(session: &PtySession) -> String {

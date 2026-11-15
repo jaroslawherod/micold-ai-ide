@@ -496,7 +496,12 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
     use micold_client::features::daemons::Section;
     // One section is open at a time (feature 1091), so each is laid out in its own measurement.
     let mut form = painted_tall(&state);
-    for section in [Section::Image, Section::Resources, Section::Placement] {
+    for section in [
+        Section::Image,
+        Section::Credentials,
+        Section::Resources,
+        Section::Placement,
+    ] {
         state.update(Message::Daemons(DaemonsMsg::SectionToggled(section)));
         form.extend(painted_tall(&state));
         assert_no_text_overflows(&state, "the Kubernetes form, one section open");
@@ -507,6 +512,8 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         "CPU request",
         "Memory limit",
         "Registry credentials file",
+        "GitHub tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can read them)",
+        "Only tokens whose repository matches a saved project of this daemon are sent",
         "Node selector",
         "Tolerations",
         "Volume size",

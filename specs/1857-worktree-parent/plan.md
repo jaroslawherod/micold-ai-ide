@@ -10,8 +10,9 @@ Record, for each worktree an agent creates, the worktree whose session created i
 worktree id kept in the per-project state file. Surface it as `parent` / `parent_state` on the MCP
 worktree and session rows, a `parent` filter on `list_worktrees`, and an optional `parent` argument
 on `create_worktree`; show it in the sidebar as a label and a filter; and give the supervisor
-(#1813, #1814, #1816) a rule to scope itself by it. Three milestones: M1 MCP and persistence, M2
-sidebar UI, M3 supervisor integration. Design only here; no code is written by this issue.
+(#1813, #1814, #1816) a rule to scope itself by it. Milestones: M1 MCP and persistence, M1b one
+visibility filter for every tool (FR-015 to FR-017, scope checked in the daemon, no new cross-session
+state), M2 sidebar UI, M3 supervisor integration. All four shipped; see tasks.md and autopilot.md.
 
 ## Technical Context
 
@@ -29,7 +30,7 @@ sidebar UI, M3 supervisor integration. Design only here; no code is written by t
 
 **Performance Goals**: listing adds one map lookup per worktree; reconcile is O(worktrees) on the existing catalog refresh
 
-**Constraints**: local-first, additive on-disk change readable by older builds (unknown fields ignored); parent is advisory, never a permission (FR-012)
+**Constraints**: local-first, additive on-disk change readable by older builds (unknown fields ignored); parent drives caller visibility (FR-015); no other permission changes (FR-012)
 
 **Scale/Scope**: tens of worktrees per project
 
@@ -77,7 +78,7 @@ crates/micold-client/src/features/
 ├── sidebar.rs         # TagFilter::Parent, available_tag_filters, parent label
 └── worktree.rs        # worktree_tags gains the parent tag
 docs/user-guide/       # agent-tools.md, worktrees-and-sessions.md
-.claude/skills/speckit-supervisor/ and scripts/autopilot/   # M3: ownership rule, ledger field
+.claude/skills/autopilot-supervisor/ and scripts/autopilot/ # M3: ownership rule, ledger field
 ```
 
 **Structure Decision**: extend the existing core/daemon/client split; no new crate. Milestones:

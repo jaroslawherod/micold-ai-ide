@@ -430,12 +430,7 @@ mod unix {
         let home = tempfile::tempdir().unwrap();
         std::env::set_var("XDG_DATA_HOME", home.path());
         std::env::set_var("HOME", home.path());
-        let data_local_dir = if cfg!(target_os = "macos") {
-            home.path()
-                .join("Library/Application Support/micold-ai-ide")
-        } else {
-            home.path().join("micold-ai-ide")
-        };
+        let data_local_dir = home.path().join("micold-ai-ide");
 
         assert_eq!(history_dir(), Some(data_local_dir.join("terminal-history")));
     }
@@ -451,26 +446,6 @@ mod unix {
         assert_eq!(mode(store.dir()), 0o700);
         assert_eq!(mode(&store.dir().join(SESSION_FILE)), 0o600);
     }
-}
-
-// U54 (FR-019): the roaming profile is copied between machines; a terminal's history stays on the
-// one it was written on. Windows resolves both folders from the user's profile, not from a
-// variable a test could redirect; nothing is created here.
-#[cfg(windows)]
-#[test]
-fn on_windows_the_history_directory_is_local_and_not_in_the_roaming_profile() {
-    let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap());
-    let roaming = PathBuf::from(std::env::var_os("APPDATA").unwrap());
-
-    assert_eq!(
-        history_dir(),
-        Some(local.join("micold-ai-ide\\data\\terminal-history")),
-        "under the local data directory"
-    );
-    assert!(
-        !history_dir().unwrap().starts_with(&roaming),
-        "not under the roaming data directory {roaming:?}"
-    );
 }
 
 // ---------------------------------------------------------------------------------------

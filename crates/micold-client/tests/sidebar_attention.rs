@@ -31,6 +31,7 @@ const AGENT: &str = "agent-00112233445566aa";
 
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: Path::new(REPO).join(".claude/worktrees").join(dir),
         branch: Some(format!("feat/{dir}")),
@@ -79,6 +80,7 @@ fn state_with_worktrees(recorded: Vec<Worktree>, sessions: Vec<Session>) -> Stat
 fn entry_name(entry: &SidebarEntry) -> String {
     match entry {
         SidebarEntry::Group(group) => group.name.clone(),
+        SidebarEntry::UserGroup(header) => format!("[{}]", header.name),
         SidebarEntry::Default(_) => "Default".to_string(),
         SidebarEntry::Worktree(node) => node.worktree.dir_name.clone(),
     }

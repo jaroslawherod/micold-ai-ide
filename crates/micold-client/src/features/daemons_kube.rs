@@ -108,6 +108,9 @@ pub struct KubeDraft {
     pub allowed: BTreeSet<AllowedKind>,
     /// The registry auth file, while registry pull is ticked.
     pub pull_file: String,
+    /// Whether a start delivers the stored GitHub tokens matching the daemon's saved projects
+    /// (#1760, FR-008).
+    pub github_tokens: bool,
 }
 
 impl KubeDraft {
@@ -151,6 +154,7 @@ impl KubeDraft {
             storage_class: settings.storage_class.clone().unwrap_or_default(),
             allowed: BTreeSet::new(),
             pull_file: String::new(),
+            github_tokens: settings.github_tokens,
         };
         for credential in &settings.allowed {
             match credential {
@@ -228,6 +232,7 @@ impl KubeDraft {
             Quantity::parse_k8s(self.volume_size.trim()).ok_or(invalid_field("volume_size"))?;
         s.storage_class = Some(self.storage_class.trim().to_string()).filter(|c| !c.is_empty());
         s.allowed = self.credentials()?;
+        s.github_tokens = self.github_tokens;
         s.validate().map_err(|e| match e {
             micold_core::daemons::RegistryError::InvalidField { field } => invalid_field(field),
             _ => invalid_field("context"),

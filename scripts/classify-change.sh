@@ -12,7 +12,7 @@
 #
 # Outputs beyond `docs_only` (#952) follow one pattern, so a later gate adds a declaration plus one
 # output rather than a one-off `paths:` filter: a boolean that is true when ANY touched path carries
-# the attribute. `packaging` (attribute `micold-packaging`) gates the Windows ARM64 package job;
+# the attribute. `packaging` (attribute `micold-packaging`) gates no job since #1897;
 # `daemon_runtime` (attribute `micold-daemon-runtime`, #954) gates the sandbox real-runtime and
 # remote-sshd jobs. Unlike `docs_only`, which is true only when EVERY path matches, these err
 # towards running: every failure path lands on `true`.

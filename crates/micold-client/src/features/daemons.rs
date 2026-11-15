@@ -2199,6 +2199,8 @@ pub enum Msg {
     KubeImageEdited(String),
     /// An AI CLI to install was ticked or unticked.
     ProviderToggled(AiCli, bool),
+    /// The Kubernetes form's GitHub tokens opt-in was ticked or unticked (#1760, FR-008).
+    GithubTokensToggled(bool),
     /// The Kubernetes CPU request field changed.
     CpuRequestEdited(String),
     /// The Kubernetes CPU limit field changed.
@@ -2453,6 +2455,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         }
         Msg::NamespaceEdited(v) => edit(state, &|d| d.kube.namespace = v.clone()),
         Msg::KubeImageEdited(v) => edit(state, &|d| d.kube.image = v.clone()),
+        Msg::GithubTokensToggled(on) => edit(state, &|d| d.kube.github_tokens = on),
         Msg::ProviderToggled(cli, on) => edit(state, &|d| {
             if on {
                 d.kube.providers.insert(cli);

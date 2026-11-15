@@ -342,9 +342,7 @@ fn attach_chord(c: char) -> KeyInput {
         shift: true,
         ..Mods::NONE
     };
-    if cfg!(target_os = "macos") {
-        mods.logo = true;
-    } else {
+    {
         mods.ctrl = true;
     }
     KeyInput {

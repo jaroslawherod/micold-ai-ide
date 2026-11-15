@@ -20,6 +20,7 @@ fn project() -> PathBuf {
 
 fn managed(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: project().join(".claude/worktrees").join(dir_name),
         branch: Some(branch.to_string()),
@@ -30,6 +31,7 @@ fn managed(dir_name: &str, branch: &str) -> Worktree {
 
 fn elsewhere(dir_name: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: PathBuf::from("/somewhere/else").join(dir_name),
         branch: Some(format!("feat/{dir_name}")),
@@ -138,6 +140,7 @@ fn the_sidebar_view_has_no_reveal_control() {
             SidebarEntry::Default(d) => d.display_name.to_string(),
             SidebarEntry::Worktree(w) => w.display_name.clone(),
             SidebarEntry::Group(g) => panic!("unexpected group row {}", g.name),
+            SidebarEntry::UserGroup(h) => panic!("unexpected user group header {}", h.name),
         })
         .collect();
     assert_eq!(rows, vec!["Default", "Login", "Agent 0123456789abcdef0"]);
@@ -170,6 +173,7 @@ fn the_project_root_is_listed_beside_every_worktree() {
             SidebarEntry::Default(d) => d.display_name.to_string(),
             SidebarEntry::Worktree(w) => w.display_name.clone(),
             SidebarEntry::Group(g) => g.name.clone(),
+            SidebarEntry::UserGroup(h) => h.name.clone(),
         })
         .collect();
     assert_eq!(rows, vec!["Default", "Agent 0123456789abcdef0"]);

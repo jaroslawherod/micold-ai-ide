@@ -77,6 +77,10 @@ pub struct DrainedSignals {
     /// So this is precisely the text the row displays, which is what keeps the record and the
     /// screen from being able to diverge.
     pub names: Vec<(SessionId, String)>,
+    /// The text a session's program asked to put on the clipboard (OSC 52) since the last drain,
+    /// the latest per process of the session (#1720). The supervisor tick sends each as a
+    /// `ClipboardStore`.
+    pub clipboard: Vec<(SessionId, String)>,
 }
 
 type IssueLookupFactory =
@@ -2179,7 +2183,7 @@ impl DaemonState {
             return resolved;
         };
         let mut joined = bin_dir.into_os_string();
-        joined.push(if cfg!(windows) { ";" } else { ":" });
+        joined.push(":");
         joined.push(session_path(&resolved.vars));
         let joined = joined.to_string_lossy().into_owned();
         match resolved
@@ -2709,6 +2713,7 @@ impl DaemonState {
             Self::overlay_live_summaries(inner, &mut project.sessions);
             if let Some(discovered) = inner.worktrees.get(&project.path) {
                 let names = overrides.get(&project.path);
+                let parents = inner.catalog.worktree_parent_views(&project.path);
                 project.worktrees = discovered
                     .iter()
                     .map(|wt| WorktreeSnapshot {
@@ -2722,6 +2727,14 @@ impl DaemonState {
                         status: wire_worktree_status(wt.status),
                         path: wt.path.clone(),
                         included: wt.included,
+                        parent: parents.get(&wt.dir_name).map(|view| {
+                            view.label(|dir| {
+                                names
+                                    .and_then(|m| m.get(dir))
+                                    .cloned()
+                                    .unwrap_or_else(|| dir.to_string())
+                            })
+                        }),
                     })
                     .collect();
             }
@@ -5410,12 +5423,73 @@ impl DaemonState {
                     let pruned = inner.reviews.prune_worktrees(&inner.catalog, project, gone);
                     Self::broadcast_locked(inner, pruned);
                 }
+                // Spec 1857: a worktree is live while discovery lists it or its directory is still
+                // there (the guard above also keeps a failed git query from retiring everyone).
+                if repo.is_dir() {
+                    let mut live: BTreeSet<String> =
+                        discovered.iter().map(|w| w.dir_name.clone()).collect();
+                    live.extend(
+                        inner
+                            .catalog
+                            .worktree_ids(project)
+                            .into_keys()
+                            .filter(|dir| !gone(dir)),
+                    );
+                    if let Err(e) = inner.catalog.reconcile_worktree_parents(project, &live) {
+                        tracing::warn!(%e, "recording worktree ids failed");
+                    }
+                }
                 inner.worktrees.insert(project.to_path_buf(), discovered);
             }
             _ => {
                 self.lock().worktrees.remove(project);
             }
         }
+    }
+
+    /// A worktree of `project` was just created: give it a fresh id and record `parent`, if any
+    /// (spec 1857, FR-001). A failed write is logged; the worktree exists either way.
+    pub fn record_worktree_parent(
+        &self,
+        project: &Path,
+        dir_name: &str,
+        parent: Option<&micold_core::worktree_parent::ParentChoice>,
+    ) {
+        let result = self
+            .lock()
+            .catalog
+            .record_worktree_parent(project, dir_name, parent);
+        if let Err(e) = result {
+            tracing::warn!(%e, "recording the worktree's parent failed");
+        }
+    }
+
+    /// A worktree of `project` was deleted: its children become removed, its own entries go
+    /// (spec 1857, FR-006).
+    pub fn forget_worktree_parent(&self, project: &Path, dir_name: &str) {
+        if let Err(e) = self
+            .lock()
+            .catalog
+            .forget_worktree_parent(project, dir_name)
+        {
+            tracing::warn!(%e, "dropping the deleted worktree's parent entries failed");
+        }
+    }
+
+    /// Each linked worktree of `project` and its parent (spec 1857), by directory name.
+    pub fn worktree_parent_views(
+        &self,
+        project: &Path,
+    ) -> BTreeMap<String, micold_core::worktree_parent::ParentView> {
+        self.lock().catalog.worktree_parent_views(project)
+    }
+
+    /// The stable ids of `project`'s worktrees, by directory name (spec 1857, FR-014).
+    pub fn worktree_ids(
+        &self,
+        project: &Path,
+    ) -> BTreeMap<String, micold_core::worktree::WorktreeId> {
+        self.lock().catalog.worktree_ids(project)
     }
 
     /// The worktrees `project` shows from outside the app's own directory (016 BUG-002, FR-030).
@@ -8138,6 +8212,12 @@ impl DaemonState {
         let threshold = inner.effective_long_task_threshold();
         let turn_now = inner.turn_now();
         for (id, live) in inner.sessions.iter_mut() {
+            // Any process of the session may copy: the primary or a shell tab (#1720).
+            for proc in live.procs.values() {
+                if let Some(text) = proc.pty().and_then(|pty| pty.signals().take_clipboard()) {
+                    out.clipboard.push((*id, text));
+                }
+            }
             // The name comes from the conversation, so from the AI CLI and nothing else (feature
             // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
             // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
@@ -9803,7 +9883,7 @@ mod offered_tests {
             .expect("a PATH in the spawn environment");
         match gh_shim_bin_dir() {
             Some(dir) => {
-                let prefix = format!("{}{}", dir.display(), if cfg!(windows) { ';' } else { ':' });
+                let prefix = format!("{}{}", dir.display(), ':');
                 raw.strip_prefix(prefix.as_str())
                     .map_or(raw.clone(), str::to_string)
             }
@@ -9869,11 +9949,7 @@ mod offered_tests {
             .find(|(k, _)| k == "PATH")
             .map(|(_, v)| v.clone())
             .expect("a PATH in the spawn environment");
-        let prefix = format!(
-            "{}{}",
-            shim_dir.display(),
-            if cfg!(windows) { ';' } else { ':' }
-        );
+        let prefix = format!("{}{}", shim_dir.display(), ':');
         assert!(
             path.starts_with(&prefix),
             "PATH {path:?} does not start with the gh shim directory {shim_dir:?}"
@@ -9930,11 +10006,7 @@ mod offered_tests {
                 .find(|(k, _)| k == "PATH")
                 .map(|(_, v)| v.clone())
                 .expect("a PATH in the spawn environment");
-            let prefix = format!(
-                "{}{}",
-                shim_dir.display(),
-                if cfg!(windows) { ';' } else { ':' }
-            );
+            let prefix = format!("{}{}", shim_dir.display(), ':');
             assert!(
                 path.starts_with(&prefix),
                 "kind {kind}: PATH {path:?} does not start with the gh shim directory {shim_dir:?}"

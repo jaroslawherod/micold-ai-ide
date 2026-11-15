@@ -30,6 +30,7 @@ fn project_path() -> PathBuf {
 
 fn worktree(dir: &str, branch: Option<&str>, status: WorktreeStatus, included: bool) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: branch.map(str::to_string),
@@ -2196,6 +2197,7 @@ mod issue_link {
     /// A worktree of the project, its path built with `Path::join` (G1).
     fn named(dir: &str) -> Worktree {
         Worktree {
+            parent: None,
             dir_name: dir.to_string(),
             path: project_path().join(".claude").join("worktrees").join(dir),
             branch: Some(format!("feat/{dir}")),

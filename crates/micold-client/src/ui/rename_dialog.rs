@@ -1,5 +1,6 @@
-//! The rename dialog shared by the project and worktree renames: the two differ only in their
-//! texts, field, messages and draft type, which [`RenameSpec`] carries.
+//! The naming dialog shared by the project and worktree renames and the user-group name (feature
+//! 1786, R6): they differ only in their texts, field, confirm label, error line, messages and draft
+//! type, which [`RenameSpec`] carries.
 
 use crate::app::Message;
 use crate::features::window::FieldId;
@@ -20,6 +21,10 @@ pub(crate) struct RenameSpec<'a> {
     pub text: &'a str,
     /// How the name field is marked (feature 937): required, and missing once left or confirmed.
     pub required: FieldRequirement,
+    /// The confirm button's label: "Rename", or "Create" for a new group.
+    pub confirm: &'static str,
+    /// Why the last confirm was refused, shown under the field (feature 1786, FR-004).
+    pub error: Option<String>,
     pub on_input: fn(String) -> Message,
     pub on_confirm: Message,
     pub on_cancel: Message,
@@ -36,6 +41,7 @@ pub(crate) fn view<'a>(
     let input = TextField::new("", spec.text, r)
         .label(spec.label)
         .required(spec.required)
+        .error(spec.error)
         .track_focus(spec.field, focused)
         .on_input(spec.on_input)
         .on_submit(spec.on_confirm.clone());
@@ -51,7 +57,7 @@ pub(crate) fn view<'a>(
     fields = fields.push(input);
 
     let actions = material::dialog::actions(row![
-        Button::filled("Rename", r).on_press(spec.on_confirm),
+        Button::filled(spec.confirm, r).on_press(spec.on_confirm),
         Button::outlined("Cancel", r).on_press(spec.on_cancel),
     ]);
 

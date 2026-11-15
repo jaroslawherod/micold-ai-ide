@@ -7,9 +7,11 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::daemon_config_render::{self, DaemonSettings, StartupTable};
+use crate::daemon_config_render::{self, DaemonSettings, GithubTokenSetting, StartupTable};
 use micold_core::daemon_config::Kind;
 use micold_core::daemons::SessionExtras;
+use micold_core::github::GithubRepo;
+use micold_core::scoped_credential::SecretToken;
 
 /// The script's file name beside the delivered configuration (host data dir; SSH `secrets/`).
 pub const SCRIPT_NAME: &str = "startup.sh";
@@ -312,22 +314,7 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
     settings.extras = staged.extras;
     let mut extras = Vec::new();
     for (name, bytes) in staged.files {
-        if bytes.len() > POD_FILE_LIMIT {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "{name} is {} bytes, over the {POD_FILE_LIMIT} a pod can hold",
-                    bytes.len()
-                ),
-            ));
-        }
-        let text = String::from_utf8(bytes).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("{name} is not text, so it cannot be delivered to a pod"),
-            )
-        })?;
-        extras.push((name, text));
+        extras.push((name.clone(), pod_text(&name, bytes)?));
     }
     let settings = &settings;
     let Some(files) = read_startup_files(settings)? else {
@@ -341,24 +328,10 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
     use micold_core::kube::manifest::{CONFIG_MOUNT, STARTUP_ENV_FILE, STARTUP_SCRIPT_FILE};
     let table = settings.startup.as_ref().expect("files were read");
     let text = |what: &str, path: &Path, bytes: Vec<u8>| {
-        if bytes.len() > POD_FILE_LIMIT {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "the start script's {what} {} is {} bytes, over the {POD_FILE_LIMIT} a pod can hold",
-                    path.display(),
-                    bytes.len()
-                ),
-            ));
-        }
-        String::from_utf8(bytes).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "the start script's {what} is not text, so it cannot be delivered to a pod"
-                ),
-            )
-        })
+        pod_text(
+            format_args!("the start script's {what} {}", path.display()),
+            bytes,
+        )
     };
     Ok(PodStartup {
         settings: relocated_startup(
@@ -376,6 +349,134 @@ pub fn pod_startup(settings: &DaemonSettings) -> io::Result<PodStartup> {
             .transpose()?,
         files: extras,
     })
+}
+
+/// The stored tokens a pod daemon receives (#1760, FR-009): those whose filter names one of the
+/// daemon's saved projects' repositories, and those with no filter (their reach is unknown here),
+/// in Settings order. No repository, no token.
+pub fn select_tokens(
+    tokens: Vec<GithubTokenSetting>,
+    repositories: &[GithubRepo],
+) -> Vec<GithubTokenSetting> {
+    use micold_core::scoped_credential::token_choice::{reaches, Filter};
+    tokens
+        .into_iter()
+        .filter(|token| {
+            let filter = Filter {
+                name: &token.name,
+                repos: &token.repos,
+            };
+            repositories.iter().any(|repo| reaches(&filter, repo))
+        })
+        .collect()
+}
+
+/// The selected tokens read for a pod (#1760, FR-001): `entries` render as `[[github.tokens]]`
+/// naming each token at the startup Secret's mount, and `files` are the Secret's keys and values.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PodGithubTokens {
+    pub entries: Vec<GithubTokenSetting>,
+    pub files: Vec<(String, SecretToken)>,
+}
+
+/// A file's text for a pod's config map or startup secret: one over [`POD_FILE_LIMIT`], or not
+/// text, is refused naming it as `what` (never quoting the content).
+fn pod_text(what: impl std::fmt::Display, bytes: Vec<u8>) -> io::Result<String> {
+    let invalid = |reason: String| io::Error::new(io::ErrorKind::InvalidData, reason);
+    if bytes.len() > POD_FILE_LIMIT {
+        return Err(invalid(format!(
+            "{what} is {} bytes, over the {POD_FILE_LIMIT} a pod can hold",
+            bytes.len()
+        )));
+    }
+    String::from_utf8(bytes).map_err(|_| {
+        invalid(format!(
+            "{what} is not text, so it cannot be delivered to a pod"
+        ))
+    })
+}
+
+/// The data a Kubernetes Secret holds in all, which the API server enforces.
+pub const SECRET_LIMIT: usize = 1024 * 1024;
+
+/// Refuses a startup Secret whose `values` together pass [`SECRET_LIMIT`], so the start fails
+/// before anything is created instead of the API server refusing the Secret partway through.
+pub fn check_secret_size<'a>(values: impl IntoIterator<Item = &'a str>) -> io::Result<()> {
+    let total: usize = values.into_iter().map(str::len).sum();
+    if total > SECRET_LIMIT {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "the pod's startup Secret would hold {total} bytes, over the {SECRET_LIMIT} bytes \
+                 Kubernetes allows; deliver fewer or smaller files and tokens"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// A delivered token's key in the startup Secret is this prefix and the token's lower-case name
+/// (the PAT store's file name), so a key always holds the same token, whatever the set's order.
+pub const GITHUB_TOKEN_PREFIX: &str = "github-token-";
+
+impl PodGithubTokens {
+    /// Reads each selected token's file, verbatim (the daemon parses the stored shape), for the
+    /// pod's startup Secret. A file that cannot be read, is empty, is not text, is over
+    /// [`POD_FILE_LIMIT`] or, on Unix, can be read by another user stops the start naming the
+    /// token, so the pod never starts with a token silently missing (#1533's stance).
+    pub fn read(selected: Vec<GithubTokenSetting>) -> io::Result<Self> {
+        use micold_core::kube::manifest::STARTUP_ENV_MOUNT;
+        let mut read = Self {
+            entries: Vec::with_capacity(selected.len()),
+            files: Vec::with_capacity(selected.len()),
+        };
+        for entry in selected {
+            let refused = |e: io::Error| {
+                io::Error::new(
+                    e.kind(),
+                    format!(
+                        "cannot deliver the GitHub token \"{}\" to the pod: {e}",
+                        entry.name
+                    ),
+                )
+            };
+            if !micold_core::scoped_credential::pat_store::valid_name(&entry.name) {
+                return Err(refused(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "not a valid token name",
+                )));
+            }
+            let value = read_token_file(&entry.token_file).map_err(refused)?;
+            let key = format!("{GITHUB_TOKEN_PREFIX}{}", entry.name.to_ascii_lowercase());
+            read.entries.push(GithubTokenSetting {
+                token_file: PathBuf::from(format!("{STARTUP_ENV_MOUNT}/{key}")),
+                ..entry
+            });
+            read.files.push((key, value));
+        }
+        Ok(read)
+    }
+}
+
+/// A token file's text, or why it cannot go to a pod (never quoting the content).
+fn read_token_file(path: &Path) -> io::Result<SecretToken> {
+    let bytes = std::fs::read(path).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            format!("{} could not be read: {e}", path.display()),
+        )
+    })?;
+    let invalid = |reason: String| io::Error::new(io::ErrorKind::InvalidData, reason);
+    if let Some(mode) = micold_core::daemon_config::readable_by_others(path) {
+        return Err(invalid(format!(
+            "{} can be read by other users (mode {mode:o}); make it owner-only (chmod 600)",
+            path.display()
+        )));
+    }
+    if bytes.is_empty() {
+        return Err(invalid(format!("{} is empty", path.display())));
+    }
+    pod_text(path.display(), bytes).map(SecretToken::new)
 }
 
 /// Removes `path` when it exists; whether it did.
@@ -417,9 +518,4 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
 fn set_owner_only(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-#[cfg(windows)]
-fn set_owner_only(_path: &Path) -> io::Result<()> {
-    Ok(())
 }

@@ -14,8 +14,8 @@
 //! confirmation in every window (FR-014), and only then the effect. So a refused, conflicting or
 //! no-op request never shows a prompt.
 
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use micold_core::git::parse_remote_list;
@@ -42,10 +42,12 @@ use micold_core::review::comment::{CommentRef, Outcome, Reporter, Status};
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
+use micold_core::worktree::ParentState;
 use micold_core::worktree::{
     self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
     CreateMode,
 };
+use micold_core::worktree_parent::{ParentChoice, ParentView};
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
@@ -380,14 +382,20 @@ fn read_call(
 ) -> Result<Value, OpError> {
     let project = caller_project(state, caller)?;
     let modes = state.session_modes(&project.path);
+    let parents = state.worktree_parent_views(&project.path);
+    let scope = Scope::new(&project, &parents, caller);
     let context = Context {
         caller,
         project: &project,
         modes: &modes,
+        parents: &parents,
+        scope: &scope,
     };
     match operation {
         Operation::Whoami => Ok(context.whoami()),
-        Operation::ListWorktrees => Ok(json!({"worktrees": context.worktree_rows()})),
+        Operation::ListWorktrees { parent } => Ok(json!({
+            "worktrees": context.list_worktrees(parent.as_ref())
+        })),
         Operation::ListBranches => context.list_branches(state),
         Operation::ListSessions { worktree } => context.list_sessions(worktree.as_ref()),
         Operation::GetSession { session } => context.get_session(SessionId::from_uuid(session.0)),
@@ -401,6 +409,7 @@ fn read_call(
             limit,
             offset,
             worktree.as_ref(),
+            &scope,
         )),
         Operation::CreateWorktree(_)
         | Operation::CreateSession { .. }
@@ -418,6 +427,122 @@ fn read_call(
             unreachable!("read_session_output has its own handler, with a policy check")
         }
     }
+}
+
+/// What a caller may see and address (spec 1857, FR-015): its own worktree, its parent, its
+/// siblings and its direct children, by worktree ref. `None` is everything: a caller in `default`.
+/// A removed parent links no one.
+struct Scope {
+    visible: Option<BTreeSet<String>>,
+    /// The paths of the worktrees outside the scope, so an error that names the holder of a branch
+    /// can leave out one the caller cannot see.
+    hidden: Vec<PathBuf>,
+}
+
+impl Scope {
+    /// Everything: for the row of what the caller itself just made or changed, which may be a
+    /// child of a sibling, and so outside its scope.
+    fn unrestricted() -> Self {
+        Self {
+            visible: None,
+            hidden: Vec::new(),
+        }
+    }
+
+    fn new(
+        project: &ProjectSnapshot,
+        parents: &BTreeMap<String, ParentView>,
+        caller: SessionId,
+    ) -> Self {
+        let Some(own) = project
+            .sessions
+            .iter()
+            .find(|s| s.id == caller)
+            .and_then(|s| s.worktree_dir.as_deref())
+        else {
+            return Self::unrestricted();
+        };
+        let known = |dir: &str| {
+            parents
+                .get(dir)
+                .filter(|view| view.state == ParentState::Known)
+                .map(|view| view.name.as_str())
+        };
+        let parent = known(own);
+        let mut set = BTreeSet::from([own.to_string()]);
+        set.extend(parent.map(str::to_string));
+        set.extend(
+            parents
+                .keys()
+                .filter(|dir| known(dir).is_some_and(|p| p == own || Some(p) == parent))
+                .cloned(),
+        );
+        let hidden = project
+            .worktrees
+            .iter()
+            .filter(|wt| !set.contains(&wt.dir_name))
+            .map(|wt| wt.path.clone())
+            .collect();
+        Self {
+            visible: Some(set),
+            hidden,
+        }
+    }
+
+    fn allows(&self, worktree: &str) -> bool {
+        self.visible
+            .as_ref()
+            .is_none_or(|set| set.contains(worktree))
+    }
+
+    /// [`BlockReason::explain`], without the holder when it is a worktree outside the scope
+    /// (spec 1857, FR-015): the project's own root is `default`, which a restricted caller may not
+    /// see either.
+    fn explain(&self, reason: &BlockReason, branch: &str) -> String {
+        let hidden = match reason {
+            BlockReason::CheckedOutAt { path } => self.hidden.contains(path),
+            BlockReason::CheckedOutInProjectRoot => !self.allows(WorktreeRef::DEFAULT),
+            BlockReason::CheckedOutOutsideApp { .. } => false,
+        };
+        if hidden {
+            format!("'{branch}' is already checked out in another worktree.")
+        } else {
+            reason.explain(branch)
+        }
+    }
+
+    fn allows_session(&self, session: &SessionSummary) -> bool {
+        self.allows(worktree_ref(session))
+    }
+
+    /// `not_found`, worded as for a worktree that does not exist, outside the scope.
+    fn worktree(&self, worktree: &WorktreeRef) -> Result<(), OpError> {
+        if self.allows(worktree.as_str()) {
+            Ok(())
+        } else {
+            Err(OpError::not_found(format!(
+                "no worktree \"{}\" in this project",
+                worktree.as_str()
+            )))
+        }
+    }
+
+    /// `not_found`, worded as for a session that does not exist, outside the scope.
+    fn session(&self, session: &SessionSummary) -> Result<(), OpError> {
+        if self.allows_session(session) {
+            Ok(())
+        } else {
+            Err(OpError::not_found(format!(
+                "no session {} in this project",
+                session.id.0
+            )))
+        }
+    }
+}
+
+/// What `caller` may see and address in `project`. **Blocking.**
+fn scope_of(state: &DaemonState, project: &ProjectSnapshot, caller: SessionId) -> Scope {
+    Scope::new(project, &state.worktree_parent_views(&project.path), caller)
 }
 
 /// The caller as policy sees it, and its project. **Blocking.**
@@ -572,6 +697,7 @@ fn resolve_session_target(
         .find(|s| s.id == session)
         .cloned()
         .ok_or_else(|| OpError::not_found(format!("no session {} in this project", session.0)))?;
+    scope_of(state, &project, caller).session(&target)?;
     Ok((who, project, target))
 }
 
@@ -625,10 +751,14 @@ async fn session_row_now(
     blocking(move || {
         let project = caller_project(&st, caller)?;
         let modes = st.session_modes(&project.path);
+        let parents = st.worktree_parent_views(&project.path);
+        let scope = Scope::new(&project, &parents, caller);
         Context {
             caller,
             project: &project,
             modes: &modes,
+            parents: &parents,
+            scope: &scope,
         }
         .get_session(session)
     })
@@ -803,6 +933,7 @@ async fn delete_worktree(
     let name = dir_name.clone();
     let (who, project, wt) = blocking(move || {
         let (who, project) = resolve_caller(&st, caller)?;
+        scope_of(&st, &project, caller).worktree(&WorktreeRef::Named(name.clone()))?;
         let wt = project
             .worktrees
             .iter()
@@ -971,7 +1102,8 @@ async fn create_worktree_row(
             name,
             mode,
             start,
-        } => create_literal_worktree(state, caller, branch, name, mode, start, asked).await,
+            parent,
+        } => create_literal_worktree(state, caller, branch, name, mode, start, parent, asked).await,
         derived @ CreateWorktreeRequest::Derived { .. } => {
             create_derived_worktree(state, caller, derived, asked).await
         }
@@ -987,7 +1119,13 @@ async fn create_derived_worktree(
     asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
-    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
+    let (who, project, scope) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let scope = scope_of(&st, &project, caller);
+        Ok((who, project, scope))
+    })
+    .await?;
+    let parent = parent_choice(&who, &project, &scope, request.parent())?;
     let Some((repo, true)) = state.project_repo(&project.path) else {
         return Err(OpError::invalid_input(
             "this project is not a git repository, so it has no worktrees",
@@ -1025,7 +1163,7 @@ async fn create_derived_worktree(
             };
             return Err(OpError::new(
                 ErrorCategory::Conflict,
-                describe_derived_collision(&names.branch, &situation, branch_taken),
+                describe_derived_collision(&scope, &names.branch, &situation, branch_taken),
             ));
         }
         Some(Err(e)) => {
@@ -1044,10 +1182,12 @@ async fn create_derived_worktree(
         state,
         caller,
         &who,
+        &scope,
         &project.path,
         names.clone(),
         CreateMode::NewBranch,
         request.start(),
+        parent.as_ref(),
         asked,
     )
     .await?;
@@ -1214,6 +1354,7 @@ async fn resolve_naming(
 
 /// A literal branch: scope, then the naming rules and git's ref check, then policy (FR-015a), then
 /// the dialog's pre-flight, then the dialog's own create (FR-009).
+#[allow(clippy::too_many_arguments)]
 async fn create_literal_worktree(
     state: &Arc<DaemonState>,
     caller: SessionId,
@@ -1221,10 +1362,17 @@ async fn create_literal_worktree(
     name: Option<String>,
     mode: CreateMode,
     start: Option<StartSession>,
+    parent: Option<WorktreeRef>,
     asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
-    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
+    let (who, project, scope) = blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        let scope = scope_of(&st, &project, caller);
+        Ok((who, project, scope))
+    })
+    .await?;
+    let parent = parent_choice(&who, &project, &scope, parent.as_ref())?;
     let Some((repo, true)) = state.project_repo(&project.path) else {
         return Err(OpError::invalid_input(
             "this project is not a git repository, so it has no worktrees",
@@ -1258,6 +1406,7 @@ async fn create_literal_worktree(
             name,
             mode: mode.clone(),
             start: start.clone(),
+            parent: None,
         }),
     )?;
 
@@ -1270,7 +1419,7 @@ async fn create_literal_worktree(
         Some(Ok(situation)) => {
             return Err(OpError::new(
                 ErrorCategory::Conflict,
-                describe_situation(&branch, &situation),
+                describe_situation(&scope, &branch, &situation),
             ))
         }
         Some(Err(e)) => {
@@ -1289,10 +1438,12 @@ async fn create_literal_worktree(
         state,
         caller,
         &who,
+        &scope,
         &project.path,
         names,
         mode,
         start.as_ref(),
+        parent.as_ref(),
         asked,
     )
     .await?;
@@ -1311,16 +1462,20 @@ async fn create_with_optional_session(
     state: &Arc<DaemonState>,
     caller: SessionId,
     who: &Caller,
+    scope: &Scope,
     project: &Path,
     names: DerivedNames,
     mode: CreateMode,
     start: Option<&StartSession>,
+    parent: Option<&ParentChoice>,
     asked: tokio::time::Instant,
 ) -> Result<Option<Value>, OpError> {
     let Some(start) = start else {
+        let dir_name = names.dir_name.clone();
         let setup = ops::create_worktree(state, project.to_path_buf(), names, mode, None)
             .await
-            .map_err(create_failure)?;
+            .map_err(|failure| create_failure(scope, failure))?;
+        state.record_worktree_parent(project, &dir_name, parent);
         return Ok(Some(serde_json::json!({ "setup": setup_word(setup) })));
     };
     let cli = start.ai_cli.unwrap_or_else(|| state.default_ai_cli());
@@ -1347,7 +1502,8 @@ async fn create_with_optional_session(
         // A terminal without bracketed paste still gets the prompt, as one plain submission.
         require_bracketed: false,
     });
-    let (session, typed, setup) = ops::create_worktree_with_session(
+    let dir_name = names.dir_name.clone();
+    let created = ops::create_worktree_with_session(
         state,
         project.to_path_buf(),
         names,
@@ -1355,10 +1511,17 @@ async fn create_with_optional_session(
         None,
         ops::StartDefinition { cli, prompt: first },
     )
-    .await
-    .map_err(|failure| match failure {
+    .await;
+    // The worktree exists once the create succeeded, with or without its session (spec 1857).
+    if !matches!(
+        created,
+        Err(ops::WorktreeStartFailure::CliUnavailable(_) | ops::WorktreeStartFailure::Create(_))
+    ) {
+        state.record_worktree_parent(project, &dir_name, parent);
+    }
+    let (session, typed, setup) = created.map_err(|failure| match failure {
         ops::WorktreeStartFailure::CliUnavailable(why) => OpError::service_error(why),
-        ops::WorktreeStartFailure::Create(failure) => create_failure(failure),
+        ops::WorktreeStartFailure::Create(failure) => create_failure(scope, failure),
         ops::WorktreeStartFailure::Session { dir_name, error } => OpError::service_error(format!(
             "worktree \"{dir_name}\" was created, but its session could not be: {error}; it has \
              no session, and create_session starts one"
@@ -1428,10 +1591,13 @@ async fn worktree_row(
     blocking(move || {
         let project = caller_project(&st, caller)?;
         let modes = st.session_modes(&project.path);
+        let parents = st.worktree_parent_views(&project.path);
         let context = Context {
             caller,
             project: &project,
             modes: &modes,
+            parents: &parents,
+            scope: &Scope::unrestricted(),
         };
         context
             .worktree_rows()
@@ -1464,6 +1630,7 @@ async fn rename_worktree(
     let name = dir_name.clone();
     let (who, project) = blocking(move || {
         let (who, project) = resolve_caller(&st, caller)?;
+        scope_of(&st, &project, caller).worktree(&WorktreeRef::Named(name.clone()))?;
         if !project.worktrees.iter().any(|wt| wt.dir_name == name) {
             return Err(OpError::not_found(format!(
                 "no worktree \"{name}\" in this project"
@@ -1505,6 +1672,7 @@ fn list_resumable_sessions(
     limit: usize,
     offset: usize,
     worktree: Option<&WorktreeRef>,
+    scope: &Scope,
 ) -> Value {
     use micold_core::attach::{AttachTarget, ResumableStatus, SkipReason, UnresumableReason};
     let report = state.attach_discover(&project.path);
@@ -1515,6 +1683,7 @@ fn list_resumable_sessions(
     let matching: Vec<_> = report
         .sessions
         .iter()
+        .filter(|s| scope.allows(&target_ref(&s.target)))
         .filter(|s| worktree.is_none_or(|w| w.as_str() == target_ref(&s.target)))
         .collect();
     let rows: Vec<Value> = matching
@@ -1582,15 +1751,15 @@ async fn start_session(
     let st = Arc::clone(state);
     let (who, lifecycle) = blocking(move || {
         let (who, project) = resolve_caller(&st, caller)?;
-        let lifecycle = project
+        let summary = project
             .sessions
             .iter()
             .find(|s| s.id == session)
-            .map(|s| s.lifecycle.clone())
             .ok_or_else(|| {
                 OpError::not_found(format!("no session {} in this project", session.0))
             })?;
-        Ok((who, lifecycle))
+        scope_of(&st, &project, caller).session(summary)?;
+        Ok((who, summary.lifecycle.clone()))
     })
     .await?;
     check_policy(
@@ -1633,16 +1802,15 @@ async fn start_session(
     Ok(json!({ "lifecycle": lifecycle }))
 }
 
-/// `session` must be one of `project`'s. A session of another project fails exactly as one that
-/// does not exist (FR-010).
-fn session_in(project: &ProjectSnapshot, session: SessionId) -> Result<(), OpError> {
-    if project.sessions.iter().any(|s| s.id == session) {
-        Ok(())
-    } else {
-        Err(OpError::not_found(format!(
+/// `session` must be one of `project`'s, and in `scope`. A session of another project, or out of
+/// scope (spec 1857, FR-015), fails exactly as one that does not exist (FR-010).
+fn session_in(project: &ProjectSnapshot, scope: &Scope, session: SessionId) -> Result<(), OpError> {
+    match project.sessions.iter().find(|s| s.id == session) {
+        Some(summary) => scope.session(summary),
+        None => Err(OpError::not_found(format!(
             "no session {} in this project",
             session.0
-        )))
+        ))),
     }
 }
 
@@ -1669,7 +1837,7 @@ fn read_session_output(
 ) -> Result<Value, OpError> {
     let session = SessionId::from_uuid(target.0);
     let (who, project) = resolve_caller(state, caller)?;
-    session_in(&project, session)?;
+    session_in(&project, &scope_of(state, &project, caller), session)?;
     check_cross_session(
         state,
         &who,
@@ -1780,6 +1948,7 @@ async fn create_session(
     let place = worktree.clone();
     let (who, project, cwd) = blocking(move || {
         let (who, project) = resolve_caller(&st, caller)?;
+        scope_of(&st, &project, caller).worktree(&place)?;
         let cwd = match &place {
             WorktreeRef::Default => project.path.clone(),
             WorktreeRef::Named(name) => project
@@ -1885,10 +2054,13 @@ async fn session_reply(
     let row = blocking(move || {
         let project = caller_project(&st, caller)?;
         let modes = st.session_modes(&project.path);
+        let parents = st.worktree_parent_views(&project.path);
         let context = Context {
             caller,
             project: &project,
             modes: &modes,
+            parents: &parents,
+            scope: &Scope::unrestricted(),
         };
         context.get_session(session)
     })
@@ -1932,7 +2104,7 @@ fn checked_dir_name(name: &str) -> Result<String, OpError> {
 }
 
 /// The pre-flight's situation in the dialog's words, with the mode that fits it (US2 s2).
-fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
+fn describe_situation(scope: &Scope, branch: &str, situation: &BranchSituation) -> String {
     match situation {
         BranchSituation::Free => {
             format!("branch '{branch}' does not exist yet; use mode new_branch to create it")
@@ -1946,7 +2118,7 @@ fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
              of them as remote, or new_branch to start a fresh branch",
             remotes.join(", ")
         ),
-        BranchSituation::Blocked { branch, reason } => reason.explain(branch),
+        BranchSituation::Blocked { branch, reason } => scope.explain(reason, branch),
         BranchSituation::DirectoryTaken { dir } => explain_directory_taken(dir).to_string(),
     }
 }
@@ -1955,6 +2127,7 @@ fn describe_situation(branch: &str, situation: &BranchSituation) -> String {
 /// retry with `branch` and `mode` `existing_local` or `track_remote`. A taken directory with a
 /// free branch keeps the dialog's own text; the branch wins when both are taken.
 fn describe_derived_collision(
+    scope: &Scope,
     branch: &str,
     situation: &BranchSituation,
     branch_taken: bool,
@@ -1969,7 +2142,7 @@ fn describe_derived_collision(
                 remotes.join(", ")
             )
         }
-        BranchSituation::Blocked { reason, .. } => reason.explain(branch),
+        BranchSituation::Blocked { reason, .. } => scope.explain(reason, branch),
         _ => format!("Branch '{branch}' already exists."),
     };
     format!(
@@ -1980,13 +2153,13 @@ fn describe_derived_collision(
 }
 
 /// A create the shared operation refused or could not complete.
-fn create_failure(failure: ops::CreateFailure) -> OpError {
+fn create_failure(scope: &Scope, failure: ops::CreateFailure) -> OpError {
     match failure {
         ops::CreateFailure::NotARepository => {
             OpError::invalid_input("this project is not a git repository, so it has no worktrees")
         }
         ops::CreateFailure::Create(CreateError::BranchInUse { branch, reason }) => {
-            OpError::new(ErrorCategory::Conflict, reason.explain(&branch))
+            OpError::new(ErrorCategory::Conflict, scope.explain(&reason, &branch))
         }
         ops::CreateFailure::Create(CreateError::SituationChanged) => OpError::new(
             ErrorCategory::Conflict,
@@ -2024,6 +2197,55 @@ struct Context<'a> {
     caller: SessionId,
     project: &'a ProjectSnapshot,
     modes: &'a BTreeMap<SessionId, TerminalMode>,
+    /// Each linked worktree's parent (spec 1857), by directory name.
+    parents: &'a BTreeMap<String, ParentView>,
+    /// What the caller may see (spec 1857, FR-015).
+    scope: &'a Scope,
+}
+
+/// A row's `parent` and `parent_state` (spec 1857, FR-008, FR-009); both omitted when there is no
+/// link.
+fn insert_parent(row: &mut Value, view: Option<&ParentView>) {
+    if let Some(view) = view {
+        row["parent"] = json!(view.name);
+        row["parent_state"] = json!(view.state.as_str());
+    }
+}
+
+/// The parent a new worktree is recorded with (spec 1857, FR-001, FR-002; research R4, R5): the
+/// explicit one when given, which must be `default` or a live worktree of the project, else the
+/// caller's own worktree, or none when that cannot be resolved.
+fn parent_choice(
+    who: &Caller,
+    project: &ProjectSnapshot,
+    scope: &Scope,
+    explicit: Option<&WorktreeRef>,
+) -> Result<Option<ParentChoice>, OpError> {
+    let live = |dir: &str| project.worktrees.iter().any(|wt| wt.dir_name == dir);
+    // FR-016: a caller outside `default` names only a worktree it can see.
+    if let Some(parent) = explicit.filter(|p| !scope.allows(p.as_str())) {
+        return Err(OpError::invalid_input(format!(
+            "parent \"{}\" is not a worktree you can see; see list_worktrees",
+            parent.as_str()
+        )));
+    }
+    match explicit {
+        Some(WorktreeRef::Default) => Ok(Some(ParentChoice::Default)),
+        Some(WorktreeRef::Named(name)) if live(name) => {
+            Ok(Some(ParentChoice::Worktree(name.clone())))
+        }
+        Some(WorktreeRef::Named(name)) => Err(OpError::invalid_input(format!(
+            "parent \"{name}\" is not \"default\" or a worktree of this project; see \
+             list_worktrees"
+        ))),
+        None => Ok(match &who.location {
+            SessionLocation::Default => Some(ParentChoice::Default),
+            SessionLocation::Worktree(dir) if live(dir) => {
+                Some(ParentChoice::Worktree(dir.clone()))
+            }
+            SessionLocation::Worktree(_) => None,
+        }),
+    }
 }
 
 impl Context<'_> {
@@ -2053,31 +2275,51 @@ impl Context<'_> {
             .iter()
             .filter(|s| s.worktree_dir.is_none())
             .count();
-        let mut rows = vec![json!({
-            "ref": WorktreeRef::DEFAULT,
-            "display_name": DEFAULT_DISPLAY_NAME,
-            "branch": Value::Null,
-            "path": native(&self.project.path),
-            "status": "clean",
-            "session_count": root_count,
-        })];
-        for wt in &self.project.worktrees {
+        let mut rows = Vec::new();
+        if self.scope.allows(WorktreeRef::DEFAULT) {
+            rows.push(json!({
+                "ref": WorktreeRef::DEFAULT,
+                "display_name": DEFAULT_DISPLAY_NAME,
+                "branch": Value::Null,
+                "path": native(&self.project.path),
+                "status": "clean",
+                "session_count": root_count,
+            }));
+        }
+        for wt in self
+            .project
+            .worktrees
+            .iter()
+            .filter(|wt| self.scope.allows(&wt.dir_name))
+        {
             let session_count = self
                 .project
                 .sessions
                 .iter()
                 .filter(|s| s.worktree_dir.as_deref() == Some(wt.dir_name.as_str()))
                 .count();
-            rows.push(json!({
+            let mut row = json!({
                 "ref": wt.dir_name,
                 "display_name": wt.display_name,
                 "branch": wt.branch,
                 "path": native(&wt.path),
                 "status": status_name(wt.status),
                 "session_count": session_count,
-            }));
+            });
+            insert_parent(&mut row, self.parents.get(&wt.dir_name));
+            rows.push(row);
         }
         rows
+    }
+
+    /// [`Self::worktree_rows`], or only the direct children of `parent` (spec 1857, FR-008): a
+    /// removed parent's children are no one's, and a name that is no worktree has none.
+    fn list_worktrees(&self, parent: Option<&WorktreeRef>) -> Vec<Value> {
+        let rows = self.worktree_rows();
+        let Some(parent) = parent else { return rows };
+        rows.into_iter()
+            .filter(|row| row["parent"] == parent.as_str() && row["parent_state"] == "known")
+            .collect()
     }
 
     fn list_branches(&self, state: &DaemonState) -> Result<Value, OpError> {
@@ -2098,7 +2340,9 @@ impl Context<'_> {
                         Some(WorktreeRef::DEFAULT.to_string())
                     }
                     Some(BlockReason::CheckedOutOutsideApp { .. }) | None => None,
-                };
+                }
+                // A worktree the caller cannot see is not named (spec 1857, FR-015).
+                .filter(|worktree| self.scope.allows(worktree));
                 json!({
                     "name": c.name,
                     "kind": match c.origin {
@@ -2106,7 +2350,7 @@ impl Context<'_> {
                         BranchOrigin::Remote { .. } => "remote",
                     },
                     "checked_out_in": checked_out_in,
-                    "unavailable_reason": c.blocked_by.as_ref().map(|r| r.explain(&c.name)),
+                    "unavailable_reason": c.blocked_by.as_ref().map(|r| self.scope.explain(r, &c.name)),
                 })
             })
             .collect();
@@ -2125,6 +2369,9 @@ impl Context<'_> {
     }
 
     fn list_sessions(&self, filter: Option<&WorktreeRef>) -> Result<Value, OpError> {
+        if let Some(filter) = filter {
+            self.scope.worktree(filter)?;
+        }
         if let Some(WorktreeRef::Named(name)) = filter {
             if !self.project.worktrees.iter().any(|wt| &wt.dir_name == name) {
                 return Err(OpError::not_found(format!(
@@ -2136,6 +2383,7 @@ impl Context<'_> {
             .project
             .sessions
             .iter()
+            .filter(|s| self.scope.allows_session(s))
             .filter(|s| filter.is_none_or(|f| worktree_ref(s) == f.as_str()))
             .map(|s| self.session_row(s))
             .collect();
@@ -2151,6 +2399,7 @@ impl Context<'_> {
             .ok_or_else(|| {
                 OpError::not_found(format!("no session {} in this project", session.0))
             })?;
+        self.scope.session(summary)?;
         let mut row = self.session_row(summary);
         if let WireLifecycle::Failed { reason, .. } = &summary.lifecycle {
             row["failure_reason"] = json!(reason);
@@ -2168,6 +2417,10 @@ impl Context<'_> {
             "worktree": worktree_ref(s),
             "is_caller": s.id == self.caller,
         });
+        // The worktree's parent (spec 1857, FR-009); independent of `origin` below (FR-011).
+        if let Some(dir) = &s.worktree_dir {
+            insert_parent(&mut row, self.parents.get(dir));
+        }
         // The session that started this one (feature 551, FR-013); both omitted when top-level.
         if let Some(origin) = &s.origin {
             row["origin"] = json!(origin.id.0.to_string());

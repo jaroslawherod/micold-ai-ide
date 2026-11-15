@@ -45,6 +45,8 @@ const MAPPING: &[(TypeRole, &str)] = &[
     (TypeRole::CardType, "overview_card_type"),
     (TypeRole::CardSmall, "overview_card_small"),
     (TypeRole::CardTag, "overview_card_tag"),
+    // A user group's header (feature 1786, R7): `label_medium`, one line in a one-line row.
+    (TypeRole::UserGroupHeader, "label_medium"),
 ];
 
 #[test]

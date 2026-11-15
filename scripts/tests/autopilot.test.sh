@@ -695,9 +695,12 @@ check "ask.md skips AskUserQuestion over the cap" 0 'do not call' grep -A3 'Rest
 # Supervised escalation prose (US2 AC1-AC3, FR-010, FR-011b, FR-013, SC-003): tasks/ask.md and tasks/resume.md.
 AK="$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"; RM="$ROOT/.claude/skills/speckit-autopilot/tasks/resume.md"
 check "ask.md: a supervised run asks through supervised.sh" 0 '^ok$' bash -c "grep -q 'supervised.sh <ledger>' '$AK' && grep -q 'exits 0' '$AK' && echo ok"
-check "ask.md: supervised sends banner and notification, no AskUserQuestion, ends the turn" 0 '^ok$' bash -c "grep -A3 'Supervised?' '$AK' | grep -qi 'no .AskUserQuestion' && grep -A3 'Supervised?' '$AK' | grep -qi 'end the turn' && echo ok"
+check "ask.md: supervised sends the banner, no AskUserQuestion, ends the turn" 0 '^ok$' bash -c "grep -A3 'Supervised?' '$AK' | tr -s ' \n' '  ' | grep -qi 'no .AskUserQuestion' && grep -A3 'Supervised?' '$AK' | tr -s ' \n' '  ' | grep -qi 'end the turn' && echo ok"
 check "ask.md: no ledger or not supervised keeps asking as before" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$AK' | grep -qi 'No ledger yet or not supervised: ask as below' && echo ok"
 check "ask.md: the answer returns as resume <answer>" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$AK' && echo ok"
+check "ask.md: a supervised run sends no notification, the supervisor does" 0 '^ok$' bash -c "grep -A5 'Supervised?' '$AK' | tr -s ' \n' '  ' | grep -qi 'no notification (the supervisor sends the only one)' && echo ok"
+check "ask.md: an unsupervised run still notifies" 0 '^ok$' bash -c "tr -s ' \n' '  ' < '$AK' | grep -qi 'ask as below, notification included' && echo ok"
+check "supervised.md: says who notifies" 0 'Who notifies' grep -n 'Who notifies' "$ROOT/.claude/skills/speckit-autopilot/rules/supervised.md"
 check "ask.md: supervised, answer.sh records the answer" 0 '^ok$' bash -c "grep -q 'answer.sh. records the answer' '$AK' && echo ok"
 check "resume.md: resume <answer> calls answer.sh then continues" 0 '^ok$' bash -c "grep -q 'resume <answer>' '$RM' && grep -q 'answer.sh <ledger>' '$RM' && grep -qi 'apply the answer' '$RM' && echo ok"
 check "resume.md: a refused batch is relayed and a repeat is ignored" 0 '^ok$' bash -c "grep -q 'Exit 2' '$RM' && grep -q 'ignored: no open escalation' '$RM' && echo ok"
@@ -985,6 +988,17 @@ sed -i '/^## Open escalation/,$d' "$l"; printf '## Open escalation\n\n%s\n' "$ON
 check "answer: a prose Decisions section gets a table" 0 '^\| D1 \|' "$A" "$l" "SQLite"
 check "answer: that table has its header" 0 '^\| # \| Phase ' bash -c "grep '^| #' '$l'"
 check "answer: a blank line ends that table" 0 '^$' bash -c "grep -B1 '^## Open escalation' '$l' | head -1"
+# --by <who> (#1815 FR-005a)
+l="$d/by.md"; esc_ledger "$l" "$ONE"
+check "answer --by supervisor: the By cell holds supervisor" 0 '^\| D3 \| milestones \| Which store\? \| Postgres \| supervisor \|' "$A" --by supervisor "$l" "Postgres"
+l="$d/by2.md"; esc_ledger "$l" "$BATCH"
+check "answer --by supervisor: a batch writes it on every row" 0 '^2$' bash -c "'$A' --by supervisor '$l' \$'1. SQLite\n2. 80' >/dev/null; grep -c '| supervisor |' '$l'"
+l="$d/by3.md"; esc_ledger "$l" "$ONE"
+check "answer --by: no open escalation still exits 3" 3 '^ignored' "$A" --by supervisor "$d/none.md" "x"
+l="$d/by4.md"; esc_ledger "$l" "$BATCH"
+check "answer --by: a bad batch still exits 2" 2 'missing answer' "$A" --by supervisor "$l" '1. a'
+check "answer --by: without a value is a usage error" 2 'usage' "$A" --by
+check "resume.md: resume --by supervisor runs answer.sh --by supervisor" 0 '^ok$' bash -c "grep -q 'resume --by supervisor' '$RM' && grep -q 'answer.sh --by supervisor' '$RM' && echo ok"
 
 # Code diffs use the single-agent review; the staged flow was dropped (specs/1804-staged-review/shadow.md).
 RV="$ROOT/.claude/skills/speckit-autopilot/tasks/review.md"

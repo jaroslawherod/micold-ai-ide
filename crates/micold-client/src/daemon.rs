@@ -11,7 +11,7 @@
 //! the whole re-architecture rests on.
 
 use crate::features::connection::Msg as ConnectionMsg;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -114,7 +114,7 @@ static CONTAINER_HOME: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLoc
 /// call wins.
 pub fn install_container_home(host_home: Option<&Path>) {
     let _ = CONTAINER_HOME
-        .set(host_home.map(|home| micold_core::sandbox::pathmap::map_for(home, cfg!(windows))));
+        .set(host_home.map(|home| micold_core::sandbox::pathmap::map_for(home, false)));
 }
 
 /// The AI CLI packages a container daemon's provisioning installs, when a process replaced the
@@ -253,7 +253,30 @@ pub enum Dial {
         /// The SSH key, signing key, CA file and session files, delivered in the startup secret
         /// (#1536); identity as for `startup`.
         extras: ExtrasDial,
+        /// The repositories of the daemon's saved projects, which pick the GitHub tokens the pod
+        /// receives (#1760, FR-009); identity as for `startup`.
+        projects: ProjectsDial,
     },
+}
+
+/// The repositories the `remote`s of a daemon's saved projects name, lower-cased, sorted and
+/// without repeats, as part of an actor's identity (#1760, research R3). A project with no remote,
+/// or one off GitHub, names none.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ProjectsDial(pub Vec<micold_core::github::GithubRepo>);
+
+impl ProjectsDial {
+    /// The repositories `projects`' remotes name.
+    pub fn of(projects: &[micold_core::daemons::ProjectSetting]) -> Self {
+        let repos: BTreeSet<_> = projects
+            .iter()
+            .filter_map(|p| p.remote.as_deref())
+            .filter_map(|remote| {
+                micold_core::github::GithubRepo::from_remote_url(&remote.to_ascii_lowercase())
+            })
+            .collect();
+        Self(repos.into_iter().collect())
+    }
 }
 
 /// A daemon's session extras as part of an actor's identity (#1536): the paths and keys; a changed
@@ -590,6 +613,12 @@ pub fn actor_specs_answered(
                             .map(|(settings, _)| settings.extras)
                             .unwrap_or_default(),
                     ),
+                    // Off, the saved projects pick no token, so editing them must not re-dial.
+                    projects: if k.github_tokens {
+                        ProjectsDial::of(&entry.file.projects)
+                    } else {
+                        ProjectsDial::default()
+                    },
                 },
                 _ => return None,
             };
@@ -943,6 +972,7 @@ async fn connect_and_pump(
                 drift,
                 startup,
                 extras,
+                projects,
             },
             _,
         ) => {
@@ -961,7 +991,16 @@ async fn connect_and_pump(
             // A daemon that never connected is on its first start, which creates the pod if it
             // is missing: that is the user's Start, not a re-dial.
             let tried = if life.established {
-                kube_reconnect(env, name, &settings.0, startup.0.as_ref(), &extras.0, &sink).await
+                kube_reconnect(
+                    env,
+                    name,
+                    &settings.0,
+                    startup.0.as_ref(),
+                    &extras.0,
+                    &projects.0,
+                    &sink,
+                )
+                .await
             } else {
                 kube_attempt(
                     env,
@@ -969,6 +1008,7 @@ async fn connect_and_pump(
                     &settings.0,
                     startup.0.as_ref(),
                     &extras.0,
+                    &projects.0,
                     drift.0,
                     &sink,
                 )
@@ -1795,6 +1835,30 @@ pub struct KubeEnv {
     pub home: PathBuf,
     /// The cancel token of each Kubernetes daemon's start under way, by daemon name.
     pub cancels: std::sync::Mutex<BTreeMap<String, CancelToken>>,
+    /// Where a pod start that delivers GitHub tokens finds them (#1760).
+    pub tokens: PodTokenSource,
+}
+
+/// The GitHub token store a pod start reads when the daemon's `github_tokens` opt-in is on, and
+/// the forge the delivered entries name (#1760, research R5). The shell sets
+/// [`PodTokenSource::on_device`]; a test points it at its own store and a local forge.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PodTokenSource {
+    /// The PAT store's root; `None` delivers no token.
+    pub pat_root: Option<PathBuf>,
+    /// The `host` every delivered entry names; `None` is the daemon's default, `github.com`.
+    pub host: Option<String>,
+}
+
+impl PodTokenSource {
+    /// This device's PAT store, with no host (the daemon's default, `github.com`).
+    pub fn on_device() -> Self {
+        Self {
+            pat_root: micold_core::scoped_credential::pat_store::PatStore::on_device()
+                .map(|store| store.root().to_path_buf()),
+            host: None,
+        }
+    }
 }
 
 impl KubeEnv {
@@ -1813,6 +1877,7 @@ impl KubeEnv {
             keys_root,
             home,
             cancels: std::sync::Mutex::default(),
+            tokens: PodTokenSource::default(),
         }
     }
 }
@@ -1931,6 +1996,7 @@ pub async fn kube_reconnect(
     settings: &KubeSettings,
     startup: Option<&daemon_config_render::StartupTable>,
     extras: &micold_core::daemons::SessionExtras,
+    projects: &[micold_core::github::GithubRepo],
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeReconnectError> {
     use micold_core::kube::classify::PodGone;
@@ -1954,11 +2020,35 @@ pub async fn kube_reconnect(
         settings,
         startup,
         extras,
+        projects,
         DriftChoice::Keep,
         sink,
     )
     .await
     .map_err(KubeReconnectError::Attempt)
+}
+
+/// The stored GitHub tokens a pod start delivers (#1760): none unless the daemon's
+/// `github_tokens` opt-in is on; then those of `source`'s store that match `projects`, read for the
+/// startup Secret and naming `source.host`. A token the pod cannot take is the start's failure.
+fn pod_github_tokens(
+    source: &PodTokenSource,
+    settings: &KubeSettings,
+    projects: &[micold_core::github::GithubRepo],
+) -> Result<crate::daemon_config_delivery::PodGithubTokens, KubeAttemptError> {
+    use crate::daemon_config_delivery::{select_tokens, PodGithubTokens};
+    let store = match (&source.pat_root, settings.github_tokens) {
+        (Some(root), true) => micold_core::scoped_credential::pat_store::PatStore::new(root),
+        _ => return Ok(PodGithubTokens::default()),
+    };
+    let mut selected = select_tokens(
+        daemon_config_render::GithubTokenSetting::from_store(&store),
+        projects,
+    );
+    for token in &mut selected {
+        token.host.clone_from(&source.host);
+    }
+    PodGithubTokens::read(selected).map_err(|e| KubeAttemptError::Failed(e.to_string()))
 }
 
 /// The account the pod's SSH server logs this client in as: the basic image's passwd entry for
@@ -1969,13 +2059,17 @@ pub const POD_SSH_USER: &str = "micold";
 /// SSH port with its host key pinned, then the shared copy, install and connect sequence over it.
 /// The relay returned must outlive the connection. A failure is the reason in the user's words and
 /// the attempt is already rolled back; a drift is [`KubeAttemptError::Drift`] unless `drift` says
-/// what to do about it. [`cancel_kube_start`] stops the attempt while it runs.
+/// what to do about it. [`cancel_kube_start`] stops the attempt while it runs. `projects` are the
+/// repositories of the daemon's saved projects, which pick the GitHub tokens the pod receives
+/// when `settings.github_tokens` is on (#1760).
+#[allow(clippy::too_many_arguments)]
 pub async fn kube_attempt(
     env: &KubeEnv,
     name: &str,
     settings: &KubeSettings,
     startup: Option<&daemon_config_render::StartupTable>,
     extras: &micold_core::daemons::SessionExtras,
+    projects: &[micold_core::github::GithubRepo],
     drift: DriftChoice,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeAttemptError> {
@@ -1985,6 +2079,10 @@ pub async fn kube_attempt(
     };
     let fail =
         |f: micold_core::kube::classify::KubeFailure| KubeAttemptError::Failed(f.to_string());
+    // Read before this attempt's first cluster call, so a token the pod cannot take stops the
+    // start before anything is created (#1760, contract §2). On a reconnect, `kube_reconnect` has
+    // already asked for the pod's status. Off reads nothing.
+    let tokens = pod_github_tokens(&env.tokens, settings, projects)?;
     let image = settings.pod_image();
     let (context, namespace) = (&settings.context.0, &settings.namespace.0);
     let names = micold_core::kube::names::ResourceNames::new(context, namespace, name);
@@ -1998,7 +2096,6 @@ pub async fn kube_attempt(
     }
     let cancel = CancelToken::new();
     let _registered = Registered::new(env, name, &cancel);
-    let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
     let read = |path: &Path| std::fs::read_to_string(path);
     // The file the pod's config map holds. Checked as every delivered file is: one that does not
     // validate is not delivered (contract §4).
@@ -2020,13 +2117,28 @@ pub async fn kube_attempt(
     );
     pod_settings.startup = startup.cloned();
     pod_settings.extras = extras.clone();
+    pod_settings.github_tokens = tokens.entries;
     let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
+    // The values stay `SecretToken`s until here, and only ever go into the startup Secret;
+    // `daemon.toml` names their files.
+    let secret_files: Vec<(String, String)> = (delivered.files.iter().cloned())
+        .chain((tokens.files.iter()).map(|(key, value)| (key.clone(), value.expose().to_string())))
+        .collect();
+    crate::daemon_config_delivery::check_secret_size(
+        [delivered.env.as_deref(), git_config.as_deref()]
+            .into_iter()
+            .flatten()
+            .chain(secret_files.iter().map(|(_, value)| value.as_str())),
+    )
+    .map_err(|e| format!("cannot start the pod: {e}"))?;
     let config = crate::daemon_config_render::prepare(
         &delivered.settings,
         micold_core::daemon_config::Kind::Kubernetes,
     )
     .map_err(|errors| format!("the pod's configuration is invalid: {}", errors[0]))?;
+    // Every file is read and checked before the first call to the cluster.
+    let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
     let request = StartRequest {
         cluster: &*cluster,
         keys: &*env.keygen,
@@ -2042,7 +2154,7 @@ pub async fn kube_attempt(
         startup_script: delivered.script.as_deref(),
         startup_env: delivered.env.as_deref(),
         git_config: git_config.as_deref(),
-        secret_files: &delivered.files,
+        secret_files: &secret_files,
         time_zone,
     };
     let started = match start(&request, &mut |_| {}).await {
@@ -2377,6 +2489,75 @@ mod tests {
         ));
         states.insert(id, DaemonState::Unreachable { reason: "x".into() });
         assert!(actor_specs(&registry, &states, dir, None).is_empty());
+    }
+
+    /// #1760 T010: the projects dial is the saved projects' GitHub repositories, lower-cased,
+    /// sorted and once each. Its part in the actor's identity is the two tests below.
+    #[test]
+    fn the_projects_dial_is_the_saved_repositories() {
+        use micold_core::daemons::ProjectSetting;
+        let project = |path: &str, remote: Option<&str>| ProjectSetting {
+            path: path.into(),
+            remote: remote.map(String::from),
+        };
+        let projects = [
+            project("/w/b", Some("git@github.com:Zed/Repo.git")),
+            project("/w/a", Some("https://github.com/acme/App")),
+            project("/w/c", None),
+            project("/w/d", Some("https://gitlab.com/x/y")),
+            project("/w/e", Some("https://github.com/ACME/app.git")),
+        ];
+        let dial = super::ProjectsDial::of(&projects);
+        let shown: Vec<String> = dial.0.iter().map(ToString::to_string).collect();
+        assert_eq!(shown, ["acme/app", "zed/repo"]);
+    }
+
+    /// The dial's projects, saved to a Kubernetes daemon, as its actor spec sees them: the spec
+    /// before and after `projects` are saved.
+    fn specs_around_saving_projects(
+        opted_in: bool,
+    ) -> (super::ActorSpec, super::ActorSpec, super::ProjectsDial) {
+        use micold_core::daemons::{FileSettings, ProjectSetting};
+        let projects = vec![ProjectSetting {
+            path: "/w/a".into(),
+            remote: Some("https://github.com/acme/App".into()),
+        }];
+        let dial = super::ProjectsDial::of(&projects);
+        let mut registry = DaemonRegistry::default();
+        let mut settings = micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
+        settings.github_tokens = opted_in;
+        let id = registry
+            .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
+            .unwrap();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let dir = std::path::Path::new("/nonexistent");
+        let before = actor_specs(&registry, &states, dir, None).remove(0);
+        let file = FileSettings {
+            projects,
+            ..FileSettings::default()
+        };
+        registry.set_file(id, file).unwrap();
+        let after = actor_specs(&registry, &states, dir, None).remove(0);
+        (before, after, dial)
+    }
+
+    /// With the opt-in on, saving a project changes the Kubernetes actor's identity.
+    #[test]
+    fn the_projects_dial_changes_the_identity_with_the_opt_in_on() {
+        let (before, after, dial) = specs_around_saving_projects(true);
+        assert_ne!(
+            before, after,
+            "an opted-in daemon re-dials on a new project"
+        );
+        assert!(matches!(&after.dial, Dial::Kubernetes { projects, .. } if *projects == dial));
+    }
+
+    /// With the opt-in off, saved projects pick nothing, so the identity stays (no re-dial).
+    #[test]
+    fn the_projects_dial_is_no_identity_with_the_opt_in_off() {
+        let (before, after, _) = specs_around_saving_projects(false);
+        assert_eq!(before, after, "off: saved projects are no identity");
     }
 
     /// The answer to the drift prompt is part of the actor's identity, so giving it restarts the

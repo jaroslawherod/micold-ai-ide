@@ -241,6 +241,7 @@ mod tests {
         });
         state.workspace.active = Some(path.clone());
         state.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: "feat-a".to_string(),
             path: PathBuf::from(format!("{PROJECT}/.claude/worktrees/feat-a")),
             branch: Some("feat/a".to_string()),
@@ -602,12 +603,8 @@ mod tests {
             &ConnectionStatus::Connected,
             &Sandbox::default(),
         );
-        let (other, mac) = crate::keymap::switcher_chord_labels();
-        let (overview, switcher) = if cfg!(target_os = "macos") {
-            ("Cmd+Shift+O", mac)
-        } else {
-            ("Ctrl+Shift+O", other)
-        };
+        let (switcher, _) = crate::keymap::switcher_chord_labels();
+        let overview = "Ctrl+Shift+O";
         assert_eq!(m.hints[0], format!("{overview} Overview"));
         assert_eq!(m.hints[1], format!("{switcher} Jump"));
         assert_eq!(m.usage, None);

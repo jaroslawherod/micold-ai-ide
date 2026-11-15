@@ -455,43 +455,14 @@ fn kube_logs(
     )
 }
 
-/// The `ssh` executable on Windows: the one on `PATH`, then the OpenSSH that ships with Windows
-/// (`%SystemRoot%\\System32\\OpenSSH\\ssh.exe`). `None` leaves the lookup to the runner, which
-/// reports a missing `ssh` with the hint to install it. `is_file` is injected so the order is
-/// testable on any platform.
-pub fn locate_windows_ssh(
-    path_var: &str,
-    system_root: Option<&Path>,
-    is_file: &dyn Fn(&Path) -> bool,
-) -> Option<PathBuf> {
-    let on_path = std::env::split_paths(path_var)
-        .map(|dir| dir.join("ssh.exe"))
-        .find(|p| is_file(p));
-    on_path.or_else(|| {
-        system_root
-            .map(|root| root.join("System32").join("OpenSSH").join("ssh.exe"))
-            .filter(|p| is_file(p))
-    })
-}
-
 /// The one real `ssh` runner of this process (feature 489, FR-017): this build's own daemon is the
-/// artefact copied to a host of the same platform, and the executable is looked up by name, except
-/// on Windows where OpenSSH is not always on `PATH`.
+/// artefact copied to a host of the same platform, and the executable is looked up by name.
 pub fn system_ssh() -> micold_core::ssh::SystemSsh {
-    let ssh_path = if cfg!(windows) {
-        locate_windows_ssh(
-            &std::env::var("PATH").unwrap_or_default(),
-            std::env::var_os("SystemRoot").map(PathBuf::from).as_deref(),
-            &|p| p.is_file(),
-        )
-    } else {
-        None
-    };
     micold_core::ssh::SystemSsh {
         own_daemon: PathBuf::from(micold_core::spawn::daemon_binary()),
         // The static Linux builds for remote hosts and containers ship with the package.
         bundled_dir: std::env::current_exe().ok().map(|exe| bundled_dir(&exe)),
-        ssh_path,
+        ssh_path: None,
         cancel: None,
     }
 }
@@ -629,30 +600,6 @@ mod tests {
         ] {
             assert_eq!(bundled_dir(Path::new(exe)), PathBuf::from(want), "{exe}");
         }
-    }
-
-    #[test]
-    fn windows_ssh_is_taken_from_path_before_the_system_openssh() {
-        let tools = PathBuf::from("tools");
-        let root = PathBuf::from("win");
-        let path_var = std::env::join_paths([&tools])
-            .unwrap()
-            .into_string()
-            .unwrap();
-        let on_path = tools.join("ssh.exe");
-        let system = root.join("System32").join("OpenSSH").join("ssh.exe");
-
-        let both = |p: &Path| p == on_path || p == system;
-        assert_eq!(
-            locate_windows_ssh(&path_var, Some(&root), &both),
-            Some(on_path.clone())
-        );
-        let system_only = |p: &Path| p == system;
-        assert_eq!(
-            locate_windows_ssh(&path_var, Some(&root), &system_only),
-            Some(system.clone())
-        );
-        assert_eq!(locate_windows_ssh(&path_var, None, &system_only), None);
     }
 
     /// T052 (FR-013, FR-020): launch only reads the registry. Tracking an auto-start remote and

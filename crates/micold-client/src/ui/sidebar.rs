@@ -59,7 +59,12 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // The list holds every entry once, the Default entry among them, so "one entry in all" is
     // "no worktree entries matched". Built once per render: it gives both the hint and the rows.
     let entries = state.sidebar_list();
-    let no_worktree_entries = entries.len() <= 1;
+    // A user group's header is not a location row (feature 1786), so it does not count.
+    let no_worktree_entries = entries
+        .iter()
+        .filter(|entry| !matches!(entry, crate::features::sidebar::SidebarEntry::UserGroup(_)))
+        .count()
+        <= 1;
     // A project with no discovered worktree takes the "none yet" branch — the "no match / clear
     // filters" branch would offer to clear a filter that was never applied.
     let hint: Option<Element<'_, Message>> = if state.worktree.worktrees.is_empty() {
@@ -149,6 +154,20 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // its whole subtree (`ui/material/ripple.rs`).
     .id(SIDEBAR_SCROLL_ID.clone())
     .into();
+    // Feature 1786 (C6a): a right-click on the list that no row answers — the space under the last
+    // row, a hint — opens the empty-area menu. A row's own area answers first and captures, so a
+    // row's right-click still opens that row's menu.
+    let body: Element<'_, Message> = if state.workspace.active.is_some() {
+        cdk::context_area::ContextArea::new(body)
+            .on_secondary_press(|point| {
+                Message::SidebarGroups(
+                    crate::features::sidebar_group_actions::Msg::EmptyAreaMenuOpened(point),
+                )
+            })
+            .into()
+    } else {
+        body
+    };
 
     // Minimal left/right padding to maximize name/tag width (FR-009); a little vertical breathing
     // room is kept.
@@ -324,11 +343,12 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
 }
 
 /// The human label for a tag filter chip.
-fn filter_label(filter: TagFilter) -> String {
+fn filter_label(filter: &TagFilter) -> String {
     match filter {
         TagFilter::Type(t) => t.as_str().to_string(),
         TagFilter::HasIssue => "issue".to_string(),
         TagFilter::Untyped => "untyped".to_string(),
+        TagFilter::Parent(parent) => format!("parent: {}", Tag::Parent(parent.clone()).label()),
     }
 }
 
@@ -344,12 +364,12 @@ fn filter_chip(
     // Feature 014: the pill styling that used to live here is now the shared `ToggleChip`
     // primitive, so this and the reveal chip below stay identical by construction rather than by
     // two copies drifting apart (Principle VIII Component-reuse gate).
-    let (fill, on) = match filter {
-        TagFilter::Type(t) => r.type_tag(t),
+    let (fill, on) = match &filter {
+        TagFilter::Type(t) => r.type_tag(*t),
         TagFilter::HasIssue => r.issue_tag(),
-        TagFilter::Untyped => material::chip_neutral_accent(r),
+        TagFilter::Untyped | TagFilter::Parent(_) => material::chip_neutral_accent(r),
     };
-    let label = filter_label(filter);
+    let label = filter_label(&filter);
     let chip = ToggleChip::new(
         label,
         Message::Sidebar(SidebarMsg::FilterToggled(filter)),
@@ -410,7 +430,7 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
                     // Selected while no filter is; pressing it clears every filter (US4.2, US4.3).
                     ChipBarChip::All => all(on),
                     ChipBarChip::Filter(filter) => takes_the_keyboard(
-                        filter_chip(filter, on, false, r),
+                        filter_chip(filter.clone(), on, false, r),
                         Message::Sidebar(SidebarMsg::FilterToggled(filter)),
                         r,
                     ),
@@ -435,9 +455,9 @@ fn chip_bar(state: &State, r: Roles) -> Element<'static, Message> {
                 toggle.clone(),
                 r,
             ));
-            line.extend(bar.shown.iter().map(|&filter| {
+            line.extend(bar.shown.iter().cloned().map(|filter| {
                 takes_the_keyboard(
-                    filter_chip(filter, true, true, r),
+                    filter_chip(filter.clone(), true, true, r),
                     Message::Sidebar(SidebarMsg::FilterToggled(filter)),
                     r,
                 )
@@ -534,8 +554,9 @@ fn filter_panel(
 ) -> Element<'static, Message> {
     let chips: Vec<Element<'static, Message>> = available
         .iter()
-        .map(|&filter| {
-            let chip = filter_chip(filter, active.contains(&filter), false, r);
+        .cloned()
+        .map(|filter| {
+            let chip = filter_chip(filter.clone(), active.contains(&filter), false, r);
             if open {
                 takes_the_keyboard(chip, Message::Sidebar(SidebarMsg::FilterToggled(filter)), r)
             } else {
@@ -588,6 +609,7 @@ pub fn more_menu_items(state: &State) -> Vec<material::MenuItem<Message>> {
             MoreAction::Refresh => Icon::Refresh,
             MoreAction::AttachExisting => Icon::OpenProject,
             MoreAction::RunInParallel => Icon::AiCli,
+            MoreAction::NewGroup => Icon::Overview,
         };
         material::MenuItem {
             message: item
@@ -601,6 +623,32 @@ pub fn more_menu_items(state: &State) -> Vec<material::MenuItem<Message>> {
     .collect()
 }
 
+/// The sidebar's empty-area menu (feature 1786, C6a): **New group…**, at the press point, clamped
+/// into the window like the row menus. `None` while it is closed.
+pub fn empty_area_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'a, Message>> {
+    use crate::features::sidebar_group_actions::Msg;
+    let anchor = state.sidebar_groups.empty_menu?;
+    let items = vec![material::MenuItem::new(
+        Icon::Overview,
+        "New group…",
+        Message::SidebarGroups(Msg::New),
+    )];
+    let (x, y) = crate::features::project::clamp_menu_anchor(
+        anchor,
+        material::menu_panel_size(items.len()),
+        state.window.window_size,
+    );
+    Some(
+        material::MenuOverlay::new(
+            items,
+            Message::SidebarGroups(Msg::EmptyAreaMenuDismissed),
+            r,
+        )
+        .anchor(iced::Point::new(x as f32, y as f32))
+        .into(),
+    )
+}
+
 /// What choosing `action` on the more menu does: the message today's header button sent (FR-015).
 /// The shell sends it once the menu has closed, so the refresh still goes through its request path.
 pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Message {
@@ -609,6 +657,9 @@ pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Mess
         MoreAction::Refresh => Message::Worktree(WorktreeMsg::RefreshRequested),
         MoreAction::AttachExisting => Message::Attach(crate::features::attach::Msg::Opened),
         MoreAction::RunInParallel => Message::Sidebar(SidebarMsg::RunInParallelRequested),
+        MoreAction::NewGroup => {
+            Message::SidebarGroups(crate::features::sidebar_group_actions::Msg::New)
+        }
     }
 }
 
@@ -848,6 +899,18 @@ fn build_items(
                 items.extend(group_items(state, group, at + items.len(), r));
                 continue;
             }
+            crate::features::sidebar::SidebarEntry::UserGroup(header) => {
+                // Feature 1786 (C5): the header at the one-line row height `row_heights` gives it.
+                items.push(
+                    crate::ui::material::GroupHeader::new(header.name)
+                        .collapsed(header.collapsed)
+                        .count(header.count)
+                        .roles(r)
+                        .key(row_key(RowKey::UserGroup(header.id)))
+                        .into(),
+                );
+                continue;
+            }
         };
         let wt = &node.worktree;
         // No leading git icon (FR-010); a non-Valid worktree is cued by an error-tinted name
@@ -1075,6 +1138,7 @@ enum RowKey {
     Row(RowRef),
     RunGroup(micold_core::runs::GroupId),
     Run(micold_core::runs::GroupId, u8),
+    UserGroup(micold_core::sidebar_layout::UserGroupId),
 }
 
 /// The [`TreeItem::key`] of a row: every sidebar row has one, so the keyboard's focus, the ripple
@@ -1179,7 +1243,7 @@ fn group_items(
         match run.row {
             RunRow::Worktree(node) => items.extend(build_items(
                 state,
-                vec![SidebarEntry::Worktree(node)],
+                vec![SidebarEntry::Worktree(*node)],
                 1,
                 Some((number, provider)),
                 at + items.len(),
@@ -1701,6 +1765,7 @@ mod tests {
         state.worktree.worktrees = ["feat-a", "fix-b"]
             .into_iter()
             .map(|dir| micold_core::worktree::Worktree {
+                parent: None,
                 dir_name: dir.into(),
                 path: std::path::Path::new("/repo/.claude/worktrees").join(dir),
                 branch: Some(dir.replace('-', "/")),
@@ -1738,6 +1803,7 @@ mod tests {
         ]
         .into_iter()
         .map(|dir| micold_core::worktree::Worktree {
+            parent: None,
             dir_name: dir.into(),
             path: std::path::Path::new("/repo/.claude/worktrees").join(dir),
             branch: Some(dir.replace('-', "/")),
@@ -1763,7 +1829,7 @@ mod tests {
         state.sidebar.filter_open = true;
         let chips: Vec<_> = available
             .iter()
-            .map(|&f| sidebar(SidebarMsg::FilterToggled(f)))
+            .map(|f| sidebar(SidebarMsg::FilterToggled(f.clone())))
             .collect();
         let open = tab_order(&state, head.len() + chips.len() + tail.len());
         assert_eq!(
@@ -1795,6 +1861,7 @@ mod tests {
         state.worktree.worktrees = ["feat-a", "feat-b"]
             .into_iter()
             .map(|dir| Worktree {
+                parent: None,
                 dir_name: dir.to_string(),
                 path: std::path::PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
                 branch: Some(format!("feat/{dir}")),
@@ -1841,6 +1908,7 @@ mod tests {
         state.worktree.worktrees = ["idle", "done", "work", "attn", "act"]
             .into_iter()
             .map(|dir| Worktree {
+                parent: None,
                 dir_name: dir.to_string(),
                 path: std::path::PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
                 branch: Some(format!("feat/{dir}")),

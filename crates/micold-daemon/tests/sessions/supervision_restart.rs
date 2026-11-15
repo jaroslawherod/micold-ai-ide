@@ -34,14 +34,6 @@ fn sh(script: &str) -> CommandBuilder {
     cmd.arg(script);
     cmd
 }
-/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
-#[cfg(windows)]
-fn sh(script: &str) -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("cmd");
-    cmd.arg("/c");
-    cmd.arg(script);
-    cmd
-}
 
 /// A daemon hosting one `Regular`-mode session at the project root, and its id.
 fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {

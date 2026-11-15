@@ -63,9 +63,8 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
 ## How it stops, and what it saves first
 
 The service stops in an orderly way in two cases: when it stops itself after 30 minutes with no
-window connected, and when it is asked to stop: `SIGTERM`, `SIGINT` or `SIGHUP` on Linux and macOS
-(**Restart service**, logout and a reboot), and on Windows its stop event or an end-of-session
-message (see *On Windows* below). Both run the same unwind: it stops accepting connections,
+window connected, and when it is asked to stop: `SIGTERM`, `SIGINT` or `SIGHUP`
+(**Restart service**, logout and a reboot). Both run the same unwind: it stops accepting connections,
 **saves the terminal history of every running AI CLI terminal** (one file each, written in parallel,
 all of it bounded at 3 seconds so a stuck disk cannot keep the service from stopping), marks the
 sessions interrupted-resumable, ends their processes, and only then releases the endpoint. A terminal
@@ -568,31 +567,6 @@ speak the same contract, so nothing is actually incompatible, only stale. Until 
 out, or reboot), the service keeps running the version it was already running, even though the app you
 just relaunched is newer.
 
-### On Windows
-
-The service works the same way on Windows, with Windows mechanisms underneath:
-
-- **It is reached over a named pipe**, `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` is your
-  account's security identifier. The pipe allows only your account to connect, so another user
-  signed in to the same PC cannot reach your sessions.
-- **Its pid is recorded** at `%LOCALAPPDATA%\micold-ai-ide\run\micold-daemon.pid`.
-- **Restart service works** as described above. The app stops the recorded process only if it
-  really is `micold-daemon.exe`, so a stale record never stops an unrelated program. It first sets
-  the service's **stop event**, `Local\Micold.Daemon.Stop.<SID>`, which the service creates at start
-  with a protected DACL for your account only, and waits up to 5 seconds for the service to save
-  every terminal and exit; a service that does not answer, or has no event (an older one), is ended
-  with `TerminateProcess` as before.
-- **Logout and shutdown are told.** The service has a hidden top-level window whose
-  `WM_ENDSESSION` handler raises the same stop request and holds Windows back while the service
-  saves. Windows ends an application that takes more than about 5 seconds, so a very slow disk can
-  still lose the last minute, as a crash does.
-- **Installing an update stops it for you.** The installer sets the stop event and waits up to 5
-  seconds, then stops the service if it is still running, before
-  replacing its files, and its Ready to Install page warns that running sessions will be stopped.
-  The next launch starts the new service, and the sessions come back interrupted-resumable, as
-  below.
-- **Logout still ends it**, exactly as in the table at the top of this page.
-
 ### Interrupted-resumable sessions after any service restart
 
 Whenever the service starts and finds sessions that were running when it last stopped — whether from
@@ -654,7 +628,7 @@ daemons are unaffected.
 
 A daemon whose protocol version differs from the orchestrator's, older or newer, is refused with
 `Refused { reason: "version_mismatch", orchestrator_version, daemon_version, message }`; the message
-names both numbers (`daemon <id> speaks protocol version 80; this orchestrator speaks 81`). Its id
+names both numbers (`daemon <id> speaks protocol version 81; this orchestrator speaks 82`). Its id
 is listed `needs-update`, and the record then carries `orchestrator_version` beside its own
 `protocol_version`. A daemon on the current number whose `Hello` carries another schema hash is
 refused at `Hello` and listed the same way. A refusal for the build (`BuildMismatch`) or for
@@ -741,17 +715,11 @@ does not offer to make it. A container daemon's form in Settings → Daemons sti
 sign out* checkbox, but it is the **container's** setting: with the direct placement selected the
 control says plainly that it cannot be honoured there, rather than quietly doing nothing.
 
-On macOS, sessions survive closing the window but not logging out when the session service runs
-directly on your computer; running it in a container is the supported way to survive logout
-there. That sentence is the one `docs/user-guide/install-macos.md` and
-`crates/micold-core/src/logout_survival.rs` also carry, held equal by
-`crates/micold-core/tests/macos_logout_claims_agree.rs`.
-
 ### What to do instead
 
 Run the session service **in a container**. A container runtime is a service the platform already
 keeps running across logout and reboot, so a sandbox with its keep-running setting on comes back on
-its own — on Linux, macOS and Windows alike. Turn it on in Settings → Daemons; see
+its own. Turn it on in Settings → Daemons; see
 [Running the session service in a container](user-guide/sandboxed-daemon.md) for what it can and
 cannot see, which runtimes work, and what to do when it will not start.
 
@@ -789,7 +757,7 @@ lives in Settings → Daemons, described in
 
 | Placement | What it is | Reached over |
 |---|---|---|
-| **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket in a `0700` directory on Linux and macOS; on Windows, a named pipe only your account can open |
+| **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket in a `0700` directory |
 | **In a container** | A container on this machine, seeing only your registered projects | An SSH connection to the container's sshd on a loopback port (feature 806; before it, loopback TCP with a shared secret) |
 | **On another computer** | A daemon on an SSH host you own (feature 489) | An SSH connection to the host |
 

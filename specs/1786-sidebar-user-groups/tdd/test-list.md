@@ -16,7 +16,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 
 | id | behavior | traces | kind | state | test |
 |---|---|---|---|---|---|
-| A1 | New group with a valid name adds a header holding no worktree | US1-1, FR-001 | example | PENDING | tasks T011, T012 |
+| A1 | New group with a valid name adds a header holding no worktree | US1-1, FR-001 | example | DONE | tests/sidebar_group_actions.rs::a_valid_name_adds_a_header_holding_no_worktree_and_saves |
 | A2 | Renaming a group changes the header name and keeps its worktrees | US1-2, FR-002 | example | PENDING | tasks T020, T021 |
 | A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | PENDING | tasks T020, T021 |
 | A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | PENDING | tasks T011, T020 |
@@ -43,26 +43,26 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | A25 | A stale assignment is ignored on load | US6-3, FR-018 | example | PENDING | tasks T002, T003, T039 |
 | A26 | No header names a state | US7-2, FR-013 | example | PENDING | tasks T041 |
 | A27 | A run group row is dragged and dropped as one unit; a group header arms for group drag | FR-016, FR-019 | example | PENDING | tasks T029, T037 |
-| A28 | A worktree added or removed while running appears in ungrouped or leaves its group | FR-005, FR-018 | example | PENDING | tasks T006, T007 |
+| A28 | A worktree added or removed while running appears in ungrouped or leaves its group | FR-005, FR-018 | example | DONE | tests/sidebar_tree.rs::user_groups::a_worktree_added_while_running_is_ungrouped_and_a_removed_one_leaves_its_group |
 
 ## Inner loop: unit behaviors
 
 | id | behavior | traces | kind | state | test |
 |---|---|---|---|---|---|
-| U1 | to_json/from_json round trip | FR-012 | example | PENDING | tasks T002, T003 |
-| U2 | Missing, corrupt, older or newer version loads empty without error | FR-018 | example | PENDING | tasks T002, T003 |
-| U3 | reconcile drops absent items | FR-018 | example | PENDING | tasks T002, T003 |
-| U4 | reconcile keeps a doubly-named item in the first group | C1, FR-005 | example | PENDING | tasks T002, T003 |
-| U5 | reconcile appends unknown live items to ungrouped in live order | C1 | example | PENDING | tasks T002, T003 |
+| U1 | to_json/from_json round trip | FR-012 | example | DONE | micold-core sidebar_layout::tests::a_layout_survives_its_own_json |
+| U2 | Missing, corrupt, older or newer version loads empty without error | FR-018 | example | DONE | micold-core sidebar_layout::tests::missing_unparseable_older_or_newer_text_loads_as_no_groups |
+| U3 | reconcile drops absent items | FR-018 | example | DONE | micold-core sidebar_layout::tests::reconcile_drops_items_no_longer_listed |
+| U4 | reconcile keeps a doubly-named item in the first group | C1, FR-005 | example | DONE | micold-core sidebar_layout::tests::reconcile_keeps_an_item_named_twice_in_the_first_group_only |
+| U5 | reconcile appends unknown live items to ungrouped in live order | C1 | example | DONE | micold-core sidebar_layout::tests::reconcile_appends_unknown_live_items_to_ungrouped_in_live_order |
 | U6 | Default is never stored (IsDefault) | FR-015 | example | PENDING | tasks T002, T003, T024, T025 |
-| U7 | save/load round trip, missing file empty | C7, SC-003 | example | PENDING | tasks T004, T005 |
-| U8 | corrupt file renamed .corrupt, empty layout loads | FR-018 | example | PENDING | tasks T004, T005 |
-| U9 | sidebar_entries with empty layout equals the stable order | FR-013 | example | PENDING | tasks T006, T007 |
-| U10 | Entries order: Default, group headers with rows, ungrouped | C5 | example | PENDING | tasks T006, T007 |
-| U11 | Collapsed group hides rows, empty group keeps header, tag filter keeps stored order | C5, FR-017 | example | PENDING | tasks T006, T007 |
-| U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | PENDING | tasks T006, T007 |
-| U13 | create trims, ids monotonic and never reused | FR-004 | example | PENDING | tasks T009, T010 |
-| U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | PENDING | tasks T009, T010 |
+| U7 | save/load round trip, missing file empty | C7, SC-003 | example | DONE | tests/sidebar_layout_store.rs::a_saved_layout_loads_back_after_a_restart, a_missing_file_loads_as_no_groups |
+| U8 | corrupt file renamed .corrupt, empty layout loads | FR-018 | example | DONE | tests/sidebar_layout_store.rs::a_corrupt_file_is_kept_aside_and_loads_as_no_groups |
+| U9 | sidebar_entries with empty layout equals the stable order | FR-013 | example | DONE | tests/sidebar_tree.rs::user_groups::with_no_layout_the_drawn_list_is_the_stable_order |
+| U10 | Entries order: Default, group headers with rows, ungrouped | C5 | example | DONE | tests/sidebar_tree.rs::user_groups::groups_come_after_default_with_their_rows_then_the_ungrouped_rows |
+| U11 | Collapsed group hides rows, empty group keeps header, tag filter keeps stored order | C5, FR-017 | example | DONE | tests/sidebar_tree.rs::user_groups::a_collapsed_group_keeps_its_header_and_hides_its_rows_and_an_empty_group_keeps_its_header, a_tag_filter_hides_grouped_rows_and_keeps_their_stored_order |
+| U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | DONE | tests/sidebar_tree.rs::user_groups::a_run_group_sits_in_a_user_group_as_one_unit, row_metrics_count_headers_and_navigation_skips_them |
+| U13 | create trims, ids monotonic and never reused | FR-004 | example | DONE | micold-core sidebar_layout::tests::create_trims_the_name_and_adds_an_empty_group_last, created_ids_grow_and_are_never_reused |
+| U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | DONE | micold-core sidebar_layout::tests::create_refuses_a_blank_name_and_changes_nothing, create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing |
 | U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | PENDING | tasks T018, T019 |
 | U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | PENDING | tasks T018, T019 |
 | U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | PENDING | tasks T024, T025 |
@@ -79,7 +79,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U28 | set_collapsed; Enter/Space on a header toggles; menu Collapse/Expand | FR-011 | example | PENDING | tasks T039, T040 |
 | U29 | reveal_ready expands the group holding the target | FR-017 | example | PENDING | tasks T039, T040 |
 | U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | PENDING | tasks T020, T021 |
-| U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | PENDING | tasks T011, T012 |
+| U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | DONE | tests/sidebar_group_actions.rs::new_group_is_on_the_more_menu_with_no_worktree_needed, no_project_open_offers_no_new_group, the_new_group_chord_is_primary_shift_g_and_on_the_shortcut_sheet (empty-area menu still open, T014) |
 
 ## Out of scope
 

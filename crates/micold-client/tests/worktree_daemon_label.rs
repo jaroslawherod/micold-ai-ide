@@ -14,6 +14,7 @@ const PROJECT: &str = "/repo";
 
 fn worktree(dir: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("{PROJECT}/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),

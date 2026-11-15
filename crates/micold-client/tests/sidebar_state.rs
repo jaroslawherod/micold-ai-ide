@@ -417,13 +417,13 @@ fn worktree_hover_sets_and_clears() {
 fn sidebar_filter_toggles_and_clears() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat.clone())));
     assert!(state.sidebar.filters.contains(&feat));
     // Toggling again removes it.
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat.clone())));
     assert!(!state.sidebar.filters.contains(&feat));
     // Multiple filters accumulate; clear empties them all.
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat.clone())));
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(
         TagFilter::HasIssue,
     )));
@@ -481,7 +481,7 @@ fn opening_help_menu_or_project_switcher_closes_the_more_menu() {
 fn closing_the_more_menu_never_changes_active_filters() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat.clone())));
     assert!(state.sidebar.filters.contains(&feat));
 
     state.update(Message::Sidebar(SidebarMsg::MoreMenuToggled)); // open
@@ -591,6 +591,8 @@ fn each_more_menu_item_sends_the_header_buttons_message() {
             Message::Worktree(WorktreeMsg::RefreshRequested),
             Message::Attach(micold_client::features::attach::Msg::Opened),
             Message::Sidebar(SidebarMsg::RunInParallelRequested),
+            // Feature 1786 (C6a): New group opens the naming dialog.
+            Message::SidebarGroups(micold_client::features::sidebar_group_actions::Msg::New),
         ]
     );
 }
@@ -606,11 +608,11 @@ fn the_more_menus_refresh_is_enabled_exactly_when_a_refresh_can_start() {
     };
     let mut state = state_with_active();
     assert!(state.can_refresh_worktrees());
-    assert_eq!(enabled(&state), [true, true, true]);
+    assert_eq!(enabled(&state), [true, true, true, true]);
     state.update(Message::Worktree(WorktreeMsg::RefreshRequested));
     assert!(!state.can_refresh_worktrees());
-    assert_eq!(enabled(&state), [false, true, true]);
-    assert_eq!(enabled(&State::default()), [false, false, false]);
+    assert_eq!(enabled(&state), [false, true, true, true]);
+    assert_eq!(enabled(&State::default()), [false, false, false, false]);
 }
 
 /// **All** clears every active filter in one press, as **Clear filters** did (US4.3).
@@ -635,6 +637,7 @@ fn all_clears_every_filter_in_one_message() {
 fn default_entry_stays_visible_with_an_active_tag_filter() {
     let mut state = state_with_active();
     state.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: "feat-a".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/a".to_string()),
@@ -679,6 +682,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     let path = state.workspace.active.clone().unwrap();
     micold_client::app::drain(
         state.set_worktrees(vec![Worktree {
+            parent: None,
             dir_name: "feat-a".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
             branch: Some("feat/feat-a".to_string()),
@@ -704,6 +708,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     micold_client::app::drain(
         state.set_worktrees(vec![
             Worktree {
+                parent: None,
                 dir_name: "feat-a".to_string(),
                 path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
                 branch: Some("feat/feat-a".to_string()),
@@ -711,6 +716,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
                 included: false,
             },
             Worktree {
+                parent: None,
                 dir_name: "feat-new".to_string(),
                 path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
                 branch: Some("feat/feat-new".to_string()),
@@ -1029,6 +1035,9 @@ mod flat_list {
             SidebarEntry::Worktree(node) => node.location(),
             SidebarEntry::Group(group) => {
                 SessionLocation::Worktree(format!("group {}", group.name))
+            }
+            SidebarEntry::UserGroup(header) => {
+                SessionLocation::Worktree(format!("user group {}", header.name))
             }
         }
     }

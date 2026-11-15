@@ -452,7 +452,22 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
     }
 
     fn remove(&self, id: &ContainerId) -> Result<(), RuntimeError> {
-        self.run_idempotent(&["rm", "-f", &id.0], &["no such container"])
+        match self.run_idempotent(&["rm", "-f", &id.0], &["no such container"]) {
+            Ok(()) => Ok(()),
+            // #1926: Podman 5.7 can remove the container and then fail its own cleanup (the
+            // rootless network namespace: "kill network process: permission denied"), exiting
+            // non-zero. What the caller asked for is a container that is gone, so ask whether it
+            // is; only one still there makes the failure real.
+            // A runtime that is missing, down, or a run that was cancelled or timed out says
+            // nothing about the container, so those return as they are.
+            Err(e @ (RuntimeError::PermissionDenied { .. } | RuntimeError::Unknown { .. })) => {
+                match self.find(&id.0) {
+                    Ok(None) => Ok(()),
+                    _ => Err(e),
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn inspect(&self, id: &ContainerId) -> Result<ContainerFacts, RuntimeError> {

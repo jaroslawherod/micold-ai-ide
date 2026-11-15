@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Decisions of the autopilot supervisor skill, reproducible from fixtures: the supervisor ledger
 # (.autopilot/supervisor.md) and the start gate and queue. Prints; never calls gh or MCP.
-# Usage: supervisor.sh <ledger init|owner|set|get|table | next | touches | overlap | gate | map | retry | check-owner> [--ledger <file>] ...
+# Usage: supervisor.sh <ledger init|owner|set|get|table | next | touches | overlap | gate | map | retry | check-owner | route add|next|state|answer|gate|compose|sent|overdue|target|drop|table> [--ledger <file>] ...
 # Exit: 0 answered, 1 gate FAIL, 2 usage error or malformed ledger.
 # Contract: specs/1813-supervisor-skill/contracts/supervisor-cli.md (bash 3.2: no associative arrays)
 STATES="queued starting running done failed lost skipped"
-FIELDS="Issue State Touches Worktree Session Started Tries Note"
+FIELDS="Issue State Touches Worktree Session Started Tries Note Parent"
 LEDGER=".autopilot/supervisor.md"
 
 die() { echo "supervisor.sh: $*" >&2; exit 2; }
@@ -35,6 +35,13 @@ col() { # field name -> column number (1-based among the row's cells)
   local i=0 f; for f in $FIELDS; do i=$((i + 1)); [ "$f" = "$1" ] && { echo "$i"; return; }; done
   die "unknown field $1 (one of: $FIELDS)"
 }
+# An 8-column ledger (made before the Parent column) has no cell for Parent: writing it would run
+# past the closing pipe. Refuse, and say how to migrate.
+need_field() {
+  [ "$1" = Parent ] && ! grep -q '^| Issue | .*| Parent |$' "$LEDGER" \
+    && die "ledger $LEDGER predates the Parent column: add a Parent cell to the header and every row, or re-init"
+  return 0
+}
 
 ledger_cmd() {
   local sub="${1:-}"; [ $# -gt 0 ] && shift
@@ -59,10 +66,10 @@ ledger_cmd() {
       {
         echo "# Autopilot supervisor ledger"
         echo "- **Owner**: $owner"; echo "- **Cap**: $cap"; echo "- **Grace**: $grace"; echo "- **Source**: $source"
-        echo; echo "| Issue | State | Touches | Worktree | Session | Started | Tries | Note |"
-        echo "|---|---|---|---|---|---|---|---|"
+        echo; echo "| Issue | State | Touches | Worktree | Session | Started | Tries | Note | Parent |"
+        echo "|---|---|---|---|---|---|---|---|---|"
         for n in "$@"; do
-          echo "| $n | queued | - |  |  |  | 0 |  |"
+          echo "| $n | queued | - |  |  |  | 0 |  |  |"
         done
       } > "$LEDGER" ;;
     owner)
@@ -71,7 +78,7 @@ ledger_cmd() {
         && mv "$LEDGER.tmp" "$LEDGER" ;;
     set)
       need_ledger; [ $# -eq 3 ] || die "usage: ledger set <issue> <field> <value>"
-      local c; c="$(col "$2")" || exit 2
+      local c; c="$(col "$2")" || exit 2; need_field "$2"
       case "$3" in *'|'*) die "a cell holds no pipe" ;; esac
       if [ "$2" = State ]; then case " $STATES " in *" $3 "*) ;; *) die "unknown state $3 (one of: $STATES)" ;; esac; fi
       rows | awk -v n="$1" '$1 == n { f = 1 } END { exit !f }' || die "no row for issue $1"
@@ -81,7 +88,7 @@ ledger_cmd() {
         { print }' "$LEDGER" > "$LEDGER.tmp" && mv "$LEDGER.tmp" "$LEDGER" ;;
     get)
       need_ledger; [ $# -eq 2 ] || die "usage: ledger get <issue> <field>"
-      local c; c="$(col "$2")" || exit 2
+      local c; c="$(col "$2")" || exit 2; need_field "$2"
       rows | awk -v n="$1" '$1 == n { f = 1 } END { exit !f }' || die "no row for issue $1"
       N="$1" C="$c" awk -F'|' '{ k = $2; gsub(/ /, "", k) }
         k == ENVIRON["N"] && $2 ~ /^ *[0-9]+ *$/ { v = $(ENVIRON["C"] + 1); gsub(/^ +| +$/, "", v); print v }' "$LEDGER" ;;
@@ -282,7 +289,10 @@ owner_cmd() {
   echo FREE
 }
 
+. "$(dirname "${BASH_SOURCE[0]}")/supervisor-route.sh"
+
 case "$cmd" in
+  route) route_cmd "$@" ;;
   map) map_cmd "$@" ;;
   retry) retry_cmd "$@" ;;
   check-owner) owner_cmd "$@" ;;

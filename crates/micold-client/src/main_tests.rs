@@ -915,6 +915,7 @@ fn a_drained_reveal_records_where_it_sent_the_list() {
     });
     app.core.workspace.active = Some(path.clone());
     app.core.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: "only".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/only"),
         branch: Some("feat/only".to_string()),
@@ -5153,6 +5154,7 @@ fn app_on_demo(worktrees: &[(&str, micold_core::worktree::WorktreeStatus, bool)]
     app.core.worktree.worktrees = worktrees
         .iter()
         .map(|(dir, status, _)| micold_core::worktree::Worktree {
+            parent: None,
             dir_name: dir.to_string(),
             path: root.join(".claude/worktrees").join(dir),
             branch: Some(format!("feat/{dir}")),
@@ -5586,6 +5588,7 @@ fn catalog_with_worktree_in(
     let mut catalog = snapshot_with(DEMO, Vec::new());
     let project: &mut ProjectSnapshot = &mut catalog.projects[0];
     project.worktrees.push(WorktreeSnapshot {
+        parent: None,
         daemon: Default::default(),
         dir_name: dir.to_string(),
         branch: Some(format!("feat/{dir}")),
@@ -7602,6 +7605,7 @@ mod issue_source {
         use micold_core::worktree::{Worktree, WorktreeStatus};
         rig.app.core.settings.github_issues_enabled = enabled;
         rig.app.core.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: "feat-42_crash".into(),
             path: PathBuf::from("/repo/demo/.claude/worktrees/feat-42_crash"),
             branch: Some("feat/42_crash".into()),
@@ -10744,6 +10748,7 @@ mod pr_status {
         let mut catalog = snapshot_with(DEMO, Vec::new());
         for (dir, branch) in worktrees {
             catalog.projects[0].worktrees.push(WorktreeSnapshot {
+                parent: None,
                 daemon: Default::default(),
                 dir_name: dir.to_string(),
                 branch: branch.map(str::to_string),
@@ -12112,6 +12117,7 @@ mod pr_status {
                 git_at(&wt, t + 5_000, &["branch", "-q", "-D", branches[0]]);
             }
             listed.push(micold_core::worktree::Worktree {
+                parent: None,
                 dir_name: dir.to_string(),
                 path: wt,
                 branch: branches.last().map(|b| b.to_string()),
@@ -14576,8 +14582,8 @@ mod panes {
                     key: Key::Char('a'),
                     mods: Mods {
                         shift: true,
-                        ctrl: !cfg!(target_os = "macos"),
-                        logo: cfg!(target_os = "macos"),
+                        ctrl: true,
+                        logo: false,
                         ..Mods::NONE
                     },
                     text: None,
@@ -14628,8 +14634,8 @@ mod panes {
         let ctrl_c = micold_client::keymap::KeyInput {
             key: micold_client::keymap::Key::Char('c'),
             mods: micold_client::keymap::Mods {
-                ctrl: !cfg!(target_os = "macos"),
-                logo: cfg!(target_os = "macos"),
+                ctrl: true,
+                logo: false,
                 ..micold_client::keymap::Mods::NONE
             },
             text: None,
@@ -15309,6 +15315,7 @@ fn app_in_overview_with(dirs: &[&str]) -> App {
     app.core.worktree.worktrees = dirs
         .iter()
         .map(|dir| Worktree {
+            parent: None,
             dir_name: (*dir).to_string(),
             path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
             branch: Some(format!("feat/{dir}")),
@@ -17211,6 +17218,7 @@ fn worktrees_fingerprint_follows_the_branch() {
 
     let mut app = base_app();
     app.core.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: "project-thread-t2a600".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/project-thread-t2a600"),
         branch: Some("claude/project-thread-t2a600".to_string()),
@@ -17810,6 +17818,7 @@ mod title_facts {
 
     fn worktree_at(dir: &str, path: PathBuf) -> Worktree {
         Worktree {
+            parent: None,
             dir_name: dir.into(),
             path,
             branch: Some(format!("claude/{dir}")),

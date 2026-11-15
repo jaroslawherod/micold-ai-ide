@@ -15,6 +15,78 @@ use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
+/// The stable identity of one worktree incarnation (spec 1857, FR-014). Minted when the app first
+/// sees or creates the worktree; a rename keeps it, and a worktree created later under a deleted
+/// one's directory name gets a new one, so a parent link never re-adopts by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct WorktreeId(uuid::Uuid);
+
+impl WorktreeId {
+    /// A fresh, never-before-used id.
+    pub fn mint() -> Self {
+        Self(uuid::Uuid::new_v4())
+    }
+}
+
+/// What a worktree's parent is (spec 1857, `contracts/storage-parent.md`): the project root
+/// (`Default`) or another worktree by its [`WorktreeId`]. A worktree with no parent has no
+/// [`ParentLink`] at all, so "neither" is unrepresentable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParentRef {
+    Default,
+    Worktree(WorktreeId),
+}
+
+/// Whether a link's parent still exists (spec 1857, FR-006). Derived from [`ParentLink::removed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParentState {
+    Known,
+    Removed,
+}
+
+impl ParentState {
+    /// The word the tools report.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Known => "known",
+            Self::Removed => "removed",
+        }
+    }
+}
+
+/// One child's recorded parent, keyed by the child's [`WorktreeId`] in the project state.
+/// `last_name` is the parent's directory name when it was last live, which labels a removed parent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ParentLink {
+    pub parent: ParentRef,
+    #[serde(default)]
+    pub removed: bool,
+    pub last_name: String,
+}
+
+impl ParentLink {
+    /// `Default` is the project root and is never removed.
+    pub fn state(&self) -> ParentState {
+        if self.removed && self.parent != ParentRef::Default {
+            ParentState::Removed
+        } else {
+            ParentState::Known
+        }
+    }
+}
+
+/// A worktree's parent as the sidebar shows it (spec 1857, FR-010): the parent's current display
+/// name, and whether it has been removed (then `name` is the last one it had).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ParentLabel {
+    /// The parent's name: `default` for the project root, else the worktree's display name.
+    pub name: String,
+    /// The parent worktree no longer exists (FR-006).
+    pub removed: bool,
+}
+
 /// Health of a discovered worktree on disk (FR-018a). Enum, not bools, so the sidebar can
 /// render an explicit state and block session-start at the type level (Principle V).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -91,6 +163,9 @@ pub struct Worktree {
     /// The list shows these by location as well as by name (FR-029): a folder name alone says
     /// nothing about where a worktree the app did not create actually is.
     pub included: bool,
+    /// The worktree's parent, when it has one (spec 1857, FR-010). Filled from the daemon's
+    /// catalog; absent for a worktree no tool created with a parent.
+    pub parent: Option<ParentLabel>,
 }
 
 impl Worktree {
@@ -226,6 +301,7 @@ pub fn reconcile(
         let dir_name = folder_name(&rec.path);
         registered_dirs.push(dir_name.clone());
         out.push(Worktree {
+            parent: None,
             dir_name,
             path: rec.path.clone(),
             branch: rec.branch.clone(),
@@ -239,6 +315,7 @@ pub fn reconcile(
         if !registered_dirs.contains(name) {
             registered_dirs.push(name.clone());
             out.push(Worktree {
+                parent: None,
                 dir_name: name.clone(),
                 path: worktrees_root.join(name),
                 branch: None,
@@ -263,6 +340,7 @@ pub fn reconcile(
         let dir_name = unique_dir_name(&rec.path, &registered_dirs);
         registered_dirs.push(dir_name.clone());
         out.push(Worktree {
+            parent: None,
             dir_name,
             path: rec.path.clone(),
             branch: rec.branch.clone(),
@@ -968,11 +1046,6 @@ fn foreign_uid(path: &Path) -> Option<u32> {
     (uid != euid).then_some(uid)
 }
 
-#[cfg(not(unix))]
-fn foreign_uid(_path: &Path) -> Option<u32> {
-    None
-}
-
 /// The named stage a worktree creation is (or was, on failure) currently in (feature 013,
 /// FR-006/FR-007/FR-009). A closed enum (Principle V) so the progress display can never show a
 /// stage that isn't a real, reachable step.
@@ -1139,6 +1212,7 @@ pub fn create_worktree(
     }
 
     Ok(Worktree {
+        parent: None,
         dir_name: names.dir_name.clone(),
         path: target_path.to_path_buf(),
         branch: Some(names.branch.clone()),

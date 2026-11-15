@@ -63,17 +63,6 @@ fn fs_name(path: &Path) -> io::Result<Name<'_>> {
 }
 
 /// `true` iff something is accepting connections at `path` right now.
-#[cfg(windows)]
-async fn is_live(path: &Path) -> bool {
-    use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
-    match micold_core::connect::open_pipe(path) {
-        Ok(_) => true,
-        Err(e) => e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32),
-    }
-}
-
-/// `true` iff something is accepting connections at `path` right now.
-#[cfg(not(windows))]
 async fn is_live(path: &Path) -> bool {
     use interprocess::local_socket::tokio::{prelude::*, Stream};
     match fs_name(path) {
@@ -92,11 +81,6 @@ fn unlink_if_socket(path: &Path) -> io::Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
     }
-}
-
-#[cfg(not(unix))]
-fn unlink_if_socket(_path: &Path) -> io::Result<()> {
-    Ok(())
 }
 
 /// Run the single-instance startup sequence for `endpoint`.
@@ -148,88 +132,5 @@ pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
             }
             Err(TryLockError::Error(e)) => return Err(e),
         }
-    }
-}
-
-/// Windows needs no lock file: `interprocess` creates the first pipe instance with
-/// `FILE_FLAG_FIRST_PIPE_INSTANCE` itself (`create_instance.rs:86`), an atomic create-or-fail with no
-/// TOCTOU gap, so a second starter's bind fails and it acts as a client.
-///
-/// The pipe gets an explicit protected DACL granting only the current user (research R2, FR-021):
-/// the default descriptor lets Everyone and anonymous logons read it.
-#[cfg(windows)]
-pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
-    use interprocess::os::windows::local_socket::ListenerOptionsExt;
-
-    if is_live(&endpoint.socket_path).await {
-        return Ok(Acquisition::AlreadyRunning);
-    }
-    let name = fs_name(&endpoint.socket_path)?;
-    let options = ListenerOptions::new()
-        .name(name)
-        .security_descriptor(owner_only_descriptor()?);
-    match options.create_tokio() {
-        Ok(listener) => Ok(Acquisition::Bound(Box::new(BoundListener {
-            listener,
-            _lock: None,
-            socket_path: endpoint.socket_path.clone(),
-        }))),
-        Err(e) if e.kind() == io::ErrorKind::AddrInUse => Ok(Acquisition::AlreadyRunning),
-        // Losing the first-instance race to this user's own daemon reads as access denied, and so
-        // does a pipe another account created first. Only the first can be connected to.
-        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-            match micold_core::connect::open_pipe(&endpoint.socket_path) {
-                Err(refused) if refused.kind() == io::ErrorKind::PermissionDenied => {
-                    Err(io::Error::new(
-                        io::ErrorKind::PermissionDenied,
-                        format!(
-                            "{} exists but refuses this user, so another account may hold it: {refused}",
-                            endpoint.socket_path.display()
-                        ),
-                    ))
-                }
-                _ => Ok(Acquisition::AlreadyRunning),
-            }
-        }
-        Err(e) => Err(e),
-    }
-}
-
-/// `D:P(A;;GA;;;<sid>)`: a protected DACL (nothing inherited) with one entry, full access for the
-/// user running this process.
-#[cfg(windows)]
-fn owner_only_descriptor(
-) -> io::Result<interprocess::os::windows::security_descriptor::SecurityDescriptor> {
-    use interprocess::os::windows::security_descriptor::{
-        AsSecurityDescriptorExt, BorrowedSecurityDescriptor,
-    };
-    use windows_sys::Win32::Foundation::LocalFree;
-    use windows_sys::Win32::Security::Authorization::{
-        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
-    };
-
-    let sddl = format!("D:P(A;;GA;;;{})", micold_core::endpoint::user_sid()?);
-    let wide: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
-    let mut relative: *mut core::ffi::c_void = std::ptr::null_mut();
-    // SAFETY: `wide` is NUL-terminated and outlives the call; `relative` is a local out pointer that
-    // is freed with `LocalFree` below, as the call's contract requires. (This is what
-    // `SecurityDescriptor::deserialize` does, without naming its `widestring` argument type.)
-    let ok = unsafe {
-        ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            wide.as_ptr(),
-            SDDL_REVISION_1,
-            &mut relative,
-            std::ptr::null_mut(),
-        )
-    };
-    if ok == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: a successful conversion returned a valid self-relative descriptor, borrowed only until
-    // the copy below and freed exactly once after it.
-    unsafe {
-        let owned = BorrowedSecurityDescriptor::from_ptr(relative).to_owned_sd();
-        LocalFree(relative);
-        owned
     }
 }
