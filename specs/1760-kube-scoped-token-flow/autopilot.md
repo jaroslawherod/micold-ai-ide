@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9suuus
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M3 review (A high, B sonnet by the orchestrator), CI `kube-cluster`, then merge
+- **Next step**: close (fresh cloud thread)
 
 ## Pull requests
 
@@ -21,7 +21,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 | #1918 | M2 | merged | 110457c5aa066acdedbf5b089eb7b80bbd57f156 |
 | #1923 | M3 | merged | 9287b8ea78e6784543c07b69f2c91685fffe7197 |
-| #1923 | M3 | draft, CI | - |
 
 ## Milestones
 
