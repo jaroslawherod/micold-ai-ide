@@ -32,11 +32,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
+| Spec review | 1 | spec | c5c4ee9eea8c5213009bd9e31ae289e13de2449d | 6580b0d5f69f5d16e0d94c289720723d0f9858a2:c5c4ee9eea8c5213009bd9e31ae289e13de2449d | CHANGES: 3 MAJOR fixed (pod path after N11 is mTLS, PROTOCOL_VERSION 82, FR-005 vs Q2 socket), 3 MINOR fixed; fixes are claim changes, not re-reviewed beyond self-check |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| spec | Spec review 1 | none | all six findings fixed |
 
 ## Handover
 
