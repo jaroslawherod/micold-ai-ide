@@ -387,10 +387,17 @@ pub async fn run() -> io::Result<()> {
             {
                 tracing::error!(error = %e, path = %endpoint.lock_path.display(), "could not record daemon pid");
             }
-            crate::runtime_status::spawn(Arc::clone(&state), endpoint.clone());
             serve_configured_projects(&state);
             // Not awaited: serving clients never waits for the orchestrator (#1725, FR-001).
-            drop(crate::orchestrator_link::spawn_for(&state));
+            let link = crate::orchestrator_link::spawn_for(&state);
+            // `status.json` carries the link's status (FR-012).
+            crate::runtime_status::spawn(
+                Arc::clone(&state),
+                endpoint.clone(),
+                link.as_ref()
+                    .map(crate::orchestrator_link::LinkHandle::watch),
+            );
+            drop(link);
             serve_interprocess(state, *bound).await
         }
     }

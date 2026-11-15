@@ -154,7 +154,7 @@ async fn a_restart_while_linked_is_accepted_as_the_restored_record() {
     let seen = tokio::spawn(async move {
         let mut seen = Vec::new();
         while statuses.changed().await.is_ok() {
-            seen.push(statuses.borrow_and_update().clone());
+            seen.push(statuses.borrow_and_update().status.clone());
         }
         seen
     });

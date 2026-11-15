@@ -11,7 +11,9 @@ mod conn;
 mod host;
 mod outage;
 mod process;
+mod refused;
 mod stalled;
+mod status;
 
 use std::io;
 use std::path::Path;

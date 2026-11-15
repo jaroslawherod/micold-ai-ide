@@ -1,5 +1,6 @@
 //! The daemon's `status.json` (feature 489, FR-011, research R4): its pid, version and how many
-//! sessions run on it, written beside the lock file whenever the count changes.
+//! sessions run on it, written beside the lock file whenever the count changes, and where its
+//! orchestrator link stands (#1725, FR-012), rewritten whenever that changes.
 //!
 //! This is what `micold-daemon remote status | stop` read. A client of another version cannot ask
 //! the daemon over the wire, so this file is the one version-stable answer to "may it be replaced?".
@@ -13,8 +14,10 @@ use std::time::Duration;
 
 use micold_core::endpoint::Endpoint;
 use micold_core::protocol::version::{BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION};
-use micold_core::ssh::status::{RemoteStatus, STATUS_FILE, STATUS_VERSION};
+use micold_core::ssh::status::{LinkStatusReport, RemoteStatus, STATUS_FILE, STATUS_VERSION};
+use tokio::sync::watch;
 
+use crate::orchestrator_link::LinkState;
 use crate::state::DaemonState;
 
 /// How often the session count is compared with what the file says.
@@ -25,8 +28,12 @@ pub fn path(endpoint: &Endpoint) -> PathBuf {
     endpoint.lock_path.with_file_name(STATUS_FILE)
 }
 
-/// This daemon's status with `running_sessions` sessions.
-pub fn snapshot(endpoint: &Endpoint, running_sessions: u32) -> RemoteStatus {
+/// This daemon's status with `running_sessions` sessions and its link's `link` report.
+pub fn snapshot(
+    endpoint: &Endpoint,
+    running_sessions: u32,
+    link: Option<LinkStatusReport>,
+) -> RemoteStatus {
     RemoteStatus {
         status_version: STATUS_VERSION,
         pid: std::process::id(),
@@ -35,6 +42,7 @@ pub fn snapshot(endpoint: &Endpoint, running_sessions: u32) -> RemoteStatus {
         protocol_version: PROTOCOL_VERSION,
         running_sessions,
         endpoint: endpoint.socket_path.display().to_string(),
+        link,
     }
 }
 
@@ -56,20 +64,26 @@ pub fn read(endpoint: &Endpoint) -> Option<RemoteStatus> {
 }
 
 /// Keep the file true for the life of the daemon: written at once, then whenever the count of
-/// running sessions changes.
-pub fn spawn(state: Arc<DaemonState>, endpoint: Endpoint) {
+/// running sessions or the orchestrator link's status changes. `link` is the link task's status
+/// cell; `None` (no link enabled) writes no `link` object.
+pub fn spawn(
+    state: Arc<DaemonState>,
+    endpoint: Endpoint,
+    link: Option<watch::Receiver<LinkState>>,
+) {
     tokio::spawn(async move {
-        let mut written: Option<u32> = None;
+        let mut written: Option<(u32, Option<LinkStatusReport>)> = None;
         let mut ticker = tokio::time::interval(TICK);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             ticker.tick().await;
             let running = u32::try_from(state.live_session_count()).unwrap_or(u32::MAX);
-            if written == Some(running) {
+            let now = (running, link.as_ref().map(|l| l.borrow().report()));
+            if written.as_ref() == Some(&now) {
                 continue;
             }
-            match write(&endpoint, &snapshot(&endpoint, running)) {
-                Ok(()) => written = Some(running),
+            match write(&endpoint, &snapshot(&endpoint, now.0, now.1.clone())) {
+                Ok(()) => written = Some(now),
                 Err(e) => tracing::warn!(error = %e, "could not write status.json"),
             }
         }
@@ -92,7 +106,7 @@ mod tests {
     fn the_file_sits_beside_the_lock_and_carries_this_build() {
         let dir = tempfile::tempdir().unwrap();
         let ep = endpoint(dir.path());
-        write(&ep, &snapshot(&ep, 2)).unwrap();
+        write(&ep, &snapshot(&ep, 2, None)).unwrap();
         assert_eq!(path(&ep), dir.path().join("status.json"));
         let text = std::fs::read_to_string(path(&ep)).unwrap();
         let status = RemoteStatus::parse(&text).unwrap();
@@ -106,8 +120,8 @@ mod tests {
     fn a_rewrite_replaces_the_count() {
         let dir = tempfile::tempdir().unwrap();
         let ep = endpoint(dir.path());
-        write(&ep, &snapshot(&ep, 2)).unwrap();
-        write(&ep, &snapshot(&ep, 0)).unwrap();
+        write(&ep, &snapshot(&ep, 2, None)).unwrap();
+        write(&ep, &snapshot(&ep, 0, None)).unwrap();
         let text = std::fs::read_to_string(path(&ep)).unwrap();
         assert_eq!(RemoteStatus::parse(&text).unwrap().running_sessions, 0);
     }
@@ -116,7 +130,7 @@ mod tests {
     async fn a_file_is_believed_only_while_the_endpoint_accepts_and_the_pid_matches() {
         let dir = tempfile::tempdir().unwrap();
         let ep = endpoint(dir.path());
-        write(&ep, &snapshot(&ep, 0)).unwrap();
+        write(&ep, &snapshot(&ep, 0, None)).unwrap();
         std::fs::write(&ep.lock_path, format!("{}\n", std::process::id())).unwrap();
         assert_eq!(read(&ep), None, "nothing accepts: a stale file");
         let _listener = UnixListener::bind(&ep.socket_path).unwrap();

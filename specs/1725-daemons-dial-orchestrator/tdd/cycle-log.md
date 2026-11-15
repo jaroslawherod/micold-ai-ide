@@ -118,3 +118,56 @@ failed before the implementation.
 - The no-link test captures with `Captured::for_this_thread` (global subscriber, now at `TRACE`)
   instead of a thread-local one. `--test orchestrator_dial` 17 passed, `--test orchestrator` 50
   passed, clippy `-D warnings` clean.
+
+## Milestone M3 (T021–T027)
+
+### Cycle 8 — the `link` object of `status.json` (T021 → T024, FR-012)
+
+- tests: four unit tests in `crates/micold-core/src/ssh/status.rs`: the link round-trips as
+  `{state, since, detail}`; a file without it parses, `None` writes no field and `STATUS_VERSION` is
+  still 1; an unknown `state` word still parses (and keeps the replace offer); `LinkStatusReport::new`
+  gives each `LinkStatus` its word.
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib ssh::status` → 6 compile errors,
+  `cannot find struct ... LinkStatusReport`, `no field link on type RemoteStatus`.
+- green: `RemoteStatus.link: Option<LinkStatusReport>` (`serde(default, skip_serializing_if)`),
+  `LinkStatusReport { state: String, since: u64, detail: String }` with `new`, and `LinkStatus::word`
+  → `--lib status` 53 passed.
+- refactor: none.
+
+### Cycle 9 — `status.json` and `remote status` carry the link (T023 → T025, T026, FR-012)
+
+- tests: `crates/micold-daemon/tests/orchestrator_dial/status.rs`: a fake orchestrator refuses
+  `VersionMismatch`; the status writer, given the link's cell, writes `link.state =
+  refused-version-mismatch`, the orchestrator's sentence as `detail` and a `since`; `remote::status_lines`
+  prints it on the JSON line and in words. A daemon with no link writes no `link` object.
+- red (with the seams in place: `LinkState` cell, `runtime_status::spawn(.., link)` ignoring it,
+  `status_lines` returning no words): `--test orchestrator_dial -- refused status` → 5 passed, 1 failed:
+  `status_json_and_remote_status_carry_the_link_state_and_the_refusal_reason` panicked at
+  `support.rs:46` (`status.json is written: nothing within 20s`).
+- green: `runtime_status::spawn` rewrites the file when the session count or the link report
+  changes; `snapshot` takes the report; `server.rs` hands it the link task's cell; `status_lines`
+  adds `orchestrator link: <state>[: <detail>]`, which `remote status` prints on stderr → `--test
+  orchestrator_dial` 23 passed.
+- refactor: `Reporter` keeps the last settled state, so a retry refused the same way keeps its
+  `since` and logs nothing.
+
+### Cycle 10 — refusals back off; the redial after a loss is short (T022 → T025, FR-007, SC-004)
+
+- tests: `crates/micold-daemon/tests/orchestrator_dial/refused.rs`, four tests: a fake orchestrator
+  refusing `VersionMismatch`, `AlreadyLinked` and `Hello` in turn on a paused clock for 60 s (every gap
+  between attempts in `15 s ..= 18 s`, at most 5 attempts, one log line per change); against the real
+  orchestrator, a daemon announcing `PROTOCOL_VERSION - 1` is listed `needs-update`, stays
+  `Refused(VersionMismatch)` with 4–5 attempts in 60 s and logs the refusal once; a refused duplicate
+  leaves the first link online and alone; after the failure backoff has reached its cap, a lost link
+  is re-dialled after `1 s ..= 1.2 s`.
+- red: not observed. M1's task already waited `jittered(after_refusal())` on both refusals and reset
+  on `Welcome` (T025's delay half was built with T013), so the tests passed once the `spawn_as` and
+  `LinkState.attempts` seams compiled. Recorded as test-after for that half; strength checked with
+  deliberate mutants in `orchestrator_link/mod.rs`, each restored (`-- refused`):
+  - refusal delay `policy.after_failure()` → 2 FAILED, `1s between attempts`, `8 attempts in 60s`;
+  - log on every settled set (guards removed) → the needs-update test FAILED, `no line per retry`;
+  - no reset on `Welcome` and the loss delay `after_failure()` → FAILED, `re-dialled 15s after the loss`;
+  - the loss delay `after_failure()` alone survives: with the reset on `Welcome` it gives the same
+    1 s (an equivalent mutant but for the jitter).
+- green: T025's remaining half: the refusal's sentence and the attempt count enter the status cell.
+- refactor: none.

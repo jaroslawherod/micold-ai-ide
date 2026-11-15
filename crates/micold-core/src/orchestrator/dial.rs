@@ -37,6 +37,18 @@ impl LinkStatus {
             Self::HelloRefused(_) => "refused (hello)",
         }
     }
+
+    /// The state's word in `status.json` (FR-012).
+    pub fn word(&self) -> &'static str {
+        match self {
+            Self::NotLinked => "not-linked",
+            Self::Linking => "linking",
+            Self::Linked => "linked",
+            Self::Refused(RefuseReason::VersionMismatch) => "refused-version-mismatch",
+            Self::Refused(RefuseReason::AlreadyLinked) => "refused-already-linked",
+            Self::HelloRefused(_) => "refused-hello",
+        }
+    }
 }
 
 /// `delay` grown by `unit` of [`MAX_JITTER`]: `unit` in `0.0..=1.0` gives `1.0..=1.2` times
