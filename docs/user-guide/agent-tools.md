@@ -400,9 +400,15 @@ as a session that does not exist is, so an assistant cannot even learn that anot
 
 A session in `default` sees every worktree and session of the project. A session in any other
 worktree sees only the worktrees related to its own by parent: its own, its parent, its siblings
-(the worktrees with the same parent) and its direct children, and the sessions in them. A worktree
-with no parent has no parent or siblings to see, so its session sees itself and its children. A
-worktree whose parent was removed has no parent to see either.
+(the worktrees with the same parent) and its direct children, and the sessions in them.
+
+A worktree you made by hand, or any worktree with no recorded parent, counts as a child of
+`default` for this. Its session therefore sees `default`, the other worktrees whose parent is
+`default` (recorded or not) as its siblings, and its own children. It does not see a worktree whose
+parent is another worktree. Siblings are mutual: a worktree whose recorded parent is `default` sees
+the unparented ones too. This changes what a session can see only; no parent is recorded for the
+worktree, and listings still leave `parent` out for it. A worktree whose parent was removed has no
+parent to see, and no siblings. A session whose own worktree no longer exists sees only itself.
 
 Everything else is reported as "not found", exactly as one that does not exist is, in every tool
 that lists, reads or addresses a session or worktree: `list_worktrees`, `list_sessions`,

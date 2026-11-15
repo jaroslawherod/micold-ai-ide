@@ -1,6 +1,7 @@
-//! Spec 1857 (`contracts/mcp-parent.md`, Visibility; FR-015, FR-016, FR-017): a caller outside
-//! `default` sees and addresses only its own worktree, its parent, its siblings and its direct
-//! children; anything else is `not_found`, and the way to reach it is to message the parent.
+//! Spec 1857 (`contracts/mcp-parent.md`, Visibility; FR-015, FR-016, FR-017) and spec 1945
+//! (FR-001, FR-002): a caller outside `default` sees and addresses only its own worktree, its
+//! parent, its siblings and its direct children; anything else is `not_found`, and the way to reach
+//! it is to message the parent. A worktree with no recorded parent is a child of `default` for this.
 //!
 //! Fixture: `P` (no parent) with children `A` and `B`; `C`, a child of `A`; `X` (no parent) with
 //! child `Y`. Each has one session; `default` has S1.
@@ -38,6 +39,11 @@ struct Fixture {
 
 impl Fixture {
     async fn new() -> Self {
+        Self::with(&[], &[]).await
+    }
+
+    /// The fixture plus `extra` members `(directory, session, exists on disk)` and `links`.
+    async fn with(extra: &[(&str, u128, bool)], links: &[(&str, &str)]) -> Self {
         let project = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
         init_repo(project.path());
@@ -47,8 +53,14 @@ impl Fixture {
             TerminalMode::AiCli,
             AiCli::ClaudeCode,
         )];
-        for (dir, id) in MEMBERS {
-            add_worktree(project.path(), dir);
+        let members = MEMBERS
+            .iter()
+            .map(|&(dir, id)| (dir, id, true))
+            .chain(extra.iter().copied());
+        for (dir, id, on_disk) in members {
+            if on_disk {
+                add_worktree(project.path(), dir);
+            }
             sessions.push(session(
                 sid(id),
                 Some(dir),
@@ -64,7 +76,7 @@ impl Fixture {
             .set_cross_session_access(CrossSessionAccess::Auto)
             .unwrap();
         state.refresh_worktrees(project.path());
-        for (child, parent) in LINKS {
+        for &(child, parent) in LINKS.iter().chain(links) {
             state.record_worktree_parent(
                 project.path(),
                 child,
@@ -128,11 +140,86 @@ async fn a_worktree_with_a_parent_lists_itself_its_parent_siblings_and_children(
 }
 
 #[tokio::test]
-async fn an_unparented_worktree_sees_itself_and_its_children() {
+async fn an_unparented_worktree_sees_default_its_siblings_and_its_children() {
     let f = Fixture::new().await;
-    assert_eq!(f.worktrees(X).await, ["X", "Y"]);
-    assert_eq!(f.session_worktrees(X).await, ["X", "Y"]);
-    assert_eq!(f.worktrees(P).await, ["A", "B", "P"]);
+    assert_eq!(f.worktrees(X).await, ["P", "X", "Y", "default"]);
+    assert_eq!(f.session_worktrees(X).await, ["P", "X", "Y", "default"]);
+    assert_eq!(f.worktrees(P).await, ["A", "B", "P", "X", "default"]);
+    // Not the children of a sibling (FR-002), and not the sibling's own children.
+    assert_eq!(
+        f.session_worktrees(P).await,
+        ["A", "B", "P", "X", "default"]
+    );
+}
+
+#[tokio::test]
+async fn siblings_are_mutual_between_a_recorded_and_an_implicit_default_parent() {
+    let f = Fixture::with(&[("D", 16, true)], &[("D", "default")]).await;
+    // D's recorded parent is default: it sees the unparented P and X, not their children.
+    assert_eq!(f.worktrees(16).await, ["D", "P", "X", "default"]);
+    assert_eq!(f.session_worktrees(16).await, ["D", "P", "X", "default"]);
+    // And the unparented P and X see D as a sibling.
+    assert!(f.worktrees(P).await.contains(&"D".to_string()));
+    assert!(f.session_worktrees(X).await.contains(&"D".to_string()));
+    // Addressing a sibling's session is accepted like any visible session.
+    let row = f.call(X, "get_session", session_arg(16)).await;
+    assert_eq!(row["worktree"], "D", "{row}");
+}
+
+/// `gone` is a child of `P` with a sibling `sib` and a child `kid`; its directory is removed
+/// behind the daemon's back and the daemon notices at its next refresh.
+#[tokio::test]
+async fn a_caller_whose_worktree_was_removed_sees_only_itself() {
+    let f = Fixture::with(
+        &[("gone", 16, true), ("sib", 17, true), ("kid", 18, true)],
+        &[("gone", "P"), ("sib", "P"), ("kid", "gone")],
+    )
+    .await;
+    assert!(f.worktrees(16).await.contains(&"P".to_string()));
+    assert!(f.worktrees(16).await.contains(&"kid".to_string()));
+    let path = f._project.path().join(".claude/worktrees/gone");
+    let status = std::process::Command::new("git")
+        .current_dir(f._project.path())
+        .args(["worktree", "remove", "--force", path.to_str().unwrap()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    f.state.refresh_worktrees(f._project.path());
+    assert!(f.worktrees(16).await.is_empty());
+    assert_eq!(f.session_worktrees(16).await, ["gone"]);
+    for other in [DEFAULT, P, 17, 18] {
+        assert_eq!(
+            f.error_category(16, "get_session", session_arg(other))
+                .await,
+            "not_found",
+            "{other}"
+        );
+    }
+}
+
+/// The caller's worktree is on disk and linked but not in the daemon's cached list: fail closed.
+#[tokio::test]
+async fn a_caller_whose_worktree_is_missing_from_the_cached_list_sees_only_itself() {
+    let f = Fixture::with(&[("late", 16, false)], &[("late", "P")]).await;
+    add_worktree(f._project.path(), "late");
+    assert!(f.worktrees(16).await.is_empty());
+    assert_eq!(f.session_worktrees(16).await, ["late"]);
+    assert_eq!(
+        f.error_category(16, "get_session", session_arg(P)).await,
+        "not_found"
+    );
+}
+
+#[tokio::test]
+async fn an_unparented_worktree_does_not_see_unrelated_children() {
+    let f = Fixture::new().await;
+    for hidden in [A, B, C] {
+        assert_eq!(
+            f.error_category(X, "get_session", session_arg(hidden))
+                .await,
+            "not_found"
+        );
+    }
 }
 
 #[tokio::test]

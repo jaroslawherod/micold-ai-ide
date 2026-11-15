@@ -922,15 +922,25 @@ pub enum WorktreeStartFailure {
         /// Why there is no session.
         error: crate::catalog::CreateSessionError,
     },
+    /// The worktree was created and its parent link could not be written (spec 1945, FR-009):
+    /// no session was started, so nothing runs unlinked.
+    Link {
+        /// The worktree that was created.
+        dir_name: String,
+        /// Why the link was not recorded.
+        error: String,
+    },
 }
 
-/// The session `create_worktree_with_session` defines: its CLI and optional first prompt.
+/// The session `create_worktree_with_session` defines: its CLI, optional first prompt and parent.
 #[derive(Debug, Clone, Copy)]
 pub struct StartDefinition<'a> {
     /// The AI CLI.
     pub cli: AiCli,
     /// The first input, typed once the CLI is ready.
     pub prompt: Option<FirstPrompt<'a>>,
+    /// The parent to record before the session starts (spec 1945, D5), when the caller named one.
+    pub parent: Option<&'a micold_core::worktree_parent::ParentChoice>,
 }
 
 /// Create worktree `names.dir_name` and its one session together (feature 776, FR-006): the
@@ -961,6 +971,15 @@ pub async fn create_worktree_with_session(
     let setup = create_worktree(state, project.clone(), names, mode, progress)
         .await
         .map_err(WorktreeStartFailure::Create)?;
+    // Before the session starts, so the agent never runs in a worktree without its link.
+    if let Some(parent) = definition.parent {
+        state
+            .try_record_worktree_parent(&project, &dir_name, Some(parent))
+            .map_err(|e| WorktreeStartFailure::Link {
+                dir_name: dir_name.clone(),
+                error: e.to_string(),
+            })?;
+    }
     create_session_with_prompt(
         state,
         NewSession {

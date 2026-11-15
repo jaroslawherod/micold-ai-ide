@@ -42,12 +42,11 @@ use micold_core::review::comment::{CommentRef, Outcome, Reporter, Status};
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
-use micold_core::worktree::ParentState;
 use micold_core::worktree::{
     self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
     CreateMode,
 };
-use micold_core::worktree_parent::{ParentChoice, ParentView};
+use micold_core::worktree_parent::{neighbourhood, ParentChoice, ParentSide, ParentView};
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
@@ -429,9 +428,11 @@ fn read_call(
     }
 }
 
-/// What a caller may see and address (spec 1857, FR-015): its own worktree, its parent, its
-/// siblings and its direct children, by worktree ref. `None` is everything: a caller in `default`.
-/// A removed parent links no one.
+/// What a caller may see and address (spec 1857, FR-015; spec 1945, FR-001): its own worktree, its
+/// parent, its siblings and its direct children, by worktree ref, built on
+/// [`neighbourhood`]: a worktree with no recorded parent is a child of `default` for this. `None`
+/// is everything: a caller in `default`. A removed parent links no one, and a caller whose own
+/// worktree is gone sees only itself.
 struct Scope {
     visible: Option<BTreeSet<String>>,
     /// The paths of the worktrees outside the scope, so an error that names the holder of a branch
@@ -462,21 +463,18 @@ impl Scope {
         else {
             return Self::unrestricted();
         };
-        let known = |dir: &str| {
-            parents
-                .get(dir)
-                .filter(|view| view.state == ParentState::Known)
-                .map(|view| view.name.as_str())
-        };
-        let parent = known(own);
+        let live: BTreeSet<String> = project
+            .worktrees
+            .iter()
+            .map(|wt| wt.dir_name.clone())
+            .collect();
+        let near = neighbourhood(&live, parents, Some(own));
         let mut set = BTreeSet::from([own.to_string()]);
-        set.extend(parent.map(str::to_string));
-        set.extend(
-            parents
-                .keys()
-                .filter(|dir| known(dir).is_some_and(|p| p == own || Some(p) == parent))
-                .cloned(),
-        );
+        if let Some(ParentSide::Known { name, .. }) = near.parent {
+            set.insert(name);
+        }
+        set.extend(near.siblings);
+        set.extend(near.children.into_iter().map(|c| c.name));
         let hidden = project
             .worktrees
             .iter()
@@ -1502,26 +1500,26 @@ async fn create_with_optional_session(
         // A terminal without bracketed paste still gets the prompt, as one plain submission.
         require_bracketed: false,
     });
-    let dir_name = names.dir_name.clone();
     let created = ops::create_worktree_with_session(
         state,
         project.to_path_buf(),
         names,
         mode,
         None,
-        ops::StartDefinition { cli, prompt: first },
+        ops::StartDefinition {
+            cli,
+            prompt: first,
+            parent,
+        },
     )
     .await;
-    // The worktree exists once the create succeeded, with or without its session (spec 1857).
-    if !matches!(
-        created,
-        Err(ops::WorktreeStartFailure::CliUnavailable(_) | ops::WorktreeStartFailure::Create(_))
-    ) {
-        state.record_worktree_parent(project, &dir_name, parent);
-    }
     let (session, typed, setup) = created.map_err(|failure| match failure {
         ops::WorktreeStartFailure::CliUnavailable(why) => OpError::service_error(why),
         ops::WorktreeStartFailure::Create(failure) => create_failure(scope, failure),
+        ops::WorktreeStartFailure::Link { dir_name, error } => OpError::service_error(format!(
+            "worktree \"{dir_name}\" was created, but its parent link could not be recorded: \
+             {error}; it has no session, and create_session starts one"
+        )),
         ops::WorktreeStartFailure::Session { dir_name, error } => OpError::service_error(format!(
             "worktree \"{dir_name}\" was created, but its session could not be: {error}; it has \
              no session, and create_session starts one"
