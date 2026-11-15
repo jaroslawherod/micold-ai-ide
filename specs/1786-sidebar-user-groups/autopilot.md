@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vc038y
 - **Started**: 2026-11-11
 - **Phase**: milestones (M4)
-- **Next step**: M4 (T029–T034): the orchestrator's scoped review B round 2 of the fix diff c4df81448..888b042f1, then the M4 PR
+- **Next step**: wait on CI for #1968 and squash-merge; then M5 (T035–T042) in a fresh thread
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1905 | M1 | merged 2026-11-14 | b479914eb6744a3691cd90d805b7547e24464392 |
 | #1913 | M2 | merged 2026-11-15 | 6006f3e02039a34205aa3afad24a23e7a8d6b511 |
 | #1946 | M3 | merged 2026-11-15 | cae50ef59af4fac194e5559b72608cc0ac814a23 |
+| #1968 | M4 | open (draft) | — |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
-| M4 | T029–T034 | full | Drag between lists and cancel | #… | in progress (M3 merge cae50ef59 recorded) |
+| M4 | T029–T034 | full | Drag between lists and cancel | #1968 | PR open (draft) |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
 
@@ -73,6 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 diff (A, code-review high) | 3 | M4 | c8a3831ba91c795c728a0034a1e43af3f6f0195f | fix diff 725770af9..895410de4 | CHANGES (round limit: 3 fixed, not re-reviewed: inert button kept a stale pressed state, a surface refusing Escape dropped the drag cancel, the cancel rule written twice; 2 declined). Escalated, category 5 |
 | Review B M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CHANGES (2 MAJOR, 1 MINOR, all fixed in 888b042f1: a release after Escape or a focus loss mid-drag selected the dragged row; run group rows and headers were never held; Moved(None) left from stale) |
 | Visual pass M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CLEAN (PASS, all six checks; screenshots /mnt/project-files/issue-1786/m4-*.png) |
+| Review B M4 | 2 | M4 | 2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | db4fe07eeef99d8f15b6953a5d3d8bb01ae3a136:2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | CLEAN (scoped to fix diff c4df81448..2f2bcd226; 1 MINOR left: held survives a blur released outside the window until the next press) |
 
 ## Declined review findings
 
@@ -110,6 +112,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M4 review B r2 MINOR: after a window blur mid-drag with the button released outside the window, `sidebar_drag` `held` stays set (row inert) until the next press; a press that `can_drag` rejects does not clear it. Clear `held` on any `Pressed`.
 
 - M5 (T040): the visual pass could not see keyboard focus move into a pointer-opened menu (group menu and worktree-row menu alike: Down/Tab showed no highlight, Return hit the button underneath). Check menu keyboard focus when the header tab stop and keyboard opener land.
 - Seen in the M2 visual pass, not isolated: after Ctrl+Shift+G (New group) the More menu stayed open behind the naming dialog and after Create.
