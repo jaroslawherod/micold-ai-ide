@@ -39,3 +39,24 @@ Append only. Newest last.
 - red: same run, the script absent → exit 127 for each case, written in the same red pass as cycle 3.
 - green: `--parent <ref> --rows <file>` calls `runs-of-parent.sh --check` per run and names the parent
   → `close-out: 78 cases, 0 failed`.
+
+## Cycle 5 — M4 safe-to-remove list, FR-011..FR-013, FR-016, SC-005 (T015 → T016, T021)
+
+- tests: `close-out.test.sh` cases for SAFE (clean verified, `--live` elsewhere, `--no-live-sessions`) and
+  KEEP (live session, no session list, dirty tree, unmerged commit, open PR, not a worktree, several ledgers);
+  opt-in off (no ledger, absent file, `maybe`) gives zero `REMOVE` and every worktree still exists; opt-in on
+  gives `REMOVE` after `SAFE` only; a text guard finds no removal command in the script; `--parent/--rows`
+  keep to the own parent; the report's Safe to remove section. Commit "test(1816): red cases …".
+- red: `close-out: 110 cases, 24 failed`, each with exit 127 (`safe-to-remove.sh: No such file`) or the report
+  printing `- none` for a SAFE worktree; the earlier 78 cases still passed.
+- green: `safe-to-remove.sh` added, `close-out-report.sh` calls it for its last section. The first green run
+  failed 5 cases on my fixtures (two runs shared PR 7 and one `GH_FIXTURES`); fixed in the tests, not the script
+  → `close-out: 104 cases` passing apart from the rules cases.
+
+## Cycle 6 — M4 rules file, FR-015 (T017 → T018, T019)
+
+- test: the rules file names `verify-run.sh`, `follow-up.sh`, `close-out-report.sh`, `safe-to-remove.sh`,
+  `Auto-remove` and `delete_worktree`.
+- red: 6 failures (`the rules file does not name …`), file absent.
+- green: `rules/supervisor-close-out.md` written, the pressure scenario S13 and the README entries added
+  → `close-out: 110 cases, 0 failed`.
