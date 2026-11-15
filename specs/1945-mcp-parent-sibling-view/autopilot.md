@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A | 1 | code-review high | e8d0eb7b6fe8746ec74aa98cd05f9e977e000c6d | 428ab0399774fef30f66d8ad6cc66d69dcfa8650:e8d0eb7b6fe8746ec74aa98cd05f9e977e000c6d | CHANGES (A-F1..F4; fixed in the next M1 commit, T016/T017 pulled in) |
 | M1 review B | 1 | conformance | e8d0eb7b6fe8746ec74aa98cd05f9e977e000c6d | 428ab0399774fef30f66d8ad6cc66d69dcfa8650:e8d0eb7b6fe8746ec74aa98cd05f9e977e000c6d | CHANGES (B-F1..F3; cycle-log, drift-M1, implicit loop fixed) |
 | tasks | 2 | design | a3392c6f602d1ccf19b73576fce51cddfc115fb5 | 5304203d510eef87bf8351eb34b6d456f161cfe9:a3392c6f602d1ccf19b73576fce51cddfc115fb5 | CLEAN (sonnet, scoped) |
+| A | 2 | M1 | e265b36a5efb795a3e5b5f4ddea2878008c05b85 | b04e7ce9281b10af5b6f11587a6984cf9c8ff8d7:e265b36a5efb795a3e5b5f4ddea2878008c05b85 | CLEAN (sonnet, scoped; MINOR: no-parent create no longer retires stale ids, carried to M3) |
+| B | 2 | M1 | e265b36a5efb795a3e5b5f4ddea2878008c05b85 | b04e7ce9281b10af5b6f11587a6984cf9c8ff8d7:e265b36a5efb795a3e5b5f4ddea2878008c05b85 | CLEAN (sonnet, scoped; MINOR M3 range fixed) |
 
 ## Declined review findings
 
