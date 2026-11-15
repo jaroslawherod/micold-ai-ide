@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-do55sf
 - **Runs as**: the orchestrator dispatches units with the `autopilot-unit` type in a cloud thread (no `mise`, no `gh`; no PR for the spec unit, pushed to the harness branch only)
 - **Started**: 2026-11-14
-- **Phase**: milestones
-- **Next step**: M4 implemented and pushed; orchestrator dispatches Review A and B, then opens the PR from pr-title.txt/pr-body.md
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1901 | M1 batch routing core | merged (squash) | afe9a3fe0d243743505cea0a95c47ed551c51e83 |
 | #1907 | M2 routine questions from repo evidence | merged (squash) | b3ec7f88ce399a4f178b0a9a8a4d869434e788cb |
 | #1911 | M3 context-cap survival | merged (squash) | 9721aedb923006f0625fd368aa1f7e485fde9841 |
+| #1916 | M4 upward relay | merged (squash) | d996a8d24ab09d325e2520ac5a43cc234c1b9faf |
+| #1920 | close-out | open | |
 
 ## Milestones
 
@@ -30,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T010 | full | two asking runs produce one batch, one notification, per-session answers | #1901 | merged |
 | M2 | T011–T016 | full | routine questions resolved from repo evidence; answer.sh --by | #1907 | merged |
 | M3 | T017–T019 | light | context-cap survival: reask, overdue | #1911 | merged |
-| M4 | T020–T022 | light | upward relay to a reported parent | | implemented, reviews pending |
+| M4 | T020–T022 | light | upward relay to a reported parent | #1916 | merged |
 
 ## Decisions
 
@@ -63,6 +65,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M4 | 1d0b88284070e600db96a5aabe26524ad2a40e90 | e9bce9ed800ebdcc381c74a54d1eef759142dea8:1d0b88284070e600db96a5aabe26524ad2a40e90 | CHANGES: 1 MAJOR (T021 names supervisor-route.sh; plan-drift exit 0) fixed, 1 MINOR declined |
 | Review A | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: only failed lifecycle demoted; left as is) |
 | Review B | 2 | M4 | eda751be93a03b8877108d65e6251902959644be | 9b124ca77e05e6a7a3582b839132be307d4dea55:eda751be93a03b8877108d65e6251902959644be | CLEAN (1 MINOR: contracts/routing-cli.md route target row predates round-1 fixes; close unit updates it) |
+| Review close | 1 | close | e826f648bca63196fc72fb36a149f25c4f3319ca | not taken (reviewed head e826f648b) | CLEAN (2 MINOR: drift-M1 base wording, PR title; left) |
+| Review close | 2 | close | caa363637366355cd921db52cfbdb81f20e72b33 | e099910a3089cbd581a8839f3f0d207b5c8dd2bd:caa363637366355cd921db52cfbdb81f20e72b33 | CLEAN (1 MINOR: verification.md remediation note, added) |
 
 ## Declined review findings
 
@@ -86,4 +90,4 @@ None.
 
 ## Follow-ups not done
 
-- Close unit: extend the `route target` row in contracts/routing-cli.md with the M4 round-1 rules (object-shaped list, is_caller fallback, parent_state known, `default` via worktree lookup, live over failed). Review B M4 round 2 MINOR.
+None.
