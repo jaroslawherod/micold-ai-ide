@@ -85,6 +85,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A r1 | Menu with many groups is taller than the window and never scrolls; long names overflow; a group named "Ungrouped" reads like the Ungrouped entry | Every row menu is flat and clamped the same way; scrolling or truncating menus is not this feature's scope, and the desktop app is being sunset |
 | M3 | A r1 | Moving an unheld row to Ungrouped does nothing | An unheld row is already ungrouped, in stable order; saving it would pin it to the front. Consistent with choosing the list a row is already in |
 | M3 | A r1 | Header-fits gate only exercises `hidden: 0` | The gate's `group_header_row` pose is the showcase's; its `n of m` pose belongs to M6 (T043). `count_words` is unit-tested |
+| M4 | A r1 | Highlight and marker re-wrap a row, so iced rebuilds that row's widget state (hover, pressed button, remembered pointer) | For the dragged row this is now intended (it drops its press, see the fix for the click-on-release finding); other rows lose only hover and ripple state, which the next pointer move restores. A fixed wrapper on every row would add a layout level above every row and re-point the layout snapshot and the row-path gates |
+| M4 | A r1 | With the terminal focused, Escape cannot cancel a drag | Feature 006 FR-009: the focused terminal owns every key, Escape included. The drag still ends on any release or when the window loses focus |
+| M4 | A r1 | Each pointer move rebuilds `sidebar_list` for the hit test | The view rebuilds the same list on every frame anyway; a handful of rows, not measured as a cost (as M1's `apply_layout` finding) |
+| M4 | A r1 | A wheel scroll during a drag leaves `over` naming the row under the pointer before the scroll | MINOR: the next pointer move corrects it; the drop lands where the marker was drawn, which is what the user saw |
+| M4 | A r1 | `entry_spans` repeats `scroll_target`'s row-top arithmetic | MINOR: `entry_spans` walks entries with each one's row count; `scroll_target` asks one row's top. Both read the shared `ROW_GAP` (made public for this) |
 
 ## Handover
 

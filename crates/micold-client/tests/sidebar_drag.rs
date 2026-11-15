@@ -165,12 +165,18 @@ fn the_hit_test_finds_only_group_headers_group_rows_and_ungrouped_rows() {
         (Some(WORK), None, None),
         "the header lands at the group's start"
     );
+    let play = entries.iter().position(header(PLAY)).unwrap();
     let empty = at(&header(PLAY), 0.5).expect("an empty group stays a target");
-    assert_eq!(empty.list, Some(PLAY));
+    assert_eq!(
+        (empty.list, empty.marker, empty.below),
+        (Some(PLAY), entry_spans(&heights, &entries)[play].row, true),
+        "the marker is under the header, not on the next list's first row"
+    );
     let upper = at(&row("a"), 0.25).unwrap();
     assert_eq!((upper.list, upper.before), (Some(WORK), Some(wt("a"))));
     let lower = at(&row("b"), 0.75).unwrap();
     assert_eq!((lower.list, lower.after), (Some(WORK), Some(wt("b"))));
+    assert!(lower.below, "under b, not on Play's header");
     let ungrouped = at(&row("c"), 0.25).unwrap();
     assert_eq!((ungrouped.list, ungrouped.before), (None, Some(wt("c"))));
     let spans = entry_spans(&heights, &entries);
@@ -210,7 +216,11 @@ fn over_a_target_the_spot_carries_the_marker_and_over_none_nothing_is_drawn() {
     let spot: DropSpot = state.sidebar_drag.over.clone().expect("highlighted");
     let entries = state.sidebar_list();
     let spans = entry_spans(&row_heights(&entries), &entries);
-    assert_eq!(spot.marker, spans[a].row, "the marker sits above a");
+    assert_eq!(
+        (spot.marker, spot.below),
+        (spans[a].row, false),
+        "the marker sits on a's top edge"
+    );
     hover(&mut state, 0, 0.5);
     assert_eq!(
         state.sidebar_drag.over, None,

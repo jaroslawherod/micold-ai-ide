@@ -2265,12 +2265,15 @@ pub fn on_escape(state: &State) -> Option<Message> {
     // and Settings is no longer in that list to answer for itself (feature 027, FR-026). An open
     // surface that refuses Escape answers for itself too: falling through would let a scrim click
     // on a non-dismissible dialog discard the Settings draft behind it (013 BUG-001, FR-010a).
+    // Feature 1786 (US5-1, FR-009): a sidebar drag is cancelled first, and alone; a surface open
+    // under it waits for the next Escape.
+    if state.sidebar_drag.active {
+        return Some(Message::SidebarDrag(
+            crate::features::sidebar_drag::Msg::Cancelled,
+        ));
+    }
     match crate::overlay::registry::topmost(state) {
         Some(open) => open.on(micold_core::overlay::Trigger::Escape).cloned(),
-        // Feature 1786 (US5-1, FR-009): a sidebar drag is cancelled first, and alone.
-        None if state.sidebar_drag.active => Some(Message::SidebarDrag(
-            crate::features::sidebar_drag::Msg::Cancelled,
-        )),
         None if state.settings.settings_draft.is_some() => {
             Some(Message::Settings(crate::features::settings::Msg::Cancelled))
         }

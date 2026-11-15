@@ -21,6 +21,8 @@ use std::num::NonZeroUsize;
 /// (BUG-008).
 type OnKeyboardFocus<'a, M> = Box<dyn Fn(bool) -> M + 'a>;
 type OnRightPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
+/// What a left press of a row also becomes, built from the press point in window coordinates.
+type OnPress<'a, M> = OnRightPress<'a, M>;
 
 /// What a row says about unread sessions (feature 039 FR-018, feature 575).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -96,10 +98,9 @@ pub struct TreeItem<'a, M> {
     /// What a left press of the row also becomes, built from the press point in window
     /// coordinates, beside the row's own `on_press` (which fires on the release): a drag arming
     /// (feature 1786, contract C3).
-    pub on_primary_press: Option<OnRightPress<'a, M>>,
-    /// Sent on a left release over the row, beside its own `on_press`: the drag's release, for one
-    /// that arrives with its press (feature 1786, contract C3).
-    pub on_primary_release: Option<M>,
+    /// The message sent on a left release over the row rides with it: the drag's release, for one
+    /// that arrives with its press.
+    pub on_primary_press: Option<(OnPress<'a, M>, M)>,
     /// Message emitted when the pointer enters the row (feature 008 hover-reveal).
     pub on_hover: Option<M>,
     /// Message emitted when the pointer leaves the row (feature 008 hover-reveal).
@@ -197,7 +198,6 @@ impl<'a, M> TreeItem<'a, M> {
             trailing_chip: None,
             on_right_press: None,
             on_primary_press: None,
-            on_primary_release: None,
             on_hover: None,
             on_unhover: None,
             trailing_custom: None,
@@ -362,8 +362,7 @@ impl<'a, M> TreeItem<'a, M> {
     /// Emit `f(point)` on a left press of the row and `release` on a left release over it, both
     /// beside the row's own press, which still fires on the release (feature 1786, contract C3).
     pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a, release: M) -> Self {
-        self.on_primary_press = Some(Box::new(f));
-        self.on_primary_release = Some(release);
+        self.on_primary_press = Some((Box::new(f), release));
         self
     }
 
@@ -963,11 +962,10 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     if let Some(build) = item.on_right_press {
                         area = area.on_secondary_press(build);
                     }
-                    if let Some(build) = item.on_primary_press {
-                        area = area.on_primary_press(build);
-                    }
-                    if let Some(release) = item.on_primary_release {
-                        area = area.on_primary_release(move || release.clone());
+                    if let Some((build, release)) = item.on_primary_press {
+                        area = area
+                            .on_primary_press(build)
+                            .on_primary_release(move || release.clone());
                     }
                     area.into()
                 } else {

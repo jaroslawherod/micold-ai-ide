@@ -62,8 +62,10 @@ pub struct DropSpot {
     pub before: Option<LayoutItem>,
     /// The row lands just below this one. With neither, it lands first in `list`.
     pub after: Option<LayoutItem>,
-    /// The drawn row (an index into [`row_heights`]) the insertion marker sits above.
+    /// The drawn row (an index into [`row_heights`]) whose edge the insertion marker is on.
     pub marker: usize,
+    /// Whether the marker is on that row's bottom edge rather than its top.
+    pub below: bool,
 }
 
 /// Everything the user does while dragging.
@@ -153,13 +155,16 @@ pub fn hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<Dro
         .position(|span| y >= span.top && y < span.top + span.height + ROW_GAP)?;
     let span = spans[at];
     let list = entry_lists(entries)[at]?;
-    let below = span.row + span.rows;
+    // The marker stays on the target's own rows: under a header, on top of the row the dragged
+    // row lands before, or under the last row of the one it lands after.
+    let last = span.row + span.rows - 1;
     let Some(item) = layout_item(&entries[at]) else {
         return Some(DropSpot {
             list,
             before: None,
             after: None,
-            marker: below,
+            marker: span.row,
+            below: true,
         });
     };
     Some(if y < span.top + span.height / 2.0 {
@@ -168,13 +173,15 @@ pub fn hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<Dro
             before: Some(item),
             after: None,
             marker: span.row,
+            below: false,
         }
     } else {
         DropSpot {
             list,
             before: None,
             after: Some(item),
-            marker: below,
+            marker: last,
+            below: true,
         }
     })
 }
