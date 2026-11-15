@@ -66,14 +66,13 @@ async fn a_relink_after_a_restart_updates_the_record_and_does_not_duplicate_it()
     assert_eq!(stored[0]["health"], "offline");
 }
 
+/// US5.2 and FR-009 (sessions keep running, intact when the link returns) hold by construction:
+/// the orchestrator hosts no session and has no way to reach a daemon's state, so no test can
+/// observe them from here. What is observable is that it starts no child process and writes only
+/// its registry.
 #[tokio::test]
-async fn the_orchestrator_keeps_no_session_state_to_lose() {
+async fn the_orchestrator_hosts_no_session_and_writes_only_its_registry() {
     let _quiet = children_quiet().await;
-    // The fake daemon's sessions live with it, never with the orchestrator: a restart in between
-    // leaves them as they were, and the orchestrator's state is the registry file alone.
-    let daemon_dir = tempfile::tempdir().unwrap();
-    let sessions = daemon_dir.path().join("sessions.json");
-    std::fs::write(&sessions, br#"[{"id":"s1","state":"running"}]"#).unwrap();
     let orchestrator = Orchestrator::start().await;
     let link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
     record_when(&orchestrator, "box", online).await;
@@ -87,10 +86,6 @@ async fn the_orchestrator_keeps_no_session_state_to_lose() {
     let registry_dir = restarted.registry_file().parent().unwrap().to_owned();
     let _dir = restarted.stop().await;
 
-    assert_eq!(
-        std::fs::read(&sessions).unwrap(),
-        br#"[{"id":"s1","state":"running"}]"#
-    );
     let kept: Vec<_> = std::fs::read_dir(registry_dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())

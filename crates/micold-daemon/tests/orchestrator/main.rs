@@ -1,11 +1,11 @@
 //! The orchestrator's integration suite (#1724): a fake daemon dials a real local socket in a
-//! temporary directory, with a controllable clock. One binary; each later milestone fills in its
-//! own stub below.
+//! temporary directory, with a controllable clock. One binary, one module per user story.
 
 mod support;
 
 mod dispatch;
 mod heartbeat;
+mod link;
 mod link_and_list;
 mod netns;
 mod no_outbound;

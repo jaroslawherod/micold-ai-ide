@@ -4,10 +4,10 @@
 
 use std::time::Duration;
 
-use micold_core::protocol::keepalive::{LIVENESS_DEADLINE, PING_INTERVAL};
+use micold_core::protocol::keepalive::{CHECK_INTERVAL, LIVENESS_DEADLINE, PING_INTERVAL};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 
-use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
+use crate::support::{announcement, record_when, FakeDaemon, LinkedDaemon, Orchestrator};
 
 #[tokio::test]
 async fn an_idle_link_gets_a_link_ping_every_ping_interval() {
@@ -27,11 +27,11 @@ async fn an_idle_link_gets_a_link_ping_every_ping_interval() {
     assert_ne!(first, second);
 }
 
-#[tokio::test]
-async fn a_silent_daemon_lists_offline_and_its_next_frame_brings_it_back() {
+/// "a" silent and "b" answering at five seconds, then the clock past "a"'s deadline only.
+async fn one_silent_one_chatty() -> (Orchestrator, u64, LinkedDaemon, serde_json::Value) {
     let orchestrator = Orchestrator::start().await;
     let start = orchestrator.clock.wall();
-    let mut silent = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    let silent = FakeDaemon::link(&orchestrator, &announcement("a")).await;
     let mut chatty = FakeDaemon::link(&orchestrator, &announcement("b")).await;
 
     // Halfway to the deadline "b" answers; "a" does not.
@@ -44,9 +44,29 @@ async fn a_silent_daemon_lists_offline_and_its_next_frame_brings_it_back() {
     orchestrator
         .clock
         .advance(LIVENESS_DEADLINE - Duration::from_secs(4));
-    let offline = record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
+    record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
+    // `chatty` is dropped here: a closed link is not a reason for "b" to change before its deadline.
+    (orchestrator, start, silent, before)
+}
+
+#[tokio::test]
+async fn a_silent_daemon_lists_offline_with_its_last_answers_time() {
+    let (orchestrator, start, _silent, _) = one_silent_one_chatty().await;
+    let offline = record_when(&orchestrator, "a", |_| true).await;
+    assert_eq!(offline["health"], "offline");
     assert_eq!(offline["last_seen"], start, "the last answer's time");
+}
+
+#[tokio::test]
+async fn a_silent_daemon_does_not_change_the_record_of_one_that_answered() {
+    let (orchestrator, _, _silent, before) = one_silent_one_chatty().await;
     assert_eq!(record_when(&orchestrator, "b", |_| true).await, before);
+}
+
+#[tokio::test]
+async fn an_offline_daemons_next_frame_brings_it_back_online() {
+    let (orchestrator, _, mut silent, before) = one_silent_one_chatty().await;
+    let offline = record_when(&orchestrator, "a", |_| true).await;
 
     // Any frame is an answer.
     let now = orchestrator.clock.wall();
@@ -57,15 +77,35 @@ async fn a_silent_daemon_lists_offline_and_its_next_frame_brings_it_back() {
     assert_eq!(record_when(&orchestrator, "b", |_| true).await, before);
 }
 
-#[tokio::test]
+/// SC-002: offline within the deadline plus one check interval. The tokio clock is paused, so the
+/// orchestrator's own check timer is measured in virtual time, not left to a 20 s poll.
+#[tokio::test(start_paused = true)]
+async fn a_silent_daemon_lists_offline_within_one_check_interval_of_the_deadline() {
+    let orchestrator = Orchestrator::start().await;
+    let _silent = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+
+    orchestrator.clock.advance(LIVENESS_DEADLINE);
+    let passed = tokio::time::Instant::now();
+    record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
+
+    // One check interval, and the poll's own step.
+    assert!(
+        passed.elapsed() <= CHECK_INTERVAL + Duration::from_millis(100),
+        "listed offline {:?} after the deadline",
+        passed.elapsed()
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_dropped_link_turns_offline_once_the_deadline_passes() {
     let orchestrator = Orchestrator::start().await;
     let start = orchestrator.clock.wall();
     let linked = FakeDaemon::link(&orchestrator, &announcement("a")).await;
     drop(linked);
 
-    // A drop is silence: the record keeps its health until the deadline runs out.
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    // A drop is silence: the record keeps its health until the deadline runs out. The paused
+    // clock runs the link task through several of its checks first.
+    tokio::time::advance(Duration::from_secs(3)).await;
     assert_eq!(
         record_when(&orchestrator, "a", |_| true).await["health"],
         "online"
@@ -82,9 +122,8 @@ async fn a_link_that_drops_after_going_offline_can_be_relinked() {
     orchestrator.clock.advance(LIVENESS_DEADLINE);
     record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
     drop(linked);
-    tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // The ended link releases its id, so the daemon links again and is online.
+    // The silent link gives way, so the daemon links again and is online.
     let _again = FakeDaemon::link(&orchestrator, &announcement("a")).await;
     record_when(&orchestrator, "a", |a| a["health"] == "online").await;
 }
