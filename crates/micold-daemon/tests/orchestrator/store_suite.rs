@@ -306,12 +306,16 @@ fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
 fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
     auth.create_invite(&invite("i1", "tok-1", T + 100)).unwrap();
     auth.create_invite(&invite("i2", "tok-2", T + 10)).unwrap();
     refused(auth.create_invite(&invite("i1", "tok-3", T + 100)));
     refused(auth.create_invite(&invite("i3", "tok-1", T + 100)));
     refused(auth.redeem_invite(&hash("unknown"), &uid("u1"), T + 1));
     refused(auth.redeem_invite(&hash("tok-2"), &uid("u1"), T + 10));
+    // An unknown redeeming user is refused, and the invite stays redeemable (M1 review B F2).
+    refused(auth.redeem_invite(&hash("tok-1"), &uid("ghost"), T + 11));
     let redeemed = auth
         .redeem_invite(&hash("tok-1"), &uid("u1"), T + 20)
         .unwrap();
@@ -592,4 +596,6 @@ mod json {
 
 mod sqlite {
     registry_tests!(super::SqliteBackend::new());
+    auth_tests!(super::SqliteBackend::new());
+    audit_tests!(super::SqliteBackend::new());
 }

@@ -13,7 +13,7 @@ use micold_core::protocol::routing::WireDaemonId;
 use sqlx::any::AnyRow;
 use sqlx::{AnyConnection, Row as _};
 
-use super::StoreHandle;
+use super::{to_i64, StoreHandle};
 
 const UPSERT: &str = "INSERT INTO daemons \
     (tenant_id, id, kind, name, protocol_version, capabilities, health, last_seen, owner_user_id) \
@@ -37,9 +37,7 @@ impl SqlRegistryStore {
         &self,
         work: impl std::future::Future<Output = Result<T, sqlx::Error>>,
     ) -> Result<T, StoreError> {
-        self.db
-            .block_on(work)?
-            .map_err(|error| self.db.map_error(&error))
+        self.db.run(work)
     }
 }
 
@@ -54,10 +52,6 @@ fn name_of<T: serde::Serialize>(value: &T) -> String {
 fn from_name<T: serde::de::DeserializeOwned>(name: &str) -> Result<T, String> {
     serde_json::from_value(serde_json::Value::String(name.to_owned()))
         .map_err(|e| format!("{name:?}: {e}"))
-}
-
-fn to_i64(value: u64) -> i64 {
-    i64::try_from(value).unwrap_or(i64::MAX)
 }
 
 async fn upsert_row(conn: &mut AnyConnection, record: &DaemonRecord) -> Result<(), sqlx::Error> {
@@ -120,13 +114,7 @@ impl RegistryStore for SqlRegistryStore {
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
         self.run(async {
-            let mut tx = self.db.pool().begin().await?;
-            // A write first, so the transaction holds the write lock from its start: SQLite
-            // refuses at once, ignoring the busy timeout, to upgrade a read snapshot another
-            // writer has overtaken.
-            sqlx::query("DELETE FROM daemons WHERE 1 = 0")
-                .execute(&mut *tx)
-                .await?;
+            let mut tx = self.db.begin_write().await?;
             for record in records {
                 upsert_row(&mut tx, record).await?;
             }
