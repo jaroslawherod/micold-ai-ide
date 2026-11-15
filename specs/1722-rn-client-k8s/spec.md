@@ -316,6 +316,8 @@ requirement that replaces the one with the same number there.
 - Native mobile apps (the React Native code base keeps them possible).
 - A terminal view.
 - Several active orchestrator replicas (designed for, not built).
-- Per-daemon or per-project grants; SSO beyond GitHub and Google.
+- Multi-user ownership (each user their own daemons, projects and sessions), per-daemon or
+  per-project grants (designed for: `tenant_id` and `owner_user_id` on every row); SSO beyond GitHub
+  and Google.
 - Remote push notifications.
 - End-to-end encryption between client and daemon.

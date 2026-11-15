@@ -284,6 +284,27 @@ jaro (2026-11-14): "make orchestrator use some relational db as storage, assume 
 - **Backup**: the database's own backups (managed service, or CloudNativePG's scheduled backups);
   the CA key Secret backed up separately.
 
+### Toward multi-user
+
+v1 already has several users per deployment (invites, three roles, audit), but they share one set of
+projects and daemons. jaro wants the application to be multi-user at some point, meaning each person
+has their own daemons, projects and sessions on one shared orchestrator. The v1 design keeps that
+open without a data migration:
+
+- **Ownership columns from the start**: every daemon, project and session row the orchestrator
+  stores carries `tenant_id` and `owner_user_id`. In v1 all rows belong to the one tenant and the
+  owner.
+- **Authorization in one place**: #1734's check takes (user, action, target). v1 decides by global
+  role only; multi-user adds "the target's owner, or a grant on it" in that same function. That is
+  the deferred per-daemon grant (Q-D) generalized.
+- **Claude credentials stay per daemon, and therefore per user**: each user signs in to Claude Code
+  on their own daemons, or uses an API key the deployment's owner provides for their own authorized
+  users under the commercial terms. Micold still never relays a token (Anthropic's terms require each
+  end user to use their own credentials).
+- **Enrollment tokens are issued to a user**, so the daemon a user enrolls is theirs.
+- **Later work (N17)**: per-user views and isolation, sharing a project with another user, per-user
+  quotas, and an admin role across tenants.
+
 ### Scalability path
 
 v1 runs one orchestrator replica (jaro: "initially yes but we should keep in mind to make it
@@ -408,11 +429,12 @@ M6 and M7 to retirement.
 8. Other providers (Q-B, 2026-11-15): **no**, they do not block the web client or the iced app's
    retirement. Focus on delivering the UI for Claude Code; Codex, Copilot, Pi and OpenCode ship later
    (N14).
+9. Sign-in (Q-C, 2026-11-15): **yes**, GitHub and Google on a network, the local access link on
+   loopback, no passwords; and the application should become **multi-user** at some point (see
+   [Toward multi-user](#toward-multi-user)).
 
 ## Open questions for jaro
 
-- **Q-C — Password-free sign-in**: GitHub and Google for network access, the local access link for
-  loopback, no password account. OK?
 - **Q-D — Per-daemon grants**: three global roles for "basic permissions". OK?
 - **Q-F — Local mode storage**: PostgreSQL for every network deployment. For the loopback-only
   local mode, SQLite through the same traits (no server to run), or Postgres everywhere (one code

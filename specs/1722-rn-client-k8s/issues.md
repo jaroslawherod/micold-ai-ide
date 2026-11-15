@@ -40,6 +40,7 @@ PR titles follow the project rule: `#<issue>: <issue title>`.
 | N13 | new | chore: retire the iced desktop app (remove `micold-client`, `micold-material`, packaging, docs) |
 | N14 | future | feat: structured adapters for Codex, Copilot, Pi and OpenCode (after Claude Code; does not block N13) |
 | N15 | future | feat: several orchestrator replicas — Postgres link directory and replica-to-replica forwarding |
+| N17 | future | feat: multi-user — each user owns their daemons, projects and sessions; sharing; per-user quotas |
 | N16 | new | feat: PostgreSQL store for the orchestrator (sqlx, migrations, store traits; SQLite for local mode) |
 
 The earlier N8 (terminal view) is dropped: structured view only.
@@ -246,14 +247,15 @@ link to this plan.
 - **Milestone**: M3 · **Depends on**: #1724 (M5 `RegistryStore` trait) · **Covers**: FR-042, FR-046
 - **Body**: `sqlx` with `PgPool`; migrations in `crates/micold-daemon/migrations/` applied on start,
   forward only, refusing a newer schema; `RegistryStore`, `AuthStore`, `AuditStore` traits with
-  in-memory (tests), PostgreSQL and SQLite (local mode) implementations; `tenant_id` on every table;
+  in-memory (tests), PostgreSQL and SQLite (local mode) implementations; `tenant_id` on every table
+  and `owner_user_id` on every daemon, project and session row (for later multi-user, N17);
   `database.url_file` and `database.ca_file` in the orchestrator config; a one-shot import of
   `registry.json`; CI runs the store tests against a Postgres service container and the migration
   chain from every released schema.
 - **Acceptance**: the registry, users and audit survive a restart on Postgres and on SQLite; a newer
   schema is refused naming both versions; no private key is ever written to the database.
 
-### N7, N14, N15 — future
+### N7, N14, N15, N17 — future
 
 Kept as placeholders so the plan names them: native mobile app (N7), structured adapters for other
-providers (N14), several orchestrator replicas (N15). None is created until jaro asks.
+providers (N14), several orchestrator replicas (N15), multi-user ownership and sharing (N17). None is created until jaro asks.
