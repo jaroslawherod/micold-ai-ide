@@ -48,7 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | plan fix diff | (this commit) | 1c7862375e7765f0e55c0e9fc8331fd4e4c8c56b:8123b3e49d68aa61553fe7273ad201b44137eebf | CLEAN (1 MINOR fixed, prose only) |
 | Plan | 2 | plan | 190e9973277b43ecb3c28cee728d38243108c2e5 | 1c7862375e7765f0e55c0e9fc8331fd4e4c8c56b:8123b3e49d68aa61553fe7273ad201b44137eebf | CLEAN |
 | Tasks | 1 | tasks | (pending) | e8c4d28d157e06b94aac968d5bbbf982906eeb65:7e5052b09b288667942286e771b4b91a672f3412 | CHANGES: 4 MAJOR 3 MINOR, all fixed (M1+M2 merged, milestones renumbered, Verify one filter per command, T012 not [P], T027 unreachable case, T041 config test before T042, quickstart wording) |
-| Tasks | 2 | tasks fix diff | (pending) | b2d38ef36db8d9a9c95fa37b0ededa0f6b612709:ab2d68a634bf73201e1ffe5c3c6d7b122d741812 | pending reviewer |
+| Tasks | 2 | tasks fix diff | (pending) | b2d38ef36db8d9a9c95fa37b0ededa0f6b612709:ab2d68a634bf73201e1ffe5c3c6d7b122d741812 | CHANGES: 1 MAJOR (Verify joined with "and" not &&), fixed |
+| Tasks | 3 | tasks fix diff | (pending) | 3d3ec8c874fcffe3ca8aecf860c97d3efe962a9a:c9db7e595c1f9181c01606cca34854d161c8a40e | pending reviewer |
 
 ## Declined review findings
 

@@ -348,7 +348,7 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Tasks**: T001–T013
 - **Deliverable**: `RegistryStore` has per-record `upsert` and `remove`, `StoreError` has its new variants, `AuthStore` and `AuditStore` exist in `micold-core` with in-memory implementations, and one shared suite passes on the in-memory and JSON stores, tenant isolation included; the sqlx spike is recorded in research.md.
 - **Satisfies**: US1 acceptance scenario 3, US6 scenario 2 (auth and audit); FR-001, FR-002, FR-006 (types), FR-007, FR-015
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `scripts/build-lock.sh cargo test -p micold-core orchestrator::store` and `scripts/build-lock.sh cargo test -p micold-core orchestrator::auth` and `scripts/build-lock.sh cargo test -p micold-core orchestrator::audit`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite && scripts/build-lock.sh cargo test -p micold-core orchestrator::store && scripts/build-lock.sh cargo test -p micold-core orchestrator::auth && scripts/build-lock.sh cargo test -p micold-core orchestrator::audit`
 - **Depends on**: —
 - **Tier**: full
 
@@ -357,7 +357,7 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Tasks**: T014–T020
 - **Deliverable**: a SQLite file (owner-only, WAL) migrates to the v1 schema and holds the registry across reopen, passing the shared registry suite.
 - **Satisfies**: US1 acceptance scenario 2 (registry); FR-002, FR-003 (forward, transactional), FR-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations && scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite`
 - **Depends on**: M1
 - **Tier**: full
 
@@ -366,7 +366,7 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Tasks**: T021–T025
 - **Deliverable**: users, invites, tokens, serials, enrollments and audit entries survive a reopen on SQLite, and the audit log rejects update and delete.
 - **Satisfies**: US1 acceptance scenario 2; FR-002, FR-011
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite && scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`
 - **Depends on**: M1, M2
 - **Tier**: full
 
@@ -402,7 +402,7 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Tasks**: T039–T044
 - **Deliverable**: `config check` accepts and validates `[database]`, shows paths and states only, and `choose_store` returns the table of contracts/config.md.
 - **Satisfies**: US4 acceptance scenarios 1, 2, 4; FR-008, FR-009 (rule)
-- **Verify**: `mise run test-core` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`
+- **Verify**: `mise run test-core && scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`
 - **Depends on**: M4
 - **Tier**: full
 
@@ -411,7 +411,7 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Tasks**: T045–T050
 - **Deliverable**: `micold-daemon orchestrator` with no `[database]` creates the SQLite file and keeps its registry across a restart; with a `url_file` it uses PostgreSQL; an unreachable database fails the start without the password; a slow store call leaves heartbeats answered.
 - **Satisfies**: US4 acceptance scenario 3; FR-009, FR-014, FR-016, SC-005
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_slow` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`; quickstart §B steps 1–2
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_slow && scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`; quickstart §B steps 1–2
 - **Depends on**: M5, M7
 - **Tier**: full
 
@@ -429,6 +429,6 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Tasks**: T055–T060
 - **Deliverable**: daemon records carry an owner that survives relinks, `reassign_unowned` hands pre-user records to the first owner, every data table has `tenant_id` and the three owned tables `owner_user_id`, and quickstart §A and §B are recorded.
 - **Satisfies**: US6 acceptance scenarios 1–2; FR-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`; quickstart §A and §B
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite && scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`; quickstart §A and §B
 - **Depends on**: M9
 - **Tier**: full
