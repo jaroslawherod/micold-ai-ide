@@ -1,6 +1,6 @@
 # Quickstart: orchestrator store
 
-No UI, so no visual pass (§B). Part A is run by CI; the commands run in a worktree that has `mise`.
+No UI, so no visual pass; §B is a by-hand local-mode check. Part A is run by CI; the commands run in a worktree that has `mise`.
 
 ## A. Automated
 

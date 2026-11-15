@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ns6vcg
 - **Started**: 2026-11-15
 - **Phase**: tasks (written, awaiting review)
-- **Next step**: tasks review round 1 (reviewer dispatched by the orchestrator), then gate, then design PR
+- **Next step**: tasks review round 2 (sonnet, fix diff) by the orchestrator; then gate, then design PR
 
 ## Pull requests
 
@@ -22,17 +22,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T004 | full | Registry upsert/remove contract, shared suite scaffold | | pending |
-| M2 | T005–T013 | full | Auth and audit traits with in-memory stores | | pending |
-| M3 | T014–T020 | full | SQLite handle, schema, registry store | | pending |
-| M4 | T021–T025 | full | SQLite auth and audit stores | | pending |
-| M5 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
-| M6 | T032–T035 | full | Migration safety | | pending |
-| M7 | T036–T038 | full | No private key in any table | | pending |
-| M8 | T039–T044 | full | [database] config and backend rule | | pending |
-| M9 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
-| M10 | T051–T054 | full | Import registry.json once | | pending |
-| M11 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
+| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | | pending |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | | pending |
+| M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
+| M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
+| M5 | T032–T035 | full | Migration safety | | pending |
+| M6 | T036–T038 | full | No private key in any table | | pending |
+| M7 | T039–T044 | full | [database] config and backend rule | | pending |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
+| M9 | T051–T054 | full | Import registry.json once | | pending |
+| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
 ## Decisions
 
@@ -48,7 +47,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | plan | (pending commit) | 039972fca59028890bb8b22565c8ee7ab6bca81a:b1cd1965e0f01444b33b7d262dbda5e068ff3b06 | CHANGES: 1 BLOCKER 1 MAJOR 3 MINOR, all fixed |
 | Plan | 2 | plan fix diff | (this commit) | 1c7862375e7765f0e55c0e9fc8331fd4e4c8c56b:8123b3e49d68aa61553fe7273ad201b44137eebf | CLEAN (1 MINOR fixed, prose only) |
 | Plan | 2 | plan | 190e9973277b43ecb3c28cee728d38243108c2e5 | 1c7862375e7765f0e55c0e9fc8331fd4e4c8c56b:8123b3e49d68aa61553fe7273ad201b44137eebf | CLEAN |
-| Tasks | 1 | tasks | (pending) | e8c4d28d157e06b94aac968d5bbbf982906eeb65:7e5052b09b288667942286e771b4b91a672f3412 | pending reviewer |
+| Tasks | 1 | tasks | (pending) | e8c4d28d157e06b94aac968d5bbbf982906eeb65:7e5052b09b288667942286e771b4b91a672f3412 | CHANGES: 4 MAJOR 3 MINOR, all fixed (M1+M2 merged, milestones renumbered, Verify one filter per command, T012 not [P], T027 unreachable case, T041 config test before T042, quickstart wording) |
+| Tasks | 2 | tasks fix diff | (pending) | b2d38ef36db8d9a9c95fa37b0ededa0f6b612709:ab2d68a634bf73201e1ffe5c3c6d7b122d741812 | pending reviewer |
 
 ## Declined review findings
 
@@ -67,7 +67,7 @@ None.
 
 ## Follow-ups not done
 
-- M1–M7 and M11 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M8–M10 carry guide tasks.
+- M1–M6 and M10 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M7–M9 carry guide tasks.
 - Cloud thread: preflight failed only on `mise` (missing) and `gh` auth (known cloud setup); the run proceeded. Use `scripts/gate.sh` and the GitHub MCP tools.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.

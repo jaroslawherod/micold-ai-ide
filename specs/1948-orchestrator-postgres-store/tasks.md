@@ -90,7 +90,7 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   `NewAuditEntry` (`new` enforces the 2048-byte cap), `AuditStore` trait; T006 green.
 - [ ] T011 [US1] `MemoryAuthStore` in `auth.rs` (`Mutex` over collections, tenant-keyed, same
   `Refused` and ordering rules, `fail(bool)` switch returning `Unavailable`).
-- [ ] T012 [P] [US1] `MemoryAuditStore` in `audit.rs` with the same `fail(bool)` switch.
+- [ ] T012 [US1] `MemoryAuditStore` in `audit.rs` with the same `fail(bool)` switch.
 - [ ] T013 [US1] Re-export the new types in `crates/micold-core/src/orchestrator/mod.rs`; add the memory
   auth and audit factories to `store_support.rs`; T007 and T008 green on memory.
 
@@ -126,7 +126,7 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   `Arc<StoreHandle>`: `load` ordered by `(tenant_id, id)`, `save` (upsert each, delete the rest, one
   transaction), `upsert` (`ON CONFLICT` updating every column except `tenant_id` and
   `owner_user_id`), `remove`; `tenant_id` from `record.tenant`; `owner_user_id` written as `UNOWNED`
-  on insert (M11 carries the real owner).
+  on insert (M10 carries the real owner).
 - [ ] T020 [US1] Declare `pub mod db;` in `crates/micold-daemon/src/orchestrator/mod.rs` so the
   integration target reaches it; T014 and T015 green.
 
@@ -161,7 +161,9 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   test creates and drops its own database; unset prints `skipped: MICOLD_TEST_POSTGRES_URL not set`,
   and fails instead when `MICOLD_REQUIRE_POSTGRES=1`; every shared-suite case runs on it.
 - [ ] T027 [P] [US1] Test in `store_migrations.rs`: `migrations/postgres/` and `migrations/sqlite/`
-  list the same versions and descriptions.
+  list the same versions and descriptions; and (red, before T029) a store-level case that opening a
+  refused local port returns `StoreError::Unavailable` carrying `host:port`, with no password in its
+  `Display` (FR-016).
 - [ ] T028 [US1] `crates/micold-daemon/migrations/postgres/0001_orchestrator_schema.sql`: same schema,
   `BIGSERIAL PRIMARY KEY` for `audit_log.seq`, a `plpgsql` function plus `CREATE TRIGGER` raising
   `audit_log is append-only` on `BEFORE UPDATE OR DELETE`, no `GRANT`.
@@ -169,7 +171,7 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   the URL (with `ca_file`: `ssl_root_cert` and `VerifyFull`; without: `prefer`), `pool_size`,
   `install_default_drivers`; adjust any statement in `db/registry.rs`, `db/auth.rs`, `db/audit.rs`
   whose form differs per dialect; an unreachable server maps to `StoreError::Unavailable` carrying
-  `host:port` and the driver cause with the URL stripped.
+  `host:port` and the driver cause with the URL stripped (T027's unreachable case green).
 - [ ] T030 [P] [US1] `.github/workflows/ci.yml`: `services: postgres` (`postgres:17`, user, password and
   db as job env, `pg_isready` health check, port 5432) on the `test` job, with
   `MICOLD_TEST_POSTGRES_URL` and `MICOLD_REQUIRE_POSTGRES=1`.
@@ -235,15 +237,15 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   `choose_store(Option<&DatabaseConfig>, BindScope, data_dir)` returns PostgreSQL when the table is
   present on any bind, SQLite at `<data_dir>/orchestrator/orchestrator.db` when absent and
   `LoopbackOnly`, and an error naming `database.url_file` when absent and `Network`.
-- [ ] T041 [US4] `DatabaseConfig { url_file, ca_file, pool_size }` in
-  `crates/micold-core/src/daemon_config/mod.rs`, the checks in `files.rs`, the view in `resolved.rs`;
-  T039 green.
-- [ ] T042 [US4] `backend.rs`: `BindScope`, `StoreChoice`, `choose_store`, re-exported in
-  `orchestrator/mod.rs`; `config check` calls it with `LoopbackOnly` (until #1732 adds the bind key);
-  T040 green.
-- [ ] T043 [P] [US4] `crates/micold-daemon/tests/orchestrator/store_config.rs` (new, registered): a
+- [ ] T041 [P] [US4] `crates/micold-daemon/tests/orchestrator/store_config.rs` (new, registered): (red, before T042) a
   `config check` run on files with and without `[database]` passes or fails as T039 states, naming
   key and path.
+- [ ] T042 [US4] `DatabaseConfig { url_file, ca_file, pool_size }` in
+  `crates/micold-core/src/daemon_config/mod.rs`, the checks in `files.rs`, the view in `resolved.rs`;
+  T039 and T041 green.
+- [ ] T043 [US4] `backend.rs`: `BindScope`, `StoreChoice`, `choose_store`, re-exported in
+  `orchestrator/mod.rs`; `config check` calls it with `LoopbackOnly` (until #1732 adds the bind key);
+  T040 green.
 - [ ] T044 [P] [US4] `docs/user-guide/daemon-configuration.md`: `[database]` rows (`url_file`,
   `ca_file`, `pool_size`, what a missing key does).
 
@@ -322,120 +324,111 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 ## Dependencies and order
 
-Setup, then Foundational, then M1 to M11 in order: each milestone builds on the previous store layer
+Setup, then Foundational, then M1 to M10 in order: each milestone builds on the previous store layer
 (memory, then SQLite, then PostgreSQL, then migration safety, then config and wiring, then import,
 then owners). Within a milestone, test tasks precede the code they cover; `[P]` tasks touch disjoint
 files.
 
 ## Implementation Strategy
 
-MVP is M1 to M2 (traits, memory stores, shared suite), then M3 to M4 make local mode real, M5 adds
-PostgreSQL and its CI proof. M6 to M8 harden (migrations, key scan, config). M9 wires the running
-orchestrator, M10 imports, M11 adds owners. Every milestone merges to `main` with the suite green;
-the orchestrator keeps using `JsonRegistryStore` until M9 wires the SQL store, so no milestone
-changes behaviour users see before M9. User-guide pages arrive with M8, M9 and M10.
+MVP is M1 (traits, memory stores, shared suite), then M2 to M3 make local mode real, M4 adds
+PostgreSQL and its CI proof. M5 to M7 harden (migrations, key scan, config). M8 wires the running
+orchestrator, M9 imports, M10 adds owners. Every milestone merges to `main` with the suite green;
+the orchestrator keeps using `JsonRegistryStore` until M8 wires the SQL store, so no milestone
+changes behaviour users see before M8. User-guide pages arrive with M7, M8 and M9.
 
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). The daemon crate is
-not a `micold-user-facing` path, so the user-guide gate fires only on M8 to M10, which carry the
-guide tasks; M1 to M7 and M11 use the `docs-not-needed` label.
+not a `micold-user-facing` path, so the user-guide gate fires only on M7 to M9, which carry the
+guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 
-### M1 — Registry contract and shared suite scaffold 🎯 MVP
+### M1 — Stores for registry, auth and audit, in memory 🎯 MVP
 
-- **Tasks**: T001–T004
-- **Deliverable**: `RegistryStore` has per-record `upsert` and `remove`, `StoreError` has its new variants, and one shared registry suite passes on the in-memory and JSON stores; the sqlx spike is recorded in research.md.
-- **Satisfies**: US1 acceptance scenario 3 (registry part); FR-001, FR-015
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `cargo test -p micold-core orchestrator::store`
+- **Tasks**: T001–T013
+- **Deliverable**: `RegistryStore` has per-record `upsert` and `remove`, `StoreError` has its new variants, `AuthStore` and `AuditStore` exist in `micold-core` with in-memory implementations, and one shared suite passes on the in-memory and JSON stores, tenant isolation included; the sqlx spike is recorded in research.md.
+- **Satisfies**: US1 acceptance scenario 3, US6 scenario 2 (auth and audit); FR-001, FR-002, FR-006 (types), FR-007, FR-015
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `scripts/build-lock.sh cargo test -p micold-core orchestrator::store` and `scripts/build-lock.sh cargo test -p micold-core orchestrator::auth` and `scripts/build-lock.sh cargo test -p micold-core orchestrator::audit`
 - **Depends on**: —
 - **Tier**: full
 
-### M2 — Auth and audit traits with in-memory stores
-
-- **Tasks**: T005–T013
-- **Deliverable**: `AuthStore` and `AuditStore` exist in `micold-core` with in-memory implementations, and the shared suite passes on them, tenant isolation included.
-- **Satisfies**: US1 acceptance scenario 3, US6 scenario 2 (auth and audit); FR-001, FR-002, FR-006 (types), FR-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `cargo test -p micold-core orchestrator::auth orchestrator::audit`
-- **Depends on**: M1
-- **Tier**: full
-
-### M3 — SQLite handle, schema and registry store
+### M2 — SQLite handle, schema and registry store
 
 - **Tasks**: T014–T020
 - **Deliverable**: a SQLite file (owner-only, WAL) migrates to the v1 schema and holds the registry across reopen, passing the shared registry suite.
 - **Satisfies**: US1 acceptance scenario 2 (registry); FR-002, FR-003 (forward, transactional), FR-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations store_suite`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite`
 - **Depends on**: M1
 - **Tier**: full
 
-### M4 — SQLite auth and audit stores
+### M3 — SQLite auth and audit stores
 
 - **Tasks**: T021–T025
 - **Deliverable**: users, invites, tokens, serials, enrollments and audit entries survive a reopen on SQLite, and the audit log rejects update and delete.
 - **Satisfies**: US1 acceptance scenario 2; FR-002, FR-011
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite store_scan`
-- **Depends on**: M2, M3
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`
+- **Depends on**: M1, M2
 - **Tier**: full
 
-### M5 — PostgreSQL store and CI service container
+### M4 — PostgreSQL store and CI service container
 
 - **Tasks**: T026–T031
 - **Deliverable**: the shared suite passes on PostgreSQL and CI runs it against a Postgres service container that fails, not skips, when missing.
 - **Satisfies**: US1 acceptance scenario 1; FR-012, SC-004
 - **Verify**: `MICOLD_TEST_POSTGRES_URL=postgres://… scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_`; CI `test` job green
-- **Depends on**: M4
+- **Depends on**: M3
 - **Tier**: full
 
-### M6 — Migration safety
+### M5 — Migration safety
 
 - **Tasks**: T032–T035
 - **Deliverable**: a newer schema, an edited migration, a half-way failure and a concurrent start are each handled as the spec says, and every shipped schema version upgrades with data intact.
 - **Satisfies**: US2 acceptance scenarios 1–2; FR-003, FR-004, FR-005, FR-013, SC-002
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations` (SQLite; PostgreSQL with the URL)
-- **Depends on**: M5
+- **Depends on**: M4
 - **Tier**: full
 
-### M7 — No private key in any table
+### M6 — No private key in any table
 
 - **Tasks**: T036–T038
 - **Deliverable**: a scan of every column after exercising every store method finds no key material, and the scanner is proven able to fail.
 - **Satisfies**: US3 acceptance scenarios 1–2; FR-006, SC-003
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`
-- **Depends on**: M5
+- **Depends on**: M4
 - **Tier**: full
 
-### M8 — `[database]` config and the backend rule
+### M7 — `[database]` config and the backend rule
 
 - **Tasks**: T039–T044
 - **Deliverable**: `config check` accepts and validates `[database]`, shows paths and states only, and `choose_store` returns the table of contracts/config.md.
 - **Satisfies**: US4 acceptance scenarios 1, 2, 4; FR-008, FR-009 (rule)
-- **Verify**: `mise run test-core` (`daemon_config`, `orchestrator::backend`) and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`
-- **Depends on**: M5
+- **Verify**: `mise run test-core` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`
+- **Depends on**: M4
 - **Tier**: full
 
-### M9 — The orchestrator starts on the chosen store
+### M8 — The orchestrator starts on the chosen store
 
 - **Tasks**: T045–T050
 - **Deliverable**: `micold-daemon orchestrator` with no `[database]` creates the SQLite file and keeps its registry across a restart; with a `url_file` it uses PostgreSQL; an unreachable database fails the start without the password; a slow store call leaves heartbeats answered.
 - **Satisfies**: US4 acceptance scenario 3; FR-009, FR-014, FR-016, SC-005
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_slow store_config`; quickstart §B steps 1–2
-- **Depends on**: M6, M8
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_slow` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_config`; quickstart §B steps 1–2
+- **Depends on**: M5, M7
 - **Tier**: full
 
-### M10 — Import `registry.json` once
+### M9 — Import `registry.json` once
 
 - **Tasks**: T051–T054
 - **Deliverable**: an un-imported `registry.json` is imported into an empty database registry at start and renamed `registry.json.imported`; corrupt files and non-empty registries refuse.
 - **Satisfies**: US5 acceptance scenarios 1–4; FR-010
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_import`; quickstart §B step 3
-- **Depends on**: M9
+- **Depends on**: M8
 - **Tier**: full
 
-### M11 — Ownership columns and adoption
+### M10 — Ownership columns and adoption
 
 - **Tasks**: T055–T060
 - **Deliverable**: daemon records carry an owner that survives relinks, `reassign_unowned` hands pre-user records to the first owner, every data table has `tenant_id` and the three owned tables `owner_user_id`, and quickstart §A and §B are recorded.
 - **Satisfies**: US6 acceptance scenarios 1–2; FR-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite store_scan`; quickstart §A and §B
-- **Depends on**: M10
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`; quickstart §A and §B
+- **Depends on**: M9
 - **Tier**: full
