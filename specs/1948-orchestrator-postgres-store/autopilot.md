@@ -11,19 +11,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-8aowf1
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M1 review B (conformance), then the orchestrator opens the PR from pr-M1.md
+- **Next step**: M1 PR #1970 CI green, squash-merge; then M2 in a fresh thread
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
+| #1970 | M1 | open (draft) | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | (opened by the orchestrator from pr-M1.md) | review B pending |
+| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | open, reviews CLEAN |
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | | pending |
 | M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
@@ -60,6 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
+| #1970 | M1 | open (draft) | |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
 
@@ -85,3 +87,4 @@ None.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
+- M3 (SQL auth store): `redeem_invite` must refuse an unknown redeeming user, like `put_refresh`, `rotate_refresh` and `link_identity`, or contracts/store-traits.md must say the caller guarantees it (M1 review B F2). Also M1 review A: a SQL `rotate_refresh` commits the family revocation before returning `Refused`.
