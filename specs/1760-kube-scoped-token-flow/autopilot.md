@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
 | #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 | #1918 | M2 | merged | 110457c5aa066acdedbf5b089eb7b80bbd57f156 |
+| #1923 | M3 | merged | 9287b8ea78e6784543c07b69f2c91685fffe7197 |
 | #1923 | M3 | draft, CI | - |
 
 ## Milestones
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
 | M2 | T018–T019 | light | form tick and user guide | #1918 | merged |
-| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | built; kube-cluster green at 6392eda61, T026 revert red; awaiting merge |
+| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | merged |
 
 ## Decisions
 
@@ -73,6 +74,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+2026-11-15 M3 orchestrator (cloud): PR #1923 squash-merged (9287b8ea78e6784543c07b69f2c91685fffe7197) on all-green CI (kube-cluster and podman included); main merged back into claude/project-thread-9suuus. Next: a fresh thread runs `/speckit-autopilot resume #1760` on this branch and dispatches the close unit (model omitted); previous PR #1923, merge SHA above. Note for the close: kube_real_concurrent once failed with `mv: cannot stat .../ai-clis/offered.json.part` on the revert-check run only (90564a406); not seen on other runs.
 
 2026-11-15 M3 orchestrator (cloud, branch claude/project-thread-9suuus): PR #1923. kube-cluster CI found a production bug from M1 (V14 refused the pod's 0440 startup Secret mount; fixed in 7929a0413, Review A r2 CLEAN) and three harness bugs in the env check (second session replaced the viewed terminals, a literal newline in `tr`, a leading prompt before a fact), fixed in e296b13c7, f1fc4ef50, 6392eda61; kube-cluster green at 6392eda61. T026: a temporary commit with the token keys off (90564a406) turned `kube_real_scoped_token` red at "A: the token is delivered" (left: [], right: ["github-token-kube-run"]), right before the push; reverted. `container daemon end to end (podman, linux)` is red on main too (rootless podman permission at container removal), not this PR's. Next: squash-merge #1923, merge main back, then the close unit.
 
