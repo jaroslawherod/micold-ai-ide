@@ -8,24 +8,25 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-8aowf1
+- **Worktree branch**: claude/project-thread-ygs15x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M1 PR #1970 CI green, squash-merge; then M2 in a fresh thread
+- **Next step**: M2 PR CI and merge; then M3 (fresh thread)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
-| #1970 | M1 | open (draft) | |
+| #1970 | M1 | merged | bfb463f60 |
+| #1980 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | open, reviews CLEAN |
-| M2 | T014–T020 | full | SQLite handle, schema, registry store | | pending |
+| M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | PR open |
 | M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
 | M5 | T032–T035 | full | Migration safety | | pending |
@@ -54,22 +55,26 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 3 | design | 51d20197b6bb9ca92ffbf64dec4be986cd56f4fa | 3d3ec8c874fcffe3ca8aecf860c97d3efe962a9a:c9db7e595c1f9181c01606cca34854d161c8a40e | CLEAN |
 | M1 A | 1 | M1 diff (code-review high, run by the unit: no Agent tool) | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN (1 MINOR noted as a follow-up) |
 | M1 A | 1 | M1 diff | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN |
+| M2 A | 1 | M2 diff (code-review high, run by the unit: no Agent tool) | 1c5e8c6bda32fc3ca960ce3a62d7282506a25826 | (see commit) | CHANGES: 0 BLOCKER, 3 MAJOR-ish (non-ASCII URL, SQLITE_BUSY as Refused, save lock upgrade) all fixed with 4 MINOR; 3 declined (see below) |
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
+| M2 B | 1 | M2 | 60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | 5b6a0087c24bfaa47a2eee1e527d2ff41066c334:60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | CHANGES: 1 MAJOR (cycle 2 no red for review A fixes), fixed by red-by-revert evidence; 1 MINOR (db/ blanket skip in no_outbound scan) declined |
+| M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
 
 ## Declined review findings
+
+- M2 A: `Drop` skips `pool.close()` on a `spawn_blocking` thread (WAL is recovered on the next open; the context probe cannot tell the thread kinds apart); one runtime per handle (plan decision); `Failed { version: 0 }` and `VersionMissing` to `DatabaseNewer` belong to M5 T035.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
-| #1970 | M1 | open (draft) | |
+| #1970 | M1 | merged | bfb463f60 |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
+| M2 | B | F2 MINOR: no_outbound scan skips all of `src/orchestrator/db/` | The pool `connect` is the only dial-like construct there; recorded in drift-M2.md; M4 (PostgreSQL) should narrow it to the `connect` call sites |
 
 ## Handover
 
-None. M1 done and committed (6d4d88cad), full gate green on it, plan-drift clean (drift-M1.md), cycle-log written. Review B (conformance, sonnet) pending: the orchestrator dispatches it, then opens the PR from pr-M1.md. Next unit: M2.
-
-
+M2 code done and pushed (T014–T020 ticked, review A fixed, gate green). Next: the orchestrator runs review B, opens the PR from `specs/1948-orchestrator-postgres-store/pr-M2.md`, merges; then dispatch M3 (T021–T025) in a fresh thread.
 
 ## Open escalation
 
@@ -79,7 +84,8 @@ None.
 
 - M2 (SQL auth store): `rotate_refresh` on a revoked token must commit the family revocation and then return `Refused`, so it cannot be one transaction that rolls back on the error; the memory store revokes then refuses.
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
-- `sqlx` and `sha1` are in `micold-daemon`'s dependencies but unused until M2 (T001 asked for both).
+- `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
+- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. `check_not_newer` and a version in `SchemaError::Failed` are M5.
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 
 - M1–M6 and M10 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M7–M9 carry guide tasks.
