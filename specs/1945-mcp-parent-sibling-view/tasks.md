@@ -17,11 +17,11 @@ description: "Task list for MCP parent/sibling view, neighbourhood tool and pare
 
 **Goal**: one derivation of parent/siblings/children, used by `Scope`, so every tool shows an unparented session `default` and its siblings.
 
-- [ ] T001 [US1] Core unit tests (failing) for `neighbourhood()`: implicit parent, mutual siblings (recorded vs implicit `default` parent), removed parent, `default` caller with implicit children, unknown worktree, in `crates/micold-core/src/worktree_parent.rs`
-- [ ] T002 [US1] Add `Neighbourhood`, `ParentSide`, `Child` and `neighbourhood(live, views, own)` to `crates/micold-core/src/worktree_parent.rs` (data-model.md)
-- [ ] T003 [US1] Daemon integration tests (failing) in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_visibility.rs`: unparented caller lists sessions and worktrees (US1.1-1.5, SC-001), a caller whose worktree was removed sees only itself (SC-005); amend the 1857 expectations that "no parent has no siblings" in place (also `mcp_worktree_parent.rs`)
-- [ ] T004 [US1] Rebuild `Scope::new` on `neighbourhood()` in `crates/micold-daemon/src/mcp/tools.rs` (D2): read `project.worktrees`, unknown own dir gives `visible = {own}`, `default` caller stays unrestricted
-- [ ] T005 [US1] User guide: rewrite "Which worktrees a session can see" in `docs/user-guide/agent-tools.md` for the implicit `default` parent
+- [x] T001 [US1] Core unit tests (failing) for `neighbourhood()`: implicit parent, mutual siblings (recorded vs implicit `default` parent), removed parent, `default` caller with implicit children, unknown worktree, in `crates/micold-core/src/worktree_parent.rs`
+- [x] T002 [US1] Add `Neighbourhood`, `ParentSide`, `Child` and `neighbourhood(live, views, own)` to `crates/micold-core/src/worktree_parent.rs` (data-model.md)
+- [x] T003 [US1] Daemon integration tests (failing) in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_visibility.rs`: unparented caller lists sessions and worktrees (US1.1-1.5, SC-001), a caller whose worktree was removed sees only itself (SC-005); amend the 1857 expectations that "no parent has no siblings" in place (also `mcp_worktree_parent.rs`)
+- [x] T004 [US1] Rebuild `Scope::new` on `neighbourhood()` in `crates/micold-daemon/src/mcp/tools.rs` (D2): read `project.worktrees`, unknown own dir gives `visible = {own}`, `default` caller stays unrestricted
+- [x] T005 [US1] User guide: rewrite "Which worktrees a session can see" in `docs/user-guide/agent-tools.md` for the implicit `default` parent
 
 **Checkpoint**: `list_sessions`/`list_worktrees` from an unparented caller show `default` and siblings.
 

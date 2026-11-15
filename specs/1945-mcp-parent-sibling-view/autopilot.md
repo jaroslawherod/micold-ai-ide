@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1945
 - **Worktree branch**: claude/project-thread-x5s2f0
 - **Started**: 2026-11-15
-- **Phase**: tasks
-- **Next step**: tasks review (orchestrator), then gate and design PR; add a note to specs/1857-worktree-parent/spec.md pointing to 1945 at close
+- **Phase**: implement M1
+- **Next step**: M1 committed locally, not pushed; orchestrator runs reviews A and B, then push (merge origin/main first, no rebase)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1947 | design | MERGED | 00f66d534eedc83b1c08c7614e50f5a32194eaa8 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T005 | full | Unparented sessions see default and siblings | - | pending |
+| M1 | T001–T005 | full | Unparented sessions see default and siblings | - | implemented, local commit, gate partial (fmt, clippy, core lib, daemon mcp green; workspace nextest not run: disk) |
 | M2 | T006–T014 | full | neighbourhood and send_parent_input tools | - | pending |
 | M3 | T015–T020 | full | Parent recorded before start; agents told | - | pending |
 

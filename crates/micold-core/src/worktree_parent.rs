@@ -152,6 +152,93 @@ pub fn views(ids: &Ids, links: &Links) -> BTreeMap<String, ParentView> {
         .collect()
 }
 
+/// A caller's parent, as it sees it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParentSide {
+    /// A live parent; `recorded == false` is the implicit `default` of an unparented worktree.
+    Known { name: String, recorded: bool },
+    /// The parent was removed: no sessions, no siblings.
+    Removed { last_name: String },
+}
+
+/// A direct child; `implicit` only for an unparented child of `default`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Child {
+    pub name: String,
+    pub implicit: bool,
+}
+
+/// Where a worktree stands (spec 1945): its parent, siblings and direct children, by directory
+/// name (`default` is `"default"`), sorted by name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Neighbourhood {
+    pub parent: Option<ParentSide>,
+    pub siblings: Vec<String>,
+    pub children: Vec<Child>,
+}
+
+/// The neighbourhood of `own` (`None` is `default`) among the `live` worktrees, whose recorded
+/// links are `views`. A worktree with no recorded link is an implicit child of `default`, for
+/// visibility only. An `own` that is not live has an empty neighbourhood.
+pub fn neighbourhood(
+    live: &BTreeSet<String>,
+    views: &BTreeMap<String, ParentView>,
+    own: Option<&str>,
+) -> Neighbourhood {
+    // The live parent of `dir`: the recorded one, else `default`. `None` when it was removed.
+    let parent_of = |dir: &str| match views.get(dir) {
+        None => Some((DEFAULT_NAME, false)),
+        Some(v) if v.state == ParentState::Known => Some((v.name.as_str(), true)),
+        Some(_) => None,
+    };
+    let children_of = |name: &str| {
+        live.iter()
+            .filter(|d| parent_of(d).is_some_and(|(p, _)| p == name))
+            .map(|d| Child {
+                name: d.clone(),
+                implicit: parent_of(d).is_some_and(|(_, recorded)| !recorded),
+            })
+            .collect()
+    };
+    let Some(own) = own else {
+        return Neighbourhood {
+            parent: None,
+            siblings: Vec::new(),
+            children: children_of(DEFAULT_NAME),
+        };
+    };
+    if !live.contains(own) {
+        return Neighbourhood::default();
+    }
+    let (parent, siblings) = match parent_of(own) {
+        Some((name, recorded)) => (
+            ParentSide::Known {
+                name: name.to_string(),
+                recorded,
+            },
+            live.iter()
+                .filter(|d| d.as_str() != own && parent_of(d).is_some_and(|(p, _)| p == name))
+                .cloned()
+                .collect(),
+        ),
+        None => (
+            ParentSide::Removed {
+                last_name: views[own].name.clone(),
+            },
+            Vec::new(),
+        ),
+    };
+    let mut children: Vec<Child> = children_of(own);
+    for c in &mut children {
+        c.implicit = false;
+    }
+    Neighbourhood {
+        parent: Some(parent),
+        siblings,
+        children,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +340,100 @@ mod tests {
         record(&mut ids, &mut links, "w", None);
         assert_ne!(ids["w"], stale);
         assert_eq!(name_of(&views(&ids, &links), "c").1, ParentState::Removed);
+    }
+
+    fn view(name: &str, state: ParentState) -> ParentView {
+        ParentView {
+            name: name.into(),
+            state,
+        }
+    }
+
+    fn known(name: &str) -> ParentView {
+        view(name, ParentState::Known)
+    }
+
+    fn views_of(pairs: &[(&str, ParentView)]) -> BTreeMap<String, ParentView> {
+        pairs
+            .iter()
+            .map(|(d, v)| (d.to_string(), v.clone()))
+            .collect()
+    }
+
+    fn child(name: &str, implicit: bool) -> Child {
+        Child {
+            name: name.into(),
+            implicit,
+        }
+    }
+
+    #[test]
+    fn an_unparented_worktree_has_the_implicit_default_parent_and_unparented_siblings() {
+        let n = neighbourhood(
+            &live(&["a", "b", "c"]),
+            &views_of(&[("c", known("a"))]),
+            Some("a"),
+        );
+        assert_eq!(
+            n.parent,
+            Some(ParentSide::Known {
+                name: "default".into(),
+                recorded: false
+            })
+        );
+        assert_eq!(n.siblings, ["b"]);
+        assert_eq!(n.children, [child("c", false)]);
+    }
+
+    #[test]
+    fn siblings_are_mutual_between_a_recorded_and_an_implicit_default_parent() {
+        let v = views_of(&[("d", known("default"))]);
+        let l = live(&["a", "b", "d"]);
+        let from_d = neighbourhood(&l, &v, Some("d"));
+        assert_eq!(
+            from_d.parent,
+            Some(ParentSide::Known {
+                name: "default".into(),
+                recorded: true
+            })
+        );
+        assert_eq!(from_d.siblings, ["a", "b"]);
+        assert!(from_d.children.is_empty());
+        assert_eq!(neighbourhood(&l, &v, Some("a")).siblings, ["b", "d"]);
+    }
+
+    #[test]
+    fn a_removed_parent_leaves_no_siblings() {
+        let v = views_of(&[
+            ("c", view("gone", ParentState::Removed)),
+            ("e", view("gone", ParentState::Removed)),
+        ]);
+        let n = neighbourhood(&live(&["c", "e"]), &v, Some("c"));
+        assert_eq!(
+            n.parent,
+            Some(ParentSide::Removed {
+                last_name: "gone".into()
+            })
+        );
+        assert!(n.siblings.is_empty() && n.children.is_empty());
+    }
+
+    #[test]
+    fn default_has_recorded_and_implicit_children_but_not_grandchildren_or_removed_ones() {
+        let v = views_of(&[
+            ("d", known("default")),
+            ("c", known("a")),
+            ("r", view("gone", ParentState::Removed)),
+        ]);
+        let n = neighbourhood(&live(&["a", "c", "d", "r"]), &v, None);
+        assert_eq!(n.parent, None);
+        assert!(n.siblings.is_empty());
+        assert_eq!(n.children, [child("a", true), child("d", false)]);
+    }
+
+    #[test]
+    fn a_worktree_that_is_not_live_has_an_empty_neighbourhood() {
+        let n = neighbourhood(&live(&["a"]), &BTreeMap::new(), Some("ghost"));
+        assert_eq!(n, Neighbourhood::default());
     }
 }
