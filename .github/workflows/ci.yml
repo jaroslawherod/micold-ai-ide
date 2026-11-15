@@ -26,6 +26,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # Diff guardrails (#1931), one switch each, read by `ci-complete`. `true` makes that job's red
+  # result block a merge; `false` keeps it advisory (shown, never blocking). To flip one, change the
+  # value here and nothing else. Scope and threshold: scripts/guardrails-scope.conf;
+  # docs/development/diff-guardrails.md.
+  GUARDRAIL_COVERAGE_BLOCK: "true"
+  GUARDRAIL_MUTANTS_BLOCK: "false"
   CARGO_TERM_COLOR: always
   # See the matching note in release.yml. The shared target directory in .cargo/config.toml is a
   # local-machine concession to many concurrent worktrees; on a runner it only breaks
@@ -223,6 +229,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          components: llvm-tools-preview # cargo-llvm-cov, below
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         id: rust-cache
       - name: Install iced system dependencies (Linux)
@@ -270,6 +278,19 @@ jobs:
           # /usr/local/bin is root-owned on the runner image, like the kind/kubectl and lychee
           # installs elsewhere in this workflow.
           sudo install -m 0755 cargo-nextest /usr/local/bin/
+      # #1931: the full-workspace step runs through `cargo llvm-cov nextest`, so the suite runs once
+      # and also writes the lcov file the `diff-coverage` job reads. Pinned and checksummed like
+      # nextest above.
+      - name: Install cargo-llvm-cov
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          ver=v0.9.1
+          asset="cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSLO "https://github.com/taiki-e/cargo-llvm-cov/releases/download/$ver/$asset"
+          echo "b3f68e625481fed9b16444174f3fa5ebcdbde4a1878803a35eabe2dcefcdc41a  $asset" | sha256sum -c -
+          tar xzf "$asset" cargo-llvm-cov
+          sudo install -m 0755 cargo-llvm-cov /usr/local/bin/
       # Principle I: the render-free core compiles and passes with no iced/PTY (FR-040).
       - name: Test (render-free core, no GUI)
         run: cargo test -p micold-core --all-targets
@@ -342,9 +363,25 @@ jobs:
           # (or vice versa) behind set -e / shell && (issue #1649 review finding). --no-fail-fast:
           # unlike `cargo test`, nextest stops the whole run after the first failing test by
           # default, which would hide every later failure.
-          nextest_rc=0; cargo nextest run --workspace --no-fail-fast || nextest_rc=$?
+          # #1931: nextest runs instrumented (`cargo llvm-cov nextest`) and writes lcov.info for the
+          # `diff-coverage` job. The doctests and the release frame-budget step below stay outside
+          # the instrumented run. So do the wall-clock budget tests in TIMED: instrumentation slows
+          # them past their bounds (PR #1933's first run: ten_busy_sessions_are_all_saved_within_the_bound
+          # lost a session's save). They run right after, uninstrumented; add a budget test here when
+          # it only fails under coverage.
+          TIMED='package(micold-daemon) & (binary(=history_timing) | (binary(=history_stop_request) & test(=ten_busy_sessions_are_all_saved_within_the_bound)))'
+          nextest_rc=0
+          cargo llvm-cov nextest --workspace --no-fail-fast -E "not ($TIMED)" --lcov --output-path lcov.info || nextest_rc=$?
+          timed_rc=0
+          cargo nextest run -p micold-daemon --test history_timing --test history_stop_request --no-fail-fast -E "$TIMED" || timed_rc=$?
           doc_rc=0; cargo test --doc --workspace || doc_rc=$?
-          exit $((nextest_rc == 0 ? doc_rc : nextest_rc))
+          for rc in "$nextest_rc" "$timed_rc" "$doc_rc"; do [ "$rc" -eq 0 ] || exit "$rc"; done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && runner.os == 'Linux' && hashFiles('lcov.info') != '' }}
+        with:
+          name: lcov
+          path: lcov.info
+          retention-days: 7
       # Feature 021's frame budget (SC-002) is a release-build number, so its measurements are
       # ignored in the debug suite above and run here instead (BUG-003).
       - name: Test (type-ahead frame budget, release)
@@ -354,6 +391,85 @@ jobs:
           cargo test --release -p micold-core --test main -- jira_site_release::
           cargo test --release -p micold-core --lib review::anchor::tests::two_hundred_comments_locate_inside_the_budget
           cargo test --release -p micold-client --test transcript_open_budget
+
+  # #1931: do the tests run the lines this pull request changed? Reads the lcov file the `test` job
+  # wrote and checks the changed executable lines in scope (scripts/guardrails-scope.conf) against
+  # it, 80% by default. Pull requests only: a push has no base. Skipped (so satisfied) when `test`
+  # was, as on a documentation-only change. Whether red blocks is GUARDRAIL_COVERAGE_BLOCK.
+  diff-coverage:
+    name: diff coverage
+    needs: [classify, test]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.test.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Fetch the base branch
+        env:
+          BASE: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: lcov
+      - name: Check the changed lines
+        env:
+          BASE: ${{ github.base_ref }}
+        run: scripts/diff-coverage.py --lcov lcov.info --base "origin/$BASE" --summary diff-coverage.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: diff-coverage
+          path: |
+            lcov.info
+            diff-coverage.md
+          retention-days: 7
+
+  # #1931: do the tests notice a change to the lines this pull request changed? `cargo mutants
+  # --in-diff` mutates only those lines (scripts/mutants-diff.sh), each mutant tested by its own
+  # crate's tests under nextest. Slow, so it is capped at 30 minutes and skipped on a
+  # documentation-only change. Whether red blocks is GUARDRAIL_MUTANTS_BLOCK (advisory by default).
+  mutants:
+    name: mutants on the diff
+    needs: classify
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.classify.result == 'success' && needs.classify.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Fetch the base branch
+        env:
+          BASE: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
+      - name: Install cargo-nextest and cargo-mutants
+        run: |
+          set -euo pipefail
+          ver=cargo-nextest-0.9.150
+          asset="$ver-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSLO "https://github.com/nextest-rs/nextest/releases/download/$ver/$asset"
+          echo "b0959bc64232974224cf9fb22c915845398c0e8668fa7831eb5b43fb1eef781f  $asset" | sha256sum -c -
+          tar xzf "$asset" cargo-nextest
+          sudo install -m 0755 cargo-nextest /usr/local/bin/
+          ver=v27.1.0
+          asset="cargo-mutants-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSLO "https://github.com/sourcefrog/cargo-mutants/releases/download/$ver/$asset"
+          echo "dfe6dc37d0342c891d2829b5a695aa57c2d0edecef7e7d0399a30cc6e206411e  $asset" | sha256sum -c -
+          tar xzf "$asset" cargo-mutants
+          sudo install -m 0755 cargo-mutants /usr/local/bin/
+      - name: Mutate the changed lines
+        env:
+          BASE: ${{ github.base_ref }}
+        run: scripts/mutants-diff.sh "origin/$BASE" mutants-diff-out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: mutants-diff
+          path: mutants-diff-out
+          retention-days: 7
 
   # Feature 027. The sandbox adapter layer is tested by the `test` job above, against an injected
   # fake runner with nothing installed. This job covers the part a fake cannot: that the argv we construct
@@ -741,7 +857,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, assertions, docs]
+    needs: [classify, lint, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -768,6 +884,9 @@ jobs:
           KUBECLUSTER: ${{ needs.kube-cluster.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
+          # #1931: the guardrails; whether each blocks is the workflow-level GUARDRAIL_* switch.
+          DIFFCOVERAGE: ${{ needs.diff-coverage.result }}
+          MUTANTS: ${{ needs.mutants.result }}
         run: |
           status=0
           check() {
@@ -777,6 +896,10 @@ jobs:
               success|skipped) printf 'ok       %-12s %s\n' "$1" "$2" ;;
               *) printf 'BLOCKED  %-12s %s\n' "$1" "$2"; status=1 ;;
             esac
+          }
+          # A guardrail whose switch is not "true" is advisory: its result is shown, never blocks.
+          guardrail() {
+            if [ "$3" = "true" ]; then check "$1" "$2"; else printf 'advisory %-12s %s\n' "$1" "$2"; fi
           }
           check classify "$CLASSIFY"
           check lint "$LINT"
@@ -788,6 +911,8 @@ jobs:
           check kube-cluster "$KUBECLUSTER"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
+          guardrail diff-coverage "$DIFFCOVERAGE" "$GUARDRAIL_COVERAGE_BLOCK"
+          guardrail mutants "$MUTANTS" "$GUARDRAIL_MUTANTS_BLOCK"
           {
             echo "### ci complete"
             echo
@@ -803,6 +928,8 @@ jobs:
             echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
+            echo "| diff-coverage | \`$DIFFCOVERAGE\` | $GUARDRAIL_COVERAGE_BLOCK |"
+            echo "| mutants | \`$MUTANTS\` | $GUARDRAIL_MUTANTS_BLOCK |"
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
       # #956: a red `main` or nightly run must reach somebody. A pull request needs no notice (its author is watching the check).

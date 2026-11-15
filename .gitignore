@@ -46,3 +46,5 @@ __pycache__/
 
 # The autopilot supervisor keeps its ledger local (specs/1813-supervisor-skill).
 /.autopilot/
+lcov.info
+mutants-diff-out/

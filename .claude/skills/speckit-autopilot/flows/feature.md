@@ -11,7 +11,7 @@ New behaviour. The whole Spec Kit flow, shipped as reviewed milestones.
 | Milestone K, one at a time | [implement](../tasks/implement.md), [verify](../tasks/verify.md), review, review-rounds, gate, pr | **Tier** `full`: omit. `light`, `docs`: `"sonnet"` | one PR per milestone |
 | Close | [close](../tasks/close.md), review, review-rounds, gate, pr | omit | the close PR with the ledger finished, or `NEW MILESTONES` (run them, then a new close unit). It reads milestones and milestone-format only when it finds unbuilt behaviour |
 
-Omit means the session model. Continued with a red CI log, a unit also reads
+Omit means the session model; an orchestrator on Sonnet passes `model: "opus"` instead (dispatch). Continued with a red CI log, a unit also reads
 [red-ci](../tasks/red-ci.md).
 
 - **Keeps everything:** a fresh reviewer on spec, plan and tasks; reviews A (`high`) and B on

@@ -5,8 +5,9 @@ When: the flow's file names the next unit, and the previous PR (if any) has merg
 Run each unit in its own `autopilot-unit` subagent (`general-purpose` when your agent types lack
 it: the type drops tool schemas a unit never uses, about 10k tokens on each of its calls). The
 `model` is the one the flow's file gives. **On that fallback pass `model` whenever the flow gives one**, omitting it only where the flow says
-omit: `general-purpose` inherits the session's (Opus), so a missing `model` silently loses the
-cheaper tiers. `"sonnet"` for
+omit: `general-purpose` inherits the session's, so a missing `model` silently loses the
+cheaper tiers. An orchestrator on Sonnet ([../rules/cloud.md](../rules/cloud.md)) passes `model: "opus"`
+where the flow says omit. `"sonnet"` for
 the units the flow marks light, re-reviews, conformance checks and workers. Cloud threads often do
 not list the `autopilot-*` types: check the agent list before the first dispatch, and say in the
 ledger when you fell back. A unit keeps its model when continued with `SendMessage`.
@@ -38,7 +39,7 @@ Read the ledger (`scripts/autopilot/brief.py ledger <ledger>`), never the transc
 | `DONE` with `NEXT: <flow>` | [../flows/switch.md](../flows/switch.md) |
 | `DONE` with `NEW MILESTONES: …` | Run those milestone units, then a new close unit |
 | `ESCALATE` | Ask the returned questions yourself ([ask.md](ask.md)), then continue the unit with the answers (*Continuing a unit*) |
-| `FAILED` | Read the ledger and the five lines. A unit on a cheaper model: retry once on the session model, from the ledger's *Handover*. Otherwise retry once with a fresh unit, or escalate |
+| `FAILED` | Read the ledger and the five lines. A unit on a cheaper model: retry once with `model: "opus"` (explicit: the orchestrator may itself run on Sonnet), from the ledger's *Handover*. Otherwise retry once with a fresh unit, or escalate |
 | `HANDOVER` | Its context passed 150k. Dispatch a fresh unit of the same kind, model, task files and scope, with `part <n>` added to the description and `Continue from the ledger's Handover.` in the prompt. A fourth part (a third, in the bug and chore flows) is an escalation (category 5), with what is done and what is left. If it had opened its PR, the new part finishes the work on that PR; send any `RED` log to the latest part |
 
 ## Continuing a unit

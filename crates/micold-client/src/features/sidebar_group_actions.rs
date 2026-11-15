@@ -14,14 +14,17 @@
 //! `New`, `Rename`, `Delete`, `TextChanged`, `Confirmed`, `Cancelled`; the sidebar's empty-area menu
 //! (`EmptyAreaMenuOpened`, `EmptyAreaMenuDismissed`), whose one item is **New group…** (C6a); the
 //! group header's menu (`MenuOpened`, `MenuDismissed`), whose items are **Rename** and **Delete**
-//! (C6).
+//! (C6); and `Move`, the **Move to group** entries of a worktree's or run group's menu
+//! ([`move_menu_items`], FR-010, FR-016).
 
 use crate::app::Message;
 use crate::features::Outcome;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
-use micold_core::sidebar_layout::{LayoutError, SidebarLayout, UserGroupId};
+use micold_core::sidebar_layout::{
+    DropTarget, LayoutError, LayoutItem, SidebarLayout, UserGroupId,
+};
 
 /// What this feature remembers: the open naming dialog, if any.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -45,14 +48,73 @@ pub struct GroupMenu {
 /// that add them.
 pub const GROUP_MENU_ITEMS: [&str; 2] = ["Rename", "Delete"];
 
-/// What the naming dialog names (data-model.md, *NamingDraft*). Creating a group to move a row
-/// into joins this with the milestone that adds it.
+/// What the naming dialog names (data-model.md, *NamingDraft*).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NamingTarget {
     /// A new, empty group.
     New,
     /// This group, renamed.
     Rename(UserGroupId),
+    /// A new group that takes this row in as its first (**New group…** in a row's menu, US2-3).
+    NewAndMove(LayoutItem),
+}
+
+/// Where a row's **Move to group** entry puts it (contract C6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MoveTarget {
+    /// The end of this group.
+    Group(UserGroupId),
+    /// The end of the ungrouped list.
+    Ungrouped,
+    /// A group the user names next, which the row then joins.
+    NewGroup,
+}
+
+/// One **Move to group** entry: where it goes and the words naming it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MoveEntry {
+    pub target: MoveTarget,
+    /// The group's name, `Ungrouped` or `New group…`.
+    pub label: String,
+}
+
+impl MoveEntry {
+    /// The entry as the menu draws it.
+    pub fn menu_label(&self) -> String {
+        match self.target {
+            MoveTarget::NewGroup => "Move to new group…".to_owned(),
+            _ => format!("Move to {}", self.label),
+        }
+    }
+}
+
+/// The **Move to group** entries for `item` (contract C6, FR-010): every group in order, then
+/// **Ungrouped**, then **New group…**, which alone is offered while no group exists (US2-3). The
+/// project root is never an item, so it is offered none (FR-015). Choosing the place the row is in
+/// changes nothing.
+pub fn move_menu_items(state: &crate::app::State, item: &LayoutItem) -> Vec<MoveEntry> {
+    if matches!(item, LayoutItem::Worktree(dir) if dir.is_empty()) {
+        return Vec::new();
+    }
+    let groups = state.sidebar_layout().map_or(&[][..], |l| &l.groups[..]);
+    let mut entries: Vec<MoveEntry> = groups
+        .iter()
+        .map(|group| MoveEntry {
+            target: MoveTarget::Group(group.id),
+            label: group.name.clone(),
+        })
+        .collect();
+    if !entries.is_empty() {
+        entries.push(MoveEntry {
+            target: MoveTarget::Ungrouped,
+            label: "Ungrouped".to_owned(),
+        });
+    }
+    entries.push(MoveEntry {
+        target: MoveTarget::NewGroup,
+        label: "New group…".to_owned(),
+    });
+    entries
 }
 
 /// The naming dialog's draft (contract C2).
@@ -83,6 +145,9 @@ pub enum Msg {
     Confirmed,
     /// The naming dialog was dismissed.
     Cancelled,
+    /// **Move to group** from a row's menu: the row goes to the target, or the naming dialog opens
+    /// for the group it will join.
+    Move(LayoutItem, MoveTarget),
     /// The sidebar's empty area was right-clicked at this window point (C6a).
     EmptyAreaMenuOpened((u16, u16)),
     /// The empty-area menu was dismissed.
@@ -129,6 +194,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
                 draft.error = None;
             }
         }
+        Msg::Move(item, target) => return moved(state, item, target),
         Msg::Confirmed => return confirmed(state),
         Msg::Cancelled => state.sidebar_groups.naming = None,
         Msg::EmptyAreaMenuOpened(point) => {
@@ -198,6 +264,69 @@ fn deleted(state: &mut crate::app::State, id: UserGroupId) -> Vec<Outcome> {
     }
 }
 
+/// **Move to group**: closes the row's menu, then moves the row to the end of the target list. A
+/// row the sidebar no longer has, or a group that is gone, changes nothing, and so does choosing
+/// the list the row is already in. A row the saved layout does not hold yet is ungrouped, so it is
+/// adopted there for [`SidebarLayout::move_item`] to take it out; moving it to *Ungrouped* then has
+/// nothing to do.
+fn moved(state: &mut crate::app::State, item: LayoutItem, target: MoveTarget) -> Vec<Outcome> {
+    let to = match target {
+        MoveTarget::Group(id) => DropTarget::Group {
+            id,
+            index: usize::MAX,
+        },
+        MoveTarget::Ungrouped => DropTarget::Ungrouped { index: usize::MAX },
+        MoveTarget::NewGroup => {
+            if crate::overlay::registry::open_dialog(state).is_some() {
+                close_row_menus(state);
+            } else if state.layout_item_exists(&item) {
+                open_draft(state, NamingTarget::NewAndMove(item), String::new());
+            } else {
+                close_row_menus(state);
+            }
+            return Vec::new();
+        }
+    };
+    close_row_menus(state);
+    let Some(project) = state.workspace.active.clone() else {
+        return Vec::new();
+    };
+    if !state.layout_item_exists(&item) {
+        return Vec::new();
+    }
+    let held = state
+        .sidebar_layout()
+        .cloned()
+        .unwrap_or_else(SidebarLayout::default);
+    let list_to = match to {
+        DropTarget::Group { id, .. } => Some(id),
+        _ => None,
+    };
+    // Already where it was asked to go: nothing to move, nothing to save.
+    if held.list_of(&item).unwrap_or(None) == list_to {
+        return Vec::new();
+    }
+    let mut layout = held;
+    layout.adopt(&item);
+    if layout.move_item(&item, to).is_err() {
+        return Vec::new();
+    }
+    vec![Outcome::SidebarLayoutChanged { project, layout }]
+}
+
+/// A pick from a row's menu closes it, as every other pick does. The menu is found through the
+/// overlay registry rather than named, so this feature names no other feature's items (SC-002).
+fn close_row_menus(state: &mut crate::app::State) {
+    let menus: Vec<SurfaceId> = crate::overlay::registry::open_popovers(state)
+        .into_iter()
+        .filter(|open| open.layer() == micold_core::overlay::Layer::ContextMenu)
+        .map(|open| open.id())
+        .collect();
+    for id in menus {
+        crate::overlay::registry::dismiss(state, id);
+    }
+}
+
 /// The draft was confirmed: a valid name returns the changed layout and closes the dialog; a
 /// refused one keeps the dialog open with the reason, and the layout unchanged (C2).
 fn confirmed(state: &mut crate::app::State) -> Vec<Outcome> {
@@ -215,6 +344,10 @@ fn confirmed(state: &mut crate::app::State) -> Vec<Outcome> {
     let result = match &draft.target {
         NamingTarget::New => layout.create(&draft.text).map(|_| ()),
         NamingTarget::Rename(id) => layout.rename(*id, &draft.text),
+        NamingTarget::NewAndMove(item) if !state.layout_item_exists(item) => {
+            Err(LayoutError::UnknownItem)
+        }
+        NamingTarget::NewAndMove(item) => new_and_move(&mut layout, item, &draft.text),
     };
     match result {
         Ok(()) => {
@@ -233,6 +366,19 @@ fn confirmed(state: &mut crate::app::State) -> Vec<Outcome> {
             Vec::new()
         }
     }
+}
+
+/// Create the group `name` and move `item` into it, together or not at all (`layout` is a copy the
+/// caller keeps only on success). A row the layout never held is ungrouped, so it is placed there
+/// first for the move to take it out of.
+fn new_and_move(
+    layout: &mut SidebarLayout,
+    item: &LayoutItem,
+    name: &str,
+) -> Result<(), LayoutError> {
+    let id = layout.create(name)?;
+    layout.adopt(item);
+    layout.move_item(item, DropTarget::Group { id, index: 0 })
 }
 
 /// The sidebar's empty-area menu, as a floating surface (C6a): a context menu, so it and the row

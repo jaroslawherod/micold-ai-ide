@@ -42,6 +42,7 @@
 - [The layout snapshot](development/layout-snapshot.md)
 - [The component showcase](development/component-showcase.md)
 - [The CI pipeline](development/ci-pipeline.md)
+- [Diff guardrails: coverage and mutants](development/diff-guardrails.md)
 - [The shared target directory and build lock](development/shared-build.md)
 - [The duplication budget](development/duplication.md)
 - [Duplication triage](development/duplication-triage.md)

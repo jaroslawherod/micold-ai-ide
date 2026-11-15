@@ -27,6 +27,7 @@ fn header_height() -> f32 {
         name: LONG_GROUP_NAME.to_string(),
         collapsed: false,
         count: 3,
+        hidden: 0,
     })]);
     assert_eq!(heights.len(), 1, "a header is one row: {heights:?}");
     heights[0]

@@ -26,7 +26,7 @@ When: [implement.md](implement.md) is done and every task in the range is ticked
 Findings and rounds: [review-rounds.md](review-rounds.md). Red gates for one cause: after the third
 failed fix, escalate (category 5). A unit on a cheaper model (**Tier** `light` or `docs`) instead
 writes *Handover* after the second failed fix and returns `FAILED`, so the orchestrator retries it
-on the session model.
+with `model: "opus"`.
 
 Hands on: return `DONE` with the PR number. Continued later with a red CI log:
 [red-ci.md](red-ci.md).

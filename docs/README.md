@@ -85,6 +85,8 @@ follows describes the version you are reading it from (constitution, Principle V
   specs skips the build entirely, where the documentation set is declared, the single status check
   the default branch requires and the two properties that keep it honest, how to force a full run,
   and what to do when the pipeline surprises you.
+- [Diff guardrails](development/diff-guardrails.md) — changed-line coverage (merge-blocking) and mutation testing
+  (advisory), what they cover, the two switches in `ci.yml`, and the opt-in `mise run` tasks.
 - [The documentation site](development/docs-site.md) — how a publication works: the five steps a
   build runs in, what each pre-merge and pre-deploy check catches, what triggers a publication and
   how to republish without cutting a release, what a failed publication leaves behind, and why the
