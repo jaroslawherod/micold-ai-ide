@@ -88,6 +88,7 @@ pub fn spawn(config: &Arc<DaemonConfig>) -> Option<LinkHandle> {
 
 /// [`spawn`], announcing `announcement` instead of the one `config` gives (a test announces
 /// another protocol version this way).
+#[doc(hidden)]
 pub fn spawn_as(config: &Arc<DaemonConfig>, announcement: LinkAnnouncement) -> Option<LinkHandle> {
     let link = config.orchestrator_link.as_ref().filter(|l| l.enabled)?;
     // An empty socket is refused by `config check` (L1); a daemon started with one does not dial.
@@ -196,7 +197,8 @@ impl Reporter {
             (LinkStatus::Linked, LinkStatus::NotLinked) => {
                 tracing::warn!("orchestrator link lost");
             }
-            (_, LinkStatus::NotLinked) => {}
+            // A refused daemon whose orchestrator then went away.
+            (_, LinkStatus::NotLinked) => tracing::info!("orchestrator link not linked"),
             (_, LinkStatus::Linked) => tracing::info!("orchestrator link up"),
             _ => tracing::warn!(state = status.name(), detail, "orchestrator link refused"),
         }

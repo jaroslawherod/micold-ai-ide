@@ -691,7 +691,8 @@ without it. The task:
 A lost link is dialled again without a restart, after 1, 2, 4, 8, then 15 seconds (the delay of the
 SSH reconnect). The first delay after a lost link may grow by up to 20 %. A refusal waits 15 seconds
 (plus up to 20 %) and does not grow that delay. The task logs a state change once (`orchestrator link
-up`, `orchestrator link lost`, a refusal with its reason), never every retry. It reads only the
+up`, `orchestrator link lost`, a refusal with its reason, `orchestrator link not linked` when a
+refused daemon's orchestrator goes away), never every retry. It reads only the
 configuration and holds no lock a session waits on, so an orchestrator outage never touches a session.
 
 The refusals a dialer meets are `VersionMismatch` and `AlreadyLinked` in the verdict, and a

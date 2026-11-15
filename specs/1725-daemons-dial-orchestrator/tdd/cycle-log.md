@@ -171,3 +171,12 @@ failed before the implementation.
     1 s (an equivalent mutant but for the jitter).
 - green: T025's remaining half: the refusal's sentence and the attempt count enter the status cell.
 - refactor: none.
+
+### Review A fixes (M3, round 1: CLEAN, 3 MINOR)
+
+- F1: a refused daemon whose orchestrator went away changed to `NotLinked` with no log line. Test
+  first: `refused::a_refusal_followed_by_an_absent_orchestrator_is_logged_once` → FAILED `left: 0`;
+  green: the `(_, NotLinked)` arm logs `orchestrator link not linked` → passed.
+- F2: `spawn_as` is `#[doc(hidden)]` (test seam).
+- F3: the SC-004 test refuses each way twice in a row and asserts `ceil(attempts / 2)` log lines, so
+  a line per retry fails it. `--test orchestrator_dial` 24 passed.

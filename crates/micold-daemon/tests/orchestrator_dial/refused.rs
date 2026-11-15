@@ -79,8 +79,8 @@ async fn refuse(incoming: Incoming, turn: usize) -> LinkStatus {
     }
 }
 
-/// Scenarios 1-2, SC-004: refused every time, each a different way, the daemon tries at most once
-/// per capped delay over 60 s, and logs each change of refusal once.
+/// Scenarios 1-2, SC-004: refused every time, each way twice in a row, the daemon tries at most
+/// once per capped delay over 60 s, and logs each change of refusal once, never the repeat.
 #[tokio::test(start_paused = true)]
 async fn a_daemon_refused_every_time_tries_at_most_once_per_capped_delay() {
     let dir = tempfile::tempdir().unwrap();
@@ -97,7 +97,7 @@ async fn a_daemon_refused_every_time_tries_at_most_once_per_capped_delay() {
             break;
         }
         attempts.push(Instant::now());
-        let want = refuse(incoming, turn).await;
+        let want = refuse(incoming, turn / 2).await;
         status_is(&handle, want).await;
     }
 
@@ -118,7 +118,7 @@ async fn a_daemon_refused_every_time_tries_at_most_once_per_capped_delay() {
     let refused = captured.text().matches("orchestrator link refused").count();
     assert_eq!(
         refused,
-        attempts.len(),
+        attempts.len().div_ceil(2),
         "one line per change:\n{}",
         captured.text()
     );
@@ -207,4 +207,28 @@ async fn the_first_redial_after_a_lost_link_comes_after_one_second() {
         gap >= one && gap <= one.mul_f64(1.0 + MAX_JITTER) + SLACK,
         "re-dialled {gap:?} after the loss"
     );
+}
+
+/// FR-012: a refused daemon whose orchestrator goes away logs that change once too.
+#[tokio::test(start_paused = true)]
+async fn a_refusal_followed_by_an_absent_orchestrator_is_logged_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("orchestrator.sock");
+    let fake = FakeOrchestrator::bind(&socket);
+    let captured = Captured::for_this_thread();
+    let handle = spawn(&link_to(&socket)).unwrap();
+    let want = refuse(fake.accept().await, 1).await;
+    status_is(&handle, want).await;
+    drop(fake);
+    let _ = std::fs::remove_file(&socket);
+
+    status_is(&handle, LinkStatus::NotLinked).await;
+    tokio::time::sleep(RUN).await;
+    let log = captured.text();
+    assert_eq!(
+        log.matches("orchestrator link not linked").count(),
+        1,
+        "{log}"
+    );
+    assert_eq!(handle.status(), LinkStatus::NotLinked);
 }
