@@ -754,7 +754,8 @@ no attempt is counted, nothing is logged per retry, and the delay grows 1, 2, 4,
 cap. Reopening the connection runs `prepare-link` again, which removes whatever socket is there (even
 one an old `sshd` session still holds after the app's `ssh` was killed with `SIGKILL`), and the next
 dial links: `online` within 16 seconds (the capped delay plus the handshake), the same daemon process,
-the same record. The `ssh_real_link` suite proves both bounds against a real `sshd`.
+the same record. The `ssh_real_link` suite measures both bounds against a real `sshd`, after a
+`SIGTERM` and after a `SIGKILL` with an immediate reopen.
 
 ## Finding the logs and recent errors
 

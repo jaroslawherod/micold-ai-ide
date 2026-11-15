@@ -455,7 +455,7 @@ const ONLINE_WITHIN: Duration = Duration::from_secs(16);
 /// the registry and the `list` query itself.
 const POLL_SLACK: Duration = Duration::from_millis(500);
 
-/// Moves the harness orchestrator's test clock on with real time, in 100 ms steps, so its heartbeat
+/// Moves the harness orchestrator's test clock on with real time, in 20 ms steps, so its heartbeat
 /// deadline runs out as a real orchestrator's does; stops when dropped.
 struct RealTime(tokio::task::JoinHandle<()>);
 
@@ -688,6 +688,9 @@ async fn ssh_real_link_a_killed_connection_reopened_at_once_comes_back_online() 
         .expect("the open succeeds");
     record_when(&orchestrator, "link-kill", |r| r["health"] == "online").await;
     let pid = remote_daemon_pid();
+    let first_link = within_link(|l| l.state == "linked").await;
+    // `since` counts whole seconds: past this one, a new link's `since` is later than the first's.
+    tokio::time::sleep(Duration::from_millis(1100)).await;
 
     kill_link_ssh(&orchestrator, "-KILL");
     let reopened = Instant::now();
@@ -695,10 +698,13 @@ async fn ssh_real_link_a_killed_connection_reopened_at_once_comes_back_online() 
         .await
         .expect("the reopen succeeds over the old forward's socket");
     drop(first);
-    let waited = health_within(&orchestrator, "link-kill", "online", reopened).await;
+    // The orchestrator keeps the record `online` until its deadline, so the return is timed on the
+    // daemon's side: a new link, entered after the first.
+    within_link(|l| l.state == "linked" && l.since > first_link.since).await;
+    let waited = reopened.elapsed();
     assert!(
         waited <= ONLINE_WITHIN + POLL_SLACK,
-        "online {waited:?} after the reopen"
+        "linked again {waited:?} after the reopen"
     );
     // Past the heartbeat deadline plus a check, a link still riding the killed session would have
     // ended on both sides: still linked and online now, it runs through the new forward.
