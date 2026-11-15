@@ -176,3 +176,113 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
 - green: `GroupHeaderNode.hidden`, `GroupHeader::hidden`, `count_words(count, hidden)`: `n`, `n of m`
   or `empty`.
 - refactor: none.
+
+## Cycle 10: the drag reducer and hit test (A10–A15, A27 in part, U20–U23; T029, T030)
+
+- test: `tests/sidebar_drag.rs` (`a_press_arms_*`, `a_move_of_four_pixels_*`,
+  `the_list_pointer_is_ignored_until_*`, `the_hit_test_finds_only_*`, `the_spans_follow_*`,
+  `over_a_target_the_spot_carries_the_marker_*`, `dropping_*`, `a_dropped_worktree_keeps_its_sessions_*`,
+  `a_drop_on_a_collapsed_group_*`, `a_drop_on_the_rows_own_place_*`, `a_drop_below_the_rows_own_place_*`,
+  `default_never_arms`, `rows_a_tag_filter_hides_*`, `a_run_group_row_is_dragged_*`,
+  `a_group_header_arms_a_group_drag_*`); `tests/features_sidebar_drag.rs` (isolation, SC-004).
+- red: `cargo check -p micold-client --test main` -> 31 errors: `E0432` unresolved import
+  `micold_client::features::sidebar_drag` (2), `E0599` no variant `Message::SidebarDrag` (2),
+  `E0609` no field `sidebar_drag` on `State` (27).
+- green: `features/sidebar_drag.rs` (`State`, `Dragged`, `DropSpot`, `Msg`, `entry_spans`,
+  `entry_lists`, `hit_test`, `update`); `Message::SidebarDrag` and the `sidebar_drag`
+  field in `app.rs`; `SidebarLayout::locate` made public in the core for the drop's index and the
+  no-op check. `cargo test -p micold-client --test main sidebar_drag` -> `25 passed; 0 failed`
+  on the first run after the module compiled.
+- refactor: `sidebar::ROW_GAP` made public rather than repeated, so the hit test and the scroll
+  arithmetic measure the same gap.
+
+## Cycle 11: cancelling the drag (A20–A22; T031, T032)
+
+- test: `tests/sidebar_drag.rs` (`escape_ends_the_drag_with_no_change`,
+  `a_release_outside_every_target_changes_nothing`, `the_dragged_worktree_vanishing_*`,
+  `a_release_after_the_dragged_worktree_vanished_*`, `escape_with_no_drag_keeps_its_meaning`,
+  `losing_the_window_focus_cancels_the_drag`). Each compares `sidebar_list()` or the layout before
+  and after (SC-002).
+- red: written in the same file as cycle 10, so the same 31 compile errors; the Escape test then
+  needed `on_escape` to answer `Message::SidebarDrag(Msg::Cancelled)` while a drag is active.
+- green: the cancel paths in `sidebar_drag::update` (`Cancelled`, a release with `over = None`,
+  `still_there` on every pointer message and on the release) and one `on_escape` arm in `app.rs`
+  after the registry, guarded by `sidebar_drag.active`.
+- refactor: none.
+
+## Cycle 12: the glue (T033)
+
+- test: `ui::sidebar::tests::rows_and_headers_arm_a_drag_default_does_not_and_the_target_list_is_highlighted`,
+  `shell::subscriptions::tests::sidebar_drag_message_follows_the_pointer_and_ends_on_release_or_blur`,
+  `micold-material cdk::context_area::tests::a_primary_release_over_the_area_reports`.
+- red: written beside the glue (Principle I exception for view glue); each fails without its line:
+  no `on_primary_press` on a row leaves `arming` at 0, no `drop_highlight` leaves `lit` at 0.
+- green: `TreeItem::on_primary_press` and `GroupHeader::on_primary_press` (press point and release
+  through `cdk::ContextArea`, whose new `on_primary_release` hears a release that comes in the
+  press's own batch); `ui::sidebar` arms top-level worktree rows, run group rows and headers, tints
+  the target list, puts `DropMarker` on the edge of the row `over.marker` names
+  (`TreeItem::drop_marker`), and wraps the list in a `mouse_area` that reports the pointer's
+  height while the drag is active; `shell/subscriptions.rs` follows the pointer, the release and
+  the focus loss while a press is armed.
+- refactor: the first glue drew the marker in a `stack` over the whole list. The stack added a
+  layout level above every row and broke the layout snapshot and the gates that address rows by
+  path (`context_menu_anchor`, `tooltip_clears_its_row`: "no node at 0/0/0/1/0/0/0/2/0/0/8").
+  The marker moved onto the row it marks, laid over the row's edge, and the `mouse_area`, which
+  adds no layout node, stayed; the paths are as before.
+
+## Cycle 13: review A fixes (rounds 1 to 3)
+
+- test: `tests/sidebar_drag.rs::the_hit_test_finds_only_*` (the marker of a header and of a lower
+  half sits on the target's own row, `below`), `escape_cancels_the_drag_before_a_surface_open_under_it`;
+  `ui::sidebar::tests::rows_and_headers_arm_*` (the whole target list is lit, marker edges, the
+  dragged row is `inert`); `cdk::context_area::tests::a_held_release_reaches_the_content_with_no_cursor`.
+- red: the test changes went in with their fixes, so their red was not run; it is argued from the
+  code they replace: against the first `hit_test` the header's spot had no `below` and named the
+  next list's first row, and the first `on_escape` order let `dismiss_topmost` close the menu and
+  leave `armed` set. One red was run: the first inert count failed (`left: 3`, `right: 2`) because
+  it picked a row with no press, and now picks one that has a press.
+- green: `DropSpot.below`; `drop_highlight` tints each target entry's whole row range;
+  `drag_escape` read by `on_escape` and `dismiss_topmost`; `TreeItem::inert` and
+  `ContextArea::hold_release`, which hand the dragged row's button its release with no cursor, so
+  it lets go without pressing and keeps its look (round 2's disabled button kept a stale pressed
+  state, found in round 3).
+- refactor: `TreeItem`'s press point and release are one `Option<(OnPress, M)>`.
+
+## Cycle 14: the drag hears no window pointer (guard tests)
+
+- test: existing guards, run with the whole `tests/main.rs` binary:
+  `idle_subscriptions::the_pointer_is_not_subscribed_at_all`,
+  `root_state_is_shared::component_local_paths_are_pinned_or_moved`,
+  `root_vocabulary_is_cross_cutting::the_scan_finds_the_vocabulary_it_is_meant_to_read`.
+- red: `cargo test -p micold-client --test main` -> `3488 passed; 3 failed`: "`CursorMoved` is back
+  in src/shell/subscriptions.rs"; "`state.sidebar_drag.over` — written only by `sidebar_drag` ...
+  neither moved nor pinned"; `left: 34`, `right: 33`.
+- green: the window listener keeps only the release and the focus loss; the list's `mouse_area`
+  reports the pointer in its content while a press is armed (`Msg::Moved`), the first report is
+  where the drag starts from, and `Msg::Pressed` no longer carries a window point (one coordinate
+  space, no window pointer). `sidebar_drag.over` pinned in `COMPONENT_LOCAL`; the vocabulary count
+  is 34. `--test main` -> `3491 passed; 0 failed`.
+- refactor: `moved` takes the activation and the hit test in one place.
+
+## Cycle 15: review B round 1 fixes (F1 to F3)
+
+- test: `ui::sidebar::tests::the_dragged_row_of_every_kind_holds_its_release_until_the_button_is_up`
+  (a worktree row, a run group's row and a group header, through Escape or a focus loss and the
+  release); `tests/sidebar_drag.rs::escape_mid_drag_holds_the_rows_release_until_the_button_is_up`,
+  `a_focus_loss_before_the_drag_is_active_holds_nothing`,
+  `leaving_the_list_before_the_drag_is_active_forgets_where_it_started`.
+- red (F1): `cargo test -p micold-client --lib the_dragged_row_of_every_kind` -> `Item(Worktree("work")):
+  held until the button is up`, `left: []`, `right: [("feat/work", true)]`: `Cancelled` reset the
+  state, so the next view gave the dragged row its live press back.
+- red (F2), once F1 was green: the same test -> `Item(Run(GroupId(..1))): []`, `left: 0`,
+  `right: 1`: a run group's row (and a header) was never held.
+- red (F3): `cargo test -p micold-client --test main leaving_the_list_before` failed at
+  `sidebar_drag.rs:147`, "re-entering is where it starts": the stale `from` activated the drag.
+- green: `sidebar_drag::State::held`, set by `Cancelled` from an active drag and cleared by
+  `Released` or the next press; `State::holds` keys `inert` for every row kind and
+  `State::listens` keeps the window's release heard until the button is up; `GroupHeader::inert`;
+  `TreeView` wraps every row's content, pressable or not, in the holding `ContextArea`;
+  `Moved(None)` while inactive clears `from`. `--test main` 3494 passed, `--lib` 1110 passed,
+  `layout_snapshot` 180, `feature_registration_cost` 7.
+- refactor: the run group fixture of `a_run_group_row_wears_the_worst_state_of_its_runs` is the
+  shared `with_run_group` helper.

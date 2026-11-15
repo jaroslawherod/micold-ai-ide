@@ -970,7 +970,7 @@ pub const SIDEBAR_DENSITY: i8 = density::DENSE;
 ///
 /// Not a parameter: the gap is a property of the component that draws the rows, not of the caller
 /// that measures them, and passing it in would invite two answers.
-const ROW_GAP: f32 = spacing::XS;
+pub const ROW_GAP: f32 = spacing::XS;
 
 /// The rendered height of every sidebar row, top to bottom (feature 024, research R6).
 ///
