@@ -363,7 +363,9 @@ panel. In a narrow sidebar the toggle is just the chevron. The panel stays open 
 - Tap **untyped** to show worktrees that do not follow the naming convention.
 - Tap **parent: <name>** to show only the direct children of that parent (`parent: default` for
   the worktrees made from the project folder). There is one chip per parent that has children, and
-  a removed parent has its own, marked **(removed)**.
+  a removed parent has its own, marked **(removed)**. A parent chip that is on keeps the name it had
+  when you tapped it: after the parent is renamed it matches nothing, so clear it and tap the chip
+  with the new name.
 - Type, issue and untyped chips combine with **OR** — tapping `feat` and `fix` shows both. Parent
   chips are a second choice on top of them: with a parent chip on, a worktree must be a child of one
   of the chosen parents *and* match the other chips you chose, so `parent: supervisor` with `issue`

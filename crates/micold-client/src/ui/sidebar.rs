@@ -1243,7 +1243,7 @@ fn group_items(
         match run.row {
             RunRow::Worktree(node) => items.extend(build_items(
                 state,
-                vec![SidebarEntry::Worktree(node)],
+                vec![SidebarEntry::Worktree(*node)],
                 1,
                 Some((number, provider)),
                 at + items.len(),

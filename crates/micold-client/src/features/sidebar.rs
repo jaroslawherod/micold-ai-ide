@@ -265,14 +265,11 @@ pub struct RunNode {
 }
 
 /// What a run row is made of.
-///
-/// `NoWorktree` is the rare variant and carries nothing, so boxing the node every row holds would
-/// cost an allocation per row to shave a size the list never copies in bulk.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(clippy::large_enum_variant)]
 pub enum RunRow {
-    /// The run's worktree, with the usual tags and session children.
-    Worktree(WorktreeNode),
+    /// The run's worktree, with the usual tags and session children. Boxed: the node is far larger
+    /// than `NoWorktree` (clippy `large_enum_variant`).
+    Worktree(Box<WorktreeNode>),
     /// The run has no worktree row: it failed while creating it, or is still creating it, or the
     /// sidebar's filters hide it. A leaf with no worktree menu (G1a).
     NoWorktree,
@@ -511,7 +508,7 @@ pub fn arrange_groups(
                 let row = match at.and_then(|i| entries[i].take().map(|e| (i, e))) {
                     Some((i, SidebarEntry::Worktree(node))) => {
                         first = Some(first.map_or(i, |f: usize| f.min(i)));
-                        RunRow::Worktree(node)
+                        RunRow::Worktree(Box::new(node))
                     }
                     _ => RunRow::NoWorktree,
                 };

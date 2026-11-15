@@ -711,7 +711,7 @@ pub(crate) fn location_card(state: &State, location: &SessionLocation) -> Option
         SidebarEntry::Default(_) | SidebarEntry::UserGroup(_) => None,
         SidebarEntry::Worktree(node) => (node.worktree.dir_name == *dir).then_some(node),
         SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
-            RunRow::Worktree(node) if node.worktree.dir_name == *dir => Some(node),
+            RunRow::Worktree(node) if node.worktree.dir_name == *dir => Some(&**node),
             _ => None,
         }),
     })?;

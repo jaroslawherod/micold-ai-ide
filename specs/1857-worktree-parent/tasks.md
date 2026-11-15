@@ -11,6 +11,31 @@ description: "Task list for worktree parent registration (MCP + sidebar) and sup
 **Documentation**: each user-facing story carries its user-guide task (Constitution VII).
 **Milestones** (one GitHub issue each): **M1** MCP and persistence (Phases 1-4, 6; US1, US2, US3, US5), **M2** sidebar UI (Phase 5; US4; blocked by M1), **M3** supervisor integration (Phase 7; blocked by M1; consumed by #1813, #1814, #1816).
 
+## Milestones
+
+Each milestone merges to `main` on its own (speckit-autopilot). The ledger
+(`specs/1857-worktree-parent/autopilot.md`) records their PRs.
+
+### M1 — MCP and persistence (#1858)
+
+- **Tasks**: T001–T014, T020–T022
+- **Satisfies**: US1, US2, US3, US5
+
+### M1b — Visibility by parent (#1858)
+
+- **Tasks**: T030–T032
+- **Satisfies**: FR-015, FR-016, FR-017
+
+### M2 — Sidebar parent label and filter (#1859)
+
+- **Tasks**: T015–T019
+- **Satisfies**: US4
+
+### M3 — Supervisor integration
+
+- **Tasks**: T023–T026, T033
+- **Satisfies**: FR-013
+
 ## Format: `- [ ] [TaskID] [P?] [Story?] Description with file path`
 
 ## Phase 1: Setup (M1)
