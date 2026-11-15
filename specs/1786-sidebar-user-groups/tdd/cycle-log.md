@@ -213,7 +213,7 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
 ## Cycle 12: the glue (T033)
 
 - test: `ui::sidebar::tests::rows_and_headers_arm_a_drag_default_does_not_and_the_target_list_is_highlighted`,
-  `shell::subscriptions::tests::sidebar_drag_message_follows_the_pointer_and_ends_on_release_or_blur`,
+  `shell::subscriptions::tests::sidebar_drag_message_ends_on_release_or_blur_and_ignores_the_pointer`,
   `micold-material cdk::context_area::tests::a_primary_release_over_the_area_reports`.
 - red: written beside the glue (Principle I exception for view glue); each fails without its line:
   no `on_primary_press` on a row leaves `arming` at 0, no `drop_highlight` leaves `lit` at 0.
