@@ -314,10 +314,17 @@ fn moved(state: &mut crate::app::State, item: LayoutItem, target: MoveTarget) ->
     vec![Outcome::SidebarLayoutChanged { project, layout }]
 }
 
-/// A pick from a row's menu closes it, as every other pick does.
+/// A pick from a row's menu closes it, as every other pick does. The menu is found through the
+/// overlay registry rather than named, so this feature names no other feature's items (SC-002).
 fn close_row_menus(state: &mut crate::app::State) {
-    crate::features::worktree::close_menu(state);
-    crate::features::runs::close_menu(state);
+    let menus: Vec<SurfaceId> = crate::overlay::registry::open_popovers(state)
+        .into_iter()
+        .filter(|open| open.layer() == micold_core::overlay::Layer::ContextMenu)
+        .map(|open| open.id())
+        .collect();
+    for id in menus {
+        crate::overlay::registry::dismiss(state, id);
+    }
 }
 
 /// The draft was confirmed: a valid name returns the changed layout and closes the dialog; a
