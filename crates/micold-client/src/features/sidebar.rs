@@ -218,6 +218,10 @@ pub struct GroupHeaderNode {
     pub collapsed: bool,
     /// How many of its rows the list holds now, shown whether or not it is collapsed.
     pub count: usize,
+    /// How many more members it holds that the sidebar does not show (the active tag filter hides
+    /// them); with any, the header reads `n of m`, never `empty` (feature 1786, M3 decision D7).
+    /// A member whose worktree is gone is not counted.
+    pub hidden: usize,
 }
 
 impl SidebarEntry {
@@ -450,12 +454,17 @@ pub fn layout_item(entry: &SidebarEntry) -> Option<LayoutItem> {
 /// in saved order. The layout is fitted to the listed rows first ([`SidebarLayout::reconcile`] on a
 /// copy), so a row it does not know lands among the ungrouped in stable order and a row hidden by a
 /// tag filter or gone from disk is skipped while its stored place stays. Reads no state (FR-013).
-pub fn apply_layout(entries: Vec<SidebarEntry>, layout: &SidebarLayout) -> Vec<SidebarEntry> {
+pub fn apply_layout(
+    entries: Vec<SidebarEntry>,
+    layout: &SidebarLayout,
+    exists: impl Fn(&LayoutItem) -> bool,
+) -> Vec<SidebarEntry> {
     if layout.is_empty() {
         return entries;
     }
     let live: Vec<LayoutItem> = entries.iter().filter_map(layout_item).collect();
     let mut layout = layout.clone();
+    let stored: Vec<Vec<LayoutItem>> = layout.groups.iter().map(|g| g.items.clone()).collect();
     layout.reconcile(&live);
     let mut rows: std::collections::HashMap<LayoutItem, SidebarEntry> =
         std::collections::HashMap::new();
@@ -468,12 +477,17 @@ pub fn apply_layout(entries: Vec<SidebarEntry>, layout: &SidebarLayout) -> Vec<S
             None => out.push(entry),
         }
     }
-    for group in &layout.groups {
+    for (group, stored) in layout.groups.iter().zip(stored) {
         out.push(SidebarEntry::UserGroup(GroupHeaderNode {
             id: group.id,
             name: group.name.clone(),
             collapsed: group.collapsed,
             count: group.items.len(),
+            hidden: stored
+                .iter()
+                .filter(|item| exists(item))
+                .count()
+                .saturating_sub(group.items.len()),
         }));
         if !group.collapsed {
             out.extend(group.items.iter().filter_map(|item| rows.remove(item)));
@@ -1932,8 +1946,17 @@ impl crate::app::State {
     pub fn sidebar_list(&self) -> Vec<SidebarEntry> {
         let entries = self.sidebar_entries();
         match self.sidebar_layout() {
-            Some(layout) => apply_layout(entries, layout),
+            Some(layout) => apply_layout(entries, layout, |item| self.layout_item_exists(item)),
             None => entries,
+        }
+    }
+
+    /// Whether the row `item` names is still there, filtered out of the sidebar or not: a worktree
+    /// on the list or a run group (feature 1786). A stale message for a gone row is ignored on it.
+    pub fn layout_item_exists(&self, item: &LayoutItem) -> bool {
+        match item {
+            LayoutItem::Worktree(dir) => self.worktree.worktrees.iter().any(|w| &w.dir_name == dir),
+            LayoutItem::Run(id) => self.runs.groups.iter().any(|g| g.id == *id),
         }
     }
 

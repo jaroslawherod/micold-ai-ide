@@ -21,10 +21,10 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | DONE | tasks T020, T021 |
 | A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | DONE | tasks T011, T020 |
 | A5 | Duplicate name is refused with a visible message, state kept | US1-5, FR-004 | example | DONE | tasks T011, T020 |
-| A6 | Move to group via menu moves the row under that group | US2-1, FR-010 | example | PENDING | tasks T026, T027 |
-| A7 | Move to group Ungrouped moves the row to the ungrouped list | US2-2, FR-010 | example | PENDING | tasks T026, T027 |
-| A8 | With no group, the menu offers only New group… which creates and moves | US2-3, FR-010 | example | PENDING | tasks T026, T027 |
-| A9 | The whole move is possible with keyboard only | US2-4, SC-006 | example | PENDING | tasks T026, T027 |
+| A6 | Move to group via menu moves the row under that group | US2-1, FR-010 | example | DONE | tests/sidebar_group_actions.rs::moving_a_worktree_to_a_group_puts_it_under_that_group_and_saves |
+| A7 | Move to group Ungrouped moves the row to the ungrouped list | US2-2, FR-010 | example | DONE | tests/sidebar_group_actions.rs::moving_to_ungrouped_takes_the_row_out_of_its_group |
+| A8 | With no group, the menu offers only New group… which creates and moves | US2-3, FR-010 | example | DONE | tests/sidebar_group_actions.rs::new_group_from_the_move_menu_creates_the_group_and_moves_the_row_into_it, with_no_group_the_move_menu_offers_only_new_group |
+| A9 | The whole move is possible with keyboard only | US2-4, SC-006 | example | DONE | tests/sidebar_group_actions.rs::a_keyboard_user_moves_a_row_through_the_card_menu_with_no_pointer |
 | A10 | Drop of a row on a group assigns it at the marked position | US3-1, FR-006 | example | PENDING | tasks T029, T030 |
 | A11 | Drop on another group moves it out of the first | US3-2, FR-006 | example | PENDING | tasks T029, T030 |
 | A12 | Drop on the ungrouped list removes it from its group | US3-3, FR-006 | example | PENDING | tasks T029, T030 |
@@ -54,7 +54,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U3 | reconcile drops absent items | FR-018 | example | DONE | micold-core sidebar_layout::tests::reconcile_drops_items_no_longer_listed |
 | U4 | reconcile keeps a doubly-named item in the first group | C1, FR-005 | example | DONE | micold-core sidebar_layout::tests::reconcile_keeps_an_item_named_twice_in_the_first_group_only |
 | U5 | reconcile appends unknown live items to ungrouped in live order | C1 | example | DONE | micold-core sidebar_layout::tests::reconcile_appends_unknown_live_items_to_ungrouped_in_live_order |
-| U6 | Default is never stored (IsDefault) | FR-015 | example | PENDING | tasks T002, T003, T024, T025 |
+| U6 | Default is never stored (IsDefault) | FR-015 | example | DONE | micold-core sidebar_layout::tests::move_item_refuses_what_it_cannot_place_and_changes_nothing (IsDefault) |
 | U7 | save/load round trip, missing file empty | C7, SC-003 | example | DONE | tests/sidebar_layout_store.rs::a_saved_layout_loads_back_after_a_restart, a_missing_file_loads_as_no_groups |
 | U8 | corrupt file renamed .corrupt, empty layout loads | FR-018 | example | DONE | tests/sidebar_layout_store.rs::a_corrupt_file_is_kept_aside_and_loads_as_no_groups |
 | U9 | sidebar_entries with empty layout equals the stable order | FR-013 | example | DONE | tests/sidebar_tree.rs::user_groups::with_no_layout_the_drawn_list_is_the_stable_order |
@@ -65,9 +65,9 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | DONE | micold-core sidebar_layout::tests::create_refuses_a_blank_name_and_changes_nothing, create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing |
 | U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | DONE | tasks T018, T019 |
 | U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | DONE | tasks T018, T019 |
-| U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | PENDING | tasks T024, T025 |
-| U18 | move_item UnknownItem and IsDefault errors; run group moves as one | FR-015, FR-016 | example | PENDING | tasks T024, T025 |
-| U19 | all outcomes keep each item in exactly one list | SC-002 | example | PENDING | tasks T024, T025 |
+| U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | DONE | micold-core sidebar_layout::tests::move_item_into_a_group_removes_it_from_where_it_was, move_item_clamps_an_index_past_the_end, move_item_within_its_list_counts_the_index_before_the_removal |
+| U18 | move_item UnknownItem and IsDefault errors; run group moves as one | FR-015, FR-016 | example | DONE | micold-core sidebar_layout::tests::move_item_refuses_what_it_cannot_place_and_changes_nothing, a_run_group_moves_as_one_item |
+| U19 | all outcomes keep each item in exactly one list | SC-002 | example | DONE | micold-core sidebar_layout::tests::every_outcome_keeps_each_item_in_exactly_one_list |
 | U20 | press arms, movement under 4 px is a click, at 4 px activates (both sides) | C3 | example | PENDING | tasks T029, T030 |
 | U21 | hit_test returns Some only over valid places, otherwise None; hidden rows not targets | C3 | example | PENDING | tasks T029, T030 |
 | U22 | Default, chip bar, Overview never arm | C3, FR-015 | example | PENDING | tasks T029, T030 |
@@ -75,7 +75,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U24 | step_item/step_group move one place and refuse at the ends | FR-010 | example | PENDING | tasks T035, T036 |
 | U25 | move_group reorders groups; hit_test GroupSlot only for a dragged group | FR-019 | example | PENDING | tasks T035, T036, T037, T038 |
 | U26 | Move up/down menu items disabled at the ends | C6 | example | PENDING | tasks T037, T038 |
-| U27 | move_menu_items lists each group, Ungrouped, New group…; none for Default | C6, FR-010 | example | PENDING | tasks T026, T027 |
+| U27 | move_menu_items lists each group, Ungrouped, New group…; none for Default | C6, FR-010 | example | DONE | tests/sidebar_group_actions.rs::the_move_menu_lists_every_group_then_ungrouped_then_new_group, the_default_row_is_offered_no_move, the_worktree_menu_offers_move_to_group_above_delete |
 | U28 | set_collapsed; Enter/Space on a header toggles; menu Collapse/Expand | FR-011 | example | PENDING | tasks T039, T040 |
 | U29 | reveal_ready expands the group holding the target | FR-017 | example | PENDING | tasks T039, T040 |
 | U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | PARTIAL: items operable (done); the keyboard opener is T040 (M5) | tasks T020, T021, T040 |

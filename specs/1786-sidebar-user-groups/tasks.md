@@ -54,11 +54,11 @@ Rename and delete (scenarios 2, 3):
 
 **Goal**: "Move to group" in the worktree menu. **Independent test**: open the menu by keyboard, pick a group, the row is under it.
 
-- [ ] T024 [U6][U17][U18][U19] [US2] Tests in `crates/micold-core/src/sidebar_layout.rs`: `move_item(item, DropTarget::Group|Ungrouped)` removes before insert so an item is in exactly one list; run group moves as one `LayoutItem::Run`; `UnknownItem`, `IsDefault` errors; index clamped; a property-style loop over all outcomes keeps each item in exactly one list (SC-002, FR-005, FR-016). Red first.
-- [ ] T025 [U6][U17][U18][U19] [US2] Implement `move_item` (including in-list moves and index adjustment) in `crates/micold-core/src/sidebar_layout.rs` (depends on T024).
-- [ ] T026 [A6][A7][A8][A9][U27] [US2] Tests in `crates/micold-client/tests/sidebar_group_actions.rs`: `move_menu_items(state, key)` lists every group, "Ungrouped", "New group…"; with no group only "New group…" which creates the group and moves the worktree (`NewAndMove`); also for a run group row; Default offers none; keyboard-only move through the 803 menu (SC-006). Red first.
-- [ ] T027 [A6][A7][A8][A9][U27] [US2] Implement `move_menu_items`, `Msg::Move`, `NewAndMove` in `crates/micold-client/src/features/sidebar_group_actions.rs` and the "Move to group" items in `crates/micold-client/src/features/worktree.rs` (`WorktreeContextMenu`, run group menu) (depends on T025, T026).
-- [ ] T028 [US2] User guide: "Move to group" in `docs/user-guide/worktrees-and-sessions.md`.
+- [x] T024 [U6][U17][U18][U19] [US2] Tests in `crates/micold-core/src/sidebar_layout.rs`: `move_item(item, DropTarget::Group|Ungrouped)` removes before insert so an item is in exactly one list; run group moves as one `LayoutItem::Run`; `UnknownItem`, `IsDefault` errors; index clamped; a property-style loop over all outcomes keeps each item in exactly one list (SC-002, FR-005, FR-016). Red first.
+- [x] T025 [U6][U17][U18][U19] [US2] Implement `move_item` (including in-list moves and index adjustment) in `crates/micold-core/src/sidebar_layout.rs` (depends on T024).
+- [x] T026 [A6][A7][A8][A9][U27] [US2] Tests in `crates/micold-client/tests/sidebar_group_actions.rs`: `move_menu_items(state, key)` lists every group, "Ungrouped", "New group…"; with no group only "New group…" which creates the group and moves the worktree (`NewAndMove`); also for a run group row; Default offers none; keyboard-only move through the 803 menu (SC-006). Red first.
+- [x] T027 [A6][A7][A8][A9][U27] [US2] Implement `move_menu_items`, `Msg::Move`, `NewAndMove` in `crates/micold-client/src/features/sidebar_group_actions.rs` and the "Move to group" items in `crates/micold-client/src/features/worktree.rs` (`WorktreeContextMenu`, run group menu) (depends on T025, T026).
+- [x] T028 [US2] User guide: "Move to group" in `docs/user-guide/worktrees-and-sessions.md`.
 
 ## Phase 5: User Stories 3 and 5 - Drag between lists, cancel a drag (P1)
 

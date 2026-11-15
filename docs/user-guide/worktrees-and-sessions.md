@@ -400,8 +400,9 @@ stays open so you can change it. **Cancel** or Escape closes it and makes nothin
 project open, but no worktree.
 
 The new group appears in the sidebar as a header row: its name (shortened with an ellipsis when it
-does not fit; point at it to read it whole), then how many rows it holds, or **empty**. A new group
-is empty. A group never stands for a state: a worktree keeps its group whatever its sessions are
+does not fit; point at it to read it whole), then how many rows it shows, or **empty**. A new group
+is empty. While a tag filter hides some of a group's worktrees, the header reads, for example,
+**1 of 3**, so a group with worktrees is never called empty. A group never stands for a state: a worktree keeps its group whatever its sessions are
 doing.
 
 To rename or delete a group, right-click its header and choose **Rename** or **Delete**.
@@ -412,6 +413,21 @@ To rename or delete a group, right-click its header and choose **Rename** or **D
 - **Delete** removes the header at once; there is nothing to confirm because nothing is lost. Every
   worktree in the group goes back to the ungrouped list, after the ones already there. No worktree
   and no session is deleted, stopped or changed: a group only arranges the sidebar.
+
+#### Move to group
+
+To put a worktree or a run group in a group, right-click its row. The menu has one entry per group
+of the project, **Move to** and its name, then **Move to Ungrouped**, then **Move to new group…**.
+The row joins the end of the group you pick, and leaves the group it was in.
+A run group moves as one row with its runs; its runs cannot be moved one by one. The **Default** row
+cannot be put in a group, so its menu has no move entries.
+
+When the project has no group yet, the menu offers only **Move to new group…**: it asks for a name
+as **New group…** does, makes the group and puts the row in it. If the name is refused, the dialog
+stays open and nothing moves.
+
+You do not need the pointer: open the Overview, move to the worktree's card, press the Menu key (or
+Shift+F10), use the Up and Down arrows to the entry, and press Enter.
 
 ### Agent worktrees
 

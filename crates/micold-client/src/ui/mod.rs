@@ -726,7 +726,7 @@ pub fn view_with<'a>(
     // Same anchor rule and clamping as the worktree menu above.
     let group_menu: Option<cdk::overlay::Surface<'a, Message>> = state.runs.menu.map(|menu| {
         let project = state.workspace.active.clone().unwrap_or_default();
-        let items = vec![
+        let mut items = vec![
             material::MenuItem::new(
                 Icon::Git,
                 crate::features::runs::GROUP_MENU_ITEMS[0],
@@ -744,6 +744,13 @@ pub fn view_with<'a>(
                 }),
             ),
         ];
+        // Feature 1786 (FR-016): a run group row is assigned to a user group like a worktree row,
+        // by an entry above **Dismiss group**.
+        let moves = sidebar::move_items(
+            state,
+            &micold_core::sidebar_layout::LayoutItem::Run(menu.group),
+        );
+        items.splice(1..1, moves);
         let (x, y) = crate::features::project::clamp_menu_anchor(
             menu.anchor,
             material::menu_panel_size(items.len()),
@@ -1012,6 +1019,14 @@ pub fn location_menu_items(
     {
         items.insert(at + offset, item);
     }
+    // Feature 1786 (FR-010, C6): **Move to group**, above the entries that sit directly above Delete (setup, bind). Overview cards offer
+    // it too, which is how a keyboard user reaches it (feature 972).
+    let at = items.len() - 1;
+    let moves = sidebar::move_items(
+        state,
+        &micold_core::sidebar_layout::LayoutItem::Worktree(dir.clone()),
+    );
+    items.splice(at..at, moves);
     // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete like the
     // other non-destructive entries.
     if let (Some(project), true) = (

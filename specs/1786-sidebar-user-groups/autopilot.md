@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-sufjt3
 - **Started**: 2026-11-11
 - **Phase**: milestones (M3)
-- **Next step**: M3 milestone unit (T024–T028)
+- **Next step**: M3 review B and visual pass (orchestrator), then open the PR from specs/1786-sidebar-user-groups/pr-M3.md
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T044 | full | Layout core, store, create a group | #1905 | merged |
 | M2 | T018–T023 | full | Rename and delete a group | #1913 | merged |
-| M3 | T024–T028 | full | Move to group from the menu | #… | pending |
+| M3 | T024–T028 | full | Move to group from the menu | #… | implemented, gate and push in progress |
 | M4 | T029–T034 | full | Drag between lists and cancel | #… | pending |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #… | pending |
 | M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
@@ -42,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | implement M1 | Does "New group" also get a button in a project header? | No: since feature 1125 the sidebar has no project header and its header buttons are the chip bar's more menu; contract C6a's three entry points (more menu, empty-area menu, chord) are the contract | agent-resolved | contracts/sidebar-groups.md C6a; plan.md line 80 |
 | D5 | implement M1 | `GroupHeader::new(name, on_toggle)` with no toggle message before US6? | `GroupHeader::new(name).on_toggle(m)`: no twisty until M5 adds `Msg::Toggle`, so M1 draws no dead control | agent-resolved | tasks.md T040 |
 | D6 | implement M2 | T022 says the group menu opens "by the 803 chord", but no row menu has a keyboard opener | The menu opens by right click; its items are keyboard-operable like any menu. The keyboard opener lands with the header's tab stop in T040 (M5), which now names it (803 chord / Menu key on the focused header, with its test); U30 is PARTIAL | agent-resolved | tasks.md T040; test-list U30 |
+| D7 | implement M3 | Is a header's count the group's members or the rows shown under the active filter? | The rows shown, with the hidden members said aloud: `n` while none is hidden, `n of m` while a tag filter hides some, `empty` only for a group that holds no member. A group is not empty because a filter hides its members, and the count never claims rows the list does not draw (C3: hidden rows are not targets, their stored places stay). A member whose worktree is gone is not counted as hidden | agent-resolved | spec.md edge cases (empty group; tag filter hides worktrees); contracts/sidebar-groups.md C3, C5; tests `a_header_counts_the_rows_shown_*` |
 
 ## Review rounds
 
@@ -62,6 +63,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CHANGES (2 MAJOR fixed: drift-M2.md, T040 names keyboard opener; 2 MINOR fixed) |
 | Review B M2 | 2 | M2 | 4c3288732b05a7f614473ad3c58c82a7467a151b | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc:4c3288732b05a7f614473ad3c58c82a7467a151b | CLEAN (scoped re-review of da2697f8e, 4c3288732) |
 | Visual pass M2 | 1 | M2 | 53565ed9eb4b8c572a8a84459f0c1a0bab55badc | b479914eb6744a3691cd90d805b7547e24464392:53565ed9eb4b8c572a8a84459f0c1a0bab55badc | CLEAN (PASS; screenshots /mnt/project-files/issue-1786/m2-*.png; later fixes docs only) |
+| M3 diff (A, code-review high) | 1 | origin/main...working tree | 2f9d3665853d6d3d41fa9ac8d8b5135f74db9cfd | 2687a887a67c6a031fda6a8fb6897ee53fe046fd:2f9d3665853d6d3d41fa9ac8d8b5135f74db9cfd | CHANGES (5 fixed: header counted gone rows as hidden, choosing the row's own list reordered it, New group over an open dialog closed it, `listed` ignored filters and rebuilt the tree, the adopt rule copied in two places (now `SidebarLayout::adopt`); 3 declined) |
+| Review B M3 | — | conformance | — | — | PENDING (orchestrator runs it; no Agent tool in this cloud thread) |
+| Visual pass M3 | — | quickstart | — | — | PENDING (orchestrator runs it) |
 
 ## Declined review findings
 
@@ -77,10 +81,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A r1 | Rename `GroupContextMenu` to `UserGroupContextMenu` | The task names it `GroupContextMenu`; every registry use is fully qualified and its id is `user_group_menu` |
 | M1 | A r1 | `refusal()` restates `LayoutError`'s Display | The dialog's words are contract C2's (quoted name); the core's Display is for logs |
 | M1 | A r1 | `apply_layout` clones per `sidebar_list()`; layout I/O on the UI thread | Small data (a handful of groups); the write happens only after a group operation, as `save_runs` does. Not a measured cost |
+| M3 | A r1 | Menu with many groups is taller than the window and never scrolls; long names overflow; a group named "Ungrouped" reads like the Ungrouped entry | Every row menu is flat and clamped the same way; scrolling or truncating menus is not this feature's scope, and the desktop app is being sunset |
+| M3 | A r1 | Moving an unheld row to Ungrouped does nothing | An unheld row is already ungrouped, in stable order; saving it would pin it to the front. Consistent with choosing the list a row is already in |
+| M3 | A r1 | Header-fits gate only exercises `hidden: 0` | The gate's `group_header_row` pose is the showcase's; its `n of m` pose belongs to M6 (T043). `count_words` is unit-tested |
 
 ## Handover
 
-M1 unit 3 finished M1: all of T001–T017 and T044 are ticked. Review A ran in round 1 (4 fixed, 6 declined, see the tables above). Review B (conformance) and the visual pass ran afterwards: review B found 1 MAJOR (plan drift record) and 1 MINOR, both fixed; the visual pass under Xvfb passed. origin/main was merged in at 45383389c, the branch is pushed, and draft PR #1905 is open. The PR author is the reviewer, so a review request was refused. Four micold-core permission tests fail only as root in the container: settings_refuses_save_over_failed_read, settings_write_is_logged, and two in worktree_leftovers.
+M3 unit finished T024–T028 (all ticked). Core `SidebarLayout::move_item`/`adopt`/`holds`/`list_of`; client `Msg::Move`, `MoveTarget`, `move_menu_items`, `NamingTarget::NewAndMove`, the "Move to ..." entries in the worktree menu (and so the Overview card menu, the keyboard path) and the run group menu; the header count decision D7 (`n`, `n of m`, `empty`). Review A ran in round 1 (5 fixed, 3 declined). Review B and the visual pass are PENDING: this cloud thread has no Agent tool, so the orchestrator runs them after the unit returns and records their rounds above. Next: run them, fix any BLOCKER or MAJOR, open the PR from `specs/1786-sidebar-user-groups/pr-M3.md` (title `#1786: feat: sidebar: let the user create groups (M3)`), wait for CI and merge, then M4 (T029–T034). Four micold-core permission tests fail only as root (settings_refuses_save_over_failed_read, settings_write_is_logged, two in worktree_leftovers): ignore them.
 
 ## Open escalation
 
@@ -105,4 +112,3 @@ Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 - M5 (T040): the visual pass could not see keyboard focus move into a pointer-opened menu (group menu and worktree-row menu alike: Down/Tab showed no highlight, Return hit the button underneath). Check menu keyboard focus when the header tab stop and keyboard opener land.
 - Seen in the M2 visual pass, not isolated: after Ctrl+Shift+G (New group) the More menu stayed open behind the naming dialog and after Create.
 
-- M3: decide whether a header's count is the group's members or its rows shown under the active filter (review A r1, declined for M1).
