@@ -41,6 +41,8 @@ pulldown-cmark = { workspace = true }
 similar = { workspace = true }
 # Feature 1271: the digest of a file's change record (`review::marks::ChangeId`, research R1).
 sha1 = { workspace = true }
+# #1948: token hashes for the orchestrator auth store (`orchestrator::auth::TokenHash`).
+sha2 = { workspace = true }
 directories = { workspace = true }
 postcard = { workspace = true }
 # Shared client<->daemon framing codec (protocol::codec). `tokio-util`'s `LengthDelimitedCodec`

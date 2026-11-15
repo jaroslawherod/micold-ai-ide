@@ -5,6 +5,9 @@
 #
 #   scripts/mutants-diff.sh [base-ref=origin/main] [out-dir=mutants-diff-out]
 #
+# --copy-vcs true keeps .git in cargo-mutants' scratch copy: tests that run git (micold-core's
+# documentation_is_not_read, via git check-attr) fail the unmutated baseline (exit 4) without it.
+#
 # Writes <out-dir>/missed.txt and timeout.txt (mutants the tests did not catch) and a markdown
 # report to <out-dir>/summary.md, which is also appended to $GITHUB_STEP_SUMMARY when that is set.
 # Exit 0 when every mutant was caught or none applies; otherwise cargo-mutants' own code (2 missed,
@@ -23,7 +26,7 @@ mapfile -t globs < <(python3 scripts/diff-coverage.py --print-globs rust)
 [ "${#globs[@]}" -gt 0 ] || { echo "mutants-diff: no [rust] globs in scripts/guardrails-scope.conf" >&2; exit 2; }
 git diff --no-color "$(git merge-base "$base" HEAD)" HEAD >"$out/pr.diff" || exit 2
 
-args=(mutants --in-diff "$out/pr.diff" --test-tool nextest --output "$out/raw")
+args=(mutants --in-diff "$out/pr.diff" --test-tool nextest --copy-vcs true --output "$out/raw")
 for g in "${globs[@]}"; do args+=(--file "$g"); done
 cargo "${args[@]}"
 rc=$?

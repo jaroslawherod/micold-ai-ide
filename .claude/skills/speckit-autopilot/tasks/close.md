@@ -5,8 +5,7 @@ When: every milestone in the ledger is merged.
 1. **Checks.** `speckit-tdd-verify` always (through an `autopilot-worker`, see
    [../rules/waiting.md](../rules/waiting.md)). `speckit-converge` first, unless *Review rounds*
    holds a `CLEAN` review B for every milestone in the ledger: B already checked each milestone's
-   tasks and scenarios against its diff. Do not run `speckit-docguard-guard`: its findings here
-   were always repo conventions this repo never adopted.
+   tasks and scenarios against its diff.
    Also run `scripts/autopilot/plan-drift.sh <feature-dir> M<K>` for each merged milestone, with
    the commit before its PR and its merge commit as the base and end arguments, and treat unrecorded drift as unbuilt or unplanned
    work: record it in `drift-M<K>.md` with a reason, or update tasks.md.

@@ -51,6 +51,7 @@ const PRINTED: usize = 3_000;
 fn arguments(tool: &str) -> Option<Value> {
     match tool {
         "whoami"
+        | "neighbourhood"
         | "list_worktrees"
         | "list_branches"
         | "list_sessions"
