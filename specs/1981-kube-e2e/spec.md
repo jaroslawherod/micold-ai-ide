@@ -154,12 +154,9 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 | Milestone | Delivers | Needs a live cluster to prove |
 |---|---|---|
 | M1 Image and chart | FR-001 to FR-005, FR-016, FR-019 (data dir and socket) | no (lint, kubeconform, template tests) |
-| M2 kind harness | FR-008 to FR-010 (harness, local task, CI job with a smoke "install and wait Ready"), FR-014, FR-018 | yes, one CI round |
-| M3 Ops endpoints | FR-006, FR-007, FR-015, FR-019 (ops address) | unit/integration no; probes in M2's smoke |
-| M4 API e2e suite | FR-011 to FR-013, FR-017 | yes |
-| M5 Network API and UI slots | Placeholder suites, then real tests as #1732 and #1954 land (US4) | yes, later |
-
-M3 can ship before M2 (it needs no cluster). M5 stays open until the blocking issues land; the epic closes after M4 with M5 tracked as separate issues.
+| M2 Ops endpoints | FR-006, FR-007, FR-015, FR-019 (ops address) | no (integration tests; probes proven in M3's smoke) |
+| M3 kind harness | FR-008 to FR-010 (harness, local task, CI job with a smoke "install and wait Ready"), FR-014, FR-018 | yes, one CI round |
+M2 (ops) comes before M3 (harness) because the harness smoke needs the readiness probe; see plan.md. M5 stays open until the blocking issues land; the epic closes after M4 with M5 tracked as separate issues.
 
 ## Assumptions
 

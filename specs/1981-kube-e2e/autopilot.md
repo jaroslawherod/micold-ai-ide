@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-pcdbm7
 - **Started**: 2026-11-15
 - **Phase**: plan
-- **Next step**: Plan unit. Q1/Q2 settled (D1, D2). Spec round-1 fixes need a sonnet re-review of the fix diff.
+- **Next step**: Plan review (pending, orchestrator dispatches reviewers), then tasks unit.
 
 ## Pull requests
 
@@ -23,7 +23,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | tbd | full | Image + chart + data-dir/socket flags | #… | pending |
+| M2 | tbd | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | pending |
+| M3 | tbd | full | kind harness, mise task, CI job kube-e2e | #… | pending |
+| M4 | tbd | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
+| M5 | tbd | full | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
 
 ## Decisions
 
@@ -56,3 +60,7 @@ None.
 ## Follow-ups not done
 
 None.
+
+## Plan notes
+
+- Clarify unit skipped by the orchestrator (no markers left in the spec). Milestones reordered: M2 ops before M3 harness (smoke needs the readiness probe); spec table updated. Plan written, plan review pending (reviewer round 1 not run: unit has no Agent tool).
