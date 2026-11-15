@@ -267,5 +267,75 @@ cases=$((cases + 1)); ! grep -q '^###' <<<"$(report "$r1" --parent sup-1 --rows 
 check "a parent without rows is exit 2" 2 'rows' "$CO" "$r1" --parent sup-1
 check "unreadable rows are exit 2" 2 'unreadable|rows' "$CO" "$r1" --parent sup-1 --rows "$tmp/absent.json"
 
+# --- US4, FR-011..FR-013, FR-016, SC-005: safe-to-remove.sh ---------------------------------------------
+SR="$S/safe-to-remove.sh"
+# safe <args...>: the list, run from $tmp.
+safe() { ( cd "$tmp" && "$SR" "$@" ); }
+# want_lines <name> <want> <got>: the two multi-line texts are equal.
+want_lines() { cases=$((cases + 1)); [ "$2" = "$3" ] || { failures=$((failures + 1)); echo "FAIL $1:"; printf '%s\n' "$3" | sed 's/^/    /'; }; }
+AR="$tmp/sup-auto.md"; printf '%s\n' '# Supervisor' '- **Auto-remove**: yes' > "$AR"
+NOAR="$tmp/sup-noauto.md"; printf '%s\n' '# Supervisor' '- **Auto-remove**: maybe' > "$NOAR"
+
+# US4.1: a clean verified run with no live session is SAFE; a session elsewhere does not matter
+FX=""; newrun 42 clean; r1="$RUN"; unset FX
+want_lines "a clean verified run is SAFE" "SAFE $r1" "$(safe "$r1" --live "$tmp/elsewhere")"
+want_lines "--no-live-sessions says nobody is live" "SAFE $r1" "$(safe "$r1" --no-live-sessions)"
+
+# US4.2: every reason to keep a worktree is named
+want_lines "a live session keeps it" "KEEP $r1 live session" "$(safe "$r1" --live "$r1")"
+want_lines "a live session under a relative or odd path keeps it" "KEEP $r1 live session" "$(safe "$r1" --live "$r1/../wt")"
+want_lines "no session list keeps it" "KEEP $r1 no session list given" "$(safe "$r1")"
+(cd "$r1" && echo x > new.txt)
+want_lines "a dirty tree keeps it" "KEEP $r1 not verified: uncommitted work: 1 path(s)" "$(safe "$r1" --no-live-sessions)"
+(cd "$r1" && rm new.txt && echo x > new.txt && git add -A && git commit -qm local)
+want_lines "an unmerged commit keeps it" "KEEP $r1 not verified: 1 commit(s) not on origin/main" "$(safe "$r1" --no-live-sessions)"
+FX=""; newrun 44 twin; r3="$RUN"; unset FX
+(cd "$r3" && cp specs/044-x/autopilot.md specs/044-x/autopilot-2.md && git add -A && git commit -qm two -q && git push -q origin HEAD:main 2>/dev/null)
+want_lines "several ledgers keep it" "KEEP $r3 several ledgers" "$(safe "$r3" --no-live-sessions 2>/dev/null)"
+FX=""; PRS=8 newrun 43 open; r2="$RUN"; pr_json "$d/fx" 8 OPEN > "$d/fx/pr-8.json"; newrun 45 ready; r4="$RUN"; unset FX
+want_lines "a run that is not verified keeps it, with the first remaining line" "KEEP $r2 not verified: PR #8 is OPEN" "$(safe "$r2" --no-live-sessions)"
+want_lines "a non-worktree keeps it" "KEEP $tmp/nowhere not a git worktree" "$(safe "$tmp/nowhere" --no-live-sessions)"
+check "no directory is exit 0 with no lines" 0 '^OK$' bash -c '[ -z "$("$0")" ] && echo OK' "$SR"
+check "an unknown option is exit 2" 2 'unknown option' "$SR" --nope
+
+# US4.3, SC-005: no opt-in, no REMOVE line, nothing removed; US4.4: opt-in, REMOVE only after SAFE
+for led in "" "--supervisor-ledger $tmp/absent.md" "--supervisor-ledger $NOAR"; do
+  # shellcheck disable=SC2086
+  out="$(safe "$r4" "$r2" --no-live-sessions $led)"
+  cases=$((cases + 1)); ! grep -q '^REMOVE' <<<"$out" && [ -d "$r4" ] || { failures=$((failures + 1)); echo "FAIL REMOVE without opt-in (${led:-no ledger})"; }
+done
+want_lines "opt-in: a REMOVE request follows each SAFE line only" "$(printf '%s\n' "SAFE $r4" "REMOVE $r4" "KEEP $r2 not verified: PR #8 is OPEN")" \
+  "$(safe "$r4" "$r2" --no-live-sessions --supervisor-ledger "$AR")"
+want_lines "opt-in: a live worktree gets no REMOVE" "KEEP $r4 live session" "$(safe "$r4" --live "$r4" --supervisor-ledger "$AR")"
+cases=$((cases + 1)); [ -d "$r4" ] && [ -d "$r2" ] || { failures=$((failures + 1)); echo "FAIL a worktree disappeared"; }
+cases=$((cases + 1)); ! grep -nE 'worktree[[:space:]]+(remove|prune)|delete_worktree|(^|[^[:alnum:]_.-])rm[[:space:]]|git[[:space:]]+branch[[:space:]]+-[dD]' <(grep -v '^[[:space:]]*#' "$SR") >/dev/null \
+  || { failures=$((failures + 1)); echo "FAIL safe-to-remove.sh has a removal command"; }
+
+# FR-016, T021: only the supervisor's own parent's runs are listed; another parent's is never SAFE or REMOVE
+rows="$tmp/rows-safe.json"
+jq -n --arg a "$r4" --arg b "$r1" '{worktrees: [
+  {ref: "wt", path: $a, parent: "sup-1", parent_state: "known"},
+  {ref: "wt", path: $b, parent: "sup-2", parent_state: "known"}]}' > "$rows"
+want_lines "only the own parent's runs are listed" "$(printf '%s\n' "SAFE $r4" "REMOVE $r4")" \
+  "$(safe "$r4" "$r1" --no-live-sessions --supervisor-ledger "$AR" --parent sup-1 --rows "$rows")"
+check "a parent without rows is exit 2" 2 'rows' "$SR" "$r4" --parent sup-1
+check "unreadable rows are exit 2" 2 'unreadable|rows' "$SR" "$r4" --parent sup-1 --rows "$tmp/absent.json"
+
+# the report's Safe to remove section lists the SAFE worktrees, and "none" otherwise; never a REMOVE
+out="$(report "$r4" "$r2" --no-live-sessions --supervisor-ledger "$AR")"
+want_lines "the report lists the SAFE worktree" "- $r4" "$(section 'Safe to remove' <<<"$out")"
+out="$(report "$r4" "$r2")"
+want_lines "no session list: the report says none" "- none" "$(section 'Safe to remove' <<<"$out")"
+out="$(report "$r4" --live "$r4")"
+want_lines "a live worktree is not in the report's list" "- none" "$(section 'Safe to remove' <<<"$out")"
+out="$(report "$r4" "$r1" --no-live-sessions --parent sup-1 --rows "$rows")"
+want_lines "the report's list keeps to the own parent" "- $r4" "$(section 'Safe to remove' <<<"$out")"
+
+# FR-015: the rules file names the four scripts and the supervisor-ledger opt-in
+RULES="$ROOT/.claude/skills/speckit-autopilot/rules/supervisor-close-out.md"
+for w in verify-run.sh follow-up.sh close-out-report.sh safe-to-remove.sh 'Auto-remove' delete_worktree; do
+  cases=$((cases + 1)); grep -qF -- "$w" "$RULES" 2>/dev/null || { failures=$((failures + 1)); echo "FAIL the rules file does not name $w"; }
+done
+
 echo "close-out: $cases cases, $failures failed"
 [ "$failures" -eq 0 ]

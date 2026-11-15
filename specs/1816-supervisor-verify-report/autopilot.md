@@ -7,10 +7,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1816
-- **Worktree branch**: claude/project-thread-nytitb
+- **Worktree branch**: claude/project-thread-vhhrxe
 - **Started**: 2026-11-12
 - **Phase**: 4-milestones
-- **Next step**: merge #1922 (M3) on green CI, then M4 in a fresh thread
+- **Next step**: orchestrator opens the M4 PR from the scratchpad title and body, runs review B, waits for CI and merges; M4 is the last milestone, then close and handoff
 
 ## Pull requests
 
@@ -19,6 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1867 | design | merged | 749d63f |
 | #1909 | M1 | merged | 7c96443 |
 | #1915 | M2 | merged | 46f7263 |
+| #1922 | M3 | merged | 35ffa7c |
+| #1924 | M4 | open | |
 
 ## Milestones
 
@@ -26,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
 | M2 | T009–T012 | full | follow-up.sh and cap | #1915 | merged |
-| M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | reviewed, awaiting CI |
-| M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
+| M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | merged |
+| M4 | T015–T019, T021 | full | safe-to-remove.sh and rules | #1924 | in review |
 
 ## Decisions
 
@@ -52,6 +54,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 1 | M3 | 54c815ff4ec16aacf2c524791e3dd9ef03f74a2e | - | CLEAN (run by the unit itself, no Agent tool; no findings) |
 | Review B | 1 | M3 | f605b7957964614c4420c157052e572f55317bc5 | 9c260155a70445ffa2edd421d0e8fa60cd6eb132:f605b7957964614c4420c157052e572f55317bc5 | CHANGES (F1 drift-M3.md, F2 cycle-log fixed) |
 | Review B | 2 | M3 | c2aee869706cbfe157fbe85e9b89632ed6745fd8 | 091dd5b5cc6ddbb2fe6ca0d006b9b30d5e6f3f40:c2aee869706cbfe157fbe85e9b89632ed6745fd8 | CLEAN (round-1 F1, F2 confirmed fixed) |
+| Review A | 1 | M4 | aac52c7b450ebfcb3748a4e58f582c12c1751532 | 559fd0a3127a26b6ca0823a77f31d87f49dcd14e:aac52c7b450ebfcb3748a4e58f582c12c1751532 | CLEAN (run by the unit itself, no Agent tool; no findings) |
+| Review B | 1 | M4 | fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | 0304b3be1b61d1a7d48bbe5f9bd29530158b477e:fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | CHANGES (F1 drift-M4 supervised.md row, fixed) |
+| Review B | 2 | M4 | 687cb19ef26a1bcc4426a45313c02f6d243dac46 | 31953c17169a2901ae3a57ebdcded71fcf78ca3d:687cb19ef26a1bcc4426a45313c02f6d243dac46 | CLEAN (round-1 F1 confirmed fixed) |
 
 ## Declined review findings
 
@@ -61,7 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 pushed; review A clean, review B left to the orchestrator; scripts/gate.sh passed fmt and clippy, stopped at the missing cargo-nextest, so the workspace tests are left to CI (shell suites all pass). M4 is the last milestone: next the run's close and handoff.
 
 ## Open escalation
 

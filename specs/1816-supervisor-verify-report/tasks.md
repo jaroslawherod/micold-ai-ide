@@ -49,12 +49,12 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 
 ## Phase 6: User Story 4 - Worktrees safe to remove are listed, not removed (P2)
 
-- [ ] T015 [US4] Tests: clean verified is `SAFE`; dirty, unmerged commit, live session, not verified, no session list, several ledgers, not a worktree are `KEEP <reason>`; opt-in off gives zero `REMOVE`, opt-in on gives `REMOVE` only for SAFE; the report's Safe to remove section lists them; text guard: script has no worktree removal command and no `rm` (US4.1..4, FR-011..FR-013, SC-005) in `scripts/tests/close-out.test.sh`
-- [ ] T016 [US4] Implement `scripts/autopilot/safe-to-remove.sh` per `contracts/close-out-report.md`; wire its section into `close-out-report.sh`
-- [ ] T021 [US4] Tests and implementation: `safe-to-remove.sh` lists only runs of the supervisor's own parent; a run of another parent is never `SAFE` or `REMOVE` (FR-016) in `scripts/tests/close-out.test.sh`
-- [ ] T017 [US4] Test: the rules file names the four scripts (FR-015) in `scripts/tests/close-out.test.sh`
-- [ ] T018 [US4] Write `.claude/skills/speckit-autopilot/rules/supervisor-close-out.md` (verify, follow-up, report, safe list; supervisor makes the Micold calls) and a close-out scenario in `.claude/skills/speckit-autopilot/tests/pressure-scenarios.md`
-- [ ] T019 [US4] List the other three scripts and the rules file in `.claude/skills/speckit-autopilot/README.md`
+- [x] T015 [US4] Tests: clean verified is `SAFE`; dirty, unmerged commit, live session, not verified, no session list, several ledgers, not a worktree are `KEEP <reason>`; opt-in off gives zero `REMOVE`, opt-in on gives `REMOVE` only for SAFE; the report's Safe to remove section lists them; text guard: script has no worktree removal command and no `rm` (US4.1..4, FR-011..FR-013, SC-005) in `scripts/tests/close-out.test.sh`
+- [x] T016 [US4] Implement `scripts/autopilot/safe-to-remove.sh` per `contracts/close-out-report.md`; wire its section into `close-out-report.sh`
+- [x] T021 [US4] Tests and implementation: `safe-to-remove.sh` lists only runs of the supervisor's own parent; a run of another parent is never `SAFE` or `REMOVE` (FR-016) in `scripts/tests/close-out.test.sh`
+- [x] T017 [US4] Test: the rules file names the four scripts (FR-015) in `scripts/tests/close-out.test.sh`
+- [x] T018 [US4] Write `.claude/skills/speckit-autopilot/rules/supervisor-close-out.md` (verify, follow-up, report, safe list; supervisor makes the Micold calls) and a close-out scenario in `.claude/skills/speckit-autopilot/tests/pressure-scenarios.md`
+- [x] T019 [US4] List the other three scripts and the rules file in `.claude/skills/speckit-autopilot/README.md`
 
 **Checkpoint**: the supervisor has the full close-out step documented and scripted; nothing removes a worktree.
 

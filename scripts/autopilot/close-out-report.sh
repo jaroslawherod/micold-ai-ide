@@ -9,21 +9,22 @@
 # Exit: 0 (also for zero runs and errored runs) · 2 usage or unreadable rows.
 # Contract: specs/1816-supervisor-verify-report/contracts/close-out-report.md
 # Env: AUTOPILOT_VERIFY_RUN replaces verify-run.sh, AUTOPILOT_RUN_STATUS replaces run-status.sh.
+# Safe to remove lists safe-to-remove.sh's SAFE worktrees (--live, --no-live-sessions go to it).
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/ledger-of.sh"
 . "$here/supervisor-ledger.sh"
-dirs=() sled="" parent="" rows=""
+dirs=() live=() sled="" parent="" rows="" nolive=""
 usage() { echo "close-out-report.sh: $1" >&2; exit 2; }
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    --no-live-sessions) shift ;;
+    --no-live-sessions) nolive=1; shift ;;
     --supervisor-ledger|--parent|--rows|--live)
       [ $# -ge 2 ] || usage "$1 needs a value"
       case "$1" in
-        --supervisor-ledger) sled="$2" ;; --parent) parent="$2" ;; --rows) rows="$2" ;; --live) ;; # --live belongs to Safe to remove (M4)
+        --supervisor-ledger) sled="$2" ;; --parent) parent="$2" ;; --rows) rows="$2" ;; --live) live+=("$2") ;;
       esac
       shift 2 ;;
     -*) usage "unknown option $1" ;;
@@ -87,5 +88,11 @@ for dir in ${dirs[@]+"${dirs[@]}"}; do
   fi
 done
 
-printf '## Completed\n%s## Not done\n%s## Escalated\n%s## Safe to remove\n- none\n' "$completed" "$notdone" "$escalated"
+# Safe to remove: the SAFE lines of safe-to-remove.sh, which removes nothing (REMOVE requests are the supervisor's).
+sargs=(${dirs[@]+"${dirs[@]}"})
+for l in ${live[@]+"${live[@]}"}; do sargs+=(--live "$l"); done
+[ -z "$nolive" ] || sargs+=(--no-live-sessions)
+[ -z "$parent" ] || sargs+=(--parent "$parent" --rows "$rows")
+safe="$("$here/safe-to-remove.sh" ${sargs[@]+"${sargs[@]}"} 2>/dev/null | sed -n 's/^SAFE /- /p')"
+printf '## Completed\n%s## Not done\n%s## Escalated\n%s## Safe to remove\n%s\n' "$completed" "$notdone" "$escalated" "${safe:-- none}"
 exit 0
