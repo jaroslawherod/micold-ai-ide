@@ -18,16 +18,7 @@ use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
 
 use crate::support::{record_when, within, Orchestrator};
-use crate::{config, link_to, Captured, FakeOrchestrator};
-
-async fn status_is(handle: &micold_daemon::orchestrator_link::LinkHandle, want: LinkStatus) {
-    within("the status settles", async {
-        while handle.status() != want {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
-    .await;
-}
+use crate::{config, link_to, status_is, Captured, FakeOrchestrator};
 
 #[tokio::test]
 async fn a_host_daemon_is_listed_online_with_every_announced_field() {

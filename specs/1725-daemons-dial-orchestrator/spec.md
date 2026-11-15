@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Closed 2026-11-15 — shipped in PRs #1969, #1971, #1975, #1976, #1979, #1989, and the close PR
 
 **Input**: GitHub issue #1725, part of epic #1722 (plans: `specs/orchestrator/`, revised by
 `specs/1722-rn-client-k8s/`). "Every daemon dials out and keeps one multiplexed link. The host daemon
