@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c875n9
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: merge M2 PR #1918 on green CI, then M3 (fresh cloud thread)
+- **Next step**: M3 (fresh cloud thread)
 
 ## Pull requests
 
@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
 | #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
+| #1918 | M2 | merged | 110457c5aa066acdedbf5b089eb7b80bbd57f156 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
-| M2 | T018–T019 | light | form tick and user guide | #1918 | reviewed (A, B CLEAN), visual pass PASS, awaiting CI |
+| M2 | T018–T019 | light | form tick and user guide | #1918 | merged |
 | M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
 ## Decisions
@@ -67,6 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+2026-11-15 M2 orchestrator (cloud): PR #1918 squash-merged (110457c5aa066acdedbf5b089eb7b80bbd57f156) on green CI (incl. the real kube cluster job); main merged back into claude/project-thread-c875n9. Next: a fresh thread runs `/speckit-autopilot resume #1760` on this branch and dispatches the M3 milestone unit (T021–T027, Tier full, model omitted); previous PR #1918, merge SHA above. Then the close unit.
 
 2026-11-14 M2 orchestrator (cloud): draft PR #1918 opened via MCP. Review A r1 (fresh, high) MINOR-only; Review B r1 CHANGES fixed in 72a62c7 (specs only), r2 CLEAN, Verify 122 passed. Visual pass (quickstart §B) PASS in light and dark at b43df5f, screenshots /mnt/project-files/issue-1760/m2-b1-*.png; the cycle-log line "visual pass pending" is superseded by this entry. Next: squash-merge #1918 on green, merge main back, then M3.
 
