@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-12
 
-**Status**: Draft
+**Status**: Closed 2026-11-15 — shipped in PRs #1909, #1915, #1922, #1924, #1867 (design)
 
 **Input**: User description: "autopilot supervisor M5: verify handoff and report completed runs (issue #1816)"
 
