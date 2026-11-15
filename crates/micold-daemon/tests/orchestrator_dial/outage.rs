@@ -16,29 +16,20 @@ use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::session::SessionId;
 use micold_daemon::catalog::Catalog;
-use micold_daemon::orchestrator_link::{spawn, LinkHandle};
+use micold_daemon::orchestrator_link::spawn;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
 
 use crate::conn::{connect_as, Client};
 use crate::support::{record_when, within, Orchestrator};
-use crate::{link_to, Captured};
+use crate::{link_to, status_is, Captured};
 
 /// SC-003's outage.
 const OUTAGE: Duration = Duration::from_secs(30);
 
 /// SC-003's bound on the return: the capped reconnect delay (15 s), plus a second for the dial.
 const BACK_ONLINE_WITHIN: Duration = Duration::from_secs(16);
-
-async fn status_is(handle: &LinkHandle, want: LinkStatus) {
-    within("the status settles", async {
-        while handle.status() != want {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
-    .await;
-}
 
 /// A shell that prints `tick_1`, `tick_2`, … every 50 ms, forever.
 fn counting() -> CommandBuilder {
