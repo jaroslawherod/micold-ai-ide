@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1725
-- **Worktree branch**: claude/project-thread-t27ol0
+- **Worktree branch**: claude/project-thread-2hmeav
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M4 review B (orchestrator, sonnet) and review A round 2 on the F1 fix diff (snapshot in Review rounds), then open the PR from pr-title.md/pr-body.md
+- **Next step**: M5 (T038–T040) milestone unit
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
-| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | pending (branch claude/project-thread-t27ol0) | implemented; review A round 1 fixed; gate green but for env-flaky script tests; awaiting review B + A round 2, PR |
+| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | #1979 | merged (squash bc0a44f22) |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
 
 ## Decisions
