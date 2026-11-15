@@ -44,32 +44,6 @@
         "speckit-tdd-verify"
       ],
       "installed_at": "2026-09-03T18:02:01.639478+00:00"
-    },
-    "docguard": {
-      "version": "0.34.9",
-      "source": "local",
-      "manifest_hash": "sha256:becd549ccb6f2aebb2cce883b8b53a689a107670c84f24055839bfa74fbe7f10",
-      "enabled": true,
-      "priority": 10,
-      "registered_commands": {
-        "claude": [
-          "speckit.docguard.guard",
-          "speckit.docguard.fix",
-          "speckit.docguard.review",
-          "speckit.docguard.score",
-          "speckit.docguard.diagnose",
-          "speckit.docguard.generate"
-        ]
-      },
-      "registered_skills": [
-        "speckit-docguard-guard",
-        "speckit-docguard-fix",
-        "speckit-docguard-review",
-        "speckit-docguard-score",
-        "speckit-docguard-diagnose",
-        "speckit-docguard-generate"
-      ],
-      "installed_at": "2026-09-12T07:05:54.459813+00:00"
     }
   }
 }

@@ -36,3 +36,35 @@ Baseline: `micold-core --lib` 2149 passed, `micold-daemon --test mcp` 256 passed
 - Tests: `a_link_that_cannot_be_written_names_the_worktree_and_starts_no_session` (`tests/mcp_create_session.rs`, a project store refusing any catalog that holds a link) and `link_failure_tests::a_failed_link_write_is_an_io_failure_naming_the_worktree` (`server.rs`).
 - Red (mutation: `try_record_worktree_parent(..).ok()` in `ops::create_worktree_with_session`): the MCP test `FAILED` (no error reported).
 - Green: mutation reverted, both pass. The app path (`server.rs`) names no parent today, so no real create reaches its `Link` arm; its reply is extracted to `link_failed` and tested directly.
+
+## M2
+
+## Cycle 8: catalog and policy for the two tools (T006, T007)
+- Tests: `mcp_tools_catalog::neighbourhood_and_send_parent_input_parse_and_reject_extra_arguments`, the `SHIPPED`/`READ_TOOLS` lists, `mcp_policy::send_parent_input_is_decided_as_send_session_input`, `Neighbourhood` in the read-only proceed list.
+- Red: `cargo test -p micold-core --test main mcp_`: `error[E0599]: no variant ... named Neighbourhood / SendParentInput found for enum Operation` (5 errors).
+- Green: first run 116 passed, 1 failed (`report_review_comment_is_listed_after_send_session_input_as_the_contract_gives`: the new tool sat between them); moved after the report tool, 117 passed.
+
+## Cycle 9: `neighbourhood` and the `send_parent_input` refusals (T008, T009, T011)
+- Tests: `tests/mcp/mcp_worktree_parent_neighbourhood.rs` (recorded, unparented, removed, `default`, several sessions, unknown worktree, scope over every fixture caller; four refusals).
+- Red (daemon arms stubbed: `Neighbourhood => Ok(json!({}))`, `SendParentInput => service_error`): `--test mcp worktree_parent` 27 passed, 11 failed (every new test).
+- Green: 38 passed. Later a directory named `default` case was added for the `None` arm (diff coverage): 12 passed in the file.
+
+## Cycle 10: `parent_target` (T010)
+- Tests: `mcp::tools::parent_target_tests` (first running in catalog order, same twice, `default`; none running).
+- Red (mutation: the `Running` filter replaced by "not failed"): both `FAILED`. Written together with the function, so the red is by mutation.
+- Green: mutation reverted, 2 passed.
+
+## Cycle 11: delivery through `send_parent_input` (T012, T013)
+- Tests in `tests/mcp_cross_session.rs`: one parent session, two sessions reached twice at the first, implicit `default`, `Off`, `Confirm each send`, a running session outside the scope never reached.
+- Red (dispatch arm stubbed to `service_error` with the tests in place): `--test mcp_cross_session parent` 5 failed, 0 passed.
+- Green: `--test mcp_cross_session` 25 passed.
+
+## Cycle 12: review A round 1 fixes (F1-F4)
+- Tests: `mcp_cross_session::{a_shell_ahead_of_the_parents_ai_cli_session_is_never_reached, a_parent_directory_named_default_is_not_the_project_root}`; `mcp_worktree_parent_neighbourhood::{a_parent_directory_named_default_lists_its_own_sessions, a_worktree_named_default_is_its_own_worktree_and_a_send_from_it_is_refused}` (replaces `a_send_from_a_worktree_named_default_is_refused`); `mcp_audit_log::a_text_sent_to_the_parent_never_reaches_the_log_and_the_line_names_the_session` and the `send_parent_input` target in `every_successful_mutating_call_writes_one_info_line`; `worktree_parent::tests::a_worktree_recorded_under_a_directory_named_default_is_its_child_not_the_roots`.
+- Red (tests in place, code unchanged): `--test mcp parent` 2 failed (the root's session listed as the parent's and as the caller's own worktree); `--test mcp_cross_session --test mcp_audit_log parent` 3 failed (the shell reached; the root session reached for a directory named `default`; the audit line said `target=parent`). The core unit test failed to compile (no `root` field).
+- Green: core `worktree_parent` 16 passed; daemon lib `parent_target` 2 passed; `--test mcp` 270, `--test mcp_cross_session` 27, `--test mcp_audit_log` 8 passed (first run 7/8: the `parent` field was Debug-quoted, logged as Display).
+
+## Cycle 13: review A round 2 fixes (F1, F3, F4)
+- Tests: `mcp_worktree_parent_neighbourhood::a_directory_named_default_never_grants_the_project_roots_sessions` (F1); `mcp_cross_session::a_parent_running_only_a_shell_is_refused_as_having_no_ai_cli_session` (F3). F4 adds a check the parent always passes today, so no test can make it fail; the existing delivery tests cover its line.
+- Red (tests in place, `src/mcp/tools.rs` unchanged): `--test mcp` 1 failed (`list_sessions` from the directory named `default` listed the root's session `...0001`); `--test mcp_cross_session` 1 failed (message "has no running session", not "no running AI CLI session (only shell sessions)").
+- Green: `--test mcp` 271, `--test mcp_audit_log` 8, `--test mcp_cross_session` 28 passed. First run 27/28: `a_parent_directory_named_default_is_not_the_project_root` started the root's session as the linked caller, which the old scope allowed only through the bug; it now starts it with the full view before linking.

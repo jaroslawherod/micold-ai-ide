@@ -688,6 +688,29 @@ without it. The task:
 4. answers each `LinkPing` with a `LinkPong` of the same nonce. Any frame it receives counts as proof
    of life; nine seconds of silence, an end of stream or an error is a lost link.
 
+A container, SSH-host or pod daemon dials `orchestrator.sock` in its pinned runtime directory
+(`/tmp/micold-<uid>`, beside the socket `remote bridge` uses), and the holder of the SSH connection to
+it forwards that socket to the orchestrator's own (`ProvisionOptions.link`, a `LinkRequest` naming the
+local socket). The start sequence's start step (`provision::start_step`) then:
+
+1. for a user-config reach, runs `ssh -G` and refuses the link when it fails or shows a
+   `localforward`, `remoteforward` or `dynamicforward` line: `ClearAllForwardings` cannot be scoped to
+   all but one `-R`, so dropping it would open those too (a pinned reach uses `-F none` and skips this);
+2. runs `micold-daemon remote prepare-link` (`argv::prepare_link`), which resolves the pinned
+   endpoint, creates or verifies the directory (`0700`, owner; never repaired), removes
+   `orchestrator.sock` whatever listens there, and prints its path;
+3. builds `argv::LinkForward` from that path and the local socket (both absolute, no `:`, whitespace
+   or control character) and opens the bridge with `argv::bridge_with_link`: the bridge's argv plus
+   `-o ExitOnForwardFailure=yes -R <remote>:<local>`, without `ClearAllForwardings`, and no other
+   forward. `argv::Forward` has two shapes only, the install relay and the link.
+
+Any refusal fails the start as `FailureCause::LinkForward` with its sentence; a forward the remote
+sshd will not bind (`AllowStreamLocalForwarding no`) ends the bridge with ssh's `remote port
+forwarding failed`, reported the same way with ssh's text. The connection is never opened without the
+forward. The client sets the request on every SSH, container and pod connection of a Unix client. The
+forward needs a Unix remote (feature 489); `packaging/basic/sshd_config` sets
+`AllowStreamLocalForwarding remote` and `StreamLocalBindUnlink yes`.
+
 A lost link is dialled again without a restart, after 1, 2, 4, 8, then 15 seconds (the delay of the
 SSH reconnect). The first delay after a lost link may grow by up to 20 %. A refusal waits 15 seconds
 (plus up to 20 %) and does not grow that delay. The task logs a state change once (`orchestrator link

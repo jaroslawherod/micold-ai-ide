@@ -4,11 +4,17 @@
 mod ssh_real_support;
 
 #[cfg(all(feature = "ssh-real-runtime", unix))]
+#[path = "../orchestrator/support.rs"]
+mod orchestrator_support;
+
+#[cfg(all(feature = "ssh-real-runtime", unix))]
 mod ssh_real_concurrent;
 #[cfg(all(feature = "ssh-real-runtime", unix))]
 mod ssh_real_endtoend;
 #[cfg(all(feature = "ssh-real-runtime", unix))]
 mod ssh_real_hostkey_auth;
+#[cfg(all(feature = "ssh-real-runtime", unix))]
+mod ssh_real_link;
 #[cfg(all(feature = "ssh-real-runtime", unix))]
 mod ssh_real_mismatch;
 #[cfg(all(feature = "ssh-real-runtime", unix))]

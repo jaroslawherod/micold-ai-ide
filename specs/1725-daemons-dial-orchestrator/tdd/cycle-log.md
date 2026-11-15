@@ -180,3 +180,84 @@ failed before the implementation.
 - F2: `spawn_as` is `#[doc(hidden)]` (test seam).
 - F3: the SC-004 test refuses each way twice in a row and asserts `ceil(attempts / 2)` log lines, so
   a line per retry fails it. `--test orchestrator_dial` 24 passed.
+
+### Cycle 11 — the link's forward argv (T028 → T032, FR-004, FR-005)
+
+- tests: `crates/micold-core/src/ssh/argv.rs`, seven tests: `LinkForward` refuses a relative path,
+  `:`, whitespace and a control character at either end; `bridge_with_link` has exactly one `-R`
+  (one argv element `<remote>:<local>`, before `--`), `ExitOnForwardFailure=yes`, no
+  `ClearAllForwardings`, no `-L`/`-D`/`-W`/`-N`/`-f`, and the bridge's remote command; `prepare_link`
+  runs the quoted helper's `remote prepare-link`; a pinned reach admits the link without `ssh -G`; a
+  user-config reach only when `ssh -G` shows no `localforward`/`remoteforward`/`dynamicforward`; a
+  failed or unasked `ssh -G` refuses it naming the cause; the relay keeps its own shape.
+- red: written with the implementation in one edit (test-after for this cycle); strength shown by
+  mutants, each restored (`-- ssh::argv`): no absolute-path check → 1 FAILED; no configured-forward
+  check → 1 FAILED; `ClearAllForwardings` kept on the link → 1 FAILED.
+- green: `Forward` is an enum (`InstallRelay`, `Link`), `LinkRefusal`, `LinkForward::new`,
+  `AdmittedLink` (only it opens the forward), `link_config_allows`, `admit_link`, `bridge_with_link`,
+  `prepare_link` → `-- ssh::argv` 25 passed.
+- refactor: `bridge_remote` shared by `bridge_with_env` and `bridge_with_link`.
+
+### Cycle 12 — `remote prepare-link` (T029 → T033, contracts/dial.md)
+
+- tests: `crates/micold-daemon/tests/remote_prepare_link.rs` (wired in `tests/main.rs`), four tests
+  on `remote::prepare_link_at` with a temporary directory: a missing directory is created `0700` and
+  the path returned; an existing `orchestrator.sock` with a live listener is removed and nothing else
+  is; a `0755` directory is refused naming the mode, never repaired; an extra argument is a usage error
+  with nothing on stdout.
+- red (stub returning the path only): `--test main remote_prepare_link` → 1 passed, 3 FAILED
+  (`remote_prepare_link.rs:16` expect on `Err`… mode `0o755` was accepted; the old socket stayed,
+  line 40).
+- green: `endpoint::guard_runtime_dir`, `prepare_link_at` (guard, unlink, path), the `prepare-link`
+  subcommand on the pinned directory → 5 passed (with `every_test_file_is_wired`).
+- refactor: none.
+
+### Cycle 13 — the start step prepares, checks and bridges with the forward (T030 → T034, T035)
+
+- tests: `crates/micold-core/src/provision/mod.rs`, five tests on the fake host: with
+  `ProvisionOptions.link` a pinned target runs `reach, probe, install, last, prepare_link, bridge`
+  and the bridge carries one `-R <printed path>:<local>`; unset, the bridge is
+  `bridge_with_env` exactly; a user host runs `ssh -G` first and, with a configured forward or a
+  failing `ssh -G`, fails the start as `LinkForward` without opening a bridge; a failed
+  `prepare-link`, a relative printed path and an empty answer each fail naming why; a bridge that
+  ends with ssh's `remote port forwarding failed` fails as `LinkForward(NotBound)` with that text.
+- red (field added, `start_step` ignoring it): `-- provision::` 85 passed, 4 FAILED (kinds without
+  `prepare_link`; `Ssh(Other { tail: "no bridge" })`; `DaemonStart` instead of `NotBound`).
+- green: `admit_link` step in `start_step` (`ssh -G` for a user-config reach, `prepare_link`,
+  `LinkForward::new`, `argv::admit_link`), `FORWARD_NOT_BOUND`, `FailureCause::LinkForward` →
+  `-- provision:: ssh:: kube::` 344 passed.
+- T035: the client's three sites set `orchestrator_link()` (Unix clients: the orchestrator's
+  socket); `the_connect_watchdog_uses_the_users_connect_timeout` also asserts the request (test-after).
+
+### Cycle 14 — four kinds through a real forward (T031, SC-001, SC-006, scenarios 1–4, FR-005)
+
+- tests: `crates/micold-daemon/tests/ssh_real/ssh_real_link.rs`, four tests against a rootless
+  `sshd` (this session installed `openssh-server` and made `/run/sshd`): a host daemon linked
+  directly, then container, SSH-host (user configuration, `ssh -G`) and pod (pinned reach) daemons one
+  after another through the forward, each `online` once under its own id with its kind; while open,
+  `sshd` listens on the remote `orchestrator.sock` only and on no new TCP port, the runtime directory
+  is `0700`, and the socket answers the orchestrator's `list`; a directory where `orchestrator.sock`
+  goes fails the open naming the link; `AllowStreamLocalForwarding no` fails with ssh's `remote port
+  forwarding failed`.
+- red (mutant: `start_step` ignores `opts.link`): 4 FAILED (`link-container never became ready`;
+  `the open must fail ...`).
+- green: `--features ssh-real-runtime --test ssh_real ssh_real_link -- --test-threads=1` → 4 passed.
+  The whole `ssh_real` suite: 17 passed, 1 failed, `ssh_real_an_unreachable_host_fails_within_the_connection_timeout`
+  (`ConnectionRefused`: the cloud network refuses the unroutable address instead of dropping it; the
+  test opens no link).
+- refactor: the TCP/Unix listener check counts only sockets `sshd` processes hold (the remote
+  daemon's own loopback ports are not the forward's).
+
+### Review A fixes (M4, round 1: CHANGES, 2 MAJOR, 2 MINOR)
+
+- F1: a user's `ClearAllForwardings yes` would clear the link's `-R`. Test first in the same edit:
+  `the_link_bridge_has_exactly_one_reverse_forward_and_exits_on_its_failure` asserts
+  `-o ClearAllForwardings=no`; green: `command()` passes it for `Forward::Link` → `-- ssh::argv
+  provision:: kube::` 272 passed.
+- F2: prose only (research R2 superseded by T028; ledger Decisions).
+- F3: the scenario-3 test is named for what it covers and asserts `LinkRefusal::Prepare`.
+- Scoped gate: `kube_daemon_*` client tests (21) panicked `unscripted ssh run`: the core fake pod
+  host (`kube/fake_host.rs`) now answers `remote prepare-link` itself → `--tests kube_daemon` green;
+  `ssh_real_link` 4 passed.
+- Full gate 1: `daemon_tests_gate_with_reason` failed (`remote_prepare_link.rs` gated `#![cfg(unix)]`
+  with no reason line); the `// unix-only:` line added → passed.

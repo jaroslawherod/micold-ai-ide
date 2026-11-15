@@ -156,6 +156,7 @@ fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
 fn the_read_only_operations_proceed_for_a_worktree_caller_and_a_default_caller() {
     for operation in [
         Operation::Whoami,
+        Operation::Neighbourhood,
         Operation::ListWorktrees { parent: None },
         Operation::ListBranches,
         Operation::ListSessions { worktree: None },
@@ -462,6 +463,21 @@ fn send_session_input_proceeds_at_auto_is_confirmed_at_confirm_each_send_and_ref
     let error = refusal(decide_at(CrossSessionAccess::Off, &send_input(OTHER)));
     assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
     assert!(error.message.contains("Settings"), "{}", error.message);
+}
+
+/// Spec 1945 (D4): `send_parent_input` is gated as `send_session_input` is, at every option value.
+#[test]
+fn send_parent_input_is_decided_as_send_session_input() {
+    let to_parent = Operation::SendParentInput {
+        text: NonEmptyText::new("carry on").expect("non-empty"),
+    };
+    for access in EVERY_ACCESS {
+        assert_eq!(
+            decide_at(access, &to_parent),
+            decide_at(access, &send_input(OTHER)),
+            "{access:?}"
+        );
+    }
 }
 
 /// U117: validation comes before policy, so the caller's own session is invalid input even when

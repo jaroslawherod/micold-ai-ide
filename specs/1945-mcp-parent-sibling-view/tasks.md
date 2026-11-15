@@ -31,15 +31,15 @@ description: "Task list for MCP parent/sibling view, neighbourhood tool and pare
 
 **Goal**: one call for the whole neighbourhood; send text to the parent without a session id.
 
-- [ ] T006 [US2] [US3] Catalog tests (failing) in `crates/micold-core/tests/mcp_tools_catalog.rs`: both tools listed, parse, extra arguments rejected
-- [ ] T007 [US2] [US3] Add `Operation::{Neighbourhood, SendParentInput}`, TOOLS entries and parsing in `crates/micold-core/src/mcp/tools.rs`; the variants in `crates/micold-core/src/mcp/policy.rs` (Neighbourhood allowed, SendParentInput gated as `SendSessionInput`)
-- [ ] T008 [US2] Daemon integration tests (failing) in new `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs` (register `mod mcp_worktree_parent_neighbourhood;` in `crates/micold-daemon/tests/mcp/main.rs`): `neighbourhood` for recorded, unparented, removed and `default` callers, caller with several sessions, an unknown-worktree caller (empty lists and the note "this session's worktree is not known to the daemon"), nothing outside scope (US2, FR-003..005, SC-002, SC-005)
-- [ ] T009 [US2] Implement `Context::neighbourhood()` and its `read_call` dispatch in `crates/micold-daemon/src/mcp/tools.rs` per `contracts/mcp-neighbourhood.md` (rows via `session_row`, `recorded`, `note`)
-- [ ] T010 [US3] Unit test (failing) for `parent_target` (several sessions, catalog order, non-`Running` skipped, none) beside the function in `crates/micold-daemon/src/mcp/tools.rs`
-- [ ] T011 [US3] Refusal tests (failing) in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs`: `default` caller, removed parent, no running session, unknown worktree; nothing typed
-- [ ] T012 [US3] Delivery tests (failing) in `crates/micold-daemon/tests/mcp_cross_session.rs` (`#![cfg(unix)]`, stub `claude`): delivery to one and to several parent sessions (same session twice), implicit `default` parent, policy `Off` and `ConfirmEachSend`, scope (FR-006..008, SC-003)
-- [ ] T013 [US3] Add `parent_target` and `send_parent_input` (refusals per the contract table, then delegate to `send_session_input`, add `session` and `parent_worktree`) in `crates/micold-daemon/src/mcp/tools.rs` (D4)
-- [ ] T014 [US2] [US3] User guide: tool table rows for both tools and the several-parent-sessions rule in `docs/user-guide/agent-tools.md`
+- [x] T006 [US2] [US3] Catalog tests (failing) in `crates/micold-core/tests/mcp_tools_catalog.rs`: both tools listed, parse, extra arguments rejected
+- [x] T007 [US2] [US3] Add `Operation::{Neighbourhood, SendParentInput}`, TOOLS entries and parsing in `crates/micold-core/src/mcp/tools.rs`; the variants in `crates/micold-core/src/mcp/policy.rs` (Neighbourhood allowed, SendParentInput gated as `SendSessionInput`)
+- [x] T008 [US2] Daemon integration tests (failing) in new `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs` (register `mod mcp_worktree_parent_neighbourhood;` in `crates/micold-daemon/tests/mcp/main.rs`): `neighbourhood` for recorded, unparented, removed and `default` callers, caller with several sessions, an unknown-worktree caller (empty lists and the note "this session's worktree is not known to the daemon"), nothing outside scope (US2, FR-003..005, SC-002, SC-005)
+- [x] T009 [US2] Implement `Context::neighbourhood()` and its `read_call` dispatch in `crates/micold-daemon/src/mcp/tools.rs` per `contracts/mcp-neighbourhood.md` (rows via `session_row`, `recorded`, `note`)
+- [x] T010 [US3] Unit test (failing) for `parent_target` (several sessions, catalog order, non-`Running` skipped, none) beside the function in `crates/micold-daemon/src/mcp/tools.rs`
+- [x] T011 [US3] Refusal tests (failing) in `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs`: `default` caller, removed parent, no running session, unknown worktree; nothing typed
+- [x] T012 [US3] Delivery tests (failing) in `crates/micold-daemon/tests/mcp_cross_session.rs` (`#![cfg(unix)]`, stub `claude`): delivery to one and to several parent sessions (same session twice), implicit `default` parent, policy `Off` and `ConfirmEachSend`, scope (FR-006..008, SC-003)
+- [x] T013 [US3] Add `parent_target` and `send_parent_input` (refusals per the contract table, then delegate to `send_session_input`, add `session` and `parent_worktree`) in `crates/micold-daemon/src/mcp/tools.rs` (D4)
+- [x] T014 [US2] [US3] User guide: tool table rows for both tools and the several-parent-sessions rule in `docs/user-guide/agent-tools.md`
 
 **Checkpoint**: `quickstart.md` steps 1-3 pass.
 
