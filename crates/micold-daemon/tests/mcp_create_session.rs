@@ -1370,7 +1370,7 @@ async fn a_no_parent_create_with_a_session_survives_a_failed_link_write() {
     use micold_core::worktree::CreateMode;
     let _guard = ENV.lock().await;
     let s = Sandbox::with_unwritable_links().await;
-    micold_daemon::ops::create_worktree_with_session(
+    let (_session, _typed, _setup) = micold_daemon::ops::create_worktree_with_session(
         &s.state,
         s.project.path().to_path_buf(),
         DerivedNames {
