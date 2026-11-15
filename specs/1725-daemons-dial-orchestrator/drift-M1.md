@@ -14,3 +14,10 @@ Paths changed beyond those the tasks of M1 name, with the reason.
 - MISSING `crates/micold-daemon/tests/orchestrator/main.rs`: T001 said "reuse or extract" the helpers;
   they are reused by `#[path = "../orchestrator/support.rs"]`, so that `main.rs` is not touched.
 - MISSING `data-model.md`: a spec file named in T004's text, not a code path; nothing to change.
+- UNPLANNED `crates/micold-daemon/tests/orchestrator_dial/process.rs`: a real-process wiring test of
+  `server::run` (the daemon dials a real orchestrator through the production entry point); added for
+  review A's MAJOR and backs the Verify step.
+- UNPLANNED `crates/micold-daemon/tests/orchestrator/no_outbound.rs`: the orchestrator-source scan now
+  skips the pure, I/O-free `crates/micold-core/src/orchestrator/dial.rs` (blanking its `pub mod dial;`
+  and `pub use dial::` lines in `mod.rs`), and the new test `the_dialer_rules_file_holds_no_io` keeps
+  `dial.rs` free of I/O (forbidden crates and the scan's full forbidden-word set).

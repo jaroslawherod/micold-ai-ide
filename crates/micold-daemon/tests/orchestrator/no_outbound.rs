@@ -255,6 +255,11 @@ fn the_dialer_rules_file_holds_no_io() {
     ] {
         assert!(!code.contains(word), "{PURE_DIAL_RULES} uses `{word}`");
     }
+    assert_eq!(
+        violations(&source),
+        [],
+        "{PURE_DIAL_RULES} holds a forbidden call or path"
+    );
 }
 
 #[test]

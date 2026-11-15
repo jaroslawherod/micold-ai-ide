@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn connect_delays_are_one_two_four_eight_then_the_cap() {
+    fn backoff_delays_are_one_two_four_eight_then_the_cap() {
         assert_eq!(secs(&mut RetryPolicy::new(), 6), [1, 2, 4, 8, 15, 15]);
     }
 
