@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-boi1v0
 - **Started**: 2026-11-15
 - **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
-- **Phase**: gate M3
+- **Phase**: review M3
 - **Next step**: dispatch Milestone M3 unit (T015, T018–T020) on branch claude/project-thread-boi1v0, which has origin/main merged after M2; then close
 
 ## Pull requests
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
 | M2 | T006–T014 | full | neighbourhood and send_parent_input tools | #1978 | merged |
-| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | - | implemented, gate pending review A/B |
+| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | - | gate green, awaiting review A/B and PR |
 
 ## Decisions
 
