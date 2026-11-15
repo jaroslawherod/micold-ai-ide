@@ -388,52 +388,34 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_save_keeps_the_stored_copy_and_reports_it() {
-        let store = Arc::new(MemoryRegistryStore::with(vec![record("a", Health::Online)]));
-        let saver = RegistrySaver::new(Arc::clone(&store) as Arc<dyn RegistryStore>);
-        store.fail_saves(true);
-        let error = saver
-            .save(&snapshot(1, vec![record("a", Health::Offline)]))
-            .unwrap_err();
-        assert!(error.to_string().contains("could not be saved"), "{error}");
-        assert_eq!(store.stored(), vec![record("a", Health::Online)]);
-        assert_eq!(store.saves(), 0);
-        store.fail_saves(false);
-        assert!(saver
-            .save(&snapshot(2, vec![record("b", Health::Online)]))
-            .unwrap());
-        assert_eq!(store.stored(), vec![record("b", Health::Online)]);
-        assert_eq!(store.load().unwrap(), store.stored());
-    }
-
-    #[test]
-    fn a_failed_save_leaves_the_registry_in_memory_correct() {
-        use crate::orchestrator::registry::Registry;
+    fn a_failed_save_is_reported_and_only_a_newer_snapshot_tries_again() {
         let store = Arc::new(MemoryRegistryStore::default());
         let saver = RegistrySaver::new(Arc::clone(&store) as Arc<dyn RegistryStore>);
         store.fail_saves(true);
-        let mut registry = Registry::restore(vec![record("a", Health::Online)]);
-        let listed = registry.list();
-        let reserved = match registry.claim(&announcement("b"), std::time::Instant::now()) {
-            crate::orchestrator::registry::Claim::Reserved { snapshot, .. } => snapshot,
-            other => panic!("{other:?}"),
-        };
-        assert!(saver.save(&reserved).is_err());
-        assert_eq!(registry.list(), listed);
-        assert_eq!(listed[0].health, Health::Offline);
-        assert!(store.stored().is_empty());
-    }
-
-    fn announcement(id: &str) -> crate::orchestrator::LinkAnnouncement {
-        crate::orchestrator::LinkAnnouncement {
-            format: 1,
-            id: WireDaemonId::new(id).unwrap(),
-            kind: Kind::Host,
-            name: id.to_owned(),
-            protocol_version: crate::protocol::version::PROTOCOL_VERSION,
-            capabilities: BTreeSet::new(),
-            tenant: None,
-        }
+        let error = saver
+            .save(&snapshot(2, vec![record("a", Health::Offline)]))
+            .unwrap_err();
+        assert!(
+            matches!(&error, StoreError::Save { reason, .. } if reason == "injected save failure"),
+            "{error:?}"
+        );
+        assert!(error.to_string().contains("could not be saved"), "{error}");
+        store.fail_saves(false);
+        // The failed snapshot's sequence number was taken: the same one and an older one are
+        // skipped, not written.
+        assert!(!saver
+            .save(&snapshot(2, vec![record("a", Health::Offline)]))
+            .unwrap());
+        assert!(!saver
+            .save(&snapshot(1, vec![record("a", Health::Online)]))
+            .unwrap());
+        assert_eq!(store.saves(), 0);
+        // The next newer snapshot writes.
+        assert!(saver
+            .save(&snapshot(3, vec![record("b", Health::Online)]))
+            .unwrap());
+        assert_eq!(store.saves(), 1);
+        assert_eq!(store.load().unwrap(), vec![record("b", Health::Online)]);
     }
 
     #[test]

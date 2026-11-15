@@ -9,7 +9,7 @@ use micold_core::protocol::keepalive::LIVENESS_DEADLINE;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
 use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 
-use crate::support::{announcement, FakeDaemon, Orchestrator};
+use crate::support::{announcement, record_when, FakeDaemon, LinkedDaemon, Orchestrator};
 
 async fn record_of(orchestrator: &Orchestrator, id: &str) -> Option<serde_json::Value> {
     orchestrator
@@ -25,15 +25,19 @@ async fn health_of(orchestrator: &Orchestrator, id: &str) -> Option<String> {
         .map(|record| record["health"].as_str().unwrap().to_owned())
 }
 
-#[tokio::test]
-async fn version_mismatch_an_older_daemon_is_refused_naming_both_versions_and_listed_needs_update()
-{
+/// `older` (one protocol version behind) announced on a fresh orchestrator beside a live "current".
+async fn refused_older() -> (Orchestrator, LinkedDaemon, LinkVerdict) {
     let orchestrator = Orchestrator::start().await;
-    let _current = FakeDaemon::link(&orchestrator, &announcement("current")).await;
-
+    let current = FakeDaemon::link(&orchestrator, &announcement("current")).await;
     let mut older = announcement("older");
     older.protocol_version = PROTOCOL_VERSION - 1;
     let verdict = FakeDaemon::dial(&orchestrator).await.announce(&older).await;
+    (orchestrator, current, verdict)
+}
+
+#[tokio::test]
+async fn version_mismatch_an_older_daemon_is_refused_naming_both_versions() {
+    let (_orchestrator, _current, verdict) = refused_older().await;
     let LinkVerdict::Refused {
         reason,
         orchestrator_version,
@@ -51,11 +55,20 @@ async fn version_mismatch_an_older_daemon_is_refused_naming_both_versions_and_li
             && message.contains(&(PROTOCOL_VERSION - 1).to_string()),
         "{message}"
     );
+}
 
+#[tokio::test]
+async fn version_mismatch_an_older_daemon_is_listed_needs_update_with_both_versions() {
+    let (orchestrator, _current, _verdict) = refused_older().await;
     let record = record_of(&orchestrator, "older").await.expect("listed");
     assert_eq!(record["health"], "needs-update");
     assert_eq!(record["protocol_version"], PROTOCOL_VERSION - 1);
     assert_eq!(record["orchestrator_version"], PROTOCOL_VERSION);
+}
+
+#[tokio::test]
+async fn version_mismatch_a_refused_daemon_leaves_a_live_peer_online() {
+    let (orchestrator, _current, _verdict) = refused_older().await;
     assert_eq!(health_of(&orchestrator, "current").await.unwrap(), "online");
 }
 
@@ -118,13 +131,7 @@ async fn version_mismatch_a_live_daemon_is_never_overwritten() {
     orchestrator.clock.advance(Duration::from_secs(3));
     let now = orchestrator.clock.wall();
     live.send(ClientMsg::LinkPong { nonce: 1 }).await;
-    for _ in 0..100 {
-        if record_of(&orchestrator, "a").await.unwrap()["last_seen"] == now {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    let after = record_of(&orchestrator, "a").await.unwrap();
+    let after = record_when(&orchestrator, "a", |a| a["last_seen"] == now).await;
     assert_eq!(after["health"], "online");
     assert_eq!(after["last_seen"], now);
 }
@@ -213,13 +220,7 @@ async fn version_mismatch_a_silent_link_is_closed_and_the_id_listed_needs_update
     let orchestrator = Orchestrator::start().await;
     let mut silent = FakeDaemon::link(&orchestrator, &announcement("a")).await;
     orchestrator.clock.advance(LIVENESS_DEADLINE);
-    for _ in 0..100 {
-        if health_of(&orchestrator, "a").await.as_deref() == Some("offline") {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert_eq!(health_of(&orchestrator, "a").await.unwrap(), "offline");
+    record_when(&orchestrator, "a", |a| a["health"] == "offline").await;
 
     let mut older = announcement("a");
     older.protocol_version = PROTOCOL_VERSION - 1;

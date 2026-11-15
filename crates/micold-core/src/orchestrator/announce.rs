@@ -4,12 +4,10 @@
 
 use std::collections::BTreeSet;
 use std::fmt;
-use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
 use crate::daemon_config::Kind;
-use crate::protocol::keepalive::LIVENESS_DEADLINE;
 use crate::protocol::routing::WireDaemonId;
 
 /// The largest preamble frame, in bytes.
@@ -148,14 +146,8 @@ pub fn decode_first_frame(body: &[u8]) -> Result<FirstFrame, DecodeError> {
         .map_err(|e| DecodeError::Invalid(e.to_string()))
 }
 
-/// Whether a preamble that began at `started` has run out of time at `now`.
-pub fn preamble_expired(started: Instant, now: Instant) -> bool {
-    now.saturating_duration_since(started) >= LIVENESS_DEADLINE
-}
-
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
 
     use super::*;
 
@@ -284,16 +276,5 @@ mod tests {
             serde_json::to_string(&RefuseReason::AlreadyLinked).unwrap(),
             serde_json::to_string(&RefuseReason::VersionMismatch).unwrap()
         );
-    }
-
-    #[test]
-    fn a_preamble_not_finished_within_the_deadline_expires() {
-        let start = Instant::now();
-        assert!(!preamble_expired(start, start));
-        assert!(!preamble_expired(
-            start,
-            start + LIVENESS_DEADLINE - Duration::from_millis(1)
-        ));
-        assert!(preamble_expired(start, start + LIVENESS_DEADLINE));
     }
 }

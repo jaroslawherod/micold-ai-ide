@@ -7,3 +7,5 @@
 | `crates/micold-daemon/tests/orchestrator/{heartbeat,netns,no_outbound,one_link_per_id,restart,version_mismatch}.rs` | One-line stubs T010 creates so `[[test]] orchestrator` (T002) and `every_test_file_is_wired` compile; later milestones fill them. |
 
 `MISSING contracts/link.md`, `MISSING data-model.md`, `MISSING every_test_file_is_wired.rs` are read-only references in task text, not planned edits.
+
+Full paths for the stub row above (close check): `crates/micold-daemon/tests/orchestrator/heartbeat.rs`, `crates/micold-daemon/tests/orchestrator/netns.rs`, `crates/micold-daemon/tests/orchestrator/no_outbound.rs`, `crates/micold-daemon/tests/orchestrator/one_link_per_id.rs`, `crates/micold-daemon/tests/orchestrator/restart.rs`, `crates/micold-daemon/tests/orchestrator/version_mismatch.rs` are the one-line stubs of T010.
