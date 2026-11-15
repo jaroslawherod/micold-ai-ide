@@ -544,6 +544,17 @@ fn worktree_reason(failure: ops::CreateFailure, branch: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_runs_reserved_worktree_name_is_explained_as_the_create_does() {
+        let failure = ops::CreateFailure::Create(CreateError::ReservedName {
+            dir: "default".into(),
+        });
+        assert_eq!(
+            worktree_reason(failure, "default"),
+            explain_reserved_name("default")
+        );
+    }
     use micold_core::naming::{ConventionalType, DerivedNames};
     use micold_core::settings::JsonFileSettingsStore;
     use micold_core::store::JsonFileStore;

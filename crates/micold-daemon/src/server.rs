@@ -3513,6 +3513,17 @@ mod create_error_tests {
         assert!(message.contains("feat-login"), "{message}");
         assert!(message.contains("Choose a different name"), "{message}");
     }
+
+    /// Spec 1945 D2: a reserved name is the caller's mistake, said in core's words.
+    #[test]
+    fn the_reserved_name_is_an_invalid_input_in_cores_own_words() {
+        let (kind, message, detail) = describe_create_error(CreateError::ReservedName {
+            dir: "default".into(),
+        });
+        assert_eq!(kind, ErrorKind::InvalidInput);
+        assert_eq!(message, explain_reserved_name("default"));
+        assert_eq!(detail, None);
+    }
 }
 
 #[cfg(test)]
