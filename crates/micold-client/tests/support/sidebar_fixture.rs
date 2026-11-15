@@ -42,6 +42,7 @@ pub fn state_with_active() -> State {
 /// A worktree at `/repo`, matching the paths `state_with_active` sets up.
 pub fn listed(dir_name: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.to_string(),
         path: PathBuf::from("/repo/.claude/worktrees").join(dir_name),
         branch: Some(format!("feat/{dir_name}")),

@@ -241,6 +241,7 @@ mod tests {
         });
         state.workspace.active = Some(path.clone());
         state.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: "feat-a".to_string(),
             path: PathBuf::from(format!("{PROJECT}/.claude/worktrees/feat-a")),
             branch: Some("feat/a".to_string()),

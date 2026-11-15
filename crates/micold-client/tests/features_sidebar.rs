@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 
 fn worktree(dir_name: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.into(),
         path: Path::new("/p/.claude/worktrees").join(dir_name),
         branch: Some(format!("feat/{dir_name}")),
@@ -2261,14 +2262,14 @@ mod chip_bar {
         let none = chip_bar_chips(&on_offer(), &BTreeSet::new());
         assert!(
             none.iter()
-                .all(|&(chip, active)| active == (chip == ChipBarChip::All)),
+                .all(|(chip, active)| *active == (*chip == ChipBarChip::All)),
             "no filter: All alone looks selected (US4.2): {none:?}"
         );
         let fix = TagFilter::Type(ConventionalType::Fix);
-        let one = chip_bar_chips(&on_offer(), &filters([fix]));
+        let one = chip_bar_chips(&on_offer(), &filters([fix.clone()]));
         assert!(
             one.iter()
-                .all(|&(chip, active)| active == (chip == ChipBarChip::Filter(fix))),
+                .all(|(chip, active)| *active == (*chip == ChipBarChip::Filter(fix.clone()))),
             "a filter on: its chip alone looks selected, All no longer does: {one:?}"
         );
     }
@@ -2383,16 +2384,21 @@ mod chip_bar {
     #[test]
     fn active_filters_show_on_the_line_and_the_rest_end_in_a_plus_n() {
         let all = nine();
-        let bar = collapsed_bar(&all, &filters([all[4], all[1], all[7]]), 2).expect("9 > 3");
+        let bar = collapsed_bar(
+            &all,
+            &filters([all[4].clone(), all[1].clone(), all[7].clone()]),
+            2,
+        )
+        .expect("9 > 3");
         assert!(!bar.all_active);
         assert_eq!(bar.active_count, 3, "the toggle's count");
         assert_eq!(
             bar.shown,
-            [all[1], all[4]],
+            [all[1].clone(), all[4].clone()],
             "on-offer order, as many as fit"
         );
         assert_eq!(bar.overflow, 1, "+1");
-        let fits = collapsed_bar(&all, &filters([all[4]]), 2).expect("9 > 3");
-        assert_eq!((fits.shown, fits.overflow), (vec![all[4]], 0));
+        let fits = collapsed_bar(&all, &filters([all[4].clone()]), 2).expect("9 > 3");
+        assert_eq!((fits.shown, fits.overflow), (vec![all[4].clone()], 0));
     }
 }

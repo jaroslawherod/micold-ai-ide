@@ -643,6 +643,7 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
             worktree: micold_client::features::worktree::State {
                 worktrees: (0..worktrees)
                     .map(|i| micold_core::worktree::Worktree {
+                        parent: None,
                         dir_name: format!("feat-{i:02}"),
                         path: std::path::PathBuf::from("/fixture/project")
                             .join(format!("feat-{i:02}")),

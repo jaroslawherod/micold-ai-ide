@@ -398,6 +398,7 @@ mod tests {
 
     fn worktree(dir: &str, branch: Option<&str>) -> Worktree {
         Worktree {
+            parent: None,
             dir_name: dir.into(),
             path: format!("{REPO}/.claude/worktrees/{dir}").into(),
             branch: branch.map(Into::into),

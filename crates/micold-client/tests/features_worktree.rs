@@ -24,6 +24,7 @@ use std::path::PathBuf;
 
 fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir_name.into(),
         path: PathBuf::from("/p/.claude/worktrees").join(dir_name),
         branch: Some(branch.into()),

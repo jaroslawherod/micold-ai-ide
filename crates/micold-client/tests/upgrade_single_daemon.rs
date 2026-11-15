@@ -55,6 +55,7 @@ fn launch(settings: &JsonFileSettingsStore, projects: &JsonFileStore) -> State {
     };
     state.workspace.active = Some(PathBuf::from(PROJECT));
     state.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: "feature-x".into(),
         path: PathBuf::from(PROJECT).join(".claude/worktrees/feature-x"),
         branch: Some("feat/feature-x".into()),

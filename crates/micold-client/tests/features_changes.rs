@@ -3441,6 +3441,7 @@ fn two_worktrees_app() -> (
     app.workspace.active = Some(root.clone());
     app.worktree.worktrees = ["feat-a", "feat-b"]
         .map(|dir| Worktree {
+            parent: None,
             dir_name: dir.into(),
             path: root.join(".claude/worktrees").join(dir),
             branch: Some(format!("feat/{dir}")),

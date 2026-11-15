@@ -837,6 +837,7 @@ fn a_dialog_draws_from_its_own_state() {
             });
         state.workspace.active = Some(std::path::PathBuf::from("/p"));
         state.worktree.worktrees = vec![micold_core::worktree::Worktree {
+            parent: None,
             dir_name: "feat-x".to_string(),
             path: std::path::PathBuf::from("/p/.claude/worktrees/feat-x"),
             branch: Some("feat/x".to_string()),

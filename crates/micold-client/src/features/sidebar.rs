@@ -267,8 +267,9 @@ pub struct RunNode {
 /// What a run row is made of.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunRow {
-    /// The run's worktree, with the usual tags and session children.
-    Worktree(WorktreeNode),
+    /// The run's worktree, with the usual tags and session children. Boxed: the node is far larger
+    /// than `NoWorktree` (clippy `large_enum_variant`).
+    Worktree(Box<WorktreeNode>),
     /// The run has no worktree row: it failed while creating it, or is still creating it, or the
     /// sidebar's filters hide it. A leaf with no worktree menu (G1a).
     NoWorktree,
@@ -362,7 +363,7 @@ pub fn more_menu_items(project_active: bool, refreshing: bool) -> Vec<MoreMenuIt
 }
 
 /// One chip of the chip bar (feature 1125, FR-014): **All**, or one tag filter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChipBarChip {
     All,
     Filter(TagFilter),
@@ -379,7 +380,7 @@ pub fn chip_bar_chips(
         .chain(
             available
                 .iter()
-                .map(|&filter| (ChipBarChip::Filter(filter), active.contains(&filter))),
+                .map(|filter| (ChipBarChip::Filter(filter.clone()), active.contains(filter))),
         )
         .collect()
 }
@@ -416,8 +417,8 @@ pub fn collapsed_bar(
     }
     let mut on: Vec<TagFilter> = available
         .iter()
-        .copied()
         .filter(|f| active.contains(f))
+        .cloned()
         .collect();
     let overflow = on.len().saturating_sub(fit);
     on.truncate(fit);
@@ -507,7 +508,7 @@ pub fn arrange_groups(
                 let row = match at.and_then(|i| entries[i].take().map(|e| (i, e))) {
                     Some((i, SidebarEntry::Worktree(node))) => {
                         first = Some(first.map_or(i, |f: usize| f.min(i)));
-                        RunRow::Worktree(node)
+                        RunRow::Worktree(Box::new(node))
                     }
                     _ => RunRow::NoWorktree,
                 };
@@ -806,7 +807,7 @@ impl SidebarEntry {
 
 /// A tag filter the sidebar can apply (feature 008, FR-024). Typed so an impossible filter is
 /// unrepresentable (Principle V); ordered so it lives in a `BTreeSet`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TagFilter {
     /// Match worktrees of a specific conventional type.
     Type(ConventionalType),
@@ -814,6 +815,9 @@ pub enum TagFilter {
     HasIssue,
     /// Match worktrees whose name does not follow the convention (no type tag).
     Untyped,
+    /// Match the direct children of one parent (spec 1857, FR-010). Unlike the others it narrows:
+    /// see [`matches_filters`].
+    Parent(micold_core::worktree::ParentLabel),
 }
 
 /// The environment variable that pre-applies sidebar tag filters at launch.
@@ -829,12 +833,21 @@ pub enum TagFilter {
 pub const FILTER_ENV_VAR: &str = "MICOLD_SIDEBAR_FILTER";
 
 impl TagFilter {
-    /// Parse one filter token: a conventional type (`feat`, `fix`, …), `issue`, or `untyped`.
+    /// Parse one filter token: a conventional type (`feat`, `fix`, …), `issue`, `untyped`, or
+    /// `parent:<name>` for the live parent of that name (`parent:default` is the project root).
     pub fn from_token(token: &str) -> Option<Self> {
         match token {
             "issue" => Some(Self::HasIssue),
             "untyped" => Some(Self::Untyped),
-            other => ConventionalType::from_token(other).map(Self::Type),
+            other => match other.strip_prefix("parent:") {
+                Some(name) if !name.is_empty() => {
+                    Some(Self::Parent(micold_core::worktree::ParentLabel {
+                        name: name.to_string(),
+                        removed: false,
+                    }))
+                }
+                _ => ConventionalType::from_token(other).map(Self::Type),
+            },
         }
     }
 }
@@ -842,7 +855,8 @@ impl TagFilter {
 /// The filters named by [`FILTER_ENV_VAR`]'s value: a comma-separated list of tokens.
 ///
 /// - `None`, empty, or all-whitespace → no filters, and the application starts normally.
-/// - `"fix"`, `"fix,docs"`, `"issue"`, `"untyped"` → those filters, in the order given.
+/// - `"fix"`, `"fix,docs"`, `"issue"`, `"untyped"`, `"parent:sup"` → those filters, in the order
+///   given.
 /// - anything else → `Err` naming the variable, the bad token, and the grammar.
 ///
 /// A malformed value is an error rather than a silent "no filter", for the reason the frame probe
@@ -866,7 +880,7 @@ pub fn filters_from_env_value(raw: Option<&str>) -> Result<Vec<TagFilter>, Strin
         let filter = TagFilter::from_token(token).ok_or_else(|| {
             format!(
                 "{FILTER_ENV_VAR}: {token:?} is not a filter. Expected a comma-separated list of \
-                 conventional types ({}), `issue`, or `untyped`.",
+                 conventional types ({}), `issue`, `untyped`, or `parent:<name>`.",
                 ConventionalType::ALL
                     .iter()
                     .map(|t| t.as_str())
@@ -880,17 +894,36 @@ pub fn filters_from_env_value(raw: Option<&str>) -> Result<Vec<TagFilter>, Strin
 }
 
 /// Whether a worktree with `tags` passes the active `filters` (feature 008, FR-025). An empty
-/// filter set shows everything; otherwise a worktree matches if it satisfies ANY active filter
-/// (logical OR).
+/// filter set shows everything. The type, issue and untyped filters match if ANY is satisfied
+/// (logical OR). The parent filters are a second dimension (spec 1857, FR-010): when any is on, the
+/// worktree must also be a direct child of ANY chosen parent, so a parent filter narrows what the
+/// others select instead of adding to it.
 pub fn matches_filters(tags: &[Tag], filters: &BTreeSet<TagFilter>) -> bool {
-    if filters.is_empty() {
-        return true;
-    }
-    filters.iter().any(|f| match f {
-        TagFilter::Type(t) => tags.iter().any(|tag| matches!(tag, Tag::Type(x) if x == t)),
-        TagFilter::HasIssue => tags.iter().any(|tag| matches!(tag, Tag::Issue(_))),
-        TagFilter::Untyped => !tags.iter().any(|tag| matches!(tag, Tag::Type(_))),
-    })
+    let parents: Vec<_> = filters
+        .iter()
+        .filter_map(|f| match f {
+            TagFilter::Parent(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    let others: Vec<_> = filters
+        .iter()
+        .filter(|f| !matches!(f, TagFilter::Parent(_)))
+        .collect();
+    let by_parent = parents.is_empty() || parents.iter().any(|p| has_parent(tags, p));
+    let by_tag = others.is_empty()
+        || others.iter().any(|f| match f {
+            TagFilter::Type(t) => tags.iter().any(|tag| matches!(tag, Tag::Type(x) if x == t)),
+            TagFilter::HasIssue => tags.iter().any(|tag| matches!(tag, Tag::Issue(_))),
+            TagFilter::Untyped => !tags.iter().any(|tag| matches!(tag, Tag::Type(_))),
+            TagFilter::Parent(_) => false,
+        });
+    by_parent && by_tag
+}
+
+fn has_parent(tags: &[Tag], parent: &micold_core::worktree::ParentLabel) -> bool {
+    tags.iter()
+        .any(|tag| matches!(tag, Tag::Parent(p) if p == parent))
 }
 
 /// Whether a location's row is shown open (feature 024, contract §1.1).
@@ -1564,13 +1597,15 @@ pub enum RowChip {
     OutsideThisApp,
     /// A merged pull request holds all its work (feature 040, FR-015).
     CanBeRemoved,
+    /// The worktree's parent, by its current name, `(removed)` when it is gone (spec 1857, FR-010).
+    Parent(String),
 }
 
 impl RowChip {
     /// The words the chip shows.
     pub fn label(&self) -> String {
         match self {
-            Self::Status(label) | Self::Daemon(label) => label.clone(),
+            Self::Status(label) | Self::Daemon(label) | Self::Parent(label) => label.clone(),
             Self::CurrentSession => "current session".into(),
             Self::OutsideThisApp => "outside this app".into(),
             Self::CanBeRemoved => "can be removed".into(),
@@ -1588,6 +1623,12 @@ pub fn row_chips(node: &WorktreeNode, removable: bool) -> Vec<RowChip> {
         .filter(|tag| matches!(tag, Tag::Status(_)))
         .map(|tag| RowChip::Status(tag.label()))
         .collect();
+    chips.extend(
+        node.tags
+            .iter()
+            .filter(|tag| matches!(tag, Tag::Parent(_)))
+            .map(|tag| RowChip::Parent(tag.label())),
+    );
     if node.shown_for_current_session {
         chips.push(RowChip::CurrentSession);
     }
@@ -2067,7 +2108,8 @@ impl crate::app::State {
 
     /// The distinct tag filters offered for the current worktrees (feature 008, FR-024): a
     /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
-    /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
+    /// `Untyped` if any worktree lacks a type, and a `Parent` per parent that has children (spec
+    /// 1857). Order: types first, then HasIssue, Untyped, then parents by name.
     ///
     /// Sourced from every worktree (552): an `agent-<hex>` worktree is listed like any other, so
     /// its missing type is a real `Untyped` row.
@@ -2075,6 +2117,7 @@ impl crate::app::State {
         let mut types = BTreeSet::new();
         let mut has_issue = false;
         let mut has_untyped = false;
+        let mut parents = BTreeSet::new();
         for worktree in &self.worktree.worktrees {
             let tags = worktree_tags(worktree);
             let mut typed = false;
@@ -2086,6 +2129,9 @@ impl crate::app::State {
                     }
                     Tag::Issue(_) => has_issue = true,
                     Tag::Status(_) => {}
+                    Tag::Parent(parent) => {
+                        parents.insert(parent.clone());
+                    }
                 }
             }
             if !typed {
@@ -2099,6 +2145,7 @@ impl crate::app::State {
         if has_untyped {
             out.push(TagFilter::Untyped);
         }
+        out.extend(parents.into_iter().map(TagFilter::Parent));
         out
     }
 }

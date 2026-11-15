@@ -30,6 +30,21 @@ pub struct ParentView {
     pub state: ParentState,
 }
 
+impl ParentView {
+    /// The label the sidebar shows (FR-010): `display` names a live or removed parent by its
+    /// directory name, and answers the parent's display name (a rename override), or itself.
+    pub fn label(&self, display: impl Fn(&str) -> String) -> crate::worktree::ParentLabel {
+        crate::worktree::ParentLabel {
+            name: if self.name == DEFAULT_NAME {
+                self.name.clone()
+            } else {
+                display(&self.name)
+            },
+            removed: self.state == ParentState::Removed,
+        }
+    }
+}
+
 fn retire(ids: &mut Ids, links: &mut Links, dir: &str) {
     let Some(id) = ids.remove(dir) else { return };
     links.remove(&id);

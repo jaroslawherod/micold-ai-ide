@@ -1522,6 +1522,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         status: micold_core::worktree::WorktreeStatus::Valid,
                         // The app made this one, so it is not an inclusion (016 BUG-002).
                         included: false,
+                        parent: None,
                     },
                 )));
             }
@@ -1593,6 +1594,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                             branch: worktree.branch,
                             status: wire_to_worktree_status(worktree.status),
                             included: worktree.included,
+                            parent: worktree.parent,
                         },
                     )));
                 }

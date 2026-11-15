@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 
 fn wt(dir: &str, repo: &Path) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: repo.join(".claude/worktrees").join(dir),
         branch: Some(format!("feat/{dir}")),

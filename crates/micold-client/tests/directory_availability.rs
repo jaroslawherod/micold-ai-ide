@@ -449,6 +449,7 @@ fn env_include_changed_reports_only_a_real_change() {
 
 fn worktree(name: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: name.to_string(),
         path: PathBuf::from(format!("{P}/.claude/worktrees/{name}")),
         branch: Some(format!("feat/{name}")),

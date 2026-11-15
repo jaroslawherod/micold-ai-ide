@@ -115,6 +115,7 @@ fn a_refusal_names_the_worktree_holding_the_branch_and_its_daemon() {
     let project = PathBuf::from(PROJECT);
     let path = project.join(".claude/worktrees/feat-held");
     state.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: "feat-held".into(),
         path: path.clone(),
         branch: Some("feat/held".into()),

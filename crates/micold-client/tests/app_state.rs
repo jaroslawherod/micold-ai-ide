@@ -116,6 +116,7 @@ fn created_worktree_is_added_and_form_closed() {
         micold_client::features::worktree_form::Msg::Opened,
     ));
     let wt = Worktree {
+        parent: None,
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
@@ -239,6 +240,7 @@ fn an_include_clears_a_stale_create_failure_too() {
     ));
 
     state.update(Message::Worktree(WorktreeMsg::Included(Worktree {
+        parent: None,
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/p/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
@@ -336,6 +338,7 @@ fn session_started_selected_and_closed() {
     // write happened whether the location existed or not.
     micold_client::app::drain(
         state.set_worktrees(vec![Worktree {
+            parent: None,
             dir_name: "feat-x".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
             branch: Some("feat/x".to_string()),
@@ -429,6 +432,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
     });
     state.workspace.active = Some(path.clone());
     state.worktree.worktrees.push(Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -603,6 +607,7 @@ fn escape_cancels_worktree_rename() {
 fn agent_worktree(hex: &str) -> Worktree {
     let dir = format!("agent-{hex}");
     Worktree {
+        parent: None,
         dir_name: dir.clone(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("worktree-agent-{hex}")),
@@ -1823,6 +1828,7 @@ fn state_with_current_session_in(dir: &str) -> State {
     });
     state.workspace.active = Some(path.clone());
     state.worktree.worktrees = vec![Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -1865,6 +1871,7 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
 
     micold_client::app::drain(
         state.set_worktrees(vec![Worktree {
+            parent: None,
             dir_name: "feat-a".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
             branch: Some("feat/feat-a".to_string()),
@@ -2033,6 +2040,7 @@ fn state_with_many_worktrees(count: usize) -> State {
     state.workspace.active = Some(path.clone());
     state.worktree.worktrees = (0..count)
         .map(|i| Worktree {
+            parent: None,
             dir_name: format!("feat-{i:02}"),
             path: PathBuf::from(format!("/repo/.claude/worktrees/feat-{i:02}")),
             branch: Some(format!("feat/{i:02}")),
@@ -2129,6 +2137,7 @@ fn starting_a_session_reveals_it() {
     micold_client::app::drain(
         state.set_worktrees(vec![
             Worktree {
+                parent: None,
                 dir_name: "feat-a".to_string(),
                 path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
                 branch: Some("feat/feat-a".to_string()),
@@ -2136,6 +2145,7 @@ fn starting_a_session_reveals_it() {
                 included: false,
             },
             Worktree {
+                parent: None,
                 dir_name: "feat-b".to_string(),
                 path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
                 branch: Some("feat/feat-b".to_string()),

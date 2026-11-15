@@ -249,6 +249,7 @@ fn a_narrow_session_row_shortens_the_title_and_never_the_cli_label() {
             ..micold_client::app::State::default()
         };
         state.worktree.worktrees = vec![Worktree {
+            parent: None,
             dir_name: "feat-short".to_string(),
             path: PathBuf::from(PROJECT).join(".claude/worktrees/feat-short"),
             branch: Some("feat/short".to_string()),

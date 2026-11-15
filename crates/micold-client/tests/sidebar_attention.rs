@@ -31,6 +31,7 @@ const AGENT: &str = "agent-00112233445566aa";
 
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
+        parent: None,
         dir_name: dir.to_string(),
         path: Path::new(REPO).join(".claude/worktrees").join(dir),
         branch: Some(format!("feat/{dir}")),

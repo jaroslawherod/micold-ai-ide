@@ -242,6 +242,7 @@ fn a_stage_reported_after_cancel_is_the_one_a_failure_names() {
 /// A worktree as the daemon's success reply describes it.
 fn worktree_named(dir_name: &str) -> micold_core::worktree::Worktree {
     micold_core::worktree::Worktree {
+        parent: None,
         dir_name: dir_name.into(),
         path: std::path::PathBuf::from("/repo/demo/.claude/worktrees").join(dir_name),
         branch: None,
