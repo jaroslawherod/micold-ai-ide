@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 1 | M2 | 2e31bdcd1b62b43879df3a1a9afa37fb0f88858f | bb26161ef2fa2e86022fc2cbb791aab111384099:a199b3c482dad6e2e2c35e8a607dcf758f2ff756 | MINOR-ONLY: CLEAN with 3 MINOR (redundant claim_failed, Detached comment and duplicated set-up, thread-local capture in host test); all fixed, no new round (MINOR only) |
 | Review B | 1 | M2 | d120a5c13b499fc7f04b3d9a923813229864c532 | 43ea938da69a7ebd31566488c5881cbcc07b885c:d120a5c13b499fc7f04b3d9a923813229864c532 | MINOR-ONLY: 2 MINOR declined (orchestrator, sonnet); Verify 7 passed, no plan drift |
 | Review A | 1 | M3 | 11cf6ef6aacaa53f201f8e063e94ea6e94dcdaeb | b6c2d388a5ead6484138edc3efa314604677c7e0:02fd9250fb4dd000800238ca044234da717f8a4b | MINOR-ONLY: CLEAN with 3 MINOR (refused-to-absent change not logged, spawn_as public seam, SC-004 log test could not catch a per-retry line); all fixed in 11cf6ef6a, no new round (MINOR only) |
+| Review B | 1 | M3 | 7f09644ad | HEAD | CLEAN (orchestrator, sonnet): 1 MINOR accepted (T022 never red; cycle 10 records mutation checks); Verify 7+53 passed, no plan drift |
 
 ## Declined review findings
 
