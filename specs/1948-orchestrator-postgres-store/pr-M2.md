@@ -11,7 +11,7 @@
 - Review B (conformance, sonnet): pending, dispatched by the orchestrator.
 
 ## Local gate
-GATE_LINE
+`scripts/gate.sh` passed at 2deff3756 (13257 tests, script tests). It was red once before on two tests: the outbound scan met the database pool's `connect` (the scan now skips `orchestrator/db/`) and a signed-commit test needed `ssh-keygen`. No macOS, sandbox or visual check: nothing here touches them.
 
 Refs #1948
 
