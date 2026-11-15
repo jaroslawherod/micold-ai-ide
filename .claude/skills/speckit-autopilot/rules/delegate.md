@@ -31,8 +31,8 @@ and ask for at most ~40 lines back: the failing step, the failing tests, the dec
 2. Fetch that step's log: `gh run view <run> --log-failed`, or MCP `get_job_logs` with
    `return_content: true` (blob URLs return 403 in the cloud). An oversized result is saved to a
    tool-results JSON file: `jq -r .logs_content <file> > "$SCRATCHPAD/job.log"`.
-3. `grep -n -E 'FAILED|panicked|error' "$SCRATCHPAD/job.log"`, then `grep -n -C3` around the first
-   hits. Never print the whole log.
+3. `grep -n -E 'FAILED|panicked|error'` the log file (`<log>` when handed a non-empty one, else
+   `$SCRATCHPAD/job.log`), then `grep -n -C3` around the first hits. Never print the whole log.
 4. Return: failing job and step, failing test names, the decisive lines. Nothing else.
 
 The same applies to any long log a debugging unit needs (a gate log is already read with `grep`).
