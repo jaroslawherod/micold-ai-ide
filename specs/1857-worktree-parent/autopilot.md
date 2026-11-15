@@ -1,4 +1,4 @@
-# Autopilot ledger — worktree-parent M1, M1b (#1858), M2 (#1859)
+# Autopilot ledger — worktree-parent M1, M1b (#1858), M2 (#1859), M3 (#1860)
 
 Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
 finds this file by its **Worktree branch** line. Keep it true.
@@ -19,8 +19,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
-| #1912 | M1b | merged | 95fa459da |
-| #1921 | M2 | open (draft) | — |
+| #1912 | M1b | merged | 95fa459da7e2b4381424c66ba66f40454159a70b |
+| #1917 | M3 | merged | 2c3e7fd77e9305e8a801bcd8c2a61541480c23e1 |
+| #1921 | M2 | open | — |
 
 ## Milestones
 
@@ -29,6 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
 | M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | merged |
 | M2 | T015–T019 | full | Sidebar parent label (current name, marked removed) and a parent filter that narrows and composes with the issue/type filter; no nesting; shared chip; user guide; visual pass of quickstart Part B | #1921 | in-review (T015-T019 done; review B CLEAN, visual pass PASS) |
+| M3 | T023, T024, T033, T025, T026 | light | Supervisor ownership: `runs-of-parent.sh` with fixture test; ownership and relay rules in the supervisor skill; `Parent` ledger column; issue notes | #1917 | merged |
 
 ## Decisions
 
@@ -58,6 +60,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 1 | M1b | 7318d57 | (code-review skill, high, no subagent tool) | 7 findings: list_resumable_sessions and list_branches scoped, scope computed in the blocking closure, redundant retain removed, `Scope::unrestricted()`, list_branches test added; 2 declined |
 | B | 1 | M1b | f8a65aedc8a930ce6de6b90bf29bc8e2b6c8c5b7 | 091e3648b65b331889996323fab008ad31a1ba0d:9949424349adb1a57a7b6ce87a8d75e9634a9bb8 | CHANGES (F1-F4): all fixed (cycle-log red runs, drift-M1b.md, relay test states coverage, Scope::explain with red-first tests); round 2 to run by orchestrator |
 | B | 2 | M1b | 24e28dc124ca0b39051ae6b826275be5f3d80fb7 | 2b7105f8e940df91f685cfc09e6da5c31dfa8fce:24e28dc124ca0b39051ae6b826275be5f3d80fb7 | CLEAN (round 2 sonnet on fix diff; worktree_parent 22 passed; 2 MINOR) |
+| A | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F6): F1 `ref` not `name`, F2 orphan scan on unfiltered list, F3 `--check` takes ref or path, F4 exit 2 on empty or bad rows, F5 8-column ledger refuses Parent, F6 relay text; all fixed test first (cycle-log M3); round 2 to run by orchestrator |
+| B | 1 | M3 | 06e798571 | 1036173b0df044edbd6d9e5688f8d09e586f9e31:06e79857162a63dd6971f69df67a16423d6cbfc8 | CHANGES (F1-F4): F1 cycle-log M3 section with red runs, F2 = A F6, F3 T026 reworded to comments, F4 drift-M3.md; all fixed; round 2 to run by orchestrator |
+| A | 2 | M3 | b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | 4aed8e5fc120550f00e3254472dd2fbadfc597d2:b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | CLEAN (round 2 sonnet on fix diff; ownership 39, supervisor 269 passed) |
+| B | 2 | M3 | b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | 4aed8e5fc120550f00e3254472dd2fbadfc597d2:b2b6e0af3d1535e299bfdec02e9cfca59968ae14 | CLEAN (round 2 sonnet on fix diff) |
 | A | 1 | M2 | afd98b48f3ac0d200e992af167138e8e3330c0dc | by-hand review of origin/main...HEAD (no subagent tool) | CLEAN no BLOCKER or MAJOR |
 | B | 1 | M2 | 68d2fd0f5 | conformance review of origin/main...HEAD | CHANGES (F1-F4) fixed: cycle-log M2 red run and two mutants (both killed), drift-M2.md and a `## Milestones` section in tasks.md, RunRow boxed instead of the allow, renamed-parent note in the user guide |
 | B | 2 | M2 | e05d5e719 | fix diff 68d2fd0f5..e05d5e719 (sonnet) | CLEAN: F1-F4 resolved; plan-drift.sh M2 no drift; clippy client clean. Visual pass T018 PASS (both Part B checks, screenshots in project files issue-1859/) |

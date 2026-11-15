@@ -176,7 +176,10 @@ impl Section {
             (Container, F::DaemonSurviveLogout) => Section::Sessions,
             (Kubernetes, F::DaemonKubeContext | F::DaemonKubeNamespace) => Section::Connection,
             (Kubernetes, F::DaemonKubeImage | F::DaemonKubeProvider(_)) => Section::Image,
-            (Kubernetes, F::DaemonKubeAllowed(_) | F::DaemonKubePullFile) => Section::Credentials,
+            (
+                Kubernetes,
+                F::DaemonKubeAllowed(_) | F::DaemonKubePullFile | F::DaemonKubeGithubTokens,
+            ) => Section::Credentials,
             (
                 Kubernetes,
                 F::DaemonCpuRequest

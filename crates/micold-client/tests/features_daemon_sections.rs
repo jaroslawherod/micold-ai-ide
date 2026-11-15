@@ -150,6 +150,7 @@ fn every_required_or_marked_control_has_its_section() {
         (Kubernetes, F::DaemonKubeProvider(cli), Image),
         (Kubernetes, F::DaemonKubeAllowed(0), Credentials),
         (Kubernetes, F::DaemonKubePullFile, Credentials),
+        (Kubernetes, F::DaemonKubeGithubTokens, Credentials),
         (Kubernetes, F::DaemonCpuRequest, Resources),
         (Kubernetes, F::DaemonCpuLimit, Resources),
         (Kubernetes, F::DaemonMemoryRequest, Resources),

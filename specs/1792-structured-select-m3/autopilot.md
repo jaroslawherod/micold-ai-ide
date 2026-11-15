@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1792
-- **Worktree branch**: claude/project-thread-q9zjol
+- **Worktree branch**: claude/project-thread-hyfws4
 - **Started**: 2026-11-11
-- **Phase**: M3 PR open (visual pass findings handled)
-- **Next step**: orchestrator waits on CI and merges #1902 (review B round 2 done; the step 5 visual re-check passed, see visual-pass-M3.md)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1836 | Design | merged | e0894d44a661930bebb203ffd8e9e2d1554d039e |
 | #1842 | M1 | merged | 7628262fce95c344ccb9eed01db1138e2da2a5fa |
 | #1851 | M2 | merged (2026-11-12) | bd4e5970c23446123021f819fd9543caadf9c46f |
-| #1902 | M3 | open | — |
+| #1902 | M3 | merged (2026-11-14) | aa9968e9ae1f6988b5b9325e00afddc91e40254f |
+| #1919 | Close | open | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Material 3 trigger on the three structured selects | #1842 | merged |
 | M2 | T011–T012 | light | menu parity pinned (test-only if green) | #1851 | merged |
-| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | #1902 | PR open |
+| M3 | T013–T021 | full | options row expand/collapse animation; collapse closes pickers (T017/T020) | #1902 | merged |
 
 Polish T022–T023 (no code) is left to the close unit.
 
@@ -78,6 +79,13 @@ M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy c
 | A | 3 | M3 | 11ba14eefb44c852011f1dc86dffca39d646b0f4 | 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 | MINOR-ONLY (fix diff 3ce8964c9..8107980c1, code-review medium: 8 doc/record findings, no code bug; fixed in 11ba14eef: visual-pass table and step 5 note consistent, collapse readings explained, core reduce_motion doc names the row, note says composer's, ValidSettings doc points at core; prose and UI text only, no new round) |
 | B | 2 | M3 | 64c99464d08f6210785fd53dde78255d812c2980 | 847071f13ca67489e476e0b1d89c162ce6cf4f49:8107980c156197c0a6df2b50ff3c1257a57ca784 | CHANGES (F1 MAJOR three settings paths unrecorded in drift-M3.md; F2 MINOR step 5 visual re-check due) |
 | B | 3 | M3 | 16e8a681667d58af49025c849a82d254bf358403 | 6083dd1716343295c327e0fb1ae3a691a75b0e52:16e8a681667d58af49025c849a82d254bf358403 | CLEAN (docs-only fix diff 64c99464d..16e8a6816, sonnet: drift recorded, step 5 PASS on clean build) |
+| review A | 1 | 1919 | c86609ed2127eccbbc95cecf3c3ad72507a24746 | 6a4ec58fbfb162db2f55154435eb1c45bd4c8919:c86609ed2127eccbbc95cecf3c3ad72507a24746 | CHANGES |
+| review B | 1 | 1919 | c86609ed2127eccbbc95cecf3c3ad72507a24746 | 6a4ec58fbfb162db2f55154435eb1c45bd4c8919:c86609ed2127eccbbc95cecf3c3ad72507a24746 | CHANGES |
+| review A | 2 | 1919 | 00d1db3298f24400028ef390882edbfb907f7462 | 5318982802c0cb0203d1c7be21ad4fed27d953a6:00d1db3298f24400028ef390882edbfb907f7462 | MINOR-ONLY (fix diff c86609ed2..9c5056546, code-review medium via the Skill tool, no Agent tool in this unit: no code bug; 9 doc/robustness points, fixed in the following docs-only commit: task ids, mutant list wording, T022a step wording, cycle-log split note; declined: chevron contrast margin measured 141 vs 465 (0.30 against a 0.5 limit), ripple sampled 150 ms after mount origin (press stamps within ms), effort header is one painted run (asserted by the run), ledger verdicts bare by the record-verdict format, stale-save worry vacuous since the store starts empty) |
+| review B | 2 | 1919 | 00d1db3298f24400028ef390882edbfb907f7462 | 5318982802c0cb0203d1c7be21ad4fed27d953a6:00d1db3298f24400028ef390882edbfb907f7462 | MINOR-ONLY (same re-review run covered conformance: F1-F3 untick/run/Phase honest, F4 product mutants, F6 effort named, F7 drift confirmed; F5 T022b left open, recorded; no BLOCKER or MAJOR) |
+
+- Close round 1 fixes (head 9c5056546): T029 mutants run (red), T030 split, T031 consts, T026 two mutants run and two survivors killed by strengthened tests, T025 product mutants and FR-002 deviation, T028 effort named, T027 declined, T022/T023 split into ticked a and open b, drift-M3 confirmed. Gate (cloud): `cargo fmt --check`, `cargo clippy -p micold-client --all-targets -D warnings`, targeted tests green; CI is the gate of record.
+- Close review (code-review medium via the Skill tool, no Agent tool in this cloud unit; not a fresh autopilot-reviewer): 10 findings. Fixed: chevron pairing in composer_fits (distinct nearest chevron per label), ROW constant, focus test no longer sends Tab, cycle-log wording on the focus/pressed proof, T026/T023 tick text, verification.md remediation addendum. Declined: spec Status line (close.md requires it; open follow-ups are listed below); drift-M3.md wording kept (the audit found no changed paths in containment.rs). Test and doc fixes only.
 
 ## Declined review findings
 
@@ -89,6 +97,7 @@ M3 visual-pass fix gate (cloud) at 11ba14eef: `scripts/gate.sh` fmt and clippy c
 | M3 | A1 | F3 another session's picker loses focus target | The press or key that toggles the row already took focus from the other session's filter field (a text field unfocuses on a press outside it; the keyboard toggle needs the settings button focused). |
 | M3 | A1 | F4 no per-session key on the track | One row flag per window: a session switched in mid-flight continues toward the same target its row must reach; `restart_on` would replay the grow from zero on every switch, which is worse. Separate composers keep separate tracks (T015). |
 | M3 | A1 | F5 `/model` focus while the row is still at 0 | The filter field is in the menu overlay, which `Expand::overlay` forwards at any progress, so the focus operation reaches it; the visual pass checks `/model` while hidden. |
+| Close | tdd-verify 6 / T027 | paint-level menu parity | Declined as at M2 (above): the parity test is geometry only by decision; `menu_panel` and `row_surface` are shared functions both controls call, so the panel and rows cannot drift apart in paint; a draw dump is out of proportion. |
 | M3 | A1 | F6 hidden row built every frame | Required by design: the track must live in the tree (research R3); three small controls per composer. |
 
 ## Handover
@@ -114,6 +123,9 @@ None. <or, one question:>
 Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
 
 ## Follow-ups not done
+
+- Close unit: speckit-tdd-verify verdict FAIL (tdd/verification.md). After review round 1 fixes: findings 1-5, 7-10 cleared in the close PR (mutants run, tests split and strengthened, see tdd/cycle-log.md); 6 (T027) declined (below). Still open, not tests: T022b (visual run of focus/pressed and narrow-window step 7: the forked visual-pass skill received no arguments and ran nothing, twice) and T023b.
+- Close unit, not done from the cloud: close or narrow #1765 with a link to #1842/#1851/#1902 (spec Assumptions) (T023b); `mise run duplication` (T023b); `branch-start.sh` refused (gh unauthenticated), the branch was already on the merged base.
 
 - Process: review B round 1's mutation check (`options_motion` mutated) ran while the visual-pass worker built its release client in the same worktree; the binary (21:36:03) carried the mutant, the revert came at 21:36:15, so step 5 failed on a mutated build. A mutation check and a build for a visual pass must not share a worktree at once. Evidence: visual-pass-M3.md, *Step 5 re-check*.
 - Parity test (M2) compares geometry only; colour, elevation and state-layer paint are not compared. T011 was green first run, T012 skipped.

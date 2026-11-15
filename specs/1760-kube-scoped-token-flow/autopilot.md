@@ -8,23 +8,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1760
-- **Worktree branch**: claude/project-thread-myub4h
+- **Worktree branch**: claude/project-thread-c875n9
 - **Started**: 2026-11-12
 - **Phase**: milestones
-- **Next step**: M1 round 2 of Review A (fix diff) and Review B (Verify) (orchestrator), then the M1 PR
+- **Next step**: merge M2 PR #1918 on green CI, then M3 (fresh cloud thread)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
+| #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | pending-review | built, pushed, awaiting reviews |
-| M2 | T018–T019 | light | form tick and user guide | - | pending |
+| M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
+| M2 | T018–T019 | light | form tick and user guide | #1918 | reviewed (A, B CLEAN), visual pass PASS, awaiting CI |
 | M3 | T021–T027 | full | kube_real_scoped_token and forge harness | - | pending |
 
 ## Decisions
@@ -51,6 +52,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B (conformance) | 1 | M1 | c5fb01da75a62b53009826c1d649440184d47587 | 127f0833ef54e6b40f7306db53653abf0ea414a0:3c7c46c82761f64a23599beeaab880b4ce202b67 | CHANGES: F1 MAJOR fixed (drift-M1.md), F2 MINOR fixed (PR body moved out of the tree); round 2 (Verify) pending |
 | Review A | 2 | M1 | afc83aba87b0ffac0ffc2b88d92285c92a893f6f | bd50b71e8142636b177dd984f110c553e105c671:afc83aba87b0ffac0ffc2b88d92285c92a893f6f | CLEAN (all 6 round-1 findings fixed; F4 retry behaviour declined) |
 | Review B | 2 | M1 | afc83aba87b0ffac0ffc2b88d92285c92a893f6f | bd50b71e8142636b177dd984f110c553e105c671:afc83aba87b0ffac0ffc2b88d92285c92a893f6f | CLEAN (1 MINOR: stale handover path, fixed) |
+| Review A M2 | 1 | diff | b43df5f | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (1 MINOR declined) |
+| Review B M2 | 1 | diff | b43df5f | same | CHANGES: F1 drift-M2.md, F2 cycle-log, F3 Verify line fixed (docs/prose only, no code change); F4 MINOR declined |
+| Review A | 1 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | MINOR-ONLY (F1 declined: spec fixes the label) |
+| Review B | 2 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (F1-F3 fixed in specs, Verify 122 passed) |
 
 ## Declined review findings
 
@@ -58,8 +63,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | spec | spec review r1 | F1 MAJOR: three open markers (FR-008..010) leave scope unsettled | They are the template's allowed three; the rubric sends each to clarify. FR-008 is escalated there. Fixed F2, F3, F4 (prose/edge case). |
 | M1 | Review A r1 | F4 MINOR (behaviour part): a token-read failure on an established link retries with back-off instead of a terminal StartFailed | The token file was readable when the link was made; a retry picks up a file the user fixes (chmod 600, a new token) with no action, and each failed attempt shows the reason naming the token. A terminal StartFailed would need a manual restart for a transient or fixed problem. The comment is corrected. |
+| M2 | Review A r1 | F1 MINOR: group title and checkbox label both start `GitHub tokens` | The spec (contracts/opt-in.md) fixes the label text; the group title only names the group. |
+| M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+2026-11-14 M2 orchestrator (cloud): draft PR #1918 opened via MCP. Review A r1 (fresh, high) MINOR-only; Review B r1 CHANGES fixed in 72a62c7 (specs only), r2 CLEAN, Verify 122 passed. Visual pass (quickstart §B) PASS in light and dark at b43df5f, screenshots /mnt/project-files/issue-1760/m2-b1-*.png; the cycle-log line "visual pass pending" is superseded by this entry. Next: squash-merge #1918 on green, merge main back, then M3.
+
+2026-11-14 M2 unit (cloud, branch claude/project-thread-c875n9): previous PR #1914 merged at 17284c645186eeb705ba403c114ee757f3ea3d53. T018–T019 built: tick in the Credentials section after Allowed credentials, `Msg::GithubTokensToggled`, `FieldId::DaemonKubeGithubTokens`, geometry and reducer tests, user guide wording. Targeted tests, fmt, clippy (client, all targets) green. Review A (self, high, small diff): no findings. Review B r1 fixed (drift-M2.md, cycle-log red run, Verify line). Still needed from the orchestrator: the visual pass (quickstart §B), push/PR (gh unavailable; PR body at the unit's scratchpad pr-body-m2.md), CI, merge.
+2026-11-14 M1 orchestrator (cloud): Review A and B round 2 CLEAN at afc83aba8; PR #1914 squash-merged (17284c645186eeb705ba403c114ee757f3ea3d53) on green CI (all checks, incl. the real kube cluster job). main merged back into claude/project-thread-myub4h. Next: a fresh thread runs `/speckit-autopilot resume #1760` and dispatches the M2 milestone unit (T018–T019, Tier light, model sonnet) on this branch; previous PR #1914, merge SHA above.
 
 2026-11-14 M1 fix unit (cloud): Review A r1 (6 findings) and Review B r1 (2) acted on in c5fb01da7: all fixed but F4's retry behaviour (declined, see table). Targeted tests, fmt and clippy (core, client) green. PR body updated at the unit's scratchpad (outside the tree, Review B F2). Next: round 2 of A and B on the fix diff from snapshot 127f0833e:3c7c46c82, then open the M1 PR.
 2026-11-14 M1 unit (cloud): previous PR #1870 merged at 55e614ed76ba667e09c0ac9649abc04114f93393. T001–T017 and T020 built test-first (tdd/test-list.md, tdd/cycle-log.md), committed and pushed on claude/project-thread-myub4h; PR body kept out of the tree (orchestrator scratchpad). Next: orchestrator runs Review A and B, the unit fixes findings, then the PR opens.

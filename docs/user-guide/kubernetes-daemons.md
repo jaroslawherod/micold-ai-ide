@@ -155,11 +155,11 @@ daemon's **GitHub tokens** opt-in, which is off for every daemon. A delivered to
 Kubernetes Secret: **anyone who can read Secrets in the namespace, and anyone who can read the
 cluster's etcd, can read the token.** Turn it on only for a namespace you trust with it.
 
-The form has no switch for it yet. To turn it on, quit the application and add
-`"github_tokens": true` to the daemon's `runtime` object (the one with `"kind": "kubernetes"`) in
-the `daemons` list of `settings.json` (see
-[Where settings are stored](settings.md#where-settings-are-stored)); remove the key, or set it to
-`false`, to turn it off. It applies at the daemon's next start.
+To turn it on, open the daemon in **Settings → Daemons**, expand **Credentials** and tick **GitHub
+tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can
+read them)**; untick it to turn it off. It is saved with the daemon's other settings and applies at
+the daemon's next start. (The same switch is `"github_tokens": true` in the daemon's `runtime`
+object in `settings.json`; see [Where settings are stored](settings.md#where-settings-are-stored).)
 
 With it on, each start sends the pod only the tokens that can be for its projects: a token whose
 **Repositories** filter names the repository (`owner/repo` or `owner/*`) of one of the daemon's
