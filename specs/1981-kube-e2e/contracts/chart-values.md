@@ -11,6 +11,7 @@
 | `ops.enabled` / `ops.port` | `true` (M2) / `9090` | adds `--ops-addr=0.0.0.0:<port>` and probes |
 | `web.enabled` / `web.image.*` | `false` | renders nothing when false; with true and an image, Deployment + Service |
 | `testDaemon.enabled` | `false` | M4, set only by `ci/e2e.yaml`: second container sharing `/run/micold` |
+| `testing.corruptRegistry.enabled` | `false` | M4, only `ci/corrupt-registry.yaml`: pinned busybox init container writes an invalid `orchestrator/registry.json` |
 | `securityContext` | non-root 65532, read-only root FS, no escalation, drop ALL, `RuntimeDefault` | not user-weakenable in the schema |
 
 Fixed paths: data `/var/lib/micold`, socket `/run/micold/orchestrator.sock`, tmp `/tmp` (emptyDir). The mount path equals the `--data-dir` argument (tested).

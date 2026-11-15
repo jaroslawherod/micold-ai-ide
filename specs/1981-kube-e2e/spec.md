@@ -41,7 +41,7 @@ A maintainer runs `helm install` of `deploy/helm/micold` into a cluster and gets
 
 **Acceptance Scenarios**:
 
-1. **Given** default values, **When** the chart is rendered, **Then** it yields a Deployment (`replicas: 1`, `strategy: Recreate`), a Service and a PersistentVolumeClaim, with `runAsNonRoot`, UID 65532, read-only root FS, no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp, and an `emptyDir` at `/tmp`.
+1. **Given** default values, **When** the chart is rendered, **Then** it yields a Deployment (`replicas: 1`, `strategy: Recreate`) and a PersistentVolumeClaim (the Service, which needs the ops port, arrives with M2), with `runAsNonRoot`, UID 65532, read-only root FS, no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp, and an `emptyDir` at `/tmp`.
 2. **Given** `web.enabled=false` (default), **When** rendered, **Then** no web resource exists; **Given** `web.enabled=true` with an image, **Then** a web Deployment and Service render.
 3. **Given** `state.mode=file` (the only mode this epic supports), **When** rendered, **Then** a PersistentVolumeClaim (or `emptyDir` when `state.persistence.enabled=false`) is mounted at the data directory the orchestrator is configured with (FR-019). **Given** any other `state.mode` (`sqlite`, `postgres`), **Then** rendering fails with a message saying the mode is not available yet and naming #1948 and #1740. The value shape `state.mode` and `database.existingSecret` is reserved so those issues fill it in.
 
@@ -113,7 +113,7 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 ### Functional Requirements
 
 - **FR-001**: The repository MUST contain a Dockerfile that builds the orchestrator image from the workspace, running `micold-daemon orchestrator` as UID 65532 on a distroless `cc` base, tagged `ghcr.io/jaroslawherod/micold-orchestrator` (`:dev` locally).
-- **FR-002**: The chart `deploy/helm/micold` MUST render the orchestrator Deployment, Service and PersistentVolumeClaim with the security context of User Story 1, and MUST take image repository, tag and pull policy as values.
+- **FR-002**: The chart `deploy/helm/micold` MUST render the orchestrator Deployment and PersistentVolumeClaim, and from M2 its Service, with the security context of User Story 1, and MUST take image repository, tag and pull policy as values.
 - **FR-003**: The chart MUST support only `state.mode=file` and MUST fail rendering for any other mode as in User Story 1. It reserves the value names `state.mode` and `database.existingSecret` per the 1722 plan; the `sqlite` and `postgres` modes belong to #1948 and #1740.
 - **FR-004**: The chart MUST contain a `web` component, disabled by default, rendering nothing when disabled.
 - **FR-005**: `helm lint` and `kubeconform` (pinned versions, checksums) MUST run on the chart for default values and every values file under `deploy/helm/micold/ci/`, in CI on every chart or Dockerfile change and in `mise run gate`'s chart step where the tools exist.
@@ -156,6 +156,9 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 | M1 Image and chart | FR-001 to FR-005, FR-016, FR-019 (data dir and socket) | no (lint, kubeconform, template tests) |
 | M2 Ops endpoints | FR-006, FR-007, FR-015, FR-019 (ops address) | no (integration tests; probes proven in M3's smoke) |
 | M3 kind harness | FR-008 to FR-010 (harness, local task, CI job with a smoke "install and wait Ready"), FR-014, FR-018 | yes, one CI round |
+| M4 API e2e suite | FR-011 to FR-013, FR-017 | yes |
+| M5 Network API and UI slots | Placeholder suites, then real tests as #1732 and #1954 land (US4) | yes, later |
+
 M2 (ops) comes before M3 (harness) because the harness smoke needs the readiness probe; see plan.md. M5 stays open until the blocking issues land; the epic closes after M4 with M5 tracked as separate issues.
 
 ## Assumptions

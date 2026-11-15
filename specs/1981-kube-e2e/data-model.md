@@ -10,3 +10,4 @@ No new persisted data. Configuration entities:
 | Harness environment | see [contracts/harness-env.md](contracts/harness-env.md) | |
 
 The registry file (`<data-dir>/orchestrator/registry.json`) is unchanged and owned by `JsonRegistryStore`.
+| `e2e-link` verbs (new, M4, `micold-daemon e2e-link`) | `idle`; `register --name N [--hold] --socket P`; `list --socket P` | test support only; `list` prints the listing as JSON (name, online/offline); starts no session |
