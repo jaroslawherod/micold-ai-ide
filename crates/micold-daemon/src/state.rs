@@ -1844,6 +1844,11 @@ impl DaemonState {
         }
     }
 
+    /// The configuration in force, if the daemon started with a file.
+    pub fn config_current(&self) -> Option<Arc<micold_core::daemon_config::DaemonConfig>> {
+        self.config.get().map(|runtime| runtime.current())
+    }
+
     /// The `config` section of the diagnostic (contract §5); `None` without a configuration file.
     pub fn config_status(&self) -> Option<micold_core::protocol::messages::ConfigStatus> {
         self.config.get().map(|runtime| runtime.status())

@@ -114,11 +114,7 @@ impl Shared {
 
 /// The orchestrator's own endpoint: beside the daemon's, under other names, so both can run.
 fn endpoint() -> io::Result<Endpoint> {
-    let daemon = micold_core::endpoint::resolve()?;
-    Ok(Endpoint {
-        socket_path: daemon.socket_path.with_file_name("orchestrator.sock"),
-        lock_path: daemon.lock_path.with_file_name("orchestrator.lock"),
-    })
+    micold_core::endpoint::orchestrator_endpoint()
 }
 
 /// Run the orchestrator on the user's endpoint until the process is stopped, keeping its registry

@@ -127,6 +127,13 @@ impl fmt::Display for DecodeError {
 
 impl std::error::Error for DecodeError {}
 
+/// The body of an announcement's preamble frame (the inverse of [`decode_first_frame`]): the JSON
+/// a daemon writes first when it dials the orchestrator (#1725).
+pub fn encode_announcement(announcement: &LinkAnnouncement) -> Vec<u8> {
+    // A struct of strings, numbers and a set of strings: serialising it cannot fail.
+    serde_json::to_vec(announcement).expect("a link announcement serialises")
+}
+
 /// Decode a connection's first frame body.
 pub fn decode_first_frame(body: &[u8]) -> Result<FirstFrame, DecodeError> {
     if body.len() > MAX_PREAMBLE_FRAME {
@@ -159,6 +166,27 @@ mod tests {
             FirstFrame::Announcement(a) => Ok(a),
             FirstFrame::Query(q) => panic!("a query: {q:?}"),
         }
+    }
+
+    #[test]
+    fn an_encoded_announcement_decodes_to_the_same_announcement() {
+        let original = announcement(OLD).unwrap();
+        let bytes = encode_announcement(&original);
+        assert_eq!(
+            announcement(std::str::from_utf8(&bytes).unwrap()).unwrap(),
+            original
+        );
+        let bare = LinkAnnouncement {
+            tenant: None,
+            capabilities: BTreeSet::new(),
+            name: String::new(),
+            ..original
+        };
+        let bytes = encode_announcement(&bare);
+        assert_eq!(
+            announcement(std::str::from_utf8(&bytes).unwrap()).unwrap(),
+            bare
+        );
     }
 
     #[test]
