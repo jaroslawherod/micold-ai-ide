@@ -30,7 +30,7 @@ M1 and M2 touch disjoint files except `deploy/helm/micold/templates/deployment.y
 
 **Testing**: `cargo test` for the flag parser and the ops listener (no cluster); `scripts/tests/*.test.sh` for the harness's pure parts; a chart conformance test (rendered-template checks) in `scripts/tests/` driven by `helm template`; `helm lint` and `kubeconform` in CI; `crates/micold-e2e` against kind in the `kube-e2e` job.
 
-**Target Platform**: Linux (docker, kind). macOS/arm64: harness exits 0 with a skip.
+**Target Platform**: Linux (docker, kind). Another host (not Linux amd64): harness exits 0 with a skip.
 
 **Project Type**: infrastructure and test harness over an existing Rust daemon.
 

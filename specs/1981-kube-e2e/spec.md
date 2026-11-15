@@ -60,7 +60,7 @@ A developer runs one `mise run` task on Linux and gets: a kind cluster, the imag
 1. **Given** docker, kind and kubectl on PATH, **When** the task runs, **Then** the cluster `micold-e2e` is created, torn down at exit (kept with `MICOLD_E2E_KEEP=1`), and exit status is the suite's.
 2. **Given** a missing tool, **When** the task runs, **Then** it stops before any cluster work and names the tool.
 3. **Given** a failing suite, **When** the run ends, **Then** pod logs, `kubectl describe` and events are saved under a known directory and CI uploads them as an artifact.
-4. **Given** a cloud thread or a macOS machine, **When** the e2e test binary runs without the harness, **Then** it skips with a stated reason, and fails instead when `MICOLD_E2E_REQUIRED=1` (as `MICOLD_KUBE_TEST_REQUIRED` does).
+4. **Given** a cloud thread or a machine without kind, **When** the e2e test binary runs without the harness, **Then** it skips with a stated reason, and fails instead when `MICOLD_E2E_REQUIRED=1` (as `MICOLD_KUBE_TEST_REQUIRED` does).
 
 ---
 
@@ -104,7 +104,7 @@ When #1732 lands, its WebSocket and auth endpoints get their own suite in the sa
 - Two e2e runs on one machine: distinct cluster names via `MICOLD_E2E_CLUSTER`; one build at a time through `scripts/build-lock.sh` (shared target directory).
 - Slow CI node: every wait has a stated timeout and prints pod status on expiry.
 - A pod restarts mid-test (Recreate rollout): tests wait for readiness, never sleep a fixed time.
-- Arm64 or macOS developer: the image build and harness are Linux-only; `mise run e2e-kind` says so and exits 0 with a skip, not a failure.
+- A host that is not Linux amd64: the image build and harness are Linux-only; `mise run e2e-kind` says so and exits 0 with a skip, not a failure.
 - Multi-session (Principle II): the listing test runs two test daemons at once and sees both.
 - Browser differences (Principle VI): only the `ui` suite is affected; it declares its browser matrix (chromium first, others when #1954 lands).
 
@@ -170,4 +170,4 @@ M2 (ops) comes before M3 (harness) because the harness smoke needs the readiness
 
 ## Out of Scope
 
-Release publishing, multi-arch images, cosign, ingress/Gateway API, NetworkPolicies, cert-manager, CloudNativePG, metrics, authentication, the web client itself, Windows and macOS runs, load and chaos testing.
+Release publishing, multi-arch images, cosign, ingress/Gateway API, NetworkPolicies, cert-manager, CloudNativePG, metrics, authentication, the web client itself, load and chaos testing.
