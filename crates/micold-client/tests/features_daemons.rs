@@ -513,6 +513,21 @@ mod kubernetes {
     }
 
     #[test]
+    fn the_github_tokens_tick_is_off_by_default_and_saved_with_the_daemon() {
+        let (mut w, id) = world();
+        let mut state = open(&mut w, id);
+        assert!(!state.draft.as_ref().unwrap().kube.github_tokens);
+        send(&mut state, &mut w, Msg::GithubTokensToggled(true));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(stored(&w, id).github_tokens);
+        let mut state = open(&mut w, id);
+        assert!(state.draft.as_ref().unwrap().kube.github_tokens);
+        send(&mut state, &mut w, Msg::GithubTokensToggled(false));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(!stored(&w, id).github_tokens);
+    }
+
+    #[test]
     fn registry_auth_requires_a_file() {
         let (mut w, id) = world();
         let mut state = open(&mut w, id);
