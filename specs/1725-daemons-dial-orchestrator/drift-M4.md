@@ -24,3 +24,7 @@ Paths changed beyond those the tasks of M4 name, with the reason.
 - `crates/micold-core/src/ssh/provision.rs` (planned, T034) also maps `FailureCause::LinkForward` to
   `SshFailure::Other` with the refusal's sentence in `ssh_failure_of`, so an SSH host's failure names
   the cause instead of a bare helper line.
+- `packaging/basic/sshd_config` is T036's own file (the script reads that task's line without it).
+- MISSING `contracts/dial.md`, `research.md`: both are this feature's spec files
+  (`specs/1725-daemons-dial-orchestrator/`), named by T029 (the contract the test follows, unchanged)
+  and T036 (R1, updated with the `ListenAddress` check).
