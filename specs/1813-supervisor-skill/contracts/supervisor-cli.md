@@ -15,8 +15,8 @@ error or malformed ledger.
 | `check-owner --live-sessions "ids" --me <id>` | `OWN`, `FREE` (no owner or owner not listed; read-only, the skill then calls `ledger owner <id>`), or `HELD <owner>` (exit 1) |
 | `ledger init --owner <id> --cap N [--grace S] --source <text> <issues...>` | creates the file; refuses when it exists |
 | `ledger owner <id>` | sets the Owner header |
-| `ledger set <issue> <field> <value>` | updates one cell; `State` values are checked against the seven names |
-| `ledger get <issue> <field>` | prints the cell |
+| `ledger set <issue> <field> <value>` | updates one cell; `State` values are checked against the seven names. The ledger has nine fields (`Issue State Touches Worktree Session Started Tries Note Parent`, #1860); on a ledger made with eight, `Parent` is refused (exit 2) rather than written past the row |
+| `ledger get <issue> <field>` | prints the cell (`Parent` refused on an eight-field ledger, as for `set`) |
 | `ledger table` | the short report table for the advance |
 
 `supervisor-watch.sh --ledger <f> [--interval S] [--ceiling S]`: prints `CHANGED <issue> <old> <new>`
