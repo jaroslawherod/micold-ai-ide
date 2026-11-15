@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1725
 - **Worktree branch**: claude/project-thread-71llv0
 - **Started**: 2026-11-15
-- **Phase**: tasks
-- **Next step**: tasks review round 1, then specs-only gate, push, write pr-title.md/pr-body.md (orchestrator opens the design PR)
+- **Phase**: design-pr
+- **Next step**: orchestrator opens the design PR from pr-title.md and pr-body.md; then milestone M1
 
 ## Pull requests
 
@@ -44,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 2 | spec fix diff | 9f5fe99c4d2d09674f417cac5a47b1da6cfaa105 | ce951a8ddb4e9f3252212e2563fb06d8ede5cca9:9f5fe99c4d2d09674f417cac5a47b1da6cfaa105 | CLEAN: round-1 fixes hold (scoped, sonnet, diff against c5c4ee9ee) |
 | Plan review | 1 | plan | 51d50295e396f5546030a0ebf185e54f3e96e8b6 | d346f6bd5384d30c245219fa412dd36f021b470f:edb515ca275e9528697839235b08037de5e4f1e7 | CHANGES: 4 MAJOR (ClearAllForwardings scope, stale live socket, encode_announcement NEW, prepare-link app side), 2 MINOR; all fixed |
 | Plan review | 2 | plan fix diff | 51d50295e396f5546030a0ebf185e54f3e96e8b6 | f357f1489081de54ce559264732119f2099ffded:edb515ca275e9528697839235b08037de5e4f1e7 | CLEAN (scoped, sonnet); one MINOR comment fixed, prose only |
+| Tasks review | 1 | design | 4e9b7e7f8147a6ca39abdb4a0aed819f5efedbb4 | 4efebc3b7d308f99107399a0d9913f9b32676e64:c30e1ae59e0d06bb201b6b3de8d70a51e5540c91 | CHANGES: 5 MAJOR (test wiring, ssh_real feature flag, Verify filters, FR-002 test, needs-update case), 3 MINOR; all fixed |
+| Tasks review | 2 | design fix diff | 4e9b7e7f8147a6ca39abdb4a0aed819f5efedbb4 | 4efebc3b7d308f99107399a0d9913f9b32676e64:c30e1ae59e0d06bb201b6b3de8d70a51e5540c91 | CLEAN (scoped, sonnet) |
 
 ## Declined review findings
 
