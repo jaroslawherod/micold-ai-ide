@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-ygs15x
+- **Worktree branch**: claude/project-thread-3al8kt
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 PR CI and merge; then M3 (fresh thread)
+- **Next step**: M3 (fresh thread, `/speckit-autopilot resume`)
 
 ## Pull requests
 
@@ -19,14 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | #1970 | M1 | merged | bfb463f60 |
-| #1980 | M2 | open | |
+| #1980 | M2 | merged | 952b8a818 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
-| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | PR open |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
 | M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
 | M5 | T032–T035 | full | Migration safety | | pending |
@@ -59,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
 | M2 B | 1 | M2 | 60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | 5b6a0087c24bfaa47a2eee1e527d2ff41066c334:60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | CHANGES: 1 MAJOR (cycle 2 no red for review A fixes), fixed by red-by-revert evidence; 1 MINOR (db/ blanket skip in no_outbound scan) declined |
 | M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
+| M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
 
 ## Declined review findings
 
@@ -74,7 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 code done and pushed (T014–T020 ticked, review A fixed, gate green). Next: the orchestrator runs review B, opens the PR from `specs/1948-orchestrator-postgres-store/pr-M2.md`, merges; then dispatch M3 (T021–T025) in a fresh thread.
+M2 merged (PR #1980, squash 952b8a818). Next: dispatch the M3 milestone unit (T021–T025, Tier full: SQLite auth and audit stores) in a fresh thread; set the Worktree branch line to that thread's branch. Read *Follow-ups not done* for M3 items (rotate_refresh commits revocation before Refused; redeem_invite unknown user). Cloud: CI `diff coverage` blocks at 80% on `src/orchestrator/**` — have the unit cover error paths with tests before pushing (M2 needed a coverage fix). `mutants on the diff` fails its baseline on netns tests (no unshare in the job): advisory. `sandbox against a real runtime` failed once on the memory-limit test and passed on the next run.
 
 ## Open escalation
 
@@ -94,3 +95,4 @@ None.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
 - M3 (SQL auth store): `redeem_invite` must refuse an unknown redeeming user, like `put_refresh`, `rotate_refresh` and `link_identity`, or contracts/store-traits.md must say the caller guarantees it (M1 review B F2). Also M1 review A: a SQL `rotate_refresh` commits the family revocation before returning `Refused`.
+- M5 (T035): `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` in tests/orchestrator/store_migrations.rs pins the pre-M5 `Failed`; update it to `DatabaseNewer` (M2 review B r3 MINOR).
