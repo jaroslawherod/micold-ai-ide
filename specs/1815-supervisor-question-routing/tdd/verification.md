@@ -16,6 +16,9 @@ mutants_survived: 4 # 2 real gaps (A1, K1), 1 near-equivalent (T3), 1 equivalent
 suite: supervisor.test.sh 288 passed, 0 failed, 14s; autopilot.test.sh 354 passed, 0 failed, 41s
 ---
 
+> Remediated after the audit: findings 1, 2, 3 and 5 (T023–T026) closed in caa363637; each new case fails under its named mutation. The suite now has 291 cases, 0 failures. The FAIL verdict above is the audit record at e826f648b.
+
+
 # TDD Verification: Autopilot supervisor M4, question routing (#1815)
 
 **Verdict: FAIL.** Two deliberate mutants inside DONE behaviors survive: free-text `route add` idempotency (`supervisor-route.sh:39`) and numeric ascending order of `route next` (`supervisor-route.sh:59`).
