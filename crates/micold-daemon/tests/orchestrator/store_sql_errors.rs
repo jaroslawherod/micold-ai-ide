@@ -336,3 +336,13 @@ fn a_call_from_async_code_is_unavailable_not_a_panic() {
         unavailable("users", auth.users());
     });
 }
+
+#[test]
+fn a_stored_refresh_token_keeps_the_revocation_it_arrived_with() {
+    let (_dir, _handle, auth) = open();
+    auth.create_user(&user("u1")).unwrap();
+    let mut revoked = token("r", "u1", "fam");
+    revoked.revoked_at = Some(T + 7);
+    auth.put_refresh(&revoked).unwrap();
+    assert_eq!(auth.refresh(&hash("r")).unwrap(), Some(revoked));
+}

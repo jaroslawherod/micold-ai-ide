@@ -677,7 +677,7 @@ async fn insert_refresh(
     sqlx::query(
         "INSERT INTO refresh_tokens \
          (tenant_id, token_hash, user_id, family, issued_at, expires_at, revoked_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, NULL)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(tenant)
     .bind(token.hash.as_str().to_owned())
@@ -685,6 +685,7 @@ async fn insert_refresh(
     .bind(token.family.clone())
     .bind(to_i64(token.issued_at))
     .bind(to_i64(token.expires_at))
+    .bind(token.revoked_at.map(to_i64))
     .execute(conn)
     .await
     .map(drop)
