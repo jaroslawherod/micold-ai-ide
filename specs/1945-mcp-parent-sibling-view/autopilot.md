@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-boi1v0
 - **Started**: 2026-11-15
 - **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
-- **Phase**: review M3
-- **Next step**: dispatch Milestone M3 unit (T015, T018–T020) on branch claude/project-thread-boi1v0, which has origin/main merged after M2; then close
+- **Phase**: merge M3
+- **Next step**: merge #1988 on green `ci complete`, then dispatch the close unit
 
 ## Pull requests
 
@@ -59,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 3 | M2 (scoped, 87425df21..e8805a8c4) | e8805a8c4ff759a20cbe0f614db8520ff3cde832 | - | CLEAN (sonnet, scoped; 3 MINOR carried to M3: shell-only wording, list_resumable_sessions filter and output refs collapse root vs dir named default) |
 | A | 1 | M3 | 122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | fd1153ec754a24b7edd5b870520a5ed52ccf7fae:122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | CHANGES: 1 MAJOR, 2 MINOR (F1 T015 test could not tell before from just after: rewritten with a slow store and a stand-in that reads the saved link first, red by moving the record; F2 no-parent record is log-only, `create_unparented_worktree` for the app and runs; F3 worker prompt line names `send_parent_input`) |
 | B | 1 | M3 | 122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | fd1153ec754a24b7edd5b870520a5ed52ccf7fae:122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | CLEAN, 2 MINOR (cycle 16 red: recorded; T015 path: fixed) |
+| A | 2 | M3 | 29dd0fa023c9527f60f55b7238922a8d3e6ed453 | - | CLEAN (sonnet, scoped 122c0c61d..29dd0fa02; 1 MINOR cycle-log count fixed) |
 
 ## Declined review findings
 

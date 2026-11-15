@@ -91,4 +91,4 @@ Baseline: `micold-core --lib` 2149 passed, `micold-daemon --test mcp` 256 passed
 ## Cycle 18: every create path retires the stale id (review A round 1 F2)
 - Tests: `mcp_create_session::{an_unparented_create_retires_the_stale_id_and_survives_a_failed_write, a_no_parent_create_with_a_session_survives_a_failed_link_write}`.
 - Red (before the fix): the second failed with `the worktree's parent was not recorded` on the unwritable store; the first did not compile (`create_unparented_worktree` missing).
-- Green: `--test mcp_create_session` 39 passed.
+- Green: `--test mcp_create_session` 38 passed.
