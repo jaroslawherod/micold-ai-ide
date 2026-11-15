@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1945
 - **Worktree branch**: claude/project-thread-x5s2f0
 - **Started**: 2026-11-15
-- **Phase**: spec
-- **Next step**: clarify done (no questions); next: plan unit; add a note to specs/1857-worktree-parent/spec.md pointing to 1945 at close
+- **Phase**: plan
+- **Next step**: plan review (orchestrator), then tasks unit; add a note to specs/1857-worktree-parent/spec.md pointing to 1945 at close
 
 ## Pull requests
 
