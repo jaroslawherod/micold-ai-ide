@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1915 | M2 | merged | 46f7263 |
 | #1922 | M3 | merged | 35ffa7c |
 | #1924 | M4 | merged | 3f59523 |
-| (to open) | close | to open | |
+| #1927 | close | open | |
 
 ## Milestones
 
@@ -58,12 +58,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 1 | M4 | aac52c7b450ebfcb3748a4e58f582c12c1751532 | 559fd0a3127a26b6ca0823a77f31d87f49dcd14e:aac52c7b450ebfcb3748a4e58f582c12c1751532 | CLEAN (run by the unit itself, no Agent tool; no findings) |
 | Review B | 1 | M4 | fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | 0304b3be1b61d1a7d48bbe5f9bd29530158b477e:fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | CHANGES (F1 drift-M4 supervised.md row, fixed) |
 | Review B | 2 | M4 | 687cb19ef26a1bcc4426a45313c02f6d243dac46 | 31953c17169a2901ae3a57ebdcded71fcf78ca3d:687cb19ef26a1bcc4426a45313c02f6d243dac46 | CLEAN (round-1 F1 confirmed fixed) |
+| Review close | 1 | close | ca499cad564f3e48d06612347325d9efb5592f04 | c11234396b696b7697e4280277d54061ab530565:ca499cad564f3e48d06612347325d9efb5592f04 | CLEAN (1 MINOR declined: supervisor.test.sh line edit is a tightening from another PR) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A r2 | F1 MINOR: verify-run.sh runs ledgers_of twice | Cheap (a few ms) and the code stays as reviewed so both CLEAN verdicts stay bound to the head |
+| close | close r1 | F1 MINOR: verification.md says existing supervisor tests were not loosened, but one line in supervisor.test.sh changed | That line is a tightening from another PR (#1815) in the same range; the claim holds for the 1816 hunks |
 
 ## Handover
 
