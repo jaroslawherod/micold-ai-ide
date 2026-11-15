@@ -155,3 +155,25 @@ Append only. Newest last.
   features_daemons_kube features_daemons::` -> `130 passed`, then `features_daemons::` -> `89 passed`.
 - refactor: none needed.
 - visual pass (T019, quickstart §B): pending, run by the orchestrator.
+
+## Cycle 10: M3 the kind test (T021-T027)
+
+- test: `tests/kube_real_scoped_token.rs` `kube_real_forge_accepts_only_the_run_secret` (T021, no
+  cluster: 401 with `WWW-Authenticate` for no, wrong-user, wrong-secret and malformed credentials;
+  200 for Basic `x-access-token:<secret>`; the REST listing under `/user/repos` and
+  `/api/v3/user/repos` with a Bearer; a real `git clone` without the secret fails, with it clones and
+  pushes) and `kube_real_scoped_token` (T025, live).
+- green: forge test `2 passed` locally (`--features kube-real-runtime --test kube_real_scoped_token`;
+  the live test prints `SKIP ... kind is not installed` here). fmt and clippy (client, all targets and
+  `--features kube-real-runtime --tests`, `-D warnings`) clean; `every_test_file_is_wired` passes.
+- live evidence (T026): this container has no docker/kind/kubectl, so the live arms run only in CI job
+  `kube-cluster` (`scripts/test-kube.sh` exports `MICOLD_KUBE_TEST_REQUIRED=1` and runs
+  `kube_real_`, which matches the new test, so a missing tool fails it instead of skipping). The
+  revert check (token keys of T014 commented out, the push in arm A must fail) is left to a temporary
+  revert commit the orchestrator pushes on request; none is on the branch.
+- refactor: `Shell` (open, step, new `switch` and `capture`) moved from `kube_real_toolchain.rs` into
+  `kube_real_support/mod.rs` so both tests share it.
+- M3 review fixes: `in_clone` git calls clear `credential.helper` and set `GIT_TERMINAL_PROMPT=0` (one `git_in` helper); the client-log scan also looks for the base64 of each secret and of the token store files; the env/home check now also runs in a second session (`Shell::open_another_session`). The live test is unrun here (no cluster).
+- 2026-11-15 CI red (kube-cluster, 715d8488f): push, pull and helper offers passed; the env check timed out because opening the second session replaced the viewed terminals before shells 1 and 2 were checked. The second session now opens only for the third check.
+- 2026-11-15 CI red (kube-cluster, e296b13c7): the env check's command held a literal newline (`tr '<newline>' ,`), so the shell printed a `> ` continuation prompt before each fact and `field` found no `ENVSECRET`; now `tr '\\n' ,`.
+- 2026-11-15 CI red (kube-cluster, f1fc4ef50): shell 1 passed; in shell 2 the first fact line read `$ ENVSECRET=0` (the command was typed before the new terminal printed its prompt), so `field` now also takes a `KEY=` after a space.
