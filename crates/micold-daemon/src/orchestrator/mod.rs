@@ -16,6 +16,7 @@ use micold_core::endpoint::Endpoint;
 use micold_core::orchestrator::{JsonRegistryStore, Registry, RegistryStore, Snapshot};
 
 pub mod config;
+pub mod db;
 pub mod link;
 pub mod query;
 mod save;

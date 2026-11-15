@@ -1,4 +1,4 @@
-//! The remote helper: `micold-daemon remote bridge | status | stop | prune` (feature 489, contracts/ssh-transport.md).
+//! The remote helper: `micold-daemon remote bridge | status | stop | prune | prepare-link` (feature 489, contracts/ssh-transport.md; `prepare-link`: #1725, contracts/dial.md).
 //!
 //! The client runs these over `ssh` on the host this daemon lives on. `bridge` is the whole
 //! transport: it connects the `ssh` child's stdin and stdout to the daemon's own local endpoint,
@@ -51,8 +51,11 @@ pub fn main(args: &[OsString]) -> i32 {
         }
         "status" => run_status(),
         "stop" => run_stop(),
+        "prepare-link" if args.len() == 1 => run_prepare_link(),
         _ => {
-            eprintln!("usage: micold-daemon remote bridge | status | stop | prune --keep <n>");
+            eprintln!(
+                "usage: micold-daemon remote bridge | status | stop | prune --keep <n> | prepare-link"
+            );
             2
         }
     }
@@ -144,6 +147,75 @@ fn run_stop() -> i32 {
                 1
             }
         },
+    }
+}
+
+/// `prepare-link`: the remote end of the orchestrator link's forward, made ready in the pinned
+/// runtime directory, printed as the one line on stdout.
+fn run_prepare_link() -> i32 {
+    #[cfg(unix)]
+    {
+        prepare_link_command(
+            || micold_core::endpoint::resolve_pinned().map(|e| e.socket_path),
+            &mut io::stdout(),
+            &mut io::stderr(),
+        )
+    }
+    #[cfg(not(unix))]
+    {
+        eprintln!("micold-daemon remote prepare-link: Unix remotes only");
+        1
+    }
+}
+
+/// The command with its pinned socket path resolver injected: the runtime directory is the
+/// socket path's parent; a resolver that fails is reported like any other refusal.
+#[cfg(unix)]
+pub fn prepare_link_command<E: std::fmt::Display>(
+    resolve: impl FnOnce() -> Result<std::path::PathBuf, E>,
+    out: &mut impl io::Write,
+    err: &mut impl io::Write,
+) -> i32 {
+    match resolve() {
+        Ok(socket) => {
+            let dir = socket.parent().map(Path::to_path_buf).unwrap_or_default();
+            prepare_link_report(&dir, out, err)
+        }
+        Err(e) => {
+            let _ = writeln!(err, "micold-daemon remote prepare-link: {e}");
+            1
+        }
+    }
+}
+
+/// Runs `prepare_link_at` and reports it the way the command does: the path as one line on `out`
+/// and exit 0, or the cause on `err` and exit 1.
+#[cfg(unix)]
+pub fn prepare_link_report(dir: &Path, out: &mut impl io::Write, err: &mut impl io::Write) -> i32 {
+    match prepare_link_at(dir) {
+        Ok(path) => {
+            let _ = writeln!(out, "{}", path.display());
+            0
+        }
+        Err(e) => {
+            let _ = writeln!(err, "micold-daemon remote prepare-link: {e}");
+            1
+        }
+    }
+}
+
+/// The remote end of the link's forward in the runtime directory `dir` (#1725, research R3):
+/// creates it `0700` or verifies an existing one (owner and mode, never repaired), removes
+/// `orchestrator.sock` whenever it exists, and returns its path. A listener there is the user's
+/// own earlier forward (the directory is owner-only); the new forward replaces it.
+#[cfg(unix)]
+pub fn prepare_link_at(dir: &Path) -> io::Result<std::path::PathBuf> {
+    micold_core::endpoint::guard_runtime_dir(dir)?;
+    let path = dir.join("orchestrator.sock");
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(path),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(path),
+        Err(e) => Err(e),
     }
 }
 

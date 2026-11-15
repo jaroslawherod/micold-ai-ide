@@ -492,6 +492,70 @@ async fn deliver_config(
     Ok(())
 }
 
+/// What ssh prints when a remote forward cannot bind (`ExitOnForwardFailure` then ends it).
+const FORWARD_NOT_BOUND: &str = "remote port forwarding failed";
+
+/// The link's forward for `target`, cleared for its reach (#1725, FR-004, FR-005): for a user's
+/// host, `ssh -G` first (research R2); then `remote prepare-link`, whose printed path is the remote
+/// end. The outer error is an I/O failure of the step; the inner one names why there is no link.
+async fn admit_link(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    request: &crate::ssh::provision::LinkRequest,
+    bound: Duration,
+) -> Result<Result<argv::AdmittedLink, argv::LinkRefusal>, ProvisionFailure> {
+    let resolved = match &target.reach {
+        Reach::Pinned(_) => None,
+        Reach::UserConfig(user) => {
+            let out = host
+                .run(
+                    argv::resolve(user, opts.platform),
+                    Vec::new(),
+                    Some(bound),
+                    None,
+                )
+                .await
+                .map_err(|e| io_fail(Step::Start, e))?;
+            Some(if out.ok() {
+                Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+            } else {
+                Err(out.stderr)
+            })
+        }
+    };
+    let resolved = resolved
+        .as_ref()
+        .map(|r| r.as_deref().map_err(String::as_str));
+    // Nothing is prepared on the remote unless the configuration allows the forward.
+    if let Err(refusal) = argv::link_config_allows(&target.reach, resolved) {
+        return Ok(Err(refusal));
+    }
+    let cmd = argv::prepare_link(
+        &target.reach,
+        opts.platform,
+        opts.timeout_secs,
+        &opts.build_id,
+    );
+    let out = host
+        .run(cmd, Vec::new(), Some(bound), None)
+        .await
+        .map_err(|e| io_fail(Step::Start, e))?;
+    if !out.ok() {
+        return Ok(Err(argv::LinkRefusal::Prepare {
+            detail: out.stderr.trim().to_string(),
+        }));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let Some(remote) = stdout.lines().map(str::trim).find(|l| !l.is_empty()) else {
+        return Ok(Err(argv::LinkRefusal::Prepare {
+            detail: "it printed no path".into(),
+        }));
+    };
+    Ok(argv::LinkForward::new(remote, &request.local_socket)
+        .and_then(|forward| argv::admit_link(&target.reach, forward, resolved)))
+}
+
 async fn start_step(
     host: &dyn SshHost,
     target: &ProvisionTarget,
@@ -517,13 +581,28 @@ async fn start_step(
                 return Err(fail(Step::Start, FailureCause::DaemonStart).with_output(out.stderr));
             }
         }
-        let cmd = argv::bridge_with_env(
-            &target.reach,
-            opts.platform,
-            opts.timeout_secs,
-            &opts.build_id,
-            &target.env,
-        );
+        let cmd = match &opts.link {
+            None => argv::bridge_with_env(
+                &target.reach,
+                opts.platform,
+                opts.timeout_secs,
+                &opts.build_id,
+                &target.env,
+            ),
+            Some(request) => {
+                let link = admit_link(host, target, opts, request, bound)
+                    .await?
+                    .map_err(|refusal| fail(Step::Start, FailureCause::LinkForward(refusal)))?;
+                argv::bridge_with_link(
+                    &target.reach,
+                    opts.platform,
+                    opts.timeout_secs,
+                    &opts.build_id,
+                    &target.env,
+                    &link,
+                )
+            }
+        };
         let stdio = host.open(cmd).map_err(|e| io_fail(Step::Start, e))?;
         let tail = stdio.stderr_tail();
         let credentials = Credentials::default();
@@ -538,6 +617,15 @@ async fn start_step(
                 } else {
                     text
                 };
+                if let Some(line) = text.lines().find(|l| l.contains(FORWARD_NOT_BOUND)) {
+                    // `ExitOnForwardFailure` ended the bridge: the link's socket was not bound.
+                    let refusal = argv::LinkRefusal::NotBound {
+                        detail: line.trim().to_string(),
+                    };
+                    return Err(
+                        fail(Step::Start, FailureCause::LinkForward(refusal)).with_output(text)
+                    );
+                }
                 Err(if app_owned {
                     fail(Step::Start, FailureCause::DaemonStart).with_output(text)
                 } else {
@@ -740,7 +828,11 @@ mod tests {
     /// Which kind of command this is, from what it runs and what it is fed.
     fn kind(cmd: &SshCommand, stdin: &[u8]) -> &'static str {
         let last = cmd.args.last().map(String::as_str).unwrap_or_default();
-        if last == "true" {
+        if cmd.args.first().map(String::as_str) == Some("-G") {
+            "resolve"
+        } else if last.contains("remote prepare-link") {
+            "prepare_link"
+        } else if last == "true" {
             "reach"
         } else if last.contains("daemon.toml") {
             "config"
@@ -769,6 +861,8 @@ mod tests {
         /// Every `run`, with its command line and stdin.
         runs: Mutex<Vec<(&'static str, SshCommand, Vec<u8>)>>,
         bridge: Mutex<Option<SshStdio>>,
+        /// Every `open`'s command line.
+        opened: Mutex<Vec<SshCommand>>,
         percent: Vec<u8>,
         hang: Option<&'static str>,
     }
@@ -834,6 +928,7 @@ mod tests {
         }
         fn open(&self, cmd: SshCommand) -> io::Result<SshStdio> {
             self.seen.lock().unwrap().push(kind(&cmd, b""));
+            self.opened.lock().unwrap().push(cmd);
             self.bridge
                 .lock()
                 .unwrap()
@@ -874,6 +969,7 @@ mod tests {
             timeout_secs: 15,
             build_id: "1.0.0-abcdef123456".into(),
             client_build: "test".into(),
+            link: None,
         }
     }
 
@@ -1683,6 +1779,206 @@ mod tests {
         assert_eq!(
             AiCliSelection::all().0.into_iter().collect::<Vec<_>>(),
             crate::session::AiCli::ALL
+        );
+    }
+
+    fn with_link(local: &str) -> ProvisionOptions {
+        ProvisionOptions {
+            link: Some(crate::ssh::provision::LinkRequest {
+                local_socket: local.into(),
+            }),
+            ..opts()
+        }
+    }
+
+    async fn run_opts(
+        fake: &Fake,
+        target: &ProvisionTarget,
+        opts: &ProvisionOptions,
+    ) -> Result<Provisioned, ProvisionFailure> {
+        let (sink, _log) = recorder();
+        run(fake, target, opts, &CancelToken::new(), &sink).await
+    }
+
+    fn opened_bridge(fake: &Fake) -> SshCommand {
+        fake.opened
+            .lock()
+            .unwrap()
+            .last()
+            .cloned()
+            .expect("a bridge")
+    }
+
+    fn reverse_forwards(cmd: &SshCommand) -> Vec<String> {
+        cmd.args
+            .windows(2)
+            .filter(|w| w[0] == "-R")
+            .map(|w| w[1].clone())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_link_request_prepares_the_remote_end_then_bridges_with_the_forward() {
+        let mut fake = Fake::default()
+            .say("reach", ok(""))
+            .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
+            .say("last", ok(""))
+            .say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_target(StepBounds::container());
+        let result = run_opts(&fake, &target, &with_link("/run/me/orchestrator.sock")).await;
+        assert!(matches!(result.unwrap().connected, Connected::Refused(_)));
+        assert_eq!(
+            fake.kinds(),
+            [
+                "reach",
+                "probe",
+                "install",
+                "last",
+                "prepare_link",
+                "bridge"
+            ],
+            "a pinned reach asks no configuration"
+        );
+        let (prepare, _) = fake.first("prepare_link");
+        assert_eq!(
+            prepare,
+            argv::prepare_link(&target.reach, ClientPlatform::Linux, 15, &opts().build_id)
+        );
+        assert_eq!(
+            reverse_forwards(&opened_bridge(&fake)),
+            ["/tmp/micold-1000/orchestrator.sock:/run/me/orchestrator.sock"]
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_link_request_the_bridge_is_unchanged() {
+        let mut fake = Fake::default()
+            .say("reach", ok(""))
+            .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
+            .say("last", ok(""));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_target(StepBounds::container());
+        run_opts(&fake, &target, &opts()).await.unwrap();
+        assert_eq!(fake.count("prepare_link"), 0);
+        assert_eq!(
+            opened_bridge(&fake),
+            argv::bridge_with_env(
+                &target.reach,
+                ClientPlatform::Linux,
+                15,
+                &opts().build_id,
+                &target.env
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn a_user_host_link_is_opened_only_after_ssh_g_shows_no_configured_forward() {
+        let mut fake = Fake::default()
+            .say("probe", ok(PROBE_HAVE))
+            .say("resolve", ok("hostname host\nuser me\n"))
+            .say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = user_target(StepBounds::user_host(secs(15)));
+        run_opts(&fake, &target, &with_link("/run/me/o.sock"))
+            .await
+            .unwrap();
+        assert_eq!(fake.kinds(), ["probe", "resolve", "prepare_link", "bridge"]);
+        assert_eq!(reverse_forwards(&opened_bridge(&fake)).len(), 1);
+
+        let fake = Fake::default()
+            .say("probe", ok(PROBE_HAVE))
+            .say("resolve", ok("hostname host\nlocalforward 5432 db:5432\n"));
+        let f = failure(run_opts(&fake, &target, &with_link("/run/me/o.sock")).await);
+        assert_eq!(f.step, Step::Start);
+        assert!(
+            matches!(
+                &f.cause,
+                FailureCause::LinkForward(argv::LinkRefusal::ConfiguredForwards { forwards, .. })
+                    if forwards == &["localforward 5432 db:5432".to_string()]
+            ),
+            "{f:?}"
+        );
+        assert_eq!(fake.count("bridge"), 0, "never opened without the forward");
+
+        let fake = Fake::default().say("probe", ok(PROBE_HAVE)).say(
+            "resolve",
+            bad("/home/me/.ssh/config line 3: Bad configuration option"),
+        );
+        let f = failure(run_opts(&fake, &target, &with_link("/run/me/o.sock")).await);
+        assert!(
+            matches!(&f.cause, FailureCause::LinkForward(argv::LinkRefusal::ConfigUnreadable { detail, .. }) if detail.contains("Bad configuration option")),
+            "{f:?}"
+        );
+        assert_eq!(fake.count("bridge"), 0);
+    }
+
+    #[tokio::test]
+    async fn a_failed_or_unusable_prepare_link_fails_the_start_naming_it() {
+        let target = owned_target(StepBounds::container());
+        for (answer, want) in [
+            (
+                bad("micold-daemon remote prepare-link: endpoint dir has mode 0o755"),
+                "0o755",
+            ),
+            (
+                ok("relative/orchestrator.sock\n"),
+                "is not an absolute path",
+            ),
+            (ok(""), "printed no path"),
+        ] {
+            let fake = Fake::default()
+                .say("reach", ok(""))
+                .say("probe", ok(PROBE_HAVE))
+                .say("install", ok(""))
+                .say("last", ok(""))
+                .say("prepare_link", answer);
+            let f = failure(run_opts(&fake, &target, &with_link("/run/o.sock")).await);
+            assert_eq!(f.step, Step::Start);
+            assert!(matches!(f.cause, FailureCause::LinkForward(_)), "{f:?}");
+            let reason = f.reason(&crate::ssh::ReasonContext {
+                host: "127.0.0.1".into(),
+                port: 40222,
+                timeout_secs: 15,
+                platform: ClientPlatform::Linux,
+            });
+            assert!(reason.contains(want), "{reason}");
+            assert_eq!(fake.count("bridge"), 0);
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_forward_the_remote_cannot_bind_fails_the_start_with_ssh_text() {
+        let child = tokio::process::Command::new("sh")
+            .args([
+                "-c",
+                "echo 'Error: remote port forwarding failed for listen path /tmp/micold-1000/orchestrator.sock' >&2; exit 255",
+            ])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut fake = Fake::default()
+            .say("reach", ok(""))
+            .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
+            .say("last", ok(""))
+            .say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        *fake.bridge.get_mut().unwrap() = Some(SshStdio::from_child(child).unwrap());
+        let target = owned_target(StepBounds::container());
+        let f = failure(run_opts(&fake, &target, &with_link("/run/o.sock")).await);
+        assert!(
+            matches!(
+                &f.cause,
+                FailureCause::LinkForward(argv::LinkRefusal::NotBound { detail })
+                    if detail.contains("remote port forwarding failed")
+            ),
+            "{f:?}"
         );
     }
 }

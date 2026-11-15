@@ -66,6 +66,11 @@ fn keygen(keygen: &Path, file: &Path) -> Result<(), String> {
 impl Sshd {
     /// Start `sshd` on a free loopback port, or say why not.
     pub fn start() -> Result<Self, String> {
+        Self::start_with("")
+    }
+
+    /// [`Sshd::start`] with `extra` appended to the server configuration (lines ending in `\n`).
+    pub fn start_with(extra: &str) -> Result<Self, String> {
         let sshd = find("sshd").ok_or("`sshd` is not installed")?;
         let ssh = find("ssh").ok_or("`ssh` is not installed")?;
         let ssh_keygen = find("ssh-keygen").ok_or("`ssh-keygen` is not installed")?;
@@ -99,7 +104,7 @@ impl Sshd {
                 "Port {sshd_port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\n\
                  AuthorizedKeysFile {}\nStrictModes no\nUsePAM no\nPasswordAuthentication no\n\
                  KbdInteractiveAuthentication no\nPubkeyAuthentication yes\nLogLevel ERROR\n\
-                 SetEnv HOME={} PATH={}/bin:/usr/local/bin:/usr/bin:/bin\n",
+                 SetEnv HOME={} PATH={}/bin:/usr/local/bin:/usr/bin:/bin\n{extra}",
                 host_key.display(),
                 dir.join("sshd.pid").display(),
                 authorized.display(),

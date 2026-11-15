@@ -88,6 +88,8 @@ pub enum FailureCause {
     Cancelled,
     /// The daemon's network setting blocks downloads and no relay could be opened.
     PostureBlocksDownload,
+    /// The orchestrator link's reverse forward could not be opened (#1725, FR-005).
+    LinkForward(crate::ssh::argv::LinkRefusal),
     /// An SSH failure, with 489's reason text unchanged.
     Ssh(SshFailure),
 }
@@ -115,6 +117,9 @@ impl FailureCause {
             FailureCause::TimedOut { bound } => format!("did not finish within {}", bound_text(*bound)),
             FailureCause::Cancelled => "stopped by you".into(),
             FailureCause::PostureBlocksDownload => "the daemon's network setting blocks downloads and the install relay could not be opened".into(),
+            FailureCause::LinkForward(refusal) => {
+                format!("the orchestrator link could not be opened: {refusal}")
+            }
             FailureCause::Ssh(failure) => failure.reason(ctx),
         }
     }
@@ -286,6 +291,13 @@ mod tests {
         for (cause, text) in want {
             assert_eq!(cause.text(&ctx()), text);
         }
+        let link = FailureCause::LinkForward(crate::ssh::argv::LinkRefusal::Prepare {
+            detail: "no such file".into(),
+        });
+        assert_eq!(
+            link.text(&ctx()),
+            "the orchestrator link could not be opened: the remote could not prepare the link socket: no such file"
+        );
         let mismatch = FailureCause::VersionMismatch {
             found: "1.0".into(),
             expected: "2.0".into(),
