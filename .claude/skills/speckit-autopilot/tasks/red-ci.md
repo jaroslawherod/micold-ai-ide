@@ -6,7 +6,11 @@ code. A fresh unit started with it stays on the PR's branch: skip `branch-start.
 0. `scripts/autopilot/pr-state.sh <pr>`: `CONFLICTING` first: rebase onto `origin/main`, then fix
    what is still red. `CI-RED` `STUCK` (past 30 min) means the fix is overdue: finish this round or
    escalate *blocked* now.
-1. `grep` the log for the failure; never read it whole.
+1. Triage the log in an `autopilot-worker` (`model: "sonnet"`) per the recipe in
+   [../rules/delegate.md](../rules/delegate.md) (*Triage a CI or job log in a worker*). Hand it
+   `<run>` and `<log>`: a non-empty `<log>` starts the recipe at step 3 on that file, an empty one
+   from step 1. It returns at most ~40 lines (failing step, failing tests, decisive lines). Never
+   read the raw log; `grep` `<log>` only for more.
 2. Run `systematic-debugging` on it. Do not guess-fix.
 3. Fix, run the full gate again ([gate.md](gate.md)), commit, push.
 

@@ -659,6 +659,42 @@ fn connecting_starts_the_restored_session_rather_than_only_viewing_it() {
     );
 }
 
+/// #1934: a restarted window must name the process it shows. The daemon's attached process
+/// outlives the window, so a shell tab the previous window left attached kept the restored AI tab
+/// on "Starting…", taking no keys, until the user clicked the tab.
+#[test]
+fn connecting_attaches_the_process_the_window_shows_before_viewing_it() {
+    let project = PathBuf::from("/repo/demo");
+    let id = SessionId::new();
+    let mut app = base_app();
+    app.core.workspace.active = Some(project);
+    app.core.session.active = Some(id);
+
+    let sent = connect(
+        &mut app,
+        snapshot_with(
+            "/repo/demo",
+            vec![summary(id, "running", WireLifecycle::Running)],
+        ),
+    );
+
+    let attach = sent
+        .iter()
+        .position(|m| {
+            matches!(m, ClientMsg::SessionAttachProcess { session, process }
+                if *session == id && *process == micold_core::protocol::messages::SessionProcess::Primary)
+        })
+        .expect("the window shows the AI tab, so it must attach the primary process");
+    let view = sent
+        .iter()
+        .position(|m| matches!(m, ClientMsg::SetViewedSession { session: Some(s), .. } if *s == id))
+        .expect("the session is viewed");
+    assert!(
+        attach < view,
+        "the attach precedes the view, so the stream opens on the right process"
+    );
+}
+
 /// Exactly one start, naming the restored session (SC-005a, contract §3.3b).
 ///
 /// This is the bound that replaces FR-004's prohibition. Resuming the one session the user is

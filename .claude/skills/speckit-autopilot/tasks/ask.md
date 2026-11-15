@@ -21,7 +21,7 @@ phone notification, hours later, with no scrollback. What may be asked:
    the session (no `/clear`), and an answer hours later re-writes your whole context to the cache.
    Confirm *Open escalation* holds the question, options and recommendation, send the banner with
    the extra line `Cheaper: /clear, then /speckit-autopilot resume — it asks this again from the
-   ledger.`, send the notification, and end the turn. `tasks/resume.md` re-asks it.
+   ledger.`, send the notification, and end the turn. `tasks/resume.md` re-asks it. Cloud threads: [../rules/cloud.md](../rules/cloud.md).
 5. **Record.** The escalation is in *Open escalation* before you ask (the unit wrote it; the flow
    question at entry has no ledger). Supervised, `answer.sh` records the answer; else the unit
    moves it to *Decisions* as `decided by user`.

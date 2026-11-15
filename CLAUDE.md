@@ -54,7 +54,7 @@ for the new model, which costs more than it saves.
   types in `.claude/agents/`. `autopilot-unit` is pinned to Sonnet by its frontmatter (the others inherit the model); all drop the tools they never use: the Artifact
   schema alone is about 10k tokens on every call of a `general-purpose` subagent.
 - **Re-review rounds** (round 2+ of a spec, plan, tasks or diff review) and **conformance checks**:
-  `model: "sonnet"`. First-round reviews stay on the session model.
+  `model: "sonnet"`. First-round artifact reviews pass `model: "opus"` explicitly.
 - **Forked skills** already set `context: fork` + `model: sonnet` in their frontmatter:
   `visual-pass`, `speckit-analyze`, `speckit-bugfix-verify`, `speckit-tdd-verify`. They see only
   their arguments, so pass paths and what to check. A spec-kit upgrade regenerates the `speckit-*`

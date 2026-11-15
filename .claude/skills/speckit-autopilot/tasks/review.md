@@ -10,7 +10,8 @@ reviewed head with `scripts/autopilot/record-verdict.sh`, before the ledger comm
 refused for any other head ([merge.md](merge.md), *A verdict belongs to one head*). Use `Agent` with `subagent_type: autopilot-reviewer` (`general-purpose` when your agent
 types lack it) and a description that names the review (`Review B M2 042`).
 
-`model`: omit for round 1 of an artifact review in the feature flow. `"sonnet"` for review B in
+`model`: `"opus"` for round 1 of an artifact review in the feature flow: pass it, never omit it, so
+the review keeps Opus when the orchestrator runs on Sonnet ([../rules/cloud.md](../rules/cloud.md)). `"sonnet"` for review B in
 every round, the bug rubric, and every scoped re-review.
 
 Prompt parts, in order. Parts 1 to 4 are the same text for every review of a kind, so the prompt
