@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-vc038y
 - **Started**: 2026-11-11
 - **Phase**: milestones (M4)
-- **Next step**: M4 (T029–T034): review A fixes, gate, then the orchestrator's review B and visual pass
+- **Next step**: M4 (T029–T034): answer the open escalation, then the orchestrator's review B, visual pass and PR
 
 ## Pull requests
 
@@ -100,27 +100,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 unit finished T024–T028 (all ticked). Core `SidebarLayout::move_item`/`adopt`/`holds`/`list_of`; client `Msg::Move`, `MoveTarget`, `move_menu_items`, `NamingTarget::NewAndMove`, the "Move to ..." entries in the worktree menu (and so the Overview card menu, the keyboard path) and the run group menu; the header count decision D7 (`n`, `n of m`, `empty`). Review A ran in round 1 (5 fixed, 3 declined). The orchestrator then ran review B (CLEAN, 3 MINOR) and the visual pass (PASS) and opened draft PR #1946. Next: wait for CI and squash-merge #1946, then M4 (T029–T034) in a fresh thread. Four micold-core permission tests fail only as root (settings_refuses_save_over_failed_read, settings_write_is_logged, two in worktree_leftovers): ignore them.
-
-M3 merged as #1946 (squash cae50ef59). After review B one more commit (d360ecd8c) changed `close_row_menus` in `features/sidebar_group_actions.rs` to dismiss context menus through the overlay registry, because CI's `feature_registration_cost` test forbids a feature naming another feature's items. M4 units must avoid `crate::features::<other>::` calls for the same reason. Visual pass observed (not defects): ungrouped rows have no header and read as part of the last group; externally created worktrees appear only after restart.
+M4 unit (milestone M4, T029–T034, all ticked; nothing outside the range). New `features/sidebar_drag.rs` (press arms, the list's pointer reports activate at 4 px and hit-test, the window's release commits, Escape / focus loss / off-target release / a vanished row cancel), glue in `ui/sidebar.rs`, `ui/material/{tree_view,group_header}.rs`, `cdk::ContextArea`, `shell/subscriptions.rs`; user guide section *Drag a row between lists*. Review A ran 3 rounds (high); round 3 still found a MAJOR, fixed in c8a3831ba and not re-reviewed, so M4 is escalated (category 5, *Open escalation*). Local gate: fmt and clippy (core, workspace, -D warnings) green; `cargo test -p micold-client` `--test main` (3491), `--lib`, `--bin micold-ai-ide`, `layout_snapshot`, `feature_registration_cost` and nine more client test binaries, and `micold-material`, `micold-core --lib`, all green. A full `cargo test --workspace` ran out of disk (target-shared wiped), and cargo-nextest is not installed: CI is the full gate. Branch pushed; no PR yet. Next: answer the escalation; then the orchestrator runs review B and the visual pass (quickstart §B steps 2–3, plus a click after a drag selects nothing) and opens the M4 PR with the body in the unit's return.
 
 ## Open escalation
 
-None. <or, one question:>
-
-```
-- **Category**: <number and name from rules/escalation.md>
-- **Question**: <one sentence>
+- **Category**: 5 Non-convergence
+- **Question**: Review A of M4 still found a MAJOR in round 3 (now fixed, not re-reviewed); go on to review B and the visual pass, or hold M4?
 - **Options**:
-  1. <label> (Recommended) — <description>
-  2. <label> — <description>
-- **Recommended**: <label> — <reason>
-- **Evidence**: <paths, commands, results>
-- **Banner**: sent <date>
-```
-
-<A batch: `### Q1`, `### Q2`... each holding Question, Options, Recommended and Evidence; Category and
-Banner stay above them. `scripts/autopilot/run-status.sh` reads these fields.>
+  1. Go on (Recommended) — the orchestrator runs review B (conformance) and the visual pass on the final head, which covers the round-3 fix, then opens the M4 PR
+  2. One more review A round — a fourth scoped code-review of the round-3 fix diff before review B
+  3. Hold M4 — leave the branch unpushed to a PR until someone reads the drag code
+- **Recommended**: Go on — each round's MAJORs were in the previous round's fix of the same click-after-drag/Escape seam, not new areas; the round-3 fix (`ContextArea::hold_release`) is small and unit-tested, and review B and the visual pass (drag, drop, Escape, a click after a drag) check it in the real app
+- **Evidence**: ledger *Review rounds* (M4 diff A rounds 1-3), *Declined review findings* (M4 rows); commits 725770af9, 895410de4, c8a3831ba; tests/sidebar_drag.rs; crates/micold-material/src/cdk/context_area.rs `a_held_release_reaches_the_content_with_no_cursor`
+- **Banner**: not sent (unit return)
 
 ## Follow-ups not done
 

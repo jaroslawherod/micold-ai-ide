@@ -247,3 +247,19 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   it lets go without pressing and keeps its look (round 2's disabled button kept a stale pressed
   state, found in round 3).
 - refactor: `TreeItem`'s press point and release are one `Option<(OnPress, M)>`.
+
+## Cycle 14: the drag hears no window pointer (guard tests)
+
+- test: existing guards, run with the whole `tests/main.rs` binary:
+  `idle_subscriptions::the_pointer_is_not_subscribed_at_all`,
+  `root_state_is_shared::component_local_paths_are_pinned_or_moved`,
+  `root_vocabulary_is_cross_cutting::the_scan_finds_the_vocabulary_it_is_meant_to_read`.
+- red: `cargo test -p micold-client --test main` -> `3488 passed; 3 failed`: "`CursorMoved` is back
+  in src/shell/subscriptions.rs"; "`state.sidebar_drag.over` — written only by `sidebar_drag` ...
+  neither moved nor pinned"; `left: 34`, `right: 33`.
+- green: the window listener keeps only the release and the focus loss; the list's `mouse_area`
+  reports the pointer in its content while a press is armed (`Msg::Moved`), the first report is
+  where the drag starts from, and `Msg::Pressed` no longer carries a window point (one coordinate
+  space, no window pointer). `sidebar_drag.over` pinned in `COMPONENT_LOCAL`; the vocabulary count
+  is 34. `--test main` -> `3491 passed; 0 failed`.
+- refactor: `moved` takes the activation and the hit test in one place.

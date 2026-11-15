@@ -166,9 +166,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     {
         subs.push(iced::event::listen_with(changes_drag_message));
     }
-    // Feature 1786 (contract C3): a pressed sidebar row is followed through the window while the
-    // press lasts, so the drag activates, ends on a release anywhere, and is cancelled when the
-    // window loses its focus. Escape goes through `on_escape`.
+    // Feature 1786 (contract C3): while a sidebar row is pressed, the release ends the drag
+    // wherever it lands, and the window losing its focus cancels it. The pointer itself is the
+    // list's to report (`ui::sidebar`), never the window's. Escape goes through `on_escape`.
     if app.core.sidebar_drag.armed.is_some() {
         subs.push(iced::event::listen_with(sidebar_drag_message));
     }
@@ -242,8 +242,8 @@ fn changes_drag_message(
     }
 }
 
-/// The `listen_with` callback that follows a sidebar drag (feature 1786, contract C3): the pointer
-/// in window pixels, the left button's release, captured or not, and the window losing focus.
+/// The `listen_with` callback that ends a sidebar drag (feature 1786, contract C3): the left
+/// button's release, captured or not, and the window losing focus.
 fn sidebar_drag_message(
     event: iced::Event,
     _status: iced::event::Status,
@@ -251,9 +251,6 @@ fn sidebar_drag_message(
 ) -> Option<Message> {
     use micold_client::features::sidebar_drag::Msg as DragMsg;
     let msg = match event {
-        iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-            DragMsg::PointerMoved((position.x.max(0.0) as u16, position.y.max(0.0) as u16))
-        }
         iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
             DragMsg::Released
         }
@@ -519,18 +516,12 @@ mod tests {
         );
     }
 
-    /// Feature 1786 (C3): a sidebar drag follows the pointer, ends on the left release and is
-    /// cancelled by the window losing its focus; a press or another button maps to nothing.
+    /// Feature 1786 (C3): a sidebar drag ends on the left release and is cancelled by the window
+    /// losing its focus; the pointer, a press or another button maps to nothing.
     #[test]
-    fn sidebar_drag_message_follows_the_pointer_and_ends_on_release_or_blur() {
+    fn sidebar_drag_message_ends_on_release_or_blur_and_ignores_the_pointer() {
         use micold_client::features::sidebar_drag::Msg as DragMsg;
         let map = |event| sidebar_drag_message(event, dummy_status(), iced::window::Id::unique());
-        assert_eq!(
-            map(iced::Event::Mouse(iced::mouse::Event::CursorMoved {
-                position: iced::Point::new(12.7, 40.2)
-            })),
-            Some(Message::SidebarDrag(DragMsg::PointerMoved((12, 40))))
-        );
         assert_eq!(
             map(iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                 iced::mouse::Button::Left

@@ -11,23 +11,25 @@
 //!
 //! # How a drag runs
 //!
-//! A press on a row arms it ([`Msg::Pressed`], the press point in window pixels). While armed, the
-//! window reports the pointer ([`Msg::PointerMoved`]); at [`ACTIVATION_PX`] from the press the drag
-//! is active, and below that the release is the click it always was (the row's own press selects).
-//! While active, the list reports the pointer's height in its content ([`Msg::ListPointer`]), and
-//! [`hit_test`] over the drawn rows picks the [`DropSpot`]: the target the sidebar highlights and
-//! the row its insertion marker sits above. The release commits; Escape, the window losing focus,
-//! a release over no target, or the dragged row leaving the sidebar ends it with no change.
+//! A press on a row arms it ([`Msg::Pressed`]). While armed, the list reports the pointer in its
+//! content ([`Msg::Moved`]); the window is never followed (the idle guarantee, 018 FR-029d). The
+//! first report is where the drag starts from, and at [`ACTIVATION_PX`] from it the drag is
+//! active; below that the release is the click it always was (the row's own press selects). While
+//! active, [`hit_test`] over the drawn rows turns each report into the [`DropSpot`]: the target
+//! the sidebar highlights and the row edge its insertion marker is on. The release, heard through
+//! the window, commits; Escape, the window losing focus, a release over no target, or the dragged
+//! row leaving the sidebar ends it with no change.
 //!
 //! # Messages
 //!
-//! `Pressed`, `PointerMoved`, `ListPointer`, `Released`, `Cancelled`.
+//! `Pressed`, `Moved`, `Released`, `Cancelled`.
 
 use crate::features::sidebar::{layout_item, row_heights, SidebarEntry, ROW_GAP};
 use crate::features::Outcome;
 use micold_core::sidebar_layout::{DropTarget, LayoutItem, SidebarLayout, UserGroupId};
 
-/// How far, in window pixels, the pointer moves from the press before a press is a drag (C3).
+/// How far, in pixels, the pointer moves from where it was first seen after the press before the
+/// press is a drag (C3).
 pub const ACTIVATION_PX: u32 = 4;
 
 /// What a drag carries: a row the layout places, or a user group by its header (FR-019).
@@ -44,9 +46,9 @@ pub enum Dragged {
 pub struct State {
     /// What the press armed; `None` while nothing is pressed.
     pub armed: Option<Dragged>,
-    /// The press point, in window pixels.
-    pub from: (u16, u16),
-    /// Whether the pointer has moved [`ACTIVATION_PX`] from the press: then it is a drag.
+    /// Where the list first saw the pointer after the press, in its content's pixels.
+    pub from: Option<(u32, u32)>,
+    /// Whether the pointer has moved [`ACTIVATION_PX`] from `from`: then it is a drag.
     pub active: bool,
     /// Where a release would land; `None` over no target, and then nothing is highlighted and no
     /// marker is drawn (C3).
@@ -71,12 +73,10 @@ pub struct DropSpot {
 /// Everything the user does while dragging.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
-    /// A row was pressed at this window point: the drag is armed.
-    Pressed(Dragged, (u16, u16)),
-    /// The pointer moved to this window point.
-    PointerMoved((u16, u16)),
-    /// The pointer's height in the list's content, in whole pixels; `None` once it left the list.
-    ListPointer(Option<u32>),
+    /// A row was pressed: the drag is armed.
+    Pressed(Dragged),
+    /// The pointer in the list's content, in whole pixels, `(x, y)`; `None` once it left the list.
+    Moved(Option<(u32, u32)>),
     /// The button was released, wherever the pointer is.
     Released,
     /// Escape, or the window lost its focus: the drag ends with no change.
@@ -189,36 +189,15 @@ pub fn hit_test(y: f32, heights: &[f32], entries: &[SidebarEntry]) -> Option<Dro
 /// This feature's reducer (shape A).
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
     match msg {
-        Msg::Pressed(dragged, at) => {
+        Msg::Pressed(dragged) => {
             if can_drag(state, &dragged) {
                 state.sidebar_drag = State {
                     armed: Some(dragged),
-                    from: at,
-                    active: false,
-                    over: None,
+                    ..State::default()
                 };
             }
         }
-        Msg::PointerMoved(at) => {
-            if !still_there(state) {
-                state.sidebar_drag = State::default();
-            } else if !state.sidebar_drag.active && moved_far(state.sidebar_drag.from, at) {
-                state.sidebar_drag.active = true;
-            }
-        }
-        Msg::ListPointer(y) => {
-            if !still_there(state) {
-                state.sidebar_drag = State::default();
-            } else if state.sidebar_drag.active {
-                state.sidebar_drag.over = match (&state.sidebar_drag.armed, y) {
-                    (Some(Dragged::Item(_)), Some(y)) => {
-                        let entries = state.sidebar_list();
-                        hit_test(y as f32, &row_heights(&entries), &entries)
-                    }
-                    _ => None,
-                };
-            }
-        }
+        Msg::Moved(at) => moved(state, at),
         Msg::Released => return released(state),
         Msg::Cancelled => state.sidebar_drag = State::default(),
     }
@@ -248,11 +227,38 @@ fn still_there(state: &crate::app::State) -> bool {
         .is_some_and(|dragged| can_drag(state, dragged))
 }
 
+/// The pointer moved in the list, or left it (`None`): the first report after the press is where
+/// the drag starts from, a report [`ACTIVATION_PX`] from it activates the drag, and while active
+/// each report picks the drop spot. A dragged row that left the sidebar ends the drag.
+fn moved(state: &mut crate::app::State, at: Option<(u32, u32)>) {
+    if !still_there(state) {
+        state.sidebar_drag = State::default();
+        return;
+    }
+    let drag = &mut state.sidebar_drag;
+    if let (false, Some(at)) = (drag.active, at) {
+        match drag.from {
+            None => drag.from = Some(at),
+            Some(from) => drag.active = moved_far(from, at),
+        }
+    }
+    if !state.sidebar_drag.active {
+        return;
+    }
+    state.sidebar_drag.over = match (&state.sidebar_drag.armed, at) {
+        (Some(Dragged::Item(_)), Some((_, y))) => {
+            let entries = state.sidebar_list();
+            hit_test(y as f32, &row_heights(&entries), &entries)
+        }
+        _ => None,
+    };
+}
+
 /// Whether `to` is [`ACTIVATION_PX`] or more from `from`.
-fn moved_far(from: (u16, u16), to: (u16, u16)) -> bool {
-    let dx = u32::from(from.0.abs_diff(to.0));
-    let dy = u32::from(from.1.abs_diff(to.1));
-    dx * dx + dy * dy >= ACTIVATION_PX * ACTIVATION_PX
+fn moved_far(from: (u32, u32), to: (u32, u32)) -> bool {
+    let dx = u64::from(from.0.abs_diff(to.0));
+    let dy = u64::from(from.1.abs_diff(to.1));
+    dx * dx + dy * dy >= u64::from(ACTIVATION_PX * ACTIVATION_PX)
 }
 
 /// The release: an active drag over a target commits the move (C4); anything else ends with no

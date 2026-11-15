@@ -89,13 +89,19 @@ fn y_in(state: &State, index: usize, frac: f32) -> u32 {
 /// Report the pointer `frac` of the way down entry `index` of the list.
 fn hover(state: &mut State, index: usize, frac: f32) {
     let y = y_in(state, index, frac);
-    send(state, Msg::ListPointer(Some(y)));
+    send(state, Msg::Moved(Some((20, y))));
+}
+
+/// The pointer at `(x, y)` in the list's content.
+fn at(x: u32, y: u32) -> Msg {
+    Msg::Moved(Some((x, y)))
 }
 
 /// Press `dragged` and move past the activation distance, so the drag is active.
 fn start(state: &mut State, dragged: Dragged) {
-    send(state, Msg::Pressed(dragged, (20, 100)));
-    send(state, Msg::PointerMoved((20, 110)));
+    send(state, Msg::Pressed(dragged));
+    send(state, at(20, 100));
+    send(state, at(20, 110));
     assert!(state.sidebar_drag.active, "the drag is under way");
 }
 
@@ -117,9 +123,10 @@ fn drop_on(
 #[test]
 fn a_press_arms_and_a_move_under_four_pixels_stays_a_click() {
     let mut state = grouped();
-    send(&mut state, Msg::Pressed(Dragged::Item(wt("c")), (20, 100)));
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("c"))));
     assert_eq!(state.sidebar_drag.armed, Some(Dragged::Item(wt("c"))));
-    send(&mut state, Msg::PointerMoved((22, 102)));
+    send(&mut state, at(20, 100));
+    send(&mut state, at(22, 102));
     assert!(!state.sidebar_drag.active, "under 4 px it is still a click");
     let before = layout(&state);
     send(&mut state, Msg::Released);
@@ -131,17 +138,18 @@ fn a_press_arms_and_a_move_under_four_pixels_stays_a_click() {
 #[test]
 fn a_move_of_four_pixels_activates_the_drag() {
     let mut state = grouped();
-    send(&mut state, Msg::Pressed(Dragged::Item(wt("c")), (20, 100)));
-    send(&mut state, Msg::PointerMoved((20, 103)));
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("c"))));
+    send(&mut state, at(20, 100));
+    send(&mut state, at(20, 103));
     assert!(!state.sidebar_drag.active, "3 px");
-    send(&mut state, Msg::PointerMoved((20, 104)));
+    send(&mut state, at(20, 104));
     assert!(state.sidebar_drag.active, "4 px");
 }
 
 #[test]
 fn the_list_pointer_is_ignored_until_the_drag_is_active() {
     let mut state = grouped();
-    send(&mut state, Msg::Pressed(Dragged::Item(wt("c")), (20, 100)));
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("c"))));
     let index = entry_at(&state, header(WORK));
     hover(&mut state, index, 0.5);
     assert_eq!(state.sidebar_drag.over, None);
@@ -228,7 +236,7 @@ fn over_a_target_the_spot_carries_the_marker_and_over_none_nothing_is_drawn() {
     );
     hover(&mut state, a, 0.75);
     assert!(state.sidebar_drag.over.is_some());
-    send(&mut state, Msg::ListPointer(None));
+    send(&mut state, Msg::Moved(None));
     assert_eq!(state.sidebar_drag.over, None, "the pointer left the list");
 }
 
@@ -317,20 +325,14 @@ fn a_drop_below_the_rows_own_place_in_its_list_lands_after_the_row_it_was_droppe
 #[test]
 fn default_never_arms() {
     let mut state = grouped();
-    send(&mut state, Msg::Pressed(Dragged::Item(wt("")), (20, 100)));
+    send(&mut state, Msg::Pressed(Dragged::Item(wt(""))));
     assert_eq!(state.sidebar_drag.armed, None);
-    send(
-        &mut state,
-        Msg::Pressed(Dragged::Item(wt("gone")), (20, 100)),
-    );
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("gone"))));
     assert_eq!(
         state.sidebar_drag.armed, None,
         "a row the sidebar does not have"
     );
-    send(
-        &mut state,
-        Msg::Pressed(Dragged::Group(UserGroupId(9)), (20, 100)),
-    );
+    send(&mut state, Msg::Pressed(Dragged::Group(UserGroupId(9))));
     assert_eq!(
         state.sidebar_drag.armed, None,
         "a group the project does not have"
@@ -447,7 +449,7 @@ fn escape_ends_the_drag_with_no_change() {
 fn a_release_outside_every_target_changes_nothing() {
     let mut state = dragging_over_a_target();
     let entries = state.sidebar_list();
-    send(&mut state, Msg::ListPointer(None));
+    send(&mut state, Msg::Moved(None));
     send(&mut state, Msg::Released);
     assert_eq!(state.sidebar_drag.armed, None);
     assert_eq!(state.sidebar_list(), entries);
@@ -463,7 +465,7 @@ fn the_dragged_worktree_vanishing_ends_the_drag_with_no_change_and_no_error() {
         ["a", "b", "d", "e"].iter().map(|d| listed(d)).collect(),
     );
     let before = layout(&state);
-    send(&mut state, Msg::PointerMoved((20, 120)));
+    send(&mut state, at(20, 120));
     assert_eq!(state.sidebar_drag.armed, None, "the drag ended");
     send(&mut state, Msg::Released);
     assert_eq!(layout(&state), before);
@@ -492,7 +494,7 @@ fn escape_with_no_drag_keeps_its_meaning() {
         None,
         "nothing to close"
     );
-    send(&mut state, Msg::Pressed(Dragged::Item(wt("c")), (20, 100)));
+    send(&mut state, Msg::Pressed(Dragged::Item(wt("c"))));
     assert_eq!(
         micold_client::app::on_escape(&state),
         None,

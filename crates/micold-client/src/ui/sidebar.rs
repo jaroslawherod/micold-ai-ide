@@ -228,17 +228,21 @@ fn with_drop_marker(
     items
 }
 
-/// The list reporting, while a drag is active, the pointer's height in its content to the hit
-/// test (feature 1786, contract C3). The area is always there and adds no layout node, so a drag
+/// The list reporting, while a press is armed, the pointer in its content to the drag (feature
+/// 1786, contract C3): it activates the drag and feeds the hit test. Only while armed, so the idle
+/// window still hears no pointer. The area is always there and adds no layout node, so a drag
 /// starting or ending keeps the rows' widget state, the pressed row's included.
 fn drag_layer<'a>(state: &State, list: Element<'a, Message>) -> Element<'a, Message> {
     let mut area = iced::widget::mouse_area(list);
-    if state.sidebar_drag.active {
+    if state.sidebar_drag.armed.is_some() {
         area = area
             .on_move(|point| {
-                Message::SidebarDrag(DragMsg::ListPointer(Some(point.y.max(0.0) as u32)))
+                Message::SidebarDrag(DragMsg::Moved(Some((
+                    point.x.max(0.0) as u32,
+                    point.y.max(0.0) as u32,
+                ))))
             })
-            .on_exit(Message::SidebarDrag(DragMsg::ListPointer(None)));
+            .on_exit(Message::SidebarDrag(DragMsg::Moved(None)));
     }
     area.into()
 }
@@ -1005,9 +1009,7 @@ fn build_items(
                 items.push(
                     crate::ui::material::GroupHeader::new(header.name)
                         .on_primary_press(
-                            move |point| {
-                                Message::SidebarDrag(DragMsg::Pressed(Dragged::Group(id), point))
-                            },
+                            move |_| Message::SidebarDrag(DragMsg::Pressed(Dragged::Group(id))),
                             Message::SidebarDrag(DragMsg::Released),
                         )
                         .collapsed(header.collapsed)
@@ -1311,7 +1313,7 @@ fn drag_source(
     dragged: micold_core::sidebar_layout::LayoutItem,
 ) -> TreeItem<'static, Message> {
     item.on_primary_press(
-        move |point| Message::SidebarDrag(DragMsg::Pressed(Dragged::Item(dragged.clone()), point)),
+        move |_| Message::SidebarDrag(DragMsg::Pressed(Dragged::Item(dragged.clone()))),
         Message::SidebarDrag(DragMsg::Released),
     )
 }
@@ -2281,7 +2283,7 @@ mod tests {
 
         state.sidebar_drag = Drag {
             armed: Some(Dragged::Item(LayoutItem::Worktree("idle".into()))),
-            from: (0, 0),
+            from: None,
             active: true,
             over: Some(DropSpot {
                 list: Some(UserGroupId(0)),
