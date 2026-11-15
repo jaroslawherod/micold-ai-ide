@@ -6,6 +6,7 @@
 //! the pinned `/tmp/micold-<uid>`, and removing a live `orchestrator.sock` there would cut the link
 //! of a daemon on the machine running the suite. The `ssh_real_link` suite runs the command.
 
+// unix-only: `prepare-link` serves Unix remotes only (feature 489); the tests bind a Unix socket and read Unix modes.
 #![cfg(unix)]
 
 use std::os::unix::fs::PermissionsExt;

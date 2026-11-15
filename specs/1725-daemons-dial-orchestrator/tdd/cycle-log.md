@@ -259,3 +259,5 @@ failed before the implementation.
 - Scoped gate: `kube_daemon_*` client tests (21) panicked `unscripted ssh run`: the core fake pod
   host (`kube/fake_host.rs`) now answers `remote prepare-link` itself → `--tests kube_daemon` green;
   `ssh_real_link` 4 passed.
+- Full gate 1: `daemon_tests_gate_with_reason` failed (`remote_prepare_link.rs` gated `#![cfg(unix)]`
+  with no reason line); the `// unix-only:` line added → passed.
