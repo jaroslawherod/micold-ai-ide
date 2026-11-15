@@ -22,6 +22,20 @@ Covers FR-042 and FR-046 of `specs/1722-rn-client-k8s/spec.md`. Plan: `specs/172
 - Linux only: jaro dropped macOS and Windows on 2026-11-14 (#1897). That decision stands whatever
   the constitution text says until #1949 updates it.
 
+### Session 2026-11-15
+
+- Q: When a `[database]` table is present on a loopback-only bind, which backend runs? → A:
+  PostgreSQL. The table's presence selects PostgreSQL on any bind; SQLite is chosen only when the
+  table is absent on a loopback bind (FR-008, FR-009). _(agent-resolved:
+  specs/1722-rn-client-k8s/plan.md#Storage: PostgreSQL)_
+- Q: Does moving an existing SQLite local-mode database to PostgreSQL belong here? → A: No. Only
+  the one-shot `registry.json` import exists (FR-010); a SQLite-to-PostgreSQL data move is out of
+  scope. _(agent-resolved: specs/1722-rn-client-k8s/plan.md#Storage: PostgreSQL)_
+- Q: Which `owner_user_id` do records get before any user exists (enrolled daemons, imported
+  `registry.json` records)? → A: Deferred to the plan, which must pick a value that satisfies
+  FR-007 and FR-010 together (v1 has one tenant and one owner). _(agent-resolved:
+  specs/1722-rn-client-k8s/plan.md#Toward multi-user)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Orchestrator state survives a restart (Priority: P1)
@@ -267,3 +281,4 @@ multi-user later needs no data migration (FR-046).
 - The Postgres `LinkDirectory`, replica forwarding, retention partition drops, backups.
 - Constitution amendment (#1949); Helm chart changes.
 - Encrypting the SQLite file at rest.
+- Moving a SQLite local-mode database into PostgreSQL (only the `registry.json` import exists).

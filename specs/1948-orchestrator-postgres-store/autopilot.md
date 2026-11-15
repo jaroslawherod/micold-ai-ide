@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1948
 - **Worktree branch**: claude/project-thread-ns6vcg
 - **Started**: 2026-11-15
-- **Phase**: spec (done)
-- **Next step**: clarify unit
+- **Phase**: clarify (done)
+- **Next step**: plan unit
 
 ## Pull requests
 
