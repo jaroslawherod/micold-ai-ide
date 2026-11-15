@@ -7,10 +7,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature
 - **Effort**: default
 - **Issue**: #1816
-- **Worktree branch**: claude/project-thread-9puqm3
+- **Worktree branch**: claude/project-thread-vhhrxe
 - **Started**: 2026-11-12
-- **Phase**: 4-milestones
-- **Next step**: M2 PR open, wait on CI then squash-merge; M3, M4 wait on #1860
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,15 +18,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1867 | design | merged | 749d63f |
 | #1909 | M1 | merged | 7c96443 |
+| #1915 | M2 | merged | 46f7263 |
+| #1922 | M3 | merged | 35ffa7c |
+| #1924 | M4 | merged | 3f59523 |
+| #1927 | close | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T008 | full | verify-run.sh verdict | #1909 | merged |
-| M2 | T009–T012 | full | follow-up.sh and cap | | implemented, awaiting reviews |
-| M3 | T013–T014 | full | close-out-report.sh | | pending |
-| M4 | T015–T019 | full | safe-to-remove.sh and rules | | pending |
+| M2 | T009–T012 | full | follow-up.sh and cap | #1915 | merged |
+| M3 | T013–T014, T020 | full | close-out-report.sh | #1922 | merged |
+| M4 | T015–T019, T021 | full | safe-to-remove.sh and rules | #1924 | merged |
 
 ## Decisions
 
@@ -48,16 +52,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 1 | M2 | 733b29cb33318483b3015ab4353f5c29e254bcfb | 62fb0a7eddc5e9ab87abad102eace4a605e662de:733b29cb33318483b3015ab4353f5c29e254bcfb | CHANGES (F1, F2 MAJOR, F3-F5 MINOR fixed) |
 | Review B | 1 | M2 | 733b29cb33318483b3015ab4353f5c29e254bcfb | 62fb0a7eddc5e9ab87abad102eace4a605e662de:733b29cb33318483b3015ab4353f5c29e254bcfb | CLEAN (MINORs: F4/F5 as A, drift-M2.md added) |
 | Review A | 2 | M2 | 5c82564f98dc584383f89ef8ce4224b1ea48df01 | d6f38ac696c314114dabe21416b0901e18a02c2a:5c82564f98dc584383f89ef8ce4224b1ea48df01 | CLEAN (round-1 F1-F5 confirmed fixed) |
+| Review A | 1 | M3 | 54c815ff4ec16aacf2c524791e3dd9ef03f74a2e | - | CLEAN (run by the unit itself, no Agent tool; no findings) |
+| Review B | 1 | M3 | f605b7957964614c4420c157052e572f55317bc5 | 9c260155a70445ffa2edd421d0e8fa60cd6eb132:f605b7957964614c4420c157052e572f55317bc5 | CHANGES (F1 drift-M3.md, F2 cycle-log fixed) |
+| Review B | 2 | M3 | c2aee869706cbfe157fbe85e9b89632ed6745fd8 | 091dd5b5cc6ddbb2fe6ca0d006b9b30d5e6f3f40:c2aee869706cbfe157fbe85e9b89632ed6745fd8 | CLEAN (round-1 F1, F2 confirmed fixed) |
+| Review A | 1 | M4 | aac52c7b450ebfcb3748a4e58f582c12c1751532 | 559fd0a3127a26b6ca0823a77f31d87f49dcd14e:aac52c7b450ebfcb3748a4e58f582c12c1751532 | CLEAN (run by the unit itself, no Agent tool; no findings) |
+| Review B | 1 | M4 | fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | 0304b3be1b61d1a7d48bbe5f9bd29530158b477e:fa93cb9d7fcf8c63b7a7026e5e4ba67d2ea26c1d | CHANGES (F1 drift-M4 supervised.md row, fixed) |
+| Review B | 2 | M4 | 687cb19ef26a1bcc4426a45313c02f6d243dac46 | 31953c17169a2901ae3a57ebdcded71fcf78ca3d:687cb19ef26a1bcc4426a45313c02f6d243dac46 | CLEAN (round-1 F1 confirmed fixed) |
+| Review close | 1 | close | ca499cad564f3e48d06612347325d9efb5592f04 | c11234396b696b7697e4280277d54061ab530565:ca499cad564f3e48d06612347325d9efb5592f04 | CLEAN (1 MINOR declined: supervisor.test.sh line edit is a tightening from another PR) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A r2 | F1 MINOR: verify-run.sh runs ledgers_of twice | Cheap (a few ms) and the code stays as reviewed so both CLEAN verdicts stay bound to the head |
+| close | close r1 | F1 MINOR: verification.md says existing supervisor tests were not loosened, but one line in supervisor.test.sh changed | That line is a tightening from another PR (#1815) in the same range; the claim holds for the 1816 hunks |
 
 ## Handover
 
-M2 implemented (T009–T012 ticked): scripts/autopilot/supervisor-ledger.sh, follow-up.sh, follow-up cases in scripts/tests/close-out.test.sh (50 pass). Review A and Review B are to be dispatched by the orchestrator (a cloud unit cannot spawn subagents); they are not run. Next: reviews, PR, merge. M3, M4 stay blocked on #1860.
+None.
 
 ## Open escalation
 
