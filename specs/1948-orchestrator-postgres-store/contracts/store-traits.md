@@ -90,7 +90,7 @@ pub trait AuditStore: Send + Sync {
 ```
 
 No update, no delete. `NewAuditEntry { at, actor, action, target, detail }`; `action` is a short
-dotted name (`user.invite`, `daemon.revoke`); `detail` is free text capped at 2 KiB.
+dotted name (`user.invite`, `daemon.revoke`); `detail` is free text, refused above 2048 bytes.
 
 ## In-memory implementations
 

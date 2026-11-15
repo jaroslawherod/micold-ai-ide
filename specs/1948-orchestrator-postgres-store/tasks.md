@@ -27,7 +27,7 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 ## Phase 1: Setup
 
-- [ ] T001 Spike (research.md R2): add `sqlx` 0.8 (`default-features = false`, features
+- [X] T001 Spike (research.md R2): add `sqlx` 0.8 (`default-features = false`, features
   `runtime-tokio`, `tls-rustls-ring-webpki`, `postgres`, `sqlite`, `any`, `migrate`) and
   `sha1 = { workspace = true }` to `crates/micold-daemon/Cargo.toml`; write a throwaway probe
   `crates/micold-daemon/tests/orchestrator/store_spike.rs` proving `$n` placeholders, `ON CONFLICT`,
@@ -37,19 +37,19 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 ## Phase 2: Foundational (registry contract, shared suite scaffold)
 
-- [ ] T002 [P] Write failing unit tests in `crates/micold-core/src/orchestrator/store.rs`
+- [X] T002 [P] Write failing unit tests in `crates/micold-core/src/orchestrator/store.rs`
   (`#[cfg(test)]`): `StoreError::Unavailable { target, reason }`, `Refused { reason }` and
   `Schema(SchemaError)` (`DatabaseNewer { database: i64, build: i64 }`, `ChecksumChanged { version:
   i64, description }`, `Failed { version, reason }`) keep `Eq` and `Clone`, and their `Display`
   holds no URL; the default `upsert` replaces by `(tenant, id)` and keeps other records; the default
   `remove(&TenantId, &WireDaemonId)` returns true then false.
-- [ ] T003 [P] Create the shared-suite scaffold `crates/micold-daemon/tests/orchestrator/store_support.rs`
+- [X] T003 [P] Create the shared-suite scaffold `crates/micold-daemon/tests/orchestrator/store_support.rs`
   (a `Backend` factory with `registry()` and `reopen()`; memory and `JsonRegistryStore` factories)
   and `store_suite.rs` registry cases, register both in `tests/orchestrator/main.rs`: upsert inserts
   then updates, `remove` true/false, `save` replaces the whole set across tenants in one call,
   `load` ordered by `(tenant_id, id)`, a non-default tenant record and the same id under two tenants
   survive `reopen`, two writers upserting different ids lose neither (FR-015, FR-001, US1).
-- [ ] T004 Implement T002 in `crates/micold-core/src/orchestrator/store.rs`: the three `StoreError`
+- [X] T004 Implement T002 in `crates/micold-core/src/orchestrator/store.rs`: the three `StoreError`
   variants, `SchemaError`, and `RegistryStore::upsert` and `remove` with default bodies built on
   `load` and `save` (`JsonRegistryStore`, `MemoryRegistryStore` and the doubles in
   `crates/micold-daemon/src/orchestrator/mod.rs` compile unchanged); re-export in
@@ -61,16 +61,16 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: the three traits exist with in-memory implementations behind one suite (US1 scenario 3).
 
-- [ ] T005 [P] [US1] Failing unit tests in `crates/micold-core/src/orchestrator/auth.rs`
+- [X] T005 [P] [US1] Failing unit tests in `crates/micold-core/src/orchestrator/auth.rs`
   (`#[cfg(test)]`): `UserId::new` rejects blank and the text `unowned`; `TokenHash::from_hex` accepts
   exactly "64 hex chars" (lower-case) and rejects any other length or character, `hash_of(token)` is
   the SHA-256 hex; `Role` and `Provider` round-trip `owner`/`operator`/`viewer` and
   `github`/`google` text.
-- [ ] T006 [P] [US1] Failing unit tests in `crates/micold-core/src/orchestrator/audit.rs`
+- [X] T006 [P] [US1] Failing unit tests in `crates/micold-core/src/orchestrator/audit.rs`
   (`#[cfg(test)]`): `NewAuditEntry::new` accepts `detail` of "free text capped at 2 KiB" (2048 bytes)
   and returns `StoreError::Refused` above it; also correct the cap sentence in
   contracts/store-traits.md to say "refused above 2048 bytes".
-- [ ] T007 [US1] Auth cases in `crates/micold-daemon/tests/orchestrator/store_suite.rs` (red): create,
+- [X] T007 [US1] Auth cases in `crates/micold-daemon/tests/orchestrator/store_suite.rs` (red): create,
   read, list (removed users excluded), `set_role`, soft `remove_user` that revokes the user's refresh
   tokens in the same call; `link_identity` Refused when linked to another user; `redeem_invite` once
   (Refused when expired, unknown or redeemed); bootstrap `set`, `consume` (Refused on mismatch or
@@ -78,20 +78,20 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   active, reuse of a revoked one revokes the family); serials, revocations, `is_revoked`; enrollment
   redeemed once; two `AuthStore` values for different tenants on one backend see disjoint rows (US6
   scenario 2); every case ends with `reopen` (FR-002).
-- [ ] T008 [US1] Audit cases in `store_suite.rs` (red): `append` returns the entry with a strictly
+- [X] T008 [US1] Audit cases in `store_suite.rs` (red): `append` returns the entry with a strictly
   increasing `seq`, `recent(limit, before)` newest first by keyset, `by_actor`, tenant isolation,
   survives `reopen`.
-- [ ] T009 [US1] Implement `crates/micold-core/src/orchestrator/auth.rs`: `UserId`, `Role`,
+- [X] T009 [US1] Implement `crates/micold-core/src/orchestrator/auth.rs`: `UserId`, `Role`,
   `Provider`, `TokenHash` ("64 hex chars"), `CertSerial` (hex text), `User`, `NewUser`, `Identity`,
   `Invite`, `NewInvite`, `Bootstrap`, `RefreshToken`, `Revocation`, `NewEnrollment` and the
   `AuthStore` trait exactly as contracts/store-traits.md; add `pub const UNOWNED: &str = "unowned"`
   to `record.rs`; T005 green.
-- [ ] T010 [P] [US1] Implement `crates/micold-core/src/orchestrator/audit.rs`: `AuditEntry`,
+- [X] T010 [P] [US1] Implement `crates/micold-core/src/orchestrator/audit.rs`: `AuditEntry`,
   `NewAuditEntry` (`new` enforces the 2048-byte cap), `AuditStore` trait; T006 green.
-- [ ] T011 [US1] `MemoryAuthStore` in `auth.rs` (`Mutex` over collections, tenant-keyed, same
+- [X] T011 [US1] `MemoryAuthStore` in `auth.rs` (`Mutex` over collections, tenant-keyed, same
   `Refused` and ordering rules, `fail(bool)` switch returning `Unavailable`).
-- [ ] T012 [US1] `MemoryAuditStore` in `audit.rs` with the same `fail(bool)` switch.
-- [ ] T013 [US1] Re-export the new types in `crates/micold-core/src/orchestrator/mod.rs`; add the memory
+- [X] T012 [US1] `MemoryAuditStore` in `audit.rs` with the same `fail(bool)` switch.
+- [X] T013 [US1] Re-export the new types in `crates/micold-core/src/orchestrator/mod.rs`; add the memory
   auth and audit factories to `store_support.rs`; T007 and T008 green on memory.
 
 ---

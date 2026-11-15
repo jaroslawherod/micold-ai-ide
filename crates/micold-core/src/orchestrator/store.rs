@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
-use super::record::DaemonRecord;
+use super::record::{DaemonRecord, TenantId};
 use super::registry::Snapshot;
+use crate::protocol::routing::WireDaemonId;
 
 /// The stored file's format version.
 pub const STORE_VERSION: u32 = 1;
@@ -24,6 +25,57 @@ pub const STORE_DIR: &str = "orchestrator";
 
 /// The registry file's name.
 pub const REGISTRY_FILE: &str = "registry.json";
+
+/// Why a database could not be brought to this build's schema (FR-003 to FR-005).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SchemaError {
+    /// The database was migrated by a newer build; nothing was written.
+    DatabaseNewer {
+        /// The newest version the database holds.
+        database: i64,
+        /// The newest version this build knows.
+        build: i64,
+    },
+    /// A migration this build ships differs from the one the database applied.
+    ChecksumChanged {
+        /// The migration's version.
+        version: i64,
+        /// Its description.
+        description: String,
+    },
+    /// A migration failed and was rolled back.
+    Failed {
+        /// The migration's version.
+        version: i64,
+        /// What went wrong; never a URL.
+        reason: String,
+    },
+}
+
+impl fmt::Display for SchemaError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DatabaseNewer { database, build } => write!(
+                f,
+                "the database schema is at version {database}, newer than this build's {build}; \
+                 upgrade the orchestrator or point it at another database"
+            ),
+            Self::ChecksumChanged {
+                version,
+                description,
+            } => write!(
+                f,
+                "migration {version} ({description}) differs from the one the database applied"
+            ),
+            Self::Failed { version, reason } => {
+                write!(
+                    f,
+                    "migration {version} failed and was rolled back: {reason}"
+                )
+            }
+        }
+    }
+}
 
 /// Why the store could not load or save.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +94,22 @@ pub enum StoreError {
         /// What went wrong.
         reason: String,
     },
+    /// The database is unreachable or was lost. `target` is `host:port` or a file path, never a
+    /// URL or a password.
+    Unavailable {
+        /// Where the store tried to connect.
+        target: String,
+        /// What went wrong.
+        reason: String,
+    },
+    /// A precondition was not met: an invite already redeemed, a consumed bootstrap code, an
+    /// import into a non-empty registry.
+    Refused {
+        /// Which rule refused.
+        reason: String,
+    },
+    /// The database schema could not be brought to this build's.
+    Schema(SchemaError),
 }
 
 impl fmt::Display for StoreError {
@@ -57,6 +125,11 @@ impl fmt::Display for StoreError {
                 "orchestrator registry {} could not be saved: {reason}; the previous file is kept",
                 path.display()
             ),
+            Self::Unavailable { target, reason } => {
+                write!(f, "orchestrator store {target} is unavailable: {reason}")
+            }
+            Self::Refused { reason } => write!(f, "orchestrator store refused: {reason}"),
+            Self::Schema(error) => write!(f, "orchestrator store schema: {error}"),
         }
     }
 }
@@ -69,6 +142,55 @@ pub trait RegistryStore: Send + Sync {
     fn load(&self) -> Result<Vec<DaemonRecord>, StoreError>;
     /// Replace the saved records with `records`, whole: on failure the previous copy is intact.
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError>;
+
+    /// Insert `record`, or replace the one with the same `(tenant, id)`; every other record stays.
+    /// The default loads, replaces and saves; a SQL store does it in one statement, so two writers
+    /// upserting different ids never lose each other's record.
+    fn upsert(&self, record: &DaemonRecord) -> Result<(), StoreError> {
+        upsert_into(self.load()?, record, |all| self.save(all))
+    }
+
+    /// Remove the record `(tenant, id)`: `true` when one went, `false` when there was none.
+    fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError> {
+        remove_from(self.load()?, tenant, id, |all| self.save(all))
+    }
+}
+
+/// `records` ordered by `(tenant, id)`, the order every store loads in.
+fn sorted(mut records: Vec<DaemonRecord>) -> Vec<DaemonRecord> {
+    records.sort_by(|a, b| (&a.tenant, a.id.as_str()).cmp(&(&b.tenant, b.id.as_str())));
+    records
+}
+
+/// `records` with `record` inserted or replacing its `(tenant, id)`, handed to `save`.
+fn upsert_into(
+    mut records: Vec<DaemonRecord>,
+    record: &DaemonRecord,
+    save: impl FnOnce(&[DaemonRecord]) -> Result<(), StoreError>,
+) -> Result<(), StoreError> {
+    match records
+        .iter_mut()
+        .find(|r| r.tenant == record.tenant && r.id == record.id)
+    {
+        Some(existing) => *existing = record.clone(),
+        None => records.push(record.clone()),
+    }
+    save(&records)
+}
+
+/// `records` without `(tenant, id)`, handed to `save` when one went.
+fn remove_from(
+    mut records: Vec<DaemonRecord>,
+    tenant: &TenantId,
+    id: &WireDaemonId,
+    save: impl FnOnce(&[DaemonRecord]) -> Result<(), StoreError>,
+) -> Result<bool, StoreError> {
+    let before = records.len();
+    records.retain(|r| !(&r.tenant == tenant && &r.id == id));
+    if records.len() == before {
+        return Ok(false);
+    }
+    save(&records).map(|()| true)
 }
 
 #[derive(Serialize)]
@@ -87,6 +209,9 @@ struct Stored {
 #[derive(Debug, Clone)]
 pub struct JsonRegistryStore {
     dir: PathBuf,
+    /// Held across a read-modify-write, so two `upsert`s or `remove`s of this value never lose
+    /// each other's change.
+    gate: Arc<Mutex<()>>,
 }
 
 impl JsonRegistryStore {
@@ -94,6 +219,7 @@ impl JsonRegistryStore {
     pub fn in_data_dir(data_dir: &Path) -> Self {
         Self {
             dir: data_dir.join(STORE_DIR),
+            gate: Arc::default(),
         }
     }
 
@@ -122,7 +248,7 @@ impl RegistryStore for JsonRegistryStore {
                 stored.version
             )));
         }
-        Ok(stored.daemons)
+        Ok(sorted(stored.daemons))
     }
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
@@ -141,6 +267,16 @@ impl RegistryStore for JsonRegistryStore {
             path: self.path(),
             reason: e.to_string(),
         })
+    }
+
+    fn upsert(&self, record: &DaemonRecord) -> Result<(), StoreError> {
+        let _gate = self.gate.lock().unwrap_or_else(PoisonError::into_inner);
+        upsert_into(self.load()?, record, |all| self.save(all))
+    }
+
+    fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError> {
+        let _gate = self.gate.lock().unwrap_or_else(PoisonError::into_inner);
+        remove_from(self.load()?, tenant, id, |all| self.save(all))
     }
 }
 
@@ -183,17 +319,41 @@ impl MemoryRegistryStore {
 
 impl RegistryStore for MemoryRegistryStore {
     fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
-        Ok(self.stored())
+        Ok(sorted(self.stored()))
     }
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
+        self.commit(&mut self.lock(), records)
+    }
+
+    fn upsert(&self, record: &DaemonRecord) -> Result<(), StoreError> {
+        let mut stored = self.lock();
+        upsert_into(stored.clone(), record, |all| self.commit(&mut stored, all))
+    }
+
+    fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError> {
+        let mut stored = self.lock();
+        remove_from(stored.clone(), tenant, id, |all| {
+            self.commit(&mut stored, all)
+        })
+    }
+}
+
+impl MemoryRegistryStore {
+    /// Replace `stored` by `records`, unless saves are switched to fail. The caller holds the
+    /// lock, so a read-modify-write is one step.
+    fn commit(
+        &self,
+        stored: &mut Vec<DaemonRecord>,
+        records: &[DaemonRecord],
+    ) -> Result<(), StoreError> {
         if self.failing.load(Ordering::SeqCst) {
             return Err(StoreError::Save {
                 path: PathBuf::from("<memory>"),
                 reason: "injected save failure".to_owned(),
             });
         }
-        *self.lock() = records.to_vec();
+        *stored = records.to_vec();
         self.saves.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
@@ -430,5 +590,103 @@ mod tests {
             .unwrap());
         assert!(!saver.save(&snapshot(5, Vec::new())).unwrap());
         assert_eq!(store.load().unwrap(), newer);
+    }
+
+    // ---- #1948 T002: the new error variants and the per-record defaults ----
+
+    fn tenant_record(tenant: &str, id: &str) -> DaemonRecord {
+        DaemonRecord::new(
+            WireDaemonId::new(id).unwrap(),
+            Kind::Host,
+            id,
+            81,
+            BTreeSet::new(),
+            Some(tenant),
+        )
+    }
+
+    #[test]
+    fn the_new_error_variants_keep_eq_and_clone_and_name_no_url() {
+        let errors = [
+            StoreError::Unavailable {
+                target: "db.example:5432".to_owned(),
+                reason: "connection refused".to_owned(),
+            },
+            StoreError::Refused {
+                reason: "invite already redeemed".to_owned(),
+            },
+            StoreError::Schema(SchemaError::DatabaseNewer {
+                database: 4,
+                build: 2,
+            }),
+            StoreError::Schema(SchemaError::ChecksumChanged {
+                version: 1,
+                description: "orchestrator_schema".to_owned(),
+            }),
+            StoreError::Schema(SchemaError::Failed {
+                version: 2,
+                reason: "syntax".to_owned(),
+            }),
+        ];
+        for error in &errors {
+            assert_eq!(&error.clone(), error, "a StoreError clones equal");
+            let text = error.to_string();
+            assert!(!text.contains("://") && !text.contains('@'), "{text}");
+        }
+        let text = errors[0].to_string();
+        assert!(text.contains("db.example:5432") && text.contains("connection refused"));
+        let newer = errors[2].to_string();
+        assert!(newer.contains('4') && newer.contains('2'), "{newer}");
+        assert!(errors[3].to_string().contains("orchestrator_schema"));
+        assert!(errors[4].to_string().contains("syntax"));
+    }
+
+    /// Implements only `load` and `save`, so `upsert` and `remove` run their default bodies.
+    struct LoadSaveOnly(MemoryRegistryStore);
+
+    impl RegistryStore for LoadSaveOnly {
+        fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
+            self.0.load()
+        }
+
+        fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
+            self.0.save(records)
+        }
+    }
+
+    #[test]
+    fn the_default_upsert_replaces_by_tenant_and_id_and_keeps_the_others() {
+        let store = LoadSaveOnly(MemoryRegistryStore::with(vec![
+            tenant_record("a", "x"),
+            tenant_record("b", "x"),
+            tenant_record("a", "y"),
+        ]));
+        let mut changed = tenant_record("a", "x");
+        changed.name = "renamed".to_owned();
+        store.upsert(&changed).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 3, "an update adds nothing");
+        assert!(loaded.contains(&changed));
+        assert!(
+            loaded.contains(&tenant_record("b", "x")),
+            "other tenant kept"
+        );
+        assert!(loaded.contains(&tenant_record("a", "y")), "other id kept");
+        let fresh = tenant_record("a", "z");
+        store.upsert(&fresh).unwrap();
+        assert_eq!(store.load().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn the_default_remove_returns_true_then_false() {
+        let store = LoadSaveOnly(MemoryRegistryStore::with(vec![
+            tenant_record("a", "x"),
+            tenant_record("b", "x"),
+        ]));
+        let id = WireDaemonId::new("x").unwrap();
+        let tenant = TenantId::new(Some("a"));
+        assert!(store.remove(&tenant, &id).unwrap());
+        assert!(!store.remove(&tenant, &id).unwrap());
+        assert_eq!(store.load().unwrap(), vec![tenant_record("b", "x")]);
     }
 }

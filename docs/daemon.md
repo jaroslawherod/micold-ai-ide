@@ -691,8 +691,34 @@ without it. The task:
 A lost link is dialled again without a restart, after 1, 2, 4, 8, then 15 seconds (the delay of the
 SSH reconnect). The first delay after a lost link may grow by up to 20 %. A refusal waits 15 seconds
 (plus up to 20 %) and does not grow that delay. The task logs a state change once (`orchestrator link
-up`, `orchestrator link lost`, a refusal with its reason), never every retry. It reads only the
+up`, `orchestrator link lost`, a refusal with its reason, `orchestrator link not linked` when a
+refused daemon's orchestrator goes away), never every retry. It reads only the
 configuration and holds no lock a session waits on, so an orchestrator outage never touches a session.
+
+The refusals a dialer meets are `VersionMismatch` and `AlreadyLinked` in the verdict, and a
+`DaemonMsg::Refused` after `Accepted` (`HelloRefused`); each waits the capped delay with its jitter
+(`RetryPolicy::after_refusal`) and leaves the connect backoff where it was. The task's status cell
+(`orchestrator_link::LinkState`) holds the status, the refusal's sentence, when the status was entered
+(a retry refused the same way keeps the first time) and how many dials reached the endpoint.
+`runtime_status` mirrors it into `status.json` as an optional `link` object, `{ "state", "since",
+"detail" }` (`ssh::status::LinkStatusReport`; `STATUS_VERSION` is unchanged and an older file without
+it still parses). `state` is a word (`not-linked`, `linking`, `linked`, `refused-version-mismatch`,
+`refused-already-linked`, `refused-hello`), not an enum, so a reader meets a newer state without
+refusing the file. `micold-daemon remote status` prints the JSON line on stdout, which the client
+parses, and the state with its detail in words on stderr.
+
+While the orchestrator is down or restarting, every session keeps running and producing output and
+every client stays connected: the link is the only thing that ends, and the daemon logs
+`orchestrator link lost` once. When the orchestrator listens again the daemon links by itself, with
+no restart, within 16 seconds (the 15-second capped delay plus the dial). An orchestrator restarted
+on the same registry lists the daemon as the record it restored, `offline` until the re-dial and then
+`online`: the old link ended with the old process, so the claim is not refused as already linked and
+no second record appears.
+
+The orchestrator's own sends during the handshake (the verdict, `Welcome`, a `Hello` refusal) are
+bounded by the same 9-second deadline as its pings (`send_bounded` in `orchestrator/link.rs`). A dialer
+that keeps the connection open and stops reading is dropped at the deadline, and the id it reserved
+is free for the next claim.
 
 Container, SSH-host and pod daemons reach the orchestrator through a reverse forward of the connection
 that holds them; that is covered when it lands.

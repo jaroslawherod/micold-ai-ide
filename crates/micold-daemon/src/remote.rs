@@ -83,13 +83,29 @@ pub fn decide_stop(status: Option<&RemoteStatus>) -> StopDecision {
     }
 }
 
+/// What `remote status` prints for the daemon on `endpoint`: its one JSON line (stdout, which the
+/// client parses, `link` object included) and, when it has an orchestrator link, the link's state
+/// and refusal reason in words (stderr, #1725 FR-012). `None` when nothing proves a daemon runs
+/// there.
+pub fn status_lines(endpoint: &Endpoint) -> Option<(String, Option<String>)> {
+    let status = crate::runtime_status::read(endpoint)?;
+    let words = status.link.as_ref().map(|link| match link.detail.as_str() {
+        "" => format!("orchestrator link: {}", link.state),
+        detail => format!("orchestrator link: {}: {detail}", link.state),
+    });
+    Some((status.to_json(), words))
+}
+
 fn run_status() -> i32 {
     let Ok(endpoint) = micold_core::endpoint::resolve_pinned() else {
         return EXIT_UNKNOWN;
     };
-    match crate::runtime_status::read(&endpoint) {
-        Some(status) => {
-            println!("{}", status.to_json());
+    match status_lines(&endpoint) {
+        Some((json, words)) => {
+            println!("{json}");
+            if let Some(words) = words {
+                eprintln!("{words}");
+            }
             0
         }
         None => EXIT_UNKNOWN,
@@ -394,6 +410,7 @@ mod tests {
                 lock_path: "l".into(),
             },
             running,
+            None,
         )
     }
 
