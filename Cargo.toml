@@ -59,6 +59,8 @@ similar = "3"
 # Feature 1271 (research R1): a file's change id is the SHA-1 of its change record. Already in
 # `Cargo.lock` (0.10.7, RustCrypto, MIT OR Apache-2.0), so it adds no crate.
 sha1 = "0.10"
+# #1948: the SHA-256 of a token (`orchestrator::auth::hash_of`), same RustCrypto family as sha1.
+sha2 = "0.10"
 directories = "6.0.0"
 # Wire encoding for the client<->daemon protocol (plan W1): compact grid frames.
 postcard = { version = "1.1", features = ["use-std"] }

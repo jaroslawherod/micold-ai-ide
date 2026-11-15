@@ -58,6 +58,10 @@ notify = { workspace = true }
 # vendored fork (plan Decision 2) stays a swappable fallback for the approximation used today.
 alacritty_terminal = { workspace = true }
 portable-pty = { workspace = true }
+# #1948 (research R2): the orchestrator's SQL store, one implementation over `sqlx::Any` for
+# PostgreSQL and SQLite. rustls on the ring backend, like ureq and kube: no OpenSSL, no C TLS.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "sqlite", "any", "migrate", "macros"] }
+sha1 = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 # Ownership/mode verification for the `/tmp` endpoint fallback (protocol.md §1, FR-030).
