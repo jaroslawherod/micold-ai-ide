@@ -57,3 +57,22 @@ failed before the implementation, or says why it had none.
   missing from the plan)
 - green: with `macros`, both probes passed on SQLite and PostgreSQL 16; outcome in research.md R2
 - refactor: none needed
+
+## M2 Cycle 1: SQLite handle, schema and registry store (T014–T020)
+
+- test: `crates/micold-daemon/tests/orchestrator/store_migrations.rs` (5 cases: file 0600 and dir
+  0700, v1 applied once, WAL and foreign keys on; second open changes nothing; no `.down.sql`; open
+  inside `#[tokio::test]` is `Unavailable`; dropping the last handle inside a runtime does not
+  panic) and the `sqlite` module of `store_suite.rs` (6 registry cases, `SqliteBackend` in
+  `store_support.rs`) (new)
+- red: `cargo test -p micold-daemon --test orchestrator --no-run` -> `error[E0432]: unresolved
+  import micold_daemon::orchestrator::db` (2 errors, the module did not exist)
+- green: `db/mod.rs` (`StoreHandle`), `db/migrate.rs`, `db/registry.rs`, `migrations/sqlite/
+  0001_orchestrator_schema.sql`; `cargo test ... store_` 34 passed. The first green run failed two
+  cases for real reasons, fixed: `Handle::try_current` is also `Ok` on a `spawn_blocking` thread,
+  so the plan's guard would have refused the supported path; `block_on` now catches tokio's own
+  "within a runtime" refusal (`run_on`). And an early failure in `open_sqlite` dropped the runtime
+  inside async code; it now calls `shutdown_background()`.
+- refactor: none needed
+- notes: `load` orders with `ORDER BY tenant_id, id` (follow-up); sqlx's `Any` takes the PRAGMAs per
+  connection through `after_connect`, with `WAL` verified from the pragma's answer.

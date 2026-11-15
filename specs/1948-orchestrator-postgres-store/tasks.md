@@ -100,34 +100,34 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: local mode keeps registry, users and audit entries across a restart (US1 scenario 2).
 
-- [ ] T014 [P] [US1] Failing tests in `crates/micold-daemon/tests/orchestrator/store_migrations.rs`
+- [x] T014 [P] [US1] Failing tests in `crates/micold-daemon/tests/orchestrator/store_migrations.rs`
   (new, registered in `main.rs`): opening an empty SQLite path creates `orchestrator/` and the file with
   mode 0600, applies `0001_orchestrator_schema`, reports `journal_mode=wal`, `foreign_keys` on; a
   second open changes nothing; no `.down.sql` exists under `crates/micold-daemon/migrations/`; opening
   inside `#[tokio::test]` returns `StoreError::Unavailable` instead of panicking (the `block_on`
   guard) and dropping the last handle inside `#[tokio::test]` does not panic (Drop rule).
-- [ ] T015 [P] [US1] Add the SQLite factory (temp dir, reopen by reopening the file) to `store_support.rs`
+- [x] T015 [P] [US1] Add the SQLite factory (temp dir, reopen by reopening the file) to `store_support.rs`
   and run the registry cases of T003 on it (red).
-- [ ] T016 [US1] `crates/micold-daemon/migrations/sqlite/0001_orchestrator_schema.sql`: the whole v1
+- [x] T016 [US1] `crates/micold-daemon/migrations/sqlite/0001_orchestrator_schema.sql`: the whole v1
   schema of contracts/schema.md with `INTEGER PRIMARY KEY AUTOINCREMENT` for `audit_log.seq`, the two
   `RAISE(ABORT, 'audit_log is append-only')` triggers, every table's primary key leading with
   `tenant_id`, the `CHECK` constraints verbatim (`health IN ('online','offline','needs-update')`,
   `role IN ('owner','operator','viewer')`, `provider IN ('github','google')`, `email_verified IN
   (0,1)`), no `GRANT`.
-- [ ] T017 [US1] `crates/micold-daemon/src/orchestrator/db/migrate.rs`: `MIGRATOR` via
+- [x] T017 [US1] `crates/micold-daemon/src/orchestrator/db/migrate.rs`: `MIGRATOR` via
   `sqlx::migrate!("./migrations/sqlite")` and `run_forward`.
-- [ ] T018 [US1] `crates/micold-daemon/src/orchestrator/db/mod.rs`: `StoreHandle { rt:
+- [x] T018 [US1] `crates/micold-daemon/src/orchestrator/db/mod.rs`: `StoreHandle { rt:
   Option<Runtime>, pool }` with a private 2-worker multi-thread runtime, `block_on` that returns
   `Unavailable` under `Handle::try_current`, `Drop` using `shutdown_background()`, `acquire_timeout`
   5 s and connect timeout 5 s, SQLite open (`owner_only::ensure_dir`, file created 0600 before sqlx,
   `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout` 10 s, failure naming
   the path when WAL is not granted), error mapping to `StoreError` with no URL in any string.
-- [ ] T019 [US1] `crates/micold-daemon/src/orchestrator/db/registry.rs`: `SqlRegistryStore` over
+- [x] T019 [US1] `crates/micold-daemon/src/orchestrator/db/registry.rs`: `SqlRegistryStore` over
   `Arc<StoreHandle>`: `load` ordered by `(tenant_id, id)`, `save` (upsert each, delete the rest, one
   transaction), `upsert` (`ON CONFLICT` updating every column except `tenant_id` and
   `owner_user_id`), `remove`; `tenant_id` from `record.tenant`; `owner_user_id` written as `UNOWNED`
   on insert (M10 carries the real owner).
-- [ ] T020 [US1] Declare `pub mod db;` in `crates/micold-daemon/src/orchestrator/mod.rs` so the
+- [x] T020 [US1] Declare `pub mod db;` in `crates/micold-daemon/src/orchestrator/mod.rs` so the
   integration target reaches it; T014 and T015 green.
 
 ---

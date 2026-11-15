@@ -9,6 +9,7 @@ use micold_core::orchestrator::{
     AuditStore, AuthStore, JsonRegistryStore, MemoryAuditStore, MemoryAuthStore,
     MemoryRegistryStore, RegistryStore, TenantId,
 };
+use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
 
 /// A backend of the registry store.
 pub trait Backend {
@@ -82,5 +83,31 @@ impl Backend for JsonBackend {
 
     fn reopen(&mut self) {
         self.store = Arc::new(JsonRegistryStore::in_data_dir(self.dir.path()));
+    }
+}
+
+/// `orchestrator/orchestrator.db` in a temporary data directory: a restart drops the handle and
+/// opens the same file again, so what the suite reads back came from disk.
+pub struct SqliteBackend {
+    dir: tempfile::TempDir,
+    handle: Arc<StoreHandle>,
+}
+
+impl SqliteBackend {
+    pub fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = StoreHandle::open_sqlite(dir.path()).unwrap();
+        Self { dir, handle }
+    }
+}
+
+impl Backend for SqliteBackend {
+    fn registry(&self) -> Arc<dyn RegistryStore> {
+        Arc::new(SqlRegistryStore::new(Arc::clone(&self.handle)))
+    }
+
+    fn reopen(&mut self) {
+        // The old handle drops here, with every store value taken from it released by the case.
+        self.handle = StoreHandle::open_sqlite(self.dir.path()).unwrap();
     }
 }
