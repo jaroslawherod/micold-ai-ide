@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1945
-- **Worktree branch**: claude/project-thread-3xuzmp
+- **Worktree branch**: claude/project-thread-boi1v0
 - **Started**: 2026-11-15
 - **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 - **Phase**: implement M3
-- **Next step**: dispatch Milestone M3 unit (T015, T018–T020) on branch claude/project-thread-3xuzmp, which has origin/main merged after M2; then close
+- **Next step**: dispatch Milestone M3 unit (T015, T018–T020) on branch claude/project-thread-boi1v0, which has origin/main merged after M2; then close
 
 ## Pull requests
 
@@ -21,7 +21,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1947 | design | MERGED | 00f66d534eedc83b1c08c7614e50f5a32194eaa8 |
 | #1965 | M1 | MERGED | 2d713bcf7f9db032cfd15e828d4e4ead7a81fc2a |
 | #1978 | M2 | MERGED | 1fb7d00e222b74a70a98bc45cc138defe4aa24b8 |
-| #1978 | M2 | OPEN (draft) | - |
 
 ## Milestones
 
@@ -36,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Unparented worktree visibility | Treated as child of `default` for visibility only, no link recorded | user (jaro, 2026-11-15) | issue #1945 scope item 1 |
+| D2 | implement M3 | A worktree directory literally named `default` collides with the root's ref `default` | Reserve the name: refuse creating a worktree named `default` (any create path, clear error naming the reservation), document it in the user guide; an existing dir named `default` keeps M2 behaviour (excluded from the neighbourhood) and the docs say so. Safest: no output format or ref changes, smallest diff; the follow-up MINORs (b),(c) are then moot for new worktrees | orchestrator (2026-11-15; decision card posted to jaro, proceeding on it) | ledger Follow-ups, M2 review A r2 F2 / r3 |
 
 ## Review rounds
 
