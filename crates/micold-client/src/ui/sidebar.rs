@@ -1100,15 +1100,18 @@ fn build_items(
                 Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
         }
-        // Feature 1786 (C3): the row being dragged gives up its press while the drag is active, so
-        // releasing the drag back over it is not also a click that selects it.
+        // Feature 1786 (C3): the row being dragged holds its press back while the drag is active,
+        // so releasing the drag over it is not also a click; it keeps its button, so it does not
+        // move.
         let dragging = state.sidebar_drag.active
             && state.sidebar_drag.armed
                 == Some(Dragged::Item(
                     micold_core::sidebar_layout::LayoutItem::Worktree(dir.clone()),
                 ));
-        if let Some(main) = node.main_session().filter(|_| !dragging) {
-            item = item.on_press(Message::Session(SessionMsg::Selected(main)));
+        if let Some(main) = node.main_session() {
+            item = item
+                .on_press(Message::Session(SessionMsg::Selected(main)))
+                .inert(dragging);
         }
         // The row holding the viewed session when it draws no sub-row for it, or the row the
         // Overview sent the user to; none while the Overview is open (feature 1125, FR-009).
@@ -2313,21 +2316,28 @@ mod tests {
             "below: its bottom edge"
         );
 
-        // The dragged row gives up its press while the drag is active (no click on release).
-        let idle = |items: &[TreeItem<'static, Message>]| {
-            items.iter().filter(|i| i.on_press.is_some()).count()
+        // The dragged row holds its press back while the drag is active (no click on release).
+        let inert = |items: &[TreeItem<'static, Message>]| {
+            items
+                .iter()
+                .filter(|i| i.on_press.is_some() && i.inert)
+                .count()
         };
-        let pressable = idle(&rows(&state, r));
+        assert_eq!(
+            inert(&rows(&state, r)),
+            0,
+            "`idle` is dragged, and has no press"
+        );
         state.sidebar_drag.armed = Some(Dragged::Item(LayoutItem::Worktree("work".into())));
         assert_eq!(
-            idle(&rows(&state, r)),
-            pressable - 1,
-            "the dragged row has no press"
+            inert(&rows(&state, r)),
+            1,
+            "the dragged row presses nothing"
         );
         state.sidebar_drag.active = false;
         assert_eq!(
-            idle(&rows(&state, r)),
-            pressable,
+            inert(&rows(&state, r)),
+            0,
             "a press not yet a drag keeps it"
         );
     }

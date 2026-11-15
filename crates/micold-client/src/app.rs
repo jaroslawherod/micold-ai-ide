@@ -578,7 +578,13 @@ impl State {
     /// shape — a scroll invalidates every anchored menu at once, Escape is a single decision
     /// aimed at whatever holds the user's attention.
     fn dismiss_topmost(&mut self) {
-        if crate::overlay::registry::topmost(self).is_some() {
+        // Feature 1786 (US5-1, FR-009): an Escape press cancels a sidebar drag first, and alone;
+        // a surface open under it waits for the next press.
+        if self.sidebar_drag.active {
+            self.update(Message::SidebarDrag(
+                crate::features::sidebar_drag::Msg::Cancelled,
+            ));
+        } else if crate::overlay::registry::topmost(self).is_some() {
             crate::overlay::registry::close_topmost(self);
         } else if let Some(answer) = on_escape(self) {
             self.update(answer);
@@ -2265,15 +2271,14 @@ pub fn on_escape(state: &State) -> Option<Message> {
     // and Settings is no longer in that list to answer for itself (feature 027, FR-026). An open
     // surface that refuses Escape answers for itself too: falling through would let a scrim click
     // on a non-dismissible dialog discard the Settings draft behind it (013 BUG-001, FR-010a).
-    // Feature 1786 (US5-1, FR-009): a sidebar drag is cancelled first, and alone; a surface open
-    // under it waits for the next Escape.
-    if state.sidebar_drag.active {
-        return Some(Message::SidebarDrag(
-            crate::features::sidebar_drag::Msg::Cancelled,
-        ));
-    }
     match crate::overlay::registry::topmost(state) {
         Some(open) => open.on(micold_core::overlay::Trigger::Escape).cloned(),
+        // Feature 1786 (US5-1, FR-009): with nothing open, Escape cancels a sidebar drag. With a
+        // surface open the key press still reaches the drag first, in `dismiss_topmost`; a scrim
+        // click stays the dialog's own.
+        None if state.sidebar_drag.active => Some(Message::SidebarDrag(
+            crate::features::sidebar_drag::Msg::Cancelled,
+        )),
         None if state.settings.settings_draft.is_some() => {
             Some(Message::Settings(crate::features::settings::Msg::Cancelled))
         }

@@ -509,3 +509,19 @@ fn losing_the_window_focus_cancels_the_drag() {
     send(&mut state, Msg::Released);
     assert_eq!(state.sidebar_list(), entries);
 }
+
+#[test]
+fn escape_cancels_the_drag_before_a_surface_open_under_it() {
+    use micold_client::features::sidebar_group_actions::Msg as GroupMsg;
+    let mut state = dragging_over_a_target();
+    state.update(Message::SidebarGroups(GroupMsg::MenuOpened(WORK, (40, 40))));
+    assert!(state.sidebar_groups.group_menu.is_some(), "a menu is open");
+    state.update(Message::EscapePressed);
+    assert_eq!(state.sidebar_drag.armed, None, "the drag ended first");
+    assert!(state.sidebar_groups.group_menu.is_some(), "and alone");
+    state.update(Message::EscapePressed);
+    assert!(
+        state.sidebar_groups.group_menu.is_none(),
+        "the next press closes the menu"
+    );
+}

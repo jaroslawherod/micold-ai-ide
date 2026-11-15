@@ -90,6 +90,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | A r1 | Each pointer move rebuilds `sidebar_list` for the hit test | The view rebuilds the same list on every frame anyway; a handful of rows, not measured as a cost (as M1's `apply_layout` finding) |
 | M4 | A r1 | A wheel scroll during a drag leaves `over` naming the row under the pointer before the scroll | MINOR: the next pointer move corrects it; the drop lands where the marker was drawn, which is what the user saw |
 | M4 | A r1 | `entry_spans` repeats `scroll_target`'s row-top arithmetic | MINOR: `entry_spans` walks entries with each one's row count; `scroll_target` asks one row's top. Both read the shared `ROW_GAP` (made public for this) |
+| M4 | A r2 | The drop highlight overwrites the card-state tint of the target list's session rows | Transient, only while the drag is over that list; each row's state glyph and tooltip word still say its state (feature 1718 gives colour as the secondary channel) |
+| M4 | A r2 | `drop_highlight`'s parallel start list is derived state that is easy to get wrong | MINOR: one push per entry at the top of the loop, before any of its rows; covered by the highlight test |
 
 ## Handover
 
