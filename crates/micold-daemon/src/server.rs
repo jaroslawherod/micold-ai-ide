@@ -2120,12 +2120,7 @@ where
                             }
                         }
                         Err(ops::WorktreeStartFailure::Link { dir_name, error }) => {
-                            DaemonMsg::OperationError {
-                                req,
-                                kind: ErrorKind::IoFailed,
-                                message: format!("the worktree's parent was not recorded: {error}"),
-                                detail: Some(dir_name),
-                            }
+                            link_failed(req, dir_name, &error)
                         }
                         Err(ops::WorktreeStartFailure::Session { dir_name, error }) => {
                             DaemonMsg::OperationError {
@@ -3204,6 +3199,17 @@ fn refuse_blocked_start(
     true
 }
 
+/// The error reply for a worktree created whose parent link could not be recorded (spec 1945):
+/// `detail` names the worktree, which stays without a session.
+fn link_failed(req: u64, dir_name: String, error: &str) -> DaemonMsg {
+    DaemonMsg::OperationError {
+        req,
+        kind: ErrorKind::IoFailed,
+        message: format!("the worktree's parent was not recorded: {error}"),
+        detail: Some(dir_name),
+    }
+}
+
 /// The error reply for a `spawn_blocking` task that itself failed (panicked / was cancelled) — an
 /// internal fault, distinct from a git failure the task reported normally.
 fn task_failed(req: u64, what: &str, join: &dyn std::fmt::Display) -> DaemonMsg {
@@ -3492,5 +3498,29 @@ mod create_error_tests {
         });
         assert!(message.contains("feat-login"), "{message}");
         assert!(message.contains("Choose a different name"), "{message}");
+    }
+}
+
+#[cfg(test)]
+mod link_failure_tests {
+    use super::*;
+
+    /// The app path never names a parent today, so the daemon cannot reach this reply through a
+    /// real create; it is pinned here as the reply for the failure the op reports.
+    #[test]
+    fn a_failed_link_write_is_an_io_failure_naming_the_worktree() {
+        let reply = link_failed(7, "feat-x".into(), "disk full");
+        let DaemonMsg::OperationError {
+            req,
+            kind,
+            message,
+            detail,
+        } = reply
+        else {
+            panic!("expected an operation error");
+        };
+        assert_eq!((req, kind), (7, ErrorKind::IoFailed));
+        assert_eq!(detail.as_deref(), Some("feat-x"));
+        assert!(message.contains("disk full"), "{message}");
     }
 }

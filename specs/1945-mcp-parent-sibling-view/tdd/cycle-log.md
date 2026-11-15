@@ -31,3 +31,8 @@ Baseline: `micold-core --lib` 2149 passed, `micold-daemon --test mcp` 256 passed
 - Tests in `tests/mcp_create_session.rs`: `a_create_with_a_session_records_the_parent_link`, `a_create_that_fails_before_the_worktree_exists_records_no_link`.
 - Red: not observed; both pass on the old post-call record too (the missing-CLI case never reached it). The ordering itself (link visible to the starting session) is T015, in M3. Accepted gap.
 - Green: `--test mcp_create_session` 32 passed after one test fix (other worktrees' ids exist, so assert only the new directory has none).
+
+## Cycle 7: a failed parent-link write (diff-coverage fix, `WorktreeStartFailure::Link`)
+- Tests: `a_link_that_cannot_be_written_names_the_worktree_and_starts_no_session` (`tests/mcp_create_session.rs`, a project store refusing any catalog that holds a link) and `link_failure_tests::a_failed_link_write_is_an_io_failure_naming_the_worktree` (`server.rs`).
+- Red (mutation: `try_record_worktree_parent(..).ok()` in `ops::create_worktree_with_session`): the MCP test `FAILED` (no error reported).
+- Green: mutation reverted, both pass. The app path (`server.rs`) names no parent today, so no real create reaches its `Link` arm; its reply is extracted to `link_failed` and tested directly.
