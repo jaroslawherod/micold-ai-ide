@@ -324,6 +324,7 @@ mod tests {
             timeout_secs: 15,
             build_id: "1.0.0-abcdef123456".into(),
             client_build: "test".into(),
+            link: None,
         }
     }
 

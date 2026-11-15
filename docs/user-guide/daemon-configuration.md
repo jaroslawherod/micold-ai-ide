@@ -263,6 +263,32 @@ socket  = "/run/user/1000/micold/orchestrator.sock"  # optional
 The daemon never opens a new port for the link: it only connects out. The dial runs in the background,
 so a slow or absent orchestrator never delays a client. A lost link is dialled again by itself.
 
+A container, SSH-host or pod daemon cannot reach this computer by itself, so the application's SSH
+connection to it carries the link: before it starts the bridge it runs `micold-daemon remote
+prepare-link` there (which makes the daemon's owner-only runtime directory, removes an old
+`orchestrator.sock` and prints its path), then opens the connection with one reverse forward from that
+socket to the orchestrator's socket here. The forward opens and closes with the connection. It carries
+the orchestrator link only: no TCP port, nothing else on this computer is reachable through it, and the
+remote socket sits in a directory only the daemon's own user can enter.
+
+The remote SSH server must allow it:
+
+- `AllowStreamLocalForwarding remote` (or `yes`, the OpenSSH default; OpenSSH 6.7 or later). The basic
+  image sets it. With `no` or `local` the connection fails with ssh's own text, `remote port forwarding
+  failed`, and a sentence naming the setting; it never runs without the forward.
+- `StreamLocalBindUnlink yes` is recommended. `prepare-link` removes the old socket first, so a server
+  without it works too.
+
+For an SSH host reached through your own SSH configuration, the application first asks `ssh -G` what
+your configuration sets for it. Opening the link's forward means not clearing the forwards your
+configuration sets, so a host whose configuration has a `LocalForward`, `RemoteForward` or
+`DynamicForward` fails to connect, with a message naming them: remove them for that host (or use another
+`Host` alias for the application). A configuration `ssh -G` cannot read fails the same way, with its
+text.
+
+The forward needs a Unix remote and a Unix computer running the application (as SSH hosts do, feature
+489); a Windows application opens no forward.
+
 Stopping or restarting the orchestrator does not touch the daemon's sessions or clients: sessions keep
 running and producing output, clients stay connected, and the daemon logs `orchestrator link lost`
 once. When the orchestrator is back, the daemon is listed `online` again within 16 seconds, with no

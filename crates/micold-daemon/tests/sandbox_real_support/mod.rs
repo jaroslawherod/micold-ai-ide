@@ -1150,6 +1150,7 @@ impl ProvisionRun {
             timeout_secs: 30,
             build_id: current_build_id(),
             client_build: "micold-ai-ide/sandbox-real".to_string(),
+            link: None,
         };
         let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let seen = steps.clone();

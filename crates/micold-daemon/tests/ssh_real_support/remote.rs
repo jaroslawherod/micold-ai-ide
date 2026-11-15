@@ -70,6 +70,7 @@ impl Dialer {
                 timeout_secs,
                 build_id: current_build_id(),
                 client_build: "micold-ai-ide/ssh-real".to_string(),
+                link: None,
             },
         }
     }
