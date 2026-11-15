@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-12
 
-**Status**: Clarified
+**Status**: Closed 2026-11-15 — shipped in PRs #1870, #1914, #1918, #1923 and the close PR
 
 **Input**: User description: "Scoped-token step 11: assert the credential flow in a kind (Kubernetes) pod" (issue #1760, follow-up of #1542; closes FR-008 / US3.4 / SC-002 of `specs/1542-github-api-base-override`, Part C step 11 of `specs/1002-sandbox-scoped-token/quickstart.md`).
 

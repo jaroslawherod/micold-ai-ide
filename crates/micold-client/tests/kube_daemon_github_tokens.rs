@@ -206,3 +206,19 @@ async fn tokens_over_the_secret_limit_fail_the_start_before_any_cluster_call() {
     assert!(reason.contains("over the 1048576 bytes"), "{reason}");
     assert!(cluster.calls().is_empty(), "{:?}", cluster.calls());
 }
+
+/// The limit itself is what a Secret holds: exactly `SECRET_LIMIT` bytes pass, one more is refused.
+#[test]
+fn the_secret_limit_is_inclusive() {
+    use micold_client::daemon_config_delivery::{check_secret_size, SECRET_LIMIT};
+    let full = "a".repeat(SECRET_LIMIT);
+    assert!(
+        check_secret_size([full.as_str()]).is_ok(),
+        "a Secret of exactly the limit is accepted"
+    );
+    let over = "a".repeat(SECRET_LIMIT - 1);
+    assert!(
+        check_secret_size([over.as_str(), "bb"]).is_err(),
+        "one byte over the limit is refused"
+    );
+}

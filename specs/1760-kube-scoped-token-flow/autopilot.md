@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1760
-- **Worktree branch**: claude/project-thread-9suuus
+- **Worktree branch**: claude/project-thread-berzgj
 - **Started**: 2026-11-12
-- **Phase**: milestones
-- **Next step**: M3 review (A high, B sonnet by the orchestrator), CI `kube-cluster`, then merge
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1870 | design (spec, plan, tasks) | merged | 55e614ed76ba667e09c0ac9649abc04114f93393 |
 | #1914 | M1 | merged | 17284c645186eeb705ba403c114ee757f3ea3d53 |
 | #1918 | M2 | merged | 110457c5aa066acdedbf5b089eb7b80bbd57f156 |
-| #1923 | M3 | draft, CI | - |
+| #1923 | M3 | merged | 9287b8ea78e6784543c07b69f2c91685fffe7197 |
+| #1929 | close the spec | open (draft) | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
 | M2 | T018–T019 | light | form tick and user guide | #1918 | merged |
-| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | built; kube-cluster green at 6392eda61, T026 revert red; awaiting merge |
+| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | merged |
 
 ## Decisions
 
@@ -57,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M2 | 1 | diff | b43df5f | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (1 MINOR declined) |
 | Review B M2 | 1 | diff | b43df5f | same | CHANGES: F1 drift-M2.md, F2 cycle-log, F3 Verify line fixed (docs/prose only, no code change); F4 MINOR declined |
 | Review A | 1 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | MINOR-ONLY (F1 declined: spec fixes the label) |
+| Review A close | 1 | close diff | 8daf568e4 | - | MINOR-ONLY: F1 forge test T032 premise wrong (restored the exact nine-probe assertion; T032, cycle 11, verification finding 5 corrected), F2 test-list U5 names, F3 verification.md front matter marks the pre-remediation verdict, F4 U6 test count; all fixed |
+| Review A close | 2 | fix diff 8daf568e4..921a45008 | 921a45008 | - | CLEAN (sonnet re-review; F1-F4 verified fixed, forge test 1 passed) |
 | Review B | 2 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (F1-F3 fixed in specs, Verify 122 passed) |
 | Review A M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CLEAN (3 MINOR, all fixed in 05c383ab7) |
 | Review B M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CHANGES: drift record fixed |
@@ -73,6 +76,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+None. (Close unit 2026-11-15 ran in a cloud thread: speckit-tdd-verify FAIL cleared except LOW T034/T035; no converge, a CLEAN review B exists for M1-M3; plan-drift M1 recorded by full paths, M2 and M3 clean. Close PR number: set when the orchestrator opens it.)
+
+Previous handovers, kept for the record:
+
+2026-11-15 M3 orchestrator (cloud): PR #1923 squash-merged (9287b8ea78e6784543c07b69f2c91685fffe7197) on all-green CI (kube-cluster and podman included); main merged back into claude/project-thread-9suuus. Next: a fresh thread runs `/speckit-autopilot resume #1760` on this branch and dispatches the close unit (model omitted); previous PR #1923, merge SHA above. Note for the close: kube_real_concurrent once failed with `mv: cannot stat .../ai-clis/offered.json.part` on the revert-check run only (90564a406); not seen on other runs.
 
 2026-11-15 M3 orchestrator (cloud, branch claude/project-thread-9suuus): PR #1923. kube-cluster CI found a production bug from M1 (V14 refused the pod's 0440 startup Secret mount; fixed in 7929a0413, Review A r2 CLEAN) and three harness bugs in the env check (second session replaced the viewed terminals, a literal newline in `tr`, a leading prompt before a fact), fixed in e296b13c7, f1fc4ef50, 6392eda61; kube-cluster green at 6392eda61. T026: a temporary commit with the token keys off (90564a406) turned `kube_real_scoped_token` red at "A: the token is delivered" (left: [], right: ["github-token-kube-run"]), right before the push; reverted. `container daemon end to end (podman, linux)` is red on main too (rootless podman permission at container removal), not this PR's. Next: squash-merge #1923, merge main back, then the close unit.
 
@@ -102,3 +111,5 @@ None.
 
 - Spec prose (tasks.md T020, data-model, plan, research R2) calls the store `daemons.json`; there is no such file: the daemon registry is the `daemons` list of `settings.json`. The user guide (T020) names `settings.json`; the spec artifacts were left as they are.
 - docs/user-guide/sandboxed-daemon.md promises a sandbox pushes with a pasted token, but no client code delivers `[[github.tokens]]` to a container (deliver_container) either; separate follow-up.
+- Close unit: T034 (store changed between two starts, name-based keys through `kube_attempt`) and T035 (loosen exact-TOML and call-string assertions, rule-stating messages, split the shell loop at `kube_real_scoped_token.rs:303`, test that `kube_attempt` receives the dial's projects) from `tdd/verification.md` findings 8-13, all LOW; tests only.
+- `kube_real_concurrent` once failed with `mv: cannot stat .../ai-clis/offered.json.part` (revert-check run 90564a406 only). Not this feature: `crates/micold-core/src/provision/ai_cli.rs:214,428` writes `offered.json.part` under a fixed name and `mv`s it, so two provisioning runs at once in one pod (concurrent sessions) can race for the same temp file. Pre-existing and untouched by #1760; worth its own issue (unique temp name, e.g. with the pid).

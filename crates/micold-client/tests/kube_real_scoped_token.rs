@@ -494,15 +494,32 @@ fn kube_real_forge_accepts_only_the_run_secret() {
     assert!(forge.branch(GRANTED, "pushed").is_some());
     let seen = forge.requests();
     assert!(seen.len() > seen_before);
-    assert!(seen[seen_before..]
-        .iter()
-        .any(|r| r.path.ends_with("git-receive-pack") && r.accepted));
-    let seen = &seen[..seen_before];
-    assert_eq!(seen.len(), 1 + 4 + 1 + 2 + 1);
-    assert_eq!(seen[0].credential, None);
-    assert_eq!(
-        seen[1].credential,
-        Some((USER.to_string(), "not-the-secret".to_string()))
+    assert!(
+        seen[seen_before..]
+            .iter()
+            .any(|r| r.path.ends_with("git-receive-pack") && r.accepted),
+        "the push with the secret reaches the forge and is accepted"
     );
-    assert_eq!(seen.iter().filter(|r| r.accepted).count(), 3, "{seen:?}");
+    // The nine hand-written probes, in order, as the forge recorded them (git ran after
+    // `seen_before` was taken): exactly the right secret, as Basic or Bearer, is accepted.
+    let user = |u: &str, p: &str| Some((u.to_string(), p.to_string()));
+    let probes: Vec<_> = seen[..seen_before]
+        .iter()
+        .map(|r| (r.credential.clone(), r.accepted))
+        .collect();
+    assert_eq!(
+        probes,
+        vec![
+            (None, false),
+            (user(USER, "not-the-secret"), false),
+            (user("someone", &secret), false),
+            (user(USER, &format!("{secret}x")), false),
+            (None, false),
+            (user(USER, &secret), true),
+            (user("Bearer", &secret), true),
+            (user("Bearer", &secret), true),
+            (None, false),
+        ],
+        "the forge recorded each probe's credential and verdict"
+    );
 }
