@@ -8,7 +8,7 @@
 
 Build the first slice of the Kubernetes deployment designed in `specs/1722-rn-client-k8s/plan.md` ("Kubernetes deployment"): an orchestrator image, the chart `deploy/helm/micold`, a kind harness (`scripts/e2e-kind.sh`, `mise run e2e-kind`, CI job `kube-e2e`), and a Rust e2e test crate `crates/micold-e2e`. The orchestrator gains three flags (`--data-dir`, `--socket`, `--ops-addr`, each with an env twin) and a minimal ops HTTP listener (`/healthz`, `/readyz`). The API suite reaches the link protocol through a test-only `micold-daemon` sidecar sharing the orchestrator's `emptyDir` socket volume (D1). State is `file` on a PVC (D2). Network API and UI suites are placeholder slots until #1732 and #1954.
 
-**Milestone order differs from the spec's table.** The spec lists M2 harness before M3 ops. The harness smoke ("install and wait Ready") is only meaningful with the readiness probe, and the chart's probes (FR-007) need the ops listener, so ops comes first. The split below is final; the spec table is updated to match in the same commit.
+**Milestone order differs from the spec's table.** The spec table originally listed M2 harness before M3 ops (now already updated). The harness smoke ("install and wait Ready") is only meaningful with the readiness probe, and the chart's probes (FR-007) need the ops listener, so ops comes first. The split below is final.
 
 | Milestone | Delivers | Depends on | Live cluster needed |
 |---|---|---|---|
@@ -74,15 +74,15 @@ Dockerfile.orchestrator                         # new: M1, multi-stage, distrole
 deploy/helm/micold/                              # new: M1
 ├── Chart.yaml  values.yaml  values.schema.json  README.md
 ├── templates/{_helpers.tpl,deployment.yaml,service.yaml,pvc.yaml,web-deployment.yaml,web-service.yaml}
-└── ci/{default.yaml,web-enabled.yaml,no-persistence.yaml,e2e.yaml,corrupt-registry.yaml}   # e2e, corrupt-registry: M4
+└── ci/{default.yaml,web-enabled.yaml,no-persistence.yaml,e2e.yaml,corrupt-registry.yaml}   # e2e: M3 (testDaemon added M4), corrupt-registry: M4
 crates/micold-daemon/src/orchestrator/{mod.rs,config.rs,ops.rs}        # config: M1; ops: M2
 crates/micold-daemon/src/e2e_link.rs             # new, M4: `micold-daemon e2e-link idle|register|list`, test support, wired in main.rs
 crates/micold-core/src/paths.rs (read only)      # data_dir() stays the default
 crates/micold-e2e/                               # new workspace member: M3 skeleton, M4 suites
 ├── Cargo.toml  src/{lib.rs,cluster.rs,env.rs}
-└── tests/{ops/,link/,restart/,network/,ui/}   # network/ui: M5 placeholders
+└── tests/{ops/,link/,restart/,refusal/,network/,ui/}   # network/ui: M5 placeholders
 e2e/ui/README.md                                 # M5 placeholder for Playwright
-scripts/{e2e-kind.sh,install-kube-tools.sh,chart-check.sh}              # M3 / M3 / M1
+scripts/{e2e-kind.sh,install-kube-tools.sh,chart-check.sh}              # M3 / M1 (helm, kubeconform; M3 adds kind, kubectl) / M1
 scripts/tests/{e2e-kind.test.sh,install-kube-tools.test.sh,chart-conformance.test.sh}
 .github/workflows/ci.yml                         # kube-chart (M1), kube-e2e (M3), gate needs (M3)
 mise.toml                                        # tasks e2e-kind (M3), chart-check (M1)
