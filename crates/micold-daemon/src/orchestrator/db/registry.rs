@@ -66,7 +66,7 @@ async fn upsert_row(conn: &mut AnyConnection, record: &DaemonRecord) -> Result<(
     sqlx::query(UPSERT)
         .bind(record.tenant.as_str().to_owned())
         .bind(record.id.as_str().to_owned())
-        .bind(record.kind.as_str().to_owned())
+        .bind(name_of(&record.kind))
         .bind(record.name.clone())
         .bind(i64::from(record.protocol_version))
         .bind(capabilities)
@@ -121,6 +121,12 @@ impl RegistryStore for SqlRegistryStore {
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
         self.run(async {
             let mut tx = self.db.pool().begin().await?;
+            // A write first, so the transaction holds the write lock from its start: SQLite
+            // refuses at once, ignoring the busy timeout, to upgrade a read snapshot another
+            // writer has overtaken.
+            sqlx::query("DELETE FROM daemons WHERE 1 = 0")
+                .execute(&mut *tx)
+                .await?;
             for record in records {
                 upsert_row(&mut tx, record).await?;
             }

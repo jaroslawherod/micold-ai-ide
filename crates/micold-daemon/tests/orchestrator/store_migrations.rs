@@ -119,3 +119,25 @@ async fn dropping_the_last_handle_inside_a_runtime_does_not_panic() {
         .unwrap();
     drop(handle);
 }
+
+#[test]
+fn a_directory_with_a_space_and_non_ascii_letters_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    let odd = dir.path().join("jos\u{e9} data?x#y");
+    let handle = StoreHandle::open_sqlite(&odd).unwrap();
+    assert_eq!(
+        scalar_int(&handle, "SELECT count(*) FROM _sqlx_migrations"),
+        1
+    );
+    assert!(odd.join("orchestrator").join("orchestrator.db").is_file());
+}
+
+#[test]
+fn an_existing_loose_file_is_tightened_to_owner_only() {
+    let dir = tempfile::tempdir().unwrap();
+    drop(StoreHandle::open_sqlite(dir.path()).unwrap());
+    let file = dir.path().join("orchestrator").join("orchestrator.db");
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let _handle = StoreHandle::open_sqlite(dir.path()).unwrap();
+    assert_eq!(mode(&file), 0o600);
+}

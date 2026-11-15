@@ -90,24 +90,31 @@ impl Backend for JsonBackend {
 /// opens the same file again, so what the suite reads back came from disk.
 pub struct SqliteBackend {
     dir: tempfile::TempDir,
-    handle: Arc<StoreHandle>,
+    handle: Option<Arc<StoreHandle>>,
 }
 
 impl SqliteBackend {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let handle = StoreHandle::open_sqlite(dir.path()).unwrap();
-        Self { dir, handle }
+        Self {
+            dir,
+            handle: Some(handle),
+        }
     }
 }
 
 impl Backend for SqliteBackend {
     fn registry(&self) -> Arc<dyn RegistryStore> {
-        Arc::new(SqlRegistryStore::new(Arc::clone(&self.handle)))
+        Arc::new(SqlRegistryStore::new(Arc::clone(
+            self.handle.as_ref().expect("open"),
+        )))
     }
 
     fn reopen(&mut self) {
-        // The old handle drops here, with every store value taken from it released by the case.
-        self.handle = StoreHandle::open_sqlite(self.dir.path()).unwrap();
+        // The old handle drops first (every store value taken from it was released by the case),
+        // so the file is open once, as after a restart.
+        self.handle = None;
+        self.handle = Some(StoreHandle::open_sqlite(self.dir.path()).unwrap());
     }
 }

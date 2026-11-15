@@ -10,7 +10,7 @@
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io;
-use std::os::unix::fs::OpenOptionsExt as _;
+use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -106,13 +106,15 @@ impl StoreHandle {
         &self.pool
     }
 
-    /// Map a driver error: a rule the database enforced is `Refused`, anything else (a lost file,
-    /// a timeout) is `Unavailable`. Neither names a URL.
+    /// Map a driver error: a constraint the database enforced is `Refused`; anything else (a lost
+    /// file, a timeout, a busy or full disk) is `Unavailable`. Neither names a URL.
     pub fn map_error(&self, error: &sqlx::Error) -> StoreError {
         match error {
-            sqlx::Error::Database(db) => StoreError::Refused {
-                reason: db.message().to_owned(),
-            },
+            sqlx::Error::Database(db) if db.kind() != sqlx::error::ErrorKind::Other => {
+                StoreError::Refused {
+                    reason: db.message().to_owned(),
+                }
+            }
             other => self.unavailable(other.to_string()),
         }
     }
@@ -187,17 +189,23 @@ fn create_owner_only(path: &Path) -> io::Result<()> {
         .create(true)
         .truncate(false)
         .mode(0o600)
-        .open(path)
-        .map(drop)
+        .open(path)?
+        // A file that already existed keeps the mode it had: a database restored from a backup
+        // must not stay readable by others.
+        .set_permissions(std::fs::Permissions::from_mode(0o600))
 }
 
-/// `sqlite:<path>?mode=rw`, the characters a URL reads specially percent-encoded.
+/// `sqlite://<path>?mode=rw`, every byte but the unreserved ones percent-encoded (sqlx decodes
+/// them back), so a space, a `?` or a non-ASCII directory name reaches the same file.
 fn sqlite_url(path: &Path) -> String {
+    use std::os::unix::ffi::OsStrExt as _;
     let mut url = String::from("sqlite://");
-    for byte in path.to_string_lossy().bytes() {
+    for &byte in path.as_os_str().as_bytes() {
         match byte {
-            b'%' | b'?' | b'#' | b' ' => url.push_str(&format!("%{byte:02X}")),
-            _ => url.push(char::from(byte)),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                url.push(char::from(byte));
+            }
+            _ => url.push_str(&format!("%{byte:02X}")),
         }
     }
     url.push_str("?mode=rw");

@@ -76,3 +76,16 @@ failed before the implementation, or says why it had none.
 - refactor: none needed
 - notes: `load` orders with `ORDER BY tenant_id, id` (follow-up); sqlx's `Any` takes the PRAGMAs per
   connection through `after_connect`, with `WAL` verified from the pragma's answer.
+
+## M2 Cycle 2: review A fixes (T014, T018)
+
+- test: `store_migrations.rs` `a_directory_with_a_space_and_non_ascii_letters_opens`,
+  `an_existing_loose_file_is_tightened_to_owner_only` (new)
+- red: none, test-after admission: both were written with the review A findings (non-ASCII URL
+  bytes, an existing file keeping mode 0644) after the code, and pass with the fixes in place; the
+  fixes (percent-encoding every non-unreserved byte, `set_permissions(0o600)`) are in the same commit
+- green: 36 passed
+- refactor: `kind` written with `name_of` like `health`; `save` opens with a no-op `DELETE` so it holds
+  the write lock from its start; `map_error` maps only constraint violations to `Refused`;
+  `run_forward` retries only an "already exists", "locked" or "busy" failure; `SqliteBackend::reopen`
+  drops the old handle first

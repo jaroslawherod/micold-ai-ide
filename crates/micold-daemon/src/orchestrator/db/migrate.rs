@@ -14,9 +14,17 @@ pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations/sqlite");
 pub async fn run_forward(pool: &AnyPool) -> Result<(), StoreError> {
     match MIGRATOR.run(pool).await {
         Ok(()) => Ok(()),
-        Err(MigrateError::Execute(_)) => MIGRATOR.run(pool).await.map_err(schema_error),
+        Err(MigrateError::Execute(error)) if lost_the_race(&error) => {
+            MIGRATOR.run(pool).await.map_err(schema_error)
+        }
         Err(error) => Err(schema_error(error)),
     }
+}
+
+/// Whether another starter created what this one tried to create, or holds the write lock.
+fn lost_the_race(error: &sqlx::Error) -> bool {
+    let text = error.to_string();
+    text.contains("already exists") || text.contains("locked") || text.contains("busy")
 }
 
 fn schema_error(error: MigrateError) -> StoreError {
