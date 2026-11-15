@@ -2117,13 +2117,14 @@ pub async fn kube_attempt(
     );
     pod_settings.startup = startup.cloned();
     pod_settings.extras = extras.clone();
-    // T026 REVERT CHECK (temporary): token keys not delivered.
-    let _ = (&tokens.entries, &tokens.files);
+    pod_settings.github_tokens = tokens.entries;
     let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
     // The values stay `SecretToken`s until here, and only ever go into the startup Secret;
     // `daemon.toml` names their files.
-    let secret_files: Vec<(String, String)> = (delivered.files.iter().cloned()).collect();
+    let secret_files: Vec<(String, String)> = (delivered.files.iter().cloned())
+        .chain((tokens.files.iter()).map(|(key, value)| (key.clone(), value.expose().to_string())))
+        .collect();
     crate::daemon_config_delivery::check_secret_size(
         [delivered.env.as_deref(), git_config.as_deref()]
             .into_iter()
