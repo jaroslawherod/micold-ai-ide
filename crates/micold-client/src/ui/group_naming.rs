@@ -17,7 +17,7 @@ pub fn modal<'a>(
     focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let (title, confirm) = match draft.target {
-        NamingTarget::New => ("New group", "Create"),
+        NamingTarget::New | NamingTarget::NewAndMove(_) => ("New group", "Create"),
         NamingTarget::Rename(_) => ("Rename group", "Rename"),
     };
     rename_dialog::view(

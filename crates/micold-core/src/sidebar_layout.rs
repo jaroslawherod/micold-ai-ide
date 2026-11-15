@@ -189,6 +189,26 @@ impl SidebarLayout {
         }
     }
 
+    /// Whether some list holds `item`.
+    pub fn holds(&self, item: &LayoutItem) -> bool {
+        self.locate(item).is_some()
+    }
+
+    /// The list `item` is in (`None` for `ungrouped`), if any.
+    pub fn list_of(&self, item: &LayoutItem) -> Option<Option<UserGroupId>> {
+        self.locate(item).map(|(list, _)| list)
+    }
+
+    /// Put a live row the layout does not hold yet at the end of `ungrouped`, where [`reconcile`]
+    /// would have put it, so [`Self::move_item`] can take it from there. Held items are left alone.
+    ///
+    /// [`reconcile`]: Self::reconcile
+    pub fn adopt(&mut self, item: &LayoutItem) {
+        if !self.holds(item) {
+            self.ungrouped.push(item.clone());
+        }
+    }
+
     /// The group with `id`.
     pub fn group(&self, id: UserGroupId) -> Option<&UserGroup> {
         self.groups.iter().find(|group| group.id == id)
@@ -237,6 +257,62 @@ impl SidebarLayout {
         let group = self.groups.remove(at);
         self.ungrouped.extend(group.items);
         Ok(())
+    }
+
+    /// Move `item` to `to` (contracts C1, C4): it leaves the list it is in before it enters the
+    /// target, so it is in exactly one list afterwards (FR-005). `index` counts positions in the
+    /// target list as it was before the move, so dropping an item below its own place in the same
+    /// list lands it just after the row it was dropped under; an index past the end is clamped.
+    /// A run group is one item and takes its runs along (FR-016).
+    ///
+    /// Refused, with the layout unchanged: the project root (`Worktree("")`, the wire's name for
+    /// it) is [`LayoutError::IsDefault`]; an item in no list is [`LayoutError::UnknownItem`]; a
+    /// group that is gone, or a [`DropTarget::GroupSlot`] (a place between headers, for a group),
+    /// is [`LayoutError::UnknownGroup`].
+    pub fn move_item(&mut self, item: &LayoutItem, to: DropTarget) -> Result<(), LayoutError> {
+        if matches!(item, LayoutItem::Worktree(dir) if dir.is_empty()) {
+            return Err(LayoutError::IsDefault);
+        }
+        let (target, index) = match to {
+            DropTarget::Group { id, index } => {
+                self.group(id).ok_or(LayoutError::UnknownGroup)?;
+                (Some(id), index)
+            }
+            DropTarget::Ungrouped { index } => (None, index),
+            DropTarget::GroupSlot { .. } => return Err(LayoutError::UnknownGroup),
+        };
+        let (from, at) = self.locate(item).ok_or(LayoutError::UnknownItem)?;
+        self.list_mut(from).remove(at);
+        let list = self.list_mut(target);
+        let index = if from == target && at < index {
+            index - 1
+        } else {
+            index
+        };
+        list.insert(index.min(list.len()), item.clone());
+        Ok(())
+    }
+
+    /// The list `item` is in (`None` for `ungrouped`) and its position there.
+    fn locate(&self, item: &LayoutItem) -> Option<(Option<UserGroupId>, usize)> {
+        self.groups
+            .iter()
+            .find_map(|group| {
+                let at = group.items.iter().position(|held| held == item)?;
+                Some((Some(group.id), at))
+            })
+            .or_else(|| {
+                let at = self.ungrouped.iter().position(|held| held == item)?;
+                Some((None, at))
+            })
+    }
+
+    /// The list of group `id`, or `ungrouped` for `None`; the group must exist.
+    fn list_mut(&mut self, id: Option<UserGroupId>) -> &mut Vec<LayoutItem> {
+        match id.and_then(|id| self.groups.iter_mut().find(|group| group.id == id)) {
+            Some(group) => &mut group.items,
+            None => &mut self.ungrouped,
+        }
     }
 
     /// `name` trimmed, or why it cannot name a group: blank, or already the name of a group other
@@ -530,5 +606,192 @@ mod tests {
             Err(LayoutError::UnknownGroup)
         );
         assert_eq!(layout, sample());
+    }
+
+    fn run7() -> LayoutItem {
+        LayoutItem::Run(GroupId(Uuid::from_u128(7)))
+    }
+
+    /// Every item the layout holds, with the list it is in.
+    fn placements(layout: &SidebarLayout) -> Vec<(LayoutItem, Option<UserGroupId>)> {
+        let mut all: Vec<_> = layout
+            .groups
+            .iter()
+            .flat_map(|g| g.items.iter().map(move |i| (i.clone(), Some(g.id))))
+            .collect();
+        all.extend(layout.ungrouped.iter().map(|i| (i.clone(), None)));
+        all
+    }
+
+    fn assert_each_item_in_one_list(layout: &SidebarLayout, expected: usize) {
+        let all = placements(layout);
+        let mut seen = HashSet::new();
+        for (item, _) in &all {
+            assert!(seen.insert(item.clone()), "{item:?} is in two lists");
+        }
+        assert_eq!(all.len(), expected, "no item is lost or invented");
+    }
+
+    #[test]
+    fn adopt_places_an_unheld_item_in_ungrouped_and_leaves_a_held_one() {
+        let mut layout = sample();
+        layout.adopt(&worktree("new"));
+        layout.adopt(&worktree("feat-a"));
+        assert_eq!(layout.ungrouped, vec![worktree("fix-b"), worktree("new")]);
+        assert!(layout.holds(&worktree("new")) && !layout.holds(&worktree("nope")));
+        assert_eq!(
+            layout.list_of(&worktree("feat-a")),
+            Some(Some(UserGroupId(1)))
+        );
+        assert_eq!(layout.list_of(&worktree("fix-b")), Some(None));
+        assert_eq!(layout.list_of(&worktree("nope")), None);
+    }
+
+    #[test]
+    fn move_item_into_a_group_removes_it_from_where_it_was() {
+        let mut layout = sample();
+        let to = DropTarget::Group {
+            id: UserGroupId(2),
+            index: 0,
+        };
+        assert_eq!(layout.move_item(&worktree("fix-b"), to), Ok(()));
+        assert_eq!(
+            layout.group(UserGroupId(2)).unwrap().items,
+            vec![worktree("fix-b")]
+        );
+        assert!(
+            layout.ungrouped.is_empty(),
+            "removed before inserted (FR-005)"
+        );
+        assert_each_item_in_one_list(&layout, 3);
+    }
+
+    #[test]
+    fn move_item_to_ungrouped_appends_at_the_index() {
+        let mut layout = sample();
+        let to = DropTarget::Ungrouped { index: 0 };
+        assert_eq!(layout.move_item(&worktree("feat-a"), to), Ok(()));
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("feat-a"), worktree("fix-b")]
+        );
+        assert_eq!(layout.group(UserGroupId(1)).unwrap().items, vec![run7()]);
+    }
+
+    #[test]
+    fn move_item_clamps_an_index_past_the_end() {
+        let mut layout = sample();
+        let to = DropTarget::Group {
+            id: UserGroupId(1),
+            index: 99,
+        };
+        assert_eq!(layout.move_item(&worktree("fix-b"), to), Ok(()));
+        assert_eq!(
+            layout.group(UserGroupId(1)).unwrap().items,
+            vec![worktree("feat-a"), run7(), worktree("fix-b")]
+        );
+    }
+
+    #[test]
+    fn move_item_within_its_list_counts_the_index_before_the_removal() {
+        let mut layout = SidebarLayout {
+            ungrouped: vec![worktree("a"), worktree("b"), worktree("c")],
+            ..SidebarLayout::default()
+        };
+        let at = |index| DropTarget::Ungrouped { index };
+        assert_eq!(layout.move_item(&worktree("a"), at(2)), Ok(()));
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("b"), worktree("a"), worktree("c")]
+        );
+        assert_eq!(layout.move_item(&worktree("a"), at(3)), Ok(()));
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("b"), worktree("c"), worktree("a")]
+        );
+        assert_eq!(layout.move_item(&worktree("a"), at(0)), Ok(()));
+        assert_eq!(
+            layout.ungrouped,
+            vec![worktree("a"), worktree("b"), worktree("c")]
+        );
+        let before = layout.clone();
+        assert_eq!(layout.move_item(&worktree("b"), at(1)), Ok(()));
+        assert_eq!(
+            layout, before,
+            "a drop on its own place changes nothing (C4)"
+        );
+    }
+
+    #[test]
+    fn a_run_group_moves_as_one_item() {
+        let mut layout = sample();
+        let to = DropTarget::Group {
+            id: UserGroupId(2),
+            index: 0,
+        };
+        assert_eq!(layout.move_item(&run7(), to), Ok(()));
+        assert_eq!(layout.group(UserGroupId(2)).unwrap().items, vec![run7()]);
+        assert_eq!(
+            layout.group(UserGroupId(1)).unwrap().items,
+            vec![worktree("feat-a")]
+        );
+        assert_each_item_in_one_list(&layout, 3);
+    }
+
+    #[test]
+    fn move_item_refuses_what_it_cannot_place_and_changes_nothing() {
+        let mut layout = sample();
+        let ungrouped = DropTarget::Ungrouped { index: 0 };
+        assert_eq!(
+            layout.move_item(&worktree("gone"), ungrouped),
+            Err(LayoutError::UnknownItem)
+        );
+        assert_eq!(
+            layout.move_item(&worktree(""), ungrouped),
+            Err(LayoutError::IsDefault),
+            "the project root is never an item (FR-015)"
+        );
+        let missing = DropTarget::Group {
+            id: UserGroupId(9),
+            index: 0,
+        };
+        assert_eq!(
+            layout.move_item(&worktree("fix-b"), missing),
+            Err(LayoutError::UnknownGroup)
+        );
+        assert_eq!(
+            layout.move_item(&worktree("fix-b"), DropTarget::GroupSlot { index: 0 }),
+            Err(LayoutError::UnknownGroup),
+            "a slot between headers is for a group, not an item"
+        );
+        assert_eq!(layout, sample());
+    }
+
+    #[test]
+    fn every_outcome_keeps_each_item_in_exactly_one_list() {
+        let items = [worktree("feat-a"), run7(), worktree("fix-b")];
+        let mut targets = vec![];
+        for index in 0..4 {
+            targets.push(DropTarget::Ungrouped { index });
+            for id in [1, 2] {
+                targets.push(DropTarget::Group {
+                    id: UserGroupId(id),
+                    index,
+                });
+            }
+        }
+        for item in &items {
+            for to in &targets {
+                for start in [sample(), {
+                    let mut l = sample();
+                    l.delete(UserGroupId(1)).unwrap();
+                    l
+                }] {
+                    let mut layout = start.clone();
+                    let _ = layout.move_item(item, *to);
+                    assert_each_item_in_one_list(&layout, 3);
+                }
+            }
+        }
     }
 }

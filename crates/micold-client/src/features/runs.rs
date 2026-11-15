@@ -1287,6 +1287,11 @@ impl Registered for ParallelRunDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GroupContextMenu;
 
+/// Close the run group row's menu, as a pick from another feature's entry in it does (feature 1786).
+pub fn close_menu(state: &mut crate::app::State) {
+    crate::overlay::registry::dismiss(state, GroupContextMenu::ID);
+}
+
 impl GroupContextMenu {
     /// This surface's identity.
     pub const ID: SurfaceId = SurfaceId::new("run_group_menu");

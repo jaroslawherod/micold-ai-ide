@@ -676,6 +676,28 @@ pub fn group_menu<'a>(state: &State, r: Roles) -> Option<cdk::overlay::Surface<'
     Some(menu_at(state, menu.anchor, items, dismissed, r))
 }
 
+/// The **Move to group** entries of a worktree's or run group's menu (feature 1786, C6, FR-010,
+/// FR-016): one item per [`move_menu_items`](crate::features::sidebar_group_actions::move_menu_items)
+/// entry for `item`, none for the project root.
+pub fn move_items(
+    state: &State,
+    item: &micold_core::sidebar_layout::LayoutItem,
+) -> Vec<material::MenuItem<Message>> {
+    use crate::features::sidebar_group_actions::{move_menu_items, MoveTarget, Msg};
+    move_menu_items(state, item)
+        .into_iter()
+        .map(|entry| {
+            let icon = match entry.target {
+                MoveTarget::NewGroup => Icon::AddWorktree,
+                _ => Icon::Overview,
+            };
+            let label = entry.menu_label();
+            let message = Message::SidebarGroups(Msg::Move(item.clone(), entry.target));
+            material::MenuItem::new(icon, label, message)
+        })
+        .collect()
+}
+
 /// What choosing `action` on the more menu does: the message today's header button sent (FR-015).
 /// The shell sends it once the menu has closed, so the refresh still goes through its request path.
 pub fn more_action_message(action: crate::features::sidebar::MoreAction) -> Message {
@@ -932,6 +954,7 @@ fn build_items(
                     crate::ui::material::GroupHeader::new(header.name)
                         .collapsed(header.collapsed)
                         .count(header.count)
+                        .hidden(header.hidden)
                         .roles(r)
                         .key(row_key(RowKey::UserGroup(header.id)))
                         .on_right_press({
