@@ -30,6 +30,14 @@ const FORBIDDEN_PATHS: [&str; 3] = [
 /// The self-probe: `crate::singleton::acquire` and its result type (see the module doc).
 const ALLOWED_PATHS: [&str; 2] = ["crate::singleton::acquire", "crate::singleton::Acquisition"];
 
+/// The daemon's retry and status rules (#1725) live in the core orchestrator directory under a name
+/// that says what they are for. The file is pure: it holds no I/O at all, which
+/// [`the_dialer_rules_file_holds_no_io`] checks, so the scan skips it and the two lines naming it.
+const PURE_DIAL_RULES: &str = "crates/micold-core/src/orchestrator/dial.rs";
+
+/// The lines of `mod.rs` that declare and re-export [`PURE_DIAL_RULES`], blanked before the scan.
+const PURE_DIAL_LINES: [&str; 2] = ["pub mod dial;", "pub use dial::"];
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -214,7 +222,13 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
 
     let mut report = Vec::new();
     for file in &files {
-        let source = std::fs::read_to_string(file).unwrap();
+        if file.ends_with(PURE_DIAL_RULES) {
+            continue;
+        }
+        let mut source = std::fs::read_to_string(file).unwrap();
+        for line in PURE_DIAL_LINES {
+            source = source.replace(line, &" ".repeat(line.len()));
+        }
         for (line, word) in violations(&source) {
             report.push(format!("{}:{line}: `{word}`", file.display()));
         }
@@ -224,6 +238,23 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
         "outbound calls (FR-008):\n{}",
         report.join("\n")
     );
+}
+
+/// The file the scan skips may not grow an I/O dependency unnoticed.
+#[test]
+fn the_dialer_rules_file_holds_no_io() {
+    let source = std::fs::read_to_string(workspace_root().join(PURE_DIAL_RULES)).unwrap();
+    let code = code_only(&source);
+    for word in [
+        "tokio",
+        "interprocess",
+        "std::net",
+        "std::os",
+        "std::fs",
+        "std::io",
+    ] {
+        assert!(!code.contains(word), "{PURE_DIAL_RULES} uses `{word}`");
+    }
 }
 
 #[test]

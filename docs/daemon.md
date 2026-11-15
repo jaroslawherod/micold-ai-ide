@@ -666,7 +666,7 @@ The orchestrator never dials a daemon (FR-008): daemons dial it. Its one connect
 of its own socket (`singleton::acquire`), to refuse a second orchestrator on the same path. Three tests
 hold that. A source scan (`tests/orchestrator/no_outbound.rs`, every platform) fails on a whole-word
 `connect`, `Stream::connect`, `open_pipe` or `dial`, a `connect_*` helper, or a path into a dialing
-module under the orchestrator's source directories, allowing only that probe. On Linux
+module under the orchestrator's source directories, allowing only that probe (and the pure, I/O-free retry rules of `orchestrator/dial.rs`, #1725, which a second test keeps free of I/O). On Linux
 (`tests/orchestrator/netns.rs`) the link and heartbeat tests re-run under `unshare -rn`, a network
 namespace with no interface up, and again under `strace -e trace=connect`, which must show a connect to
 `orchestrator.sock` and to nothing else. Those runs skip, saying why, where unprivileged user
