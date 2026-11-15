@@ -236,11 +236,11 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
   half sits on the target's own row, `below`), `escape_cancels_the_drag_before_a_surface_open_under_it`;
   `ui::sidebar::tests::rows_and_headers_arm_*` (the whole target list is lit, marker edges, the
   dragged row is `inert`); `cdk::context_area::tests::a_held_release_reaches_the_content_with_no_cursor`.
-- red: the header assertion failed against the first `hit_test` (`marker` was the next list's first
-  row, `below` absent: E0609 until the field existed); the Escape test failed while
-  `dismiss_topmost` closed the registry's surface first (`armed` still `Some`); the inert count
-  failed (3 against 2) when it picked a row with no press, which showed the count was the thing
-  measured.
+- red: the test changes went in with their fixes, so their red was not run; it is argued from the
+  code they replace: against the first `hit_test` the header's spot had no `below` and named the
+  next list's first row, and the first `on_escape` order let `dismiss_topmost` close the menu and
+  leave `armed` set. One red was run: the first inert count failed (`left: 3`, `right: 2`) because
+  it picked a row with no press, and now picks one that has a press.
 - green: `DropSpot.below`; `drop_highlight` tints each target entry's whole row range;
   `drag_escape` read by `on_escape` and `dismiss_topmost`; `TreeItem::inert` and
   `ContextArea::hold_release`, which hand the dragged row's button its release with no cursor, so
