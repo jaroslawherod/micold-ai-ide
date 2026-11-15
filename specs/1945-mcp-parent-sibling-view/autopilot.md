@@ -10,6 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1945
 - **Worktree branch**: claude/project-thread-3xuzmp
 - **Started**: 2026-11-15
+- **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 - **Phase**: review M2
 - **Next step**: scoped re-review A round 2 of PR #1978 (fix diff since 45c59a68b); review B round 1 was CLEAN
 
@@ -61,8 +62,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 None.
-
-Earlier, M2 unit (2026-11-15): T006–T014 done on claude/project-thread-3xuzmp, full gate green, pushed; PR not opened (gh unauthenticated), body written by the unit. Next: orchestrator opens the M2 PR, runs reviews A and B, sends findings back; then M3, then close. Earlier: cloud orchestrator thread handed over after M1 merged (cloud rule: fresh thread per milestone). Cloud notes: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 
 ## Open escalation
 
