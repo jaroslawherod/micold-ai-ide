@@ -32,3 +32,6 @@ Recorded against `scripts/autopilot/plan-drift.sh specs/1948-orchestrator-postgr
   WAL left by a hard stop is recovered on the next open; the runtime-context probe cannot tell the
   thread kinds apart); one runtime per handle (the plan's decision, `Drop` and `run_on` are its
   cost); `Failed { version: 0 }` and `VersionMissing` becoming `DatabaseNewer` (M5, T035).
+- `crates/micold-daemon/tests/orchestrator/no_outbound.rs` (a guard test, changed): the source scan
+  now skips `crates/micold-daemon/src/orchestrator/db/`, because the pool's `connect` opens a
+  database, not a daemon; the scan failed on it in the full gate. Everything else stays scanned.

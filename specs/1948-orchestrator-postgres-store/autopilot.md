@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ygs15x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 (fresh thread, `/speckit-autopilot resume`)
+- **Next step**: M2 review B (orchestrator), PR, merge; then M3 (fresh thread)
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
-| M2 | T014–T020 | full | SQLite handle, schema, registry store | | pending |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | | review B and CI pending |
 | M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
 | M5 | T032–T035 | full | Migration safety | | pending |
@@ -54,9 +54,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 3 | design | 51d20197b6bb9ca92ffbf64dec4be986cd56f4fa | 3d3ec8c874fcffe3ca8aecf860c97d3efe962a9a:c9db7e595c1f9181c01606cca34854d161c8a40e | CLEAN |
 | M1 A | 1 | M1 diff (code-review high, run by the unit: no Agent tool) | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN (1 MINOR noted as a follow-up) |
 | M1 A | 1 | M1 diff | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN |
+| M2 A | 1 | M2 diff (code-review high, run by the unit: no Agent tool) | 1c5e8c6bda32fc3ca960ce3a62d7282506a25826 | (see commit) | CHANGES: 0 BLOCKER, 3 MAJOR-ish (non-ASCII URL, SQLITE_BUSY as Refused, save lock upgrade) all fixed with 4 MINOR; 3 declined (see below) |
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
 
 ## Declined review findings
+
+- M2 A: `Drop` skips `pool.close()` on a `spawn_blocking` thread (WAL is recovered on the next open; the context probe cannot tell the thread kinds apart); one runtime per handle (plan decision); `Failed { version: 0 }` and `VersionMissing` to `DatabaseNewer` belong to M5 T035.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -67,7 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 merged (PR #1970, squash bfb463f60). Next: dispatch the M2 milestone unit (T014–T020, Tier full) in a fresh thread; set the Worktree branch line to that thread's branch. M3 follow-ups are under *Follow-ups not done*. Cloud: mutants-on-the-diff baseline fails on any micold-core diff (no .git in the cargo-mutants copy); advisory, commented on #1970.
+M2 code done and pushed (T014–T020 ticked, review A fixed, gate green). Next: the orchestrator runs review B, opens the PR from `specs/1948-orchestrator-postgres-store/pr-M2.md`, merges; then dispatch M3 (T021–T025) in a fresh thread.
 
 ## Open escalation
 
@@ -77,7 +80,8 @@ None.
 
 - M2 (SQL auth store): `rotate_refresh` on a revoked token must commit the family revocation and then return `Refused`, so it cannot be one transaction that rolls back on the error; the memory store revokes then refuses.
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
-- `sqlx` and `sha1` are in `micold-daemon`'s dependencies but unused until M2 (T001 asked for both).
+- `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
+- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. `check_not_newer` and a version in `SchemaError::Failed` are M5.
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 
 - M1–M6 and M10 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M7–M9 carry guide tasks.
