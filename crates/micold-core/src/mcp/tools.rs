@@ -140,6 +140,9 @@ impl std::fmt::Debug for NonEmptyText {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     Whoami,
+    /// The caller's worktree, parent, siblings and direct children with their sessions, in one
+    /// answer (spec 1945, FR-003).
+    Neighbourhood,
     /// `parent` narrows the list to that worktree's direct children (spec 1857, FR-008).
     ListWorktrees {
         parent: Option<WorktreeRef>,
@@ -160,6 +163,11 @@ pub enum Operation {
     /// it is never logged (FR-018).
     SendSessionInput {
         session: SessionRef,
+        text: NonEmptyText,
+    },
+    /// [`Operation::SendSessionInput`] to the first running session of the caller's parent
+    /// worktree, chosen by the daemon (spec 1945, FR-006). The text is never logged.
+    SendParentInput {
         text: NonEmptyText,
     },
     /// Report the outcome of review comment `comment` of the caller's entry (feature 946,
@@ -324,12 +332,14 @@ impl Operation {
     pub fn tool_name(&self) -> &'static str {
         match self {
             Operation::Whoami => "whoami",
+            Operation::Neighbourhood => "neighbourhood",
             Operation::ListWorktrees { .. } => "list_worktrees",
             Operation::ListBranches => "list_branches",
             Operation::ListSessions { .. } => "list_sessions",
             Operation::GetSession { .. } => "get_session",
             Operation::ReadSessionOutput { .. } => "read_session_output",
             Operation::SendSessionInput { .. } => "send_session_input",
+            Operation::SendParentInput { .. } => "send_parent_input",
             Operation::ReportReviewComment { .. } => REPORT_TOOL,
             Operation::CreateWorktree { .. } => "create_worktree",
             Operation::CreateSession { .. } => "create_session",
@@ -347,7 +357,10 @@ impl Operation {
     /// worktree is created for. Never input text.
     pub fn audit_target(&self) -> String {
         match self {
-            Operation::Whoami | Operation::ListBranches => String::new(),
+            Operation::Whoami | Operation::Neighbourhood | Operation::ListBranches => String::new(),
+            // The session is chosen later, by the daemon, which names it here once chosen (with a
+            // `parent` field); the line never holds the text.
+            Operation::SendParentInput { .. } => "parent".to_string(),
             Operation::ListWorktrees { parent } => parent
                 .as_ref()
                 .map(|p| p.as_str().to_string())
@@ -525,6 +538,21 @@ const TOOLS: &[Tool] = &[
             })
         },
         required: &["session"],
+        read_only: true,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
+        name: "neighbourhood",
+        description: "Show where the calling session stands, in one call: its worktree with its \
+            sessions; its parent worktree with state (\"known\", or \"removed\" once deleted), \
+            recorded (false when no parent was recorded and \"default\", the project root, is \
+            taken as the parent) and the parent's sessions; its sibling worktrees (the parent's \
+            other children) and its direct child worktrees, each with their sessions. Session \
+            rows are list_sessions rows. note says when the parent is implicit or missing; a \
+            session in \"default\" has no parent. Lists only what the caller may see.",
+        properties: no_properties,
+        required: &[],
         read_only: true,
         destructive: false,
         shipped: true,
@@ -766,6 +794,29 @@ const TOOLS: &[Tool] = &[
         shipped: true,
     },
     Tool {
+        name: "send_parent_input",
+        description: "Type text into the calling session's parent and submit it once, as \
+            send_session_input does, without a session id: the target is the first running \
+            session of the parent worktree (see neighbourhood) in the project's session order, \
+            so repeated sends reach the same session. A worktree with no recorded parent has \
+            \"default\", the project root, as its parent. The result names the session reached \
+            and parent_worktree. Refused with nothing typed for a session in \"default\" (it \
+            has no parent), when the parent worktree was removed, or when it has no running \
+            session. Depending on the user's \"Let agents read and type into other sessions\" \
+            setting, the send goes through, waits for the user's confirmation in an app window, \
+            or is refused.",
+        properties: || {
+            json!({
+                "text": {"type": "string", "minLength": 1,
+                    "description": "The text to type; it is submitted with one Enter."},
+            })
+        },
+        required: &["text"],
+        read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
         name: "delete_session",
         description: "Delete a session of the project after the user confirms in an app window. \
             Omit session, or pass your own id, to delete the calling session: you get the result \
@@ -860,6 +911,7 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
     }
     Ok(match name {
         "whoami" => Operation::Whoami,
+        "neighbourhood" => Operation::Neighbourhood,
         "list_worktrees" => Operation::ListWorktrees {
             parent: optional_worktree(args, "parent")?,
         },
@@ -876,6 +928,9 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         },
         "send_session_input" => Operation::SendSessionInput {
             session: required_session(args, "session")?,
+            text: non_empty_text(args, "text")?,
+        },
+        "send_parent_input" => Operation::SendParentInput {
             text: non_empty_text(args, "text")?,
         },
         REPORT_TOOL => report_review_comment(args)?,

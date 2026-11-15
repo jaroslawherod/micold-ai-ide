@@ -165,12 +165,18 @@ pub fn decide(
                 "a session may not type into itself: the text would arrive as its own next input",
             ))
         }
-        Operation::ReadSessionOutput { .. } | Operation::SendSessionInput { .. }
+        // `send_parent_input` is a send to the session the daemon picks (spec 1945, D4); the
+        // daemon decides that send again as `SendSessionInput`, with its target.
+        Operation::ReadSessionOutput { .. }
+        | Operation::SendSessionInput { .. }
+        | Operation::SendParentInput { .. }
             if access == CrossSessionAccess::Off =>
         {
             refused(CROSS_SESSION_OFF)
         }
-        Operation::SendSessionInput { .. } if access == CrossSessionAccess::ConfirmEachSend => {
+        Operation::SendSessionInput { .. } | Operation::SendParentInput { .. }
+            if access == CrossSessionAccess::ConfirmEachSend =>
+        {
             PolicyDecision::Confirm(ConfirmedOp::SendInput)
         }
         Operation::DeleteWorktree {
