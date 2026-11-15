@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
 | M2 | T006–T014 | full | neighbourhood and send_parent_input tools | #1978 | merged |
-| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | #1988 | review A/B round 1 fixed, full gate then scoped re-review |
+| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | #1988 | round 1 fixed, gate green, awaiting scoped re-review |
 
 ## Decisions
 
