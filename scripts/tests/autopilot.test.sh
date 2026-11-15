@@ -1003,6 +1003,11 @@ check "resume.md: resume --by supervisor runs answer.sh --by supervisor" 0 '^ok$
 # Code diffs use the single-agent review; the staged flow was dropped (specs/1804-staged-review/shadow.md).
 RV="$ROOT/.claude/skills/speckit-autopilot/tasks/review.md"
 check "review.md: code diffs use the single-agent review and point to shadow.md" 0 '^ok$' bash -c "grep -qi 'single-agent review' '$RV' && grep -q 'shadow.md' '$RV' && echo ok"
+check "review.md: round 1 of an artifact review passes model opus explicitly" 0 '^ok$' bash -c "grep -q 'round 1 of an artifact review in the feature flow' '$RV' && grep -q 'model.: .\"opus\".' '$RV' && echo ok"
+CL="$ROOT/.claude/skills/speckit-autopilot/rules/cloud.md"
+DP="$ROOT/.claude/skills/speckit-autopilot/tasks/dispatch.md"
+check "cloud.md: milestone, close-out and take-over threads run on Sonnet at low effort" 0 '^ok$' bash -c "grep -q 'milestone, close-out or take-over' '$CL' && grep -q 'Sonnet at low effort' '$CL' && echo ok"
+check "dispatch.md: a FAILED cheaper unit retries with model opus explicitly" 0 '^ok$' bash -c "grep -q 'retry once with .model: \"opus\"' '$DP' && echo ok"
 
 echo "autopilot: $cases case(s), $failures failure(s)"
 [ "$failures" -eq 0 ]

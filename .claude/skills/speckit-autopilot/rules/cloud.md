@@ -3,6 +3,12 @@
 A cloud thread (no `mise` or `gh`, or no `autopilot-*` agent types listed) is the orchestrator itself, with a large fixed context and no unit handover, so its
 context is what costs. All other rules hold; these add to them.
 
+- **Sonnet at low effort for mechanical threads.** A milestone, close-out or take-over (`resume`)
+  thread is mostly dispatch, hold and merge: it runs on Sonnet at low effort, set at its first
+  turn by the brief that starts it, or by the thread's first call (a later switch re-writes the
+  whole cache). Close-out is the close unit's thread. Spec, plan, debugging and architecture threads
+  stay on the session model. Units and reviewers keep the models their task files give, so pass
+  `model: "opus"` where those say Opus.
 - **One issue per thread.** Never brief several issues ("issues 1120-1123") in one thread.
 - **A fresh thread per milestone.** After each merged milestone, write *Handover* in the ledger, commit, push,
   ask for a new thread that runs `/speckit-autopilot resume`, and stop.
