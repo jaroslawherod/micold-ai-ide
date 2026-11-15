@@ -95,9 +95,9 @@ description: "Task list for feature 1725: daemons dial the orchestrator"
 
 **Independent Test**: `ssh_real` link test kills the bridge `ssh` and reopens it.
 
-- [ ] T038 [US3] Write failing `ssh_real` tests in `crates/micold-daemon/tests/ssh_real/ssh_real_link.rs`: kill one bridge `ssh`, that daemon `offline` within 10 s and the others unchanged (SC-002, scenario 1); reopen, `online` within 16 s with the daemon pid unchanged (scenario 2); `kill -9` the app's `ssh` and reopen at once while the remote sshd session lives, `online` (stale socket, spec edge case); a dial while the forward is down (stale or absent `orchestrator.sock`) is a connect failure, not a refusal, so the delay is capped at 15 s, and it backs off quietly (scenario 3)
-- [ ] T039 [US3] Make T038 pass in `crates/micold-daemon/src/remote.rs` and `crates/micold-daemon/src/orchestrator_link/mod.rs` (stale-socket removal in `prepare-link`, a refused connect is `NotLinked` with no log line per retry); change nothing T038 does not need
-- [ ] T040 [US3] Document the offline and reconnect timings and the stale-forward troubleshooting in `docs/user-guide/daemon-configuration.md` and `docs/daemon.md`
+- [x] T038 [US3] Write failing `ssh_real` tests in `crates/micold-daemon/tests/ssh_real/ssh_real_link.rs`: kill one bridge `ssh`, that daemon `offline` within 10 s and the others unchanged (SC-002, scenario 1); reopen, `online` within 16 s with the daemon pid unchanged (scenario 2); `kill -9` the app's `ssh` and reopen at once while the remote sshd session lives, `online` (stale socket, spec edge case); a dial while the forward is down (stale or absent `orchestrator.sock`) is a connect failure, not a refusal, so the delay is capped at 15 s, and it backs off quietly (scenario 3)
+- [x] T039 [US3] Make T038 pass in `crates/micold-daemon/src/remote.rs` and `crates/micold-daemon/src/orchestrator_link/mod.rs` (stale-socket removal in `prepare-link`, a refused connect is `NotLinked` with no log line per retry); change nothing T038 does not need
+- [x] T040 [US3] Document the offline and reconnect timings and the stale-forward troubleshooting in `docs/user-guide/daemon-configuration.md` and `docs/daemon.md`
 
 ## Dependencies & Execution Order
 

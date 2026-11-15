@@ -8,6 +8,9 @@
 //! pod are reached as the app reaches them (a pinned reach, `-F none`, the app's own key); the SSH
 //! host through the user's configuration (the harness's `ssh -F` wrapper), so its `ssh -G` check
 //! runs. One loopback `sshd` stands for each (spec 686 R10).
+//!
+//! US3 (T038): killing the app's `ssh` shows that daemon `offline` within 10 s; reopening the
+//! connection shows it `online` within 16 s, the same daemon process, one record.
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -440,4 +443,293 @@ async fn ssh_real_link_a_server_refusing_socket_forwards_fails_with_ssh_text() {
         "{failure:?}"
     );
     stop_remote_daemon();
+}
+
+/// SC-002's bound on `offline`: the heartbeat deadline plus one check interval.
+const OFFLINE_WITHIN: Duration = Duration::from_secs(10);
+
+/// SC-002's bound on `online` after a reopen: one capped reconnect delay plus a handshake.
+const ONLINE_WITHIN: Duration = Duration::from_secs(16);
+
+/// What the test's own observation adds to those bounds: the clock follower's step, the 50 ms poll of
+/// the registry and the `list` query itself.
+const POLL_SLACK: Duration = Duration::from_millis(500);
+
+/// Moves the harness orchestrator's test clock on with real time, in 100 ms steps, so its heartbeat
+/// deadline runs out as a real orchestrator's does; stops when dropped.
+struct RealTime(tokio::task::JoinHandle<()>);
+
+impl RealTime {
+    fn follow(orchestrator: &Orchestrator) -> Self {
+        let clock = std::sync::Arc::clone(&orchestrator.clock);
+        Self(tokio::spawn(async move {
+            let mut last = Instant::now();
+            loop {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                let now = Instant::now();
+                clock.advance(now - last);
+                last = now;
+            }
+        }))
+    }
+}
+
+impl Drop for RealTime {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+/// The pids of the app's `ssh` processes carrying the link's `-R` to `local_socket`.
+fn link_ssh_pids(local_socket: &std::path::Path) -> Vec<u32> {
+    let suffix = format!(":{}", local_socket.display());
+    let mut pids = Vec::new();
+    for proc_dir in std::fs::read_dir("/proc").into_iter().flatten().flatten() {
+        let Some(pid) = proc_dir.file_name().to_str().and_then(|n| n.parse().ok()) else {
+            continue;
+        };
+        let comm = std::fs::read_to_string(proc_dir.path().join("comm")).unwrap_or_default();
+        if comm.trim() != "ssh" {
+            continue;
+        }
+        let cmdline = std::fs::read(proc_dir.path().join("cmdline")).unwrap_or_default();
+        let args: Vec<&[u8]> = cmdline.split(|b| *b == 0).collect();
+        let forwards = args
+            .windows(2)
+            .any(|w| w[0] == b"-R" && String::from_utf8_lossy(w[1]).ends_with(&suffix));
+        if forwards {
+            pids.push(pid);
+        }
+    }
+    pids
+}
+
+/// Kill the app's one `ssh` carrying the link with `signal`, as a dropped connection does.
+fn kill_link_ssh(orchestrator: &Orchestrator, signal: &str) {
+    let pids = link_ssh_pids(&orchestrator.socket);
+    assert_eq!(pids.len(), 1, "one ssh carries the link: {pids:?}");
+    let status = Command::new("kill")
+        .args([signal, &pids[0].to_string()])
+        .status()
+        .unwrap();
+    assert!(status.success(), "kill {signal} {}", pids[0]);
+}
+
+fn remote_daemon_pid() -> u32 {
+    micold_core::spawn::running_daemon_pid(&resolve_pinned().unwrap())
+        .expect("the remote daemon runs")
+}
+
+/// The remote daemon's link object of `status.json`.
+fn remote_link() -> micold_core::ssh::status::LinkStatusReport {
+    micold_daemon::runtime_status::read(&resolve_pinned().unwrap())
+        .and_then(|s| s.link)
+        .expect("the remote daemon reports its link")
+}
+
+/// The remote daemon's log lines that name the orchestrator link (its `$HOME` is the stand-in's).
+fn link_log_lines(host: &Sshd) -> Vec<String> {
+    fn walk(dir: &std::path::Path, found: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, found);
+            } else if path.file_name().is_some_and(|n| n == "micold-daemon.log") {
+                found.push(path);
+            }
+        }
+    }
+    let mut logs = Vec::new();
+    walk(&host.remote_home, &mut logs);
+    logs.iter()
+        .flat_map(|p| {
+            std::fs::read_to_string(p)
+                .unwrap_or_default()
+                .lines()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .filter(|l| l.contains("orchestrator"))
+        .collect()
+}
+
+/// Wait until `id`'s record is `health`, returning how long it took from `since`.
+async fn health_within(
+    orchestrator: &Orchestrator,
+    id: &str,
+    health: &str,
+    since: Instant,
+) -> Duration {
+    record_when(orchestrator, id, |r| r["health"] == health).await;
+    since.elapsed()
+}
+
+/// Scenarios 1-3, SC-002, FR-009: killing the connection shows that daemon `offline` within 10 s
+/// and leaves the directly linked host daemon `online`; while the forward is down the dials are
+/// connect failures (a stale or absent `orchestrator.sock`), not refusals, backing off to the cap
+/// without a log line each; reopening shows it `online` within 16 s, the same process, one record.
+#[tokio::test(flavor = "multi_thread")]
+async fn ssh_real_link_a_dropped_connection_shows_offline_and_a_reopen_online_with_the_same_daemon()
+{
+    let test =
+        "ssh_real_link_a_dropped_connection_shows_offline_and_a_reopen_online_with_the_same_daemon";
+    let Some(host) = Sshd::start_with(LINK_SSHD)
+        .map_err(|e| eprintln!("SKIP {test}: {e}"))
+        .ok()
+    else {
+        return;
+    };
+    let Some(()) = pinned_free(test) else { return };
+    let _cleanup = RemoteCleanup;
+    let orchestrator = Orchestrator::start().await;
+    let _real_time = RealTime::follow(&orchestrator);
+    let _host_daemon = host_daemon(&orchestrator);
+    record_when(&orchestrator, "link-host", |r| r["health"] == "online").await;
+    write_remote_config(&host, "container", "link-drop");
+    let first = open_pinned(&host, link_opts(&orchestrator))
+        .await
+        .expect("the open succeeds");
+    record_when(&orchestrator, "link-drop", |r| r["health"] == "online").await;
+    let pid = remote_daemon_pid();
+
+    let dropped = Instant::now();
+    kill_link_ssh(&orchestrator, "-TERM");
+    let waited = health_within(&orchestrator, "link-drop", "offline", dropped).await;
+    assert!(
+        waited <= OFFLINE_WITHIN + POLL_SLACK,
+        "offline {waited:?} after the drop"
+    );
+    let host_record = orchestrator.daemons().await;
+    let host_record = host_record.iter().find(|d| d["id"] == "link-host").unwrap();
+    assert_eq!(
+        host_record["health"], "online",
+        "the other daemon is unchanged"
+    );
+    drop(first);
+
+    // The forward is down: whatever the dead session left (`orchestrator.sock` stale or gone), a
+    // dial fails to connect. Past 1 + 2 + 4 + 8 s the delay is at its 15 s cap.
+    let remote_socket = orchestrator_beside(&resolve_pinned().unwrap()).socket_path;
+    if std::fs::symlink_metadata(&remote_socket).is_err() {
+        drop(std::os::unix::net::UnixListener::bind(&remote_socket).unwrap());
+    }
+    let lost = within_link(|l| l.state == "not-linked").await;
+    let lines_at_loss = link_log_lines(&host).len();
+    let backoff_until = Instant::now() + Duration::from_secs(16);
+    while Instant::now() < backoff_until {
+        let link = remote_link();
+        assert_eq!(
+            link.state, "not-linked",
+            "a connect failure, never a refusal: {link:?}"
+        );
+        assert_eq!(
+            link.since, lost.since,
+            "a retry ending the same way changes nothing"
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let lines = link_log_lines(&host);
+    assert_eq!(
+        lines.len(),
+        lines_at_loss,
+        "no log line per retry: {lines:#?}"
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.contains("orchestrator link lost"))
+            .count(),
+        1,
+        "the loss is logged once: {lines:#?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains("refused")), "{lines:#?}");
+
+    let reopened = Instant::now();
+    let second = open_pinned(&host, link_opts(&orchestrator))
+        .await
+        .expect("the reopen succeeds");
+    let waited = health_within(&orchestrator, "link-drop", "online", reopened).await;
+    assert!(
+        waited <= ONLINE_WITHIN,
+        "online {waited:?} after the reopen"
+    );
+    assert_eq!(remote_daemon_pid(), pid, "the daemon was not restarted");
+    let daemons = orchestrator.daemons().await;
+    let mut ids: Vec<&str> = daemons.iter().filter_map(|d| d["id"].as_str()).collect();
+    ids.sort_unstable();
+    assert_eq!(
+        ids,
+        ["link-drop", "link-host"],
+        "the record is updated, not duplicated"
+    );
+    drop(second);
+    stop_remote_daemon();
+}
+
+/// Spec edge case: the app's `ssh` is killed with `SIGKILL` and the connection reopened at once,
+/// while the remote end of the old forward may still be held. `prepare-link` clears the socket,
+/// the new forward binds, and the same daemon is `online` again within 16 s.
+#[tokio::test(flavor = "multi_thread")]
+async fn ssh_real_link_a_killed_connection_reopened_at_once_comes_back_online() {
+    let test = "ssh_real_link_a_killed_connection_reopened_at_once_comes_back_online";
+    let Some(host) = Sshd::start_with(LINK_SSHD)
+        .map_err(|e| eprintln!("SKIP {test}: {e}"))
+        .ok()
+    else {
+        return;
+    };
+    let Some(()) = pinned_free(test) else { return };
+    let _cleanup = RemoteCleanup;
+    let orchestrator = Orchestrator::start().await;
+    let _real_time = RealTime::follow(&orchestrator);
+    write_remote_config(&host, "container", "link-kill");
+    let first = open_pinned(&host, link_opts(&orchestrator))
+        .await
+        .expect("the open succeeds");
+    record_when(&orchestrator, "link-kill", |r| r["health"] == "online").await;
+    let pid = remote_daemon_pid();
+
+    kill_link_ssh(&orchestrator, "-KILL");
+    let reopened = Instant::now();
+    let second = open_pinned(&host, link_opts(&orchestrator))
+        .await
+        .expect("the reopen succeeds over the old forward's socket");
+    drop(first);
+    let waited = health_within(&orchestrator, "link-kill", "online", reopened).await;
+    assert!(
+        waited <= ONLINE_WITHIN + POLL_SLACK,
+        "online {waited:?} after the reopen"
+    );
+    // Past the heartbeat deadline plus a check, a link still riding the killed session would have
+    // ended on both sides: still linked and online now, it runs through the new forward.
+    tokio::time::sleep_until((reopened + OFFLINE_WITHIN + POLL_SLACK).into()).await;
+    let link = remote_link();
+    assert_eq!(link.state, "linked", "{link:?}");
+    record_when(&orchestrator, "link-kill", |r| r["health"] == "online").await;
+    assert_eq!(remote_daemon_pid(), pid, "the daemon was not restarted");
+    assert_eq!(
+        link_ssh_pids(&orchestrator.socket).len(),
+        1,
+        "only the new forward"
+    );
+    assert_eq!(orchestrator.daemons().await.len(), 1, "one record");
+    drop(second);
+    stop_remote_daemon();
+}
+
+/// The remote daemon's link object once `ready` holds for it.
+async fn within_link(
+    ready: impl Fn(&micold_core::ssh::status::LinkStatusReport) -> bool,
+) -> micold_core::ssh::status::LinkStatusReport {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(link) = micold_daemon::runtime_status::read(&resolve_pinned().unwrap())
+            .and_then(|s| s.link)
+            .filter(|l| ready(l))
+        {
+            return link;
+        }
+        assert!(Instant::now() < deadline, "the remote link never settled");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }

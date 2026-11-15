@@ -192,3 +192,47 @@ async fn a_restart_while_linked_is_accepted_as_the_restored_record() {
         "{seen:?}"
     );
 }
+
+/// #1725 US3 scenario 3, FR-009: a dial while the forward is down finds a stale `orchestrator.sock`
+/// (a killed connection's, nothing accepting) and fails to connect. That is not a refusal: the
+/// daemon stays `not linked`, counts no attempt that reached an orchestrator, backs off to the
+/// 15 s cap without a log line per retry, and links within 16 s of a listener returning there.
+#[tokio::test(start_paused = true)]
+async fn a_stale_forward_socket_is_a_quiet_connect_failure_and_a_new_forward_links_within_16_s() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("orchestrator.sock");
+    drop(std::os::unix::net::UnixListener::bind(&socket).unwrap());
+    assert!(socket.exists(), "the stale socket stays behind");
+    let captured = Captured::for_this_thread();
+    let handle = spawn(&link_to(&socket)).expect("enabled spawns a task");
+
+    // 1, 2, 4, 8, 15, 15 s: the backoff reaches its cap, never the refusal's jittered delay.
+    tokio::time::sleep(Duration::from_secs(45)).await;
+    let state = handle.state();
+    assert_eq!(state.status, LinkStatus::NotLinked, "{state:?}");
+    assert_eq!(state.attempts, 0, "no dial reached an orchestrator");
+    let log = captured.text();
+    assert!(
+        !log.contains("orchestrator"),
+        "a connect failure logs nothing per retry:\n{log}"
+    );
+
+    // The connection is reopened: `prepare-link` removes the stale socket and the forward binds.
+    std::fs::remove_file(&socket).unwrap();
+    let fake = crate::FakeOrchestrator::bind(&socket);
+    let returned = tokio::time::Instant::now();
+    let _wire = fake.accept().await.link().await;
+    status_is(&handle, LinkStatus::Linked).await;
+    let waited = returned.elapsed();
+    assert!(
+        waited <= BACK_ONLINE_WITHIN,
+        "linked {waited:?} after the forward returned"
+    );
+    assert_eq!(handle.state().attempts, 1);
+    assert_eq!(
+        captured.text().matches("orchestrator link up").count(),
+        1,
+        "{}",
+        captured.text()
+    );
+}

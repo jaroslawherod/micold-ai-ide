@@ -743,8 +743,18 @@ bounded by the same 9-second deadline as its pings (`send_bounded` in `orchestra
 that keeps the connection open and stops reading is dropped at the deadline, and the id it reserved
 is free for the next claim.
 
-Container, SSH-host and pod daemons reach the orchestrator through a reverse forward of the connection
-that holds them; that is covered when it lands.
+A daemon behind a forward is reachable only while the connection that holds it is open. When the
+app's `ssh` ends (closed, killed, or the network gone), the orchestrator's end of the link closes and
+the record is `offline` within 10 seconds (the 9-second heartbeat deadline plus the 1-second check);
+the daemon's end ends too, by the end of the stream or at the same deadline, and the daemon logs
+`orchestrator link lost` once and keeps running, sessions and all. While the forward is down its dials
+find a stale `orchestrator.sock` (the dead session's, nothing accepting) or none: that is a connect
+failure (`dial_address` gives `Ok(None)` or an error), not a refusal, so the state stays `not-linked`,
+no attempt is counted, nothing is logged per retry, and the delay grows 1, 2, 4, 8, 15 seconds to its
+cap. Reopening the connection runs `prepare-link` again, which removes whatever socket is there (even
+one an old `sshd` session still holds after the app's `ssh` was killed with `SIGKILL`), and the next
+dial links: `online` within 16 seconds (the capped delay plus the handshake), the same daemon process,
+the same record. The `ssh_real_link` suite proves both bounds against a real `sshd`.
 
 ## Finding the logs and recent errors
 
