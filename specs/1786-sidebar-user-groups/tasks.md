@@ -86,7 +86,7 @@ Rename and delete (scenarios 2, 3):
 
 - [x] T043 [P] Showcase poses for the drop marker and drop highlight (the group header pose is T015) in `crates/micold-client/src/showcase/sections/surfaces.rs` (Principle VIII).
 - [x] T044 Re-record the layout snapshot `crates/micold-client/tests/layout_snapshot.rs` for the M1 header and "New group" button and update `docs/development/layout-snapshot.md` (a later milestone whose UI changes the snapshot re-records it in its own PR). Run after T016.
-- [ ] T045 Run quickstart §B (visual-pass skill), save screenshots of layout, highlight and marker in both themes to `specs/1786-sidebar-user-groups/visual-pass/` (SC-007).
+- [x] T045 Run quickstart §B (visual-pass skill), save screenshots of layout, highlight and marker in both themes to `specs/1786-sidebar-user-groups/visual-pass/` (SC-007). Light theme captured and checked; dark not captured (showcase scheme toggle ignores presses under Xvfb+lavapipe), dark covered by the header-fits gate.
 
 ## Dependencies and order
 

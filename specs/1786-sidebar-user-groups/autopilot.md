@@ -111,7 +111,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M6 built (fea4fff), review B clean, visual pass light only. Awaiting CI and merge, then close-out.
 
 M5 merged as #1972 (squash 719e9f3b9). Review A inline MINOR-only; orchestrator-run review B r1 found 1 MAJOR (three UNPLANNED test paths missing from drift-M5.md, fixed, plan-drift clean); visual pass PASS (/mnt/project-files/issue-1786/m5-*.png; keyboard checks light only, card-state step covered by the T041 test). CI's first run failed only on a corrupt llvm-cov profile after all 13154 tests passed; green after merging main. Next: M6 (T043, T045: showcase poses and visual pass) in a fresh thread; same cloud setup (orchestrator runs review B and visual pass; units write drift-M6.md with every UNPLANNED path, tests included, and cycle-log; no `crate::features::<other>::` calls).
 
