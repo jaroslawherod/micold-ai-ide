@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rew3t5
 - **Started**: 2026-11-13
 - **Phase**: milestones
-- **Next step**: orchestrator opens the M2 PR (body in /tmp/claude-pr-1859-m2.md), runs review B and the visual pass (T018), then CI and merge
+- **Next step**: merge PR #1921 (CI)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1861 | Design (spec, plan, tasks; merged content, treated as reviewed) | not merged, content on this branch | — |
 | #1873 | M1 | merged | eb27a76d639c793f396177c4e53c203c26e13058 |
 | #1912 | M1b | merged | 95fa459da |
-| pending | M2 | not opened (gh GraphQL blocked; orchestrator opens via GitHub MCP) | — |
+| #1921 | M2 | open (draft) | — |
 
 ## Milestones
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T014, T020–T022 | full | Stable worktree ids and parent links in per-project state; create_worktree records the parent; list_worktrees/list_sessions/get_session report it; removed tombstone; user guide | #1873 | merged |
 | M1b | T030–T032 | full | One visibility filter: a caller outside default sees and addresses only own worktree, parent, siblings and children (FR-015), names only those as `parent` (FR-016), relays through the parent (FR-017); user guide | #1912 | merged |
-| M2 | T015–T019 | full | Sidebar parent label (current name, marked removed) and a parent filter that narrows and composes with the issue/type filter; no nesting; shared chip; user guide; visual pass of quickstart Part B | pending | T015-T017, T019 done; T018 (visual pass) and review B pending, run by the orchestrator |
+| M2 | T015–T019 | full | Sidebar parent label (current name, marked removed) and a parent filter that narrows and composes with the issue/type filter; no nesting; shared chip; user guide; visual pass of quickstart Part B | #1921 | in-review (T015-T019 done; review B CLEAN, visual pass PASS) |
 
 ## Decisions
 
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 2 | M1b | 24e28dc124ca0b39051ae6b826275be5f3d80fb7 | 2b7105f8e940df91f685cfc09e6da5c31dfa8fce:24e28dc124ca0b39051ae6b826275be5f3d80fb7 | CLEAN (round 2 sonnet on fix diff; worktree_parent 22 passed; 2 MINOR) |
 | A | 1 | M2 | afd98b48f3ac0d200e992af167138e8e3330c0dc | by-hand review of origin/main...HEAD (no subagent tool) | CLEAN no BLOCKER or MAJOR |
 | B | 1 | M2 | 68d2fd0f5 | conformance review of origin/main...HEAD | CHANGES (F1-F4) fixed: cycle-log M2 red run and two mutants (both killed), drift-M2.md and a `## Milestones` section in tasks.md, RunRow boxed instead of the allow, renamed-parent note in the user guide |
+| B | 2 | M2 | e05d5e719 | fix diff 68d2fd0f5..e05d5e719 (sonnet) | CLEAN: F1-F4 resolved; plan-drift.sh M2 no drift; clippy client clean. Visual pass T018 PASS (both Part B checks, screenshots in project files issue-1859/) |
 
 ## Declined review findings
 
