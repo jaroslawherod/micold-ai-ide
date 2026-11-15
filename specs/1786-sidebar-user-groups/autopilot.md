@@ -92,6 +92,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | A r1 | `entry_spans` repeats `scroll_target`'s row-top arithmetic | MINOR: `entry_spans` walks entries with each one's row count; `scroll_target` asks one row's top. Both read the shared `ROW_GAP` (made public for this) |
 | M4 | A r2 | The drop highlight overwrites the card-state tint of the target list's session rows | Transient, only while the drag is over that list; each row's state glyph and tooltip word still say its state (feature 1718 gives colour as the secondary channel) |
 | M4 | A r2 | `drop_highlight`'s parallel start list is derived state that is easy to get wrong | MINOR: one push per entry at the top of the loop, before any of its rows; covered by the highlight test |
+| M4 | A r3 | With the terminal focused, Escape cannot cancel a drag (again, from `ui::subscription`'s early return) | As r1: feature 006 FR-009 gives the focused terminal every key; the drag ends on any release or focus loss |
+| M4 | A r3 | Altitude: swallow the stray `Selected` in a reducer instead of at the widget | That reducer guard would make `sidebar_drag` name the session feature (feature_registration_cost); the widget-level `ContextArea::hold_release` keeps the button and its state and is unit-tested |
 
 ## Handover
 

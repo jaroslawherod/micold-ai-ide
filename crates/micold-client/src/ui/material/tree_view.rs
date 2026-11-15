@@ -162,8 +162,8 @@ pub struct TreeItem<'a, M> {
     /// The drag's insertion marker, on this row's top or bottom edge (feature 1786, US3-4).
     /// Drawn over the row, so marking a row moves nothing.
     pub drop_marker: Option<MarkerEdge>,
-    /// Whether the row's press is held back: it keeps its button, so nothing about the row moves,
-    /// but a release does not press it (feature 1786: the row a drag is carrying).
+    /// Whether the row's press is held back: it keeps its button and its look, but a release over
+    /// it lets go of the press without pressing (feature 1786: the row a drag is carrying).
     pub inert: bool,
     /// A role the label is always drawn in, whatever the view's roles (feature 1786: a user
     /// group's header, [`GroupHeader`](super::GroupHeader)). `None` for every other row.
@@ -371,7 +371,8 @@ impl<'a, M> TreeItem<'a, M> {
     }
 
     /// Hold the row's press back while `inert`: the row keeps its button and its look, but a
-    /// release over it presses nothing (feature 1786, the row a drag is carrying).
+    /// release over it lets go of the press without pressing (feature 1786, the row a drag is
+    /// carrying). Keyboard presses are not held: a drag is a pointer gesture.
     pub fn inert(mut self, inert: bool) -> Self {
         self.inert = inert;
         self
@@ -854,7 +855,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 // Ripples from wherever the row was clicked. A row is the most-pressed surface in
                 // this application, so it is the one where a flat colour swap is most obviously not
                 // Material (FR-024c).
-                super::Ripple::new(
+                let ripple = super::Ripple::new(
                     button(body)
                         // §7.2's horizontal padding follows the density, so a dense row is tighter
                         // as well as shorter. Vertical padding is zero deliberately: the height is
@@ -869,11 +870,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                         .width(Length::Fill)
                         .height(Length::Shrink)
                         .style(style::text_button(r, None))
-                        .on_press_maybe((!item.inert).then_some(msg)),
+                        .on_press(msg),
                     r.on_surface,
                     shape::FULL,
-                )
-                .into()
+                );
+                // Always wrapped, so holding the release back changes no widget mid-press.
+                ContextArea::new(ripple).hold_release(item.inert).into()
             } else {
                 body
             };

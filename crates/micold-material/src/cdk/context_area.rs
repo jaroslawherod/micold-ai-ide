@@ -63,6 +63,7 @@ pub struct ContextArea<'a, M> {
     on_primary_press: Option<OnPress<'a, M>>,
     on_primary_bounds: Option<OnBounds<'a, M>>,
     on_primary_release: Option<OnRelease<'a, M>>,
+    hold_release: bool,
 }
 
 impl<'a, M: 'a> ContextArea<'a, M> {
@@ -74,6 +75,7 @@ impl<'a, M: 'a> ContextArea<'a, M> {
             on_primary_press: None,
             on_primary_bounds: None,
             on_primary_release: None,
+            hold_release: false,
         }
     }
 
@@ -124,6 +126,15 @@ impl<'a, M: 'a> ContextArea<'a, M> {
         self.on_primary_release = Some(Box::new(f));
         self
     }
+
+    /// While `hold`, the content sees a primary release with no cursor: a button inside that was
+    /// pressed lets go of its press without pressing (feature 1786: releasing a drag over the row
+    /// it carries is not also a click). The button keeps its `on_press`, so it neither changes
+    /// look nor keeps a stale pressed state.
+    pub fn hold_release(mut self, hold: bool) -> Self {
+        self.hold_release = hold;
+        self
+    }
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
@@ -159,7 +170,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
             &mut tree.children[0],
             event,
             layout,
-            cursor,
+            child_cursor(event, self.hold_release, cursor),
             renderer,
             clipboard,
             shell,
@@ -237,6 +248,20 @@ fn reported_press(
         return None;
     }
     over.map(|p| (p.x as u16, p.y as u16))
+}
+
+/// The cursor the content sees: none for a primary release while `hold`, else `cursor`.
+fn child_cursor(event: &Event, hold: bool, cursor: mouse::Cursor) -> mouse::Cursor {
+    if hold
+        && matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+        )
+    {
+        mouse::Cursor::Unavailable
+    } else {
+        cursor
+    }
 }
 
 /// Whether `event` is a primary release over the area.
@@ -377,6 +402,17 @@ mod tests {
             ),
             None
         );
+    }
+
+    /// A held release reaches the content with no cursor, so a pressed button lets go without
+    /// pressing; anything else, or an unheld release, keeps the cursor.
+    #[test]
+    fn a_held_release_reaches_the_content_with_no_cursor() {
+        let at = mouse::Cursor::Available(Point::new(3.0, 4.0));
+        let release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+        assert_eq!(child_cursor(&release, true, at), mouse::Cursor::Unavailable);
+        assert_eq!(child_cursor(&release, false, at), at);
+        assert_eq!(child_cursor(&left_press(), true, at), at);
     }
 
     /// The release half: only the primary button's release, and only over the area.

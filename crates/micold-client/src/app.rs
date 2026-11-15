@@ -580,10 +580,8 @@ impl State {
     fn dismiss_topmost(&mut self) {
         // Feature 1786 (US5-1, FR-009): an Escape press cancels a sidebar drag first, and alone;
         // a surface open under it waits for the next press.
-        if self.sidebar_drag.active {
-            self.update(Message::SidebarDrag(
-                crate::features::sidebar_drag::Msg::Cancelled,
-            ));
+        if let Some(cancel) = drag_escape(self) {
+            self.update(cancel);
         } else if crate::overlay::registry::topmost(self).is_some() {
             crate::overlay::registry::close_topmost(self);
         } else if let Some(answer) = on_escape(self) {
@@ -2249,6 +2247,13 @@ where
     }
 }
 
+/// What Escape does to a sidebar drag (feature 1786, US5-1): cancels it while it is active.
+fn drag_escape(state: &State) -> Option<Message> {
+    state.sidebar_drag.active.then_some(Message::SidebarDrag(
+        crate::features::sidebar_drag::Msg::Cancelled,
+    ))
+}
+
 /// Map an Escape key press to a [`Message`] given the current state.
 ///
 /// Returns `Some(AboutClosed)` only while the About overlay is open (FR-011); returns
@@ -2272,13 +2277,14 @@ pub fn on_escape(state: &State) -> Option<Message> {
     // surface that refuses Escape answers for itself too: falling through would let a scrim click
     // on a non-dismissible dialog discard the Settings draft behind it (013 BUG-001, FR-010a).
     match crate::overlay::registry::topmost(state) {
-        Some(open) => open.on(micold_core::overlay::Trigger::Escape).cloned(),
-        // Feature 1786 (US5-1, FR-009): with nothing open, Escape cancels a sidebar drag. With a
-        // surface open the key press still reaches the drag first, in `dismiss_topmost`; a scrim
-        // click stays the dialog's own.
-        None if state.sidebar_drag.active => Some(Message::SidebarDrag(
-            crate::features::sidebar_drag::Msg::Cancelled,
-        )),
+        // Feature 1786 (US5-1, FR-009): a surface that refuses Escape still leaves it to cancel a
+        // sidebar drag, so the key stays heard; the press itself reaches the drag first, in
+        // `dismiss_topmost`. A scrim click stays the dialog's own.
+        Some(open) => open
+            .on(micold_core::overlay::Trigger::Escape)
+            .cloned()
+            .or_else(|| drag_escape(state)),
+        None if state.sidebar_drag.active => drag_escape(state),
         None if state.settings.settings_draft.is_some() => {
             Some(Message::Settings(crate::features::settings::Msg::Cancelled))
         }
