@@ -42,7 +42,7 @@ Refusals (nothing is typed):
 | Parent has no live session | `conflict` | the parent worktree, "has no running session" |
 | Caller's worktree unknown | `invalid_input` | "no parent could be determined" |
 
-The parent target is the earliest-created running session of the parent worktree (R3). Everything
+The parent target is the first running session of the parent worktree in catalog order (R3). Everything
 after the target is chosen is `send_session_input`: cross-session policy, confirmation, trust check,
 atomic submission, "session gone". Logged like it: the text is never logged.
 

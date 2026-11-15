@@ -191,7 +191,7 @@ to the parent, and the implicit `default` parent.
   taken as its parent for visibility, and MUST say when the caller is in `default` and has no parent.
 - **FR-005**: The tool MUST list nothing outside the caller's FR-015 scope as amended by FR-001.
 - **FR-006**: A tool MUST send text to the caller's parent without a session id. The target is the
-  earliest-created live session in the parent worktree, ties broken by the lowest session id;
+  first live session in the project's catalog order (creation, resume or adoption order, which persists across restart) in the parent worktree;
   the answer MUST name the session reached.
 - **FR-007**: The parent message tool MUST refuse, sending nothing, when the parent worktree has no
   session, when the parent was removed, and when the caller is in `default`; each refusal MUST state
@@ -229,7 +229,7 @@ to the parent, and the implicit `default` parent.
 
 ## Assumptions
 
-- Several parent sessions: the earliest-created live session wins, ties by lowest session id (FR-006); the guide states it.
+- Several parent sessions: the first live session in catalog order wins (FR-006); the guide states it.
 - The tool names are chosen in the plan; only the behaviour is specified here.
 - Messaging reuses the existing input path of the send-input tool, so its policy checks, "session
   gone" refusal and atomic delivery apply unchanged.

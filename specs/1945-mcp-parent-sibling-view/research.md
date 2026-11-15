@@ -17,14 +17,14 @@ argument is a typed `SessionRef` (UUID) validated by the parser.
 
 ## R3. Which parent session is the target
 **Decision**: the first `Running` session of the parent worktree in `project.sessions`, i.e. catalog
-append order (creation, attach, adoption; `claim_main_if_free` relies on the same order), ties by the
-lowest session id. `Session` has no creation timestamp, and adding one would need a storage
-migration for no gain.
-**Rejected**: the `main` session flag (a session can be main yet stopped); most recently active
-(non-deterministic across calls, violates scenario 3.2); lowest id (UUID v4, random, so unrelated to
-age).
-"Live" excludes `Idle`, `Failed`, `Restarting` and daemon-restart states; `Starting` is excluded too
-because it cannot take input yet.
+order. That order is creation order except that a resumed session is pushed at the end
+(`catalog.rs` `replace_session`) and an adopted one is appended when discovered; it persists across
+restart, so the choice is stable between calls. No id tie-break: the order is total. `Session` has no
+creation timestamp; adding one needs a storage migration for no gain. Spec FR-006 and Assumptions
+are amended to say "catalog order".
+**Rejected**: the `main` flag (can be a stopped session); most recently active (differs between calls,
+violates scenario 3.2); lowest id (UUID v4, random).
+"Live" is `Running` only: `Idle`, `Failed`, `Restarting` and `Starting` cannot take input.
 
 ## R4. How the parent message is delivered
 **Decision**: resolve to a session id and call the existing `send_session_input`.

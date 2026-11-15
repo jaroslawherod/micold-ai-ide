@@ -120,8 +120,9 @@ scenarios 1.3/1.4). A recorded parent that no longer lives is already `Removed` 
 
 ### D2. Scope (FR-001, FR-002, FR-005, FR-008)
 
-`Scope::new` keeps its signature and the caller-in-`default` and unknown-caller-worktree cases
-(`unrestricted`). Otherwise `visible = {own} ∪ parent(Known/implicit) ∪ siblings ∪ children`, taken
+`Scope::new` keeps its signature and stays `unrestricted` only where it is today: the caller session
+is not found, or has no `worktree_dir` (`default`). A caller whose own worktree dir is not live gets
+`visible = {own}` (never an empty neighbourhood mapped to everything; SC-005). Otherwise `visible = {own} ∪ parent(Known/implicit) ∪ siblings ∪ children`, taken
 from the derivation; `hidden` is unchanged (worktrees not in the set). `Scope::new` needs the live
 names, so it reads `project.worktrees`. Every tool already goes through `Scope`, so FR-001 reaches
 all of them with no per-tool change.
@@ -144,14 +145,14 @@ Because it re-enters the by-id path, the cross-session policy (`Off`, `ConfirmEa
 question, atomic submission and "session gone" apply unchanged (FR-008, Assumptions). Target rule:
 among sessions of the parent worktree (for the implicit or `default` parent: sessions with no
 worktree dir) whose lifecycle is `Running`, the first in the project's session list, which is
-creation order (catalog append order; research R3); ties (none expected) by lowest id. Policy
+catalog order (research R3; persists across restart); no tie-break is needed. Policy
 mapping: `Operation::SendParentInput` is checked as `SendSessionInput` of the resolved target, so
 `policy.rs` gets the variant only for exhaustiveness plus the `Off` gate.
 
 ### D5. Record before start (FR-009)
 
 `StartDefinition` gains `parent: Option<&ParentChoice>`. `create_worktree_with_session` calls
-`state.record_worktree_parent(&project, &dir_name, definition.parent)` right after
+`state.record_worktree_parent(...)` only `if let Some(parent) = definition.parent` (the app path passes `None` and must not retire and re-mint the directory's id), right after
 `create_worktree` returns `Ok` and before `create_session_with_prompt`. The post-call recording in
 `create_with_optional_session` for the session branch is removed (kept for the no-session branch).
 Failure semantics are unchanged: `CliUnavailable` and `Create` return before the record (no link);
@@ -184,9 +185,11 @@ Layers: **core unit** = `micold-core` unit tests; **daemon integration** = `mico
 | Catalog lists and parse for the two tools; extra args rejected | core `mcp_tools_catalog.rs` |
 | `list_sessions` / `list_worktrees` from an unparented caller (US1.1-1.5, SC-001, SC-005) | daemon integration |
 | `neighbourhood` for recorded, unparented, removed, default callers; caller's own several sessions (US2) | daemon integration |
-| `send_parent_input`: one, several (stable twice), none, implicit, default, removed (US3) | daemon integration |
-| Policy: `Off` and `ConfirmEachSend` apply; cannot reach outside scope (FR-008) | daemon integration |
-| Parent link present at session start, incl. delayed start; none when create fails (US4, SC-004) | daemon integration, using the existing create fixture with a start hook delay |
+| `parent_target` pure function: several sessions, catalog order, non-`Running` skipped, none | daemon unit test beside the function in `mcp/tools.rs` |
+| `send_parent_input` refusals: default caller, removed parent, no running session, unknown worktree | daemon integration `tests/mcp/mcp_worktree_parent_neighbourhood.rs` (`state_over` runs no process, so only refusals) |
+| `send_parent_input` delivery to one and to several parent sessions (same session twice), policy `Off` and `ConfirmEachSend`, implicit parent `default`, scope (FR-008) | `crates/micold-daemon/tests/mcp_cross_session.rs` (`#![cfg(unix)]`, stub `claude`, real Running sessions) |
+| Session whose worktree was removed: sees only itself, not everything (D2, SC-005) | daemon integration `mcp_worktree_parent_visibility.rs` |
+| Parent link present at session start (US4, SC-004): the stub `claude` of the new session writes a marker file at start; the test then reads `worktree_parent_views` and asserts the link exists at marker time, and that a failing create (missing CLI) records none | `crates/micold-daemon/tests/mcp_cross_session.rs` (stub `claude`), plus a `tests/mcp/mcp_worktree_parent.rs` case for the no-link failure |
 | Existing 1857 visibility tests whose "no parent has no siblings" expectation changes | amend in place |
 | Docs and skill text (US5) | docs check in CI plus a grep assertion in the tasks |
 
