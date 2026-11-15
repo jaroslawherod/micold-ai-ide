@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-itbg1f
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: orchestrator opens the M2 PR from pr-title.md/pr-body.md on claude/project-thread-itbg1f, runs review B, waits on CI and merges; then M3 (T021–T027)
+- **Next step**: milestone M3 (T021–T027), in a fresh thread via `/speckit-autopilot resume`
 
 ## Pull requests
 
@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
 | #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
+| #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
-| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | PR pending (branch pushed; full gate green at b38d5f3d28c050b447d51114fb8786a22fa53960; review A CLEAN + 3 MINOR fixed) |
+| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | #1975 | merged (squash 1e9b379e3) 
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
@@ -64,6 +65,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B 1 | F2 MINOR: `pub struct Detached` is test-only API | recorded in drift-M2.md; daemon crate is internal, no public API surface |
 
 ## Handover
+
+2026-11-15, M2 thread (branch claude/project-thread-itbg1f): PR #1975 squash-merged (1e9b379e3) on green `ci complete`. Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) MINOR-ONLY, 2 MINOR declined. Mutants (advisory) red again from the job's environment, not the diff: baseline failed on netns test (`unshare -rn` unavailable); on M1 it was documentation_is_not_read (no .git in the copy). Reported to the coordinator for a chore. origin/main merged back; diff vs main is ledger only. Next: M3 (T021–T027, tier full) in a fresh cloud thread running `/speckit-autopilot resume` (update the Worktree branch line to that thread's branch). Unit took ~250k tokens over ~73 min in one part.
 
 2026-11-15, M1 thread: PR #1971 squash-merged (8921b6167) on green `ci complete` (mutants advisory, red). Review B (orchestrator, sonnet) round 1 CHANGES (2 MAJOR missing drift records, 1 MINOR I/O-test scope; all fixed in d7a3d1066), round 2 CLEAN. origin/main merged back; diff vs main is ledger only. Next: M2 (T016–T020, tier full) in a fresh cloud thread running `/speckit-autopilot resume` on this branch (update the Worktree branch line if the thread's branch differs).
 
