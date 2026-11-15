@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1725
 - **Worktree branch**: claude/project-thread-2hmeav
 - **Started**: 2026-11-15
-- **Phase**: milestones
-- **Next step**: merge PR #1989 on green `ci complete`, then the close unit
+- **Phase**: close
+- **Next step**: close unit (fresh thread, `/speckit-autopilot resume`)
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
 | #1976 | M3 backoff + link status | merged (squash) | 2880eeb17 |
 | #1979 | M4 reverse forward | merged (squash) | bc0a44f22 |
-| #1989 | M5 drop/reopen | open (draft) | |
+| #1989 | M5 drop/reopen | merged (squash) | d8b39fd3149babbbf2057874c24fb658f22500e8 |
 
 ## Milestones
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | #1979 | merged (squash bc0a44f22) |
-| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | #1989 | review A+B CLEAN; CI pending |
+| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | #1989 | merged (squash d8b39fd31) |
 
 ## Decisions
 
@@ -77,6 +77,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
+2026-11-15, M5 thread (branch claude/project-thread-2hmeav): PR #1989 squash-merged (d8b39fd31) on green `ci complete`, first run (all checks green, mutants included). Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) CLEAN, 0 findings. T039 needed no product code. origin/main merged back; diff vs main is ledger only. Next: close unit in a fresh cloud thread running `/speckit-autopilot resume` (update the Worktree branch line). Unit took ~175k tokens over ~26 min in one part.
 2026-11-15, M5 unit (branch claude/project-thread-2hmeav, previous PR #1979 merged at bc0a44f22): T038–T040 done and ticked. T039 needed no product code (stale-socket removal and the quiet connect failure already held; the red was the harness's hand-moved TestClock, now driven by `RealTime` in the tests); cycle 15 in tdd/cycle-log.md, drift-M5.md written, plan-drift clean. Review A round 1 (opus, headless) CLEAN with 3 MINOR, all fixed in 1871be935. ssh_real_link 6 passed (openssh-server installed in the sandbox), orchestrator_dial 25 passed, clippy -D warnings and fmt clean; scripts/gate.sh stopped at missing cargo-nextest, full gate left to CI. Not run by the unit: review B (orchestrator). PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review B on origin/main...HEAD, then open the PR; after M5 merges the run goes to close.
 2026-11-15, M4 thread (branch claude/project-thread-t27ol0): PR #1979 squash-merged (bc0a44f22) on green `ci complete` after one fix: diff coverage (80%) failed because the `prepare-link` subprocess run is invisible to lcov; the command was split into `prepare_link_command` (resolver injected) and tested in process. Review A round 1 CHANGES (fixed), review B + round 2 CLEAN, 1 MINOR declined. Mutants (advisory) cancelled/red as before. Behaviour decision for jaro: SSH hosts with their own forwards, or a failing `ssh -G`, now fail to connect with a message (T028; revert is one match in `provision::admit_link`). Next: M5 (T038–T040) in a fresh thread.
 2026-11-15, M4 unit (branch claude/project-thread-t27ol0, previous PR #1976 merged at 2880eeb17): T028–T037 done and ticked; cycles 11–14 and review A fixes in tdd/cycle-log.md; drift-M4.md written, plan-drift clean. Review A round 1 (opus, headless) CHANGES: F1 fixed in code (`ClearAllForwardings=no`), F2 prose + Decisions (T028 fail-the-open kept; may need the user), F3 fixed, F4 declined. Round 2 of A on the F1 fix not run by the unit. ssh_real_link 4 passed against a real sshd installed in the sandbox (`apt-get install openssh-server`, `mkdir /run/sshd`). Full gate: Rust green; scripts/tests/autopilot.test.sh flaky from sandbox git (`push negotiation failed`), left to CI. PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review A round 2 + review B, then open the PR.
