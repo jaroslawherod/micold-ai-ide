@@ -444,12 +444,19 @@ fn read_call(
 /// parent, its siblings and its direct children, by worktree ref, built on
 /// [`neighbourhood`]: a worktree with no recorded parent is a child of `default` for this. `None`
 /// is everything: a caller in `default`. A removed parent links no one, and a caller whose own
-/// worktree is gone sees only itself.
+/// worktree is gone sees only itself. The project root is kept apart from the directory names, so
+/// a worktree directory named `default` never grants the root (review A round 2, F1).
 struct Scope {
-    visible: Option<BTreeSet<String>>,
+    visible: Option<Visible>,
     /// The paths of the worktrees outside the scope, so an error that names the holder of a branch
     /// can leave out one the caller cannot see.
     hidden: Vec<PathBuf>,
+}
+
+/// A restricted [`Scope`]: whether the project root is in it, and the worktree directories that are.
+struct Visible {
+    root: bool,
+    dirs: BTreeSet<String>,
 }
 
 impl Scope {
@@ -477,8 +484,13 @@ impl Scope {
         };
         let near = neighbourhood(&live_dirs(project), parents, Some(own));
         let mut set = BTreeSet::from([own.to_string()]);
-        if let Some(ParentSide::Known { name, .. }) = near.parent {
-            set.insert(name);
+        let mut root = false;
+        match near.parent {
+            Some(ParentSide::Known { root: true, .. }) => root = true,
+            Some(ParentSide::Known { name, .. }) => {
+                set.insert(name);
+            }
+            Some(ParentSide::Removed { .. }) | None => {}
         }
         set.extend(near.siblings);
         set.extend(near.children.into_iter().map(|c| c.name));
@@ -489,15 +501,32 @@ impl Scope {
             .map(|wt| wt.path.clone())
             .collect();
         Self {
-            visible: Some(set),
+            visible: Some(Visible { root, dirs: set }),
             hidden,
         }
     }
 
-    fn allows(&self, worktree: &str) -> bool {
-        self.visible
-            .as_ref()
-            .is_none_or(|set| set.contains(worktree))
+    /// The project root, `default`.
+    fn allows_root(&self) -> bool {
+        self.visible.as_ref().is_none_or(|v| v.root)
+    }
+
+    /// The worktree in directory `dir`, whatever its name.
+    fn allows_dir(&self, dir: &str) -> bool {
+        self.visible.as_ref().is_none_or(|v| v.dirs.contains(dir))
+    }
+
+    /// The worktree `worktree` names: the ref `default` is the root.
+    fn allows_ref(&self, worktree: &WorktreeRef) -> bool {
+        match worktree {
+            WorktreeRef::Default => self.allows_root(),
+            WorktreeRef::Named(dir) => self.allows_dir(dir),
+        }
+    }
+
+    /// The worktree session `worktree_dir` runs in (`None` is the root).
+    fn allows_place(&self, worktree_dir: Option<&str>) -> bool {
+        worktree_dir.map_or_else(|| self.allows_root(), |dir| self.allows_dir(dir))
     }
 
     /// [`BlockReason::explain`], without the holder when it is a worktree outside the scope
@@ -506,7 +535,7 @@ impl Scope {
     fn explain(&self, reason: &BlockReason, branch: &str) -> String {
         let hidden = match reason {
             BlockReason::CheckedOutAt { path } => self.hidden.contains(path),
-            BlockReason::CheckedOutInProjectRoot => !self.allows(WorktreeRef::DEFAULT),
+            BlockReason::CheckedOutInProjectRoot => !self.allows_root(),
             BlockReason::CheckedOutOutsideApp { .. } => false,
         };
         if hidden {
@@ -517,12 +546,12 @@ impl Scope {
     }
 
     fn allows_session(&self, session: &SessionSummary) -> bool {
-        self.allows(worktree_ref(session))
+        self.allows_place(session.worktree_dir.as_deref())
     }
 
     /// `not_found`, worded as for a worktree that does not exist, outside the scope.
     fn worktree(&self, worktree: &WorktreeRef) -> Result<(), OpError> {
-        if self.allows(worktree.as_str()) {
+        if self.allows_ref(worktree) {
             Ok(())
         } else {
             Err(OpError::not_found(format!(
@@ -1697,7 +1726,10 @@ fn list_resumable_sessions(
     let matching: Vec<_> = report
         .sessions
         .iter()
-        .filter(|s| scope.allows(&target_ref(&s.target)))
+        .filter(|s| match &s.target {
+            AttachTarget::Default => scope.allows_root(),
+            AttachTarget::Worktree { dir_name } => scope.allows_dir(dir_name),
+        })
         .filter(|s| worktree.is_none_or(|w| w.as_str() == target_ref(&s.target)))
         .collect();
     let rows: Vec<Value> = matching
@@ -1985,6 +2017,8 @@ async fn send_parent_input(
             .find(|s| s.id == target)
             .cloned()
             .expect("parent_session picked a session of this project");
+        // The checks `send_session_input` runs on its target (review A round 2, F4).
+        Scope::new(&project, &views, caller).session(&summary)?;
         Ok((who, project, summary, parent))
     })
     .await?;
@@ -2029,21 +2063,29 @@ fn parent_session(
     match neighbourhood(&live, parents, Some(own)).parent {
         Some(ParentSide::Known { name, root, .. }) => {
             let dir = (!root).then_some(name.as_str());
-            let sessions = project
-                .sessions
-                .iter()
-                .filter(|s| modes.get(&s.id) == Some(&TerminalMode::AiCli))
-                .map(|s| (s.id, s.worktree_dir.as_deref(), &s.lifecycle));
-            match parent_target(sessions, dir) {
-                Some(target) => Ok((target, name)),
-                None => Err(OpError::new(
-                    ErrorCategory::Conflict,
-                    format!(
-                        "the parent worktree \"{name}\" has no running session, so nothing was \
-                         typed; see neighbourhood"
-                    ),
-                )),
+            let sessions = || {
+                project
+                    .sessions
+                    .iter()
+                    .map(|s| (s.id, s.worktree_dir.as_deref(), &s.lifecycle))
+            };
+            let ai_cli = sessions().filter(|(id, ..)| modes.get(id) == Some(&TerminalMode::AiCli));
+            if let Some(target) = parent_target(ai_cli, dir) {
+                return Ok((target, name));
             }
+            // A running shell is listed by neighbourhood, so say it was passed over on purpose.
+            let what = if parent_target(sessions(), dir).is_some() {
+                "no running AI CLI session (only shell sessions)"
+            } else {
+                "no running session"
+            };
+            Err(OpError::new(
+                ErrorCategory::Conflict,
+                format!(
+                    "the parent worktree \"{name}\" has {what}, so nothing was typed; see \
+                     neighbourhood"
+                ),
+            ))
         }
         Some(ParentSide::Removed { last_name }) => Err(OpError::not_found(format!(
             "the parent worktree \"{last_name}\" was removed, so nothing was typed"
@@ -2362,7 +2404,7 @@ fn parent_choice(
 ) -> Result<Option<ParentChoice>, OpError> {
     let live = |dir: &str| project.worktrees.iter().any(|wt| wt.dir_name == dir);
     // FR-016: a caller outside `default` names only a worktree it can see.
-    if let Some(parent) = explicit.filter(|p| !scope.allows(p.as_str())) {
+    if let Some(parent) = explicit.filter(|p| !scope.allows_ref(p)) {
         return Err(OpError::invalid_input(format!(
             "parent \"{}\" is not a worktree you can see; see list_worktrees",
             parent.as_str()
@@ -2456,7 +2498,7 @@ impl Context<'_> {
                 Some(format!("the parent worktree \"{last_name}\" was removed")),
             ),
         };
-        let visible = |name: &&String| self.scope.allows(name);
+        let visible = |name: &&String| self.scope.allows_dir(name);
         let siblings: Vec<Value> = near
             .siblings
             .iter()
@@ -2466,7 +2508,7 @@ impl Context<'_> {
         let children: Vec<Value> = near
             .children
             .iter()
-            .filter(|c| self.scope.allows(&c.name))
+            .filter(|c| self.scope.allows_dir(&c.name))
             .map(|c| {
                 let mut child = entry(Some(&c.name));
                 if c.implicit {
@@ -2506,7 +2548,7 @@ impl Context<'_> {
             .filter(|s| s.worktree_dir.is_none())
             .count();
         let mut rows = Vec::new();
-        if self.scope.allows(WorktreeRef::DEFAULT) {
+        if self.scope.allows_root() {
             rows.push(json!({
                 "ref": WorktreeRef::DEFAULT,
                 "display_name": DEFAULT_DISPLAY_NAME,
@@ -2520,7 +2562,7 @@ impl Context<'_> {
             .project
             .worktrees
             .iter()
-            .filter(|wt| self.scope.allows(&wt.dir_name))
+            .filter(|wt| self.scope.allows_dir(&wt.dir_name))
         {
             let session_count = self
                 .project
@@ -2565,14 +2607,15 @@ impl Context<'_> {
             .iter()
             .map(|c| {
                 let checked_out_in = match &c.blocked_by {
-                    Some(BlockReason::CheckedOutAt { path }) => Some(self.worktree_ref_at(path)),
-                    Some(BlockReason::CheckedOutInProjectRoot) => {
-                        Some(WorktreeRef::DEFAULT.to_string())
-                    }
+                    // A worktree the caller cannot see is not named (spec 1857, FR-015).
+                    Some(BlockReason::CheckedOutAt { path }) => Some(self.worktree_ref_at(path))
+                        .filter(|dir| self.scope.allows_dir(dir)),
+                    Some(BlockReason::CheckedOutInProjectRoot) => self
+                        .scope
+                        .allows_root()
+                        .then(|| WorktreeRef::DEFAULT.to_string()),
                     Some(BlockReason::CheckedOutOutsideApp { .. }) | None => None,
-                }
-                // A worktree the caller cannot see is not named (spec 1857, FR-015).
-                .filter(|worktree| self.scope.allows(worktree));
+                };
                 json!({
                     "name": c.name,
                     "kind": match c.origin {

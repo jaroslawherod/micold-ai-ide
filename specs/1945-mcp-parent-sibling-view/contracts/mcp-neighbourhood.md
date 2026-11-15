@@ -40,6 +40,7 @@ Refusals (nothing is typed):
 | Caller in `default` | `invalid_input` | "default has no parent" |
 | Parent removed | `not_found` | the parent's last name, "was removed" |
 | Parent has no live session | `conflict` | the parent worktree, "has no running session" |
+| Parent runs only plain shell sessions | `conflict` | the parent worktree, "no running AI CLI session (only shell sessions)" |
 | Caller's worktree unknown | `invalid_input` | "no parent could be determined" |
 | Caller's worktree directory is named `default` | `invalid_input` | "named \"default\"", "has no parent" (also `neighbourhood`'s note) |
 

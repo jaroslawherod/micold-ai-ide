@@ -1118,11 +1118,8 @@ async fn a_running_session_outside_the_scope_is_never_reached() {
     s.nothing_typed().await;
 }
 
-/// Research R3: a plain shell listed first in the parent worktree is never the target; the text
-/// reaches the parent's AI CLI session, and nothing is typed into the shell (where Enter would run it).
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_shell_ahead_of_the_parents_ai_cli_session_is_never_reached() {
-    let _guard = ENV.lock().await;
+/// A sandbox whose caller's parent is `b`, holding one running plain shell, first in the catalog.
+async fn with_a_running_shell_in_the_parent() -> Sandbox {
     let s = Sandbox::with(vec![session(
         sid(SHELL),
         Some("b"),
@@ -1142,6 +1139,15 @@ async fn a_shell_ahead_of_the_parents_ai_cli_session_is_never_reached() {
         wait_until(BOUND, shell_runs).await,
         "the shell never started"
     );
+    s
+}
+
+/// Research R3: a plain shell listed first in the parent worktree is never the target; the text
+/// reaches the parent's AI CLI session, and nothing is typed into the shell (where Enter would run it).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_shell_ahead_of_the_parents_ai_cli_session_is_never_reached() {
+    let _guard = ENV.lock().await;
+    let s = with_a_running_shell_in_the_parent().await;
     let ai = s.start_in("b", true).await;
 
     let out = s.child_ok("send_parent_input", to_parent()).await;
@@ -1158,10 +1164,12 @@ async fn a_parent_directory_named_default_is_not_the_project_root() {
     let s = Sandbox::new().await;
     add_worktree(s._project.path(), "default");
     s.state.refresh_worktrees(s._project.path());
-    s.link_caller_to("default");
-    s.child_ok("start_session", json!({"session": reference(sid(IDLE))}))
+    // The root is outside the caller's scope once linked (review A round 2, F1): start it with the
+    // full view first, which relinks the caller to the root.
+    s.ok("start_session", json!({"session": reference(sid(IDLE))}))
         .await;
     s.ready(sid(IDLE)).await;
+    s.link_caller_to("default");
 
     let error = s.child_err("send_parent_input", to_parent()).await;
     assert_eq!(error["category"], "conflict", "{error}");
@@ -1170,4 +1178,22 @@ async fn a_parent_directory_named_default_is_not_the_project_root() {
         "{error}"
     );
     s.nothing_typed().await;
+}
+
+/// Review A round 2, F3: a parent running only a shell is refused as having no AI CLI session, so
+/// the agent can tell the shell `neighbourhood` lists was passed over on purpose; nothing is typed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_parent_running_only_a_shell_is_refused_as_having_no_ai_cli_session() {
+    let _guard = ENV.lock().await;
+    let s = with_a_running_shell_in_the_parent().await;
+
+    let error = s.child_err("send_parent_input", to_parent()).await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert!(
+        message.contains("\"b\"")
+            && message.contains("no running AI CLI session (only shell sessions)"),
+        "{error}"
+    );
+    assert_eq!(s.shown(sid(SHELL)), 0, "{:?}", s.screen(sid(SHELL)));
 }

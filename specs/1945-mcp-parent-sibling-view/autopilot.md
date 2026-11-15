@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Started**: 2026-11-15
 - **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 - **Phase**: review M2
-- **Next step**: scoped re-review A round 2 of PR #1978 (fix diff since 45c59a68b); review B round 1 was CLEAN
+- **Next step**: scoped re-review A round 3 of PR #1978 (fix diff since 87425df21: round 2's F1, F3, F4); review B round 1 was CLEAN
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
-| M2 | T006–T014 | full | neighbourhood and send_parent_input tools | #1978 | review A round 1 fixed, re-review due |
+| M2 | T006–T014 | full | neighbourhood and send_parent_input tools | #1978 | review A round 2 fixed, re-review due |
 | M3 | T015, T018–T020 | full | Parent recorded before start; agents told | - | pending |
 
 ## Decisions
@@ -53,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 3 | M1 | 456b7be22340360facd6754ccd05e84bc3352ff3 | 8220a2e6e6b532e0ee4f0b4c8cf6b69b797ae483:456b7be22340360facd6754ccd05e84bc3352ff3 | CLEAN (sonnet, scoped CI fix: link-failure tests) |
 | A | 1 | M2 | 45c59a68b | 9d35f00a:45c59a68b | CHANGES: 2 MAJOR, 3 MINOR (F1 shell target, F2 dir named `default` as parent, F3 own dir `default`, F4 audit target, F5 double resolve; all fixed in the next M2 commit) |
 | B | 1 | M2 | 45c59a68b | 9d35f00a:45c59a68b | CLEAN (1 MINOR: cycle 10 red by mutation, no fix needed) |
+| A | 2 | M2 (scoped, 45c59a68b..87425df21) | 87425df21 | - | CHANGES: 1 MAJOR, 3 MINOR (F1 scope keyed by the ref `default`: fixed, root kept apart from dir names; F3 shell-only parent wording: fixed; F4 scope check on the parent target: fixed; F2 dir named `default` excluded from the neighbourhood: not changed, carried to M3) |
 
 ## Declined review findings
 
@@ -69,4 +70,5 @@ None.
 
 ## Follow-ups not done
 
+- M3: M2 review A round 2 F2 (MINOR): a live worktree directory named `default` is hard-excluded as a child, sibling and parent holder (`worktree_parent.rs` ~238, `d != DEFAULT_NAME`), so `neighbourhood` contradicts a recorded link for it and `send_parent_input` from it refuses "has no parent". Behaviour unchanged in M2. Decide in M3: reserve the name `default` (document it, refuse creating a worktree named `default`) or key the neighbourhood on the link.
 - M3: review A round 2 MINOR: an MCP create with no parent no longer calls `record(..., None)`, which used to retire a stale id/link under a reused directory name (ops.rs ~974). Decide in M3.

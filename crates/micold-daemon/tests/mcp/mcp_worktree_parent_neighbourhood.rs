@@ -6,7 +6,7 @@
 //! `mcp_cross_session`.
 
 use crate::mcp_support::{add_worktree, sid};
-use crate::mcp_worktree_parent_visibility::{Fixture, A, B, C, DEFAULT, P, X, Y};
+use crate::mcp_worktree_parent_visibility::{session_arg, Fixture, A, B, C, DEFAULT, P, X, Y};
 
 use micold_core::worktree_parent::ParentChoice;
 use serde_json::{json, Value};
@@ -323,4 +323,49 @@ async fn a_parent_directory_named_default_lists_its_own_sessions() {
         !refs(&root["children"]).contains(&"K".to_string()),
         "{root}"
     );
+}
+
+/// Review A round 2, F1: a worktree directory named `default`, as the caller's own or as its
+/// recorded parent, never grants the project root: the root's session is neither listed nor
+/// addressed, and `list_worktrees` has no root row.
+#[tokio::test]
+async fn a_directory_named_default_never_grants_the_project_roots_sessions() {
+    let f = Fixture::with(&[("default", 16, true), ("K", 17, true)], &[]).await;
+    f.state.record_worktree_parent(
+        f._project.path(),
+        "K",
+        Some(&ParentChoice::Worktree("default".into())),
+    );
+    for caller in [16, 17] {
+        let listed = f.call(caller, "list_sessions", json!({})).await;
+        let ids: Vec<&str> = listed["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["ref"].as_str().unwrap())
+            .collect();
+        assert!(!ids.contains(&id(DEFAULT).as_str()), "{caller}: {listed}");
+        let root = id(DEFAULT);
+        for (tool, args) in [
+            ("get_session", session_arg(DEFAULT)),
+            ("read_session_output", session_arg(DEFAULT)),
+            ("send_session_input", json!({"session": root, "text": "hi"})),
+            ("stop_session", session_arg(DEFAULT)),
+        ] {
+            assert_eq!(
+                f.error_category(caller, tool, args.clone()).await,
+                "not_found",
+                "{caller}: {tool} {args}"
+            );
+        }
+        let worktrees = f.call(caller, "list_worktrees", json!({})).await;
+        assert!(
+            worktrees["worktrees"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|w| w["path"].as_str().unwrap().contains(".claude/worktrees")),
+            "{caller}: {worktrees}"
+        );
+    }
 }
