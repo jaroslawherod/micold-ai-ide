@@ -2,8 +2,7 @@
 //! `[orchestrator_link] enabled = true` dials the local orchestrator and is listed `online`; with
 //! no link configured nothing is spawned, opened or logged.
 
-use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -17,10 +16,9 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::orchestrator_link::spawn;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
-use tracing_subscriber::fmt::MakeWriter;
 
 use crate::support::{record_when, within, Orchestrator};
-use crate::{config, link_to, FakeOrchestrator};
+use crate::{config, link_to, Captured, FakeOrchestrator};
 
 async fn status_is(handle: &micold_daemon::orchestrator_link::LinkHandle, want: LinkStatus) {
     within("the status settles", async {
@@ -66,38 +64,13 @@ async fn a_daemon_started_before_the_orchestrator_links_without_a_restart() {
     status_is(&handle, LinkStatus::Linked).await;
 }
 
-#[derive(Clone, Default)]
-struct Captured(Arc<Mutex<Vec<u8>>>);
-
-impl io::Write for Captured {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> MakeWriter<'a> for Captured {
-    type Writer = Captured;
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
-    }
-}
-
 /// FR-010, SC-005: no table, a disabled table or an empty `socket`: no task, no socket, no log.
 #[tokio::test]
 async fn a_daemon_with_no_link_configured_spawns_nothing_opens_nothing_and_logs_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("orchestrator.sock");
     let fake = FakeOrchestrator::bind(&socket);
-    let captured = Captured::default();
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(captured.clone())
-        .with_ansi(false)
-        .with_max_level(tracing::Level::TRACE)
-        .finish();
+    let captured = Captured::for_this_thread();
     let disabled = format!(
         "[orchestrator_link]\nenabled = false\nsocket = \"{}\"\n",
         socket.display()
@@ -105,11 +78,9 @@ async fn a_daemon_with_no_link_configured_spawns_nothing_opens_nothing_and_logs_
     let tasks_before = tokio::runtime::Handle::current()
         .metrics()
         .num_alive_tasks();
-    tracing::subscriber::with_default(subscriber, || {
-        for table in [None, Some(disabled.as_str()), Some("[orchestrator_link]\n")] {
-            assert!(spawn(&config(table)).is_none(), "{table:?}");
-        }
-    });
+    for table in [None, Some(disabled.as_str()), Some("[orchestrator_link]\n")] {
+        assert!(spawn(&config(table)).is_none(), "{table:?}");
+    }
     assert_eq!(
         tokio::runtime::Handle::current()
             .metrics()
@@ -117,13 +88,10 @@ async fn a_daemon_with_no_link_configured_spawns_nothing_opens_nothing_and_logs_
         tasks_before,
         "no task was spawned"
     );
-    assert!(
-        captured.0.lock().unwrap().is_empty(),
-        "{}",
-        String::from_utf8_lossy(&captured.0.lock().unwrap())
-    );
     let dialled = tokio::time::timeout(Duration::from_millis(300), fake.accept()).await;
     assert!(dialled.is_err(), "a disabled daemon dialled");
+    let log = captured.text();
+    assert!(log.is_empty(), "{log}");
 }
 
 /// An empty `socket` is refused by `config check`, but a daemon that starts with one still starts

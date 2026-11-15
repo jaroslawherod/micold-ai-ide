@@ -59,3 +59,62 @@ failed before the implementation.
 - also from review A: the host endpoint assertion no longer compares against `resolve()` (another
   test sets `XDG_RUNTIME_DIR`: the first scoped gate failed there), `orchestrator_link_is_independent…`
   asserts its error lists are non-empty, a warning when an enabled link's endpoint cannot be resolved.
+
+## Milestone M2 (T016–T020)
+
+### Cycle 6 — the handshake sends are bounded (T017 → T018, FR-011)
+
+- tests: `crates/micold-daemon/tests/orchestrator_dial/stalled.rs`, four tests, one per send
+  (`refuse`, `Accepted`, `Welcome`, `Refused`), each over an 8-byte in-memory pipe the dialer stops
+  reading, on a paused clock. They drive the orchestrator through the new `orchestrator::Detached`
+  (a socket buffers far more than one frame, so it cannot stall a send); the structural seam was
+  added before the tests ran.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator_dial stalled` →
+  `0 passed; 4 failed`, each `panicked at …/support.rs:46:29: the link task ends: nothing within 20s`.
+- green: `send_bounded(framed, item)` in `orchestrator/link.rs`, generic over the codec
+  (`timeout(LIVENESS_DEADLINE, framed.send(item))`, elapsed → `io::ErrorKind::TimedOut`), used for
+  `refuse`, `Accepted` (a timed-out `Accepted` releases the reservation with
+  `claim_failed(Dropped)`), `Welcome` and both `Refused`; the steady loop's two sends use it too →
+  `--test orchestrator_dial` 14 passed, `--test orchestrator` 50 passed.
+- refactor: none beyond the steady loop's sends moving onto the one helper.
+
+### Cycle 7 — sessions survive an outage; the link returns by itself (T016 → T019, FR-008, SC-003)
+
+- tests: `crates/micold-daemon/tests/orchestrator_dial/outage.rs`, three tests on a paused clock:
+  `an_orchestrator_outage_changes_nothing_for_a_session_or_its_client` (scenario 1: a real PTY
+  counting `tick_<n>`, a client viewing it over `server::serve_connection`, a 30 s outage: the session
+  is alive and registered, the client is still connected and gets newer output, `orchestrator link
+  lost` is logged exactly once), `a_daemon_is_online_within_16_s_of_the_orchestrator_returning`
+  (scenario 2), `a_restart_while_linked_is_accepted_as_the_restored_record` (scenario 3: one record,
+  same fields, no `Refused`/`HelloRefused` status ever seen).
+- red: not observed. M1's link task already reads only `DaemonConfig` and its status cell and logs on
+  change, so the tests passed on their first run (`--test orchestrator_dial` 17 passed). Recorded as
+  test-after for behaviour M1 delivered; strength checked with deliberate mutants instead, each
+  restored after (`--test orchestrator_dial outage`):
+  - log every `NotLinked` (drop the `status == self.logged` guard, match `(_, NotLinked)`) →
+    scenario 1 FAILED, `the loss is logged once` `left: 16`;
+  - failure delay `.max(25 s)` in `RetryPolicy::after_failure` → scenario 2 FAILED,
+    `online 21.02s after the return`;
+  - `return` after a lost link (no redial) → scenarios 2 and 3 FAILED, `the status settles: nothing
+    within 20s`.
+  No mutant reaches the session or client half of scenario 1 from the link code: the task holds no
+  `DaemonState`, which is what T019 asks; the half is kept as a regression guard.
+- found while writing it: a thread-local `tracing` subscriber missed the link task's events whenever
+  another outage test ran in parallel (deterministic `left: 0` with the three outage tests, pass
+  alone); `Captured::for_this_thread` in `main.rs` installs one global subscriber that routes each
+  event to its thread's capture. Not a product bug.
+- green: T019 needed no change in `orchestrator_link/mod.rs`.
+- refactor: `Captured` moved from `host.rs` to `main.rs` so both stories share it.
+- quickstart §A step 4, by hand with the real binaries (host daemon, `orchestrator` process, 30 s
+  stop): daemon still running, `orchestrator link lost` logged once, `online 0.6 s after the return`.
+
+### Review A fixes (M2, round 1: CLEAN, 3 MINOR)
+
+- The explicit `claim_failed(Dropped)` on a timed-out `Accepted` (cycle 6) is gone: `link` already
+  releases a still-open reservation through `Registry::closed`, so the stalled-`Accepted` test could
+  not tell the two apart. The release that test sees is `closed`'s.
+- `orchestrator::start` holds the restore, saving thread and `Shared` set-up both `serve` and
+  `Detached::new` use; `Detached`'s comment now says its futures can outlive its saving thread.
+- The no-link test captures with `Captured::for_this_thread` (global subscriber, now at `TRACE`)
+  instead of a thread-local one. `--test orchestrator_dial` 17 passed, `--test orchestrator` 50
+  passed, clippy `-D warnings` clean.

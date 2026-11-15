@@ -8,23 +8,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1725
-- **Worktree branch**: claude/project-thread-9qx3oe
+- **Worktree branch**: claude/project-thread-itbg1f
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: open the M1 PR (title and body in pr-title.md/pr-body.md), review B, merge; then M2 (T016–T020)
+- **Next step**: orchestrator opens the M2 PR from pr-title.md/pr-body.md on claude/project-thread-itbg1f, runs review B, waits on CI and merges; then M3 (T021–T027)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
+| #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | | PR pending (unit done: gate green, review A clean; review B by the orchestrator) |
-| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | pending |
+| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
+| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | PR pending (branch pushed; full gate green at b38d5f3d28c050b447d51114fb8786a22fa53960; review A CLEAN + 3 MINOR fixed) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
@@ -51,16 +52,26 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 2 | M1 | e409f3f94ab32375a0471df628d084758dbe070c | 7dd654c35687f155ee415a77652480b8e758db7a:9b353509ca3082b429e161fcd3ea3bbfae7cbc68 | CLEAN (fix diff, sonnet); later commit only skips the pure dial rules in the no-outbound scan (no_outbound.rs, docs) |
 | Review B | 1 | M1 | 8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | 1f0940a172cbebd59b6fb65d90ab571ce84caf61:8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | CHANGES: 2 MAJOR drift records, 1 MINOR test; all fixed |
 | Review B | 2 | M1 | d7a3d1066f8747ae9388e8609854f959a72baea6 | f90edcff30b590fb73aed5b450becf8325d1114b:d7a3d1066f8747ae9388e8609854f959a72baea6 | CLEAN (fix diff, sonnet) |
+| Review A | 1 | M2 | 2e31bdcd1b62b43879df3a1a9afa37fb0f88858f | bb26161ef2fa2e86022fc2cbb791aab111384099:a199b3c482dad6e2e2c35e8a607dcf758f2ff756 | MINOR-ONLY: CLEAN with 3 MINOR (redundant claim_failed, Detached comment and duplicated set-up, thread-local capture in host test); all fixed, no new round (MINOR only) |
+| Review B | 1 | M2 | d120a5c13b499fc7f04b3d9a923813229864c532 | 43ea938da69a7ebd31566488c5881cbcc07b885c:d120a5c13b499fc7f04b3d9a923813229864c532 | MINOR-ONLY: 2 MINOR declined (orchestrator, sonnet); Verify 7 passed, no plan drift |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | Spec review 1 | none | all six findings fixed |
+| M2 | Review B 1 | F1 MINOR: outage tests' session/client half has no red mutant | log states it; the behaviour predates M2 and the test is a regression guard |
+| M2 | Review B 1 | F2 MINOR: `pub struct Detached` is test-only API | recorded in drift-M2.md; daemon crate is internal, no public API surface |
 
 ## Handover
 
-None. M1 unit finished 2026-11-15: T001–T015 ticked, drift-M1.md and tdd/cycle-log.md written, plan-drift clean, `scripts/gate.sh` green at the pushed tree, review A clean (round 2). Left to the orchestrator: open the PR from pr-title.md/pr-body.md, dispatch review B (conformance), wait for CI, merge, `git merge origin/main`. Environment notes: the disk holds about 30 GB, so the full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` and `cargo-nextest` (installed with `cargo install cargo-nextest --locked`) and `openssh-client` (`ssh-keygen`) on the machine.
+2026-11-15, M1 thread: PR #1971 squash-merged (8921b6167) on green `ci complete` (mutants advisory, red). Review B (orchestrator, sonnet) round 1 CHANGES (2 MAJOR missing drift records, 1 MINOR I/O-test scope; all fixed in d7a3d1066), round 2 CLEAN. origin/main merged back; diff vs main is ledger only. Next: M2 (T016–T020, tier full) in a fresh cloud thread running `/speckit-autopilot resume` on this branch (update the Worktree branch line if the thread's branch differs).
+
+Cloud notes: same as the design handover. Units have no Agent tool: they run review A headless (`claude -p "<prompt>" --agent autopilot-reviewer --model <m> --permission-mode auto --allowedTools "Read,Grep,Glob,Bash(git *),Bash(grep *),Bash(ls *)"`); the orchestrator runs review B (sonnet, rubrics/conformance.md) and a sonnet worker for its fixes. Brief units to record every UNPLANNED path (tests included) in drift-M<K>.md and run plan-drift.sh. Full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`; cargo-nextest and openssh-client may need installing. Open the PR via GitHub MCP from pr-title.md/pr-body.md (attribution block first), draft=false, wait on `ci complete` via `gh api .../commits/<head>/check-runs`, squash with expectedHeadSha, then `git merge origin/main` and check the diff is ledger only.
+
+## Follow-ups not done
+
+- CI "mutants on the diff" is red for reasons outside this flow: on PR #1971 the unmutated baseline failed (exit 4, no mutant tested) because cargo-mutants copies the tree without `.git`, so `micold-core --test main documentation_is_not_read` (`git check-attr`) fails. Likely fix: `--copy-vcs true` in `scripts/mutants-diff.sh`. Reported to the coordinator 2026-11-15 (M2 thread).
 
 ## Open escalation
 
