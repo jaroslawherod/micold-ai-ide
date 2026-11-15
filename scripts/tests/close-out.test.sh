@@ -289,23 +289,22 @@ want_lines "no session list keeps it" "KEEP $r1 no session list given" "$(safe "
 want_lines "a dirty tree keeps it" "KEEP $r1 not verified: uncommitted work: 1 path(s)" "$(safe "$r1" --no-live-sessions)"
 (cd "$r1" && rm new.txt && echo x > new.txt && git add -A && git commit -qm local)
 want_lines "an unmerged commit keeps it" "KEEP $r1 not verified: 1 commit(s) not on origin/main" "$(safe "$r1" --no-live-sessions)"
-FX=""; newrun 43 open; r2="$RUN"; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; unset FX
-want_lines "a run that is not verified keeps it, with the first remaining line" "KEEP $r2 not verified: PR #7 is OPEN" "$(safe "$r2" --no-live-sessions)"
-want_lines "a non-worktree keeps it" "KEEP $tmp/nowhere not a git worktree" "$(safe "$tmp/nowhere" --no-live-sessions)"
 FX=""; newrun 44 twin; r3="$RUN"; unset FX
 (cd "$r3" && cp specs/044-x/autopilot.md specs/044-x/autopilot-2.md && git add -A && git commit -qm two -q && git push -q origin HEAD:main 2>/dev/null)
 want_lines "several ledgers keep it" "KEEP $r3 several ledgers" "$(safe "$r3" --no-live-sessions 2>/dev/null)"
+FX=""; PRS=8 newrun 43 open; r2="$RUN"; pr_json "$d/fx" 8 OPEN > "$d/fx/pr-8.json"; newrun 45 ready; r4="$RUN"; unset FX
+want_lines "a run that is not verified keeps it, with the first remaining line" "KEEP $r2 not verified: PR #8 is OPEN" "$(safe "$r2" --no-live-sessions)"
+want_lines "a non-worktree keeps it" "KEEP $tmp/nowhere not a git worktree" "$(safe "$tmp/nowhere" --no-live-sessions)"
 check "no directory is exit 0 with no lines" 0 '^OK$' bash -c '[ -z "$("$0")" ] && echo OK' "$SR"
 check "an unknown option is exit 2" 2 'unknown option' "$SR" --nope
 
 # US4.3, SC-005: no opt-in, no REMOVE line, nothing removed; US4.4: opt-in, REMOVE only after SAFE
-FX=""; newrun 45 ready; r4="$RUN"; unset FX
 for led in "" "--supervisor-ledger $tmp/absent.md" "--supervisor-ledger $NOAR"; do
   # shellcheck disable=SC2086
   out="$(safe "$r4" "$r2" --no-live-sessions $led)"
   cases=$((cases + 1)); ! grep -q '^REMOVE' <<<"$out" && [ -d "$r4" ] || { failures=$((failures + 1)); echo "FAIL REMOVE without opt-in (${led:-no ledger})"; }
 done
-want_lines "opt-in: a REMOVE request follows each SAFE line only" "$(printf '%s\n' "SAFE $r4" "REMOVE $r4" "KEEP $r2 not verified: PR #7 is OPEN")" \
+want_lines "opt-in: a REMOVE request follows each SAFE line only" "$(printf '%s\n' "SAFE $r4" "REMOVE $r4" "KEEP $r2 not verified: PR #8 is OPEN")" \
   "$(safe "$r4" "$r2" --no-live-sessions --supervisor-ledger "$AR")"
 want_lines "opt-in: a live worktree gets no REMOVE" "KEEP $r4 live session" "$(safe "$r4" --live "$r4" --supervisor-ledger "$AR")"
 cases=$((cases + 1)); [ -d "$r4" ] && [ -d "$r2" ] || { failures=$((failures + 1)); echo "FAIL a worktree disappeared"; }
