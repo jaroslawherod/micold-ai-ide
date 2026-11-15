@@ -185,7 +185,7 @@ MUST NOT fork one-off copies of a widget that a shared primitive already provide
   reuse and the shape of component APIs, not a fixed inventory.
 
 Rationale: A shared component foundation keeps the UI coherent, reduces duplicated and
-divergent behavior, and makes theming and cross-platform fixes apply once rather than
+divergent behavior, and makes theming and browser fixes apply once rather than
 feature-by-feature. Mandating reuse at the principle level prevents the slow accretion of
 inconsistent one-off widgets that is expensive to reconcile later. Requiring typed
 props on top of that matches the React idiom (consistency and discoverability), keeps
@@ -202,7 +202,7 @@ every call site — which itself removes a common excuse to fork a bespoke widge
   PostgreSQL, with owner/tenant recorded on records from the start.
 - **Distribution**: The project is open source under an OSI-approved license. Every release
   MUST provide Linux builds of the daemons and orchestrator as `ghcr.io/jaroslawherod/micold-*`
-  images, and the web client.
+  images built from this monorepo, and the web client.
 - **Dependencies**: Every dependency MUST be vetted for maintenance health and license
   compatibility before adoption. Prefer minimal, well-maintained crates; justify each
   addition against the principles above.

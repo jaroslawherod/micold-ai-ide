@@ -22,6 +22,7 @@ Modified in 2.0.0:
 constitution.md (Principles IV, V, VI, VIII; Technology constraints; TDD and Platform gates;
   Component-reuse gate)
 .specify/templates/tasks-template.md (Principle VI references)
+.specify/templates/plan-template.md (Constitution Check: IV, V, VI, VIII)
 .claude/skills/speckit-autopilot/rubrics/spec.md (Principle VI reference)
 CLAUDE.md (stale `mise run app` macOS-bundle bullet removed)
 ```
