@@ -261,6 +261,44 @@ fn lifecycle_operations_are_idempotent() {
     }
 }
 
+/// #1926: Podman 5.7 (Ubuntu 26.04) removes the container, then fails tearing down the rootless
+/// network namespace ("kill network process: permission denied") and exits non-zero. The
+/// container the user asked to remove is gone, so the remove succeeded; reading "permission
+/// denied" as "you may not use Podman" sent the user to `podman system migrate` for nothing.
+#[test]
+fn a_remove_that_leaves_no_container_succeeds_whatever_the_cleanup_said() {
+    let rt = primed(
+        RuntimeKind::Podman,
+        vec![
+            CommandOutput::err(125, fixture("podman_err_rm_netns_teardown.txt")),
+            CommandOutput::err(125, r#"Error: no such object: "micold-sandbox""#),
+        ],
+    );
+    let id = ContainerId("micold-sandbox".to_string());
+    let removed = rt.remove(&id);
+    assert!(removed.is_ok(), "{removed:?}");
+}
+
+/// #1926's other half: a remove that failed and left the container in place is still a failure,
+/// reported as the runtime classified it.
+#[test]
+fn a_remove_that_leaves_the_container_still_fails() {
+    let rt = primed(
+        RuntimeKind::Podman,
+        vec![
+            CommandOutput::err(125, fixture("podman_err_permission_denied.txt")),
+            CommandOutput::ok(fixture("podman_inspect_container.json")),
+        ],
+    );
+    let err = rt
+        .remove(&ContainerId("micold-sandbox".to_string()))
+        .expect_err("the container is still there");
+    assert!(
+        matches!(err, RuntimeError::PermissionDenied { .. }),
+        "{err:?}"
+    );
+}
+
 /// K-9's other half: idempotence must not swallow a *real* failure. A `stop` that fails because the
 /// daemon is down has to surface, or the client reports success and then cannot reach anything.
 #[test]
