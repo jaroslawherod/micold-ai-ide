@@ -16,6 +16,11 @@ context is what costs. All other rules hold; these add to them.
   `context.md` cap, applied to the orchestrator).
 - **Wait with `hold.sh`** ([waiting.md](waiting.md)), in the thread and in its subagents.
 - **Pass `model`** on every `general-purpose` fallback ([../tasks/dispatch.md](../tasks/dispatch.md)).
+- **Restart small before a long wait.** Before a question that may wait over an hour, a thread above
+  ~150k writes its state (ledger *Handover*, or a doc for a planning thread), commits and pushes,
+  asks the question, and says the answer should start a fresh thread with
+  `/speckit-autopilot resume`: each reply after an idle hour re-writes the whole cache
+  (see `tasks/ask.md` *Restart small*).
 - **Follow-up questions** for a finished thread go to the project chat: a reply after an hour idle
   re-writes the whole cache.
 - **Log usage before resolving.** Call `get_session` on yourself and pipe the JSON to
