@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 2 | M1 | e409f3f94ab32375a0471df628d084758dbe070c | 7dd654c35687f155ee415a77652480b8e758db7a:9b353509ca3082b429e161fcd3ea3bbfae7cbc68 | CLEAN (fix diff, sonnet); later commit only skips the pure dial rules in the no-outbound scan (no_outbound.rs, docs) |
 | Review B | 1 | M1 | 8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | 1f0940a172cbebd59b6fb65d90ab571ce84caf61:8011bd2ae1e7423af4419b4addb7eaa2f4f8a8c1 | CHANGES: 2 MAJOR drift records, 1 MINOR test; all fixed |
 | Review B | 2 | M1 | d7a3d1066f8747ae9388e8609854f959a72baea6 | f90edcff30b590fb73aed5b450becf8325d1114b:d7a3d1066f8747ae9388e8609854f959a72baea6 | CLEAN (fix diff, sonnet) |
+| Review A | 1 | M2 | 2e31bdcd1b62b43879df3a1a9afa37fb0f88858f | bb26161ef2fa2e86022fc2cbb791aab111384099:a199b3c482dad6e2e2c35e8a607dcf758f2ff756 | MINOR-ONLY: CLEAN with 3 MINOR (redundant claim_failed, Detached comment and duplicated set-up, thread-local capture in host test); all fixed, no new round (MINOR only) |
 
 ## Declined review findings
 
