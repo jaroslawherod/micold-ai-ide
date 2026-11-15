@@ -59,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M2 | 1 | diff | b43df5f | same | CHANGES: F1 drift-M2.md, F2 cycle-log, F3 Verify line fixed (docs/prose only, no code change); F4 MINOR declined |
 | Review A | 1 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | MINOR-ONLY (F1 declined: spec fixes the label) |
 | Review A close | 1 | close diff | 8daf568e4 | - | MINOR-ONLY: F1 forge test T032 premise wrong (restored the exact nine-probe assertion; T032, cycle 11, verification finding 5 corrected), F2 test-list U5 names, F3 verification.md front matter marks the pre-remediation verdict, F4 U6 test count; all fixed |
+| Review A close | 2 | fix diff 8daf568e4..921a45008 | 921a45008 | - | CLEAN (sonnet re-review; F1-F4 verified fixed, forge test 1 passed) |
 | Review B | 2 | 1918 | 72a62c75e5bcc199cefd91bf2abacc2f5761a63d | 214dd8fc7e86cdff794143a41473b9a341bca0dc:b43df5f5337ae75a0f0497ec1bf9ad7913c90785 | CLEAN (F1-F3 fixed in specs, Verify 122 passed) |
 | Review A M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CLEAN (3 MINOR, all fixed in 05c383ab7) |
 | Review B M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CHANGES: drift record fixed |
