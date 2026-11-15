@@ -338,3 +338,19 @@ Baseline: suite not run at planning time (build cost; see quickstart Part A). Ap
 - T041 (A19, A26) is a regression guard: green on arrival, as the task says.
 - refactor: the card-state walk of `sidebar_state.rs::a_location_cycling_through_every_card_state_never_moves`
   is the shared `sidebar_fixture::card_state_steps`, which T041's test reuses.
+
+## Cycle 19: full gate fixes
+
+- red: `scripts/gate.sh` -> 4 failed of 13151: `layout_snapshot::the_layout_matches_the_committed_fixture`
+  (`worktree-menu-open`: the row menu is two entries taller, `240.0 304.0` -> `240.0 400.0`),
+  `overlay_registry::the_keyboard_subscription_names_no_surface` (`Message::Overview(card)`,
+  `Message::SidebarGroups(matchcard` named in `ui::subscription`),
+  `root_state_is_shared::component_local_paths_are_pinned_or_moved` (`state.sidebar_drag.held`),
+  and `micold-daemon session_extras::tests::a_signed_commit_succeeds_with_the_delivered_key`
+  (`ssh-keygen` not installed in the container; installed, no code change).
+- green: the snapshot regenerated deliberately (the **Move up** / **Move down** entries); one
+  `menu_key` map (Down, Up, Enter, Space) that `card_menu_key` and `group_menu_key` both turn into
+  their own feature's message, each a single `Some(Message::…(msg))` return, the group one exempt
+  beside the card one; `sidebar_drag.held` pinned in `COMPONENT_LOCAL` by
+  `any_press_lets_go_of_a_row_held_after_a_cancel`. Targeted `--test main` 107 passed,
+  `layout_snapshot` 180 passed.
