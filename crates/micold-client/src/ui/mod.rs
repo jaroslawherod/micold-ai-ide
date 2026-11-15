@@ -1553,9 +1553,13 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     ) {
         subs.push(review_key_listener());
     }
+    // Feature 1786 (C6): an open group menu takes Up, Down, Enter and Space, as a card menu does.
+    if state.sidebar_groups.group_menu.is_some() {
+        subs.push(group_menu_key_listener());
+    }
     // Feature 813 (FR-014, R13): arrow keys move between the cards while the Overview is open.
     // Feature 972 (FR-010): with a card menu open the same keys drive the menu instead.
-    if state.overview.open {
+    if state.overview.open && state.sidebar_groups.group_menu.is_none() {
         subs.push(if state.overview.card_menu.is_some() {
             card_menu_key_listener()
         } else {
@@ -1625,11 +1629,33 @@ fn card_menu_key_listener() -> Subscription<Message> {
     iced::keyboard::listen().filter_map(card_menu_key)
 }
 
-/// The card menu's message for a key: Down and Up move the highlight, Enter and Space run it. The
-/// entry count is the root's to supply (`items: 0` here). A named function for the same `TypeId`
-/// reason as [`escape_message`].
-fn card_menu_key(event: iced::keyboard::Event) -> Option<Message> {
-    use crate::features::overview::Msg;
+/// Up, Down, Enter and Space, heard while a group header's menu is open (feature 1786, C6).
+fn group_menu_key_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(group_menu_key)
+}
+
+/// The group menu's message for a key, as [`card_menu_key`] gives the card menu's. A named
+/// function for the same `TypeId` reason as [`escape_message`].
+fn group_menu_key(event: iced::keyboard::Event) -> Option<Message> {
+    use crate::features::sidebar_group_actions::Msg;
+    let msg = match menu_key(event)? {
+        MenuKey::Moved { forward } => Msg::MenuMoved { forward },
+        MenuKey::Activated => Msg::MenuActivated,
+    };
+    Some(Message::SidebarGroups(msg))
+}
+
+/// What a key does in an open menu that the keyboard drives (features 972, 1786).
+enum MenuKey {
+    /// Down (`forward`) or Up: the highlight moves.
+    Moved { forward: bool },
+    /// Enter or Space: the highlighted entry runs.
+    Activated,
+}
+
+/// Down and Up move a menu's highlight, Enter and Space run it; any other key, or one with a
+/// modifier, is not the menu's.
+fn menu_key(event: iced::keyboard::Event) -> Option<MenuKey> {
     use iced::keyboard::{key::Named, Key};
     let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
         return None;
@@ -1637,17 +1663,22 @@ fn card_menu_key(event: iced::keyboard::Event) -> Option<Message> {
     if !modifiers.is_empty() {
         return None;
     }
-    let msg = match key {
-        Key::Named(Named::ArrowDown) => Msg::CardMenuMoved {
-            forward: true,
-            items: 0,
-        },
-        Key::Named(Named::ArrowUp) => Msg::CardMenuMoved {
-            forward: false,
-            items: 0,
-        },
-        Key::Named(Named::Enter | Named::Space) => Msg::CardMenuActivated,
-        _ => return None,
+    match key {
+        Key::Named(Named::ArrowDown) => Some(MenuKey::Moved { forward: true }),
+        Key::Named(Named::ArrowUp) => Some(MenuKey::Moved { forward: false }),
+        Key::Named(Named::Enter | Named::Space) => Some(MenuKey::Activated),
+        _ => None,
+    }
+}
+
+/// The card menu's message for a key: Down and Up move the highlight, Enter and Space run it. The
+/// entry count is the root's to supply (`items: 0` here). A named function for the same `TypeId`
+/// reason as [`escape_message`].
+fn card_menu_key(event: iced::keyboard::Event) -> Option<Message> {
+    use crate::features::overview::Msg;
+    let msg = match menu_key(event)? {
+        MenuKey::Moved { forward } => Msg::CardMenuMoved { forward, items: 0 },
+        MenuKey::Activated => Msg::CardMenuActivated,
     };
     Some(Message::Overview(msg))
 }

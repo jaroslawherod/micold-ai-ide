@@ -451,6 +451,37 @@ below the last row or anywhere outside the sidebar. If the worktree you are drag
 meanwhile, from another window for example, the drag ends quietly. In each case every row stays
 where it was.
 
+#### Reorder rows and groups
+
+Drag a row within its own list, a group's or the ungrouped one, to put it in another place there;
+the other rows keep their order. To reorder the groups, drag a group's header: the line marks the
+place between two groups, above the group you are over when you are over its upper half (its header
+and the rows it shows) and below it over its lower half. Its rows go with it. Over the ungrouped
+rows a group has no place to land, so nothing is marked there.
+
+Every row's menu and every group's menu also has **Move up** and **Move down**, which move the row
+or the group one place within its list. At the top of the list **Move up** is greyed out, and at the
+bottom **Move down** is.
+
+#### Collapse a group
+
+Click a group header's arrow, or the header itself, to collapse the group: its rows are hidden and
+the header stays, still counting them. Click it again to expand it. The group's menu has
+**Collapse** or **Expand** too. When the app shows you a session whose row is in a collapsed group,
+for example when you step to it with the keyboard, that group opens.
+
+A group header is a stop for Tab. With it focused, Enter or Space collapses or expands it, and the
+Menu key or Shift+F10 opens its menu with the first entry selected: move with the Up and Down
+arrows (greyed-out entries are skipped) and press Enter.
+
+The groups, their names and order, which worktrees each holds and in what order, and which groups
+are collapsed are all kept when you quit and come back. A worktree that was removed meanwhile is
+simply left out; everything else is as you left it.
+
+User groups are the only grouping in the sidebar: nothing is grouped, sorted or moved because of
+what a session is doing. A row's state still shows on the row itself, and a header is always the
+name of a group you made.
+
 ### Agent worktrees
 
 AI coding assistants create worktrees of their own inside your project, in the same
