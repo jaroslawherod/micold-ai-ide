@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ns6vcg
 - **Started**: 2026-11-15
 - **Phase**: spec
-- **Next step**: dispatch spec review round 1 (autopilot-reviewer, opus), fix findings, then clarify unit
+- **Next step**: round-2 spec re-review (orchestrator), then clarify unit
 
 ## Pull requests
 
@@ -31,8 +31,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
-| Spec | 1 | spec.md | d65a0b90b4bab89ddf4da88fcd33c56490018866 | 09cb2cfc0a611043c58abc651afcc426257803e6:d65a0b90b4bab89ddf4da88fcd33c56490018866 | NOT RUN: unit has no Agent tool |
+| --- | --- | --- | --- | --- | --- |
+| Spec | 1 | spec | d3937c8969e34c08a0ce2f78559cde430b5c65f9 | 09cb2cfc0a611043c58abc651afcc426257803e6:d65a0b90b4bab89ddf4da88fcd33c56490018866 | CHANGES: 5 MAJOR 3 MINOR, all fixed |
+| Spec | 2 | spec | d3937c8969e34c08a0ce2f78559cde430b5c65f9 | 1faf1b6e8adebd019dd1d2e6f8675ad1d5a15b12:d3937c8969e34c08a0ce2f78559cde430b5c65f9 | pending |
 
 ## Declined review findings
 
@@ -41,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec written and committed. The round-1 spec review (opus, rubric spec.md) was NOT dispatched: this unit had no `Agent` tool. Next: dispatch it from the orchestrator, act on findings, then the clarify unit.
+Spec round-1 findings fixed (CHANGES recorded). Next: orchestrator dispatches the round-2 scoped re-review (sonnet), then the clarify unit.
 
 ## Open escalation
 
