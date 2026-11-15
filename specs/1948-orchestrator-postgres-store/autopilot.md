@@ -8,16 +8,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-ns6vcg
+- **Worktree branch**: claude/project-thread-8aowf1
 - **Started**: 2026-11-15
-- **Phase**: tasks (written, awaiting review)
-- **Next step**: design PR open; await merge, then M1
+- **Phase**: milestones
+- **Next step**: M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1967 | Design (spec, plan, tasks) | open (draft) | |
+| #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 
 ## Milestones
 
@@ -56,7 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-| #1967 | Design (spec, plan, tasks) | open (draft) | |
+| #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
 
