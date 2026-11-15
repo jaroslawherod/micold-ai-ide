@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1725
-- **Worktree branch**: claude/project-thread-9qx3oe
+- **Worktree branch**: claude/project-thread-itbg1f
 - **Started**: 2026-11-15
 - **Phase**: milestones
 - **Next step**: milestone M2 (T016–T020), in a fresh thread via `/speckit-autopilot resume`
@@ -64,6 +64,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 2026-11-15, M1 thread: PR #1971 squash-merged (8921b6167) on green `ci complete` (mutants advisory, red). Review B (orchestrator, sonnet) round 1 CHANGES (2 MAJOR missing drift records, 1 MINOR I/O-test scope; all fixed in d7a3d1066), round 2 CLEAN. origin/main merged back; diff vs main is ledger only. Next: M2 (T016–T020, tier full) in a fresh cloud thread running `/speckit-autopilot resume` on this branch (update the Worktree branch line if the thread's branch differs).
 
 Cloud notes: same as the design handover. Units have no Agent tool: they run review A headless (`claude -p "<prompt>" --agent autopilot-reviewer --model <m> --permission-mode auto --allowedTools "Read,Grep,Glob,Bash(git *),Bash(grep *),Bash(ls *)"`); the orchestrator runs review B (sonnet, rubrics/conformance.md) and a sonnet worker for its fixes. Brief units to record every UNPLANNED path (tests included) in drift-M<K>.md and run plan-drift.sh. Full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`; cargo-nextest and openssh-client may need installing. Open the PR via GitHub MCP from pr-title.md/pr-body.md (attribution block first), draft=false, wait on `ci complete` via `gh api .../commits/<head>/check-runs`, squash with expectedHeadSha, then `git merge origin/main` and check the diff is ledger only.
+
+## Follow-ups not done
+
+- CI "mutants on the diff" is red for reasons outside this flow: on PR #1971 the unmutated baseline failed (exit 4, no mutant tested) because cargo-mutants copies the tree without `.git`, so `micold-core --test main documentation_is_not_read` (`git check-attr`) fails. Likely fix: `--copy-vcs true` in `scripts/mutants-diff.sh`. Reported to the coordinator 2026-11-15 (M2 thread).
 
 ## Open escalation
 
