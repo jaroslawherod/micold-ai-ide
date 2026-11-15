@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | tasks | 2 | design | a3392c6f602d1ccf19b73576fce51cddfc115fb5 | 5304203d510eef87bf8351eb34b6d456f161cfe9:a3392c6f602d1ccf19b73576fce51cddfc115fb5 | CLEAN (sonnet, scoped) |
 | A | 2 | M1 | e265b36a5efb795a3e5b5f4ddea2878008c05b85 | b04e7ce9281b10af5b6f11587a6984cf9c8ff8d7:e265b36a5efb795a3e5b5f4ddea2878008c05b85 | CLEAN (sonnet, scoped; MINOR: no-parent create no longer retires stale ids, carried to M3) |
 | B | 2 | M1 | e265b36a5efb795a3e5b5f4ddea2878008c05b85 | b04e7ce9281b10af5b6f11587a6984cf9c8ff8d7:e265b36a5efb795a3e5b5f4ddea2878008c05b85 | CLEAN (sonnet, scoped; MINOR M3 range fixed) |
+| A | 3 | M1 | 456b7be22340360facd6754ccd05e84bc3352ff3 | 8220a2e6e6b532e0ee4f0b4c8cf6b69b797ae483:456b7be22340360facd6754ccd05e84bc3352ff3 | CLEAN (sonnet, scoped CI fix: link-failure tests) |
 
 ## Declined review findings
 
