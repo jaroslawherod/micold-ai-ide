@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: Draft
+**Status**: Closed 2026-11-15 — shipped in PRs #1841, #1849, #1871, #1892, #1895, #1898, #1908 and the close PR
 
 **Input**: GitHub issue #1724, part of epic #1722 (plan: `specs/orchestrator/`). "New `micold-daemon
 orchestrator` mode that hosts no sessions. It accepts daemon links, keeps the registry (id, kind,

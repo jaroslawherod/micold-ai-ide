@@ -246,6 +246,18 @@ impl FakeDaemon {
         serde_json::from_slice(&frame).expect("a verdict")
     }
 
+    /// Read until the orchestrator closes the connection with no verdict; panics if it stays open
+    /// for [`WITHIN`] (of the test's clock, so a paused one reaches it at once).
+    pub async fn expect_closed_without_verdict(&mut self) {
+        match tokio::time::timeout(WITHIN, self.framed.next())
+            .await
+            .expect("the orchestrator closes the connection")
+        {
+            None | Some(Err(_)) => {}
+            Some(Ok(frame)) => panic!("a verdict nobody asked for: {frame:?}"),
+        }
+    }
+
     /// Announce, expect `Accepted`, and switch to the wire codec.
     pub async fn accepted(mut self, announcement: &LinkAnnouncement) -> LinkedDaemon {
         let verdict = self.announce(announcement).await;

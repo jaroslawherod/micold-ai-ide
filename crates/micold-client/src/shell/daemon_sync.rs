@@ -4640,6 +4640,21 @@ pub(crate) mod tests {
         assert!(sent.is_empty(), "got {sent:?}");
     }
 
+    /// #1724 T047: `on_daemon_event` ends in a `_ => {}` wildcard, which behaves exactly like the
+    /// explicit `LinkPing` arm, so no behavioural test can see that arm deleted. Guard the source:
+    /// the arm must stay, so a new wildcard-swallowed message is a deliberate choice.
+    #[test]
+    fn the_link_ping_arm_is_spelled_out_in_on_daemon_event() {
+        let source = include_str!("daemon_sync.rs");
+        // Built with `concat!` so this test's own text never satisfies the search.
+        let arm = concat!("DaemonMsg::Link", "Ping { .. } => {}");
+        assert_eq!(
+            source.matches(arm).count(),
+            1,
+            "the explicit LinkPing arm is missing from on_daemon_event"
+        );
+    }
+
     /// T039: an `AlreadyRunning` refusal means it runs elsewhere already: nothing is started.
     #[test]
     fn a_resume_refused_as_already_running_starts_nothing() {

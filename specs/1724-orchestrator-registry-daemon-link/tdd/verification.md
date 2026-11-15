@@ -172,3 +172,16 @@ Untested criteria: US5.2 (FR-009). Tests tracing to nothing: `announce::tests::a
   wildcard at line 2392 and the cycle log.
 - `session_extras` failure is environmental (`ssh-keygen` absent); not investigated further.
 - Windows and macOS behavior: Linux is the only supported platform (#1897).
+
+## Close resolution (close unit, after the remediation workers)
+
+Re-run of the checks, not of the audit: the verdict above stands for the history (M1 and M2 were written test-after), and each finding is now cleared or accepted.
+
+- F2, F3, F4 (preamble and `Hello` timeouts, loop exits): new tests in `crates/micold-daemon/tests/orchestrator/link.rs`; five mutants of `link.rs` each turn a test red. `preamble_expired` and its unit test were unused by production code and are deleted (T044).
+- F5: `the_link_ping_arm_is_spelled_out_in_on_daemon_event` guards the arm by source text (the wildcard makes it behaviourally identical); a mutant fails it.
+- F6, F8 to F13, F15, F17: fixed in the daemon orchestrator tests (see T048, T051 to T053).
+- F7: store.rs test module reworked; a mutant fails the replacement.
+- F1: `tdd/cycle-log.md` "Retroactive red" records reds for T003, T004, T005, T011, T012, T017, T020. Accepted deviations: T006 and T010 (no separate break possible: exercised only through the wire suite), T019 and T022 (the client and server matches keep their `_ => {}` wildcard, so no behavioural red exists; the source-text guard of F5 covers the arm), T018 (bumping `PROTOCOL_VERSION` fails the integration test `the_protocol_version_is_81` in `crates/micold-core/tests/protocol_roundtrip.rs`, which pins 82, not a core lib test).
+- F14 (`no_outbound.rs` into `crates/micold-core/tests/`): declined; the scan covers both crates' orchestrator sources and needs the daemon crate's path, so it stays beside the netns proof.
+- F16 (shared announcement builders): declined; the builders live in separate crates' test modules and a shared one would need a new dev-dependency for four lines.
+- F13: the netns proof fails where a tool is missing only when `CI` is set; a developer host skips it with a `::warning::` line, so `mise run gate` is unaffected. `MICOLD_ALLOW_NETNS_SKIP` lifts the CI failure.

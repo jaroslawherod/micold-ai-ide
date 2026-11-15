@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1724
 - **Worktree branch**: claude/project-thread-430lii
 - **Started**: 2026-11-11
-- **Phase**: close
-- **Next step**: close step 3: fix tdd/verification.md findings 1-17 (tasks T044-T054, Phase 9) through autopilot-worker subagents per crate (orchestrator dispatches), re-run tests, then Status, diff review, gate, pr-title/pr-body, push
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
 | #1898 | M5 | merged | da60fabfaa8264ac0b74d9b9deee5865339b694f |
 | #1908 | M6 | merged | 6a02088c387e1c055a2c03802d2f4a998c61a037 |
+| close | Close | opened by the orchestrator | — |
 
 ## Milestones
 
