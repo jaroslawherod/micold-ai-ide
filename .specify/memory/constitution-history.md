@@ -6,6 +6,29 @@ every run read only the principles. Newest report first; prepend the next one he
 ```text
 SYNC IMPACT REPORT
 ==================
+Version change: 1.8.0 → 2.0.0
+Bump rationale: MAJOR — Principle V is replaced (Rust + iced → TypeScript + React Native
+  client over a Rust core) and Principle VI is redefined (three-platform parity → Linux
+  daemons, three-browser client); both are backward-incompatible governance changes. Approved
+  by jaro, 2026-11-14 (issue #1949, part of #1722).
+
+  The web client replaces iced. IV is amended: local mode works offline on one machine with no
+  external service; an opt-in network deployment uses PostgreSQL and GitHub/Google sign-in.
+  VI is rewritten after macOS and Windows were dropped (#1897, PR #1904). VIII's builder-API
+  clause becomes "typed props, React idiom". Technology constraints (Client, Persistence,
+  Distribution) and the Cross-platform gate (now Platform gate) follow.
+
+Modified in 2.0.0:
+constitution.md (Principles IV, V, VI, VIII; Technology constraints; TDD and Platform gates;
+  Component-reuse gate)
+.specify/templates/tasks-template.md (Principle VI references)
+.claude/skills/speckit-autopilot/rubrics/spec.md (Principle VI reference)
+CLAUDE.md (stale `mise run app` macOS-bundle bullet removed)
+```
+
+```text
+SYNC IMPACT REPORT
+==================
 Version change: 1.7.0 → 1.8.0
 Bump rationale: MINOR — a new quality gate (Task-size gate) is added to Development Workflow
   & Quality Gates; no principle is removed or redefined.
