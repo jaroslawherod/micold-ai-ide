@@ -1289,6 +1289,13 @@ had before. A branch without a `_` gets no ticket tag; the app does not guess on
 > only what's already in your repository. Run `git fetch` yourself first if you want the list to
 > be current.
 
+### The name `default` is reserved
+
+`default` is the name of the project folder itself, so no worktree can be created with that folder
+name (whatever its capitals), from the form or from an assistant: the app says the name is reserved
+and creates nothing. A folder already called `default` under `.claude/worktrees/` stays where it
+is, but the assistant tools never treat it as a worktree's parent, child or sibling.
+
 ### When the name you typed is already taken
 
 If you're creating a new branch and the derived name already exists, the form asks what to do

@@ -68,3 +68,22 @@ Baseline: `micold-core --lib` 2149 passed, `micold-daemon --test mcp` 256 passed
 - Tests: `mcp_worktree_parent_neighbourhood::a_directory_named_default_never_grants_the_project_roots_sessions` (F1); `mcp_cross_session::a_parent_running_only_a_shell_is_refused_as_having_no_ai_cli_session` (F3). F4 adds a check the parent always passes today, so no test can make it fail; the existing delivery tests cover its line.
 - Red (tests in place, `src/mcp/tools.rs` unchanged): `--test mcp` 1 failed (`list_sessions` from the directory named `default` listed the root's session `...0001`); `--test mcp_cross_session` 1 failed (message "has no running session", not "no running AI CLI session (only shell sessions)").
 - Green: `--test mcp` 271, `--test mcp_audit_log` 8, `--test mcp_cross_session` 28 passed. First run 27/28: `a_parent_directory_named_default_is_not_the_project_root` started the root's session as the linked caller, which the old scope allowed only through the bug; it now starts it with the full view before linking.
+
+## Cycle 14: the reserved name `default` (D2)
+- Tests: `branch_conflict::{a_worktree_named_default_is_refused_before_anything_is_touched, the_reserved_name_is_explained_in_one_sentence_naming_the_reservation}`; `mcp_create_session::a_worktree_named_default_is_refused_naming_the_reservation` (by branch and by `name`, with and without a session).
+- Red: `--test main branch_conflict`: `E0599 no variant ReservedName`, `E0425 explain_reserved_name` (compile errors).
+- Green: 33 passed in `branch_conflict`; the MCP test passed once the core refusal existed (it went through the same funnel), after a first run whose third case wrongly used `Default`, which `checked_dir_name` already refused with its own message.
+
+## Cycle 15: a create with no parent retires the stale id (review A round 2 MINOR)
+- Test: `mcp_create_session::a_create_without_a_parent_retires_the_stale_id_of_a_reused_name`.
+- Red (ops.rs unchanged): `assertion left != right failed` (the stale `WorktreeId` was kept).
+- Green: `--test mcp_create_session` 36 passed.
+
+## Cycle 16: the link exists before the CLI starts (T015, SC-004)
+- Test: `mcp_create_session::the_link_is_recorded_before_the_new_sessions_cli_starts` (a watcher reads the link the moment the stand-in's launch line appears).
+- Red: not shown: M1's T016 already records the link before the session, so the test passes at once. It is a regression guard, not a red; its power was not mutation-checked (the watcher polls at 1 ms and the stand-in writes its line a few ms after spawn).
+
+## Cycle 17: wording for a parent with a stopped AI CLI session (review A round 3 a)
+- Test: `mcp_cross_session::a_parent_with_a_stopped_ai_cli_session_is_not_described_as_only_shells`.
+- Red: message said "no running AI CLI session (only shell sessions)".
+- Green: `--test mcp_cross_session` 29 passed.

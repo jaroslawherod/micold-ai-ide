@@ -18,7 +18,8 @@ use micold_core::runs::store::RunsFile;
 use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus, RunStep, MAX_RUNS, MIN_RUNS};
 use micold_core::session::{AiCli, SessionId};
 use micold_core::worktree::{
-    explain_directory_taken, remove_worktree, remove_worktree_dir, CreateError, CreateMode,
+    explain_directory_taken, explain_reserved_name, remove_worktree, remove_worktree_dir,
+    CreateError, CreateMode,
 };
 
 use crate::catalog::Catalog;
@@ -532,6 +533,7 @@ fn worktree_reason(failure: ops::CreateFailure, branch: &str) -> String {
             // A run's branch is always new: one that exists already is left as it is.
             CreateError::SituationChanged => format!("the branch {branch} already exists"),
             CreateError::DuplicateDir { dir } => explain_directory_taken(&dir).to_string(),
+            CreateError::ReservedName { dir } => explain_reserved_name(&dir),
             CreateError::RolledBack(stderr) => {
                 format!("git failed to create the worktree: {}", stderr.trim())
             }

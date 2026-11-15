@@ -971,15 +971,15 @@ pub async fn create_worktree_with_session(
     let setup = create_worktree(state, project.clone(), names, mode, progress)
         .await
         .map_err(WorktreeStartFailure::Create)?;
-    // Before the session starts, so the agent never runs in a worktree without its link.
-    if let Some(parent) = definition.parent {
-        state
-            .try_record_worktree_parent(&project, &dir_name, Some(parent))
-            .map_err(|e| WorktreeStartFailure::Link {
-                dir_name: dir_name.clone(),
-                error: e.to_string(),
-            })?;
-    }
+    // Before the session starts, so the agent never runs in a worktree without its link. Recorded
+    // with no parent too: that retires the id and link a reused directory name still held, and
+    // mints the worktree its own id (spec 1857, FR-001).
+    state
+        .try_record_worktree_parent(&project, &dir_name, definition.parent)
+        .map_err(|e| WorktreeStartFailure::Link {
+            dir_name: dir_name.clone(),
+            error: e.to_string(),
+        })?;
     create_session_with_prompt(
         state,
         NewSession {

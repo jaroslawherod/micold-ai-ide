@@ -24,8 +24,8 @@ use micold_core::protocol::messages::{
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
-    branch_candidates, explain_directory_taken, parse_worktrees, preflight, CreateError,
-    CreateProgressEvent,
+    branch_candidates, explain_directory_taken, explain_reserved_name, parse_worktrees, preflight,
+    CreateError, CreateProgressEvent,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -3035,6 +3035,9 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
             explain_directory_taken(&dir).to_string(),
             None,
         ),
+        CreateError::ReservedName { dir } => {
+            (ErrorKind::InvalidInput, explain_reserved_name(&dir), None)
+        }
         CreateError::RolledBack(stderr) => (
             ErrorKind::GitFailed,
             "git failed to create the worktree".into(),

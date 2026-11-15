@@ -1180,3 +1180,98 @@ async fn a_link_that_cannot_be_written_names_the_worktree_and_starts_no_session(
     assert!(s.worktree_dirs().contains(&"feat-u".to_string()));
     assert_eq!(s.session_ids(), sessions, "no session started");
 }
+
+/// SC-004, US4.1: at the instant the new session's CLI is launched, its parent link is already
+/// recorded. The stand-in writes its launch line as its first act; a watcher reads the link the
+/// moment that line appears, so a link recorded after the session started would be missed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_link_is_recorded_before_the_new_sessions_cli_starts() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_first_prompt_bound(READY_BOUND);
+    let state = Arc::clone(&s.state);
+    let project = s.project.path().to_path_buf();
+    let launches = s.bin.path().join("copilot.launches");
+    let watcher = tokio::spawn(async move {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !launches.exists() {
+            assert!(Instant::now() < deadline, "the CLI never started");
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        state.worktree_parent_views(&project).get("feat-s").cloned()
+    });
+    s.worktree_ok(
+        sid(3),
+        json!({"branch": "feat-s", "ai_cli": "copilot", "parent": "default"}),
+    )
+    .await;
+    let seen = watcher.await.unwrap();
+    let seen = seen.expect("the link was not recorded when the CLI started");
+    assert_eq!(seen.name, "default");
+}
+
+/// Spec 1945 D2: `default` is the project folder's name in every tool, so a worktree cannot take
+/// it, by branch or by `name`; nothing is created and the message names the reservation.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_worktree_named_default_is_refused_naming_the_reservation() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let dirs = s.worktree_dirs();
+    for args in [
+        json!({"branch": "default"}),
+        json!({"branch": "feat-d", "name": "default"}),
+        json!({"branch": "feat-d", "name": "default", "ai_cli": "copilot"}),
+    ] {
+        let error = s.worktree_err(args.clone()).await;
+        assert_eq!(error["category"], "invalid_input", "{args}: {error}");
+        let message = error["message"].as_str().unwrap_or_default();
+        assert!(message.contains("is reserved"), "{args}: {error}");
+        assert!(message.contains("project folder"), "{args}: {error}");
+    }
+    assert_eq!(s.worktree_dirs(), dirs, "nothing created");
+    assert_eq!(s.launches("copilot"), 0);
+}
+
+/// A create with no parent still retires a stale id and link under a reused directory name: the
+/// new worktree is a different one, whatever the previous holder of the name was (spec 1857).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_create_without_a_parent_retires_the_stale_id_of_a_reused_name() {
+    use micold_core::naming::DerivedNames;
+    use micold_core::worktree::CreateMode;
+    use micold_core::worktree_parent::ParentChoice;
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project.path();
+    s.state
+        .record_worktree_parent(project, "feat-r", Some(&ParentChoice::Default));
+    s.state.record_worktree_parent(
+        project,
+        "feat-kid",
+        Some(&ParentChoice::Worktree("feat-r".into())),
+    );
+    let stale = s.state.worktree_ids(project)["feat-r"];
+    micold_daemon::ops::create_worktree_with_session(
+        &s.state,
+        project.to_path_buf(),
+        DerivedNames {
+            dir_name: "feat-r".into(),
+            branch: "feat-r".into(),
+        },
+        CreateMode::NewBranch,
+        None,
+        micold_daemon::ops::StartDefinition {
+            cli: AiCli::Copilot,
+            prompt: None,
+            parent: None,
+        },
+    )
+    .await
+    .unwrap_or_else(|e| panic!("create failed: {e:?}"));
+    assert_ne!(s.state.worktree_ids(project)["feat-r"], stale);
+    assert!(
+        !s.state
+            .worktree_parent_views(project)
+            .contains_key("feat-r"),
+        "the stale link is gone"
+    );
+}
