@@ -50,7 +50,7 @@ M1 and M2 touch disjoint files except `deploy/helm/micold/templates/deployment.y
 | IV. Local-First Storage | PASS | Local mode is unchanged: the new flags default to today's paths and the ops listener is off unless an address is given. `file` state on a PVC needs no external service; PostgreSQL stays out (rendering `postgres` fails). |
 | V. TS+RN client, Rust core | PASS | Rust for the daemon changes and the e2e crate; no client code. The `ui` slot is Playwright against the web client when it exists, outside the RN client's own tests. |
 | VI. Linux daemons, web reach | PASS | Linux-only harness; browser matrix declared by the `ui` slot (chromium first). |
-| VII. Documentation | PASS | `docs/development/kube-e2e.md` (FR-018) and chart `README` land with M3 and M1; no end-user surface changes, so no user-guide page (M3 checks `scripts/check-user-guide-updated.sh` accepts a development-docs-only change). |
+| VII. Documentation | PASS | `docs/development/kube-e2e.md` (FR-018) and chart `README` land with M3 and M1; no end-user surface changes, so no user-guide page (M3 (T021) checks `scripts/check-user-guide-updated.sh` accepts a development-docs-only change). |
 | VIII. Reusable UI | PASS (n/a) | No UI. |
 
 No violations; Complexity Tracking is empty.
