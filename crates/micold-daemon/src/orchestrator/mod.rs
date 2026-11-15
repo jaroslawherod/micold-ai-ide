@@ -157,22 +157,33 @@ pub async fn run_with(
     serve(endpoint, clock, store).await
 }
 
+/// The registry `store` holds, restored, and the saving thread that keeps it: what every link
+/// task shares.
+fn start(
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+) -> io::Result<(SaveWorker, Arc<Shared>)> {
+    let registry = Registry::restore(store.load().map_err(io::Error::other)?);
+    let (saving, saves) = SaveWorker::start(store)?;
+    Ok((saving, Arc::new(Shared::new(clock, registry, saves))))
+}
+
 /// An orchestrator with no listener: the caller hands it each connection, which is served by the
 /// same link task `run_with` spawns, on one shared registry. Tests use it for transports a socket
 /// cannot produce, such as a pipe whose reader stops reading.
 pub struct Detached {
     shared: Arc<Shared>,
-    // Dropped after `shared`'s users: see `serve`.
+    // Unlike `serve`'s link tasks, the futures `Detached::serve` returns can outlive this: once it
+    // is dropped, a snapshot they hand over is no longer written.
     _saving: SaveWorker,
 }
 
 impl Detached {
     /// An orchestrator on `clock`, with the registry `store` holds.
     pub fn new(clock: Arc<dyn Clock>, store: Arc<dyn RegistryStore>) -> io::Result<Self> {
-        let registry = Registry::restore(store.load().map_err(io::Error::other)?);
-        let (saving, saves) = SaveWorker::start(store)?;
+        let (saving, shared) = start(clock, store)?;
         Ok(Self {
-            shared: Arc::new(Shared::new(clock, registry, saves)),
+            shared,
             _saving: saving,
         })
     }
@@ -195,7 +206,10 @@ async fn serve(
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
     // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
-    let registry = Registry::restore(store.load().map_err(io::Error::other)?);
+    // Declared before `links`, so dropped after them: when this future ends, the link tasks are
+    // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
+    // writes the registry file after that.
+    let (_saving, shared) = start(clock, store)?;
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {
@@ -208,11 +222,6 @@ async fn serve(
             ))
         }
     };
-    // Declared before `links`, so dropped after them: when this future ends, the link tasks are
-    // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
-    // writes the registry file after that.
-    let (_saving, saves) = SaveWorker::start(store)?;
-    let shared = Arc::new(Shared::new(clock, registry, saves));
     let mut links = tokio::task::JoinSet::new();
     loop {
         while links.try_join_next().is_some() {}

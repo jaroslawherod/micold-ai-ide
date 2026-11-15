@@ -116,10 +116,8 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let accepted = serde_json::to_vec(&LinkVerdict::Accepted).map_err(invalid)?;
-    if let Err(e) = send_bounded(&mut framed, Bytes::from(accepted)).await {
-        shared.update(|registry| registry.claim_failed(link, ClaimFailure::Dropped));
-        return Err(e);
-    }
+    // A timed-out send ends the link; `link` then releases the reservation (`Registry::closed`).
+    send_bounded(&mut framed, Bytes::from(accepted)).await?;
     // From here the frames are the wire protocol's.
     let mut framed = framed.map_codec(|_| DaemonCodec::new());
 

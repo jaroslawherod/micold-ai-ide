@@ -70,12 +70,7 @@ async fn a_daemon_with_no_link_configured_spawns_nothing_opens_nothing_and_logs_
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("orchestrator.sock");
     let fake = FakeOrchestrator::bind(&socket);
-    let captured = Captured::default();
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(captured.clone())
-        .with_ansi(false)
-        .with_max_level(tracing::Level::TRACE)
-        .finish();
+    let captured = Captured::for_this_thread();
     let disabled = format!(
         "[orchestrator_link]\nenabled = false\nsocket = \"{}\"\n",
         socket.display()
@@ -83,11 +78,9 @@ async fn a_daemon_with_no_link_configured_spawns_nothing_opens_nothing_and_logs_
     let tasks_before = tokio::runtime::Handle::current()
         .metrics()
         .num_alive_tasks();
-    tracing::subscriber::with_default(subscriber, || {
-        for table in [None, Some(disabled.as_str()), Some("[orchestrator_link]\n")] {
-            assert!(spawn(&config(table)).is_none(), "{table:?}");
-        }
-    });
+    for table in [None, Some(disabled.as_str()), Some("[orchestrator_link]\n")] {
+        assert!(spawn(&config(table)).is_none(), "{table:?}");
+    }
     assert_eq!(
         tokio::runtime::Handle::current()
             .metrics()
@@ -95,13 +88,10 @@ async fn a_daemon_with_no_link_configured_spawns_nothing_opens_nothing_and_logs_
         tasks_before,
         "no task was spawned"
     );
-    assert!(
-        captured.0.lock().unwrap().is_empty(),
-        "{}",
-        String::from_utf8_lossy(&captured.0.lock().unwrap())
-    );
     let dialled = tokio::time::timeout(Duration::from_millis(300), fake.accept()).await;
     assert!(dialled.is_err(), "a disabled daemon dialled");
+    let log = captured.text();
+    assert!(log.is_empty(), "{log}");
 }
 
 /// An empty `socket` is refused by `config check`, but a daemon that starts with one still starts

@@ -160,7 +160,7 @@ impl Wire {
 pub struct Captured(pub Arc<Mutex<Vec<u8>>>);
 
 impl Captured {
-    /// What this thread logs from now on, at `DEBUG` and above, through one process-wide
+    /// What this thread logs from now on, at every level, through one process-wide
     /// subscriber that hands each event to its thread's capture (and drops it on a thread with
     /// none). A thread-local subscriber misses events whose callsites a parallel test registered
     /// first; a global one does not. A `#[tokio::test]` runtime polls its tasks on its own thread.
@@ -170,7 +170,7 @@ impl Captured {
             let subscriber = tracing_subscriber::fmt()
                 .with_writer(|| ThisThread)
                 .with_ansi(false)
-                .with_max_level(tracing::Level::DEBUG)
+                .with_max_level(tracing::Level::TRACE)
                 .finish();
             tracing::subscriber::set_global_default(subscriber)
                 .expect("the first global subscriber");

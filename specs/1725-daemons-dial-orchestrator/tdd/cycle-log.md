@@ -107,3 +107,14 @@ failed before the implementation.
 - refactor: `Captured` moved from `host.rs` to `main.rs` so both stories share it.
 - quickstart §A step 4, by hand with the real binaries (host daemon, `orchestrator` process, 30 s
   stop): daemon still running, `orchestrator link lost` logged once, `online 0.6 s after the return`.
+
+### Review A fixes (M2, round 1: CLEAN, 3 MINOR)
+
+- The explicit `claim_failed(Dropped)` on a timed-out `Accepted` (cycle 6) is gone: `link` already
+  releases a still-open reservation through `Registry::closed`, so the stalled-`Accepted` test could
+  not tell the two apart. The release that test sees is `closed`'s.
+- `orchestrator::start` holds the restore, saving thread and `Shared` set-up both `serve` and
+  `Detached::new` use; `Detached`'s comment now says its futures can outlive its saving thread.
+- The no-link test captures with `Captured::for_this_thread` (global subscriber, now at `TRACE`)
+  instead of a thread-local one. `--test orchestrator_dial` 17 passed, `--test orchestrator` 50
+  passed, clippy `-D warnings` clean.
