@@ -65,6 +65,8 @@ pub struct DaemonConfig {
     pub startup: Option<Startup>,
     #[serde(default)]
     pub orchestrator: Option<Orchestrator>,
+    #[serde(default)]
+    pub orchestrator_link: Option<OrchestratorLink>,
 }
 
 /// What kind of daemon the file is for; sets defaults and is reported, nothing more.
@@ -276,6 +278,18 @@ pub struct Orchestrator {
     pub cert_file: Option<SecretPath>,
     pub key_file: Option<SecretPath>,
     pub enrollment_token_file: Option<SecretPath>,
+}
+
+/// `[orchestrator_link]` (#1725): whether this daemon dials the orchestrator, and where. Independent
+/// of `[orchestrator]`. Absent or `enabled = false` means no dial, no task and no output.
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OrchestratorLink {
+    /// Dial only when `true`.
+    #[serde(default)]
+    pub enabled: bool,
+    /// The orchestrator's local socket; absent derives it from the daemon's own endpoint.
+    pub socket: Option<PathBuf>,
 }
 
 /// `[git]`.

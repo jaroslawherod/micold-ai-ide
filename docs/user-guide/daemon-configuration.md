@@ -243,6 +243,34 @@ daemon.toml:12:1: `[orchestrator]` needs `enrollment_token_file`, or `cert_file`
 daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https scheme
 ```
 
+### `[orchestrator_link]`
+
+Makes this daemon dial the orchestrator (#1725), so the orchestrator lists it `online`. Independent
+of `[orchestrator]`: neither table needs the other.
+
+```toml
+[orchestrator_link]
+enabled = true                                       # default false
+socket  = "/run/user/1000/micold/orchestrator.sock"  # optional
+```
+
+- `enabled`: the daemon dials only when this is `true`. The default is `false`, and with the table
+  absent the daemon behaves exactly as before: no task, no connection, no extra log line.
+- `socket`: the orchestrator's local socket. Absent, a host daemon dials the orchestrator's own socket
+  (`orchestrator.sock` beside the daemon's socket); the other kinds dial `orchestrator.sock` in their
+  per-user runtime directory.
+
+The daemon never opens a new port for the link: it only connects out. The dial runs in the background,
+so a slow or absent orchestrator never delays a client. A lost link is dialled again by itself.
+
+Rule:
+
+- **L1**: `orchestrator_link.socket` is not empty. Reported at the value.
+
+```text
+daemon.toml:7:10: `orchestrator_link.socket` is empty: give a path, or remove the key to use the default
+```
+
 ### `[session]` and `[network]`
 
 | Key | Default | Meaning |

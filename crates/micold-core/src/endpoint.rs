@@ -52,6 +52,39 @@ pub fn resolve_pinned() -> io::Result<Endpoint> {
     imp::resolve_pinned()
 }
 
+/// The orchestrator's endpoint beside `daemon`'s, under other names, so both can run (#1724).
+pub fn orchestrator_beside(daemon: &Endpoint) -> Endpoint {
+    Endpoint {
+        socket_path: daemon.socket_path.with_file_name("orchestrator.sock"),
+        lock_path: daemon.lock_path.with_file_name("orchestrator.lock"),
+    }
+}
+
+/// The orchestrator's own endpoint: beside the user's daemon endpoint ([`resolve`]).
+pub fn orchestrator_endpoint() -> io::Result<Endpoint> {
+    resolve().map(|daemon| orchestrator_beside(&daemon))
+}
+
+/// The socket a daemon of `kind` dials to reach the orchestrator (#1725, data-model.md): `socket`
+/// when `[orchestrator_link]` sets it; else, for a host daemon, [`orchestrator_endpoint`]; else
+/// `orchestrator.sock` beside the daemon socket of [`resolve_pinned`], where the holder of the SSH
+/// connection puts the remote end of the reverse forward (`ssh`, `container`, `kubernetes`).
+pub fn link_endpoint(
+    kind: crate::daemon_config::Kind,
+    socket: Option<&std::path::Path>,
+) -> io::Result<Endpoint> {
+    if let Some(socket) = socket {
+        return Ok(Endpoint {
+            socket_path: socket.to_path_buf(),
+            lock_path: socket.with_file_name("orchestrator.lock"),
+        });
+    }
+    match kind {
+        crate::daemon_config::Kind::Host => orchestrator_endpoint(),
+        _ => resolve_pinned().map(|daemon| orchestrator_beside(&daemon)),
+    }
+}
+
 /// The default loopback port the sandboxed daemon publishes its control channel on.
 ///
 /// Fixed rather than ephemeral: the client has to know where to dial before the container exists,
@@ -232,6 +265,49 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::daemon_config::Kind;
+
+    fn daemon_at(dir: &str) -> Endpoint {
+        Endpoint {
+            socket_path: PathBuf::from(dir).join("daemon.sock"),
+            lock_path: PathBuf::from(dir).join("daemon.lock"),
+        }
+    }
+
+    #[test]
+    fn the_orchestrator_endpoint_is_beside_the_daemons_under_other_names() {
+        let beside = orchestrator_beside(&daemon_at("/run/micold"));
+        assert_eq!(
+            beside.socket_path,
+            PathBuf::from("/run/micold/orchestrator.sock")
+        );
+        assert_eq!(
+            beside.lock_path,
+            PathBuf::from("/run/micold/orchestrator.lock")
+        );
+    }
+
+    #[test]
+    fn a_configured_socket_wins_for_every_kind() {
+        let socket = std::path::Path::new("/x/o.sock");
+        for kind in [Kind::Host, Kind::Ssh, Kind::Container, Kind::Kubernetes] {
+            assert_eq!(
+                link_endpoint(kind, Some(socket)).unwrap().socket_path,
+                socket
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn without_a_socket_a_host_dials_the_orchestrator_and_the_rest_the_pinned_dir() {
+        let host = link_endpoint(Kind::Host, None).unwrap();
+        assert_eq!(host, orchestrator_endpoint().unwrap());
+        let pinned = orchestrator_beside(&resolve_pinned().unwrap());
+        for kind in [Kind::Ssh, Kind::Container, Kind::Kubernetes] {
+            assert_eq!(link_endpoint(kind, None).unwrap(), pinned, "{kind:?}");
+        }
+    }
 
     #[cfg(unix)]
     #[test]

@@ -3,15 +3,17 @@
 //! are tested exactly. The daemon crate (`micold-daemon::orchestrator`) wires them to a socket.
 
 pub mod announce;
+pub mod dial;
 pub mod liveness;
 pub mod record;
 pub mod registry;
 pub mod store;
 
 pub use announce::{
-    decode_first_frame, refusal_message, FirstFrame, LinkAnnouncement, LinkQuery, LinkVerdict,
-    RefuseReason, MAX_PREAMBLE_FRAME,
+    decode_first_frame, encode_announcement, refusal_message, FirstFrame, LinkAnnouncement,
+    LinkQuery, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
 };
+pub use dial::{jittered, LinkStatus, RetryPolicy};
 pub use liveness::Heartbeat;
 pub use record::{DaemonRecord, Health, TenantId};
 pub use registry::{

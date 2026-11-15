@@ -1482,3 +1482,59 @@ fn kind_serializes_as_the_word_it_parses_from() {
         assert_eq!(serde_json::from_str::<Kind>(&json).unwrap(), kind);
     }
 }
+
+// --- #1725: [orchestrator_link] ---
+
+#[test]
+fn orchestrator_link_defaults_to_off_with_no_socket() {
+    for text in [HOST, SSH, CONTAINER, KUBERNETES] {
+        assert!(ok(text).orchestrator_link.is_none());
+    }
+    let link = ok(&host("[orchestrator_link]\n"))
+        .orchestrator_link
+        .unwrap();
+    assert!(!link.enabled);
+    assert_eq!(link.socket, None);
+}
+
+#[test]
+fn orchestrator_link_reads_enabled_and_socket() {
+    let text = host("[orchestrator_link]\nenabled = true\nsocket = \"/run/o.sock\"\n");
+    let link = ok(&text).orchestrator_link.unwrap();
+    assert!(link.enabled);
+    assert_eq!(link.socket, Some(PathBuf::from("/run/o.sock")));
+}
+
+#[test]
+fn orchestrator_link_an_unknown_key_is_refused_with_its_position() {
+    let text = host("[orchestrator_link]\nenabled = true\nbogus = 1\n");
+    let error = expect(&text, "V1", "bogus", "bogus", 9, 1);
+    assert!(error.message.contains("[orchestrator_link]"), "{error}");
+}
+
+#[test]
+fn orchestrator_link_a_wrong_type_is_refused() {
+    for body in [
+        "[orchestrator_link]\nenabled = \"yes\"\n",
+        "[orchestrator_link]\nsocket = 3\n",
+    ] {
+        assert!(!errors(&host(body)).is_empty(), "{body}");
+    }
+}
+
+#[test]
+fn orchestrator_link_l1_an_empty_socket_is_refused_at_the_key() {
+    let text = host("[orchestrator_link]\nenabled = true\nsocket = \"\"\n");
+    expect(&text, "L1", "empty", "orchestrator_link.socket", 9, 10);
+}
+
+#[test]
+fn orchestrator_link_is_independent_of_the_orchestrator_rules() {
+    // A valid link beside an invalid `[orchestrator]` reports O-rules only; a valid
+    // `[orchestrator]` beside a bad link reports L1 only.
+    let bad_orch =
+        host("[orchestrator_link]\nenabled = true\n[orchestrator]\nurl = \"http://o\"\n");
+    assert!(errors(&bad_orch).iter().all(|e| e.rule.starts_with('O')));
+    let bad_link = host(&format!("{ORCH_PAIR}[orchestrator_link]\nsocket = \"\"\n"));
+    assert!(errors(&bad_link).iter().all(|e| e.rule == "L1"));
+}

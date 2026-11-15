@@ -672,6 +672,31 @@ namespace with no interface up, and again under `strace -e trace=connect`, which
 `orchestrator.sock` and to nothing else. Those runs skip, saying why, where unprivileged user
 namespaces or `strace` are unavailable.
 
+## Linking to an orchestrator (#1725)
+
+A daemon with `[orchestrator_link] enabled = true` dials the orchestrator and is listed `online` there.
+The orchestrator never dials a daemon; this is the daemon's side of that link.
+
+For a host daemon the dial goes straight to the local orchestrator socket (a named pipe on Windows):
+`socket` from the table, else `orchestrator.sock` beside the daemon's own socket. The daemon runs one
+background task, started once its listener is bound and never awaited, so a client is served as fast as
+without it. The task:
+
+1. connects (an absent or closed endpoint is not an error: it waits and tries again);
+2. writes the announcement (id, kind, name, protocol version, capabilities) and reads the verdict;
+3. sends `Hello` and reads `Welcome`;
+4. answers each `LinkPing` with a `LinkPong` of the same nonce. Any frame it receives counts as proof
+   of life; nine seconds of silence, an end of stream or an error is a lost link.
+
+A lost link is dialled again without a restart, after 1, 2, 4, 8, then 15 seconds (the delay of the
+SSH reconnect). The first delay after a lost link may grow by up to 20 %. A refusal waits 15 seconds
+(plus up to 20 %) and does not grow that delay. The task logs a state change once (`orchestrator link
+up`, `orchestrator link lost`, a refusal with its reason), never every retry. It reads only the
+configuration and holds no lock a session waits on, so an orchestrator outage never touches a session.
+
+Container, SSH-host and pod daemons reach the orchestrator through a reverse forward of the connection
+that holds them; that is covered when it lands.
+
 ## Finding the logs and recent errors
 
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
