@@ -40,10 +40,10 @@ None: the verdict reuses `run-status.sh` and `handoff-check.sh` (#1812); the sup
 
 ## Phase 5: User Story 3 - One completion report across runs (P2)
 
-- [ ] T013 [US3] Tests: two verified runs give one entry each (issue, PRs, decisions agent/user, interventions, tokens); open-PR run only under Not done; escalated section; no interventions/tokens give `none` / `unknown`; zero runs and absent supervisor ledger give empty sections, exit 0 and a run that regresses after being reported done appears under Not done (US3.1..3, edge case, FR-008..FR-010, SC-002) in `scripts/tests/close-out.test.sh`
-- [ ] T014 [US3] Implement `scripts/autopilot/close-out-report.sh` per `contracts/close-out-report.md`, classifying each run via `verify-run.sh` (FR-004) (markdown on stdout, `--supervisor-ledger`, `--no-live-sessions`), sourcing `supervisor-ledger.sh`
+- [x] T013 [US3] Tests: two verified runs give one entry each (issue, PRs, decisions agent/user, interventions, tokens); open-PR run only under Not done; escalated section; no interventions/tokens give `none` / `unknown`; zero runs and absent supervisor ledger give empty sections, exit 0 and a run that regresses after being reported done appears under Not done (US3.1..3, edge case, FR-008..FR-010, SC-002) in `scripts/tests/close-out.test.sh`
+- [x] T014 [US3] Implement `scripts/autopilot/close-out-report.sh` per `contracts/close-out-report.md`, classifying each run via `verify-run.sh` (FR-004) (markdown on stdout, `--supervisor-ledger`, `--no-live-sessions`), sourcing `supervisor-ledger.sh`
 
-- [ ] T020 [US3] Tests and implementation: `close-out-report.sh` takes its runs from `runs-of-parent.sh` (#1860), leaves out runs of another parent or none, and names each run's parent (FR-016) in `scripts/tests/close-out.test.sh`
+- [x] T020 [US3] Tests and implementation: `close-out-report.sh` takes its runs from `runs-of-parent.sh` (#1860), leaves out runs of another parent or none, and names each run's parent (FR-016) in `scripts/tests/close-out.test.sh`
 
 **Checkpoint**: one command reports many runs; unmerged runs never appear as completed.
 

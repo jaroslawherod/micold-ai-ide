@@ -15,22 +15,27 @@ chmod +x "$tmp/prstate.sh"
 export AUTOPILOT_PR_STATE="$tmp/prstate.sh"
 VR="$S/verify-run.sh"
 
-# fresh: a clean repo on branch wt with a done ledger (issue 42, kind feature) naming PR 7, merged,
+# fresh: a clean repo on branch $BR (wt) with a done ledger (issue $ISSUE (42), kind feature) naming PR 7
+# (or $PRS), merged, with $DECS (agent) as the Decisions' By cells and $TOKENS as its Tokens field,
 # committed and pushed to origin/wt's main line, and its closed, labelled issue.
 fresh() {
+  local n="${ISSUE:-42}" br="${BR:-wt}" dec
   d="$(new_repo)"; cd "$d/wt" || exit 1; export GH_FIXTURES="$d/fx"
-  mkdir -p specs/042-x
+  [ "$br" = wt ] || git switch -q -c "$br"
+  mkdir -p specs/0$n-x
   {
-    echo "# Autopilot ledger — #42 x"; echo "- **Kind**: feature"; echo "- **Issue**: #42"
-    echo "- **Worktree branch**: wt"; echo "- **Phase**: ${PHASE:-done}"; echo "- **Next step**: handoff"
+    echo "# Autopilot ledger — #$n x"; echo "- **Kind**: feature"; echo "- **Issue**: #$n"
+    echo "- **Worktree branch**: $br"; echo "- **Phase**: ${PHASE:-done}"; echo "- **Next step**: handoff"
+    [ -z "${TOKENS:-}" ] || echo "- **Tokens**: $TOKENS"
     echo; echo "## Pull requests"; echo "| PR | Purpose | Status |"
     for p in ${PRS-7}; do echo "| #$p | x | merged |"; done
-    echo; echo "## Decisions"; echo "| D1 | x |"
+    echo; echo "## Decisions"; echo "| # | Phase | Question | Answer | By | Evidence |"; echo "|---|---|---|---|---|---|"
+    for dec in ${DECS:-agent}; do echo "| 1 | spec | q | a | $dec | e |"; done
     echo; echo "## Open escalation"; echo; echo "None."
-  } > specs/042-x/autopilot.md
+  } > specs/0$n-x/autopilot.md
   git add -A; git commit -qm "record the run"; git push -q origin HEAD:main 2>/dev/null
   for p in ${PRS-7}; do pr_json "$d/fx" "$p" MERGED > "$d/fx/pr-$p.json"; done
-  issue_json CLOSED in-progress= flow:feature > "$d/fx/issue-42.json"
+  issue_json CLOSED in-progress= flow:feature > "$d/fx/issue-$n.json"
 }
 # issue_json <state> <label...>: a label spelled `x=` is omitted (a readable way to say "without x").
 issue_json() {
@@ -175,6 +180,92 @@ cases=$((cases + 1)); [ "$(grep -c 'wt' "$SL")" = 1 ] || { failures=$((failures 
 check "a padded row's count reaches the cap" 0 '^ESCALATE$' fu --session live
 printf '## Follow-ups\n\n| Run | Count | Remaining hash | Check |\n|---|---|---|---|\n| wt |  |  |  |\n' > "$SL"
 check "an empty count reads as 0" 0 '^SEND$' fu --session live
+
+# --- US3, FR-008..FR-010, FR-016, SC-002: close-out-report.sh -------------------------------------------
+CO="$S/close-out-report.sh"
+# newrun <issue> <branch>: a fresh run whose worktree is $RUN; its fixtures join the shared $FX.
+newrun() {
+  ISSUE="$1" BR="$2" fresh; RUN="$d/wt"
+  if [ -z "${FX:-}" ]; then FX="$d/fx"; else cp "$d/fx/"* "$FX/"; fi
+  export GH_FIXTURES="$FX"
+}
+# section <name>: the lines of `## <name>` of the report on stdin.
+section() { awk -v h="## $1" '$0 == h { on = 1; next } /^## / { on = 0 } on'; }
+# report <args...>: the report, run from $tmp.
+report() { ( cd "$tmp" && "$CO" "$@" ); }
+SL="$tmp/sup-report.md"
+printf '%s\n' '## Interventions' '' '| Run | When | What |' '|---|---|---|' \
+  '| second | 2026-11-14 | sent a follow-up about PR #8 |' '| second | 2026-11-15 | resumed the session |' \
+  '| other | 2026-11-15 | not this run |' > "$SL"
+
+# US3.1: two verified runs, one entry each; decisions counted by user and by agent
+FX=""; DECS="user agent agent" TOKENS=1200 newrun 42 first; r1="$RUN"; PRS=8 newrun 43 second; r2="$RUN"; unset FX
+out="$(report "$r1" "$r2" --supervisor-ledger "$SL" --no-live-sessions)"; rc=$?
+cases=$((cases + 1)); [ "$rc" = 0 ] || { failures=$((failures + 1)); echo "FAIL report exit $rc"; }
+want="$(printf '%s\n' '### #42 first' '- PRs: #7 MERGED' '- Decisions: 1 by user, 2 by agent' '- Interventions: none' '- Tokens: 1200' \
+  '### #43 second' '- PRs: #8 MERGED' '- Decisions: 0 by user, 1 by agent' '- Interventions:' \
+  '  - 2026-11-14: sent a follow-up about PR #8' '  - 2026-11-15: resumed the session' '- Tokens: unknown')"
+cases=$((cases + 1)); [ "$(section Completed <<<"$out")" = "$want" ] || { failures=$((failures + 1)); echo "FAIL Completed section:"; section Completed <<<"$out" | sed 's/^/    /'; }
+cases=$((cases + 1)); [ "$(grep '^## ' <<<"$out" | tr '\n' '|')" = '## Completed|## Not done|## Escalated|## Safe to remove|' ] \
+  || { failures=$((failures + 1)); echo "FAIL sections not all present, in order"; }
+cases=$((cases + 1)); [ -z "$(section 'Not done' <<<"$out")" ] && [ -z "$(section Escalated <<<"$out")" ] \
+  || { failures=$((failures + 1)); echo "FAIL a verified run is also listed apart"; }
+
+# US3.2, SC-002: an unmerged PR is under Not done, never Completed
+FX=""; newrun 42 first; r1="$RUN"; pr_json "$d/fx" 7 OPEN > "$FX/pr-7.json"; unset FX
+out="$(report "$r1" --supervisor-ledger "$SL")"
+cases=$((cases + 1)); [ -z "$(section Completed <<<"$out")" ] || { failures=$((failures + 1)); echo "FAIL an open-PR run is under Completed"; }
+cases=$((cases + 1)); [ "$(section 'Not done' <<<"$out")" = "$(printf '%s\n' '### #42 first' '- PRs: #7 OPEN' '- Remaining: PR #7 is OPEN')" ] \
+  || { failures=$((failures + 1)); echo "FAIL Not done section:"; section 'Not done' <<<"$out" | sed 's/^/    /'; }
+
+# a run that regressed after it was reported done moves to Not done
+FX=""; newrun 42 first; r1="$RUN"; unset FX
+check "a verified run is Completed" 0 '^### #42 first$' bash -c '"$0" "$@" | awk "/^## Completed/{on=1;next} /^## /{on=0} on"' "$CO" "$r1"
+pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"
+cases=$((cases + 1)); [ -z "$(section Completed <<<"$(report "$r1")")" ] || { failures=$((failures + 1)); echo "FAIL a regressed run stays Completed"; }
+check "the regressed run is under Not done" 0 'Remaining: PR #7 is OPEN' report "$r1"
+
+# a run with an escalation block is under Escalated with its Question, not under Not done
+FX=""; newrun 42 first; r1="$RUN"; pr_json "$d/fx" 7 OPEN > "$d/fx/pr-7.json"; unset FX
+printf '%s\n' '## Escalations' '' '### first' '- **Category**: 5 Non-convergence' \
+  '- **Question**: Run first is still NOT DONE after 3 follow-ups; how should it proceed?' '- **Recommended**: x' > "$tmp/sup-esc.md"
+out="$(report "$r1" --supervisor-ledger "$tmp/sup-esc.md")"
+cases=$((cases + 1)); [ "$(section Escalated <<<"$out")" = "$(printf '%s\n' '### #42 first' '- PRs: #7 OPEN' '- Run first is still NOT DONE after 3 follow-ups; how should it proceed?')" ] \
+  || { failures=$((failures + 1)); echo "FAIL Escalated section:"; section Escalated <<<"$out" | sed 's/^/    /'; }
+cases=$((cases + 1)); [ -z "$(section 'Not done' <<<"$out")" ] || { failures=$((failures + 1)); echo "FAIL an escalated run is also under Not done"; }
+# a verified run with a stale block stays Completed (precedence)
+pr_json "$d/fx" 7 MERGED > "$d/fx/pr-7.json"
+cases=$((cases + 1)); [ -z "$(section Escalated <<<"$(report "$r1" --supervisor-ledger "$tmp/sup-esc.md")")" ] \
+  || { failures=$((failures + 1)); echo "FAIL a verified run with an old block is Escalated"; }
+
+# errors never abort the report: several ledgers (exit 3) and a non-worktree are one line under Not done
+FX=""; newrun 42 first; r1="$RUN"; unset FX
+cp specs/042-x/autopilot.md specs/042-x/autopilot-2.md; git add -A; git commit -qm two; git push -q origin HEAD:main 2>/dev/null
+out="$(report "$r1" "$tmp/nowhere")"; rc=$?
+cases=$((cases + 1)); [ "$rc" = 0 ] && [ "$(section 'Not done' <<<"$out" | grep -c '^- Remaining: ')" = 2 ] \
+  || { failures=$((failures + 1)); echo "FAIL errored runs: exit $rc"; printf '%s\n' "$out" | sed 's/^/    /'; }
+
+# US3.3, edge: zero runs and an absent supervisor ledger give empty sections, exit 0
+check "no runs is exit 0 with every section" 0 '^## Safe to remove$' report
+check "no runs lists nothing" 0 '^OK$' bash -c '! "$0" | grep -q "^###" && echo OK' "$CO"
+check "an absent supervisor ledger is exit 0" 0 '^## Completed$' report "$r1" --supervisor-ledger "$tmp/absent.md"
+check "an unknown option is exit 2" 2 'unknown option' "$CO" --nope
+
+# FR-016, T020: runs come from runs-of-parent.sh; another parent or none is left out; the parent is named
+FX=""; newrun 42 own; r1="$RUN"; newrun 43 stray; r2="$RUN"; newrun 44 loose; r3="$RUN"; unset FX
+rows="$tmp/rows.json"
+jq -n --arg a "$r1" --arg b "$r2" --arg c "$r3" '{worktrees: [
+  {ref: "wt", path: $a, parent: "sup-1", parent_state: "known"},
+  {ref: "wt", path: $b, parent: "sup-2", parent_state: "known"},
+  {ref: "wt", path: $c}]}' > "$rows"
+out="$(report "$r1" "$r2" "$r3" --parent sup-1 --rows "$rows")"
+cases=$((cases + 1)); [ "$(section Completed <<<"$out")" = "$(printf '%s\n' '### #42 own' '- Parent: sup-1' '- PRs: #7 MERGED' '- Decisions: 0 by user, 1 by agent' '- Interventions: none' '- Tokens: unknown')" ] \
+  || { failures=$((failures + 1)); echo "FAIL own run only, with its parent:"; section Completed <<<"$out" | sed 's/^/    /'; }
+cases=$((cases + 1)); ! grep -qE '#43|#44' <<<"$out" || { failures=$((failures + 1)); echo "FAIL a run of another parent or none is reported"; }
+jq -n --arg a "$r1" '{worktrees: [{ref: "wt", path: $a, parent: "sup-1", parent_state: "removed"}]}' > "$rows"
+cases=$((cases + 1)); ! grep -q '^###' <<<"$(report "$r1" --parent sup-1 --rows "$rows")" || { failures=$((failures + 1)); echo "FAIL a removed-parent run is reported"; }
+check "a parent without rows is exit 2" 2 'rows' "$CO" "$r1" --parent sup-1
+check "unreadable rows are exit 2" 2 'unreadable|rows' "$CO" "$r1" --parent sup-1 --rows "$tmp/absent.json"
 
 echo "close-out: $cases cases, $failures failed"
 [ "$failures" -eq 0 ]
