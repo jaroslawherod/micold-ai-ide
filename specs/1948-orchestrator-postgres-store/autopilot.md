@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ygs15x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 review B (orchestrator), PR, merge; then M3 (fresh thread)
+- **Next step**: M2 PR CI and merge; then M3 (fresh thread)
 
 ## Pull requests
 
@@ -56,6 +56,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 1 | M1 diff | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN |
 | M2 A | 1 | M2 diff (code-review high, run by the unit: no Agent tool) | 1c5e8c6bda32fc3ca960ce3a62d7282506a25826 | (see commit) | CHANGES: 0 BLOCKER, 3 MAJOR-ish (non-ASCII URL, SQLITE_BUSY as Refused, save lock upgrade) all fixed with 4 MINOR; 3 declined (see below) |
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
+| M2 B | 1 | M2 | 60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | 5b6a0087c24bfaa47a2eee1e527d2ff41066c334:60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | CHANGES: 1 MAJOR (cycle 2 no red for review A fixes), fixed by red-by-revert evidence; 1 MINOR (db/ blanket skip in no_outbound scan) declined |
+| M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
 
 ## Declined review findings
 
@@ -67,6 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1970 | M1 | merged | bfb463f60 |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
+| M2 | B | F2 MINOR: no_outbound scan skips all of `src/orchestrator/db/` | The pool `connect` is the only dial-like construct there; recorded in drift-M2.md; M4 (PostgreSQL) should narrow it to the `connect` call sites |
 
 ## Handover
 
