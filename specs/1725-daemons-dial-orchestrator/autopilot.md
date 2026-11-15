@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1725
 - **Worktree branch**: claude/project-thread-71llv0
 - **Started**: 2026-11-15
-- **Phase**: plan
-- **Next step**: tasks unit (plan reviewed, 2 rounds, committed; no PR, ships in the design PR)
+- **Phase**: tasks
+- **Next step**: tasks review round 1, then specs-only gate, push, write pr-title.md/pr-body.md (orchestrator opens the design PR)
 
 ## Pull requests
 
@@ -22,8 +22,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | | pending |
+| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | pending |
+| M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
+| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
+| M5 | T038–T040 | light | Drop shows offline, reopen restores online (US3) | | pending |
 
 ## Decisions
+
+- Tasks unit: speckit-analyze HIGH C1/C2 (who sets `enabled`) resolved as an Assumption in spec.md (user/provisioning, #1726/N11); C3 jitter added to FR-006/FR-007; MEDIUMs C4-C11 fixed in tasks.md/plan.md.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

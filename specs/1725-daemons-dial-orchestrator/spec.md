@@ -236,9 +236,10 @@ delay between attempts grows to the cap and the daemon keeps serving clients.
   destination on the client reachable from the remote, and its remote endpoint MUST be a Unix socket in the daemon's owner-only runtime directory, reachable
   only by the daemon's own user. A forward that cannot bind MUST fail the connection with a message.
 - **FR-006**: A lost link MUST be re-dialled by the daemon without a restart, with the delay of
-  `ssh::reconnect::Backoff` (1, 2, 4, 8, 15 s, then 15 s); a successful handshake resets it.
+  `ssh::reconnect::Backoff` (1, 2, 4, 8, 15 s, then 15 s); a successful handshake resets it. The first
+  delay after a lost link may carry up to 20 % jitter (1 to 1.2 s); the capped connect delay carries none.
 - **FR-007**: A refused link (`VersionMismatch`, `AlreadyLinked`, `Hello` refused) MUST be retried at
-  the capped delay, never in a tight loop, and MUST NOT affect any other link or session.
+  the capped delay (15 s, plus up to 20 % jitter), never in a tight loop, and MUST NOT affect any other link or session.
 - **FR-008**: While the orchestrator is unreachable or the link is down, a daemon MUST keep running
   every session, keep serving its clients and keep its own state unchanged; a link failure MUST NOT
   end, pause or restart any session. (Orchestrator FR-010)
@@ -293,6 +294,11 @@ delay between attempts grows to the cap and the daemon keeps serving clients.
   #1730 can supply another.
 - Tests use a rootless `sshd` on loopback (spec 686 R10), real `ssh` and the real orchestrator; no
   cluster is needed because the pod path differs only in how the app reaches the pod's sshd.
+
+- Who sets `[orchestrator_link] enabled = true` in a daemon's `daemon.toml`: the user (host) or the
+  user's provisioning of that daemon. This feature adds the table, the dialer and the forward; writing
+  the table into a provisioned daemon's config belongs to the app and orchestrator integration
+  (#1726, N11 #1957). Tests write it themselves.
 
 ## Out of Scope
 

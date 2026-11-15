@@ -34,7 +34,7 @@ jitter comes from `std::hash::RandomState` (research R5).
 **Storage**: none new. The link status is held in memory and mirrored into the existing `status.json`
 (`micold_core::ssh::status::RemoteStatus`) as one additive optional field.
 
-**Testing**: `scripts/gate.sh` for the gate; core unit tests; `micold-daemon` integration tests in a new
+**Testing**: `mise run gate` for the gate (`scripts/gate.sh` in cloud threads); core unit tests; `micold-daemon` integration tests in a new
 `tests/orchestrator_dial/` binary (real `orchestrator::run_with`, real dialer, temp sockets); the
 `ssh_real_*` suite (off by default, rootless `sshd` on loopback) for the four-kind and drop/return cases.
 
@@ -97,7 +97,7 @@ crates/micold-core/src/daemon_config/validate.rs # + rule L1 (`orchestrator_link
 crates/micold-core/src/endpoint.rs               # + orchestrator_endpoint() (moved from daemon::orchestrator::endpoint)
 crates/micold-core/src/orchestrator/dial.rs      # NEW, pure: LinkStatus, RetryPolicy (next delay, jitter value in)
 crates/micold-core/src/orchestrator/announce.rs  # + encode_announcement (NEW; #1724 has only decode_first_frame), round-trip test
-crates/micold-core/src/ssh/argv.rs               # Forward: relay -> enum {Relay, OrchestratorLink}; bridge_with_link()
+crates/micold-core/src/ssh/argv.rs               # Forward: relay -> enum {Relay, OrchestratorLink}; bridge_with_link(); prepare_link(reach, ..) -> SshCommand (runs `remote prepare-link`)
 crates/micold-core/src/ssh/status.rs             # RemoteStatus + `link: Option<LinkStatusReport>` (serde default)
 crates/micold-daemon/src/orchestrator_link/      # NEW: the dialer task
 ├── mod.rs                                       # spawn(config, state) -> handle; run loop; status watch
@@ -107,7 +107,6 @@ crates/micold-daemon/src/orchestrator/mod.rs     # endpoint() delegates to core
 crates/micold-daemon/src/server.rs               # spawn the dialer after the listener is bound
 crates/micold-daemon/src/remote.rs               # + `remote prepare-link` (ensure dir, unlink orchestrator.sock, print path)
 crates/micold-daemon/src/runtime_status.rs       # write the link status into status.json
-crates/micold-core/src/ssh/argv.rs               # + prepare_link(reach, ..) -> SshCommand (NEW): runs `remote prepare-link`
 crates/micold-core/src/ssh/provision.rs          # ProvisionOptions + `link: Option<LinkRequest>`; a prepare step before the bridge
 crates/micold-core/src/provision/mod.rs          # start_step: run prepare_link, read the path, bridge_with_link
 crates/micold-client/src/daemon.rs               # the three ProvisionOptions construction sites set `link` (app side, minimal)
