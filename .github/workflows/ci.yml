@@ -247,7 +247,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
-            libxcursor-dev libxrandr-dev libxi-dev
+            libxcursor-dev libxrandr-dev libxi-dev strace
+          # The orchestrator's FR-008 proof (crates/micold-daemon/tests/orchestrator/netns.rs) runs
+          # under `unshare -rn` and `strace`, and fails in CI rather than skipping. ubuntu-24.04
+          # restricts unprivileged user namespaces through AppArmor; lift that (absent on 22.04).
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       # Issue #1649: the "Test (full workspace)" step below runs with nextest, matching
       # `mise run gate`/`mise run test` (docs/development/shared-build.md, mise.toml's
       # `github:nextest-rs/nextest` tool comment). Downloaded straight from the project's pinned

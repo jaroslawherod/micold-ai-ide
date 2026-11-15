@@ -143,9 +143,9 @@ description: "Task list for #1724 orchestrator mode: registry, daemon link, hear
 
 ## Phase 8: Polish and cross-cutting
 
-- [ ] T041 [P] Source-level test `crates/micold-daemon/tests/orchestrator/no_outbound.rs`: fails on any whole-word `connect`, `Stream::connect` or `open_pipe` call (word-boundary regex, comments stripped) under `crates/micold-daemon/src/orchestrator/` and `crates/micold-core/src/orchestrator/` (FR-008)
-- [ ] T042 [P] Linux-only test in `crates/micold-daemon/tests/orchestrator/netns.rs` that re-runs the `link_and_list` and `heartbeat` tests (test binary re-executed with `unshare -rn`) (outbound connections blocked) and skips with a stated reason where unprivileged user namespaces are unavailable (FR-008, scope stated in the test)
-- [ ] T043 Run `quickstart.md` Part A and B against the finished build and record the results; confirm `docs/daemon.md` and the user guide describe the whole feature and `docs/SUMMARY.md` links the page
+- [x] T041 [P] Source-level test `crates/micold-daemon/tests/orchestrator/no_outbound.rs`: fails on any whole-word `connect`, `Stream::connect` or `open_pipe` call (word-boundary regex, comments stripped) under `crates/micold-daemon/src/orchestrator/` and `crates/micold-core/src/orchestrator/` (FR-008)
+- [x] T042 [P] Linux-only test in `crates/micold-daemon/tests/orchestrator/netns.rs` that re-runs the `link_and_list` and `heartbeat` tests (test binary re-executed with `unshare -rn`) (outbound connections blocked) and skips with a stated reason where unprivileged user namespaces are unavailable (FR-008, scope stated in the test)
+- [x] T043 Run `quickstart.md` Part A and B against the finished build and record the results; confirm `docs/daemon.md` and the user guide describe the whole feature and `docs/SUMMARY.md` links the page
 
 ## Dependencies and order
 

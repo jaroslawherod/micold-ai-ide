@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1724
-- **Worktree branch**: claude/project-thread-3cm73q
+- **Worktree branch**: claude/project-thread-430lii
 - **Started**: 2026-11-11
-- **Phase**: milestone M5
-- **Next step**: M5 Review A round 2 (sonnet, scoped to the fix diff `review-snapshot.sh diff aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735`) on head d4cb49cb2; Review B does not re-run; then CI and merge of #1898
+- **Phase**: milestone M6
+- **Next step**: M6 Review A round 2 (scoped, sonnet), then PR (orchestrator opens it)
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1871 | M2 | merged | b05740e146295f8e3dde4b5fe2499359aef7d17a |
 | #1892 | M3 | merged | 8bcf7894b91548a647319de47fecca688e0f74af |
 | #1895 | M4 | merged | fa0e41a737c21651652a6954264cefd2d07b1065 |
+| #1898 | M5 | merged | da60fabfaa8264ac0b74d9b9deee5865339b694f |
 
 ## Milestones
 
@@ -31,8 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T017–T025 | full | heartbeat (LinkPing/LinkPong, protocol 81), offline and back online | #1871 | merged |
 | M3 | T026–T030 | full | older-protocol daemon refused and listed needs-update | #1892 | merged |
 | M4 | T031–T035 | full | one live link per id, reservation expiry | #1895 | merged |
-| M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | in progress |
-| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | pending |
+| M5 | T036–T040 | full | registry persisted, restart lists all offline | #1898 | merged |
+| M6 | T041–T043 | full | no-outbound proof (source test, netns), quickstart recorded | #… | in progress |
 
 M1 has 16 tasks (over ~10): Setup+Foundational+US1 cannot split without a milestone with no observable deliverable. Store moved to M5 so M1 stays in-memory. Next step: tasks analyze and review.
 
@@ -74,6 +75,17 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 | Review A | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CHANGES: fixed F1 (CHILDREN lock), F2+F3 (one saving thread, coalesced, joined on stop; red-first unit test), F4 (list after stop); round 2 pending |
 | Review B | 1 | M5 | d4cb49cb237d3deba9aa3c724d5a666a380c5dd1 | aac9cfc19474c5fac0d8f3d0538564de47022218:cb8173dc616777c337ad5fcf63471e7300ecf735 | CLEAN: core orchestrator 82 passed, daemon orchestrator 35 passed, no plan drift for M5 |
 | Review A | 2 | M5 | 35bd7e8cc4660bb44785f66a5ffa553f1c573127 | 276e72832ecb6c3d8857e2357901f971a0a38805:35bd7e8cc4660bb44785f66a5ffa553f1c573127 | CLEAN: round-1 fixes hold; 1 MINOR declined (save thread panic unlogged) |
+| Review A | 1 | M6 | 617dba58e2c2632676ed27cdf65b7245a322615b | 9f8b399a5314ad8c02f6c244229215019acca3bc:617dba58e2c2632676ed27cdf65b7245a322615b | CHANGES: F1 BLOCKER (strace of connect calls added), F2 (probe asserts NetworkUnreachable and an outer loopback listener), F3 (scan covers dialing paths, self-probe allow-listed, docs reworded), F4 (named tests must run), F5 (char literals); round 2 pending |
+| Review B | 1 | M6 | 617dba58e2c2632676ed27cdf65b7245a322615b | 9f8b399a5314ad8c02f6c244229215019acca3bc:617dba58e2c2632676ed27cdf65b7245a322615b | CHANGES: F1 cycle-log M6 red/green added, F2 drift-M6.md added, F3 CI gate to confirm; no re-review of B needed |
+| Review A | 2 | M6 | 059be2672ce0f358268b70e65402b54a188b5e45 | 20fa6aa0b8a4a9348c71053dc8888e8ff0b5eeb6:059be2672ce0f358268b70e65402b54a188b5e45 | pending (orchestrator dispatches, scoped, sonnet) |
+| Review A | 2 | M6 | 059be2672ce0f358268b70e65402b54a188b5e45 | 20fa6aa0b8a4a9348c71053dc8888e8ff0b5eeb6:059be2672ce0f358268b70e65402b54a188b5e45 | CHANGES: F1 MAJOR netns proof skips silently in CI (fixed: strace in apt, apparmor sysctl, panic when CI set), F2 MINOR connect bound (fixed: exact addresses) |
+| Review A | 3 | M6 | db687910594ad7ed4920ee0c51037d13cb16aa80 | e437c697057e1cee88e69b1c9e7968cecc985690:db687910594ad7ed4920ee0c51037d13cb16aa80 | pending |
+| Review A | 3 | M6 | db687910594ad7ed4920ee0c51037d13cb16aa80 | e437c697057e1cee88e69b1c9e7968cecc985690:db687910594ad7ed4920ee0c51037d13cb16aa80 | CLEAN: round-2 F1 (strace + userns in CI, fail not skip when CI set) and F2 hold; PR #1908 |
+| Review B | 2 | M6 | 3d8863f988462297dc567c43a5e20a0eaa36b741 | 3d8863f988462297dc567c43a5e20a0eaa36b741 | CHANGES: F1 MAJOR ci.yml missing from drift-M6.md (fixed) |
+| Review A | 4 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | pending |
+| Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | pending |
+| Review A | 4 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: scoped, drift-M6 row only; PR #1908 |
+| Review B | 3 | M6 | bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | 821a579bd9bc63d145eef5c410ecb2e0953572c4:bd2f5d37ee8d68dd2ee37bed3fc9250c3edebbe7 | CLEAN: ci.yml recorded in drift-M6, plan-drift exits 0; PR #1908 |
 
 ## Declined review findings
 
@@ -92,7 +104,7 @@ Round 1: 3 questions, all agent-resolved from the repo (local socket, JSON file 
 
 ## Handover
 
-None.
+M5 squash-merged 2026-11-14 as da60fabf (PR #1898). CI: all jobs green on 8f2c9a7b first run. Review A round 1 CHANGES (2 MAJOR, 2 MINOR, all fixed in d4cb49cb), round 2 scoped (sonnet) CLEAN with 1 MINOR declined; Review B round 1 CLEAN. origin/main merged into the branch after the merge. Cloud thread branch: `claude/project-thread-3cm73q`. Next thread: `/speckit-autopilot resume #1724`, which starts M6 (T041–T043, no-outbound proof, quickstart recorded) from this branch, then the close unit.
 
 ## Open escalation
 
@@ -100,6 +112,7 @@ None. (The 2026-11-13 question on red main is settled: 1863 was fixed on main, o
 
 ## Follow-ups not done
 
+- jaro (2026-11-14, web client planning thread): the orchestrator should use a relational database for storage, assume PostgreSQL. M5's persistence is behind the `RegistryStore` trait (`crates/micold-core/src/orchestrator/store.rs`), held as `Arc<dyn RegistryStore>`; the JSON store is built only at `crates/micold-daemon/src/orchestrator/mod.rs` (`JsonRegistryStore::in_data_dir`), so a Postgres store can replace it. Not in #1724's scope.
 - M5 re-review MINOR: log a join error of the `orchestrator-save` thread in `crates/micold-daemon/src/orchestrator/save.rs` `Drop` (a panic there would silently stop saving).
 - M4 re-review MINOR: the pre-steady handshake sends in `crates/micold-daemon/src/orchestrator/link.rs` (both `Refused`, `Welcome`) are unbounded, unlike `send_bounded` in the steady state; wrap them in one `LIVENESS_DEADLINE` timeout later.
 - Possibly flaky on CI (seen on PR #1895, passed on re-run): `sandbox_real_no_outbound_still_resolves_names` (outside DNS), `structured_permission::two_sessions_waiting_are_marked_separately`.

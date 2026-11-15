@@ -662,6 +662,16 @@ and `orchestrator registry <path> is unreadable: <reason>`; the file is left unt
 orchestrator keeps no session state: sessions stay on their daemons, which keep running them while
 the orchestrator is down.
 
+The orchestrator never dials a daemon (FR-008): daemons dial it. Its one connect is a start-up probe
+of its own socket (`singleton::acquire`), to refuse a second orchestrator on the same path. Three tests
+hold that. A source scan (`tests/orchestrator/no_outbound.rs`, every platform) fails on a whole-word
+`connect`, `Stream::connect`, `open_pipe` or `dial`, a `connect_*` helper, or a path into a dialing
+module under the orchestrator's source directories, allowing only that probe. On Linux
+(`tests/orchestrator/netns.rs`) the link and heartbeat tests re-run under `unshare -rn`, a network
+namespace with no interface up, and again under `strace -e trace=connect`, which must show a connect to
+`orchestrator.sock` and to nothing else. Those runs skip, saying why, where unprivileged user
+namespaces or `strace` are unavailable.
+
 ## Finding the logs and recent errors
 
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
