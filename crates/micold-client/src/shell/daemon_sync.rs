@@ -3867,10 +3867,26 @@ fn show_session(app: &mut App, id: SessionId, start: Option<ClientMsg>) {
     app.viewed_dirty = true;
     app.selection = None;
     app.display_offset = 0;
+    let process = app
+        .core
+        .workspace
+        .find_session(id)
+        .map(|(_, s)| session_process(s));
     if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), app.active_outbox()) {
         send_pane_size(app, id);
         if let Some(start) = start {
             d.send(start);
+        }
+        // The daemon keeps one attached process per session, and it outlives this window: a shell
+        // tab the previous window left attached is still attached when a restarted window shows
+        // the session on its AI tab. The view would stream the shell's frames to a pane waiting
+        // for the AI CLI's, so it said "Starting…" forever and took no keys (#1934). Stating the
+        // process this window shows makes the two agree.
+        if let Some(process) = process {
+            d.send(ClientMsg::SessionAttachProcess {
+                session: id,
+                process,
+            });
         }
         d.send(ClientMsg::SetViewedSession {
             project,

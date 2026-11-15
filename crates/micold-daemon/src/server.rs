@@ -1525,11 +1525,17 @@ where
                     // the pane keeps streaming whatever it streamed before (FR-007). Silently
                     // ignoring this is what let a Regular Terminal toggle do nothing at all with no
                     // trace anywhere (BUG-001, feature 010-regular-terminal-mode).
-                    tracing::warn!(
-                        session = %session.0,
-                        ?process,
-                        "attach requested for a process the session does not have"
-                    );
+                    //
+                    // A session not hosted yet is no disagreement: a window that shows a session
+                    // names its process right after the start, before the start has spawned
+                    // anything (#1934), and the process the start brings up is the attached one.
+                    if state.session_has_process(session) {
+                        tracing::warn!(
+                            session = %session.0,
+                            ?process,
+                            "attach requested for a process the session does not have"
+                        );
+                    }
                 } else if viewing == Some(session) {
                     // A structured primary has no terminal: its events stream instead (BUG-1256).
                     show_single_view(
