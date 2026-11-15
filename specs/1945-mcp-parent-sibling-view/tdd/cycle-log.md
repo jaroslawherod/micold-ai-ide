@@ -80,10 +80,15 @@ Baseline: `micold-core --lib` 2149 passed, `micold-daemon --test mcp` 256 passed
 - Green: `--test mcp_create_session` 36 passed.
 
 ## Cycle 16: the link exists before the CLI starts (T015, SC-004)
-- Test: `mcp_create_session::the_link_is_recorded_before_the_new_sessions_cli_starts` (a watcher reads the link the moment the stand-in's launch line appears).
-- Red: not shown: M1's T016 already records the link before the session, so the test passes at once. It is a regression guard, not a red; its power was not mutation-checked (the watcher polls at 1 ms and the stand-in writes its line a few ms after spawn).
+- Test: `mcp_create_session::the_link_is_recorded_before_the_new_sessions_cli_starts`. The store is slow (400 ms) to save a catalog with links and then writes the link count to `links.saved`; the `copilot` stand-in copies that file into `copilot.seen` as its first act; the test asserts the marker equals the final count.
+- Red (review A round 1 F1): `try_record_worktree_parent` moved below `create_session_with_prompt` in `ops::create_worktree_with_session`: `assertion left == right failed: the CLI started before its link was saved (left "5", right "6")`. Restored; green: `--test mcp_create_session` passes. (The first version, a 1 ms watcher on the launch line, passed with the record moved too: it had no red.)
 
 ## Cycle 17: wording for a parent with a stopped AI CLI session (review A round 3 a)
 - Test: `mcp_cross_session::a_parent_with_a_stopped_ai_cli_session_is_not_described_as_only_shells`.
 - Red: message said "no running AI CLI session (only shell sessions)".
 - Green: `--test mcp_cross_session` 29 passed.
+
+## Cycle 18: every create path retires the stale id (review A round 1 F2)
+- Tests: `mcp_create_session::{an_unparented_create_retires_the_stale_id_and_survives_a_failed_write, a_no_parent_create_with_a_session_survives_a_failed_link_write}`.
+- Red (before the fix): the second failed with `the worktree's parent was not recorded` on the unwritable store; the first did not compile (`create_unparented_worktree` missing).
+- Green: `--test mcp_create_session` 39 passed.

@@ -441,7 +441,8 @@ async fn run_one(
     };
     let mode = CreateMode::NewBranchAt { start: base_commit };
     if let Err(failure) =
-        ops::create_worktree(&state, project.clone(), run.names.clone(), mode, None).await
+        ops::create_unparented_worktree(&state, project.clone(), run.names.clone(), mode, None)
+            .await
     {
         let reason = worktree_reason(failure, &run.names.branch);
         set(

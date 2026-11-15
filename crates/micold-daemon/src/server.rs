@@ -2094,8 +2094,14 @@ where
                     // operation, so the reply names both, or neither for a missing CLI.
                     let asked = tokio::time::Instant::now();
                     let created = match &session {
-                        None => ops::create_worktree(state, project, names, mode, Some(progress))
-                            .await
+                        None => ops::create_unparented_worktree(
+                            state,
+                            project,
+                            names,
+                            mode,
+                            Some(progress),
+                        )
+                        .await
                             .map(|_setup| None)
                             .map_err(ops::WorktreeStartFailure::Create),
                         Some(definition) => ops::create_worktree_with_session(

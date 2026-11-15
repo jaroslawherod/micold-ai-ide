@@ -12,3 +12,5 @@
 | `specs/1857-worktree-parent/spec.md` | T020: notes that 1945 amends FR-003 and FR-015. |
 | `scripts/tests/agent-tools-parent-docs.test.sh` | T019: the grep check for the three items (neighbourhood tool, parent route, implicit parent) in guide and skill, plus the reserved name. |
 | `specs/1945-mcp-parent-sibling-view/drift-M2.md` | Table header added before the appended rows. |
+| `crates/micold-daemon/src/ops.rs`, `server.rs`, `runs.rs` | Review A round 1 F2: a no-parent create with a session only logs a failed link write; `ops::create_unparented_worktree` (new) records no parent after `create_worktree`, used by the app's no-session create and the runs, so every create path retires a stale id. |
+| `.claude/skills/autopilot-supervisor/SKILL.md`, `specs/1945-mcp-parent-sibling-view/tasks.md` | Review A round 1 F3 (worker prompt line names `send_parent_input` and `neighbourhood`); review B F2 (T015's path). |

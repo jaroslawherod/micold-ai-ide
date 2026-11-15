@@ -183,6 +183,22 @@ pub async fn create_worktree(
     }
 }
 
+/// [`create_worktree`] for a worktree created with no parent: it also retires the id and link a
+/// reused directory name still held and mints the worktree its own id (spec 1857, FR-001), as the
+/// creates that name a parent do. A failed write is logged; the worktree exists either way.
+pub async fn create_unparented_worktree(
+    state: &Arc<DaemonState>,
+    project: PathBuf,
+    names: DerivedNames,
+    mode: CreateMode,
+    progress: Option<ProgressSink>,
+) -> Result<SetupStart, CreateFailure> {
+    let dir_name = names.dir_name.clone();
+    let setup = create_worktree(state, project.clone(), names, mode, progress).await?;
+    state.record_worktree_parent(&project, &dir_name, None);
+    Ok(setup)
+}
+
 /// Delete worktree `dir_name`: refuse when it hosts live sessions and `stop_sessions` is false;
 /// otherwise remove it through git, archive its sessions and kill their processes, and
 /// broadcast. `delete_branch` deletes the branch it had checked out.
@@ -972,14 +988,18 @@ pub async fn create_worktree_with_session(
         .await
         .map_err(WorktreeStartFailure::Create)?;
     // Before the session starts, so the agent never runs in a worktree without its link. Recorded
-    // with no parent too: that retires the id and link a reused directory name still held, and
-    // mints the worktree its own id (spec 1857, FR-001).
-    state
-        .try_record_worktree_parent(&project, &dir_name, definition.parent)
-        .map_err(|e| WorktreeStartFailure::Link {
-            dir_name: dir_name.clone(),
-            error: e.to_string(),
-        })?;
+    // with no parent too, which retires the id and link a reused directory name still held and
+    // mints the worktree its own id (spec 1857, FR-001); only a link the caller asked for must
+    // succeed, a create that asked for none goes on when the write fails.
+    match definition.parent {
+        Some(_) => state
+            .try_record_worktree_parent(&project, &dir_name, definition.parent)
+            .map_err(|e| WorktreeStartFailure::Link {
+                dir_name: dir_name.clone(),
+                error: e.to_string(),
+            })?,
+        None => state.record_worktree_parent(&project, &dir_name, None),
+    }
     create_session_with_prompt(
         state,
         NewSession {

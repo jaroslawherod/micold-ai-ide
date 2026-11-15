@@ -49,7 +49,7 @@ description: "Task list for MCP parent/sibling view, neighbourhood tool and pare
 
 **Goal**: the parent link exists before the child's session starts; the supervisor skill points workers at the parent route.
 
-- [x] T015 [US4] Test (failing) in `crates/micold-daemon/tests/mcp_cross_session.rs`: the new session's stub `claude` snapshots the parent link at start (catalog/app-state file or daemon query) and writes it into its marker; assert the marker holds the link (SC-004, US4.1)
+- [x] T015 [US4] Test (failing) in `crates/micold-daemon/tests/mcp_create_session.rs`: the new session's stub `claude` snapshots the parent link at start (catalog/app-state file or daemon query) and writes it into its marker; assert the marker holds the link (SC-004, US4.1)
 - [x] T016 [US4] (moved to M1, review A-F1) Test in `crates/micold-daemon/tests/mcp_create_session.rs` (it holds the stub-CLI sandbox `tests/mcp` lacks): a create that fails before the worktree exists (missing CLI) records no link (US4.2); a session create that fails after the worktree exists keeps the link (FR-009); an app-path create records none
 - [x] T017 [US4] (moved to M1, review A-F1; a failed link write is a `service_error` naming the worktree, no session started) Add `parent: Option<&ParentChoice>` to `StartDefinition` in `crates/micold-daemon/src/ops.rs`, record only `if let Some(parent)` between worktree create and session create; remove the post-call record for the session branch in `create_with_optional_session`; `crates/micold-daemon/src/server.rs` passes `parent: None` (D5)
 - [x] T018 [US4] User guide: say the link is recorded before the session starts in `docs/user-guide/agent-tools.md`

@@ -55,6 +55,34 @@ impl ProjectStore for LinkRefusingStore {
     }
 }
 
+/// A project store that is slow to save a catalog holding a worktree parent link, and then writes
+/// how many links it holds to `<bin>/links.saved`. A stand-in CLI that reads that file as its first
+/// act sees the newest link only when it was saved before the CLI was spawned (SC-004).
+struct SlowLinkStore(FakeProjectStore, PathBuf);
+
+impl ProjectStore for SlowLinkStore {
+    fn load(&self) -> LoadOutcome {
+        self.0.load()
+    }
+
+    fn save(&self, workspace: &Workspace) -> std::io::Result<()> {
+        let links: usize = workspace.worktree_parents.values().map(|l| l.len()).sum();
+        if links > 0 {
+            std::thread::sleep(Duration::from_millis(400));
+            std::fs::write(self.1.join("links.saved"), links.to_string())?;
+        }
+        self.0.save(workspace)
+    }
+}
+
+/// How a [`Sandbox`]'s catalog store treats worktree parent links.
+#[derive(Clone, Copy, PartialEq)]
+enum Links {
+    Plain,
+    Unwritable,
+    Slow,
+}
+
 /// Stand-in CLIs on a `PATH` that holds nothing else of the user's, a fake home whose Claude and
 /// Copilot records trust the project, a project with worktrees `b` and `gone` (whose directory has
 /// been removed), S1 in the project root and S3 in `b`.
@@ -80,15 +108,33 @@ impl Sandbox {
     }
 
     async fn build(child: bool) -> Self {
-        Self::build_over(child, false).await
+        Self::build_over(child, Links::Plain).await
     }
 
     /// [`Self::new`] over a store that refuses every write holding a parent link.
     async fn with_unwritable_links() -> Self {
-        Self::build_over(false, true).await
+        Self::build_over(false, Links::Unwritable).await
     }
 
-    async fn build_over(child: bool, refuse_links: bool) -> Self {
+    /// [`Self::new`] over a store slow to save a link, with a `copilot` stand-in that records, as
+    /// its first act, the link count the store had saved by then in `copilot.seen`.
+    async fn with_slow_links() -> Self {
+        let s = Self::build_over(false, Links::Slow).await;
+        let dir = s.bin.path().display();
+        let path = s.bin.path().join("copilot");
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\n(cat '{dir}/links.saved' 2>/dev/null || printf none) > '{dir}/copilot.seen'\n\
+                 printf '%s\\n' \"$*\" >> '{dir}/copilot.launches'\nprintf 'ready> '\n\
+                 exec cat >> '{dir}/copilot.input'\n"
+            ),
+        )
+        .unwrap();
+        s
+    }
+
+    async fn build_over(child: bool, links: Links) -> Self {
         let bin = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
@@ -149,11 +195,17 @@ impl Sandbox {
             seeded.push(c);
         }
         let projects = vec![(project.path().to_path_buf(), true, seeded)];
-        let state = if refuse_links {
-            let fake = FakeProjectStore::loaded(workspace_over(projects));
-            state_over_store(Box::new(LinkRefusingStore(fake)), store.path())
-        } else {
-            state_over(projects, store.path())
+        let state = match links {
+            Links::Unwritable => {
+                let fake = FakeProjectStore::loaded(workspace_over(projects));
+                state_over_store(Box::new(LinkRefusingStore(fake)), store.path())
+            }
+            Links::Slow => {
+                let fake = FakeProjectStore::loaded(workspace_over(projects));
+                let slow = SlowLinkStore(fake, bin.path().to_path_buf());
+                state_over_store(Box::new(slow), store.path())
+            }
+            Links::Plain => state_over(projects, store.path()),
         };
         state.set_pi_activity_component(true).unwrap();
         let addr = serve_tool_server(&state, store.path().join("mcp")).await;
@@ -1181,33 +1233,26 @@ async fn a_link_that_cannot_be_written_names_the_worktree_and_starts_no_session(
     assert_eq!(s.session_ids(), sessions, "no session started");
 }
 
-/// SC-004, US4.1: at the instant the new session's CLI is launched, its parent link is already
-/// recorded. The stand-in writes its launch line as its first act; a watcher reads the link the
-/// moment that line appears, so a link recorded after the session started would be missed.
+/// SC-004, US4.1: at the instant the new session's CLI starts, its parent link is already
+/// recorded. The store is slow to save the link and the stand-in reads what was saved as its first
+/// act, so a link recorded after the spawn would not be there yet.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_link_is_recorded_before_the_new_sessions_cli_starts() {
     let _guard = ENV.lock().await;
-    let s = Sandbox::new().await;
+    let s = Sandbox::with_slow_links().await;
     s.state.set_first_prompt_bound(READY_BOUND);
-    let state = Arc::clone(&s.state);
-    let project = s.project.path().to_path_buf();
-    let launches = s.bin.path().join("copilot.launches");
-    let watcher = tokio::spawn(async move {
-        let deadline = Instant::now() + Duration::from_secs(20);
-        while !launches.exists() {
-            assert!(Instant::now() < deadline, "the CLI never started");
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        }
-        state.worktree_parent_views(&project).get("feat-s").cloned()
-    });
     s.worktree_ok(
         sid(3),
         json!({"branch": "feat-s", "ai_cli": "copilot", "parent": "default"}),
     )
     .await;
-    let seen = watcher.await.unwrap();
-    let seen = seen.expect("the link was not recorded when the CLI started");
-    assert_eq!(seen.name, "default");
+    s.launched("copilot", 1).await;
+    // The catalog holds links of its own before the create; the one this create records is the
+    // last write, so what the CLI saw must be the final count.
+    let seen = std::fs::read_to_string(s.bin.path().join("copilot.seen")).unwrap();
+    let saved = std::fs::read_to_string(s.bin.path().join("links.saved")).unwrap();
+    assert_eq!(seen, saved, "the CLI started before its link was saved");
+    assert!(s.state.worktree_parent_views(s.project.path()).contains_key("feat-s"));
 }
 
 /// Spec 1945 D2: `default` is the project folder's name in every tool, so a worktree cannot take
@@ -1274,4 +1319,69 @@ async fn a_create_without_a_parent_retires_the_stale_id_of_a_reused_name() {
             .contains_key("feat-r"),
         "the stale link is gone"
     );
+}
+
+/// A create with no session and no parent (the app's and the runs' path) also retires the stale id
+/// and link of a reused name, and a failing link write does not fail it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_unparented_create_retires_the_stale_id_and_survives_a_failed_write() {
+    use micold_core::naming::DerivedNames;
+    use micold_core::worktree::CreateMode;
+    use micold_core::worktree_parent::ParentChoice;
+    let _guard = ENV.lock().await;
+    for refuse in [false, true] {
+        let s = if refuse {
+            Sandbox::with_unwritable_links().await
+        } else {
+            Sandbox::new().await
+        };
+        let project = s.project.path();
+        let name = if refuse { "feat-w2" } else { "feat-w" };
+        if !refuse {
+            s.state
+                .record_worktree_parent(project, name, Some(&ParentChoice::Default));
+        }
+        let stale = s.state.worktree_ids(project).get(name).copied();
+        micold_daemon::ops::create_unparented_worktree(
+            &s.state,
+            project.to_path_buf(),
+            DerivedNames {
+                dir_name: name.into(),
+                branch: name.into(),
+            },
+            CreateMode::NewBranch,
+            None,
+        )
+        .await
+        .unwrap_or_else(|e| panic!("create failed: {e:?}"));
+        let now = s.state.worktree_ids(project).get(name).copied();
+        assert!(now.is_some() && now != stale, "{name}: id not renewed");
+        assert!(!s.state.worktree_parent_views(project).contains_key(name));
+    }
+}
+
+/// A create with a session and no parent goes on when the record cannot be written.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_no_parent_create_with_a_session_survives_a_failed_link_write() {
+    use micold_core::naming::DerivedNames;
+    use micold_core::worktree::CreateMode;
+    let _guard = ENV.lock().await;
+    let s = Sandbox::with_unwritable_links().await;
+    micold_daemon::ops::create_worktree_with_session(
+        &s.state,
+        s.project.path().to_path_buf(),
+        DerivedNames {
+            dir_name: "feat-x".into(),
+            branch: "feat-x".into(),
+        },
+        CreateMode::NewBranch,
+        None,
+        micold_daemon::ops::StartDefinition {
+            cli: AiCli::Copilot,
+            prompt: None,
+            parent: None,
+        },
+    )
+    .await
+    .unwrap_or_else(|e| panic!("create failed: {e:?}"));
 }

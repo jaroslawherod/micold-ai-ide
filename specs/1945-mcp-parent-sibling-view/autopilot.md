@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1947 | design | MERGED | 00f66d534eedc83b1c08c7614e50f5a32194eaa8 |
 | #1965 | M1 | MERGED | 2d713bcf7f9db032cfd15e828d4e4ead7a81fc2a |
 | #1978 | M2 | MERGED | 1fb7d00e222b74a70a98bc45cc138defe4aa24b8 |
+| #1988 | M3 | open (draft) | - |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
 | M2 | T006–T014 | full | neighbourhood and send_parent_input tools | #1978 | merged |
-| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | - | gate green, awaiting review A/B and PR |
+| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | #1988 | review A/B round 1 fixed, full gate then scoped re-review |
 
 ## Decisions
 
@@ -56,6 +57,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 1 | M2 | 45c59a68b | 9d35f00a:45c59a68b | CLEAN (1 MINOR: cycle 10 red by mutation, no fix needed) |
 | A | 2 | M2 (scoped, 45c59a68b..87425df21) | 87425df21 | - | CHANGES: 1 MAJOR, 3 MINOR (F1 scope keyed by the ref `default`: fixed, root kept apart from dir names; F3 shell-only parent wording: fixed; F4 scope check on the parent target: fixed; F2 dir named `default` excluded from the neighbourhood: not changed, carried to M3) |
 | A | 3 | M2 (scoped, 87425df21..e8805a8c4) | e8805a8c4ff759a20cbe0f614db8520ff3cde832 | - | CLEAN (sonnet, scoped; 3 MINOR carried to M3: shell-only wording, list_resumable_sessions filter and output refs collapse root vs dir named default) |
+| A | 1 | M3 | 122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | fd1153ec754a24b7edd5b870520a5ed52ccf7fae:122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | CHANGES: 1 MAJOR, 2 MINOR (F1 T015 test could not tell before from just after: rewritten with a slow store and a stand-in that reads the saved link first, red by moving the record; F2 no-parent record is log-only, `create_unparented_worktree` for the app and runs; F3 worker prompt line names `send_parent_input`) |
+| B | 1 | M3 | 122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | fd1153ec754a24b7edd5b870520a5ed52ccf7fae:122c0c61d68d84c7bab4dd73daeb5588b897f1c0 | CLEAN, 2 MINOR (cycle 16 red: recorded; T015 path: fixed) |
 
 ## Declined review findings
 

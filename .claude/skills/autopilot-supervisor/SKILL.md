@@ -39,7 +39,7 @@ A run is yours by its worktree's `parent`, never by its name or by what you reme
 
 ### Relay
 
-A worker contacts only its parent (you) and its siblings, so its parent and siblings are the whole of its reach. Its questions and any message for another scope come to you, and you forward them up or down with your own `send_session_input` (FR-017). The supervisor never expects a worker to reach another supervisor's run. A worker asks its supervisor with `send_parent_input` (text only, no session id to look for) and finds its place with `neighbourhood`. Put this in the worker prompt: after `/speckit-autopilot #<n> supervised`, add the line `You can reach only your supervisor and your sibling runs. Send a question or a message for anyone else to your supervisor; it forwards it.`
+A worker contacts only its parent (you) and its siblings, so its parent and siblings are the whole of its reach. Its questions and any message for another scope come to you, and you forward them up or down with your own `send_session_input` (FR-017). The supervisor never expects a worker to reach another supervisor's run. A worker asks its supervisor with `send_parent_input` (text only, no session id to look for) and finds its place with `neighbourhood`. Put this in the worker prompt: after `/speckit-autopilot #<n> supervised`, add the line `You can reach only your supervisor and your sibling runs. Send a question or a message for anyone else to your supervisor with `send_parent_input`; it forwards it. `neighbourhood` shows your parent and siblings.`
 
 ## Start an issue
 
