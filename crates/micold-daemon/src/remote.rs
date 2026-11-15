@@ -155,32 +155,52 @@ fn run_stop() -> i32 {
 fn run_prepare_link() -> i32 {
     #[cfg(unix)]
     {
-        let dir = match micold_core::endpoint::resolve_pinned() {
-            Ok(endpoint) => endpoint
-                .socket_path
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_default(),
-            Err(e) => {
-                eprintln!("micold-daemon remote prepare-link: {e}");
-                return 1;
-            }
-        };
-        match prepare_link_at(&dir) {
-            Ok(path) => {
-                println!("{}", path.display());
-                0
-            }
-            Err(e) => {
-                eprintln!("micold-daemon remote prepare-link: {e}");
-                1
-            }
-        }
+        prepare_link_command(
+            || micold_core::endpoint::resolve_pinned().map(|e| e.socket_path),
+            &mut io::stdout(),
+            &mut io::stderr(),
+        )
     }
     #[cfg(not(unix))]
     {
         eprintln!("micold-daemon remote prepare-link: Unix remotes only");
         1
+    }
+}
+
+/// The command with its pinned socket path resolver injected: the runtime directory is the
+/// socket path's parent; a resolver that fails is reported like any other refusal.
+#[cfg(unix)]
+pub fn prepare_link_command<E: std::fmt::Display>(
+    resolve: impl FnOnce() -> Result<std::path::PathBuf, E>,
+    out: &mut impl io::Write,
+    err: &mut impl io::Write,
+) -> i32 {
+    match resolve() {
+        Ok(socket) => {
+            let dir = socket.parent().map(Path::to_path_buf).unwrap_or_default();
+            prepare_link_report(&dir, out, err)
+        }
+        Err(e) => {
+            let _ = writeln!(err, "micold-daemon remote prepare-link: {e}");
+            1
+        }
+    }
+}
+
+/// Runs `prepare_link_at` and reports it the way the command does: the path as one line on `out`
+/// and exit 0, or the cause on `err` and exit 1.
+#[cfg(unix)]
+pub fn prepare_link_report(dir: &Path, out: &mut impl io::Write, err: &mut impl io::Write) -> i32 {
+    match prepare_link_at(dir) {
+        Ok(path) => {
+            let _ = writeln!(out, "{}", path.display());
+            0
+        }
+        Err(e) => {
+            let _ = writeln!(err, "micold-daemon remote prepare-link: {e}");
+            1
+        }
     }
 }
 

@@ -11,7 +11,7 @@
 
 use std::os::unix::fs::PermissionsExt;
 
-use micold_daemon::remote::prepare_link_at;
+use micold_daemon::remote::{prepare_link_at, prepare_link_command, prepare_link_report};
 
 fn mode(path: &std::path::Path) -> u32 {
     std::fs::symlink_metadata(path)
@@ -76,4 +76,69 @@ fn the_command_takes_no_argument() {
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("usage"));
     assert!(out.stdout.is_empty(), "nothing on stdout but the path");
+}
+
+#[test]
+fn the_report_prints_the_path_as_one_line_and_exits_zero() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("micold-test");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    assert_eq!(prepare_link_report(&dir, &mut out, &mut err), 0);
+    let want = format!("{}\n", dir.join("orchestrator.sock").display());
+    assert_eq!(String::from_utf8(out).unwrap(), want);
+    assert!(err.is_empty());
+}
+
+#[test]
+fn the_report_names_a_refusal_on_stderr_prints_nothing_and_exits_one() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("micold-test");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    assert_eq!(prepare_link_report(&dir, &mut out, &mut err), 1);
+    assert!(out.is_empty());
+    assert!(String::from_utf8(err)
+        .unwrap()
+        .starts_with("micold-daemon remote prepare-link: "));
+}
+
+#[test]
+fn a_socket_path_that_cannot_be_removed_is_an_error_not_a_silent_success() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("micold-test");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::create_dir(dir.join("orchestrator.sock")).unwrap();
+    assert!(prepare_link_at(&dir).is_err());
+}
+
+#[test]
+fn the_command_prepares_the_parent_of_the_resolved_socket_path() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("micold-test");
+    let socket = dir.join("daemon.sock");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = prepare_link_command(|| Ok::<_, String>(socket), &mut out, &mut err);
+    assert_eq!(code, 0);
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        format!("{}\n", dir.join("orchestrator.sock").display())
+    );
+}
+
+#[test]
+fn a_resolver_that_fails_is_reported_and_exits_one() {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = prepare_link_command(
+        || Err::<std::path::PathBuf, _>("no home".to_string()),
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(code, 1);
+    assert!(out.is_empty());
+    assert_eq!(
+        String::from_utf8(err).unwrap(),
+        "micold-daemon remote prepare-link: no home\n"
+    );
 }
