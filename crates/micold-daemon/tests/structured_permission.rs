@@ -1078,6 +1078,23 @@ async fn two_sessions_waiting_are_marked_separately() {
     assert_eq!(daemon.activity(0), ActivitySignal::AwaitingInput);
 }
 
+/// FR-009: a request opened before the daemon registers the session's process, as when the CLI
+/// calls the prompt tool at once, still marks the session waiting once the process registers. The
+/// stand-in's own first call can land in that window, which is what made
+/// `two_sessions_waiting_are_marked_separately` flake: the mark was lost and the session stayed
+/// `Unknown`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_request_opened_before_the_process_registers_still_marks_the_session_waiting() {
+    let daemon = Daemon::new(1).await;
+    let mut a = window(&daemon.state).await;
+    let agent = daemon.agent_call(0, "toolu_early", bash("make")).await;
+    let shown = requested(&mut a).await;
+    assert_eq!(shown.session, daemon.ids[0]);
+    daemon.start(0, "await-stdin\nexit 0\n").await;
+    daemon.activity_is(0, ActivitySignal::AwaitingInput).await;
+    drop(agent);
+}
+
 /// What the CLI is told when its request was withdrawn while it still waited (FR-011).
 const TURN_ENDED: &str = "The turn ended before you answered.";
 

@@ -7470,6 +7470,12 @@ impl DaemonState {
         inner.ended.remove(&id);
         if structured {
             Self::structured_process_started(&mut inner, id);
+            // The CLI can call the prompt tool before its process is registered here: that
+            // request's waiting mark (FR-009, R8) found no live entry and was lost, so it is made
+            // on the fresh one (#1930).
+            if inner.prompts.has_pending(id) {
+                Self::apply_activity(&mut inner, id, ActivityEvent::Hook(HookKind::Notification));
+            }
         }
     }
 
