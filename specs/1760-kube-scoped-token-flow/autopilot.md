@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017, T020 | full | tokens delivered to pod Secret and daemon.toml behind the opt-in (setting only via daemons.json) | #1914 | merged |
 | M2 | T018–T019 | light | form tick and user guide | #1918 | merged |
-| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | built, CI red fixed (V14), awaiting CI |
+| M3 | T021–T027 | full | kube_real_scoped_token and forge harness | #1923 | built; kube-cluster green at 6392eda61, T026 revert red; awaiting merge |
 
 ## Decisions
 
@@ -61,6 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CLEAN (3 MINOR, all fixed in 05c383ab7) |
 | Review B M3 | 1 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CHANGES: drift record fixed |
 | Review B M3 | 2 | M3 | 05c383ab7 | 0de1bab04f24c3342323c227c607c9dbb0065acd:46d84655ac1b0bf7d67e5b1c490dd53d4b748912 | CLEAN |
+| Review A M3 | 2 | V14 fix diff 05c383ab7..7929a0413 | 7929a0413 | - | CLEAN (1 MINOR: config-check contract row, fixed in 715d8488f) |
 
 ## Declined review findings
 
@@ -72,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | Review B r1 | F4 MINOR: tick row is not built by a shared builder | None exists for a checkbox with a help line; `Checkbox` and `FieldGroup` are the shared widgets used. |
 
 ## Handover
+
+2026-11-15 M3 orchestrator (cloud, branch claude/project-thread-9suuus): PR #1923. kube-cluster CI found a production bug from M1 (V14 refused the pod's 0440 startup Secret mount; fixed in 7929a0413, Review A r2 CLEAN) and three harness bugs in the env check (second session replaced the viewed terminals, a literal newline in `tr`, a leading prompt before a fact), fixed in e296b13c7, f1fc4ef50, 6392eda61; kube-cluster green at 6392eda61. T026: a temporary commit with the token keys off (90564a406) turned `kube_real_scoped_token` red at "A: the token is delivered" (left: [], right: ["github-token-kube-run"]), right before the push; reverted. `container daemon end to end (podman, linux)` is red on main too (rootless podman permission at container removal), not this PR's. Next: squash-merge #1923, merge main back, then the close unit.
 
 2026-11-15 M3 red-CI unit (cloud): kube_real_scoped_token pod A never accepted on the socket. Root cause (production, M1): the pod's startup Secret mounts as 0440 (manifest defaultMode, fsGroup), and V14 (`check_files`) is an Error for sandbox kinds on any group/other bit, so the pod daemon refused its own `daemon.toml` naming the token file. Fixed test-first in `daemon_config/files.rs` (Kubernetes: only other bits count); test `v14_a_group_readable_secret_passes_in_a_pod_only`. Unverified on a live cluster (no docker); CI is the check. The diagnose output is empty because `kube_attempt` rolls the pod back before `diagnose` runs; not changed.
 
