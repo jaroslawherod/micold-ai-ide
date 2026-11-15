@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-r3rop0
 - **Started**: 2026-11-11
 - **Phase**: milestones (M6)
-- **Next step**: M6 (T043, T045): dispatch the milestone unit in a fresh thread
+- **Next step**: M6: orchestrator runs review B and the visual pass (T045), full gate left to CI, opens the PR (body in the scratchpad pr-body.md)
 
 ## Pull requests
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
 | M4 | T029–T034 | full | Drag between lists and cancel | #1968 | merged |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #1972 | merged |
-| M6 | T043, T045 | full | Showcase poses and visual pass | #… | pending |
+| M6 | T043, T045 | full | Showcase poses and visual pass | #… | T043 done; T045 pending |
 
 ## Decisions
 
@@ -127,3 +127,5 @@ None.
 - M5 review A MINOR: a reveal that opens a collapsed group marks the layout unsaved after the shell's save step of that message, so it is written with the next message.
 - Seen in the M2 visual pass, not isolated: after Ctrl+Shift+G (New group) the More menu stayed open behind the naming dialog and after Create.
 
+
+M6 unit: T043 done (drop highlight pose; drop marker pose already shipped in M1). Review A inline, no findings. Scoped gate green; full gate not run (disk full, nextest missing; CI validates). T045 and review B left to the orchestrator.

@@ -913,7 +913,7 @@ pub const COMPONENTS: &[Entry] = &[
         component: "GroupHeader",
         variants: &[],
         density: &[],
-        posed: &["with rows", "collapsed, a long name", "empty"],
+        posed: &["with rows", "collapsed, a long name", "empty", "drop highlight"],
         live: &[],
         interactive: false,
         section: Section::Components,

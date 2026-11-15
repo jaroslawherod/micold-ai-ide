@@ -2110,18 +2110,43 @@ pub fn group_header_row<'a>(
     count: usize,
     roles: Roles,
 ) -> Element<'a, Message> {
+    group_header_list(name, collapsed, count, false, roles)
+}
+
+/// The header while a drag is over its group: the sidebar's drop highlight, the secondary container
+/// fill (feature 1786, US3-4, `ui::sidebar::drop_highlight`).
+pub fn group_header_row_highlighted<'a>(
+    name: &str,
+    count: usize,
+    roles: Roles,
+) -> Element<'a, Message> {
+    group_header_list(name, false, count, true, roles)
+}
+
+fn group_header_list<'a>(
+    name: &str,
+    collapsed: bool,
+    count: usize,
+    highlighted: bool,
+    roles: Roles,
+) -> Element<'a, Message> {
     let header = material::GroupHeader::new(name)
         .on_toggle(Message::NoOp)
         .collapsed(collapsed)
         .count(count)
         .roles(roles);
-    material::TreeView::new(vec![header.into()], roles)
+    let mut item: material::TreeItem<'a, Message> = header.into();
+    if highlighted {
+        item = item.row_tint(roles.secondary_container, roles.on_secondary_container);
+    }
+    material::TreeView::new(vec![item], roles)
         .density(crate::features::sidebar::SIDEBAR_DENSITY)
         .label_role(TypeRole::SidebarName)
         .into()
 }
 
-/// `GroupHeader` — a user group's header with rows, collapsed with a long name, and empty
+/// `GroupHeader` — a user group's header with rows, collapsed with a long name, empty, and under a
+/// drag's drop highlight
 /// (feature 1786, FR-002, FR-011).
 pub fn group_header<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
@@ -2137,6 +2162,11 @@ pub fn group_header<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
                 roles,
             ),
             posed("empty", group_header_row("Later", false, 0, roles), roles),
+            posed(
+                "drop highlight",
+                group_header_row_highlighted("Review", 3, roles),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )

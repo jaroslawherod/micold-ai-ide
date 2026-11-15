@@ -10,7 +10,9 @@
 use crate::support::layout as lay;
 use iced::Size;
 use micold_client::features::sidebar::{row_heights, GroupHeaderNode, SidebarEntry};
-use micold_client::showcase::sections::surfaces::{group_header_row, LONG_GROUP_NAME};
+use micold_client::showcase::sections::surfaces::{
+    group_header_row, group_header_row_highlighted, LONG_GROUP_NAME,
+};
 use micold_core::sidebar_layout::UserGroupId;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
@@ -88,6 +90,39 @@ fn a_group_header_fits_its_one_line_row_and_cuts_a_long_name() {
                     p.origin,
                 );
             }
+        }
+    }
+}
+
+/// T043: the drop highlight pose is the header as the sidebar draws it, filled: same one-line row,
+/// same name and count, nothing pushed out of the row by the fill.
+#[test]
+fn a_highlighted_group_header_keeps_its_row_and_its_words() {
+    let height = header_height();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let roles = tokens::roles(scheme);
+        let mut renderer = lay::renderer();
+        let (painted, records) = lay::painted_text_settled_at(
+            group_header_row_highlighted("Review", 3, roles),
+            &mut renderer,
+            ROOM,
+        );
+        let what = format!("{scheme:?}");
+        let row = records
+            .iter()
+            .find(|r| (r.height - height).abs() <= TOLERANCE && r.width > ROOM.width / 2.0)
+            .unwrap_or_else(|| panic!("{what}: no {height} dp header row in {records:?}"));
+        for word in ["Review", "3"] {
+            let p = painted
+                .iter()
+                .find(|p| p.content == word)
+                .unwrap_or_else(|| panic!("{what}: `{word}` is drawn"));
+            assert!(
+                p.origin.x >= row.x - TOLERANCE
+                    && p.origin.x + p.natural_width.min(p.allowed_width)
+                        <= row.x + row.width + TOLERANCE,
+                "{what}: `{word}` runs out of the highlighted row {row:?}"
+            );
         }
     }
 }
