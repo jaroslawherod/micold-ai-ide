@@ -10,22 +10,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1945
 - **Worktree branch**: claude/project-thread-x5s2f0
 - **Started**: 2026-11-15
-- **Phase**: implement M1
-- **Next step**: M1 review fixes committed locally, not pushed; round 2 by orchestrator; orchestrator runs reviews A and B, then push (merge origin/main first, no rebase)
+- **Phase**: implement M2
+- **Next step**: dispatch Milestone M2 unit (T006-T014) on branch claude/project-thread-x5s2f0, which has origin/main merged after M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1947 | design | MERGED | 00f66d534eedc83b1c08c7614e50f5a32194eaa8 |
+| #1965 | M1 | MERGED | 2d713bcf7f9db032cfd15e828d4e4ead7a81fc2a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | - | implemented, local commit, gate partial (fmt, clippy, core lib, daemon mcp green; workspace nextest not run: disk) |
+| M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
 | M2 | T006–T014 | full | neighbourhood and send_parent_input tools | - | pending |
-| M3 | T015–T020 | full | Parent recorded before start; agents told | - | pending |
+| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | - | pending |
 
 ## Decisions
 
@@ -56,7 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Cloud orchestrator thread handed over after M1 merged (2026-11-15, cloud rule: fresh thread per milestone). Next: M2 then M3, then close. Cloud notes: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
 
 ## Open escalation
 
@@ -64,4 +65,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- M3: review A round 2 MINOR: an MCP create with no parent no longer calls `record(..., None)`, which used to retire a stale id/link under a reused directory name (ops.rs ~974). Decide in M3.
