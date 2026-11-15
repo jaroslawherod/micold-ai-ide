@@ -77,6 +77,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M4 | 1 | M4 | c4df81448814ab77b73d9f9dd81549cc4ae24b2d | 7b3bec209a63756801475cb1b7759052e7c44e4e:c4df81448814ab77b73d9f9dd81549cc4ae24b2d | CLEAN (PASS, all six checks; screenshots /mnt/project-files/issue-1786/m4-*.png) |
 | Review B M4 | 2 | M4 | 2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | db4fe07eeef99d8f15b6953a5d3d8bb01ae3a136:2f2bcd226fa68b3161cfad651b32c77c6dbe4f5d | CLEAN (scoped to fix diff c4df81448..2f2bcd226; 1 MINOR left: held survives a blur released outside the window until the next press) |
 | M5 diff (A, inline review high) | 1 | M5 | 5cfbd81007b825218f9669e87bd41e8fac21d5b9 | 8035a9b69f57deb6769c9ecfa55d121303c1965e:5cfbd81007b825218f9669e87bd41e8fac21d5b9 | MINOR-ONLY (2 MINOR, recorded: Move up/down under a tag filter can swap with a hidden row; a reveal-opened group is saved with the next message) |
+| M5 diff (A, inline review high) | 2 | M5 | 6a0da7a25b8287eb4cab652bd2468d5a70720abd | b5792d9ed192604e2343262ab4fcc5fe9ffa1b4d:6a0da7a25b8287eb4cab652bd2468d5a70720abd | CLEAN (scoped to the gate-fix diff: shared menu_key map, held pinned, snapshot regenerated; not counted) |
 
 ## Declined review findings
 
