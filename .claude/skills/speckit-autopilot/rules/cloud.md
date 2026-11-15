@@ -23,3 +23,5 @@ context is what costs. All other rules hold; these add to them.
   (see `tasks/ask.md` *Restart small*).
 - **Follow-up questions** for a finished thread go to the project chat: a reply after an hour idle
   re-writes the whole cache.
+- **Log usage before resolving.** Call `get_session` on yourself and pipe the JSON to
+  `scripts/autopilot/usage-log.py` (appends a row to `/mnt/project-files/token-usage/threads.csv`).
