@@ -46,12 +46,12 @@ client and moved provisioning into the orchestrator; it rewrote #1732 to #1740 a
 | "the app holds the `ssh -R` forward" | The iced app is sunset only after the web client's v2 parity (provisioning, N11 #1957); until then it stays in maintenance and still provisions. A browser cannot hold an SSH connection, so after N11 the orchestrator holds it. | In M1 the app (the holder of the SSH connection) opens the forward, as the issue says. The forward is specified as "the holder of the SSH connection opens it", with a reusable component, so N11 reuses it. See Assumptions. |
 | Pod daemons connect through the reverse forward | In Kubernetes a pod daemon dials the orchestrator directly over mTLS on a LoadBalancer or the link Service (#1730, M5 #1740); pods the orchestrator's provisioner (N11) creates link the same way (plan.md, "In-cluster daemons"). | The pod reverse path here serves only a pod the iced app provisions and reaches by port-forward, with a local orchestrator (M1). After N11 and for any in-cluster pod the carrier is mTLS (#1730); this issue does not touch that path, and N11 reuses the forward only for containers and SSH hosts. |
 | "The desktop app starts the orchestrator" (#1726) | A systemd user unit (`micold-orchestrator.service`) replaces it. | Not this issue's work; the dialer only needs the orchestrator to be listening eventually (US1 scenario 2). |
-| (The issue says nothing about how a daemon names its endpoint) | `[orchestrator]` (#1728) requires an `https` URL and mTLS or an enrollment token (validate rules O1-O5). | The local link has no TLS (#1724 Assumptions: mTLS is M2), so it needs its own way to name the endpoint. Open question 1. |
+| (The issue says nothing about how a daemon names its endpoint) | `[orchestrator]` (#1728) requires an `https` URL and mTLS or an enrollment token (validate rules O1-O5). | The local link has no TLS (#1724 Assumptions: mTLS is M2), so it needs its own way to name the endpoint. Settled in Clarifications (`[orchestrator_link]`). |
 | "Confirm in the plan that pods have an sshd" | Same. | Confirmed from the repo, below; the plan re-checks it against the image. |
 
 Pods and sshd (confirmed from the repo): spec 686 K2 starts the pod's SSH server on `127.0.0.1:2222`
 and reaches it through a port-forward and a loopback relay; `packaging/basic/sshd_config` sets
-`AllowTcpForwarding remote`, which is all a TCP reverse forward needs. A Unix-socket forward (open question 2) is governed by `AllowStreamLocalForwarding`, which that file leaves at the default (allowed); the plan restricts it to `remote` if the socket form is chosen, and re-checks the image's `ListenAddress` against K2's loopback listener.
+`AllowTcpForwarding remote`, which is all a TCP reverse forward needs. A Unix-socket forward (settled in Clarifications: the socket form) is governed by `AllowStreamLocalForwarding`, which that file leaves at the default (allowed); the plan restricts it to `remote` if the socket form is chosen, and re-checks the image's `ListenAddress` against K2's loopback listener.
 
 #1724's ledger lists open items; none blocks this issue:
 
@@ -68,11 +68,11 @@ spec uses the right ones.
 
 ## Clarifications
 
-Open questions for the clarify unit (three, the template's limit):
+### Session 2026-11-15
 
-1. [NEEDS CLARIFICATION: How does a daemon learn the local orchestrator's endpoint? The `[orchestrator]` section accepts only an `https` URL with mTLS (#1728); the local link has no TLS. Candidates: a new key in `[orchestrator]` (a local socket path or `unix://` URL, mutually exclusive with the mTLS keys), or a separate `[orchestrator_link]` section.]
-2. [NEEDS CLARIFICATION: How does the remote end of the reverse forward meet FR-005's "daemon's own user only": a Unix socket in an owner-only directory (needs OpenSSH 6.7 or later and `AllowStreamLocalForwarding` on the remote), or a loopback TCP port guarded by a per-connection secret (reachable by every local user of the remote otherwise)? Recommended: the Unix socket.]
-3. [NEEDS CLARIFICATION: In M1 does the app (maintenance mode) hold the reverse forward, as the issue says, or does the local orchestrator hold it? #1726 makes the app talk only to the orchestrator, but the orchestrator has no SSH credentials until provisioning moves (N11).]
+- Q: How does a daemon learn the local orchestrator's endpoint? → A: By a separate `[orchestrator_link]` table in `daemon.toml`, not a key of `[orchestrator]`. `[orchestrator]` (#1728, merged) requires an `https` URL and mTLS or a token (rules O1-O5), so a socket path there would break those rules. The table has `enabled` (default `false`, which keeps FR-010) and an optional `socket` path; when absent, the endpoint is derived as the orchestrator derives its own: `orchestrator.sock` beside the daemon socket. A container, SSH-host or pod daemon on a forward uses the same derived path, which is where the forward's remote end is placed. `config check` validates the table. _(agent-resolved: crates/micold-daemon/src/orchestrator/mod.rs#socket_path; specs/1728-orchestrator-config-section/spec.md#FR-003)_
+- Q: How does the remote end of the reverse forward meet FR-005's "daemon's own user only"? → A: A Unix-socket forward (`ssh -R <remote socket>:<local orchestrator socket>`) whose remote socket sits in the daemon's owner-only runtime directory. A loopback TCP port is rejected: any local user of the remote can reach it (spec 489 research R1 rejected the same shape). A remote OpenSSH older than 6.7, or a `sshd` that forbids stream-local forwarding, fails the open with a message (FR-005), with no TCP fallback. `packaging/basic/sshd_config` sets `AllowTcpForwarding remote` and leaves `AllowStreamLocalForwarding` at its default; the plan restricts it to `remote`. _(agent-resolved: specs/489-ssh-remote-daemon/research.md#R1; packaging/basic/sshd_config)_
+- Q: In M1 does the app or the local orchestrator hold the reverse forward? → A: The holder of the SSH connection opens it: the app in M1, as the issue says (the orchestrator has no SSH credentials until provisioning moves, N11 #1957, after which it calls the same component). #1726's "the app talks only to the orchestrator" concerns requests and lists, not the SSH connection the app already holds for provisioning. _(agent-resolved: specs/1722-rn-client-k8s/plan.md; specs/orchestrator/issues.md; this spec, Plan mismatch table and Assumptions)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -225,11 +225,15 @@ delay between attempts grows to the cap and the daemon keeps serving clients.
   `LinkPong` and treat any received frame as proof of life, so the registry shows it `online`.
 - **FR-003**: The host daemon MUST dial the local orchestrator endpoint directly, over the local
   socket (named pipe on Windows) from the platform helpers.
+- **FR-013**: The daemon configuration MUST gain an `[orchestrator_link]` table (`enabled`, default
+  `false`; optional `socket` path); a daemon dials only when `enabled` is `true`, at `socket` or the
+  derived `orchestrator.sock` beside its daemon socket. `config check` MUST reject an unknown key, a
+  wrong type and an empty `socket`; it is independent of `[orchestrator]`.
 - **FR-004**: Container, SSH-host and pod daemons MUST dial through a long-lived reverse forward that
   the holder of the SSH connection to that daemon opens with the connection and closes with it. The
   forward is opened by one reusable component, not by command-line text built at each caller.
 - **FR-005**: The reverse forward MUST carry the orchestrator link only: it MUST NOT make any other
-  destination on the client reachable from the remote, and its remote endpoint MUST be reachable
+  destination on the client reachable from the remote, and its remote endpoint MUST be a Unix socket in the daemon's owner-only runtime directory, reachable
   only by the daemon's own user. A forward that cannot bind MUST fail the connection with a message.
 - **FR-006**: A lost link MUST be re-dialled by the daemon without a restart, with the delay of
   `ssh::reconnect::Backoff` (1, 2, 4, 8, 15 s, then 15 s); a successful handshake resets it.

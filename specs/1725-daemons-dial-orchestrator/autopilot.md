@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1725
 - **Worktree branch**: claude/project-thread-71llv0
 - **Started**: 2026-11-15
-- **Phase**: spec
-- **Next step**: clarify (3 open markers in spec.md Clarifications)
+- **Phase**: clarify
+- **Next step**: plan (clarify done: 3 markers agent-resolved, no escalation)
 
 ## Pull requests
 
