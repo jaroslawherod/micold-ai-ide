@@ -510,13 +510,9 @@ fn a_row_dropped_in_its_own_list_takes_the_marked_place_and_keeps_it_on_redraw()
     assert_eq!(layout(&state).ungrouped, vec![wt("e"), wt("c"), wt("d")]);
     drop_on(&mut state, wt("a"), row("b"), 0.75);
     assert_eq!(items_of(&state, WORK), vec![wt("b"), wt("a")]);
-    let redrawn = state.sidebar_list();
-    assert_eq!(
-        redrawn,
-        state.sidebar_list(),
-        "the order stays on every redraw"
-    );
+    // The drawn list follows the stored order after both drops.
     assert!(entry_at(&state, row("e")) < entry_at(&state, row("c")));
+    assert!(entry_at(&state, row("b")) < entry_at(&state, row("a")));
 }
 
 /// Review B r2 (M4) MINOR: a row held after a cancel whose release never reached the window is

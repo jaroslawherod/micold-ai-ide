@@ -1793,6 +1793,26 @@ impl FakeProjectStore {
     pub fn removals(&self) -> Vec<PathBuf> {
         self.inner.lock().expect("fake lock").removals.clone()
     }
+
+    /// Seed `project`'s stored sidebar layout (feature 1786).
+    pub fn with_layout(self, project: impl Into<PathBuf>, layout: SidebarLayout) -> Self {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .insert(project.into(), layout);
+        self
+    }
+
+    /// `project`'s stored sidebar layout, as `save_layout` last left it (feature 1786).
+    pub fn layout_of(&self, project: &Path) -> Option<SidebarLayout> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .layouts
+            .get(project)
+            .cloned()
+    }
 }
 
 impl ProjectStore for FakeProjectStore {
@@ -1926,9 +1946,11 @@ impl ProjectStore for FakeProjectStore {
     }
 
     fn save_layout(&self, project_path: &Path, layout: &SidebarLayout) -> io::Result<()> {
-        self.inner
-            .lock()
-            .expect("fake lock")
+        let mut state = self.inner.lock().expect("fake lock");
+        if let Some(kind) = state.fail_next_save.take() {
+            return Err(io::Error::new(kind, "fake layout save failure"));
+        }
+        state
             .layouts
             .insert(project_path.to_path_buf(), layout.clone());
         Ok(())
