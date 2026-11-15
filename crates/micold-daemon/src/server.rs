@@ -2102,8 +2102,8 @@ where
                             Some(progress),
                         )
                         .await
-                            .map(|_setup| None)
-                            .map_err(ops::WorktreeStartFailure::Create),
+                        .map(|_setup| None)
+                        .map_err(ops::WorktreeStartFailure::Create),
                         Some(definition) => ops::create_worktree_with_session(
                             state,
                             project,

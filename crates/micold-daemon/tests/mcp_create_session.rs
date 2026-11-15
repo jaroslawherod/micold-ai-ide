@@ -1252,7 +1252,10 @@ async fn the_link_is_recorded_before_the_new_sessions_cli_starts() {
     let seen = std::fs::read_to_string(s.bin.path().join("copilot.seen")).unwrap();
     let saved = std::fs::read_to_string(s.bin.path().join("links.saved")).unwrap();
     assert_eq!(seen, saved, "the CLI started before its link was saved");
-    assert!(s.state.worktree_parent_views(s.project.path()).contains_key("feat-s"));
+    assert!(s
+        .state
+        .worktree_parent_views(s.project.path())
+        .contains_key("feat-s"));
 }
 
 /// Spec 1945 D2: `default` is the project folder's name in every tool, so a worktree cannot take
