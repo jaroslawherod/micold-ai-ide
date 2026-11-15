@@ -29,8 +29,11 @@ def git(*args, ok=(0,)):
     return run("git", *args, ok=ok).stdout
 
 
-def changed_ranges(diff):
-    """{path: [(first, last)]} of added or changed lines on the new side; deleted files are left out."""
+def changed_ranges(diff, pin_deletions=True):
+    """{path: [(first, last)]} of added or changed lines on the new side; deleted files are left out.
+
+    pin_deletions: a pure deletion (no new-side line) is pinned to the line before it, so a reviewer
+    finds its enclosing item. False drops it, for a coverage check that must not count a neighbour."""
     files, path, header = {}, None, False
     for line in diff.splitlines():
         if line.startswith("diff --git"):
@@ -44,8 +47,10 @@ def changed_ranges(diff):
             m = re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", line)
             n = int(m.group(2)) if m.group(2) is not None else 1
             first = int(m.group(1))
-            # a pure deletion (n == 0) is pinned to the line before it, so its enclosing item is found
-            files[path].append((max(first, 1), first + n - 1) if n else (max(first, 1), max(first, 1)))
+            if n:
+                files[path].append((max(first, 1), first + n - 1))
+            elif pin_deletions:
+                files[path].append((max(first, 1), max(first, 1)))
     return files
 
 

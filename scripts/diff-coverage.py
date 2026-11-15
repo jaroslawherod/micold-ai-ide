@@ -66,19 +66,23 @@ def glob_re(glob):
     return re.compile("".join(out) + r"\Z")
 
 
-def report(rows, covered, total, threshold, ok):
+def report(rows, covered, total, threshold, ok, missing=()):
     pct = 100.0 * covered / total if total else 100.0
     out = ["### diff coverage", ""]
+    tail = []
+    if missing:
+        tail = ["", "Changed in scope but not instrumented (no lcov record; no test binary built them):", ""]
+        tail += [f"- {p}" for p in missing]
     if not total:
         out.append("No changed executable line in scope: nothing to check.")
-        return "\n".join(out) + "\n"
+        return "\n".join(out + tail) + "\n"
     out.append(f"{'PASS' if ok else 'FAIL'}: {covered}/{total} changed executable lines covered "
                f"({pct:.1f}%, threshold {threshold:g}%).")
     uncovered = [(p, u) for p, _c, _t, u in rows if u]
     if uncovered:
         out += ["", "| file | uncovered changed lines |", "| --- | --- |"]
         out += [f"| {p} | {fmt_ranges(compress(u))} |" for p, u in uncovered]
-    return "\n".join(out) + "\n"
+    return "\n".join(out + tail) + "\n"
 
 
 def check(args):
@@ -99,18 +103,23 @@ def check(args):
     os.chdir(top)
     lcov = read_lcov(args.lcov, top)
     mb = git("merge-base", args.base, args.head).strip()
-    changed = changed_ranges(git("diff", "-U0", "--no-renames", "--no-color", mb, args.head))
+    changed = changed_ranges(git("diff", "-U0", "--no-renames", "--no-color", mb, args.head),
+                             pin_deletions=False)
 
-    rows, covered, total = [], 0, 0
+    rows, covered, total, missing = [], 0, 0, []
     for path, ranges in sorted(changed.items()):
-        if not any(r.match(path) for r in scope) or path not in lcov:
+        if not ranges or not any(r.match(path) for r in scope):
+            continue
+        if path not in lcov:
+            # no test binary compiled it (cfg-gated, or reached by none): say so, never a silent pass
+            missing.append(path)
             continue
         lines = sorted({n for a, b in ranges for n in range(a, b + 1) if n in lcov[path]})
         hit = [n for n in lines if lcov[path][n] > 0]
         rows.append((path, len(hit), len(lines), [n for n in lines if lcov[path][n] == 0]))
         covered, total = covered + len(hit), total + len(lines)
     ok = total == 0 or 100.0 * covered / total >= threshold
-    text = report(rows, covered, total, threshold, ok)
+    text = report(rows, covered, total, threshold, ok, missing)
     sys.stdout.write(text)
     for dest in (args.summary, os.environ.get("GITHUB_STEP_SUMMARY")):
         if dest:

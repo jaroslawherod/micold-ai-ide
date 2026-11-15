@@ -118,5 +118,19 @@ globs="$(cd "$ROOT" && python3 "$SCRIPT" --print-globs rust 2>&1)"
   && pass "the checked-in scope covers daemon and orchestrator, not the desktop app" \
   || fail "the checked-in scope covers daemon and orchestrator, not the desktop app" "$globs"
 
+out="$(run --lcov "$work/orch.lcov")"
+printf '%s' "$out" | grep -q 'not instrumented' && printf '%s' "$out" | grep -q 'crates/micold-daemon/src/a.rs' \
+  && pass "an in-scope changed file the lcov data lacks is named, not passed silently" \
+  || fail "an in-scope changed file the lcov data lacks is named, not passed silently" "$out"
+
+# a pure deletion changes no line on the new side: its uncovered neighbour must not count
+git -C "$repo" tag change
+sed -i '9,10d' "$repo/crates/micold-daemon/src/a.rs"
+git -C "$repo" commit -qam delete
+printf 'SF:%s/crates/micold-daemon/src/a.rs\nDA:8,0\nend_of_record\n' "$repo" >"$work/del.lcov"
+out="$(cd "$repo" && python3 "$SCRIPT" --config "$work/scope.conf" --base change --lcov "$work/del.lcov" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && pass "a pure deletion does not count the line before it" \
+  || fail "a pure deletion does not count the line before it" "rc=$rc $out"
+
 [ "$failures" -eq 0 ] || { echo "$failures failure(s)"; exit 1; }
 echo "all passed"

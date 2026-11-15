@@ -23,7 +23,11 @@ language (`**` crosses directories, `*` does not), plus the coverage threshold (
 ## Diff coverage
 
 The `test` job runs the workspace suite once, through `cargo llvm-cov nextest`, which also writes
-`lcov.info`. The doctests and the release frame-budget step stay outside the instrumented run. The
+`lcov.info`. The doctests, the release frame-budget step and the wall-clock budget tests listed in
+`TIMED` in that step stay outside the instrumented run, because instrumentation slows them past
+their bounds; they run uninstrumented right after. The test job also builds the workspace twice
+(instrumented for nextest, plain for the doctests and `TIMED`). In-scope changed files with no lcov
+record (no test binary built them) are listed as not instrumented rather than passed silently. The
 `diff-coverage` job downloads that file and runs `scripts/diff-coverage.py`, which takes the lines
 added or changed against the merge base, keeps the in-scope files, and compares the executable ones
 (those with a line record in the lcov file) with their hit counts. It passes at the threshold or

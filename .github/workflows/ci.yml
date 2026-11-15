@@ -361,11 +361,17 @@ jobs:
           # default, which would hide every later failure.
           # #1931: nextest runs instrumented (`cargo llvm-cov nextest`) and writes lcov.info for the
           # `diff-coverage` job. The doctests and the release frame-budget step below stay outside
-          # the instrumented run.
+          # the instrumented run. So do the wall-clock budget tests in TIMED: instrumentation slows
+          # them past their bounds (PR #1933's first run: ten_busy_sessions_are_all_saved_within_the_bound
+          # lost a session's save). They run right after, uninstrumented; add a budget test here when
+          # it only fails under coverage.
+          TIMED='package(micold-daemon) & (binary(=history_timing) | (binary(=history_stop_request) & test(=ten_busy_sessions_are_all_saved_within_the_bound)))'
           nextest_rc=0
-          cargo llvm-cov nextest --workspace --no-fail-fast --lcov --output-path lcov.info || nextest_rc=$?
+          cargo llvm-cov nextest --workspace --no-fail-fast -E "not ($TIMED)" --lcov --output-path lcov.info || nextest_rc=$?
+          timed_rc=0
+          cargo nextest run -p micold-daemon --test history_timing --test history_stop_request --no-fail-fast -E "$TIMED" || timed_rc=$?
           doc_rc=0; cargo test --doc --workspace || doc_rc=$?
-          exit $((nextest_rc == 0 ? doc_rc : nextest_rc))
+          for rc in "$nextest_rc" "$timed_rc" "$doc_rc"; do [ "$rc" -eq 0 ] || exit "$rc"; done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() && runner.os == 'Linux' && hashFiles('lcov.info') != '' }}
         with:
