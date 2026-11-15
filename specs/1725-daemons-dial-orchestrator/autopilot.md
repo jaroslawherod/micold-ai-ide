@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
-| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | | #1975 | merged (squash 1e9b379e3) 
+| M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | | pending |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
 | M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
