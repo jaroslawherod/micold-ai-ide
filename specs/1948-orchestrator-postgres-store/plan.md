@@ -25,8 +25,8 @@ import moves `registry.json` into an empty registry. CI gets a Postgres service 
 
 **Primary Dependencies**: new `sqlx` 0.8 (`default-features = false`, features `runtime-tokio`,
 `tls-rustls-ring-webpki`, `postgres`, `sqlite`, `any`, `migrate`), in `micold-daemon` only; `micold-core`
-stays free of it. Existing: `tokio`, `serde`, `sha1` (already in `Cargo.lock`, used for the import
-digest), `tracing`. Task 1 is a spike that pins the exact `sqlx` version and proves `$n`
+stays free of it. Existing: `tokio`, `serde`, `tracing`; `sha1` (already in `Cargo.lock`, used by `micold-core`) is added to
+`micold-daemon`'s dependencies for the import digest, as `{ workspace = true }`. Task 1 is a spike that pins the exact `sqlx` version and proves `$n`
 placeholders, `ON CONFLICT`, `RETURNING` and `Migrator` run on `Any` over both drivers (fallback in
 research.md R2).
 
@@ -97,19 +97,19 @@ crates/micold-core/src/orchestrator/
 └── mod.rs         # EDIT: re-exports
 
 crates/micold-core/src/daemon_config/
-├── mod.rs         # EDIT: `[database]` -> Database { url_file, ca_file, pool_size }
+├── mod.rs         # EDIT: `[database]` -> DatabaseConfig { url_file, ca_file, pool_size }
 ├── files.rs       # EDIT: url_file / ca_file checks (key + path in the error, URL scheme check)
 └── resolved.rs    # EDIT: database shown as paths and states only
 
 crates/micold-daemon/
-├── Cargo.toml     # EDIT: sqlx
+├── Cargo.toml     # EDIT: sqlx, sha1 (workspace)
 ├── migrations/
 │   ├── postgres/0001_orchestrator_schema.sql   # NEW
 │   └── sqlite/0001_orchestrator_schema.sql     # NEW
 └── src/orchestrator/
-    ├── mod.rs     # EDIT: run() opens the store from config, imports registry.json, then serve()
+    ├── mod.rs     # EDIT: run() opens the stores (spawn_blocking), imports registry.json, then serve(); serve loads via spawn_blocking
     └── db/
-        ├── mod.rs      # NEW: Database { rt, pool, tenant }; open(); connect options; error mapping
+        ├── mod.rs      # NEW: StoreHandle { rt: Option<Runtime>, pool }; open(); connect options; error mapping; Drop
         ├── migrate.rs  # NEW: check_not_newer(), run_forward(); error type naming versions
         ├── registry.rs # NEW: impl RegistryStore for SqlRegistryStore
         ├── auth.rs     # NEW: impl AuthStore for SqlAuthStore
@@ -139,19 +139,31 @@ new test executable is linked.
 ### Trait shape (FR-001, FR-015, FR-014)
 
 Synchronous, `Send + Sync`, `&self`. `RegistryStore` keeps `load` and `save` and gains
-`upsert(&DaemonRecord)`, `remove(&WireDaemonId)` and `reassign_unowned(&UserId) -> u64`, each with a
+`upsert(&DaemonRecord)`, `remove(&TenantId, &WireDaemonId)` and `reassign_unowned(&TenantId, &UserId) -> u64`, each with a
 default body built on `load` and `save`, so `JsonRegistryStore`, `MemoryRegistryStore` and the test
 doubles in `orchestrator/mod.rs` compile unchanged. The SQL store overrides all three with one
 statement each. Full signatures: [contracts/store-traits.md](contracts/store-traits.md).
 
-The SQL stores hold an `Arc<Database>` with a private multi-thread tokio runtime (2 workers) and the
-`AnyPool`. A method is `self.db.block_on(async { … })`. Rules that make this safe:
+The SQL stores hold an `Arc<StoreHandle>` (the daemon-side connection handle; the `[database]` config
+type is `DatabaseConfig`) with a private multi-thread tokio runtime (2 workers) and the `AnyPool`. A
+method is `self.db.block_on(async { … })`. Rules that make this safe:
 
-- The only caller today, `SaveWorker`, is a plain thread, so it may block. Async callers (the later
-  sign-in and API issues) go through `tokio::task::spawn_blocking`; `Database::block_on` detects a
-  current tokio context (`Handle::try_current`) and returns `StoreError::Unavailable` with a clear
-  message instead of panicking, and a test covers it.
-- `Database::open` runs inside `spawn_blocking` from `serve`.
+- **Every call that runs in a runtime context goes through `spawn_blocking`.** `serve` is an `async fn`
+  on the main multi-thread runtime, so the callers are: `serve`'s `store.load()` before it binds
+  (wrapped: `tokio::task::spawn_blocking({ let s = Arc::clone(&store); move || s.load() })`, the join
+  error mapped to `io::Error`); `StoreHandle::open` and the registry import in `run()`; and the later
+  auth and audit callers (#1729, #1733, #1734), which do the same. `SaveWorker` is a plain thread and
+  calls the store directly. `StoreHandle::block_on` detects a current tokio context
+  (`Handle::try_current`) and returns `StoreError::Unavailable` with a clear message instead of
+  panicking: a guard for a missed call site, not the supported path.
+- **One place opens the database: `run()`**, inside `spawn_blocking`, from the `[database]` config and
+  `choose_store`, before `serve`. It then imports `registry.json` in the same blocking task and hands
+  `serve` the `Arc<dyn RegistryStore>`. `run_with` (tests) takes any store, so a test starts it on a
+  SQL store (`store_suite.rs`: `run_with_sql_store_starts_and_restores`) to prove `serve`'s load works.
+- **Drop rule.** `StoreHandle` holds the runtime as `Option<Runtime>`; its `Drop` takes it and calls
+  `shutdown_background()`, so the last `Arc` dropping inside async code (the end of `serve`, a failed
+  start) never panics with "Cannot drop a runtime in a context where blocking is not allowed". A test
+  drops the last handle inside `#[tokio::test]`.
 - Every pool has `acquire_timeout` 5 s and connect timeout 5 s, so a dead database returns an error
   in bounded time (FR-016); the pool reconnects on the next call, which is the "retry on the next
   call" of FR-016.
@@ -161,9 +173,18 @@ thread in a store call and shows other daemons' heartbeats answered (`store_slow
 
 ### Tenant scope and owners (FR-007)
 
-A store value is built for one tenant (`SqlRegistryStore::new(db, tenant)`); every statement binds
-`tenant_id` in its `WHERE` or its inserted row. v1 builds the one `default` tenant
-(`DEFAULT_TENANT`). Two stores on one pool with different tenants see disjoint rows (US6 scenario 2).
+`AuthStore` and `AuditStore` values are built for one tenant (`SqlAuthStore::new(db, tenant)`); every
+statement binds `tenant_id` in its `WHERE` or its inserted row. v1 builds the one `default` tenant
+(`DEFAULT_TENANT`). Two such stores on one pool with different tenants see disjoint rows (US6 scenario 2).
+
+**`RegistryStore` is not tenant-bound**, because `DaemonRecord.tenant` (#1724: the daemon announces it)
+already carries each record's tenant and `Registry`/`SaveWorker` save every tenant's records in one
+snapshot. The SQL store writes `tenant_id` from `record.tenant`; `load` returns every tenant's records
+(ordered by `tenant_id, id`); `save` replaces the whole set across tenants in one transaction;
+`upsert`, `remove` and `reassign_unowned` take or read the tenant explicitly. A record under another
+tenant therefore survives a restart exactly as with `JsonRegistryStore`. The shared suite has a case
+with a non-default tenant record, and the same id under two tenants. The `registry.json` import
+writes each record under its own `tenant`.
 
 **`owner_user_id` before any user exists** (the question the clarify unit left to the plan):
 
@@ -205,12 +226,12 @@ so the SQLite file is byte-identical (a test hashes the file before and after, S
 ### Backend choice and config (FR-008, FR-009, FR-016)
 
 `[database]` joins `DaemonConfig` beside `[orchestrator]` (`url_file`, `ca_file`, `pool_size`, default
-5, range 1 to 64, `deny_unknown_fields`). `config check` verifies the files exist and are non-empty,
+5, range 1 to 64, `deny_unknown_fields`; the config type is `DatabaseConfig`). `config check` verifies the files exist and are non-empty,
 reads the URL, trims it and checks the scheme is `postgres` or `postgresql`; its errors name the key
 and the path, and for a bad scheme only the scheme, never the URL ([contracts/config.md](contracts/config.md)).
 The resolved view shows paths and `readable`/`missing`/`empty` states, as `[orchestrator]` does.
 
-The choice itself is the pure `choose_store(database: Option<&Database>, bind: BindScope, data_dir)`
+The choice itself is the pure `choose_store(database: Option<&DatabaseConfig>, bind: BindScope, data_dir)`
 in `micold-core`: table present, PostgreSQL on any bind; table absent and `LoopbackOnly`, SQLite
 at `<data_dir>/orchestrator/orchestrator.db`; table absent and `Network`, an error naming
 `database.url_file`. Today `run()` passes `LoopbackOnly` (the orchestrator listens on a Unix socket).
@@ -230,15 +251,15 @@ a test greps the error for the password).
 
 ### Registry import (FR-010)
 
-At start, after `Database::open` and before `serve` loads the registry:
+At start, in `run()`'s blocking task after `StoreHandle::open` and before `serve` loads the registry:
 
 1. `registry.json` absent: nothing. (`registry.json.imported` present: nothing.)
 2. Present: parse it with `JsonRegistryStore::load`; a corrupt file fails the start with the existing
    `StoreError::Corrupt` naming it; nothing is imported.
-3. Count the tenant's `daemons` rows. More than zero and no matching import marker: refuse, naming the
+3. Count the `daemons` rows (all tenants). More than zero and no matching import marker: refuse, naming the
    file and the count.
 4. Otherwise one transaction inserts every record (owner `unowned` unless the file carries one) and
-   an `imports` row `(tenant_id, source, digest, imported_at)`, with `digest` the SHA-1 of the file.
+   an `imports` row `(tenant_id, source, digest, imported_at)` (tenant `default`: the file is one source), with `digest` the SHA-1 of the file.
 5. Rename the file to `registry.json.imported` (same directory, same mode).
 
 If the process dies between 4 and 5 the next start finds rows and a marker whose digest matches the file:

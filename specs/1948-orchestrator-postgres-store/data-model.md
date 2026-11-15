@@ -45,11 +45,11 @@ removed user are revoked in the same transaction.
 ## State rules
 
 - Invite: `open` → `redeemed` (once, atomic compare-and-set on `redeemed_at IS NULL`) or `expired` by time.
-- Bootstrap code: `set` → `consumed`; `set_bootstrap` on a consumed tenant is refused; reset replaces the hash and clears `consumed_at`.
+- Bootstrap code: `set` → `consumed`; `set_bootstrap` on a consumed tenant is refused; there is no reset in v1 (a later issue adds one with its own method).
 - Refresh token: `active` → `revoked` (rotation revokes the old one in the same transaction as the new insert); a whole `family` revoked on reuse of a revoked token.
 - Certificate serial: `issued`; a revocation row makes it `revoked` permanently.
 - Enrollment: `open` → `redeemed` once.
-- Daemon: upsert by `(tenant_id, id)`; `owner_user_id` only set on insert or by `reassign_unowned`.
+- Daemon: upsert by `(record.tenant, id)` (`tenant_id` is written from `DaemonRecord.tenant`, so every tenant's records persist); `owner_user_id` only set on insert or by `reassign_unowned`.
 - Audit entry: insert only; `seq` strictly increasing within the database.
 
 ## What is never stored

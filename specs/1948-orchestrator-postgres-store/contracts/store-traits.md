@@ -1,7 +1,8 @@
 # Contract: store traits
 
-Module paths under `micold_core::orchestrator`. All methods are synchronous, take `&self`, and act
-within the tenant the store value was built for. `Result<_, StoreError>` throughout.
+Module paths under `micold_core::orchestrator`. All methods are synchronous and take `&self`. `AuthStore` and `AuditStore` act within the tenant the
+store value was built for; `RegistryStore` does not (below). Callers in async code wrap calls in
+`spawn_blocking` (plan.md, *Trait shape*). `Result<_, StoreError>` throughout.
 
 ## StoreError
 
@@ -24,16 +25,20 @@ pub trait RegistryStore: Send + Sync {
     fn load(&self) -> Result<Vec<DaemonRecord>, StoreError>;             // exists
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError>;  // exists: replace the tenant's set, one transaction
     fn upsert(&self, record: &DaemonRecord) -> Result<(), StoreError>;   // default: load, replace by id, save
-    fn remove(&self, id: &WireDaemonId) -> Result<bool, StoreError>;     // default likewise; true when a row went
-    fn reassign_unowned(&self, owner: &UserId) -> Result<u64, StoreError>; // default: load/save over `owner`; SQL: daemons, projects, sessions
+    fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError>;     // default likewise; true when a row went
+    fn reassign_unowned(&self, tenant: &TenantId, owner: &UserId) -> Result<u64, StoreError>; // default: load/save over `owner`; SQL: daemons, projects, sessions
 }
 ```
 
+- **Tenant rule.** `RegistryStore` is not bound to one tenant: each `DaemonRecord` carries `tenant`, the SQL
+  store writes `tenant_id` from it and keys rows by `(record.tenant, id)`. `load` returns every tenant's
+  records, `save` replaces the whole set across tenants. `remove` and `reassign_unowned` name the tenant.
+  The same id under two tenants is two records.
 - `upsert` inserts or updates every column except `tenant_id` and `owner_user_id` (owner is kept on
   conflict). Two writers upserting different ids never lose each other's record.
-- `save` is whole-list replace: upsert each, delete the tenant's others, one transaction; owner kept on
+- `save` is whole-list replace: upsert each, delete every row not in the list (all tenants), one transaction; owner kept on
   conflict. Current callers (`RegistrySaver`) are unchanged.
-- `load` is ordered by `id`.
+- `load` is ordered by `(tenant_id, id)`.
 
 ## AuthStore
 
