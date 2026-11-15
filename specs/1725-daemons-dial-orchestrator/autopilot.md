@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2hmeav
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M5 review B on origin/main...HEAD, then open the M5 PR (pr-title.md/pr-body.md ready)
+- **Next step**: merge PR #1989 on green `ci complete`, then the close unit
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
 | #1976 | M3 backoff + link status | merged (squash) | 2880eeb17 |
 | #1979 | M4 reverse forward | merged (squash) | bc0a44f22 |
+| #1989 | M5 drop/reopen | open (draft) | |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
 | M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
 | M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | #1979 | merged (squash bc0a44f22) |
-| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | implemented; PR not opened |
+| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | #1989 | review A+B CLEAN; CI pending |
 
 ## Decisions
 
@@ -61,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A | 1 | M3 | 11cf6ef6aacaa53f201f8e063e94ea6e94dcdaeb | b6c2d388a5ead6484138edc3efa314604677c7e0:02fd9250fb4dd000800238ca044234da717f8a4b | MINOR-ONLY: CLEAN with 3 MINOR (refused-to-absent change not logged, spawn_as public seam, SC-004 log test could not catch a per-retry line); all fixed in 11cf6ef6a, no new round (MINOR only) |
 | Review B | 1 | M3 | 7f09644ad | HEAD | CLEAN (orchestrator, sonnet): 1 MINOR accepted (T022 never red; cycle 10 records mutation checks); Verify 7+53 passed, no plan drift |
 | Review B | 1 | M4 | 3cb569d6ab1f015c24d50888a2849667dd040d3a | cfb92da73b2f574658db5d0f3f4b07ba8ab15897:3cb569d6ab1f015c24d50888a2849667dd040d3a | CLEAN (orchestrator, sonnet; also review A round 2 of the F1 fix): 1 MINOR declined (no ssh_real case with a user ClearAllForwardings yes; argv unit test covers it); Verify 4+52 passed, no plan drift |
+| Review B | 1 | M5 | d5493331f76e6d0f653a32812dd85b19b5abd99a | bc0a44f22:d5493331f76e6d0f653a32812dd85b19b5abd99a | CLEAN (orchestrator, sonnet): 0 findings; T039 no-product-code claim verified in source; orchestrator_dial 25 passed, no plan drift |
 | Review A | 1 | M5 | 1871be935c12be9c289d152a5c69f2a079c1523f | 1b3545cc891476ff9fe2b8f2b31449d69306e35d:40f9119251e73984f2a54108b07dbfba9e1231c9 | MINOR-ONLY: CLEAN with 3 MINOR (SIGKILL test's online check vacuous, clock-step comment, docs overclaim); all fixed, no new round (MINOR only) |
 - M4 review A round 1 (opus, headless, snapshot 5d226ed04ff2b56679eb538fb78df9e077fde4a1:e7dbd2a39a4bba360d2f05781b9e794843ecd9a0): CHANGES, 2 MAJOR, 2 MINOR. F1 fixed (`ClearAllForwardings=no` on the link, argv test); F2 fixed, prose only (research R2 marked superseded by T028; behaviour kept, see Decisions); F3 fixed (test renamed, asserts `Prepare`); F4 declined. Fix diff is code (F1): round 2 left to the orchestrator with review B (sonnet).
 

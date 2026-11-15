@@ -1,5 +1,5 @@
 <!-- claude-projects-attribution: {"github_login":"jaroslawherod"} -->
-_Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_01RyHdfvmnDGyHasLedRFLeQ?thread=cmsg_01RyHdfvmnDGyHasLedRFLeQVywo8xFvzy2nyDFzeziRa1)_
+_Requested by **jaro** · [project thread](https://claude.ai/code/project/chan_01RyHdfvmnDGyHasLedRFLeQ?thread=cmsg_01RyHdfvmnDGyHasLedRFLeQGaQeWLC839ddYbhWSNyrDu)_
 
 ## Milestone M5 of 5 — daemons dial the orchestrator (specs/1725-daemons-dial-orchestrator)
 
