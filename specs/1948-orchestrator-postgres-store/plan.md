@@ -24,8 +24,8 @@ import moves `registry.json` into an empty registry. CI gets a Postgres service 
 **Language/Version**: Rust (MSRV 1.97, workspace edition 2021).
 
 **Primary Dependencies**: new `sqlx` 0.8 (`default-features = false`, features `runtime-tokio`,
-`tls-rustls-ring-webpki`, `postgres`, `sqlite`, `any`, `migrate`), in `micold-daemon` only; `micold-core`
-stays free of it. Existing: `tokio`, `serde`, `tracing`; `sha1` (already in `Cargo.lock`, used by `micold-core`) is added to
+`tls-rustls-ring-webpki`, `postgres`, `sqlite`, `any`, `migrate`, `macros` (`sqlx::migrate!` lives behind it; spike T001)), in `micold-daemon`
+only; `micold-core` stays free of it. `micold-core` gains `sha2` 0.10 (RustCrypto, like `sha1`) for `TokenHash::hash_of`. Existing: `tokio`, `serde`, `tracing`; `sha1` (already in `Cargo.lock`, used by `micold-core`) is added to
 `micold-daemon`'s dependencies for the import digest, as `{ workspace = true }`. Task 1 is a spike that pins the exact `sqlx` version and proves `$n`
 placeholders, `ON CONFLICT`, `RETURNING` and `Migrator` run on `Any` over both drivers (fallback in
 research.md R2).

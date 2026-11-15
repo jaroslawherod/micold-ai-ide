@@ -24,6 +24,17 @@
   `AnyConnection`, or a needed type, fall back to the generic-over-`DB` form behind the same
   `StoreHandle` wrapper; the traits and tests do not change.
 
+- **Spike outcome (T001, 2026-11-15)**: pinned `sqlx` 0.8.6, features `runtime-tokio`,
+  `tls-rustls-ring-webpki`, `postgres`, `sqlite`, `any`, `migrate`, **`macros`** (without `macros`
+  `sqlx::migrate!` does not exist; plan.md corrected). On `Any`, over SQLite and over PostgreSQL 16:
+  `$n` placeholders, `INSERT … ON CONFLICT (…) DO UPDATE SET n = excluded.n`, `RETURNING`, `i64`
+  and `String` binds and `Migrator::run(&AnyPool)` from `sqlx::migrate!` all work; no fallback.
+  `sqlx::any::install_default_drivers()` must run once before the first connect.
+  Two concurrent `Migrator::run` calls on one new SQLite file: the second **can fail** with
+  `table … already exists` (seen in 1 of 2 runs), so plan.md's *Migrations* retry rule holds
+  (retry once on a migration error, then re-read the applied versions). PostgreSQL serialises through
+  its advisory lock.
+
 ## R3 Runtime-checked queries, not `query!`
 
 - **Decision**: `sqlx::query` and `query_as` with `.bind`.

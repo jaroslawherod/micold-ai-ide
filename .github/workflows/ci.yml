@@ -445,6 +445,12 @@ jobs:
         env:
           BASE: ${{ github.base_ref }}
         run: git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
+      - name: Allow the namespace tests the unmutated baseline runs
+        # Same setup as the test job: the orchestrator netns proof runs under `unshare -rn` and
+        # `strace`, which ubuntu-24.04 restricts through AppArmor.
+        run: |
+          sudo apt-get install -y strace
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Install cargo-nextest and cargo-mutants
         run: |
           set -euo pipefail
