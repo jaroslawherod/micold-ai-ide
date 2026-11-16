@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-9yqz36
+- **Worktree branch**: claude/project-thread-sabfza
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: wait for CI on #2006 and merge it, then dispatch M8
+- **Next step**: M10 review A+B on the snapshot in *Handover*, then open the M10 PR from /tmp/pr-1948-m10.md
 
 ## Pull requests
 
@@ -24,7 +24,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1997 | M4 | merged | c3944869a |
 | #2001 | M5 | merged | 8e68fa947 |
 | #2003 | M6 | merged | 3d5485c30 |
-| #2006 | M7 | open | |
+| #2006 | M7 | merged | 3a74d3004 |
+| #2008 | M8 | merged | 2243de02d |
+| #2010 | M9 | merged | 83926c52f |
 
 ## Milestones
 
@@ -36,13 +38,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
-| M7 | T039–T044 | full | [database] config and backend rule | #2006 | open |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
-| M9 | T051–T054 | full | Import registry.json once | | pending |
-| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
+| M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
+| M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
+| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | implemented, review pending |
 
 ## Decisions
 
+- M10: on every backend an `unowned` record never clears a stored owner and an owned record sets its owner (SQL: `CASE WHEN excluded.owner_user_id = 'unowned'` in the conflict branch, review A-F1; memory/JSON: `keeping_owners`). This refines plan.md's "insert only" so all backends agree. The registry still announces relinks `unowned`. SQL `reassign_unowned` returns the moved `daemons` count (projects/sessions have no rows in v1). The scan also skips SQLite's internal `sqlite_sequence`.
+- M10: quickstart §B step 1 path was `micold`, really `micold-ai-ide`; step 4 needs `config check --files` to fail (without it, exit 0 with `(missing)`), doc fixed.
 - M6: T036's tests passed on first run: `CertSerial::new` already validated hex (M1), and a PEM block fails both `CertSerial::new` and `TokenHash::from_hex`. T038 needed no `auth.rs` change; the tests pin the rule. Red evidence is T037's negative control.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -76,6 +80,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
 | B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 | Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
+| Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
+| Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
+
+- M10 full gate (scripts/gate.sh, PostgreSQL, debug=0): fmt, clippy, 13498 nextest passed; 1 failed only because the local test password `postgres` is a substring of `sqlx_postgres` (rerun with another password: store_ 129/129, 4 runs); scripts/tests all pass.
+- M10 round 1 (A CHANGES, B CLEAN): A-F1 MAJOR SQL conflict branch now sets an owned record's owner (CASE); A-F2 MAJOR suite case `an_owned_record_over_an_unowned_one_takes_its_owner` (upsert and save, all backends; import never writes over an existing row: rows without a matching marker refuse, so the CASE covers it with no import case); A-F3/B-F1 store_scan `*_reassign_moves_projects_and_sessions_of_one_tenant` + doc that the count is daemon rows; A-F4/B-F2 JSON save fails on a read error, falls back only on NotFound/parse error (+ core test); B-F3 quickstart §A gate count inline. All fixed; store_ 135/135 with PostgreSQL; full gate green (scripts/gate.sh exit 0, CARGO_INCREMENTAL=0 after wiping target-shared for disk).
+- M9 round 1 (opus A+B): MINOR-ONLY, 2 MINOR fixed: a non-NotFound read error now says `cannot read it`; the start test seeds a record and checks the started store serves it (corrupt-file start failure already covered).
 
 ## Declined review findings
 
@@ -95,7 +105,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 merged (PR #2003, squash 3d5485c30; one opus review A+B APPROVE, 2 nits fixed; CI kube_real kind setup failed once, green on rerun). Next: dispatch the M7 unit (T039–T044) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0.
+M10 (T055–T060) implemented, all six ticked; previous PR #2010 merged at 83926c52f. Review snapshot: base `83926c52f` (origin/main), head = the branch tip commit "#1948: M10 ownership columns and adoption" on claude/project-thread-sabfza. Round 1 done (fixes in the next commit); a round-2 re-review covers `9c32afd72...HEAD`, excluding the ledger. Focus: `OwnerId` serde (record.rs), `keeping_owners` + default `reassign_unowned` (core store.rs), SQL insert-only owner + `reassign_unowned` override (daemon db/registry.rs), suite/scan/import tests, quickstart §B record. Full gate result: *Review rounds*. PR body: /tmp/pr-1948-m10.md (label docs-not-needed). Local `store_slow` password-leak failure was the test URL's password `postgres` matching `sqlx_postgres` in the error text, not the code; with another password green 4/4.
 
 ## Open escalation
 
@@ -104,7 +114,7 @@ None.
 ## Follow-ups not done
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
-- `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
+- `sha1` in `micold-daemon` is used by M9's import digest (`sha1:<hex>` in `imports.digest`).
 - M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. 
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 

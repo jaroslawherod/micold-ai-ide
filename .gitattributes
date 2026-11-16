@@ -175,6 +175,19 @@ crates/micold-client/tests/support/fake_github.rs micold-daemon-runtime
 # The workflow itself: an edit to a job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-daemon-runtime
 
+# The web client set (#1735).
+#
+# `micold-client` marks the TypeScript web client and the pnpm workspace around it: the paths whose
+# change the `client` job of ci.yml (lint, typecheck, Jest, web export) must prove. Read by
+# scripts/classify-change.sh (`client=` output), pinned by scripts/tests/classify-change.test.sh.
+# A path is outside the set until declared; the failure direction is "run it". The workflow itself
+# is in the daemon-runtime set above, which is what makes an edit to the job run it.
+apps/client/**                        micold-client
+packages/protocol/**                  micold-client
+/pnpm-lock.yaml                       micold-client
+/pnpm-workspace.yaml                  micold-client
+/package.json                         micold-client
+
 # What a user can see, and what documents it (Constitution Principle VII).
 #
 # `micold-user-facing` marks the paths whose change a reader of the user guide could notice;

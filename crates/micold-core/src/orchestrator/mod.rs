@@ -26,7 +26,7 @@ pub use auth::{
 pub use backend::{choose_store, BindScope, MissingDatabase, StoreChoice};
 pub use dial::{jittered, LinkStatus, RetryPolicy};
 pub use liveness::Heartbeat;
-pub use record::{DaemonRecord, Health, TenantId, UNOWNED};
+pub use record::{DaemonRecord, Health, OwnerId, TenantId, UNOWNED};
 pub use registry::{
     Claim, ClaimFailure, ConfirmRefused, Confirmed, LinkAction, LinkToken, Registry, Snapshot,
 };

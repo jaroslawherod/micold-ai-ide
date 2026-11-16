@@ -337,3 +337,92 @@ pub fn key_material(handle: &StoreHandle, postgres: bool) -> Vec<String> {
     }
     found
 }
+
+/// A TCP proxy in front of `upstream` that can drop every connection and refuse new ones, then
+/// resume: a database lost after start and back again (FR-016).
+pub struct FlakyProxy {
+    /// The port it listens on, on 127.0.0.1.
+    pub port: u16,
+    state: Arc<ProxyState>,
+}
+
+#[derive(Default)]
+struct ProxyState {
+    down: std::sync::atomic::AtomicBool,
+    open: std::sync::Mutex<Vec<std::net::TcpStream>>,
+}
+
+impl FlakyProxy {
+    /// Listen on a free port and forward each connection to `upstream` (`host:port`).
+    pub fn start(upstream: String) -> Self {
+        use std::sync::atomic::Ordering;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let state = Arc::new(ProxyState::default());
+        let shared = Arc::clone(&state);
+        std::thread::spawn(move || {
+            for client in listener.incoming().flatten() {
+                if shared.down.load(Ordering::SeqCst) {
+                    continue; // dropped: closed at once
+                }
+                let Ok(server) = std::net::TcpStream::connect(&upstream) else {
+                    continue;
+                };
+                let mut open = shared.open.lock().unwrap();
+                open.extend([client.try_clone().unwrap(), server.try_clone().unwrap()]);
+                drop(open);
+                pipe(client.try_clone().unwrap(), server.try_clone().unwrap());
+                pipe(server, client);
+            }
+        });
+        Self { port, state }
+    }
+
+    /// Cut every open connection and refuse new ones until [`resume`](Self::resume).
+    pub fn drop_all(&self) {
+        self.state
+            .down
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        for stream in self.state.open.lock().unwrap().drain(..) {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+    }
+
+    /// Accept and forward again.
+    pub fn resume(&self) {
+        self.state
+            .down
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Copy `from` to `to` on a thread of its own until either side ends.
+fn pipe(mut from: std::net::TcpStream, mut to: std::net::TcpStream) {
+    std::thread::spawn(move || {
+        let _ = std::io::copy(&mut from, &mut to);
+        let _ = to.shutdown(std::net::Shutdown::Both);
+    });
+}
+
+/// `url` with its `host:port` replaced by `127.0.0.1:<port>`, and the `host:port` it had.
+pub fn through_port(url: &str, port: u16) -> (String, String) {
+    let start = url.find("://").unwrap() + 3;
+    let rest = &url[start..];
+    let end = rest.find(['/', '?']).unwrap_or(rest.len());
+    let authority = &rest[..end];
+    let (user, host) = authority
+        .rsplit_once('@')
+        .map_or(("", authority), |(u, h)| (u, h));
+    let upstream = if host.contains(':') {
+        host.to_owned()
+    } else {
+        format!("{host}:5432")
+    };
+    let user = if user.is_empty() {
+        String::new()
+    } else {
+        format!("{user}@")
+    };
+    let out = format!("{}{user}127.0.0.1:{port}{}", &url[..start], &rest[end..]);
+    (out, upstream)
+}

@@ -101,13 +101,35 @@ impl Orchestrator {
 
     /// An orchestrator in this process on `dir`, saving its registry there.
     pub async fn start_in(dir: Arc<tempfile::TempDir>) -> Self {
+        let store = Arc::new(JsonRegistryStore::in_data_dir(dir.path()));
+        Self::start_with(dir, store).await
+    }
+
+    /// An orchestrator in this process on `dir`, on `store`.
+    pub async fn start_with(
+        dir: Arc<tempfile::TempDir>,
+        store: Arc<dyn micold_core::orchestrator::RegistryStore>,
+    ) -> Self {
         let socket = dir.path().join("orchestrator.sock");
         let clock = TestClock::new(1_700_000_000);
-        let store = Arc::new(JsonRegistryStore::in_data_dir(dir.path()));
         let task = tokio::spawn(micold_daemon::orchestrator::run_with(
             socket.clone(),
             Arc::clone(&clock) as Arc<dyn Clock>,
             store,
+        ));
+        Self::listening(dir, socket, clock, Some(task)).await
+    }
+
+    /// An orchestrator in this process with `dir` as its only configuration: no `[database]`, so
+    /// the SQLite file under `dir` (SC-005).
+    pub async fn start_configured(dir: Arc<tempfile::TempDir>) -> Self {
+        let socket = dir.path().join("orchestrator.sock");
+        let clock = TestClock::new(1_700_000_000);
+        let task = tokio::spawn(micold_daemon::orchestrator::run_configured(
+            socket.clone(),
+            Arc::clone(&clock) as Arc<dyn Clock>,
+            None,
+            dir.path().to_path_buf(),
         ));
         Self::listening(dir, socket, clock, Some(task)).await
     }

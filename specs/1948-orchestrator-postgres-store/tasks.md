@@ -255,24 +255,24 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: start with only a data directory, or a PostgreSQL URL from config (US4 scenario 3; FR-009, FR-014, FR-016, SC-005).
 
-- [ ] T045 [P] [US4] `FlakyProxy` (a TCP proxy that can drop and resume) in `store_support.rs`.
-- [ ] T046 [US4] Failing tests in `store_slow.rs` (new, registered): an unreachable host fails the
+- [x] T045 [P] [US4] `FlakyProxy` (a TCP proxy that can drop and resume) in `store_support.rs`.
+- [x] T046 [US4] Failing tests in `store_slow.rs` (new, registered): an unreachable host fails the
   start with `orchestrator database <host>:<port> unreachable: <cause>` and the error text does not
   contain the password (grep); through `FlakyProxy`, a database lost after start makes store calls
   return `Unavailable` while the orchestrator keeps running, and the next call after the proxy
   resumes succeeds (FR-016); with the save thread parked inside a store call, other daemons'
   heartbeats are still answered inside 9 s (FR-014).
-- [ ] T047 [US4] Failing tests in `store_config.rs` and `store_suite.rs`: starting with only a data
+- [x] T047 [US4] Failing tests in `store_config.rs` and `store_suite.rs`: starting with only a data
   directory and no `[database]` creates `orchestrator/orchestrator.db` mode 0600, a linked daemon
   is listed (offline) after a restart (SC-005); `run_with_sql_store_starts_and_restores` starts
   `run_with` on a SQL store and `serve`'s load works; dropping the last handle inside async code
   does not panic.
-- [ ] T048 [US4] `db/mod.rs`: `open(config, bind, data_dir)` driven by `choose_store`, reading
+- [x] T048 [US4] `db/mod.rs`: `open(config, bind, data_dir)` driven by `choose_store`, reading
   `url_file` (trimmed) and `ca_file`.
-- [ ] T049 [US4] `crates/micold-daemon/src/orchestrator/mod.rs`: `run()` opens the stores inside
+- [x] T049 [US4] `crates/micold-daemon/src/orchestrator/mod.rs`: `run()` opens the stores inside
   `spawn_blocking` before `serve`, passing `LoopbackOnly`; `serve` loads through
   `spawn_blocking`, the join error mapped to `io::Error`; T046 and T047 green.
-- [ ] T050 [P] [US4] `docs/user-guide/orchestrator-storage.md` (new): local mode versus PostgreSQL,
+- [x] T050 [P] [US4] `docs/user-guide/orchestrator-storage.md` (new): local mode versus PostgreSQL,
   the `[database]` keys, what is stored and never stored, newer-schema refusal; link it from
   `docs/user-guide/orchestrator-mode.md`.
 
@@ -282,19 +282,19 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: an operator's JSON registry moves into the database exactly once (US5; FR-010).
 
-- [ ] T051 [P] [US5] Failing tests in `crates/micold-daemon/tests/orchestrator/store_import.rs` (new,
+- [x] T051 [P] [US5] Failing tests in `crates/micold-daemon/tests/orchestrator/store_import.rs` (new,
   registered), both backends: an un-imported file with an empty registry imports every record under
   its own `tenant` and is renamed `registry.json.imported`; a second start imports nothing and
   changes nothing; a corrupt file fails the start naming it and imports nothing; rows present with
   no matching marker refuse, naming the file and the row count; rows plus a marker whose digest
   matches the file (a crash after the import transaction) only rename.
-- [ ] T052 [US5] `crates/micold-daemon/src/orchestrator/db/import.rs`: parse with
+- [x] T052 [US5] `crates/micold-daemon/src/orchestrator/db/import.rs`: parse with
   `JsonRegistryStore::load`, count `daemons` rows over all tenants, one transaction inserting every
   record (owner `UNOWNED`) and an `imports` row `(tenant_id, source, digest, imported_at)` with
   `digest` the SHA-1 of the file, then rename (same directory, same mode).
-- [ ] T053 [US5] Call the import in `run()` after `open` and before `serve`'s load
+- [x] T053 [US5] Call the import in `run()` after `open` and before `serve`'s load
   (`crates/micold-daemon/src/orchestrator/mod.rs`); T051 green.
-- [ ] T054 [P] [US5] `docs/user-guide/orchestrator-storage.md`: the import and the `.imported` suffix.
+- [x] T054 [P] [US5] `docs/user-guide/orchestrator-storage.md`: the import and the `.imported` suffix.
 
 ---
 
@@ -302,22 +302,22 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: owners and tenants round-trip, and the first owner adopts pre-user records (US6; FR-007, FR-046).
 
-- [ ] T055 [P] [US6] Failing tests in `crates/micold-core/src/orchestrator/record.rs`: `OwnerId` is
+- [x] T055 [P] [US6] Failing tests in `crates/micold-core/src/orchestrator/record.rs`: `OwnerId` is
   `unowned` or a `UserId`; `DaemonRecord.owner` defaults to `unowned` when absent, so an old
   `registry.json` loads.
-- [ ] T056 [P] [US6] Failing cases in `store_suite.rs`: an existing owner survives a relink `upsert`
+- [x] T056 [P] [US6] Failing cases in `store_suite.rs`: an existing owner survives a relink `upsert`
   and a whole-list `save`; `reassign_unowned(&TenantId, &UserId)` moves every `unowned` row of the
   tenant and returns the count, a second call returns 0, another tenant's rows stay.
-- [ ] T057 [P] [US6] Test in `store_scan.rs`: every table except `_sqlx_migrations` has `tenant_id`,
+- [x] T057 [P] [US6] Test in `store_scan.rs`: every table except `_sqlx_migrations` has `tenant_id`,
   and `daemons`, `projects`, `sessions` have `owner_user_id`, on both backends (US6 scenario 1).
-- [ ] T058 [US6] `record.rs`: `OwnerId`, `DaemonRecord.owner` (serde default `unowned`); `store.rs`:
+- [x] T058 [US6] `record.rs`: `OwnerId`, `DaemonRecord.owner` (serde default `unowned`); `store.rs`:
   `RegistryStore::reassign_unowned` with a default body over `load` and `save`; memory and JSON
   stores green.
-- [ ] T059 [US6] `db/registry.rs`: write `owner_user_id` from the record on insert only, and override
+- [x] T059 [US6] `db/registry.rs`: write `owner_user_id` from the record on insert only, and override
   `reassign_unowned` with one transaction updating `daemons`, `projects`, `sessions` of the tenant
   `WHERE owner_user_id = 'unowned'`; `db/import.rs` keeps an owner the file carries; T056 and T057
   green.
-- [ ] T060 [US6] Run quickstart §A and §B (`specs/1948-orchestrator-postgres-store/quickstart.md`);
+- [x] T060 [US6] Run quickstart §A and §B (`specs/1948-orchestrator-postgres-store/quickstart.md`);
   record each step's result there and fix the doc where it is wrong.
 
 ---

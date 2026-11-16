@@ -8,7 +8,7 @@ use std::sync::Arc;
 use micold_core::daemon_config::Kind;
 use micold_core::orchestrator::{
     Bootstrap, CertSerial, DaemonRecord, Health, Identity, NewAuditEntry, NewEnrollment, NewInvite,
-    NewUser, Provider, RefreshToken, Role, StoreError, TenantId, TokenHash, UserId,
+    NewUser, OwnerId, Provider, RefreshToken, Role, StoreError, TenantId, TokenHash, UserId,
 };
 use micold_core::protocol::routing::WireDaemonId;
 
@@ -144,6 +144,87 @@ pub(super) fn two_writers_upserting_different_ids_lose_neither(backend: &mut dyn
     assert_eq!(store.load().unwrap().len(), 20, "no upsert was lost");
 }
 
+/// `daemon(...)` owned by `user`.
+fn owned(tenant_name: &str, id: &str, user: &str) -> DaemonRecord {
+    let mut record = daemon(tenant_name, id, id);
+    record.owner = OwnerId::parse(user);
+    record
+}
+
+fn owners(records: &[DaemonRecord]) -> Vec<(String, String)> {
+    records
+        .iter()
+        .map(|r| (r.id.as_str().to_owned(), r.owner.as_str().to_owned()))
+        .collect()
+}
+
+pub(super) fn an_owner_survives_a_relink_upsert_and_a_whole_list_save(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store.upsert(&owned("default", "a", "alice")).unwrap();
+    // A relink announces the daemon afresh, `unowned`.
+    let mut relinked = daemon("default", "a", "renamed");
+    store.upsert(&relinked).unwrap();
+    let loaded = store.load().unwrap();
+    assert_eq!(loaded[0].name, "renamed");
+    assert_eq!(owners(&loaded), vec![("a".into(), "alice".into())]);
+    relinked.name = "saved".into();
+    store
+        .save(&[relinked, daemon("default", "b", "b")])
+        .unwrap();
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![("a".into(), "alice".into()), ("b".into(), "unowned".into())]
+    );
+    assert_eq!(loaded[0].name, "saved");
+}
+
+pub(super) fn an_owned_record_over_an_unowned_one_takes_its_owner(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store.upsert(&daemon("default", "a", "a")).unwrap();
+    store.upsert(&owned("default", "a", "bob")).unwrap();
+    store.save(&[daemon("default", "b", "b")]).unwrap();
+    store
+        .save(&[owned("default", "a", "carol"), owned("default", "b", "bob")])
+        .unwrap();
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![("a".into(), "carol".into()), ("b".into(), "bob".into())]
+    );
+    let store = backend.registry();
+    store.upsert(&owned("default", "a", "bob")).unwrap();
+    assert_eq!(owners(&store.load().unwrap())[0].1, "bob");
+}
+
+pub(super) fn reassign_unowned_moves_the_tenants_unowned_records_once(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store
+        .save(&[
+            daemon("default", "a", "a"),
+            daemon("default", "b", "b"),
+            owned("default", "c", "carol"),
+            daemon("other", "d", "d"),
+        ])
+        .unwrap();
+    let default = tenant("default");
+    assert_eq!(store.reassign_unowned(&default, &uid("owner")).unwrap(), 2);
+    assert_eq!(store.reassign_unowned(&default, &uid("owner")).unwrap(), 0);
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![
+            ("a".into(), "owner".into()),
+            ("b".into(), "owner".into()),
+            ("c".into(), "carol".into()),
+            ("d".into(), "unowned".into()),
+        ]
+    );
+}
+
 macro_rules! registry_tests {
     ($make:expr) => {
         registry_tests!(@each $make,
@@ -152,7 +233,10 @@ macro_rules! registry_tests {
             save_replaces_the_whole_set_across_tenants,
             load_is_ordered_by_tenant_then_id,
             tenant_records_survive_reopen,
-            two_writers_upserting_different_ids_lose_neither
+            two_writers_upserting_different_ids_lose_neither,
+            an_owner_survives_a_relink_upsert_and_a_whole_list_save,
+            an_owned_record_over_an_unowned_one_takes_its_owner,
+            reassign_unowned_moves_the_tenants_unowned_records_once
         );
     };
     (@each $make:expr, $($case:ident),+) => {
@@ -616,4 +700,62 @@ mod postgres {
     registry_tests!(super::PostgresBackend::new());
     auth_tests!(super::PostgresBackend::new());
     audit_tests!(super::PostgresBackend::new());
+}
+
+// ---- the orchestrator on a SQL store ----
+
+/// `run_with` on a SQL store: `serve`'s load runs off the runtime, and a restart restores.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_with_sql_store_starts_and_restores() {
+    use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
+    use micold_core::orchestrator::RegistryStore;
+    use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+    use std::path::Path;
+
+    let dir = Arc::new(tempfile::tempdir().unwrap());
+    let open = |dir: &Path| -> Arc<dyn RegistryStore> {
+        Arc::new(SqlRegistryStore::new(
+            StoreHandle::open_sqlite(dir).unwrap(),
+        ))
+    };
+    let path = dir.path().to_path_buf();
+    let store = tokio::task::spawn_blocking(move || open(&path))
+        .await
+        .unwrap();
+    let orchestrator = Orchestrator::start_with(Arc::clone(&dir), Arc::clone(&store)).await;
+    let link = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    record_when(&orchestrator, "a", |a| a["health"] == "online").await;
+    drop(link);
+    let started = std::time::Instant::now();
+    loop {
+        let store = Arc::clone(&store);
+        let saved = tokio::task::spawn_blocking(move || store.load().unwrap().len())
+            .await
+            .unwrap();
+        if saved == 1 {
+            break;
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let dir = orchestrator.stop().await;
+    let restarted = Orchestrator::start_with(dir, store).await;
+    assert_eq!(
+        record_when(&restarted, "a", |_| true).await["health"],
+        "offline"
+    );
+}
+
+/// The last handle dropping inside async code shuts its runtime down without a panic.
+#[tokio::test]
+async fn dropping_the_last_handle_inside_async_code_does_not_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().to_path_buf();
+    let handle = tokio::task::spawn_blocking(move || {
+        micold_daemon::orchestrator::db::StoreHandle::open_sqlite(&path).unwrap()
+    })
+    .await
+    .unwrap();
+    assert_eq!(Arc::strong_count(&handle), 1);
+    drop(handle);
 }

@@ -198,3 +198,62 @@ exercised by reading the code path, not by a failing run first. Test-after admis
 - green: `DatabaseConfig`, rules D1–D5, the resolved view, `orchestrator::backend::choose_store`,
   `config check` wiring. 13 core cases and 4 `store_config` cases pass; the full gate is green.
 - refactor: none
+
+## M8 Cycle 1: the process starts on the chosen store (T045–T050)
+
+T045–T050 were written test-after (the review round 1 found no M8 entry). Red was recovered by
+reverting each behaviour on the green tree and running its test
+(`cargo test -p micold-daemon --test orchestrator <filter>`, PostgreSQL 16 local,
+`MICOLD_REQUIRE_POSTGRES=1`), then restoring it:
+
+- `db::open` unreachable mapping, reverted to `orchestrator database {target}: {reason}`:
+  `an_unreachable_host_fails_the_start_naming_host_and_cause_not_the_password` FAILED at
+  store_slow.rs:48 (the text does not start with `orchestrator database 127.0.0.1:<port> unreachable: `).
+- `run()`/`run_configured` store choice, reverted to the JSON store in the data directory:
+  `only_a_data_directory_starts_on_sqlite_and_keeps_the_registry_across_a_restart` FAILED at
+  store_config.rs:130 (no row reaches `orchestrator.db` within 10 s).
+- `serve` loading on `spawn_blocking`, reverted to `store.load()` on the runtime:
+  `run_with_sql_store_starts_and_restores` FAILED, `Cannot start a runtime from within a runtime`
+  in `SqlRegistryStore::load`.
+- green: all three pass with the code restored.
+
+## M8 Cycle 2: review round 1 fixes
+
+- F1, test-first: `an_unimported_registry_json_refuses_the_start_naming_the_file`. red: FAILED at
+  store_config.rs:172, `the start returns at once` (the start ran on an empty SQLite registry and
+  did not return; a first unbounded version of the test hung). green: `refuse_unimported_json` in
+  `open_store`, before any store is opened; the message names the file; with
+  `registry.json.imported` beside it the start runs.
+- F3, test-first: `a_save_lost_with_the_database_is_reported_on_stderr_without_the_password` (the
+  process on PostgreSQL through `FlakyProxy`, connections dropped, a daemon linked). red: no line
+  with `could not be saved`; stderr held only `orchestrator store 127.0.0.1:<port> is unavailable:
+  …`. green: the save thread prefixes a non-`Save` error with `a registry change could not be
+  saved:`; no line holds the password.
+- refactor: none
+
+## M9 — T051–T053 (registry.json import)
+
+- behavior: US5 1–4 (FR-010), `tests/orchestrator/store_import.rs` on SQLite and PostgreSQL, and
+  `store_config::the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one`.
+  red: on M8 the start refused any un-imported file with `this version cannot import it`, so the
+  start test's readable file never started; `import_registry_json` did not exist (the suite did
+  not compile). green: `db::import` (one transaction: rows, `imports` marker with the file's SHA-1,
+  then rename) called from `open_store` after `db::open`; 11 passed with PostgreSQL configured.
+- refactor: `upsert_row` shared with the registry store (`pub(super)`).
+
+## M10 — Ownership columns and adoption (T055–T060)
+
+- T055/T058 `record.rs`: red: `OwnerId` and `DaemonRecord.owner` did not exist (the two new
+  record tests did not compile). green: `OwnerId::{Unowned, User}` serialised as its text, serde
+  default `unowned`; 125 core orchestrator tests pass.
+- T056/T058/T059 `store_suite.rs`: red by revert: with `db/registry.rs` back at M9 (owner bound
+  as `UNOWNED`, not read on load) `an_owner_survives_a_relink_upsert_and_a_whole_list_save` fails
+  on SQLite and PostgreSQL (`left: [("a", "unowned")] right: [("a", "alice")]`). green: the owner
+  is bound on insert only and read on load; memory and JSON keep a stored owner when an `unowned`
+  record replaces it (`keeping_owners`); `reassign_unowned` default over `load`/`save`, SQL
+  override one transaction over `daemons`, `projects`, `sessions`.
+- T057 `store_scan.rs`: every table but `_sqlx_migrations` (and SQLite's `sqlite_sequence`) has
+  `tenant_id`, the three owned ones `owner_user_id`; green on arrival (the M2/M4 schema already
+  had them), kept as the US6 scenario 1 guard.
+- T059 `store_import.rs`: an owner the file carries is kept, a missing one is `unowned`; green
+  with the insert-only bind.

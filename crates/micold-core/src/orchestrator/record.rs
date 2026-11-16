@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use super::auth::UserId;
 use super::DEFAULT_TENANT;
 use crate::daemon_config::Kind;
 use crate::protocol::routing::WireDaemonId;
@@ -11,6 +12,44 @@ use crate::protocol::routing::WireDaemonId;
 /// The owner of a record that exists before any user does (#1948): the first owner user takes it
 /// over.
 pub const UNOWNED: &str = "unowned";
+
+/// Who owns a daemon, project or session record (#1948, FR-007): [`UNOWNED`] until the first owner
+/// user takes it over with `RegistryStore::reassign_unowned`, then that user.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum OwnerId {
+    /// Made before any user existed.
+    #[default]
+    Unowned,
+    /// Owned by this user.
+    User(UserId),
+}
+
+impl OwnerId {
+    /// The stored text: [`UNOWNED`] or a user id. Blank or `unowned` reads as [`OwnerId::Unowned`].
+    pub fn parse(text: &str) -> Self {
+        UserId::new(text).map_or(Self::Unowned, Self::User)
+    }
+
+    /// The owner as stored text.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Unowned => UNOWNED,
+            Self::User(user) => user.as_str(),
+        }
+    }
+}
+
+impl Serialize for OwnerId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for OwnerId {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::parse(&String::deserialize(deserializer)?))
+    }
+}
 
 /// Whether the orchestrator can reach a daemon right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -83,6 +122,10 @@ pub struct DaemonRecord {
     /// The tenant it belongs to.
     #[serde(default)]
     pub tenant: TenantId,
+    /// Who owns it; `unowned` when absent, so a `registry.json` from before owners loads. Stores
+    /// write it when the record is inserted; an upsert or save keeps a stored owner.
+    #[serde(default)]
+    pub owner: OwnerId,
 }
 
 impl DaemonRecord {
@@ -111,6 +154,7 @@ impl DaemonRecord {
             health: Health::Offline,
             last_seen: 0,
             tenant: TenantId::new(tenant),
+            owner: OwnerId::Unowned,
         }
     }
 }
@@ -168,5 +212,29 @@ mod tests {
         let json = r#"{"id":"box","kind":"ssh","name":"b","protocol_version":80,"tenant":""}"#;
         let record: DaemonRecord = serde_json::from_str(json).unwrap();
         assert_eq!(record.tenant.as_str(), "default");
+    }
+
+    #[test]
+    fn an_owner_is_unowned_or_a_user_id() {
+        assert_eq!(OwnerId::parse("unowned"), OwnerId::Unowned);
+        assert_eq!(OwnerId::parse("  "), OwnerId::Unowned);
+        let owner = OwnerId::parse(" u1 ");
+        assert_eq!(owner, OwnerId::User(UserId::new("u1").unwrap()));
+        assert_eq!(owner.as_str(), "u1");
+        assert_eq!(OwnerId::Unowned.as_str(), UNOWNED);
+        assert_eq!(serde_json::to_string(&owner).unwrap(), r#""u1""#);
+    }
+
+    #[test]
+    fn a_record_without_an_owner_reads_unowned_and_a_stored_owner_round_trips() {
+        let json = r#"{"id":"box","kind":"host","name":"b","protocol_version":80}"#;
+        let old: DaemonRecord = serde_json::from_str(json).unwrap();
+        assert_eq!(old.owner, OwnerId::Unowned);
+        assert_eq!(record("n", None).owner, OwnerId::Unowned);
+        let mut owned = old;
+        owned.owner = OwnerId::parse("u1");
+        let text = serde_json::to_string(&owned).unwrap();
+        assert!(text.contains(r#""owner":"u1""#), "{text}");
+        assert_eq!(serde_json::from_str::<DaemonRecord>(&text).unwrap(), owned);
     }
 }

@@ -1,0 +1,9 @@
+{
+  "app.title": "Micold",
+  "app.tagline": "Twoje sesje kodowania, w przeglądarce.",
+  "locale.picker.label": "Język",
+  "locale.name.en": "English",
+  "locale.name.pl": "Polski",
+  "locale.name.pseudo": "Pseudo (test)",
+  "session.count": "{count, plural, one {# sesja} few {# sesje} many {# sesji} other {# sesji}}"
+}
