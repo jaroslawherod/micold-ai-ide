@@ -85,7 +85,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 implemented (T032–T035 ticked), review A round 1 fixed, full gate (scripts/gate.sh, PostgreSQL required) green at the head pushed. Next: review B (prompt /tmp/claude-0/-home-user/4d804786-2bb7-5074-ac8b-1bd59a00ee19/scratchpad/review-B-M5.md, snapshot b45284b82970b37cab6937de8fd50ae97f17803d:eec56ae5302bbe2a83b3d21c9eabae9005d2756b; the later commit only extends the no_outbound allow-list), then open the PR with body /tmp/claude-0/-home-user/4d804786-2bb7-5074-ac8b-1bd59a00ee19/scratchpad/pr-body-M5.md. Cloud: the gate needs CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 to fit the disk.
 
 ## Open escalation
 
