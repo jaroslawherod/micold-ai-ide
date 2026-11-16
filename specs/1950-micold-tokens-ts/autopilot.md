@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-wlrb6d
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M1 (milestone unit)
+- **Next step**: M1 PR open by orchestrator, then review B, CI, merge; then M2
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | — | pending |
+| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | pending open | implemented, review A done |
 | M2 | T010–T012 | light | gate drift check | — | pending |
 
 ## Decisions
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | design | f6e05888740451cc3632bbef42831b4ac109f394 | 02f657f9:ad8718a6 | CHANGES (F1-F5 applied; reviewer dispatched by orchestrator) |
 | Plan | 2 | design | 51bb656aa43d866d8c1d18c5cc0acd1fe192a766 | 45c94fb0:955e5cb1 | CLEAN (sonnet re-review, dispatched by orchestrator) |
 | Tasks | 1 | design | 02504dfad970ca6a8acecac160a7576d8d07fc10 | f4413c54:bc96b57c | CLEAN (3 MINOR applied; dispatched by orchestrator) |
+| Diff A (self, no Agent tool) | 1 | M1 origin/main...HEAD | HEAD | - | CLEAN (1 MINOR applied: `named()` depth arg simplified; checked: colours vs stylesheet, atomic write, tables byte-identical CSS; typeScale has no `font` since no font token exists, recorded in drift-M1.md) |
 
 ## Declined review findings
 

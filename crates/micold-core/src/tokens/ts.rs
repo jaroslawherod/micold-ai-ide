@@ -25,11 +25,11 @@ pub fn module() -> String {
     out.push('\n');
     export(&mut out, "colors", &colors());
     export(&mut out, "typeScale", &type_scale());
-    export(&mut out, "shape", &named(tables::CORNER_RADII, 1));
+    export(&mut out, "shape", &named(tables::CORNER_RADII, 0));
     export(&mut out, "elevation", &elevations());
     export(&mut out, "motion", &motion());
     export(&mut out, "state", &states());
-    export(&mut out, "spacing", &named(tables::SPACING, 1));
+    export(&mut out, "spacing", &named(tables::SPACING, 0));
     out
 }
 
@@ -76,7 +76,7 @@ fn type_scale() -> String {
     object(0, &entries)
 }
 
-/// A flat `name: number` family at `depth`, keys camel-cased.
+/// A flat `name: number` family whose closing brace sits at `depth`, keys camel-cased.
 fn named<V: std::fmt::Display>(
     table: impl IntoIterator<Item = (&'static str, V)>,
     depth: usize,
@@ -85,7 +85,7 @@ fn named<V: std::fmt::Display>(
         .into_iter()
         .map(|(name, v)| (camel(name), v.to_string()))
         .collect();
-    object(depth - 1, &entries)
+    object(depth, &entries)
 }
 
 fn surface_key(role: SurfaceRole) -> &'static str {
@@ -154,7 +154,7 @@ fn motion() -> String {
     object(
         0,
         &[
-            ("duration".into(), named(tables::DURATIONS, 2)),
+            ("duration".into(), named(tables::DURATIONS, 1)),
             ("easing".into(), object(1, &easings)),
         ],
     )
@@ -164,7 +164,7 @@ fn states() -> String {
     object(
         0,
         &[
-            ("opacity".into(), named(tables::STATES, 2)),
+            ("opacity".into(), named(tables::STATES, 1)),
             ("focusRingWidth".into(), state::FOCUS_RING_WIDTH.to_string()),
         ],
     )
