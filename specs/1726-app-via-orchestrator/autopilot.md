@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
-- **Phase**: implement (M4)
+- **Phase**: review (M4)
 - **Next step**: M4 code review A+B round 1 (snapshot in Review rounds), then PR from pr-m4.md
 - **PR**: none
 
@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | CLEAN |
 | tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
 | tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | CHANGES fixed (mechanical, no r3) |
+| code A+B (M4) | 1 | M4 | 9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
@@ -76,6 +77,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- M4 gate (cloud): `scripts/gate.sh` fmt and clippy pass; `cargo nextest` is not installed here, and a `cargo test --workspace` fallback filled the disk (link failures), so the workspace test run is CI's. Targeted runs passed: `orchestrator_provisioned`, `daemon_config_delivery_host`, `orchestrator_single_connection`. The `ssh_real_link` routed case is unrun (no sshd). Warning: `scripts/tests/autopilot.test.sh` (or a sibling) checked out `main` in this worktree and left stray files; restored by hand.
 
 - M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); jaro chose 2026-11-16 to do it as M4.
 
