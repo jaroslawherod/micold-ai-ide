@@ -7,7 +7,9 @@
 #[path = "../orchestrator/support.rs"]
 mod support;
 
+mod hub_queues;
 mod link_drop;
+mod link_full;
 mod outage;
 mod refusals;
 mod requests;

@@ -25,7 +25,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use super::hub::{close_on_link, frame_for, orchestrator_frame, Opened, WRITER_QUEUE};
+use super::hub::{frame_for, orchestrator_frame, Opened, WRITER_QUEUE};
 use super::Shared;
 use crate::server::daemon_build;
 
@@ -241,9 +241,7 @@ async fn relay(shared: &Shared, client: ClientId, daemon: WireDaemonId, routed: 
     };
     // The client ends a conn with an empty opaque inner part.
     if matches!(routed.body, RoutedBody::Opaque(inner) if inner.is_empty()) {
-        if let Some((link, link_conn)) = shared.hub().client_closed(&key) {
-            close_on_link(&link, link_conn);
-        }
+        shared.hub().client_closed(&key);
         return;
     }
     if let Some(why) = refusal(shared, &daemon) {
@@ -264,8 +262,8 @@ async fn relay(shared: &Shared, client: ClientId, daemon: WireDaemonId, routed: 
     let Some(opened) = shared.hub().open_route(&key, json) else {
         return;
     };
-    let (link, link_conn) = match opened {
-        Opened::Route { link, link_conn } => (link, link_conn),
+    let link_conn = match opened {
+        Opened::Route { link_conn } => link_conn,
         Opened::NoLink => return refuse(shared, &key, json, header.req, RouteRefusal::Offline),
         Opened::Ended => return,
     };
@@ -279,6 +277,7 @@ async fn relay(shared: &Shared, client: ClientId, daemon: WireDaemonId, routed: 
         shared.hub().forwarded(&daemon, link_conn, req);
     }
     let frame = Bytes::from(encode_opaque_payload(&to_daemon, &inner));
-    // A link that ended meanwhile drops the frame: its routes are ended with `unknown`.
-    let _ = link.tx.send(frame).await;
+    // Never wait on a link: the frame joins the route's own queue toward the daemon, and a daemon
+    // that stops reading ends that route alone.
+    shared.hub().to_daemon(&key, link_conn, frame);
 }

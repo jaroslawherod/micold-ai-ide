@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use bytes::Bytes;
-use micold_core::orchestrator::route::{ClientId, ClientKey, RouteTable};
+use micold_core::orchestrator::route::{ClientId, ClientKey, DroppedRoute, RouteTable};
 use micold_core::protocol::messages::DaemonMsg;
 use micold_core::protocol::routing::{
     control_body, control_payload, encode_json_payload, encode_opaque_payload, ConnectionId,
@@ -21,6 +21,10 @@ use tokio::task::AbortHandle;
 
 /// Frames that may wait toward one client on one route.
 pub const ROUTE_QUEUE: usize = 64;
+
+/// Frames that may wait toward one daemon on one route: a client may burst this many requests
+/// before its daemon has read any of them.
+pub const TO_LINK_QUEUE: usize = 1024;
 
 /// Frames that may wait in a client's writer, and toward a link.
 pub const WRITER_QUEUE: usize = 256;
@@ -34,9 +38,13 @@ pub struct LinkOut {
 }
 
 struct RouteOut {
+    /// Toward the client, drained by `pump`.
     queue: mpsc::Sender<Bytes>,
     pump: AbortHandle,
-    client_tx: mpsc::Sender<Bytes>,
+    /// Toward the daemon's link, drained by `forwarder`: a daemon that stops reading fills this
+    /// route's queue, not the client's read loop.
+    to_link: mpsc::Sender<Bytes>,
+    forwarder: AbortHandle,
     json: bool,
     seq: u64,
 }
@@ -61,10 +69,8 @@ pub struct Hub {
 
 /// What opening or finding a route for a client frame came to.
 pub enum Opened {
-    /// The route exists; send the frame on this link conn through `link`.
+    /// The route exists; send the frame on this link conn with [`Hub::to_daemon`].
     Route {
-        /// The link's queue.
-        link: LinkOut,
         /// The conn on the link.
         link_conn: u64,
     },
@@ -122,28 +128,7 @@ impl Hub {
                 .collect::<Vec<_>>()
         };
         for (dropped, out) in ended {
-            let mut tail = Vec::new();
-            let mut seq = out.seq;
-            for req in &dropped.pending {
-                seq += 1;
-                tail.push(frame_for(
-                    &dropped.key,
-                    out.json,
-                    seq,
-                    Some(*req),
-                    &DaemonMsg::OutcomeUnknown { req: *req },
-                ));
-            }
-            seq += 1;
-            tail.push(frame_for(
-                &dropped.key,
-                out.json,
-                seq,
-                None,
-                &DaemonMsg::StreamEnded {
-                    reason: StreamEndReason::DaemonOffline,
-                },
-            ));
+            let tail = end_tail(&dropped, &out, StreamEndReason::DaemonOffline);
             finish(out, tail);
         }
     }
@@ -155,28 +140,17 @@ impl Hub {
         id
     }
 
-    /// A client left: close its routes. Each daemon's link is told, with an empty frame, to end the
-    /// conn. Requests in flight get no answer (nobody is left to read it).
+    /// A client left: close its routes. Each daemon's link is told, with an empty frame queued
+    /// behind what the route already sent, to end the conn. Requests in flight get no answer
+    /// (nobody is left to read it).
     pub fn client_gone(&self, client: ClientId) {
-        let (closed, links) = {
-            let mut inner = self.lock();
-            inner.clients.remove(&client);
-            inner.ended.retain(|k| k.client != client);
-            let closed = inner.routes.close_client(client);
-            let links: Vec<_> = closed
-                .iter()
-                .map(|d| inner.links.get(&d.key.daemon).cloned())
-                .collect();
-            for d in &closed {
-                if let Some(out) = inner.out.remove(&(d.key.daemon.clone(), d.link_conn)) {
-                    out.pump.abort();
-                }
-            }
-            (closed, links)
-        };
-        for (dropped, link) in closed.into_iter().zip(links) {
-            if let Some(link) = link {
-                close_on_link(&link, dropped.link_conn);
+        let mut inner = self.lock();
+        inner.clients.remove(&client);
+        inner.ended.retain(|k| k.client != client);
+        for dropped in inner.routes.close_client(client) {
+            if let Some(out) = inner.out.remove(&(dropped.key.daemon.clone(), dropped.link_conn)) {
+                out.pump.abort();
+                close_in_order(&out.to_link, dropped.link_conn);
             }
         }
     }
@@ -195,19 +169,22 @@ impl Hub {
         let (link_conn, fresh) = inner.routes.open(key);
         if fresh {
             let (queue, rx) = mpsc::channel(ROUTE_QUEUE);
-            let pump = tokio::spawn(pump(rx, client_tx.clone())).abort_handle();
+            let pump = tokio::spawn(pump(rx, client_tx)).abort_handle();
+            let (to_link, link_rx) = mpsc::channel(TO_LINK_QUEUE);
+            let forwarder = tokio::spawn(forward(link_rx, link.tx.clone())).abort_handle();
             inner.out.insert(
                 (key.daemon.clone(), link_conn),
                 RouteOut {
                     queue,
                     pump,
-                    client_tx,
+                    to_link,
+                    forwarder,
                     json,
                     seq: 0,
                 },
             );
         }
-        Some(Opened::Route { link, link_conn })
+        Some(Opened::Route { link_conn })
     }
 
     /// Note a request forwarded on a route.
@@ -215,19 +192,42 @@ impl Hub {
         self.lock().routes.forwarded(daemon, link_conn, req);
     }
 
-    /// The client closed its conn: end the route; returns the link to tell.
-    pub fn client_closed(&self, key: &ClientKey) -> Option<(LinkOut, u64)> {
+    /// The client closed its conn: end the route, telling the daemon's link after the frames the
+    /// route already sent.
+    pub fn client_closed(&self, key: &ClientKey) {
         let mut inner = self.lock();
         inner.ended.remove(key);
-        let dropped = inner.routes.close(key)?;
+        let Some(dropped) = inner.routes.close(key) else {
+            return;
+        };
         if let Some(out) = inner.out.remove(&(key.daemon.clone(), dropped.link_conn)) {
             out.pump.abort();
+            close_in_order(&out.to_link, dropped.link_conn);
         }
-        inner
-            .links
-            .get(&key.daemon)
-            .cloned()
-            .map(|l| (l, dropped.link_conn))
+    }
+
+    /// Queue a client frame toward the daemon on its route. A full queue means the daemon is not
+    /// keeping up with this route: the route ends (`slow-consumer`, its requests `unknown`) and
+    /// nothing else waits (FR-004).
+    pub fn to_daemon(&self, key: &ClientKey, link_conn: u64, frame: Bytes) {
+        let slot = (key.daemon.clone(), link_conn);
+        let slow = {
+            let mut guard = self.lock();
+            let state = &mut *guard;
+            match state.out.get(&slot) {
+                None => return,
+                Some(out) if out.to_link.try_send(frame).is_ok() => return,
+                Some(_) => {}
+            }
+            let out = state.out.remove(&slot).expect("just found");
+            let dropped = state.routes.close(key);
+            state.ended.insert(key.clone());
+            let tail = dropped.map_or_else(Vec::new, |d| {
+                end_tail(&d, &out, StreamEndReason::SlowConsumer)
+            });
+            (out, tail, state.links.get(&key.daemon).cloned())
+        };
+        end_slow(slow.0, slow.1, slow.2, link_conn);
     }
 
     /// A frame from `daemon`'s link on `link_conn`, carrying `req` if it is a final answer: hand
@@ -242,8 +242,8 @@ impl Hub {
     ) {
         enum Next {
             Nothing,
-            Ended(RouteOut, Bytes),
-            Slow(RouteOut, Bytes, Option<LinkOut>),
+            Ended(RouteOut, Vec<Bytes>),
+            Slow(RouteOut, Vec<Bytes>, Option<LinkOut>),
         }
         let next = {
             let mut guard = self.lock();
@@ -251,37 +251,42 @@ impl Hub {
             match state.routes.client_of(daemon, link_conn).cloned() {
                 None => Next::Nothing,
                 Some(key) => {
-                    if let Some(req) = req {
-                        state.routes.answered(daemon, link_conn, req);
-                    }
                     let slot = (daemon.clone(), link_conn);
                     if inner.is_empty() {
-                        let _ = state.routes.close(&key);
-                        match state.out.remove(&slot) {
-                            Some(out) => {
-                                let end = ended(&key, &out, StreamEndReason::Closed);
-                                Next::Ended(out, end)
+                        let dropped = state.routes.close(&key);
+                        match (dropped, state.out.remove(&slot)) {
+                            (Some(dropped), Some(out)) => {
+                                let tail = end_tail(&dropped, &out, StreamEndReason::Closed);
+                                Next::Ended(out, tail)
                             }
-                            None => Next::Nothing,
+                            _ => Next::Nothing,
                         }
                     } else if let Some(out) = state.out.get_mut(&slot) {
-                        out.seq += 1;
+                        let seq = out.seq + 1;
                         let header = RoutedHeader {
                             target: Some(daemon.clone()),
                             conn: key.conn,
-                            seq: Sequence(out.seq),
+                            seq: Sequence(seq),
                             req,
                         };
                         let payload = Bytes::from(client_form(&header, inner, out.json));
                         if out.queue.try_send(payload).is_ok() {
+                            // Answered only once the frame is queued: a frame that never was
+                            // leaves its request pending, so it is reported `unknown`.
+                            out.seq = seq;
+                            if let Some(req) = req {
+                                state.routes.answered(daemon, link_conn, req);
+                            }
                             Next::Nothing
                         } else {
                             // Full (or the pump ended): this route alone is too slow.
                             let out = state.out.remove(&slot).expect("just found");
-                            let _ = state.routes.close(&key);
+                            let dropped = state.routes.close(&key);
                             state.ended.insert(key.clone());
-                            let end = ended(&key, &out, StreamEndReason::SlowConsumer);
-                            Next::Slow(out, end, state.links.get(daemon).cloned())
+                            let tail = dropped.map_or_else(Vec::new, |d| {
+                                end_tail(&d, &out, StreamEndReason::SlowConsumer)
+                            });
+                            Next::Slow(out, tail, state.links.get(daemon).cloned())
                         }
                     } else {
                         Next::Nothing
@@ -291,14 +296,8 @@ impl Hub {
         };
         match next {
             Next::Nothing => {}
-            Next::Ended(out, end) => finish(out, vec![end]),
-            Next::Slow(out, end, link) => {
-                out.pump.abort();
-                finish_after_abort(&out, vec![end]);
-                if let Some(link) = link {
-                    close_on_link(&link, link_conn);
-                }
-            }
+            Next::Ended(out, tail) => finish(out, tail),
+            Next::Slow(out, tail, link) => end_slow(out, tail, link, link_conn),
         }
     }
 
@@ -321,15 +320,29 @@ impl Hub {
     }
 }
 
-/// The `StreamEnded` frame that closes `out`'s route.
-fn ended(key: &ClientKey, out: &RouteOut, reason: StreamEndReason) -> Bytes {
-    frame_for(
-        key,
+/// The frames that close a dropped route: `OutcomeUnknown` for each request still pending, then
+/// `StreamEnded` with `reason`. Numbered on from what the route already sent.
+fn end_tail(dropped: &DroppedRoute, out: &RouteOut, reason: StreamEndReason) -> Vec<Bytes> {
+    let mut seq = out.seq;
+    let mut tail = Vec::new();
+    for req in &dropped.pending {
+        seq += 1;
+        tail.push(frame_for(
+            &dropped.key,
+            out.json,
+            seq,
+            Some(*req),
+            &DaemonMsg::OutcomeUnknown { req: *req },
+        ));
+    }
+    tail.push(frame_for(
+        &dropped.key,
         out.json,
-        out.seq + 1,
+        seq + 1,
         None,
         &DaemonMsg::StreamEnded { reason },
-    )
+    ));
+    tail
 }
 
 /// The payload a client gets for `inner` from the daemon, in the form it speaks.
@@ -399,50 +412,73 @@ async fn pump(mut rx: mpsc::Receiver<Bytes>, client: mpsc::Sender<Bytes>) {
     }
 }
 
-/// End a route in order: the `tail` frames queue behind what is already waiting; the pump then
-/// ends by itself when the queue closes. When the queue cannot take them the route is slow, and
-/// they go straight to the client's writer instead.
+/// End a route in order: the `tail` frames queue behind what is already waiting, and the pump
+/// ends by itself when the queue closes. Nothing already queued is dropped: when the queue has no
+/// room the rest of the tail waits for it from a task (the client's writer drains it, or ends).
 fn finish(out: RouteOut, tail: Vec<Bytes>) {
+    out.forwarder.abort();
     let mut rest = tail.into_iter();
-    let mut undelivered = Vec::new();
+    let mut left = Vec::new();
     for frame in rest.by_ref() {
-        if out.queue.try_send(frame.clone()).is_err() {
-            undelivered.push(frame);
+        if let Err(e) = out.queue.try_send(frame) {
+            left.push(e.into_inner());
             break;
         }
     }
-    undelivered.extend(rest);
-    if !undelivered.is_empty() {
-        out.pump.abort();
-        finish_after_abort(&out, undelivered);
+    left.extend(rest);
+    if !left.is_empty() {
+        tokio::spawn(async move {
+            for frame in left {
+                if out.queue.send(frame).await.is_err() {
+                    break;
+                }
+            }
+        });
     }
 }
 
-/// Deliver `tail` to the client's writer from a task (the route's queue is gone).
-fn finish_after_abort(out: &RouteOut, tail: Vec<Bytes>) {
-    let tx = out.client_tx.clone();
-    tokio::spawn(async move {
-        for frame in tail {
-            if tx.send(frame).await.is_err() {
-                break;
-            }
+/// End a route that is too slow: tell the client, and tell the daemon's link to end the conn.
+fn end_slow(out: RouteOut, tail: Vec<Bytes>, link: Option<LinkOut>, link_conn: u64) {
+    finish(out, tail);
+    if let Some(link) = link {
+        let payload = close_frame(link_conn);
+        if let Err(mpsc::error::TrySendError::Full(payload)) = link.tx.try_send(payload) {
+            tokio::spawn(async move {
+                let _ = link.tx.send(payload).await;
+            });
         }
-    });
+    }
 }
 
-/// Tell a daemon's link to end `link_conn`: an opaque frame with an empty inner part.
-pub fn close_on_link(link: &LinkOut, link_conn: u64) {
+/// Drain a route's queue toward the daemon into its link, in order.
+async fn forward(mut rx: mpsc::Receiver<Bytes>, link: mpsc::Sender<Bytes>) {
+    while let Some(frame) = rx.recv().await {
+        if link.send(frame).await.is_err() {
+            break;
+        }
+    }
+}
+
+/// The frame that tells a daemon's link to end `link_conn`: an opaque frame with an empty inner
+/// part.
+fn close_frame(link_conn: u64) -> Bytes {
     let header = RoutedHeader {
         target: None,
         conn: ConnectionId(link_conn),
         seq: Sequence(0),
         req: None,
     };
-    let payload = Bytes::from(encode_opaque_payload(&header, &[]));
-    if let Err(mpsc::error::TrySendError::Full(payload)) = link.tx.try_send(payload) {
-        let tx = link.tx.clone();
+    Bytes::from(encode_opaque_payload(&header, &[]))
+}
+
+/// Queue the end of `link_conn` behind what the route already sent toward its daemon. The
+/// forwarder ends once the queue, now without its sender, is drained.
+fn close_in_order(to_link: &mpsc::Sender<Bytes>, link_conn: u64) {
+    let frame = close_frame(link_conn);
+    if let Err(mpsc::error::TrySendError::Full(frame)) = to_link.try_send(frame) {
+        let to_link = to_link.clone();
         tokio::spawn(async move {
-            let _ = tx.send(payload).await;
+            let _ = to_link.send(frame).await;
         });
     }
 }

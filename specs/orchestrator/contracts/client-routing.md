@@ -70,8 +70,12 @@ Answer: `OrchListed { req, rows, missing: [{daemon, reason}], no_daemons }`.
 ## 5. Streams, drops and outcomes (FR-004, FR-006, FR-012)
 
 - Frames on one route are delivered in order, none lost or duplicated while the link is up.
-- Each route has its own bounded queue; when it is full the route ends with
-  `StreamEnded { reason: "slow-consumer" }`; other routes and the link continue.
+- Each route has its own bounded queue toward the client and another toward the daemon; when
+  either is full the route ends with `StreamEnded { reason: "slow-consumer" }`, an answer that did
+  not fit counting as not answered (`OutcomeUnknown`); frames already queued are still delivered.
+  Other routes and the link continue.
+- The daemon's side of a link is one shared pipe: a daemon reads the link in order, so a conn that
+  stalls the daemon's own handling stalls the other conns on that link (back-pressure, not loss).
 - Link drop: every route to that daemon gets `OutcomeUnknown { req }` for each forwarded request
   not yet answered, then `StreamEnded { reason: "daemon-offline" }`. Nothing is retried. The client
   re-reads and re-attaches when the daemon is listed online again.
