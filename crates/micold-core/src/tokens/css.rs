@@ -19,7 +19,7 @@
 //!   documentation does not have (FR-029b). The site borrows the application's *look*, not its
 //!   widgets.
 
-use super::{elevation, motion, roles, shape, spacing, state, typography, ColorScheme, Rgb, Roles};
+use super::{elevation, roles, state, tables, typography, ColorScheme, Rgb, Roles};
 use std::fmt::Write as _;
 
 /// The header every generated sheet opens with. Someone will open this file in an editor; the first
@@ -49,21 +49,10 @@ pub fn stylesheet() -> String {
     out
 }
 
-/// The corner-radius scale, listed once: the emitter and its test both iterate it.
-const CORNER_RADII: [(&str, f32); 7] = [
-    ("none", shape::NONE),
-    ("extra-small", shape::EXTRA_SMALL),
-    ("small", shape::SMALL),
-    ("medium", shape::MEDIUM),
-    ("large", shape::LARGE),
-    ("extra-large", shape::EXTRA_LARGE),
-    ("full", shape::FULL),
-];
-
 fn block(out: &mut String, selector: &str, scheme: ColorScheme, comment: &str) {
     let r = roles(scheme);
     let _ = writeln!(out, "{selector} {{ /* {comment} */");
-    for (name, value) in color_roles(&r) {
+    for (name, value) in tables::color_roles(&r) {
         declare(out, &format!("--micold-{}", kebab(name)), &hex(value));
     }
     type_scale(out);
@@ -102,62 +91,6 @@ fn hex(color: Rgb) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
 }
 
-/// Every field of [`Roles`], paired with its own identifier.
-///
-/// Spelled out rather than derived: a macro over the struct would emit whatever fields happen to
-/// exist, so adding a private helper field would silently add a public CSS variable. This list is
-/// the emitter's declaration of what the site is allowed to see.
-fn color_roles(r: &Roles) -> [(&'static str, Rgb); 46] {
-    [
-        ("primary", r.primary),
-        ("on_primary", r.on_primary),
-        ("primary_container", r.primary_container),
-        ("on_primary_container", r.on_primary_container),
-        ("secondary", r.secondary),
-        ("on_secondary", r.on_secondary),
-        ("secondary_container", r.secondary_container),
-        ("on_secondary_container", r.on_secondary_container),
-        ("tertiary", r.tertiary),
-        ("on_tertiary", r.on_tertiary),
-        ("tertiary_container", r.tertiary_container),
-        ("on_tertiary_container", r.on_tertiary_container),
-        ("error", r.error),
-        ("on_error", r.on_error),
-        ("error_container", r.error_container),
-        ("on_error_container", r.on_error_container),
-        ("background", r.background),
-        ("on_background", r.on_background),
-        ("surface", r.surface),
-        ("on_surface", r.on_surface),
-        ("surface_dim", r.surface_dim),
-        ("surface_bright", r.surface_bright),
-        ("surface_container_lowest", r.surface_container_lowest),
-        ("surface_container_low", r.surface_container_low),
-        ("surface_container", r.surface_container),
-        ("surface_container_high", r.surface_container_high),
-        ("surface_container_highest", r.surface_container_highest),
-        ("surface_variant", r.surface_variant),
-        ("on_surface_variant", r.on_surface_variant),
-        ("outline", r.outline),
-        ("outline_variant", r.outline_variant),
-        ("inverse_surface", r.inverse_surface),
-        ("inverse_on_surface", r.inverse_on_surface),
-        ("inverse_primary", r.inverse_primary),
-        ("scrim", r.scrim),
-        ("shadow", r.shadow),
-        ("diff_added", r.diff_added),
-        ("diff_removed", r.diff_removed),
-        ("warning", r.warning),
-        ("on_warning", r.on_warning),
-        ("warning_container", r.warning_container),
-        ("on_warning_container", r.on_warning_container),
-        ("success", r.success),
-        ("on_success", r.on_success),
-        ("success_container", r.success_container),
-        ("on_success_container", r.on_success_container),
-    ]
-}
-
 /// Size, line height and weight — but never `tracking`, which the renderer records and does not
 /// apply (FR-042). A site that applied it would set its prose at a spacing no screenshot on that
 /// same page can show.
@@ -175,7 +108,7 @@ fn type_scale(out: &mut String) {
 }
 
 fn corner_radii(out: &mut String) {
-    declare_table(out, "--micold-shape-corner-", "px", CORNER_RADII);
+    declare_table(out, "--micold-shape-corner-", "px", tables::CORNER_RADII);
 }
 
 /// Each level emits **both** of its cues: the complete `box-shadow`, and the tonal surface it
@@ -211,38 +144,12 @@ fn elevations(out: &mut String, r: &Roles, scheme: ColorScheme) {
 }
 
 fn motion(out: &mut String) {
-    declare_table(
-        out,
-        "--micold-motion-duration-",
-        "ms",
-        [
-            ("short-1", motion::duration::SHORT_1),
-            ("short-2", motion::duration::SHORT_2),
-            ("short-3", motion::duration::SHORT_3),
-            ("short-4", motion::duration::SHORT_4),
-            ("medium-1", motion::duration::MEDIUM_1),
-            ("medium-2", motion::duration::MEDIUM_2),
-            ("medium-3", motion::duration::MEDIUM_3),
-            ("medium-4", motion::duration::MEDIUM_4),
-            ("long-1", motion::duration::LONG_1),
-            ("long-2", motion::duration::LONG_2),
-            ("long-3", motion::duration::LONG_3),
-            ("long-4", motion::duration::LONG_4),
-        ],
-    );
+    declare_table(out, "--micold-motion-duration-", "ms", tables::DURATIONS);
     declare_table(
         out,
         "--micold-motion-easing-",
         "",
-        [
-            ("standard", motion::STANDARD),
-            ("standard-accelerate", motion::STANDARD_ACCELERATE),
-            ("standard-decelerate", motion::STANDARD_DECELERATE),
-            ("emphasized", motion::EMPHASIZED),
-            ("emphasized-accelerate", motion::EMPHASIZED_ACCELERATE),
-            ("emphasized-decelerate", motion::EMPHASIZED_DECELERATE),
-        ]
-        .map(|(name, e)| {
+        tables::EASINGS.map(|(name, e)| {
             (
                 name,
                 format!("cubic-bezier({}, {}, {}, {})", e.x1, e.y1, e.x2, e.y2),
@@ -256,16 +163,7 @@ fn states(out: &mut String) {
         out,
         "--micold-state-",
         "",
-        [
-            ("hover", state::HOVER),
-            ("focus", state::FOCUS),
-            ("pressed", state::PRESSED),
-            ("dragged", state::DRAGGED),
-            ("selected", state::SELECTED),
-            ("disabled-content", state::DISABLED_CONTENT),
-            ("disabled-container", state::DISABLED_CONTAINER),
-        ]
-        .map(|(name, value)| (format!("{name}-opacity"), value)),
+        tables::STATES.map(|(name, value)| (format!("{name}-opacity"), value)),
     );
     declare(
         out,
@@ -275,18 +173,7 @@ fn states(out: &mut String) {
 }
 
 fn spacing_scale(out: &mut String) {
-    declare_table(
-        out,
-        "--micold-spacing-",
-        "px",
-        [
-            ("xs", spacing::XS),
-            ("sm", spacing::SM),
-            ("md", spacing::MD),
-            ("lg", spacing::LG),
-            ("xl", spacing::XL),
-        ],
-    );
+    declare_table(out, "--micold-spacing-", "px", tables::SPACING);
 }
 
 #[cfg(test)]
@@ -328,55 +215,6 @@ mod tests {
         identifier.replace('_', "-")
     }
 
-    const COLOR_ROLES: [&str; 46] = [
-        "primary",
-        "on_primary",
-        "primary_container",
-        "on_primary_container",
-        "secondary",
-        "on_secondary",
-        "secondary_container",
-        "on_secondary_container",
-        "tertiary",
-        "on_tertiary",
-        "tertiary_container",
-        "on_tertiary_container",
-        "error",
-        "on_error",
-        "error_container",
-        "on_error_container",
-        "background",
-        "on_background",
-        "surface",
-        "on_surface",
-        "surface_dim",
-        "surface_bright",
-        "surface_container_lowest",
-        "surface_container_low",
-        "surface_container",
-        "surface_container_high",
-        "surface_container_highest",
-        "surface_variant",
-        "on_surface_variant",
-        "outline",
-        "outline_variant",
-        "inverse_surface",
-        "inverse_on_surface",
-        "inverse_primary",
-        "scrim",
-        "shadow",
-        "diff_added",
-        "diff_removed",
-        "warning",
-        "on_warning",
-        "warning_container",
-        "on_warning_container",
-        "success",
-        "on_success",
-        "success_container",
-        "on_success_container",
-    ];
-
     /// A name defined in one block and missing from the other is the derivation failing silently:
     /// the variable falls back to its initial value and the page renders in something that is not
     /// the application's palette at all.
@@ -397,7 +235,7 @@ mod tests {
     fn every_colour_role_is_emitted_as_a_hex_triple() {
         for scheme in ["light", "dark"] {
             let declarations = block(scheme);
-            for role in COLOR_ROLES {
+            for (role, _) in tables::color_roles(&roles(ColorScheme::Light)) {
                 let name = format!("--micold-{}", kebab(role));
                 let value = declarations
                     .get(&name)
@@ -455,7 +293,7 @@ mod tests {
     #[test]
     fn every_corner_radius_is_emitted_in_px() {
         let declarations = block("light");
-        for (name, value) in CORNER_RADII {
+        for (name, value) in tables::CORNER_RADII {
             let name = format!("--micold-shape-corner-{name}");
             assert_eq!(
                 declarations.get(&name).map(String::as_str),
@@ -505,20 +343,7 @@ mod tests {
     #[test]
     fn every_duration_and_easing_is_emitted_complete() {
         let declarations = block("light");
-        for (name, value) in [
-            ("short-1", motion::duration::SHORT_1),
-            ("short-2", motion::duration::SHORT_2),
-            ("short-3", motion::duration::SHORT_3),
-            ("short-4", motion::duration::SHORT_4),
-            ("medium-1", motion::duration::MEDIUM_1),
-            ("medium-2", motion::duration::MEDIUM_2),
-            ("medium-3", motion::duration::MEDIUM_3),
-            ("medium-4", motion::duration::MEDIUM_4),
-            ("long-1", motion::duration::LONG_1),
-            ("long-2", motion::duration::LONG_2),
-            ("long-3", motion::duration::LONG_3),
-            ("long-4", motion::duration::LONG_4),
-        ] {
+        for (name, value) in tables::DURATIONS {
             let name = format!("--micold-motion-duration-{name}");
             assert_eq!(
                 declarations.get(&name).map(String::as_str),
@@ -526,14 +351,7 @@ mod tests {
                 "{name} is not emitted as {value}ms"
             );
         }
-        for (name, easing) in [
-            ("standard", motion::STANDARD),
-            ("standard-accelerate", motion::STANDARD_ACCELERATE),
-            ("standard-decelerate", motion::STANDARD_DECELERATE),
-            ("emphasized", motion::EMPHASIZED),
-            ("emphasized-accelerate", motion::EMPHASIZED_ACCELERATE),
-            ("emphasized-decelerate", motion::EMPHASIZED_DECELERATE),
-        ] {
+        for (name, easing) in tables::EASINGS {
             let name = format!("--micold-motion-easing-{name}");
             let expected = format!(
                 "cubic-bezier({}, {}, {}, {})",
@@ -550,15 +368,7 @@ mod tests {
     #[test]
     fn every_state_layer_and_the_focus_ring_are_emitted() {
         let declarations = block("light");
-        for (name, value) in [
-            ("hover", state::HOVER),
-            ("focus", state::FOCUS),
-            ("pressed", state::PRESSED),
-            ("dragged", state::DRAGGED),
-            ("selected", state::SELECTED),
-            ("disabled-content", state::DISABLED_CONTENT),
-            ("disabled-container", state::DISABLED_CONTAINER),
-        ] {
+        for (name, value) in tables::STATES {
             let name = format!("--micold-state-{name}-opacity");
             assert_eq!(
                 declarations.get(&name).map(String::as_str),
@@ -577,13 +387,7 @@ mod tests {
     #[test]
     fn the_spacing_scale_is_emitted_in_px() {
         let declarations = block("light");
-        for (name, value) in [
-            ("xs", spacing::XS),
-            ("sm", spacing::SM),
-            ("md", spacing::MD),
-            ("lg", spacing::LG),
-            ("xl", spacing::XL),
-        ] {
+        for (name, value) in tables::SPACING {
             let name = format!("--micold-spacing-{name}");
             assert_eq!(
                 declarations.get(&name).map(String::as_str),

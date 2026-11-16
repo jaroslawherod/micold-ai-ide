@@ -5,18 +5,18 @@
 
 ## Phase 1: Foundational (refactor under green)
 
-- [ ] T001 Create `crates/micold-core/src/tokens/tables.rs`; move `CORNER_RADII` from `css.rs`; extract `color_roles(&Roles)`, `DURATIONS`, `EASINGS`, `STATES`, `SPACING` from `css.rs`'s inline lists; `pub mod tables;` in `tokens/mod.rs`
-- [ ] T002 Point `css.rs` emitters at `tables.rs`; replace the test-only 46-name list in `css.rs` tests (~line 331) with `tables::color_roles`; `mise run test-core` green and `stylesheet()` bytes unchanged
+- [x] T001 Create `crates/micold-core/src/tokens/tables.rs`; move `CORNER_RADII` from `css.rs`; extract `color_roles(&Roles)`, `DURATIONS`, `EASINGS`, `STATES`, `SPACING` from `css.rs`'s inline lists; `pub mod tables;` in `tokens/mod.rs`
+- [x] T002 Point `css.rs` emitters at `tables.rs`; replace the test-only 46-name list in `css.rs` tests (~line 331) with `tables::color_roles`; `mise run test-core` green and `stylesheet()` bytes unchanged
 
 ## Phase 2: User Story 1 + 3 — the module (P1, P2) 🎯 MVP
 
-- [ ] T003 [US1] Tests in `crates/micold-core/src/tokens/ts.rs` (red): determinism (two calls equal); every colour role in both schemes equals `stylesheet()`'s value; `colors.light`/`colors.dark` same keys; every key matches `^[a-z][A-Za-z0-9]*$`; no exponent or trailing `.0` in numbers
-- [ ] T004 [US1] Tests in `ts.rs` (red): `typeScale`, `shape`, `motion.duration`, `motion.easing` (`[x1,y1,x2,y2]`), `state`, `spacing` equal their tables; `state.focusRingWidth == state::FOCUS_RING_WIDTH`; `elevation.levels` checks `level`, `surface` key, `shadow` null-or-`offsetY`/`blur`/`alpha.light`/`alpha.dark` for every `elevation::LEVELS` entry, plus `scrimAlpha`; the family renderer helper given an empty slice renders `{}`
-- [ ] T005 [US3] Test in `ts.rs` (red): first line is exactly the contract §1 header
-- [ ] T006 [US1] Implement `ts::module()` per contracts/tokens-module.md (export order, formatting, camelCase keys); `pub mod ts;` in `tokens/mod.rs`; T003–T005 green
-- [ ] T007 [US1] Test `crates/micold-core/tests/tokens_ts_bin.rs`, wired as `mod tokens_ts_bin;` in `crates/micold-core/tests/main.rs` (red): `<path>` writes `module()` bytes; no argument prints them to stdout; unwritable path exits 1 naming it and leaves no file
-- [ ] T008 [US1] Implement `crates/micold-core/src/bin/micold-tokens-ts.rs` (doc comment as `micold-tokens-css.rs`; temp file + rename; stdout when no arg); T007 green
-- [ ] T009 [US1] Generate and commit `apps/client/src/theme/tokens.generated.ts` with `cargo run -p micold-core --bin micold-tokens-ts -- apps/client/src/theme/tokens.generated.ts`
+- [x] T003 [US1] Tests in `crates/micold-core/src/tokens/ts.rs` (red): determinism (two calls equal); every colour role in both schemes equals `stylesheet()`'s value; `colors.light`/`colors.dark` same keys; every key matches `^[a-z][A-Za-z0-9]*$`; no exponent or trailing `.0` in numbers
+- [x] T004 [US1] Tests in `ts.rs` (red): `typeScale`, `shape`, `motion.duration`, `motion.easing` (`[x1,y1,x2,y2]`), `state`, `spacing` equal their tables; `state.focusRingWidth == state::FOCUS_RING_WIDTH`; `elevation.levels` checks `level`, `surface` key, `shadow` null-or-`offsetY`/`blur`/`alpha.light`/`alpha.dark` for every `elevation::LEVELS` entry, plus `scrimAlpha`; the family renderer helper given an empty slice renders `{}`
+- [x] T005 [US3] Test in `ts.rs` (red): first line is exactly the contract §1 header
+- [x] T006 [US1] Implement `ts::module()` per contracts/tokens-module.md (export order, formatting, camelCase keys); `pub mod ts;` in `tokens/mod.rs`; T003–T005 green
+- [x] T007 [US1] Test `crates/micold-core/tests/tokens_ts_bin.rs`, wired as `mod tokens_ts_bin;` in `crates/micold-core/tests/main.rs` (red): `<path>` writes `module()` bytes; no argument prints them to stdout; unwritable path exits 1 naming it and leaves no file
+- [x] T008 [US1] Implement `crates/micold-core/src/bin/micold-tokens-ts.rs` (doc comment as `micold-tokens-css.rs`; temp file + rename; stdout when no arg); T007 green
+- [x] T009 [US1] Generate and commit `apps/client/src/theme/tokens.generated.ts` with `cargo run -p micold-core --bin micold-tokens-ts -- apps/client/src/theme/tokens.generated.ts`
 
 ## Phase 3: User Story 2 — drift check (P1)
 

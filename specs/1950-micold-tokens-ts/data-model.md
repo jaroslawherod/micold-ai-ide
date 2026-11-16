@@ -3,7 +3,7 @@
 | Export | Shape | Source |
 |---|---|---|
 | `colors` | `{ light: Record<Role, "#rrggbb">, dark: same keys }` | `tables::color_roles(&roles(scheme))` |
-| `typeScale` | `Record<TypeRole, { font, size, lineHeight, weight }>` | `typography::ALL` |
+| `typeScale` | `Record<TypeRole, { size, lineHeight, weight }>` | `typography::ALL` |
 | `shape` | `Record<Radius, number>` | `tables::CORNER_RADII` |
 | `elevation` | `{ levels: { level: number, surface: <colour-role key>, shadow: null \| { offsetY, blur, alpha: { light, dark } } }[], scrimAlpha }` | `elevation::LEVELS` (`Level`, `Shadow`), `SCRIM_ALPHA` (as css.rs:184-204) |
 | `motion` | `{ duration: Record<Name, ms>, easing: Record<Name, [n,n,n,n]> }` | `tables::DURATIONS`, `EASINGS` |
