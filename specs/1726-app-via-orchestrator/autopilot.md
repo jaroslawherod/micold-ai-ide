@@ -10,8 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-v4iabl
 - **Started**: 2026-11-16
-- **Phase**: spec
-- **Next step**: spec review round 1 (not run: no Agent tool in the spec unit; orchestrator to dispatch it, snapshot f3b201b3e2dc11ea9d3cb4d365efcd62e7a71cae:b3f47d077d50c0a5339d29f608b5f351591a7057), then clarify (2 open markers: FR-002 list deadline; Assumptions `[orchestrator_link]` writer)
+- **Phase**: clari- **Next step**: plan (clarify done, 1 round, all agent-resolved)er)
 
 ## Pull requests
 
@@ -25,13 +24,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- FR-002 list deadline 2 s per daemon, parallel (agent-resolved).
+- This feature writes `[orchestrator_link]` into app-provisioned daemons, FR-013 (agent-resolved: 1725 spec Assumptions).
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
+| spec | 1 | design | 7c25a28d9e4bec1417923f0dd050b8627f79bebd | f3b201b3e2dc11ea9d3cb4d365efcd62e7a71cae:b3f47d077d50c0a5339d29f608b5f351591a7057 | CLEAN (3 MINOR applied in clarify) |
 
 ## Declined review findings
 
