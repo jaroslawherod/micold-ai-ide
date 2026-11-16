@@ -527,6 +527,7 @@ impl Checker<'_, '_> {
         self.tokens();
         self.orchestrator();
         self.orchestrator_link();
+        self.database();
     }
 
     fn at(&mut self, rule: &'static str, path: &str, message: String) {
@@ -541,9 +542,13 @@ impl Checker<'_, '_> {
 
     /// A finding at the `[orchestrator]` header, for a rule about a key that is absent.
     fn at_header(&mut self, rule: &'static str, message: String) {
-        let span = self.doc.header("orchestrator");
-        self.doc
-            .push(self.out, rule, "orchestrator", &message, span);
+        self.at_table_header("orchestrator", rule, message);
+    }
+
+    /// A finding at the `[table]` header.
+    fn at_table_header(&mut self, table: &str, rule: &'static str, message: String) {
+        let span = self.doc.header(table);
+        self.doc.push(self.out, rule, table, &message, span);
     }
 
     fn warn(&mut self, rule: &'static str, path: &str, message: String) {
@@ -701,6 +706,13 @@ impl Checker<'_, '_> {
             ] {
                 if let Some(p) = secret {
                     add(format!("orchestrator.{key}"), p.path());
+                }
+            }
+        }
+        if let Some(d) = &c.database {
+            for (key, secret) in [("url_file", &d.url_file), ("ca_file", &d.ca_file)] {
+                if let Some(p) = secret {
+                    add(format!("database.{key}"), p.path());
                 }
             }
         }
@@ -1063,6 +1075,32 @@ impl Checker<'_, '_> {
                 "`[orchestrator]` needs `enrollment_token_file`, or `cert_file` and `key_file`: \
                  add one"
                     .to_string(),
+            );
+        }
+    }
+
+    /// D1, D2 (#1948): `database.url_file` is required; `database.pool_size` is 1 to 64.
+    fn database(&mut self) {
+        let Some(d) = &self.config.database else {
+            return;
+        };
+        if d.url_file.is_none() {
+            self.at_table_header(
+                "database",
+                "D1",
+                "`database.url_file` is required: name the file that holds the PostgreSQL URL"
+                    .to_string(),
+            );
+        }
+        if !(1..=super::MAX_POOL_SIZE).contains(&d.pool_size) {
+            self.at(
+                "D2",
+                "database.pool_size",
+                format!(
+                    "`database.pool_size` {} is outside 1 to {}",
+                    d.pool_size,
+                    super::MAX_POOL_SIZE
+                ),
             );
         }
     }

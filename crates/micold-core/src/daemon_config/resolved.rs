@@ -16,6 +16,8 @@ pub enum SecretState {
     },
     Missing,
     Unreadable,
+    /// Only the database URL file: readable but blank after trimming.
+    Empty,
 }
 
 /// A secret as path + state.
@@ -120,6 +122,16 @@ pub struct ResolvedView {
     pub startup: Option<StartupView>,
     /// `None` when the file has no `[orchestrator]` table.
     pub orchestrator: Option<OrchestratorView>,
+    /// `None` when the file has no `[database]` table.
+    pub database: Option<DatabaseView>,
+}
+
+/// `[database]` as shown: the URL file as a path and its state, never the URL.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DatabaseView {
+    pub url_file: Option<SecretStatus>,
+    pub ca_file: Option<SecretStatus>,
+    pub pool_size: u32,
 }
 
 /// `[orchestrator]` as shown: the URL, and each file as a path and its state.
@@ -173,6 +185,7 @@ impl std::fmt::Display for SecretStatus {
             SecretState::Readable { mode: None } => write!(f, "{path} (readable, ACL not checked)"),
             SecretState::Missing => write!(f, "{path} (missing)"),
             SecretState::Unreadable => write!(f, "{path} (unreadable)"),
+            SecretState::Empty => write!(f, "{path} (empty)"),
         }
     }
 }
@@ -304,7 +317,23 @@ pub fn resolved_view(config: &DaemonConfig) -> ResolvedView {
                 enrollment_token_file: status(&o.enrollment_token_file),
             }
         }),
+        database: config.database.as_ref().map(|d| DatabaseView {
+            url_file: d.url_file.as_ref().map(|p| url_file_status(p.path())),
+            ca_file: d.ca_file.as_ref().map(|p| probe(p.path())),
+            pool_size: d.pool_size,
+        }),
     }
+}
+
+/// The URL file's state: a readable file that is blank after trimming shows as `empty`.
+fn url_file_status(path: &Path) -> SecretStatus {
+    let mut status = probe(path);
+    if matches!(status.state, SecretState::Readable { .. })
+        && std::fs::read_to_string(path).is_ok_and(|text| text.trim().is_empty())
+    {
+        status.state = SecretState::Empty;
+    }
+    status
 }
 
 fn cli_view(cli: &AiCli) -> CliView {
@@ -506,6 +535,15 @@ impl std::fmt::Display for ResolvedView {
                     writeln!(f, "orchestrator.{key}: {file}")?;
                 }
             }
+        }
+        if let Some(d) = &self.database {
+            if let Some(file) = &d.url_file {
+                writeln!(f, "database.url_file = {file}")?;
+            }
+            if let Some(file) = &d.ca_file {
+                writeln!(f, "database.ca_file = {file}")?;
+            }
+            writeln!(f, "database.pool_size = {}", d.pool_size)?;
         }
         Ok(())
     }

@@ -1540,3 +1540,182 @@ fn orchestrator_link_is_independent_of_the_orchestrator_rules() {
     let link_errors = errors(&bad_link);
     assert!(!link_errors.is_empty() && link_errors.iter().all(|e| e.rule == "L1"));
 }
+
+// --- #1948: [database] ---
+
+fn database_files_in(dir: &std::path::Path, url: Option<&str>) -> String {
+    let file = dir.join("url");
+    if let Some(url) = url {
+        std::fs::write(&file, url).unwrap();
+        std::fs::set_permissions(&file, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+    }
+    format!("[database]\nurl_file = \"{}\"\n", file.display())
+}
+
+fn file_findings(body: &str) -> Vec<ConfigError> {
+    let text = host(body);
+    check_files(&text, ORIGIN, &ok(&text))
+}
+
+#[test]
+fn database_parses_with_defaults_and_rejects_an_unknown_key() {
+    let config = ok(&host(
+        "[database]\nurl_file = \"/s/u\"\nca_file = \"/s/ca\"\npool_size = 9\n",
+    ));
+    let d = config.database.as_ref().unwrap();
+    assert_eq!(d.url_file.as_ref().unwrap().path(), PathBuf::from("/s/u"));
+    assert_eq!(d.pool_size, 9);
+    assert_eq!(
+        ok(&host("[database]\nurl_file = \"/s/u\"\n"))
+            .database
+            .unwrap()
+            .pool_size,
+        5
+    );
+    assert!(ok(&host("")).database.is_none());
+    let error = parse(
+        &host("[database]\nurl_file = \"/s/u\"\nhost = \"h\"\n"),
+        ORIGIN,
+    )
+    .unwrap_err();
+    assert!(error[0].message.contains("host"), "{error:?}");
+}
+
+#[test]
+fn database_pool_size_outside_one_to_sixty_four_names_the_key() {
+    for size in [0, 65] {
+        let text = host(&format!(
+            "[database]\nurl_file = \"/s/u\"\npool_size = {size}\n"
+        ));
+        expect(&text, "D2", "pool_size", "database.pool_size", 9, 13);
+    }
+    for size in [1, 64] {
+        ok(&host(&format!(
+            "[database]\nurl_file = \"/s/u\"\npool_size = {size}\n"
+        )));
+    }
+}
+
+#[test]
+fn database_without_url_file_names_the_key() {
+    expect(
+        &host("[database]\npool_size = 3\n"),
+        "D1",
+        "database.url_file",
+        "database",
+        7,
+        1,
+    );
+}
+
+#[test]
+fn database_a_relative_url_file_is_refused() {
+    expect(
+        &host("[database]\nurl_file = \"rel/u\"\n"),
+        "V4",
+        "database.url_file",
+        "database.url_file",
+        8,
+        12,
+    );
+}
+
+#[test]
+fn database_url_file_missing_empty_or_unreadable_names_key_path_and_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = database_files_in(dir.path(), None);
+    let path = dir.path().join("url");
+    let findings = file_findings(&body);
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(
+        findings[0].message,
+        format!("database.url_file {}: missing", path.display())
+    );
+    std::fs::write(&path, " \n\t\n").unwrap();
+    assert_eq!(
+        file_findings(&body)[0].message,
+        format!("database.url_file {}: empty", path.display())
+    );
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    assert_eq!(
+        file_findings(&body)[0].message,
+        format!("database.url_file {}: unreadable", path.display())
+    );
+}
+
+#[test]
+fn database_a_postgres_url_passes_and_is_trimmed() {
+    let dir = tempfile::tempdir().unwrap();
+    for url in ["postgres://u:p@h/db\n", "  postgresql://u:p@h/db  \n\n"] {
+        let findings = file_findings(&database_files_in(dir.path(), Some(url)));
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+}
+
+#[test]
+fn database_another_scheme_is_refused_naming_only_the_scheme() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = database_files_in(dir.path(), Some("mysql://user:hunter2@db.internal/x"));
+    let findings = file_findings(&body);
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    let text = findings[0].to_string();
+    assert!(
+        text.contains("database.url_file") && text.contains("\"mysql\""),
+        "{text}"
+    );
+    for secret in ["hunter2", "db.internal", "user"] {
+        assert!(!text.contains(secret), "{text}");
+    }
+    let body = database_files_in(dir.path(), Some("user:hunter2@db.internal"));
+    let text = file_findings(&body)[0].to_string();
+    assert!(
+        !text.contains("hunter2") && !text.contains("db.internal"),
+        "{text}"
+    );
+}
+
+#[test]
+fn database_a_missing_ca_file_is_refused_with_its_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = database_files_in(dir.path(), Some("postgres://h/d"));
+    body.push_str("ca_file = \"/nonexistent/ca.pem\"\n");
+    let findings = file_findings(&body);
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(
+        findings[0].message,
+        "database.ca_file /nonexistent/ca.pem: missing"
+    );
+}
+
+#[test]
+fn database_the_view_shows_paths_and_states_never_the_url() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = database_files_in(dir.path(), Some("postgres://user:hunter2@db.internal/x"));
+    body.push_str("ca_file = \"/nonexistent/ca.pem\"\n");
+    let config = ok(&host(&body));
+    let text = resolved_view(&config).to_string();
+    let url = dir.path().join("url");
+    assert!(
+        text.contains(&format!("database.url_file = {} (readable", url.display())),
+        "{text}"
+    );
+    assert!(
+        text.contains("database.ca_file = /nonexistent/ca.pem (missing)"),
+        "{text}"
+    );
+    assert!(text.contains("database.pool_size = 5"), "{text}");
+    for secret in ["hunter2", "db.internal", "user:"] {
+        assert!(!text.contains(secret), "{text}");
+    }
+    std::fs::write(&url, "\n").unwrap();
+    let text = resolved_view(&config).to_string();
+    assert!(
+        text.contains(&format!("database.url_file = {} (empty)", url.display())),
+        "{text}"
+    );
+    assert!(!resolved_view(&ok(&host("")))
+        .to_string()
+        .contains("database"));
+}
