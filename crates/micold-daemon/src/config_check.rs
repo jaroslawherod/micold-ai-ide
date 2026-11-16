@@ -90,6 +90,11 @@ pub fn run(args: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
             findings.extend(daemon_config::check_files(&text, &file, config));
         }
     }
+    if let Some(config) = &config {
+        if let Some(finding) = store_finding(config, &file) {
+            findings.push(finding);
+        }
+    }
     for finding in &findings {
         let _ = writeln!(err, "{finding}");
     }
@@ -101,4 +106,28 @@ pub fn run(args: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
         }
         _ => 2,
     }
+}
+
+/// FR-009: which store this configuration runs the orchestrator on. The orchestrator has no
+/// network bind key yet (#1732), so the bind is loopback-only and the rule cannot fail here; it is
+/// asked all the same, so the day the key lands the failure shows up in `config check`.
+fn store_finding(config: &daemon_config::DaemonConfig, file: &str) -> Option<ConfigError> {
+    let data_dir = daemon_config::resolved_view(config)
+        .data_dir
+        .unwrap_or_default();
+    let error = micold_core::orchestrator::choose_store(
+        config.database.as_ref(),
+        micold_core::orchestrator::BindScope::LoopbackOnly,
+        &data_dir,
+    )
+    .err()?;
+    Some(ConfigError {
+        origin: file.to_string(),
+        line: 1,
+        column: 1,
+        rule: "D6",
+        key: "database.url_file".to_string(),
+        message: error.to_string(),
+        severity: Severity::Error,
+    })
 }

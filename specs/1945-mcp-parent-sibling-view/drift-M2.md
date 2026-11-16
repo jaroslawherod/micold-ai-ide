@@ -18,6 +18,9 @@ Catalog order: `send_parent_input` is listed after `report_review_comment`, not 
 `send_parent_input` resolves caller, project and target from one snapshot and hands them to `deliver_input`, the part of `send_session_input` after its resolution (review A round 1, F5), instead of calling `send_session_input` and resolving twice.
 
 `MISSING contracts/mcp-neighbourhood.md`: reference only; the code follows it and it needed no change.
+
+| Path | Reason |
+|---|---|
 | `crates/micold-daemon/src/mcp/tools.rs` (`Scope`) | Review A round 2 (F1): the scope keeps the project root apart from the worktree directory names (`Visible { root, dirs }`, `allows_root`/`allows_dir`/`allows_ref`/`allows_place`), so a directory named `default`, as the caller's own or its recorded parent, never grants the root's sessions. F3: a parent running only shells is refused as having "no running AI CLI session (only shell sessions)". F4: `send_parent_input` runs the `Scope::session` check on its chosen target. |
 | `crates/micold-daemon/tests/mcp/mcp_worktree_parent_neighbourhood.rs` | Review A round 2 (F1): `a_directory_named_default_never_grants_the_project_roots_sessions`, a caller in a directory named `default` and a caller whose parent is that directory, with a root session present. |
 | `crates/micold-daemon/tests/mcp_cross_session.rs` (round 2) | Review A round 2 (F3): `a_parent_running_only_a_shell_is_refused_as_having_no_ai_cli_session`; the shell setup is shared as `with_a_running_shell_in_the_parent`. `a_parent_directory_named_default_is_not_the_project_root` now starts the root session with the full view before linking, as the root is outside the linked caller's scope (F1). |

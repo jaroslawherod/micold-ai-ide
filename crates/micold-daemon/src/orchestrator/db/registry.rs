@@ -7,20 +7,25 @@ use std::sync::Arc;
 
 use micold_core::daemon_config::Kind;
 use micold_core::orchestrator::{
-    DaemonRecord, Health, RegistryStore, StoreError, TenantId, UNOWNED,
+    DaemonRecord, Health, OwnerId, RegistryStore, StoreError, TenantId, UserId, UNOWNED,
 };
 use micold_core::protocol::routing::WireDaemonId;
 use sqlx::any::AnyRow;
 use sqlx::{AnyConnection, Row as _};
 
-use super::StoreHandle;
+use super::{to_i64, StoreHandle};
 
 const UPSERT: &str = "INSERT INTO daemons \
     (tenant_id, id, kind, name, protocol_version, capabilities, health, last_seen, owner_user_id) \
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
     ON CONFLICT (tenant_id, id) DO UPDATE SET kind = excluded.kind, name = excluded.name, \
     protocol_version = excluded.protocol_version, capabilities = excluded.capabilities, \
-    health = excluded.health, last_seen = excluded.last_seen";
+    health = excluded.health, last_seen = excluded.last_seen, \
+    owner_user_id = CASE WHEN excluded.owner_user_id = 'unowned' THEN daemons.owner_user_id \
+    ELSE excluded.owner_user_id END";
+
+/// The tables whose rows carry an owner; `reassign_unowned` moves them together.
+const OWNED_TABLES: [&str; 3] = ["daemons", "projects", "sessions"];
 
 /// The registry in the `daemons` table.
 pub struct SqlRegistryStore {
@@ -37,9 +42,7 @@ impl SqlRegistryStore {
         &self,
         work: impl std::future::Future<Output = Result<T, sqlx::Error>>,
     ) -> Result<T, StoreError> {
-        self.db
-            .block_on(work)?
-            .map_err(|error| self.db.map_error(&error))
+        self.db.run(work)
     }
 }
 
@@ -56,11 +59,10 @@ fn from_name<T: serde::de::DeserializeOwned>(name: &str) -> Result<T, String> {
         .map_err(|e| format!("{name:?}: {e}"))
 }
 
-fn to_i64(value: u64) -> i64 {
-    i64::try_from(value).unwrap_or(i64::MAX)
-}
-
-async fn upsert_row(conn: &mut AnyConnection, record: &DaemonRecord) -> Result<(), sqlx::Error> {
+pub(super) async fn upsert_row(
+    conn: &mut AnyConnection,
+    record: &DaemonRecord,
+) -> Result<(), sqlx::Error> {
     // A set of strings always serialises.
     let capabilities = serde_json::to_string(&record.capabilities).unwrap_or_else(|_| "[]".into());
     sqlx::query(UPSERT)
@@ -72,7 +74,8 @@ async fn upsert_row(conn: &mut AnyConnection, record: &DaemonRecord) -> Result<(
         .bind(capabilities)
         .bind(name_of(&record.health))
         .bind(to_i64(record.last_seen))
-        .bind(UNOWNED.to_owned())
+        // An `unowned` record never clears a stored owner (the conflict branch's CASE).
+        .bind(record.owner.as_str().to_owned())
         .execute(conn)
         .await
         .map(drop)
@@ -95,6 +98,7 @@ fn record_of(row: &AnyRow) -> Result<DaemonRecord, String> {
     );
     record.health = from_name::<Health>(&text("health")?)?;
     record.last_seen = u64::try_from(number("last_seen")?).unwrap_or(0);
+    record.owner = OwnerId::parse(&text("owner_user_id")?);
     Ok(record)
 }
 
@@ -103,7 +107,7 @@ impl RegistryStore for SqlRegistryStore {
         let rows = self.run(async {
             sqlx::query(
                 "SELECT tenant_id, id, kind, name, protocol_version, capabilities, health, \
-                 last_seen FROM daemons ORDER BY tenant_id, id",
+                 last_seen, owner_user_id FROM daemons ORDER BY tenant_id, id",
             )
             .fetch_all(self.db.pool())
             .await
@@ -120,13 +124,7 @@ impl RegistryStore for SqlRegistryStore {
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
         self.run(async {
-            let mut tx = self.db.pool().begin().await?;
-            // A write first, so the transaction holds the write lock from its start: SQLite
-            // refuses at once, ignoring the busy timeout, to upgrade a read snapshot another
-            // writer has overtaken.
-            sqlx::query("DELETE FROM daemons WHERE 1 = 0")
-                .execute(&mut *tx)
-                .await?;
+            let mut tx = self.db.begin_write().await?;
             for record in records {
                 upsert_row(&mut tx, record).await?;
             }
@@ -167,6 +165,32 @@ impl RegistryStore for SqlRegistryStore {
                 .execute(self.db.pool())
                 .await
                 .map(|done| done.rows_affected() > 0)
+        })
+    }
+
+    /// Moves the tenant's `unowned` daemons, projects and sessions in one transaction; the count
+    /// is the moved `daemons` rows only.
+    fn reassign_unowned(&self, tenant: &TenantId, owner: &UserId) -> Result<u64, StoreError> {
+        self.run(async {
+            let mut tx = self.db.begin_write().await?;
+            let mut daemons = 0;
+            for table in OWNED_TABLES {
+                let sql = format!(
+                    "UPDATE {table} SET owner_user_id = $1 \
+                     WHERE tenant_id = $2 AND owner_user_id = $3"
+                );
+                let done = sqlx::query(&sql)
+                    .bind(owner.as_str().to_owned())
+                    .bind(tenant.as_str().to_owned())
+                    .bind(UNOWNED.to_owned())
+                    .execute(&mut *tx)
+                    .await?;
+                if table == "daemons" {
+                    daemons = done.rows_affected();
+                }
+            }
+            tx.commit().await?;
+            Ok(daemons)
         })
     }
 }

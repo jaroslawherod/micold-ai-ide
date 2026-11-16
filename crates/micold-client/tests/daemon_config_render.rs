@@ -51,6 +51,7 @@ fn read_back(text: &str, kind: Kind) -> DaemonSettings {
         github_tokens: vec![],
         git_config_file: None,
         extras: Default::default(),
+        wire_id: config.daemon.id,
         ai_cli: config
             .ai
             .cli

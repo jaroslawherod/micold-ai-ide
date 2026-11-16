@@ -351,6 +351,20 @@ rather than training everyone to reach for the label.
 The gate runs on pull requests only; a push to main has already been through it. Its own cases are
 in `scripts/tests/check-user-guide-updated.test.sh` and run in the same job, before it.
 
+## The PostgreSQL service container (#1948)
+
+The `test` job starts a `postgres:17` service container (port 5432, a `pg_isready` health check;
+user, password and database come from the job's `env`) and sets `MICOLD_TEST_POSTGRES_URL` to it.
+The orchestrator's shared store suite (`crates/micold-daemon/tests/orchestrator/store_suite.rs`,
+`postgres` module) and the PostgreSQL cases in `store_migrations.rs` and `store_scan.rs` run there;
+each case creates and drops a database of its own.
+
+Locally the cases print `skipped: MICOLD_TEST_POSTGRES_URL not set` and pass when the variable is
+unset. CI also sets `MICOLD_REQUIRE_POSTGRES=1`, which turns that skip into a failure: a missing or
+misnamed service fails the job instead of passing silently. To run them locally, point the variable
+at a server whose user may create databases, for example
+`MICOLD_TEST_POSTGRES_URL=postgres://postgres:pw@localhost:5432/postgres`.
+
 ## Linux only (#1897)
 
 Linux is the only supported platform. #1877 first switched the macOS and Windows CI legs off;

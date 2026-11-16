@@ -8,21 +8,23 @@ use std::sync::Arc;
 use micold_core::daemon_config::Kind;
 use micold_core::orchestrator::{
     Bootstrap, CertSerial, DaemonRecord, Health, Identity, NewAuditEntry, NewEnrollment, NewInvite,
-    NewUser, Provider, RefreshToken, Role, StoreError, TenantId, TokenHash, UserId,
+    NewUser, OwnerId, Provider, RefreshToken, Role, StoreError, TenantId, TokenHash, UserId,
 };
 use micold_core::protocol::routing::WireDaemonId;
 
-use super::store_support::{Backend, FullBackend, JsonBackend, MemoryBackend, SqliteBackend};
+use super::store_support::{
+    Backend, FullBackend, JsonBackend, MemoryBackend, PostgresBackend, SqliteBackend,
+};
 
-fn tenant(name: &str) -> TenantId {
+pub(super) fn tenant(name: &str) -> TenantId {
     TenantId::new(Some(name))
 }
 
-fn wire(id: &str) -> WireDaemonId {
+pub(super) fn wire(id: &str) -> WireDaemonId {
     WireDaemonId::new(id).unwrap()
 }
 
-fn daemon(tenant_name: &str, id: &str, name: &str) -> DaemonRecord {
+pub(super) fn daemon(tenant_name: &str, id: &str, name: &str) -> DaemonRecord {
     let mut record = DaemonRecord::new(
         wire(id),
         Kind::Host,
@@ -36,20 +38,20 @@ fn daemon(tenant_name: &str, id: &str, name: &str) -> DaemonRecord {
     record
 }
 
-fn keys(records: &[DaemonRecord]) -> Vec<(String, String)> {
+pub(super) fn keys(records: &[DaemonRecord]) -> Vec<(String, String)> {
     records
         .iter()
         .map(|r| (r.tenant.as_str().to_owned(), r.id.as_str().to_owned()))
         .collect()
 }
 
-fn key(tenant_name: &str, id: &str) -> (String, String) {
+pub(super) fn key(tenant_name: &str, id: &str) -> (String, String) {
     (tenant_name.to_owned(), id.to_owned())
 }
 
 // ---- registry cases ----
 
-fn upsert_inserts_then_updates(backend: &mut dyn Backend) {
+pub(super) fn upsert_inserts_then_updates(backend: &mut dyn Backend) {
     let store = backend.registry();
     store.upsert(&daemon("default", "a", "first")).unwrap();
     store.upsert(&daemon("default", "b", "other")).unwrap();
@@ -60,7 +62,7 @@ fn upsert_inserts_then_updates(backend: &mut dyn Backend) {
     assert_eq!(loaded, vec![changed, daemon("default", "b", "other")]);
 }
 
-fn remove_reports_whether_a_record_went(backend: &mut dyn Backend) {
+pub(super) fn remove_reports_whether_a_record_went(backend: &mut dyn Backend) {
     let store = backend.registry();
     store.upsert(&daemon("default", "a", "a")).unwrap();
     let default = tenant("default");
@@ -71,7 +73,7 @@ fn remove_reports_whether_a_record_went(backend: &mut dyn Backend) {
     assert_eq!(store.load().unwrap(), Vec::new());
 }
 
-fn save_replaces_the_whole_set_across_tenants(backend: &mut dyn Backend) {
+pub(super) fn save_replaces_the_whole_set_across_tenants(backend: &mut dyn Backend) {
     let store = backend.registry();
     store
         .save(&[daemon("acme", "a", "a"), daemon("default", "b", "b")])
@@ -86,7 +88,7 @@ fn save_replaces_the_whole_set_across_tenants(backend: &mut dyn Backend) {
     );
 }
 
-fn load_is_ordered_by_tenant_then_id(backend: &mut dyn Backend) {
+pub(super) fn load_is_ordered_by_tenant_then_id(backend: &mut dyn Backend) {
     let store = backend.registry();
     store
         .save(&[
@@ -102,7 +104,7 @@ fn load_is_ordered_by_tenant_then_id(backend: &mut dyn Backend) {
     );
 }
 
-fn tenant_records_survive_reopen(backend: &mut dyn Backend) {
+pub(super) fn tenant_records_survive_reopen(backend: &mut dyn Backend) {
     let store = backend.registry();
     store.upsert(&daemon("acme", "box", "acme box")).unwrap();
     store
@@ -123,7 +125,7 @@ fn tenant_records_survive_reopen(backend: &mut dyn Backend) {
     );
 }
 
-fn two_writers_upserting_different_ids_lose_neither(backend: &mut dyn Backend) {
+pub(super) fn two_writers_upserting_different_ids_lose_neither(backend: &mut dyn Backend) {
     let store = backend.registry();
     let writers: Vec<_> = (0..2)
         .map(|writer| {
@@ -142,6 +144,87 @@ fn two_writers_upserting_different_ids_lose_neither(backend: &mut dyn Backend) {
     assert_eq!(store.load().unwrap().len(), 20, "no upsert was lost");
 }
 
+/// `daemon(...)` owned by `user`.
+fn owned(tenant_name: &str, id: &str, user: &str) -> DaemonRecord {
+    let mut record = daemon(tenant_name, id, id);
+    record.owner = OwnerId::parse(user);
+    record
+}
+
+fn owners(records: &[DaemonRecord]) -> Vec<(String, String)> {
+    records
+        .iter()
+        .map(|r| (r.id.as_str().to_owned(), r.owner.as_str().to_owned()))
+        .collect()
+}
+
+pub(super) fn an_owner_survives_a_relink_upsert_and_a_whole_list_save(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store.upsert(&owned("default", "a", "alice")).unwrap();
+    // A relink announces the daemon afresh, `unowned`.
+    let mut relinked = daemon("default", "a", "renamed");
+    store.upsert(&relinked).unwrap();
+    let loaded = store.load().unwrap();
+    assert_eq!(loaded[0].name, "renamed");
+    assert_eq!(owners(&loaded), vec![("a".into(), "alice".into())]);
+    relinked.name = "saved".into();
+    store
+        .save(&[relinked, daemon("default", "b", "b")])
+        .unwrap();
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![("a".into(), "alice".into()), ("b".into(), "unowned".into())]
+    );
+    assert_eq!(loaded[0].name, "saved");
+}
+
+pub(super) fn an_owned_record_over_an_unowned_one_takes_its_owner(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store.upsert(&daemon("default", "a", "a")).unwrap();
+    store.upsert(&owned("default", "a", "bob")).unwrap();
+    store.save(&[daemon("default", "b", "b")]).unwrap();
+    store
+        .save(&[owned("default", "a", "carol"), owned("default", "b", "bob")])
+        .unwrap();
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![("a".into(), "carol".into()), ("b".into(), "bob".into())]
+    );
+    let store = backend.registry();
+    store.upsert(&owned("default", "a", "bob")).unwrap();
+    assert_eq!(owners(&store.load().unwrap())[0].1, "bob");
+}
+
+pub(super) fn reassign_unowned_moves_the_tenants_unowned_records_once(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store
+        .save(&[
+            daemon("default", "a", "a"),
+            daemon("default", "b", "b"),
+            owned("default", "c", "carol"),
+            daemon("other", "d", "d"),
+        ])
+        .unwrap();
+    let default = tenant("default");
+    assert_eq!(store.reassign_unowned(&default, &uid("owner")).unwrap(), 2);
+    assert_eq!(store.reassign_unowned(&default, &uid("owner")).unwrap(), 0);
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![
+            ("a".into(), "owner".into()),
+            ("b".into(), "owner".into()),
+            ("c".into(), "carol".into()),
+            ("d".into(), "unowned".into()),
+        ]
+    );
+}
+
 macro_rules! registry_tests {
     ($make:expr) => {
         registry_tests!(@each $make,
@@ -150,14 +233,18 @@ macro_rules! registry_tests {
             save_replaces_the_whole_set_across_tenants,
             load_is_ordered_by_tenant_then_id,
             tenant_records_survive_reopen,
-            two_writers_upserting_different_ids_lose_neither
+            two_writers_upserting_different_ids_lose_neither,
+            an_owner_survives_a_relink_upsert_and_a_whole_list_save,
+            an_owned_record_over_an_unowned_one_takes_its_owner,
+            reassign_unowned_moves_the_tenants_unowned_records_once
         );
     };
     (@each $make:expr, $($case:ident),+) => {
         $(
             #[test]
             fn $case() {
-                super::$case(&mut $make);
+                let Some(mut backend) = $make else { return };
+                super::$case(&mut backend);
             }
         )+
     };
@@ -165,17 +252,17 @@ macro_rules! registry_tests {
 
 // ---- auth cases ----
 
-const T: u64 = 1_000;
+pub(super) const T: u64 = 1_000;
 
-fn hash(token: &str) -> TokenHash {
+pub(super) fn hash(token: &str) -> TokenHash {
     TokenHash::hash_of(token)
 }
 
-fn uid(text: &str) -> UserId {
+pub(super) fn uid(text: &str) -> UserId {
     UserId::new(text).unwrap()
 }
 
-fn new_user(id: &str, role: Role) -> NewUser {
+pub(super) fn new_user(id: &str, role: Role) -> NewUser {
     NewUser {
         id: uid(id),
         display_name: format!("User {id}"),
@@ -184,7 +271,12 @@ fn new_user(id: &str, role: Role) -> NewUser {
     }
 }
 
-fn refresh_token(token: &str, user: &str, family: &str, expires_at: u64) -> RefreshToken {
+pub(super) fn refresh_token(
+    token: &str,
+    user: &str,
+    family: &str,
+    expires_at: u64,
+) -> RefreshToken {
     RefreshToken {
         hash: hash(token),
         user: uid(user),
@@ -195,7 +287,7 @@ fn refresh_token(token: &str, user: &str, family: &str, expires_at: u64) -> Refr
     }
 }
 
-fn invite(id: &str, token: &str, expires_at: u64) -> NewInvite {
+pub(super) fn invite(id: &str, token: &str, expires_at: u64) -> NewInvite {
     NewInvite {
         id: id.to_owned(),
         token_hash: hash(token),
@@ -207,14 +299,14 @@ fn invite(id: &str, token: &str, expires_at: u64) -> NewInvite {
     }
 }
 
-fn refused<R: std::fmt::Debug>(result: Result<R, StoreError>) {
+pub(super) fn refused<R: std::fmt::Debug>(result: Result<R, StoreError>) {
     assert!(
         matches!(result, Err(StoreError::Refused { .. })),
         "expected Refused, got {result:?}"
     );
 }
 
-fn users_are_created_read_listed_and_soft_removed(backend: &mut impl FullBackend) {
+pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     let created = auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
@@ -253,7 +345,7 @@ fn users_are_created_read_listed_and_soft_removed(backend: &mut impl FullBackend
     assert_eq!(auth.refresh(&hash("r3")).unwrap().unwrap().revoked_at, None);
 }
 
-fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
+pub(super) fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     auth.create_user(&new_user("u1", Role::Owner)).unwrap();
@@ -303,15 +395,19 @@ fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
     );
 }
 
-fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
+pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
     auth.create_invite(&invite("i1", "tok-1", T + 100)).unwrap();
     auth.create_invite(&invite("i2", "tok-2", T + 10)).unwrap();
     refused(auth.create_invite(&invite("i1", "tok-3", T + 100)));
     refused(auth.create_invite(&invite("i3", "tok-1", T + 100)));
     refused(auth.redeem_invite(&hash("unknown"), &uid("u1"), T + 1));
     refused(auth.redeem_invite(&hash("tok-2"), &uid("u1"), T + 10));
+    // An unknown redeeming user is refused, and the invite stays redeemable (M1 review B F2).
+    refused(auth.redeem_invite(&hash("tok-1"), &uid("ghost"), T + 11));
     let redeemed = auth
         .redeem_invite(&hash("tok-1"), &uid("u1"), T + 20)
         .unwrap();
@@ -325,7 +421,7 @@ fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
     refused(auth.redeem_invite(&hash("tok-1"), &uid("u2"), T + 30));
 }
 
-fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend) {
+pub(super) fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     assert_eq!(auth.bootstrap().unwrap(), None);
@@ -349,7 +445,9 @@ fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend) {
     );
 }
 
-fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(backend: &mut impl FullBackend) {
+pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
+    backend: &mut impl FullBackend,
+) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     auth.create_user(&new_user("u1", Role::Owner)).unwrap();
@@ -397,7 +495,7 @@ fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(backend: &mut impl 
     assert_eq!(after.revoked_at, Some(T + 3));
 }
 
-fn serials_revocations_and_enrollments(backend: &mut impl FullBackend) {
+pub(super) fn serials_revocations_and_enrollments(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     let serial = |text: &str| CertSerial::new(text).unwrap();
@@ -438,7 +536,7 @@ fn serials_revocations_and_enrollments(backend: &mut impl FullBackend) {
     refused(auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 7));
 }
 
-fn two_tenants_on_one_backend_see_disjoint_rows(backend: &mut impl FullBackend) {
+pub(super) fn two_tenants_on_one_backend_see_disjoint_rows(backend: &mut impl FullBackend) {
     let (a, b) = (tenant("acme"), tenant("beta"));
     let (auth_a, auth_b) = (backend.auth(&a), backend.auth(&b));
     auth_a.create_user(&new_user("u1", Role::Owner)).unwrap();
@@ -482,7 +580,8 @@ macro_rules! auth_tests {
         $(
             #[test]
             fn $case() {
-                super::$case(&mut $make);
+                let Some(mut backend) = $make else { return };
+                super::$case(&mut backend);
             }
         )+
     };
@@ -490,11 +589,11 @@ macro_rules! auth_tests {
 
 // ---- audit cases ----
 
-fn entry(at: u64, actor: &str, action: &str) -> NewAuditEntry {
+pub(super) fn entry(at: u64, actor: &str, action: &str) -> NewAuditEntry {
     NewAuditEntry::new(at, actor, action, "target", "detail").unwrap()
 }
 
-fn append_returns_a_strictly_increasing_seq(backend: &mut impl FullBackend) {
+pub(super) fn append_returns_a_strictly_increasing_seq(backend: &mut impl FullBackend) {
     let audit = backend.audit(&tenant("default"));
     let first = audit.append(&entry(T, "u1", "user.invite")).unwrap();
     let second = audit.append(&entry(T + 1, "u1", "user.remove")).unwrap();
@@ -509,7 +608,7 @@ fn append_returns_a_strictly_increasing_seq(backend: &mut impl FullBackend) {
     );
 }
 
-fn recent_is_newest_first_by_keyset(backend: &mut impl FullBackend) {
+pub(super) fn recent_is_newest_first_by_keyset(backend: &mut impl FullBackend) {
     let audit = backend.audit(&tenant("default"));
     let seqs: Vec<i64> = (0..5)
         .map(|n| audit.append(&entry(T + n, "u1", "x.y")).unwrap().seq)
@@ -532,7 +631,7 @@ fn recent_is_newest_first_by_keyset(backend: &mut impl FullBackend) {
     assert!(audit.recent(0, None).unwrap().is_empty());
 }
 
-fn by_actor_filters_and_orders_newest_first(backend: &mut impl FullBackend) {
+pub(super) fn by_actor_filters_and_orders_newest_first(backend: &mut impl FullBackend) {
     let audit = backend.audit(&tenant("default"));
     for (n, actor) in ["u1", "u2", "u1", "u1"].into_iter().enumerate() {
         audit.append(&entry(T + n as u64, actor, "x.y")).unwrap();
@@ -544,7 +643,7 @@ fn by_actor_filters_and_orders_newest_first(backend: &mut impl FullBackend) {
     assert!(audit.by_actor("nobody", 10).unwrap().is_empty());
 }
 
-fn audit_entries_are_per_tenant_and_survive_reopen(backend: &mut impl FullBackend) {
+pub(super) fn audit_entries_are_per_tenant_and_survive_reopen(backend: &mut impl FullBackend) {
     let (a, b) = (tenant("acme"), tenant("beta"));
     let (audit_a, audit_b) = (backend.audit(&a), backend.audit(&b));
     let in_a = audit_a.append(&entry(T, "u1", "a.one")).unwrap();
@@ -574,22 +673,89 @@ macro_rules! audit_tests {
         $(
             #[test]
             fn $case() {
-                super::$case(&mut $make);
+                let Some(mut backend) = $make else { return };
+                super::$case(&mut backend);
             }
         )+
     };
 }
 
 mod memory {
-    registry_tests!(super::MemoryBackend::new());
-    auth_tests!(super::MemoryBackend::new());
-    audit_tests!(super::MemoryBackend::new());
+    registry_tests!(Some(super::MemoryBackend::new()));
+    auth_tests!(Some(super::MemoryBackend::new()));
+    audit_tests!(Some(super::MemoryBackend::new()));
 }
 
 mod json {
-    registry_tests!(super::JsonBackend::new());
+    registry_tests!(Some(super::JsonBackend::new()));
 }
 
 mod sqlite {
-    registry_tests!(super::SqliteBackend::new());
+    registry_tests!(Some(super::SqliteBackend::new()));
+    auth_tests!(Some(super::SqliteBackend::new()));
+    audit_tests!(Some(super::SqliteBackend::new()));
+}
+
+mod postgres {
+    registry_tests!(super::PostgresBackend::new());
+    auth_tests!(super::PostgresBackend::new());
+    audit_tests!(super::PostgresBackend::new());
+}
+
+// ---- the orchestrator on a SQL store ----
+
+/// `run_with` on a SQL store: `serve`'s load runs off the runtime, and a restart restores.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_with_sql_store_starts_and_restores() {
+    use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
+    use micold_core::orchestrator::RegistryStore;
+    use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+    use std::path::Path;
+
+    let dir = Arc::new(tempfile::tempdir().unwrap());
+    let open = |dir: &Path| -> Arc<dyn RegistryStore> {
+        Arc::new(SqlRegistryStore::new(
+            StoreHandle::open_sqlite(dir).unwrap(),
+        ))
+    };
+    let path = dir.path().to_path_buf();
+    let store = tokio::task::spawn_blocking(move || open(&path))
+        .await
+        .unwrap();
+    let orchestrator = Orchestrator::start_with(Arc::clone(&dir), Arc::clone(&store)).await;
+    let link = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    record_when(&orchestrator, "a", |a| a["health"] == "online").await;
+    drop(link);
+    let started = std::time::Instant::now();
+    loop {
+        let store = Arc::clone(&store);
+        let saved = tokio::task::spawn_blocking(move || store.load().unwrap().len())
+            .await
+            .unwrap();
+        if saved == 1 {
+            break;
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let dir = orchestrator.stop().await;
+    let restarted = Orchestrator::start_with(dir, store).await;
+    assert_eq!(
+        record_when(&restarted, "a", |_| true).await["health"],
+        "offline"
+    );
+}
+
+/// The last handle dropping inside async code shuts its runtime down without a panic.
+#[tokio::test]
+async fn dropping_the_last_handle_inside_async_code_does_not_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().to_path_buf();
+    let handle = tokio::task::spawn_blocking(move || {
+        micold_daemon::orchestrator::db::StoreHandle::open_sqlite(&path).unwrap()
+    })
+    .await
+    .unwrap();
+    assert_eq!(Arc::strong_count(&handle), 1);
+    drop(handle);
 }

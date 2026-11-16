@@ -286,6 +286,14 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities with `store` as the project catalog (feature 1786: a test of the
+    /// layout's load and save reads what it wrote).
+    #[cfg(test)]
+    pub(crate) fn with_projects(mut self, store: Arc<dyn ProjectStore + Send + Sync>) -> Self {
+        self.projects = Some(store);
+        self
+    }
+
     /// The same capabilities, minus the project catalog.
     ///
     /// The companion to [`Self::without_settings`], for the same reason and the same configuration

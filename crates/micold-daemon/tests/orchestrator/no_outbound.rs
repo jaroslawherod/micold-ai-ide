@@ -38,10 +38,14 @@ const PURE_DIAL_RULES: &str = "crates/micold-core/src/orchestrator/dial.rs";
 /// The lines of `mod.rs` that declare and re-export [`PURE_DIAL_RULES`], blanked before the scan.
 const PURE_DIAL_LINES: [&str; 2] = ["pub mod dial;", "pub use dial::"];
 
-/// The SQL store (#1948) opens a database, never a daemon: its `connect` is a pool connecting to a
-/// SQLite file (and, from M4, to the operator's PostgreSQL), which FR-008 does not cover, so the
-/// scan skips this directory. `netns.rs` still proves the running orchestrator dials no daemon.
+/// The SQL store (#1948) opens a database, never a daemon: its pool connecting to a SQLite file or
+/// the operator's PostgreSQL is not covered by FR-008. Only those call sites, in this directory,
+/// are blanked before the scan; anything else there that dials is still reported. `netns.rs` still
+/// proves the running orchestrator dials no daemon.
 const DATABASE_DIR: &str = "crates/micold-daemon/src/orchestrator/db";
+
+/// The database pool's connect calls, and the read-only schema check's, in [`DATABASE_DIR`].
+const DATABASE_LINES: [&str; 2] = [".connect_with(", "AnyConnection::connect("];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -227,12 +231,17 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
 
     let mut report = Vec::new();
     for file in &files {
-        if file.ends_with(PURE_DIAL_RULES) || file.starts_with(root.join(DATABASE_DIR)) {
+        if file.ends_with(PURE_DIAL_RULES) {
             continue;
         }
         let mut source = std::fs::read_to_string(file).unwrap();
         for line in PURE_DIAL_LINES {
             source = source.replace(line, &" ".repeat(line.len()));
+        }
+        if file.starts_with(root.join(DATABASE_DIR)) {
+            for line in DATABASE_LINES {
+                source = source.replace(line, &" ".repeat(line.len()));
+            }
         }
         for (line, word) in violations(&source) {
             report.push(format!("{}:{line}: `{word}`", file.display()));

@@ -5,10 +5,13 @@
 pub mod announce;
 pub mod audit;
 pub mod auth;
+pub mod backend;
 pub mod dial;
+pub mod list_merge;
 pub mod liveness;
 pub mod record;
 pub mod registry;
+pub mod route;
 pub mod store;
 
 pub use announce::{
@@ -20,9 +23,10 @@ pub use auth::{
     AuthStore, Bootstrap, CertSerial, Identity, Invite, MemoryAuthStore, NewEnrollment, NewInvite,
     NewUser, Provider, RefreshToken, Revocation, Role, TokenHash, User, UserId,
 };
+pub use backend::{choose_store, BindScope, MissingDatabase, StoreChoice};
 pub use dial::{jittered, LinkStatus, RetryPolicy};
 pub use liveness::Heartbeat;
-pub use record::{DaemonRecord, Health, TenantId, UNOWNED};
+pub use record::{DaemonRecord, Health, OwnerId, TenantId, UNOWNED};
 pub use registry::{
     Claim, ClaimFailure, ConfirmRefused, Confirmed, LinkAction, LinkToken, Registry, Snapshot,
 };

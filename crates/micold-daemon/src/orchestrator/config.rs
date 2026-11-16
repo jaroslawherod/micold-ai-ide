@@ -1,5 +1,6 @@
 //! The orchestrator's own settings (#1981, FR-019): where it keeps its registry (`--data-dir`) and
-//! which local socket it binds (`--socket`). Each flag has an environment twin, and a flag wins
+//! which local socket it binds (`--socket`); `--config` names the file with the `[database]` table
+//! (#1948). `--data-dir` and `--socket` each have an environment twin, and a flag wins
 //! over its variable, a variable over the default. The defaults are today's: the user's data
 //! directory and the orchestrator endpoint beside the daemon's. A default is only resolved when
 //! neither a flag nor a variable gives the value, so a container that passes both never touches
@@ -68,18 +69,23 @@ fn invalid(message: String) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
 }
 
-impl OrchestratorConfig {
-    /// Resolve the settings from `args` (the arguments after `orchestrator`), then `env`, then
-    /// `defaults`. `--flag value` and `--flag=value` both work; an unknown argument is an error
-    /// that names it, and so is a flag with no or an empty value. An empty variable counts as
-    /// unset.
-    pub fn from_args_env(
-        args: &[OsString],
-        env: &dyn Fn(&str) -> Option<OsString>,
-        defaults: &dyn Defaults,
-    ) -> io::Result<Self> {
-        let mut data_dir: Option<PathBuf> = None;
-        let mut socket: Option<PathBuf> = None;
+/// The orchestrator's arguments as given, before any variable or default fills a gap.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OrchestratorArgs {
+    /// `--data-dir`.
+    pub data_dir: Option<PathBuf>,
+    /// `--socket`.
+    pub socket: Option<PathBuf>,
+    /// `--config`: the configuration file holding the `[database]` table (#1948).
+    pub config: Option<PathBuf>,
+}
+
+impl OrchestratorArgs {
+    /// Parse `args` (the arguments after `orchestrator`). `--flag value` and `--flag=value` both
+    /// work; an unknown argument is an error that names it, and so is a flag with no or an empty
+    /// value.
+    pub fn parse(args: &[OsString]) -> io::Result<Self> {
+        let mut out = Self::default();
         let mut rest = args.iter();
         while let Some(arg) = rest.next() {
             let text = arg
@@ -92,11 +98,12 @@ impl OrchestratorConfig {
                 _ => (text, None),
             };
             let slot = match name {
-                "--data-dir" => &mut data_dir,
-                "--socket" => &mut socket,
+                "--data-dir" => &mut out.data_dir,
+                "--socket" => &mut out.socket,
+                "--config" => &mut out.config,
                 _ => {
                     return Err(invalid(format!(
-                        "unknown orchestrator argument {name:?} (expected --data-dir or --socket)"
+                        "unknown orchestrator argument {name:?} (expected --data-dir, --socket or --config)"
                     )));
                 }
             };
@@ -114,16 +121,38 @@ impl OrchestratorConfig {
             }
             *slot = Some(PathBuf::from(value));
         }
+        Ok(out)
+    }
+}
+
+impl OrchestratorConfig {
+    /// Resolve the settings from `args` (the arguments after `orchestrator`), then `env`, then
+    /// `defaults`: [`OrchestratorArgs::parse`], then [`OrchestratorConfig::resolve`].
+    pub fn from_args_env(
+        args: &[OsString],
+        env: &dyn Fn(&str) -> Option<OsString>,
+        defaults: &dyn Defaults,
+    ) -> io::Result<Self> {
+        Self::resolve(OrchestratorArgs::parse(args)?, env, defaults)
+    }
+
+    /// Fill what `args` leave out from `env`, then `defaults`. An empty variable counts as unset.
+    /// A default is resolved only when neither gives the value.
+    pub fn resolve(
+        args: OrchestratorArgs,
+        env: &dyn Fn(&str) -> Option<OsString>,
+        defaults: &dyn Defaults,
+    ) -> io::Result<Self> {
         let from_env = |name: &str| {
             env(name)
                 .filter(|value| !value.is_empty())
                 .map(PathBuf::from)
         };
-        let data_dir = match data_dir.or_else(|| from_env(DATA_DIR_ENV)) {
+        let data_dir = match args.data_dir.or_else(|| from_env(DATA_DIR_ENV)) {
             Some(dir) => dir,
             None => defaults.data_dir()?,
         };
-        let endpoint = match socket.or_else(|| from_env(SOCKET_ENV)) {
+        let endpoint = match args.socket.or_else(|| from_env(SOCKET_ENV)) {
             Some(socket) => endpoint_at(socket),
             None => defaults.endpoint()?,
         };
@@ -319,6 +348,25 @@ mod tests {
                 "{case}: the message names the argument, got {err}"
             );
         }
+    }
+
+    #[test]
+    fn config_names_the_database_file_beside_the_other_flags() {
+        for list in [
+            &["--config", "/etc/micold/daemon.toml", "--socket=/s.sock"][..],
+            &["--socket", "/s.sock", "--config=/etc/micold/daemon.toml"][..],
+        ] {
+            let parsed = OrchestratorArgs::parse(&args(list)).expect("valid arguments");
+            assert_eq!(
+                parsed.config,
+                Some(PathBuf::from("/etc/micold/daemon.toml")),
+                "{list:?}"
+            );
+            assert_eq!(parsed.socket, Some(PathBuf::from("/s.sock")), "{list:?}");
+            assert_eq!(parsed.data_dir, None, "{list:?}");
+        }
+        let err = OrchestratorArgs::parse(&args(&["--config"])).expect_err("no value");
+        assert!(err.to_string().contains("--config needs a value"), "{err}");
     }
 
     #[test]

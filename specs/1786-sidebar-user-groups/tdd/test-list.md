@@ -17,14 +17,14 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | id | behavior | traces | kind | state | test |
 |---|---|---|---|---|---|
 | A1 | New group with a valid name adds a header holding no worktree | US1-1, FR-001 | example | DONE | tests/sidebar_group_actions.rs::a_valid_name_adds_a_header_holding_no_worktree_and_saves |
-| A2 | Renaming a group changes the header name and keeps its worktrees | US1-2, FR-002 | example | DONE | tasks T020, T021 |
-| A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | DONE | tasks T020, T021 |
-| A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | DONE | tasks T011, T020 |
-| A5 | Duplicate name is refused with a visible message, state kept | US1-5, FR-004 | example | DONE | tasks T011, T020 |
+| A2 | Renaming a group changes the header name and keeps its worktrees | US1-2, FR-002 | example | DONE | tests/sidebar_group_actions.rs::rename_opens_a_draft_holding_the_current_name, crates/micold-core/src/sidebar_layout.rs::tests::rename_changes_the_name_and_keeps_the_members_and_position |
+| A3 | Deleting a group returns its worktrees to ungrouped and removes no worktree or session | US1-3, FR-003, SC-004 | example | DONE | tests/sidebar_group_actions.rs::deleting_a_group_returns_its_worktrees_and_touches_no_worktree_or_session |
+| A4 | Blank name is refused on create and rename, state kept | US1-4, FR-004 | example | DONE | tests/sidebar_group_actions.rs::a_blank_name_is_refused_and_the_state_stays, a_blank_or_duplicate_rename_is_refused_with_a_message_and_the_state_stays |
+| A5 | Duplicate name is refused with a visible message, state kept | US1-5, FR-004 | example | DONE | tests/sidebar_group_actions.rs::a_duplicate_name_is_refused_with_a_visible_message |
 | A6 | Move to group via menu moves the row under that group | US2-1, FR-010 | example | DONE | tests/sidebar_group_actions.rs::moving_a_worktree_to_a_group_puts_it_under_that_group_and_saves |
 | A7 | Move to group Ungrouped moves the row to the ungrouped list | US2-2, FR-010 | example | DONE | tests/sidebar_group_actions.rs::moving_to_ungrouped_takes_the_row_out_of_its_group |
 | A8 | With no group, the menu offers only New group… which creates and moves | US2-3, FR-010 | example | DONE | tests/sidebar_group_actions.rs::new_group_from_the_move_menu_creates_the_group_and_moves_the_row_into_it, with_no_group_the_move_menu_offers_only_new_group |
-| A9 | The whole move is possible with keyboard only | US2-4, SC-006 | example | DONE | tests/sidebar_group_actions.rs::a_keyboard_user_moves_a_row_through_the_card_menu_with_no_pointer |
+| A9 | The whole move is possible with keyboard only (met through the Overview card menu; not through a sidebar row menu) | US2-4, SC-006 | example | PARTIAL | tests/sidebar_group_actions.rs::a_keyboard_user_moves_a_row_through_the_card_menu_with_no_pointer (Overview card menu only: the sidebar worktree-row and run-group menus have no keyboard model, so SC-006 is not met for Move on a sidebar row; follow-up) |
 | A10 | Drop of a row on a group assigns it at the marked position | US3-1, FR-006 | example | DONE | tests/sidebar_drag.rs::dropping_an_ungrouped_row_on_a_group_assigns_it_at_the_marked_place_and_saves, dropping_on_a_header_puts_the_row_first_in_its_group |
 | A11 | Drop on another group moves it out of the first | US3-2, FR-006 | example | DONE | tests/sidebar_drag.rs::dropping_on_another_group_moves_the_row_out_of_the_first |
 | A12 | Drop on the ungrouped list removes it from its group | US3-3, FR-006 | example | DONE | tests/sidebar_drag.rs::dropping_on_the_ungrouped_rows_removes_the_row_from_its_group |
@@ -63,8 +63,8 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U12 | Run group is one unit in a group; row_heights/row_index count headers; location_nodes skip them | FR-016 | example | DONE | tests/sidebar_tree.rs::user_groups::a_run_group_sits_in_a_user_group_as_one_unit, row_metrics_count_headers_and_navigation_skips_them |
 | U13 | create trims, ids monotonic and never reused | FR-004 | example | DONE | micold-core sidebar_layout::tests::create_trims_the_name_and_adds_an_empty_group_last, created_ids_grow_and_are_never_reused |
 | U14 | create Blank and Duplicate (case-insensitive) leave state unchanged | FR-004, C2 | example | DONE | micold-core sidebar_layout::tests::create_refuses_a_blank_name_and_changes_nothing, create_refuses_a_duplicate_name_case_insensitively_and_changes_nothing |
-| U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | DONE | tasks T018, T019 |
-| U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | DONE | tasks T018, T019 |
+| U15 | rename accepts its own current name, refuses Blank, Duplicate, UnknownGroup | FR-004 | example | DONE | crates/micold-core/src/sidebar_layout.rs::tests::rename_to_its_own_current_name_is_not_a_duplicate, a_refused_rename_leaves_the_layout_as_it_was |
+| U16 | delete appends items to ungrouped in order; UnknownGroup otherwise | FR-003, C1 | example | DONE | crates/micold-core/src/sidebar_layout.rs::tests::delete_appends_the_items_to_ungrouped_in_their_order, deleting_an_unknown_group_is_refused_and_changes_nothing |
 | U17 | move_item removes before insert, one list only, index clamped | FR-005 | example | DONE | micold-core sidebar_layout::tests::move_item_into_a_group_removes_it_from_where_it_was, move_item_clamps_an_index_past_the_end, move_item_within_its_list_counts_the_index_before_the_removal |
 | U18 | move_item UnknownItem and IsDefault errors; run group moves as one | FR-015, FR-016 | example | DONE | micold-core sidebar_layout::tests::move_item_refuses_what_it_cannot_place_and_changes_nothing, a_run_group_moves_as_one_item |
 | U19 | all outcomes keep each item in exactly one list | SC-002 | example | DONE | micold-core sidebar_layout::tests::every_outcome_keeps_each_item_in_exactly_one_list |
@@ -80,6 +80,7 @@ Entry point for acceptance behaviors: the client's render-free state (`sidebar_e
 | U29 | reveal_ready expands the group holding the target | FR-017 | example | DONE | tests/sidebar_group_actions.rs::a_reveal_of_a_row_in_a_collapsed_group_expands_that_group |
 | U30 | group menu Rename/Delete opens by keyboard | FR-002, C6 | example | DONE | ui::sidebar::tests::a_group_header_is_a_tab_stop_that_toggles_and_opens_its_menu_by_keyboard; tests/sidebar_group_actions.rs::a_keyboard_opened_group_menu_highlights_its_first_entry_and_steps_over_disabled_ones, a_pointer_opened_group_menu_takes_the_keyboard_at_the_first_arrow |
 | U31 | New group reachable from more menu, empty-area menu, chord; absent without a project | FR-001, C6a | example | DONE | tests/sidebar_group_actions.rs::new_group_is_on_the_more_menu_with_no_worktree_needed, no_project_open_offers_no_new_group, the_new_group_chord_is_primary_shift_g_and_on_the_shortcut_sheet (empty-area menu still open, T014) |
+| U32 | A header's count is `n` while none is hidden, `n of m` while a tag filter hides some, `empty` only for a group with no member; a member whose worktree is gone is not counted as hidden (decision D7) | FR-017, C3, C5 | example | DONE | tests/sidebar_group_actions.rs::a_header_counts_the_rows_shown_and_says_how_many_a_filter_hides, a_group_holding_no_member_has_nothing_hidden, a_member_whose_worktree_is_gone_is_not_counted_as_hidden, crates/micold-client/src/ui/material/group_header.rs::tests::a_group_whose_members_a_filter_hides_is_not_called_empty |
 
 ## Out of scope
 

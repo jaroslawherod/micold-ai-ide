@@ -267,6 +267,289 @@ impl<M: serde::de::DeserializeOwned> RoutedEnvelope<M> {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Client routing through the orchestrator (#1726, contracts/client-routing.md)
+// ---------------------------------------------------------------------------------------------
+
+/// The routed header: what the orchestrator reads of a routed frame. `target` is absent only on
+/// a frame addressed to the orchestrator itself (`OrchList`); `req` is set on every client
+/// request frame and, by the daemon link, on every answer, so the orchestrator can track
+/// outcomes without decoding an opaque inner frame.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutedHeader {
+    /// The daemon the frame is for (from a client) or comes from (to a client).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<WireDaemonId>,
+    /// The logical connection.
+    pub conn: ConnectionId,
+    /// The position in that connection's stream.
+    pub seq: Sequence,
+    /// The correlation id of the request or answer the inner message carries, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub req: Option<u64>,
+}
+
+/// A routed frame with its inner message as JSON (`msg`): the header fields and `msg` in one
+/// object (encoding byte `0`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JsonRouted<M> {
+    /// The header fields.
+    #[serde(flatten)]
+    pub header: RoutedHeader,
+    /// The inner message.
+    pub msg: M,
+}
+
+/// The body of a routed frame, after its header is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoutedBody<'a> {
+    /// The whole JSON object (header fields and `msg`).
+    Json(&'a [u8]),
+    /// One whole inner frame payload (its own 4-byte envelope header and body), copied as is.
+    /// Empty means "this conn ends".
+    Opaque(&'a [u8]),
+}
+
+/// A routed frame payload (the bytes after the length prefix), header decoded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoutedPayload<'a> {
+    /// The header.
+    pub header: RoutedHeader,
+    /// The rest.
+    pub body: RoutedBody<'a>,
+}
+
+/// The `req` of a JSON-encoded message: the top-level `req` field of the one variant's fields.
+pub fn message_req(msg: &serde_json::Value) -> Option<u64> {
+    msg.as_object()?
+        .values()
+        .next()?
+        .as_object()?
+        .get("req")?
+        .as_u64()
+}
+
+fn malformed(why: impl fmt::Display) -> RoutingError {
+    RoutingError::Malformed(why.to_string())
+}
+
+/// Decode a routed frame payload, reading only the header (and, for the JSON form, checking that
+/// header `req` equals the inner message's `req`). Opaque inner frames are not decoded.
+pub fn decode_routed_payload(payload: &[u8]) -> Result<RoutedPayload<'_>, RoutingError> {
+    use crate::protocol::envelope::{Encoding, EnvelopeHeader, Kind};
+    let (envelope, body) = EnvelopeHeader::parse(payload).map_err(malformed)?;
+    if envelope.kind != Kind::Routed {
+        return Err(malformed("not a routed frame"));
+    }
+    match envelope.encoding {
+        Encoding::Json => {
+            let value: serde_json::Value = serde_json::from_slice(body).map_err(malformed)?;
+            let header: RoutedHeader = serde_json::from_value(value.clone()).map_err(malformed)?;
+            let inner = value.get("msg").and_then(message_req);
+            if header.req != inner {
+                return Err(malformed(format!(
+                    "header req {:?} differs from the message's req {inner:?}",
+                    header.req
+                )));
+            }
+            Ok(RoutedPayload {
+                header,
+                body: RoutedBody::Json(body),
+            })
+        }
+        Encoding::Postcard => {
+            let (len, rest) = body
+                .split_first_chunk::<4>()
+                .ok_or_else(|| malformed("opaque body shorter than its header length"))?;
+            let len = u32::from_be_bytes(*len) as usize;
+            if rest.len() < len {
+                return Err(malformed("opaque header longer than the frame"));
+            }
+            let (head, inner) = rest.split_at(len);
+            let header = serde_json::from_slice(head).map_err(malformed)?;
+            Ok(RoutedPayload {
+                header,
+                body: RoutedBody::Opaque(inner),
+            })
+        }
+        Encoding::PostcardLz4 => Err(malformed("compressed routed frames are not defined")),
+    }
+}
+
+/// The payload of an opaque routed frame carrying `inner` (one whole inner frame payload, or empty
+/// to end the conn).
+pub fn encode_opaque_payload(header: &RoutedHeader, inner: &[u8]) -> Vec<u8> {
+    use crate::protocol::envelope::{Encoding, EnvelopeHeader, Kind};
+    let head = serde_json::to_vec(header).expect("a header encodes");
+    let mut out = Vec::with_capacity(8 + head.len() + inner.len());
+    out.extend_from_slice(&EnvelopeHeader::new(Encoding::Postcard, Kind::Routed).to_bytes());
+    out.extend_from_slice(&(head.len() as u32).to_be_bytes());
+    out.extend_from_slice(&head);
+    out.extend_from_slice(inner);
+    out
+}
+
+/// The payload of a JSON-form routed frame.
+pub fn encode_json_payload<M: Serialize>(
+    header: &RoutedHeader,
+    msg: &M,
+) -> Result<Vec<u8>, serde_json::Error> {
+    use crate::protocol::envelope::{Encoding, EnvelopeHeader, Kind};
+    let mut out = EnvelopeHeader::new(Encoding::Json, Kind::Routed)
+        .to_bytes()
+        .to_vec();
+    serde_json::to_writer(
+        &mut out,
+        &JsonRouted {
+            header: header.clone(),
+            msg,
+        },
+    )?;
+    Ok(out)
+}
+
+/// The payload of a plain control frame carrying `msg`: an inner frame for an opaque routed frame.
+pub fn control_payload<M: Serialize>(msg: &M) -> Result<Vec<u8>, serde_json::Error> {
+    use crate::protocol::envelope::{Encoding, EnvelopeHeader, Kind};
+    let mut out = EnvelopeHeader::new(Encoding::Json, Kind::Control)
+        .to_bytes()
+        .to_vec();
+    serde_json::to_writer(&mut out, msg)?;
+    Ok(out)
+}
+
+/// The JSON body of `inner` when it is a plain control frame, `None` for any other kind.
+pub fn control_body(inner: &[u8]) -> Option<&[u8]> {
+    use crate::protocol::envelope::{Encoding, EnvelopeHeader, Kind};
+    let (header, body) = EnvelopeHeader::parse(inner).ok()?;
+    (header.kind == Kind::Control && header.encoding == Encoding::Json).then_some(body)
+}
+
+/// Which rows a list asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListKind {
+    /// Every project.
+    Projects,
+    /// Every worktree.
+    Worktrees,
+    /// Every session.
+    Sessions,
+}
+
+/// Why a daemon's rows are not in a list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MissingReason {
+    /// No live link (from the registry, not asked).
+    Offline,
+    /// The daemon speaks another protocol version (from the registry, not asked).
+    NeedsUpdate,
+    /// No answer within the deadline.
+    Timeout,
+    /// The daemon answered with an error.
+    Error(String),
+}
+
+impl fmt::Display for MissingReason {
+    /// The wire text: `offline`, `needs-update`, `timeout`, `error: <message>`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MissingReason::Offline => f.write_str("offline"),
+            MissingReason::NeedsUpdate => f.write_str("needs-update"),
+            MissingReason::Timeout => f.write_str("timeout"),
+            MissingReason::Error(message) => write!(f, "error: {message}"),
+        }
+    }
+}
+
+impl Serialize for MissingReason {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for MissingReason {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        match text.as_str() {
+            "offline" => Ok(MissingReason::Offline),
+            "needs-update" => Ok(MissingReason::NeedsUpdate),
+            "timeout" => Ok(MissingReason::Timeout),
+            other => other
+                .strip_prefix("error: ")
+                .map(|message| MissingReason::Error(message.to_owned()))
+                .ok_or_else(|| serde::de::Error::custom(format!("unknown reason {other:?}"))),
+        }
+    }
+}
+
+/// A daemon whose rows a list does not hold.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MissingDaemon {
+    /// The daemon.
+    pub daemon: WireDaemonId,
+    /// Why.
+    pub reason: MissingReason,
+}
+
+/// Why the orchestrator ended a route.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StreamEndReason {
+    /// The daemon's link dropped.
+    #[serde(rename = "daemon-offline")]
+    DaemonOffline,
+    /// The route's queue to the client was full.
+    #[serde(rename = "slow-consumer")]
+    SlowConsumer,
+    /// The client left.
+    #[serde(rename = "client-gone")]
+    ClientGone,
+    /// The daemon ended the conversation (its connection closed).
+    #[serde(rename = "closed")]
+    Closed,
+    /// The target daemon is unknown (a refusal with no request to answer).
+    #[serde(rename = "not_found")]
+    NotFound,
+    /// The target daemon needs an update (a refusal with no request to answer).
+    #[serde(rename = "needs-update")]
+    NeedsUpdate,
+    /// The target daemon is offline (a refusal with no request to answer).
+    #[serde(rename = "offline")]
+    Offline,
+}
+
+/// Why the orchestrator refuses to route a request (FR-005).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RouteRefusal {
+    /// No such daemon.
+    NotFound,
+    /// The daemon needs an update.
+    NeedsUpdate,
+    /// The daemon has no live link.
+    Offline,
+}
+
+impl RouteRefusal {
+    /// The error kind and message of the `OperationError` that answers a request.
+    pub fn error(self) -> (crate::protocol::messages::ErrorKind, &'static str) {
+        use crate::protocol::messages::ErrorKind;
+        match self {
+            RouteRefusal::NotFound => (ErrorKind::NotFound, "unknown daemon"),
+            RouteRefusal::NeedsUpdate => (ErrorKind::Refused, "needs-update"),
+            RouteRefusal::Offline => (ErrorKind::Refused, "offline"),
+        }
+    }
+
+    /// The end reason for a frame with no request to answer.
+    pub fn stream_end(self) -> StreamEndReason {
+        match self {
+            RouteRefusal::NotFound => StreamEndReason::NotFound,
+            RouteRefusal::NeedsUpdate => StreamEndReason::NeedsUpdate,
+            RouteRefusal::Offline => StreamEndReason::Offline,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +684,119 @@ mod tests {
         let err = env.owns(&WireDaemonId::new("b").unwrap()).unwrap_err();
         assert!(matches!(err, RoutingError::ForeignRow { .. }));
         assert!(err.to_string().contains('b'));
+    }
+
+    fn header(req: Option<u64>) -> RoutedHeader {
+        RoutedHeader {
+            target: Some(WireDaemonId::new("box").unwrap()),
+            conn: ConnectionId(3),
+            seq: Sequence(8),
+            req,
+        }
+    }
+
+    #[test]
+    fn an_opaque_frame_round_trips_and_only_its_header_is_read() {
+        // Not JSON, not a message: the orchestrator must not look.
+        let inner = [9_u8, 1, 0, 0, 0xff, 0xfe, 0x00, 0x7f];
+        let payload = encode_opaque_payload(&header(Some(4)), &inner);
+        let decoded = decode_routed_payload(&payload).unwrap();
+        assert_eq!(decoded.header, header(Some(4)));
+        assert_eq!(decoded.body, RoutedBody::Opaque(&inner));
+    }
+
+    #[test]
+    fn an_empty_opaque_inner_decodes_as_the_end_of_the_conn() {
+        let payload = encode_opaque_payload(&header(None), &[]);
+        assert_eq!(
+            decode_routed_payload(&payload).unwrap().body,
+            RoutedBody::Opaque(&[])
+        );
+    }
+
+    #[test]
+    fn a_truncated_opaque_frame_is_malformed() {
+        let payload = encode_opaque_payload(&header(None), b"x");
+        for cut in [3, 6, 9] {
+            let err = decode_routed_payload(&payload[..cut]).unwrap_err();
+            assert!(matches!(err, RoutingError::Malformed(_)), "{cut}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_json_frame_whose_header_req_differs_from_the_messages_is_malformed() {
+        let ok = encode_json_payload(
+            &header(Some(5)),
+            &serde_json::json!({"OrchList": {"req": 5, "kind": "sessions"}}),
+        )
+        .unwrap();
+        assert_eq!(decode_routed_payload(&ok).unwrap().header.req, Some(5));
+        for (req, msg) in [
+            (Some(6), serde_json::json!({"OrchList": {"req": 5}})),
+            (None, serde_json::json!({"OrchList": {"req": 5}})),
+            (Some(5), serde_json::json!({"Ping": {"nonce": 1}})),
+        ] {
+            let bad = encode_json_payload(&header(req), &msg).unwrap();
+            assert!(matches!(
+                decode_routed_payload(&bad),
+                Err(RoutingError::Malformed(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn a_plain_frame_is_not_routed() {
+        let plain = control_payload(&serde_json::json!({"Goodbye": null})).unwrap();
+        assert!(decode_routed_payload(&plain).is_err());
+        assert_eq!(control_body(&plain), Some(&plain[4..]));
+        assert_eq!(
+            control_body(&encode_opaque_payload(&header(None), b"")),
+            None
+        );
+    }
+
+    #[test]
+    fn the_reason_texts_are_the_contracts() {
+        for (reason, text) in [
+            (MissingReason::Offline, "offline"),
+            (MissingReason::NeedsUpdate, "needs-update"),
+            (MissingReason::Timeout, "timeout"),
+            (MissingReason::Error("boom".into()), "error: boom"),
+        ] {
+            let json = serde_json::to_string(&reason).unwrap();
+            assert_eq!(json, format!("{text:?}"));
+            assert_eq!(
+                serde_json::from_str::<MissingReason>(&json).unwrap(),
+                reason
+            );
+        }
+        assert!(serde_json::from_str::<MissingReason>("\"gone\"").is_err());
+        for (reason, text) in [
+            (StreamEndReason::DaemonOffline, "daemon-offline"),
+            (StreamEndReason::SlowConsumer, "slow-consumer"),
+            (StreamEndReason::ClientGone, "client-gone"),
+            (StreamEndReason::NotFound, "not_found"),
+        ] {
+            assert_eq!(serde_json::to_string(&reason).unwrap(), format!("{text:?}"));
+        }
+        assert_eq!(
+            serde_json::to_string(&ListKind::Worktrees).unwrap(),
+            "\"worktrees\""
+        );
+    }
+
+    #[test]
+    fn a_refusal_names_its_reason() {
+        use crate::protocol::messages::ErrorKind;
+        assert_eq!(RouteRefusal::NotFound.error().0, ErrorKind::NotFound);
+        assert_eq!(
+            RouteRefusal::NeedsUpdate.error(),
+            (ErrorKind::Refused, "needs-update")
+        );
+        assert_eq!(
+            RouteRefusal::Offline.error(),
+            (ErrorKind::Refused, "offline")
+        );
+        assert_eq!(RouteRefusal::Offline.stream_end(), StreamEndReason::Offline);
     }
 }

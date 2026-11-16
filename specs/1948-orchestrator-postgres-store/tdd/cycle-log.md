@@ -101,3 +101,159 @@ Seven tests in `store_migrations.rs` (see drift-M2.md) cover the schema-error ma
 paths, `map_error` and the registry's corrupt-row and driver-error branches. They were written
 after the code, for the diff-coverage gate, against behaviour that already existed: each passed on
 first run and none was shown red by breaking its branch.
+
+## M3 Cycle 1: SQL auth and audit stores on SQLite (T021-T025)
+
+- test: `store_suite.rs` `sqlite` module now runs `auth_tests!` (7 cases) and `audit_tests!` (4 cases)
+  through `SqliteBackend: FullBackend`; `store_scan.rs` `a_raw_update_of_the_audit_log_fails`,
+  `a_raw_delete_from_the_audit_log_fails`, `no_migration_text_grants_anything` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator --no-run` ->
+  `error[E0432]: unresolved imports micold_daemon::orchestrator::db::SqlAuditStore, SqlAuthStore`
+  (2 errors; the stores did not exist). The `store_scan` cases need no new code (the migration's
+  triggers exist since M2), so they were green on first run and pin FR-011.
+- green: `db/auth.rs`, `db/audit.rs`, exports; `cargo test ... store_` 57 passed, 1 failed (below)
+- refactor: `StoreHandle::run`, `begin_write`, `to_i64`/`to_u64` shared with `registry.rs`
+
+## M3 Cycle 2: redeem_invite refuses an unknown redeeming user (M1 review B F2)
+
+- test: `an_invite_is_redeemed_once` (shared suite) creates its users and asserts
+  `redeem_invite(tok-1, ghost)` is `Refused`
+- red: `store_suite::memory::an_invite_is_redeemed_once ... FAILED`: `expected Refused, got
+  Ok(Invite { id: "i1", ... redeemed_by: Some(UserId("ghost")), redeemed_at: Some(1011) })`
+  (the SQL backend already passed: it checks the user)
+- green: `MemoryAuthStore::redeem_invite` checks the user; contract line and trait doc updated;
+  66 passed
+- refactor: none
+
+## M3 Cycle 3: failure arms (CI diff coverage), `store_sql_errors.rs`
+
+Nine tests (see drift-M3.md) written after the code, for the diff-coverage gate: they passed on first
+run and none was shown red by breaking its branch. The behaviours they pin (rollback of a failed
+rotation, one CAS winner, `Corrupt` on unreadable rows, `Unavailable` on lost tables) were each
+exercised by reading the code path, not by a failing run first. Test-after admission, as in M2 cycle 3.
+- review A MINOR fixed after the fact: `put_refresh` wrote `revoked_at` as NULL where the memory store
+  keeps the token as given; now bound. `a_stored_refresh_token_keeps_the_revocation_it_arrived_with`
+  was written with the fix (test-after, no red run).
+
+## M4 Cycle 1: PostgreSQL store (T026-T029)
+
+- test: `store_support.rs` `PostgresDatabase` / `PostgresBackend` (own database per case, skip or
+  fail by `MICOLD_REQUIRE_POSTGRES`); `store_suite.rs` `postgres` module (17 cases);
+  `store_migrations.rs` `both_dialects_list_the_same_versions_and_descriptions`,
+  `an_unreachable_postgres_server_is_unavailable_naming_host_and_port_not_the_password`,
+  `opening_postgres_applies_the_v1_schema_once`; `store_scan.rs` PostgreSQL append-only case
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator --no-run` ->
+  `error[E0599]: no associated function or constant named open_postgres found for struct StoreHandle`
+  (4 call sites); the dialect-parity case had no `migrations/postgres/` directory
+- green: `migrations/postgres/0001_orchestrator_schema.sql`, `POSTGRES_MIGRATOR`,
+  `StoreHandle::open_postgres`; with `MICOLD_TEST_POSTGRES_URL` on a local PostgreSQL 16 and
+  `MICOLD_REQUIRE_POSTGRES=1`: 20 postgres cases passed; `store_` 90 passed without it (skips).
+  No query in `db/registry.rs`, `db/auth.rs`, `db/audit.rs` needed a dialect change (`$N`
+  placeholders, `ON CONFLICT`, `RETURNING` are common to both).
+- refactor: `StoreHandle::start` shared by both opens; `run_forward` takes its migrator.
+- error-arm cases (`a_url_that_does_not_parse…`, `a_missing_ca_file…`, `a_present_ca_file…`) were
+  written with the code (test-after), for diff coverage.
+
+## M5 Cycle 1: migration safety (T032-T035)
+
+- test: fixtures `tests/fixtures/orchestrator/{sqlite,postgres}/v0001.sql` (a row in every table);
+  `store_migrations.rs` M5 cases, each over SQLite and PostgreSQL:
+  `a_newer_database_is_refused_naming_both_versions_and_left_unchanged`,
+  `an_older_database_applies_the_missing_migrations_in_order`,
+  `an_edited_migration_is_refused_naming_version_and_description`,
+  `a_migration_that_fails_half_way_leaves_the_previous_version`,
+  `two_starters_on_one_database_apply_each_migration_once`,
+  `every_shipped_version_upgrades_to_the_newest_with_its_data_intact`. The pre-M5
+  `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` is replaced by the first.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations`
+  (PostgreSQL 16 local, `MICOLD_REQUIRE_POSTGRES=1`): 4 failed for the expected reasons —
+  newer: `Failed { version: 0, reason: "migration 999 was previously applied but is missing…" }`;
+  half way: `version` 0, not 2; edited: old text `migration 1 (orchestrator schema) differs…`;
+  two starters: `while executing migration 1: … table daemons already exists` (the retry matched
+  only `Execute`, not `ExecuteMigration`). The older-database and chain cases passed at once (v1 is
+  the only shipped version; they pin behaviour sqlx already gives).
+- green: `migrate::check_not_newer` (read-only SQLite connection before the WAL pool; PostgreSQL
+  `READ ONLY` transaction), called by `StoreHandle::start` before `run_forward`; `run_forward`
+  retries on `ExecuteMigration` too; `ExecuteMigration`/`VersionMissing`/`Dirty` carry their version
+  in `Failed`; `SchemaError` texts are those of contracts/config.md, *Errors at start*. 25 passed;
+  the race case 5 of 5 runs.
+- refactor: none
+
+## M5 Cycle 2: review A fixes
+
+- red: the newer-schema case's SQLite fingerprint now lists the directory; with the fix reverted it
+  failed `["orchestrator.db", "orchestrator.db-shm", "orchestrator.db-wal"]` vs `["orchestrator.db"]`
+  (the read-only check of a WAL file creates the sidecars).
+- green: a refused check removes the sidecars it created; `run_forward` retries once per migration
+  plus one (one retry was enough only while one migration ships); a schema error from the run
+  re-checks for a newer database (PostgreSQL's lock is taken only in the run); `sqlite_url` takes
+  the mode; `Dirty`/`VersionMissing` no longer claim "rolled back" with a version. The retry bound
+  and the re-check were written with the fix (test-after: one shipped migration cannot race twice).
+- refactor: `shipped_migrations` shared with `migration_names`; `newest_shipped` per dialect.
+
+## M7 Cycle 1: `[database]` config and the backend rule
+
+- T039–T041 (core config tests, `choose_store` tests, `store_config` integration): test-after. The
+  types and checks were written in the same pass as the tests; red was not observed.
+- green: `DatabaseConfig`, rules D1–D5, the resolved view, `orchestrator::backend::choose_store`,
+  `config check` wiring. 13 core cases and 4 `store_config` cases pass; the full gate is green.
+- refactor: none
+
+## M8 Cycle 1: the process starts on the chosen store (T045–T050)
+
+T045–T050 were written test-after (the review round 1 found no M8 entry). Red was recovered by
+reverting each behaviour on the green tree and running its test
+(`cargo test -p micold-daemon --test orchestrator <filter>`, PostgreSQL 16 local,
+`MICOLD_REQUIRE_POSTGRES=1`), then restoring it:
+
+- `db::open` unreachable mapping, reverted to `orchestrator database {target}: {reason}`:
+  `an_unreachable_host_fails_the_start_naming_host_and_cause_not_the_password` FAILED at
+  store_slow.rs:48 (the text does not start with `orchestrator database 127.0.0.1:<port> unreachable: `).
+- `run()`/`run_configured` store choice, reverted to the JSON store in the data directory:
+  `only_a_data_directory_starts_on_sqlite_and_keeps_the_registry_across_a_restart` FAILED at
+  store_config.rs:130 (no row reaches `orchestrator.db` within 10 s).
+- `serve` loading on `spawn_blocking`, reverted to `store.load()` on the runtime:
+  `run_with_sql_store_starts_and_restores` FAILED, `Cannot start a runtime from within a runtime`
+  in `SqlRegistryStore::load`.
+- green: all three pass with the code restored.
+
+## M8 Cycle 2: review round 1 fixes
+
+- F1, test-first: `an_unimported_registry_json_refuses_the_start_naming_the_file`. red: FAILED at
+  store_config.rs:172, `the start returns at once` (the start ran on an empty SQLite registry and
+  did not return; a first unbounded version of the test hung). green: `refuse_unimported_json` in
+  `open_store`, before any store is opened; the message names the file; with
+  `registry.json.imported` beside it the start runs.
+- F3, test-first: `a_save_lost_with_the_database_is_reported_on_stderr_without_the_password` (the
+  process on PostgreSQL through `FlakyProxy`, connections dropped, a daemon linked). red: no line
+  with `could not be saved`; stderr held only `orchestrator store 127.0.0.1:<port> is unavailable:
+  …`. green: the save thread prefixes a non-`Save` error with `a registry change could not be
+  saved:`; no line holds the password.
+- refactor: none
+
+## M9 — T051–T053 (registry.json import)
+
+- behavior: US5 1–4 (FR-010), `tests/orchestrator/store_import.rs` on SQLite and PostgreSQL, and
+  `store_config::the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one`.
+  red: on M8 the start refused any un-imported file with `this version cannot import it`, so the
+  start test's readable file never started; `import_registry_json` did not exist (the suite did
+  not compile). green: `db::import` (one transaction: rows, `imports` marker with the file's SHA-1,
+  then rename) called from `open_store` after `db::open`; 11 passed with PostgreSQL configured.
+- refactor: `upsert_row` shared with the registry store (`pub(super)`).
+
+## M10 — Ownership columns and adoption (T055–T060)
+
+- T055/T058 `record.rs`: red: `OwnerId` and `DaemonRecord.owner` did not exist (the two new
+  record tests did not compile). green: `OwnerId::{Unowned, User}` serialised as its text, serde
+  default `unowned`; 125 core orchestrator tests pass.
+- T056/T058/T059 `store_suite.rs`: red by revert: with `db/registry.rs` back at M9 (owner bound
+  as `UNOWNED`, not read on load) `an_owner_survives_a_relink_upsert_and_a_whole_list_save` fails
+  on SQLite and PostgreSQL (`left: [("a", "unowned")] right: [("a", "alice")]`). green: the owner
+  is bound on insert only and read on load; memory and JSON keep a stored owner when an `unowned`
+  record replaces it (`keeping_owners`); `reassign_unowned` default over `load`/`save`, SQL
+  override one transaction over `daemons`, `projects`, `sessions`.
+- T057 `store_scan.rs`: every table but `_sqlx_migrations` (and SQLite's `sqlite_sequence`) has
+  `tenant_id`, the three owned ones `owner_user_id`; green on arrival (the M2/M4 schema already
+  had them), kept as the US6 scenario 1 guard.
+- T059 `store_import.rs`: an owner the file carries is kept, a missing one is `unowned`; green
+  with the insert-only bind.

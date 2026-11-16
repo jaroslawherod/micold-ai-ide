@@ -50,10 +50,13 @@ fn stand_in(bin: &Path, command: &str) {
     let argv_file = bin.join(format!("{command}.argv"));
     let env_file = bin.join(format!("{command}.env"));
     let script = format!(
-        "#!/bin/sh\nprintf '%s' \"$*\" > '{a}'\nenv > '{e}'\nexec cat > /dev/null\n",
+        "#!/bin/sh\nprintf '%s' \"$*\" > '{a}.tmp'\nenv > '{e}.tmp'\nmv '{e}.tmp' '{e}'\nmv '{a}.tmp' '{a}'\nexec cat > /dev/null\n",
         a = argv_file.display(),
         e = env_file.display(),
     );
+    // Both records are written under temporary names and renamed into place, the argv record
+    // last: a test that sees either file may read both, complete, even if it kills the
+    // stand-in at once (a direct `> file` let a test read the env file before it existed).
     let path = bin.join(command);
     std::fs::write(&path, script).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();

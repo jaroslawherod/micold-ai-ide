@@ -6,7 +6,7 @@
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 
-use micold_core::orchestrator::{RegistrySaver, RegistryStore, Snapshot};
+use micold_core::orchestrator::{RegistrySaver, RegistryStore, Snapshot, StoreError};
 
 #[derive(Default)]
 pub(super) struct Pending {
@@ -81,8 +81,15 @@ impl SaveWorker {
                 while let Some(snapshot) = feed.next() {
                     // A failure is logged: the registry in memory stays right and the next
                     // change tries again.
-                    if let Err(e) = saver.save(&snapshot) {
-                        eprintln!("micold-daemon: orchestrator: {e}");
+                    match saver.save(&snapshot) {
+                        Ok(_) => {}
+                        // The JSON store's own text already says so.
+                        Err(e @ StoreError::Save { .. }) => {
+                            eprintln!("micold-daemon: orchestrator: {e}");
+                        }
+                        Err(e) => eprintln!(
+                            "micold-daemon: orchestrator: a registry change could not be saved: {e}"
+                        ),
                     }
                 }
             })?;

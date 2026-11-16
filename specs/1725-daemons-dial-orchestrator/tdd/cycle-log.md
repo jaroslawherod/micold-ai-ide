@@ -261,3 +261,36 @@ failed before the implementation.
   `ssh_real_link` 4 passed.
 - Full gate 1: `daemon_tests_gate_with_reason` failed (`remote_prepare_link.rs` gated `#![cfg(unix)]`
   with no reason line); the `// unix-only:` line added → passed.
+
+## Milestone M5 (T038–T040)
+
+### Cycle 15 — a dropped connection shows offline, a reopen online (T038 → T039, SC-002, US3 scenarios 1–3, FR-009)
+
+- tests: `crates/micold-daemon/tests/ssh_real/ssh_real_link.rs`, two tests against a rootless `sshd`
+  (this session installed `openssh-server` and made `/run/sshd`):
+  `ssh_real_link_a_dropped_connection_shows_offline_and_a_reopen_online_with_the_same_daemon` (the
+  app's link `ssh` killed with `SIGTERM`: `offline` within 10 s, the direct host daemon still
+  `online`; while the forward is down the remote `status.json` stays `not-linked` with one `since`
+  for 16 s, the log gains no line and has `orchestrator link lost` once and no refusal; reopened:
+  `online` within 16 s, same pid, records `link-drop` and `link-host` once each) and
+  `ssh_real_link_a_killed_connection_reopened_at_once_comes_back_online` (`SIGKILL` and an immediate
+  reopen: `online` within 16 s, still `linked` and `online` past the heartbeat deadline, so through the
+  new forward; same pid, one `ssh` carrying the link, one record). In-process:
+  `a_stale_forward_socket_is_a_quiet_connect_failure_and_a_new_forward_links_within_16_s` in
+  `tests/orchestrator_dial/outage.rs` (paused clock: a stale `orchestrator.sock` for 45 s is
+  `NotLinked`, 0 attempts, no log line at any level; a listener there links within 16 s, logged once).
+- red: `--features ssh-real-runtime --test ssh_real ssh_real_link -- --test-threads=1` → 4 passed, 2
+  FAILED (`link-drop never became ready`, `link-kill never became ready`): the record stayed
+  `online`. The cause was the harness, not the daemon: `Orchestrator::start` runs on a `TestClock`
+  that only moves by hand, so its heartbeat deadline never ran out. The tests now run a `RealTime`
+  follower that moves that clock with real time. Then 1 FAILED: `offline 10.03s after the drop`; the
+  registry's bound is the deadline plus one check counted from the link's end, so the test's own
+  polling (`POLL_SLACK`, 500 ms) is added to both bounds. The `SIGKILL` test first expected an
+  `offline` phase that never comes (the daemon re-dials through the new forward 1.7 s after the
+  reopen); it now proves the new forward by still being linked past the deadline.
+- green: the same command → 6 passed; `--test orchestrator_dial outage::` → 4 passed. T039 needed no
+  product change: `prepare-link` already removes a stale socket (M4, T033) and a refused connect is
+  already `Ok(None)`/`Err` → `NotLinked`, `after_failure`, no log line (M1/M3). The in-process test was
+  green on its first run (test-after, recorded as such).
+- mutation: a `tracing::info!` in `run`'s connect-failure arm → the in-process test FAILED (`a connect
+  failure logs nothing per retry`); restored.

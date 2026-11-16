@@ -26,6 +26,7 @@ pub mod kube;
 /// (feature 491).
 pub mod links;
 pub mod notification_icon;
+pub mod orchestrator_conn;
 pub mod overlay;
 pub mod pat_source;
 pub mod reveal_trace;

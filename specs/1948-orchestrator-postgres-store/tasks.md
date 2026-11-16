@@ -136,20 +136,20 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: users and audit entries survive a restart in local mode (US1 scenario 2 complete).
 
-- [ ] T021 [P] [US1] Run the auth and audit cases (T007, T008) on the SQLite factory in
+- [x] T021 [P] [US1] Run the auth and audit cases (T007, T008) on the SQLite factory in
   `store_support.rs` (red).
-- [ ] T022 [P] [US1] `crates/micold-daemon/tests/orchestrator/store_scan.rs` (new, registered): raw
+- [x] T022 [P] [US1] `crates/micold-daemon/tests/orchestrator/store_scan.rs` (new, registered): raw
   `UPDATE` and `DELETE` on `audit_log` fail with `audit_log is append-only` (FR-011); the migration
   texts under `crates/micold-daemon/migrations/` contain no `GRANT`.
-- [ ] T023 [US1] `crates/micold-daemon/src/orchestrator/db/auth.rs`: `SqlAuthStore::new(db, tenant)`;
+- [x] T023 [US1] `crates/micold-daemon/src/orchestrator/db/auth.rs`: `SqlAuthStore::new(db, tenant)`;
   every statement binds `tenant_id`; `redeem_invite` and `redeem_enrollment` are one compare-and-set
   `UPDATE … WHERE redeemed_at IS NULL` (and not expired) so exactly one caller wins;
   `rotate_refresh` revokes the old and inserts the new in one transaction; `remove_user` soft-removes
   and revokes in one transaction; `consume_bootstrap` likewise.
-- [ ] T024 [P] [US1] `crates/micold-daemon/src/orchestrator/db/audit.rs`: `SqlAuditStore::new(db,
+- [x] T024 [P] [US1] `crates/micold-daemon/src/orchestrator/db/audit.rs`: `SqlAuditStore::new(db,
   tenant)`: `append` returns the stored row with `seq`, `recent` keyset by `seq`, `by_actor`; no
   update or delete statement exists.
-- [ ] T025 [US1] Export both from `db/mod.rs`; T021 and T022 green on SQLite.
+- [x] T025 [US1] Export both from `db/mod.rs`; T021 and T022 green on SQLite.
 
 ---
 
@@ -157,25 +157,25 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: the same suite passes on PostgreSQL in CI (US1 scenario 1; FR-012, SC-004).
 
-- [ ] T026 [P] [US1] Postgres factory in `store_support.rs`: reads `MICOLD_TEST_POSTGRES_URL`, each
+- [x] T026 [P] [US1] Postgres factory in `store_support.rs`: reads `MICOLD_TEST_POSTGRES_URL`, each
   test creates and drops its own database; unset prints `skipped: MICOLD_TEST_POSTGRES_URL not set`,
   and fails instead when `MICOLD_REQUIRE_POSTGRES=1`; every shared-suite case runs on it.
-- [ ] T027 [P] [US1] Test in `store_migrations.rs`: `migrations/postgres/` and `migrations/sqlite/`
+- [x] T027 [P] [US1] Test in `store_migrations.rs`: `migrations/postgres/` and `migrations/sqlite/`
   list the same versions and descriptions; and (red, before T029) a store-level case that opening a
   refused local port returns `StoreError::Unavailable` carrying `host:port`, with no password in its
   `Display` (FR-016).
-- [ ] T028 [US1] `crates/micold-daemon/migrations/postgres/0001_orchestrator_schema.sql`: same schema,
+- [x] T028 [US1] `crates/micold-daemon/migrations/postgres/0001_orchestrator_schema.sql`: same schema,
   `BIGSERIAL PRIMARY KEY` for `audit_log.seq`, a `plpgsql` function plus `CREATE TRIGGER` raising
   `audit_log is append-only` on `BEFORE UPDATE OR DELETE`, no `GRANT`.
-- [ ] T029 [US1] `db/migrate.rs` and `db/mod.rs`: a `MIGRATOR` per backend, `PgConnectOptions` from
+- [x] T029 [US1] `db/migrate.rs` and `db/mod.rs`: a `MIGRATOR` per backend, `PgConnectOptions` from
   the URL (with `ca_file`: `ssl_root_cert` and `VerifyFull`; without: `prefer`), `pool_size`,
   `install_default_drivers`; adjust any statement in `db/registry.rs`, `db/auth.rs`, `db/audit.rs`
   whose form differs per dialect; an unreachable server maps to `StoreError::Unavailable` carrying
   `host:port` and the driver cause with the URL stripped (T027's unreachable case green).
-- [ ] T030 [P] [US1] `.github/workflows/ci.yml`: `services: postgres` (`postgres:17`, user, password and
+- [x] T030 [P] [US1] `.github/workflows/ci.yml`: `services: postgres` (`postgres:17`, user, password and
   db as job env, `pg_isready` health check, port 5432) on the `test` job, with
   `MICOLD_TEST_POSTGRES_URL` and `MICOLD_REQUIRE_POSTGRES=1`.
-- [ ] T031 [P] [US1] `docs/development/ci-pipeline.md`: note the Postgres service container and the
+- [x] T031 [P] [US1] `docs/development/ci-pipeline.md`: note the Postgres service container and the
   `MICOLD_REQUIRE_POSTGRES` rule.
 
 ---
@@ -184,9 +184,9 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: forward-only, checksummed, all-or-nothing migrations (US2; FR-003, FR-004, FR-005, FR-013, SC-002).
 
-- [ ] T032 [P] [US2] Seed fixtures `crates/micold-daemon/tests/fixtures/orchestrator/sqlite/v0001.sql`
+- [x] T032 [P] [US2] Seed fixtures `crates/micold-daemon/tests/fixtures/orchestrator/sqlite/v0001.sql`
   and `…/postgres/v0001.sql`: rows in every table at schema version 1.
-- [ ] T033 [US2] Failing tests in `store_migrations.rs`, SQLite and PostgreSQL: a database with a
+- [x] T033 [US2] Failing tests in `store_migrations.rs`, SQLite and PostgreSQL: a database with a
   recorded version above the build's newest is refused, the message names both versions and the
   SQLite file's SHA-256 is identical before and after (PostgreSQL: `_sqlx_migrations` untouched);
   an older database applies the missing migrations in order; an edited migration is refused naming
@@ -195,11 +195,11 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   migration exactly once; the chain test seeds each `tests/fixtures/orchestrator/<dialect>/vNNNN.sql`
   at version N, upgrades to the newest and finds the data intact, and fails when a migration has no
   fixture.
-- [ ] T034 [US2] `db/migrate.rs`: `check_not_newer()` read-only (SQLite `read_only(true)` and no WAL
+- [x] T034 [US2] `db/migrate.rs`: `check_not_newer()` read-only (SQLite `read_only(true)` and no WAL
   pragma; PostgreSQL `READ ONLY` transaction) comparing `max(version)` of `_sqlx_migrations`, when
   the table exists, with `MIGRATOR.migrations.last()`; `MigrateError::DatabaseNewer { database,
   build }` and the `SchemaError` mapping with the texts of contracts/config.md, *Errors at start*.
-- [ ] T035 [US2] `db/mod.rs` `open()`: call `check_not_newer` before `run_forward`; `run_forward`
+- [x] T035 [US2] `db/mod.rs` `open()`: call `check_not_newer` before `run_forward`; `run_forward`
   retries once after re-reading `_sqlx_migrations` on a SQLite busy or "already exists" failure;
   map a checksum mismatch to `SchemaError::ChecksumChanged`; T033 green.
 
@@ -209,14 +209,14 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: a scan of every column after the full suite finds no key material (US3; FR-006, SC-003).
 
-- [ ] T036 [P] [US3] Failing unit tests in `auth.rs`: `CertSerial::new` rejects non-hex text (a PEM
+- [x] T036 [P] [US3] Failing unit tests in `auth.rs`: `CertSerial::new` rejects non-hex text (a PEM
   block included); `TokenHash::from_hex` rejects a PEM block.
-- [ ] T037 [US3] Scan test in `store_scan.rs` and a table-and-column lister in `store_support.rs`
+- [x] T037 [US3] Scan test in `store_scan.rs` and a table-and-column lister in `store_support.rs`
   (`information_schema` or `sqlite_master`): after the shared suite's writes plus one write per store
   method, cast every column of every table to text and fail on `-----BEGIN` or `PRIVATE KEY`; fail on
   a column name matching `private`, `secret` or ending `_key`, no exception list; both backends; a
   negative control seeds a free-text field with a PEM block and expects the scanner to fail.
-- [ ] T038 [US3] Make T036 pass in `auth.rs` (`CertSerial::new` validates hex); T037 green on both
+- [x] T038 [US3] Make T036 pass in `auth.rs` (`CertSerial::new` validates hex); T037 green on both
   backends.
 
 ---
@@ -225,7 +225,7 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: `[database]` parses and checks, and the backend rule exists (US4 scenarios 1, 2, 4; FR-008, FR-009).
 
-- [ ] T039 [P] [US4] Failing tests in `crates/micold-core/src/daemon_config/tests.rs`: `[database]`
+- [x] T039 [P] [US4] Failing tests in `crates/micold-core/src/daemon_config/tests.rs`: `[database]`
   with `url_file`, `ca_file`, `pool_size` parses and `deny_unknown_fields` rejects another key;
   `pool_size` default 5, outside 1..=64 fails naming the key; `[database]` without `url_file` fails
   naming `database.url_file`; `url_file` missing, unreadable or blank after trimming fails
@@ -233,20 +233,20 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   only the scheme, never the rest of the URL; a missing `ca_file` fails `database.ca_file <path>:
   missing`; the resolved view shows `database.url_file = <path> (readable|missing|empty)`,
   `database.ca_file`, `database.pool_size`, never the URL, host or password.
-- [ ] T040 [P] [US4] Failing unit tests in `crates/micold-core/src/orchestrator/backend.rs` (new):
+- [x] T040 [P] [US4] Failing unit tests in `crates/micold-core/src/orchestrator/backend.rs` (new):
   `choose_store(Option<&DatabaseConfig>, BindScope, data_dir)` returns PostgreSQL when the table is
   present on any bind, SQLite at `<data_dir>/orchestrator/orchestrator.db` when absent and
   `LoopbackOnly`, and an error naming `database.url_file` when absent and `Network`.
-- [ ] T041 [P] [US4] `crates/micold-daemon/tests/orchestrator/store_config.rs` (new, registered): (red, before T042) a
+- [x] T041 [P] [US4] `crates/micold-daemon/tests/orchestrator/store_config.rs` (new, registered): (red, before T042) a
   `config check` run on files with and without `[database]` passes or fails as T039 states, naming
   key and path.
-- [ ] T042 [US4] `DatabaseConfig { url_file, ca_file, pool_size }` in
+- [x] T042 [US4] `DatabaseConfig { url_file, ca_file, pool_size }` in
   `crates/micold-core/src/daemon_config/mod.rs`, the checks in `files.rs`, the view in `resolved.rs`;
   T039 and T041 green.
-- [ ] T043 [US4] `backend.rs`: `BindScope`, `StoreChoice`, `choose_store`, re-exported in
+- [x] T043 [US4] `backend.rs`: `BindScope`, `StoreChoice`, `choose_store`, re-exported in
   `orchestrator/mod.rs`; `config check` calls it with `LoopbackOnly` (until #1732 adds the bind key);
   T040 green.
-- [ ] T044 [P] [US4] `docs/user-guide/daemon-configuration.md`: `[database]` rows (`url_file`,
+- [x] T044 [P] [US4] `docs/user-guide/daemon-configuration.md`: `[database]` rows (`url_file`,
   `ca_file`, `pool_size`, what a missing key does).
 
 ---
@@ -255,24 +255,24 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: start with only a data directory, or a PostgreSQL URL from config (US4 scenario 3; FR-009, FR-014, FR-016, SC-005).
 
-- [ ] T045 [P] [US4] `FlakyProxy` (a TCP proxy that can drop and resume) in `store_support.rs`.
-- [ ] T046 [US4] Failing tests in `store_slow.rs` (new, registered): an unreachable host fails the
+- [x] T045 [P] [US4] `FlakyProxy` (a TCP proxy that can drop and resume) in `store_support.rs`.
+- [x] T046 [US4] Failing tests in `store_slow.rs` (new, registered): an unreachable host fails the
   start with `orchestrator database <host>:<port> unreachable: <cause>` and the error text does not
   contain the password (grep); through `FlakyProxy`, a database lost after start makes store calls
   return `Unavailable` while the orchestrator keeps running, and the next call after the proxy
   resumes succeeds (FR-016); with the save thread parked inside a store call, other daemons'
   heartbeats are still answered inside 9 s (FR-014).
-- [ ] T047 [US4] Failing tests in `store_config.rs` and `store_suite.rs`: starting with only a data
+- [x] T047 [US4] Failing tests in `store_config.rs` and `store_suite.rs`: starting with only a data
   directory and no `[database]` creates `orchestrator/orchestrator.db` mode 0600, a linked daemon
   is listed (offline) after a restart (SC-005); `run_with_sql_store_starts_and_restores` starts
   `run_with` on a SQL store and `serve`'s load works; dropping the last handle inside async code
   does not panic.
-- [ ] T048 [US4] `db/mod.rs`: `open(config, bind, data_dir)` driven by `choose_store`, reading
+- [x] T048 [US4] `db/mod.rs`: `open(config, bind, data_dir)` driven by `choose_store`, reading
   `url_file` (trimmed) and `ca_file`.
-- [ ] T049 [US4] `crates/micold-daemon/src/orchestrator/mod.rs`: `run()` opens the stores inside
+- [x] T049 [US4] `crates/micold-daemon/src/orchestrator/mod.rs`: `run()` opens the stores inside
   `spawn_blocking` before `serve`, passing `LoopbackOnly`; `serve` loads through
   `spawn_blocking`, the join error mapped to `io::Error`; T046 and T047 green.
-- [ ] T050 [P] [US4] `docs/user-guide/orchestrator-storage.md` (new): local mode versus PostgreSQL,
+- [x] T050 [P] [US4] `docs/user-guide/orchestrator-storage.md` (new): local mode versus PostgreSQL,
   the `[database]` keys, what is stored and never stored, newer-schema refusal; link it from
   `docs/user-guide/orchestrator-mode.md`.
 
@@ -282,19 +282,19 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: an operator's JSON registry moves into the database exactly once (US5; FR-010).
 
-- [ ] T051 [P] [US5] Failing tests in `crates/micold-daemon/tests/orchestrator/store_import.rs` (new,
+- [x] T051 [P] [US5] Failing tests in `crates/micold-daemon/tests/orchestrator/store_import.rs` (new,
   registered), both backends: an un-imported file with an empty registry imports every record under
   its own `tenant` and is renamed `registry.json.imported`; a second start imports nothing and
   changes nothing; a corrupt file fails the start naming it and imports nothing; rows present with
   no matching marker refuse, naming the file and the row count; rows plus a marker whose digest
   matches the file (a crash after the import transaction) only rename.
-- [ ] T052 [US5] `crates/micold-daemon/src/orchestrator/db/import.rs`: parse with
+- [x] T052 [US5] `crates/micold-daemon/src/orchestrator/db/import.rs`: parse with
   `JsonRegistryStore::load`, count `daemons` rows over all tenants, one transaction inserting every
   record (owner `UNOWNED`) and an `imports` row `(tenant_id, source, digest, imported_at)` with
   `digest` the SHA-1 of the file, then rename (same directory, same mode).
-- [ ] T053 [US5] Call the import in `run()` after `open` and before `serve`'s load
+- [x] T053 [US5] Call the import in `run()` after `open` and before `serve`'s load
   (`crates/micold-daemon/src/orchestrator/mod.rs`); T051 green.
-- [ ] T054 [P] [US5] `docs/user-guide/orchestrator-storage.md`: the import and the `.imported` suffix.
+- [x] T054 [P] [US5] `docs/user-guide/orchestrator-storage.md`: the import and the `.imported` suffix.
 
 ---
 
@@ -302,22 +302,22 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: owners and tenants round-trip, and the first owner adopts pre-user records (US6; FR-007, FR-046).
 
-- [ ] T055 [P] [US6] Failing tests in `crates/micold-core/src/orchestrator/record.rs`: `OwnerId` is
+- [x] T055 [P] [US6] Failing tests in `crates/micold-core/src/orchestrator/record.rs`: `OwnerId` is
   `unowned` or a `UserId`; `DaemonRecord.owner` defaults to `unowned` when absent, so an old
   `registry.json` loads.
-- [ ] T056 [P] [US6] Failing cases in `store_suite.rs`: an existing owner survives a relink `upsert`
+- [x] T056 [P] [US6] Failing cases in `store_suite.rs`: an existing owner survives a relink `upsert`
   and a whole-list `save`; `reassign_unowned(&TenantId, &UserId)` moves every `unowned` row of the
   tenant and returns the count, a second call returns 0, another tenant's rows stay.
-- [ ] T057 [P] [US6] Test in `store_scan.rs`: every table except `_sqlx_migrations` has `tenant_id`,
+- [x] T057 [P] [US6] Test in `store_scan.rs`: every table except `_sqlx_migrations` has `tenant_id`,
   and `daemons`, `projects`, `sessions` have `owner_user_id`, on both backends (US6 scenario 1).
-- [ ] T058 [US6] `record.rs`: `OwnerId`, `DaemonRecord.owner` (serde default `unowned`); `store.rs`:
+- [x] T058 [US6] `record.rs`: `OwnerId`, `DaemonRecord.owner` (serde default `unowned`); `store.rs`:
   `RegistryStore::reassign_unowned` with a default body over `load` and `save`; memory and JSON
   stores green.
-- [ ] T059 [US6] `db/registry.rs`: write `owner_user_id` from the record on insert only, and override
+- [x] T059 [US6] `db/registry.rs`: write `owner_user_id` from the record on insert only, and override
   `reassign_unowned` with one transaction updating `daemons`, `projects`, `sessions` of the tenant
   `WHERE owner_user_id = 'unowned'`; `db/import.rs` keeps an owner the file carries; T056 and T057
   green.
-- [ ] T060 [US6] Run quickstart §A and §B (`specs/1948-orchestrator-postgres-store/quickstart.md`);
+- [x] T060 [US6] Run quickstart §A and §B (`specs/1948-orchestrator-postgres-store/quickstart.md`);
   record each step's result there and fix the doc where it is wrong.
 
 ---

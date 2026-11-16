@@ -32,6 +32,19 @@ use tracing_subscriber::fmt::MakeWriter;
 
 use support::preamble_codec;
 
+/// Wait, bounded in real time, until the link's status is `want`.
+pub async fn status_is(
+    handle: &micold_daemon::orchestrator_link::LinkHandle,
+    want: micold_core::orchestrator::LinkStatus,
+) {
+    support::within("the status settles", async {
+        while handle.status() != want {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+}
+
 /// A host daemon's configuration with an `[orchestrator_link]` table, or none.
 pub fn config(link: Option<&str>) -> Arc<DaemonConfig> {
     let text = format!(

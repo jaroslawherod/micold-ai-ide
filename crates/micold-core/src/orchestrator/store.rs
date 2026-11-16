@@ -13,7 +13,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
-use super::record::{DaemonRecord, TenantId};
+use super::auth::UserId;
+use super::record::{DaemonRecord, OwnerId, TenantId};
 use super::registry::Snapshot;
 use crate::protocol::routing::WireDaemonId;
 
@@ -57,15 +58,14 @@ impl fmt::Display for SchemaError {
         match self {
             Self::DatabaseNewer { database, build } => write!(
                 f,
-                "the database schema is at version {database}, newer than this build's {build}; \
-                 upgrade the orchestrator or point it at another database"
+                "database schema version {database} is newer than this build's {build}"
             ),
             Self::ChecksumChanged {
                 version,
                 description,
             } => write!(
                 f,
-                "migration {version} ({description}) differs from the one the database applied"
+                "migration {version} {description} was edited after it was applied"
             ),
             Self::Failed { version, reason } => {
                 write!(
@@ -154,6 +154,46 @@ pub trait RegistryStore: Send + Sync {
     fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError> {
         remove_from(self.load()?, tenant, id, |all| self.save(all))
     }
+
+    /// Hand every `unowned` record of `tenant` to `owner` (#1948, FR-007): the first owner user
+    /// adopts what existed before any user did. Returns how many records moved; a second call
+    /// moves none. Other tenants' records stay. The default loads and saves; a SQL store also
+    /// moves the tenant's projects and sessions, in one transaction.
+    fn reassign_unowned(&self, tenant: &TenantId, owner: &UserId) -> Result<u64, StoreError> {
+        let mut records = self.load()?;
+        let mut moved = 0;
+        for record in records
+            .iter_mut()
+            .filter(|r| &r.tenant == tenant && r.owner == OwnerId::Unowned)
+        {
+            record.owner = OwnerId::User(owner.clone());
+            moved += 1;
+        }
+        if moved > 0 {
+            self.save(&records)?;
+        }
+        Ok(moved)
+    }
+}
+
+/// `records`, each `unowned` one taking the owner its `(tenant, id)` has in `stored`: an upsert
+/// or a save never clears an owner (a relinked daemon is announced `unowned`).
+fn keeping_owners(stored: &[DaemonRecord], records: &[DaemonRecord]) -> Vec<DaemonRecord> {
+    records
+        .iter()
+        .map(|record| {
+            let mut record = record.clone();
+            if record.owner == OwnerId::Unowned {
+                if let Some(earlier) = stored
+                    .iter()
+                    .find(|s| s.tenant == record.tenant && s.id == record.id)
+                {
+                    record.owner = earlier.owner.clone();
+                }
+            }
+            record
+        })
+        .collect()
 }
 
 /// `records` ordered by `(tenant, id)`, the order every store loads in.
@@ -229,6 +269,23 @@ impl JsonRegistryStore {
     }
 }
 
+impl JsonRegistryStore {
+    /// The records a save keeps owners from: none when the file is missing or does not parse
+    /// (the save replaces it); a read error fails the save, so no owner is dropped.
+    fn stored_for_save(&self) -> Result<Vec<DaemonRecord>, StoreError> {
+        match std::fs::read(self.path()) {
+            Ok(bytes) => Ok(serde_json::from_slice::<Stored>(&bytes)
+                .map(|stored| stored.daemons)
+                .unwrap_or_default()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(StoreError::Save {
+                path: self.path(),
+                reason: e.to_string(),
+            }),
+        }
+    }
+}
+
 impl RegistryStore for JsonRegistryStore {
     fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
         let path = self.path();
@@ -252,9 +309,10 @@ impl RegistryStore for JsonRegistryStore {
     }
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
+        let records = keeping_owners(&self.stored_for_save()?, records);
         let stored = StoredRef {
             version: STORE_VERSION,
-            daemons: records,
+            daemons: &records,
         };
         crate::owner_only::write_with(&self.dir, REGISTRY_FILE, |file| {
             let mut out = io::BufWriter::new(file);
@@ -353,7 +411,7 @@ impl MemoryRegistryStore {
                 reason: "injected save failure".to_owned(),
             });
         }
-        *stored = records.to_vec();
+        *stored = keeping_owners(stored, records);
         self.saves.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
@@ -442,6 +500,19 @@ mod tests {
         assert_eq!(json["daemons"][0]["health"], "online");
         assert_eq!(json["daemons"][1]["health"], "needs-update");
         assert_eq!(json["daemons"][0]["tenant"], "acme");
+    }
+
+    #[test]
+    fn a_save_over_an_unreadable_copy_fails_and_one_over_a_corrupt_copy_replaces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonRegistryStore::in_data_dir(dir.path());
+        std::fs::create_dir_all(store.path()).unwrap();
+        let records = vec![record("a", Health::Online)];
+        assert!(matches!(store.save(&records), Err(StoreError::Save { .. })));
+        std::fs::remove_dir(store.path()).unwrap();
+        std::fs::write(store.path(), b"not json").unwrap();
+        store.save(&records).unwrap();
+        assert_eq!(store.load().unwrap(), records);
     }
 
     #[cfg(unix)]

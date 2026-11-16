@@ -50,7 +50,7 @@ use crate::app::Message;
 use crate::daemon_config_render::{self, DaemonSettings};
 
 /// The build string this client announces in the handshake (diagnostics only).
-const CLIENT_BUILD: &str = concat!("micold-ai-ide/", env!("CARGO_PKG_VERSION"));
+pub(crate) const CLIENT_BUILD: &str = concat!("micold-ai-ide/", env!("CARGO_PKG_VERSION"));
 
 /// Where the daemon runs, and what to present to it (feature 027).
 ///
@@ -851,6 +851,48 @@ async fn reconnect_loop<A, Fut, S, Wait>(
     }
 }
 
+/// The host daemon, reached through the orchestrator (#1726, R6, FR-007): start the host daemon
+/// as before when nothing holds its endpoint, then open a route to `local` on the app's one
+/// orchestrator connection and handshake on it. Until the host daemon has linked, the
+/// orchestrator ends the route and this looks again. An orchestrator that cannot be started fails
+/// with its cause, shown in the connection banner; nothing falls back to the daemon's socket.
+async fn host_routed(
+    endpoint: &endpoint::Endpoint,
+    data_dir: Option<&Path>,
+) -> std::io::Result<Connected> {
+    let orchestrator = crate::orchestrator_conn::shared()?;
+    let since_secs = micold_core::startup_result::now_secs();
+    micold_core::connect::connect_or_spawn_with(
+        endpoint,
+        SPAWN_TIMEOUT,
+        || async move {
+            let route = orchestrator
+                .open(&micold_core::protocol::routing::WireDaemonId::local())
+                .await?;
+            match micold_core::connect::handshake(route, CLIENT_BUILD).await {
+                Ok(connected) => Ok(Some(connected)),
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    match data_dir
+                        .and_then(|d| micold_core::startup_result::fresh_refusal(d, since_secs))
+                    {
+                        Some(block) => Err(std::io::Error::other(block)),
+                        None => Ok(None),
+                    }
+                }
+                Err(e) => Err(e),
+            }
+        },
+        || {
+            if micold_core::spawn::running_daemon_pid(endpoint).is_none() {
+                micold_core::spawn::spawn_detached_daemon()?;
+            }
+            Ok(())
+        },
+        "micold-daemon (linked to the orchestrator)",
+    )
+    .await
+}
+
 /// The host branch of [`connect_and_pump`]: deliver the config to the host's data dir, then run
 /// `connect` (which spawns the daemon on a cold start). A missing data dir or a delivery error
 /// ends in `Err` and `connect` never runs.
@@ -889,15 +931,7 @@ async fn connect_and_pump(
         (Dial::Host(host), Some(endpoint)) => {
             // A start the script refused ends at once with its exit status and output tail
             // (#1533, US4.1), read from the host's data dir.
-            deliver_then_connect(host, || {
-                micold_core::connect::connect_or_spawn_reading(
-                    endpoint,
-                    CLIENT_BUILD,
-                    SPAWN_TIMEOUT,
-                    host.data_dir.as_deref(),
-                )
-            })
-            .await
+            deliver_then_connect(host, || host_routed(endpoint, host.data_dir.as_deref())).await
         }
         (Dial::Host(_), None) => Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,

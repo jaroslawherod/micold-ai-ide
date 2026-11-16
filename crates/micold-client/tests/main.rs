@@ -181,6 +181,7 @@ mod notification_icon;
 mod notifications;
 mod one_overlay_implementation;
 mod open_project_git_gate;
+mod orchestrator_single_connection;
 mod outcome_termination;
 mod overlay_builder_api;
 mod overlay_dismissal_delta;

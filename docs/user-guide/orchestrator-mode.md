@@ -13,6 +13,35 @@ It stays in the foreground and listens on a local socket (`orchestrator.sock`) b
 so it can run next to a normal daemon. It starts no terminal, no AI session and no child process.
 Running `micold-daemon` without the argument starts the ordinary daemon, exactly as before.
 
+## The desktop app connects through it
+
+The desktop app opens one connection, to the orchestrator, and reaches your host daemon through
+it; it opens no connection to the host daemon's own socket. You never start the orchestrator by hand:
+when none is running, the app starts `micold-daemon orchestrator` itself, as it starts the host
+daemon. If one is already running (another app window, or a service you set up), the app uses it.
+Two apps starting at once still end with one orchestrator.
+
+Every daemon the app sets up gets `[orchestrator_link] enabled = true` in its `daemon.toml`, so it
+dials the orchestrator. The host daemon links as `local`; a daemon the app provisions gets its own
+id, such as `build-box-1a2b3c4d`, written as `[daemon] id` and kept in the app's settings.
+
+If the orchestrator stops, your sessions keep running on their daemons. The app shows the daemon
+as reconnecting, starts the orchestrator again, and re-reads what the daemons say, so sessions that
+ended meanwhile show as ended and new ones appear.
+
+### When the orchestrator cannot start
+
+The connection banner says why, for example
+`cannot start /usr/bin/micold-daemon: No such file or directory` when the daemon binary is missing,
+or a timeout naming `orchestrator.sock` when it cannot listen there. The app does not fall back to
+the daemon's socket. To fix it:
+
+- Check that `micold-daemon` is installed beside the app (or set `MICOLD_DAEMON_BIN` to it).
+- Run `micold-daemon orchestrator` in a terminal: it prints why it cannot start, such as a damaged
+  `orchestrator/registry.json` (see *Restarting it*) or a socket directory it may not use.
+- A message `an orchestrator is already running` means another one holds the socket; the app
+  connects to that one.
+
 ## What it lists
 
 A daemon that links to the orchestrator is listed with:
@@ -55,20 +84,21 @@ daemons that claim one id at the same moment never both get in: exactly one is a
 
 ## Restarting it
 
-The orchestrator remembers its daemons in `orchestrator/registry.json` in your data directory. After a
-restart every daemon it knew is listed again, `offline` at first (a `needs-update` daemon too), and
-each shows `online` as soon as it links again; its entry is updated, not added twice. Your daemons keep
-running their sessions while the orchestrator is stopped.
+The orchestrator remembers its daemons in a database: by default the SQLite file
+`orchestrator/orchestrator.db` in your data directory, or a PostgreSQL server you name in the
+configuration. See [Orchestrator storage](orchestrator-storage.md). After a restart every daemon it
+knew is listed again, `offline` at first (a `needs-update` daemon too), and each shows `online` as soon
+as it links again; its entry is updated, not added twice. Your daemons keep running their sessions
+while the orchestrator is stopped.
 
-If the file is damaged, the orchestrator does not start. It exits with a message that names the file,
-`orchestrator registry <path> is unreadable: <reason>`, and leaves the file as it is, so you can repair
-or remove it. If saving fails (a full disk, for example), the orchestrator says so on its error output
-and carries on; the last good file is kept.
+If the database cannot be opened, the orchestrator does not start and says why. If saving fails (a
+full disk or a lost database server, for example), the orchestrator says so on its error output and
+carries on; the next change tries again.
 
 ## What it will not do
 
-Asking the orchestrator to start a session is refused with `not hosted by the orchestrator`, and its
-session list is empty. Sessions stay on your daemons.
+The orchestrator starts no session itself: a request to start one is passed to the daemon it names
+and runs there. Sessions stay on your daemons, and keep running if the orchestrator stops.
 
 It never dials a daemon: each daemon dials it, so a firewall or network setting that blocks outbound
 connections from the orchestrator's host changes nothing.

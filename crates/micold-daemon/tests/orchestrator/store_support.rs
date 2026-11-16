@@ -9,7 +9,7 @@ use micold_core::orchestrator::{
     AuditStore, AuthStore, JsonRegistryStore, MemoryAuditStore, MemoryAuthStore,
     MemoryRegistryStore, RegistryStore, TenantId,
 };
-use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+use micold_daemon::orchestrator::db::{SqlAuditStore, SqlAuthStore, SqlRegistryStore, StoreHandle};
 
 /// A backend of the registry store.
 pub trait Backend {
@@ -104,6 +104,13 @@ impl SqliteBackend {
     }
 }
 
+impl SqliteBackend {
+    /// The open store handle.
+    pub fn handle(&self) -> Arc<StoreHandle> {
+        Arc::clone(self.handle.as_ref().expect("open"))
+    }
+}
+
 impl Backend for SqliteBackend {
     fn registry(&self) -> Arc<dyn RegistryStore> {
         Arc::new(SqlRegistryStore::new(Arc::clone(
@@ -117,4 +124,305 @@ impl Backend for SqliteBackend {
         self.handle = None;
         self.handle = Some(StoreHandle::open_sqlite(self.dir.path()).unwrap());
     }
+}
+
+impl FullBackend for SqliteBackend {
+    fn auth(&self, tenant: &TenantId) -> Arc<dyn AuthStore> {
+        Arc::new(SqlAuthStore::new(
+            Arc::clone(self.handle.as_ref().expect("open")),
+            tenant.clone(),
+        ))
+    }
+
+    fn audit(&self, tenant: &TenantId) -> Arc<dyn AuditStore> {
+        Arc::new(SqlAuditStore::new(
+            Arc::clone(self.handle.as_ref().expect("open")),
+            tenant.clone(),
+        ))
+    }
+}
+
+/// The server the PostgreSQL cases use: `MICOLD_TEST_POSTGRES_URL`, a URL whose user may create and
+/// drop databases. Unset, the cases print `skipped: …` and pass, unless `MICOLD_REQUIRE_POSTGRES=1`
+/// (CI), where they fail instead.
+pub fn postgres_server() -> Option<String> {
+    match std::env::var("MICOLD_TEST_POSTGRES_URL") {
+        Ok(url) if !url.trim().is_empty() => Some(url.trim().to_owned()),
+        _ => {
+            assert!(
+                std::env::var("MICOLD_REQUIRE_POSTGRES").as_deref() != Ok("1"),
+                "MICOLD_REQUIRE_POSTGRES=1 but MICOLD_TEST_POSTGRES_URL is not set"
+            );
+            println!("skipped: MICOLD_TEST_POSTGRES_URL not set");
+            None
+        }
+    }
+}
+
+/// A database of its own on the test server, dropped (with every connection to it) on drop.
+pub struct PostgresDatabase {
+    server: String,
+    name: String,
+    /// The URL of this database.
+    pub url: String,
+}
+
+impl PostgresDatabase {
+    /// Create a fresh database, or `None` when no server is configured.
+    pub fn create() -> Option<Self> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let server = postgres_server()?;
+        let name = format!(
+            "micold_test_{}_{}_{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        );
+        admin(&server, &format!("CREATE DATABASE {name}"));
+        let url = with_database(&server, &name);
+        Some(Self { server, name, url })
+    }
+
+    /// Open the store on this database.
+    pub fn open(&self) -> Arc<StoreHandle> {
+        StoreHandle::open_postgres(&self.url, None, 4).unwrap()
+    }
+}
+
+impl Drop for PostgresDatabase {
+    fn drop(&mut self) {
+        admin(
+            &self.server,
+            &format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", self.name),
+        );
+    }
+}
+
+/// `url` with its path (the database name) replaced by `name`.
+fn with_database(url: &str, name: &str) -> String {
+    let (base, query) = url
+        .split_once('?')
+        .map_or((url, None), |(b, q)| (b, Some(q)));
+    let authority_end = base
+        .find("://")
+        .map(|i| i + 3)
+        .and_then(|start| base[start..].find('/').map(|i| start + i))
+        .unwrap_or(base.len());
+    let mut out = format!("{}/{name}", &base[..authority_end]);
+    if let Some(query) = query {
+        out.push('?');
+        out.push_str(query);
+    }
+    out
+}
+
+/// Run one statement on the server's own database, outside a transaction.
+fn admin(server: &str, sql: &str) {
+    use sqlx::Connection as _;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let mut conn = sqlx::PgConnection::connect(server).await.unwrap();
+        sqlx::query(sql).execute(&mut conn).await.unwrap();
+        conn.close().await.unwrap();
+    });
+}
+
+/// A database of its own on `MICOLD_TEST_POSTGRES_URL`: a restart drops the handle and connects
+/// again.
+pub struct PostgresBackend {
+    handle: Option<Arc<StoreHandle>>,
+    // Dropped after the handle (field order), so no connection is open when it goes.
+    db: PostgresDatabase,
+}
+
+impl PostgresBackend {
+    /// `None` (the case is skipped) when no server is configured.
+    pub fn new() -> Option<Self> {
+        let db = PostgresDatabase::create()?;
+        Some(Self {
+            handle: Some(db.open()),
+            db,
+        })
+    }
+
+    /// The open store handle.
+    pub fn handle(&self) -> Arc<StoreHandle> {
+        Arc::clone(self.handle.as_ref().expect("open"))
+    }
+}
+
+impl Backend for PostgresBackend {
+    fn registry(&self) -> Arc<dyn RegistryStore> {
+        Arc::new(SqlRegistryStore::new(self.handle()))
+    }
+
+    fn reopen(&mut self) {
+        self.handle = None;
+        self.handle = Some(self.db.open());
+    }
+}
+
+impl FullBackend for PostgresBackend {
+    fn auth(&self, tenant: &TenantId) -> Arc<dyn AuthStore> {
+        Arc::new(SqlAuthStore::new(self.handle(), tenant.clone()))
+    }
+
+    fn audit(&self, tenant: &TenantId) -> Arc<dyn AuditStore> {
+        Arc::new(SqlAuditStore::new(self.handle(), tenant.clone()))
+    }
+}
+
+/// Every `(table, column)` of the store's schema, ordered: `sqlite_master` on SQLite,
+/// `information_schema` (the current schema) on PostgreSQL.
+pub fn tables_and_columns(handle: &StoreHandle, postgres: bool) -> Vec<(String, String)> {
+    use sqlx::Row as _;
+    let sql = if postgres {
+        "SELECT CAST(table_name AS TEXT), CAST(column_name AS TEXT) \
+         FROM information_schema.columns WHERE table_schema = current_schema() \
+         ORDER BY 1, 2"
+    } else {
+        "SELECT m.name, p.name FROM sqlite_master AS m, pragma_table_info(m.name) AS p \
+         WHERE m.type = 'table' ORDER BY 1, 2"
+    };
+    let rows = handle
+        .block_on(async { sqlx::query(sql).fetch_all(handle.pool()).await })
+        .unwrap()
+        .unwrap();
+    rows.iter()
+        .map(|row| (row.get::<String, _>(0), row.get::<String, _>(1)))
+        .collect()
+}
+
+/// What looks like key material in the store (FR-006): a column named for a private key or a
+/// secret, or a value of any column, cast to text, holding a PEM marker. Empty when clean.
+/// Limit: the scan finds PEM armour only, not key material in another encoding (raw or base64
+/// without the `-----BEGIN` line).
+pub fn key_material(handle: &StoreHandle, postgres: bool) -> Vec<String> {
+    use sqlx::Row as _;
+    let columns = tables_and_columns(handle, postgres);
+    assert!(!columns.is_empty(), "the scan found no table");
+    let mut found = Vec::new();
+    for (table, column) in &columns {
+        let name = column.to_ascii_lowercase();
+        if name.contains("private") || name.contains("secret") || name.ends_with("_key") {
+            found.push(format!("{table}.{column}: the column name"));
+        }
+        // PostgreSQL casts any type to text; SQLite reads the bytes, so a BLOB scans too.
+        let sql = if postgres {
+            format!("SELECT CAST(\"{column}\" AS TEXT) FROM \"{table}\"")
+        } else {
+            format!("SELECT CAST(\"{column}\" AS BLOB) FROM \"{table}\"")
+        };
+        let rows = handle
+            .block_on(async { sqlx::query(&sql).fetch_all(handle.pool()).await })
+            .unwrap()
+            .unwrap_or_else(|e| panic!("{sql}: {e}"));
+        for row in &rows {
+            let value = if postgres {
+                row.get::<Option<String>, _>(0)
+            } else {
+                row.get::<Option<Vec<u8>>, _>(0)
+                    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            };
+            if value.is_some_and(|v| v.contains("-----BEGIN") || v.contains("PRIVATE KEY")) {
+                found.push(format!("{table}.{column}: a value"));
+            }
+        }
+    }
+    found
+}
+
+/// A TCP proxy in front of `upstream` that can drop every connection and refuse new ones, then
+/// resume: a database lost after start and back again (FR-016).
+pub struct FlakyProxy {
+    /// The port it listens on, on 127.0.0.1.
+    pub port: u16,
+    state: Arc<ProxyState>,
+}
+
+#[derive(Default)]
+struct ProxyState {
+    down: std::sync::atomic::AtomicBool,
+    open: std::sync::Mutex<Vec<std::net::TcpStream>>,
+}
+
+impl FlakyProxy {
+    /// Listen on a free port and forward each connection to `upstream` (`host:port`).
+    pub fn start(upstream: String) -> Self {
+        use std::sync::atomic::Ordering;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let state = Arc::new(ProxyState::default());
+        let shared = Arc::clone(&state);
+        std::thread::spawn(move || {
+            for client in listener.incoming().flatten() {
+                if shared.down.load(Ordering::SeqCst) {
+                    continue; // dropped: closed at once
+                }
+                let Ok(server) = std::net::TcpStream::connect(&upstream) else {
+                    continue;
+                };
+                let mut open = shared.open.lock().unwrap();
+                open.extend([client.try_clone().unwrap(), server.try_clone().unwrap()]);
+                drop(open);
+                pipe(client.try_clone().unwrap(), server.try_clone().unwrap());
+                pipe(server, client);
+            }
+        });
+        Self { port, state }
+    }
+
+    /// Cut every open connection and refuse new ones until [`resume`](Self::resume).
+    pub fn drop_all(&self) {
+        self.state
+            .down
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        for stream in self.state.open.lock().unwrap().drain(..) {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+    }
+
+    /// Accept and forward again.
+    pub fn resume(&self) {
+        self.state
+            .down
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Copy `from` to `to` on a thread of its own until either side ends.
+fn pipe(mut from: std::net::TcpStream, mut to: std::net::TcpStream) {
+    std::thread::spawn(move || {
+        let _ = std::io::copy(&mut from, &mut to);
+        let _ = to.shutdown(std::net::Shutdown::Both);
+    });
+}
+
+/// `url` with its `host:port` replaced by `127.0.0.1:<port>`, and the `host:port` it had.
+pub fn through_port(url: &str, port: u16) -> (String, String) {
+    let start = url.find("://").unwrap() + 3;
+    let rest = &url[start..];
+    let end = rest.find(['/', '?']).unwrap_or(rest.len());
+    let authority = &rest[..end];
+    let (user, host) = authority
+        .rsplit_once('@')
+        .map_or(("", authority), |(u, h)| (u, h));
+    let upstream = if host.contains(':') {
+        host.to_owned()
+    } else {
+        format!("{host}:5432")
+    };
+    let user = if user.is_empty() {
+        String::new()
+    } else {
+        format!("{user}@")
+    };
+    let out = format!("{}{user}127.0.0.1:{port}{}", &url[..start], &rest[end..]);
+    (out, upstream)
 }

@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-ygs15x
+- **Worktree branch**: claude/project-thread-sabfza
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 PR CI and merge; then M3 (fresh thread)
+- **Next step**: M10 review A+B on the snapshot in *Handover*, then open the M10 PR from /tmp/pr-1948-m10.md
 
 ## Pull requests
 
@@ -19,24 +19,35 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | #1970 | M1 | merged | bfb463f60 |
-| #1980 | M2 | open | |
+| #1980 | M2 | merged | 952b8a818 |
+| #1992 | M3 | merged | b3f47d077 |
+| #1997 | M4 | merged | c3944869a |
+| #2001 | M5 | merged | 8e68fa947 |
+| #2003 | M6 | merged | 3d5485c30 |
+| #2006 | M7 | merged | 3a74d3004 |
+| #2008 | M8 | merged | 2243de02d |
+| #2010 | M9 | merged | 83926c52f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
-| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | PR open |
-| M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
-| M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
-| M5 | T032–T035 | full | Migration safety | | pending |
-| M6 | T036–T038 | full | No private key in any table | | pending |
-| M7 | T039–T044 | full | [database] config and backend rule | | pending |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
-| M9 | T051–T054 | full | Import registry.json once | | pending |
-| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
+| M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
+| M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
+| M5 | T032–T035 | full | Migration safety | #2001 | merged |
+| M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
+| M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
+| M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
+| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | implemented, review pending |
 
 ## Decisions
+
+- M10: on every backend an `unowned` record never clears a stored owner and an owned record sets its owner (SQL: `CASE WHEN excluded.owner_user_id = 'unowned'` in the conflict branch, review A-F1; memory/JSON: `keeping_owners`). This refines plan.md's "insert only" so all backends agree. The registry still announces relinks `unowned`. SQL `reassign_unowned` returns the moved `daemons` count (projects/sessions have no rows in v1). The scan also skips SQLite's internal `sqlite_sequence`.
+- M10: quickstart §B step 1 path was `micold`, really `micold-ai-ide`; step 4 needs `config check --files` to fail (without it, exit 0 with `(missing)`), doc fixed.
+- M6: T036's tests passed on first run: `CertSerial::new` already validated hex (M1), and a PEM block fails both `CertSerial::new` and `TokenHash::from_hex`. T038 needed no `auth.rs` change; the tests pin the rule. Red evidence is T037's negative control.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -56,9 +67,25 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 1 | M1 diff (code-review high, run by the unit: no Agent tool) | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN (1 MINOR noted as a follow-up) |
 | M1 A | 1 | M1 diff | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN |
 | M2 A | 1 | M2 diff (code-review high, run by the unit: no Agent tool) | 1c5e8c6bda32fc3ca960ce3a62d7282506a25826 | (see commit) | CHANGES: 0 BLOCKER, 3 MAJOR-ish (non-ASCII URL, SQLITE_BUSY as Refused, save lock upgrade) all fixed with 4 MINOR; 3 declined (see below) |
+| M4 A | 1 | M4 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CLEAN (1 MINOR fixed: long doc comments; noted: one-character password redaction is over-eager, safe) |
+| M4 B | 1 | M4 diff (conformance, sonnet, run by the orchestrator) | b4a39c7c3 | (see commit) | MINOR-ONLY (one-char password redaction garbles text; CI postgres creds duplicated; error-arm tests test-after, recorded) |
+| M3 A | 1 | M3 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CLEAN (1 MINOR fixed: `put_refresh` dropped `revoked_at`; noted: PostgreSQL `ORDER BY id` collation may differ from the memory order, M4) |
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
 | M2 B | 1 | M2 | 60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | 5b6a0087c24bfaa47a2eee1e527d2ff41066c334:60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | CHANGES: 1 MAJOR (cycle 2 no red for review A fixes), fixed by red-by-revert evidence; 1 MINOR (db/ blanket skip in no_outbound scan) declined |
 | M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
+| M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
+| M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
+| M5 A | 1 | M5 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CHANGES: 4 fixed (one SQLite retry not enough past one migration; WAL sidecars left by a refused read-only check; PG check/run race names VersionMissing; read-only URL by string replace) and 2 MINOR fixed; 4 declined (see below) |
+| M5 B | 1 | M5 diff (conformance, sonnet, run by the orchestrator) | eec56ae53 | (see commit) | CHANGES: drift record missing (F1 MAJOR), T035 "retries once" text (F2 MINOR); both fixed in drift-M5.md |
+| A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
+| B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
+| Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
+| Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
+| Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
+
+- M10 full gate (scripts/gate.sh, PostgreSQL, debug=0): fmt, clippy, 13498 nextest passed; 1 failed only because the local test password `postgres` is a substring of `sqlx_postgres` (rerun with another password: store_ 129/129, 4 runs); scripts/tests all pass.
+- M10 round 1 (A CHANGES, B CLEAN): A-F1 MAJOR SQL conflict branch now sets an owned record's owner (CASE); A-F2 MAJOR suite case `an_owned_record_over_an_unowned_one_takes_its_owner` (upsert and save, all backends; import never writes over an existing row: rows without a matching marker refuse, so the CASE covers it with no import case); A-F3/B-F1 store_scan `*_reassign_moves_projects_and_sessions_of_one_tenant` + doc that the count is daemon rows; A-F4/B-F2 JSON save fails on a read error, falls back only on NotFound/parse error (+ core test); B-F3 quickstart §A gate count inline. All fixed; store_ 135/135 with PostgreSQL; full gate green (scripts/gate.sh exit 0, CARGO_INCREMENTAL=0 after wiping target-shared for disk).
+- M9 round 1 (opus A+B): MINOR-ONLY, 2 MINOR fixed: a non-NotFound read error now says `cannot read it`; the start test seeds a record and checks the started store serves it (corrupt-file start failure already covered).
 
 ## Declined review findings
 
@@ -70,11 +97,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1970 | M1 | merged | bfb463f60 |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
+| M5 | A | `lost_the_race` matches text, also on PostgreSQL | A spurious retry re-runs the migrator and then fails the same way; the advisory lock makes it harmless on PostgreSQL |
+| M5 | A | dialect sniffed by `backend_name` and by `Option` in `start` | Two backends; a third would add its own open |
+| M5 | A | `DatabaseNewer` text lost its remediation hint | The text is contracts/config.md's verbatim |
+| M5 | A | test `with_pool` builds a runtime per query | Test-only; a few ms per case |
 | M2 | B | F2 MINOR: no_outbound scan skips all of `src/orchestrator/db/` | The pool `connect` is the only dial-like construct there; recorded in drift-M2.md; M4 (PostgreSQL) should narrow it to the `connect` call sites |
 
 ## Handover
 
-M2 code done and pushed (T014–T020 ticked, review A fixed, gate green). Next: the orchestrator runs review B, opens the PR from `specs/1948-orchestrator-postgres-store/pr-M2.md`, merges; then dispatch M3 (T021–T025) in a fresh thread.
+M10 (T055–T060) implemented, all six ticked; previous PR #2010 merged at 83926c52f. Review snapshot: base `83926c52f` (origin/main), head = the branch tip commit "#1948: M10 ownership columns and adoption" on claude/project-thread-sabfza. Round 1 done (fixes in the next commit); a round-2 re-review covers `9c32afd72...HEAD`, excluding the ledger. Focus: `OwnerId` serde (record.rs), `keeping_owners` + default `reassign_unowned` (core store.rs), SQL insert-only owner + `reassign_unowned` override (daemon db/registry.rs), suite/scan/import tests, quickstart §B record. Full gate result: *Review rounds*. PR body: /tmp/pr-1948-m10.md (label docs-not-needed). Local `store_slow` password-leak failure was the test URL's password `postgres` matching `sqlx_postgres` in the error text, not the code; with another password green 4/4.
 
 ## Open escalation
 
@@ -82,10 +113,9 @@ None.
 
 ## Follow-ups not done
 
-- M2 (SQL auth store): `rotate_refresh` on a revoked token must commit the family revocation and then return `Refused`, so it cannot be one transaction that rolls back on the error; the memory store revokes then refuses.
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
-- `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
-- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. `check_not_newer` and a version in `SchemaError::Failed` are M5.
+- `sha1` in `micold-daemon` is used by M9's import digest (`sha1:<hex>` in `imports.digest`).
+- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. 
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 
 - M1–M6 and M10 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M7–M9 carry guide tasks.
@@ -93,4 +123,3 @@ None.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
-- M3 (SQL auth store): `redeem_invite` must refuse an unknown redeeming user, like `put_refresh`, `rotate_refresh` and `link_identity`, or contracts/store-traits.md must say the caller guarantees it (M1 review B F2). Also M1 review A: a SQL `rotate_refresh` commits the family revocation before returning `Refused`.

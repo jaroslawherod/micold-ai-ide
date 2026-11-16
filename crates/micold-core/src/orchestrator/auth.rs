@@ -319,7 +319,8 @@ pub trait AuthStore: Send + Sync {
     ) -> Result<Option<User>, StoreError>;
     /// Create an invite; refused when its id or token hash exists.
     fn create_invite(&self, invite: &NewInvite) -> Result<(), StoreError>;
-    /// Redeem an invite once, atomically; refused when unknown, redeemed or expired.
+    /// Redeem an invite once, atomically; refused when unknown, redeemed or expired, or when the
+    /// redeeming user is unknown.
     fn redeem_invite(&self, hash: &TokenHash, by: &UserId, at: u64) -> Result<Invite, StoreError>;
     /// Set the bootstrap code hash; refused once it was consumed.
     fn set_bootstrap(&self, hash: &TokenHash, at: u64) -> Result<(), StoreError>;
@@ -559,6 +560,7 @@ impl AuthStore for MemoryAuthStore {
 
     fn redeem_invite(&self, hash: &TokenHash, by: &UserId, at: u64) -> Result<Invite, StoreError> {
         self.with(|rows| {
+            let users = &rows.users;
             let Some(invite) = rows.invites.iter_mut().find(|i| &i.token_hash == hash) else {
                 return refused("the invite is unknown");
             };
@@ -567,6 +569,9 @@ impl AuthStore for MemoryAuthStore {
             }
             if at >= invite.expires_at {
                 return refused("the invite has expired");
+            }
+            if !users.contains_key(by) {
+                return refused(format!("user {by} is unknown"));
             }
             invite.redeemed_by = Some(by.clone());
             invite.redeemed_at = Some(at);
@@ -810,5 +815,29 @@ mod tests {
         assert_eq!(CertSerial::new("0A1b").unwrap().as_str(), "0a1b");
         assert!(CertSerial::new("").is_err());
         assert!(CertSerial::new("xyz").is_err());
+    }
+
+    /// A PEM block, so no key material can reach a serial or hash column (FR-006).
+    const PEM: &str =
+        "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIA==\n-----END PRIVATE KEY-----\n";
+
+    #[test]
+    fn a_cert_serial_rejects_non_hex_text_and_a_pem_block() {
+        for bad in ["0a-1b", "0x0a", "0a 1b", "zz", PEM, "-----BEGIN"] {
+            assert!(
+                matches!(CertSerial::new(bad), Err(StoreError::Refused { .. })),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_token_hash_rejects_a_pem_block() {
+        assert!(matches!(
+            TokenHash::from_hex(PEM),
+            Err(StoreError::Refused { .. })
+        ));
+        // The first 64 bytes of the PEM: the right length for a hash, but not hex.
+        assert!(TokenHash::from_hex(&PEM[..64]).is_err());
     }
 }

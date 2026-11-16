@@ -16,6 +16,8 @@ A publication is one script — `site/build.sh` — and five steps that only mak
 1. **Emit the theme.** `micold-tokens-css` writes `site/theme/css/tokens.css` from the same design
    tokens the application renders with. It is generated on every build and never committed, so the
    site cannot drift into looking like a different product.
+   The same tokens also feed a generated TypeScript module for the client; see
+   [client-theme.md](client-theme.md).
 2. **Capture the media.** Every entry in `site/media.toml` is produced by launching the real client
    against a demonstration project on a private X display. Nothing is drawn by hand.
 3. **Stage.** `site/stage.sh` copies `docs/` into `site/build/src`, substitutes the version and the

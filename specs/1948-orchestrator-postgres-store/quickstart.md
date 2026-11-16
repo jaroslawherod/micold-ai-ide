@@ -17,10 +17,33 @@ Expected: every `store_*` test passes on memory and SQLite; with the URL set, on
 without the URL, PostgreSQL tests print `skipped: MICOLD_TEST_POSTGRES_URL not set` (CI sets
 `MICOLD_REQUIRE_POSTGRES=1`, where that skip fails).
 
+Recorded (M10, 2026-11-16, cloud container, PostgreSQL 16 local): `cargo test -p micold-daemon
+--test orchestrator store_` with `MICOLD_TEST_POSTGRES_URL` and `MICOLD_REQUIRE_POSTGRES=1` set:
+129 passed (memory, JSON, SQLite, PostgreSQL); 135 after review round 1. Full gate through
+`scripts/gate.sh` (no `mise` there), 2026-11-16: fmt, clippy, 13498 nextest tests passed and
+every `scripts/tests/*.test.sh`; the one failure is explained next. The ledger's *Review rounds*
+holds the round-1 rerun.
+Use a password that is not a substring of the error text: with `postgres:postgres`,
+`store_slow::a_save_lost_with_the_database_is_reported_on_stderr_without_the_password` fails
+whenever the logged error names `sqlx_postgres` (it found the "password" in the module path).
+
 ## B. By hand (local mode)
 
-1. `micold-daemon orchestrator` with no `[database]`: `~/.local/share/micold/orchestrator/orchestrator.db` appears with mode 0600.
-2. Link a daemon, stop the orchestrator, start it again: `micold-daemon` lists the daemon (offline, then online).
+The data directory is `~/.local/share/micold-ai-ide` (`XDG_DATA_HOME` honoured); a daemon links
+with `schema = 1`, `[daemon]`, `[listen] socket = "auto"` and `[orchestrator_link] enabled = true`
+(`socket` = the orchestrator's, `$XDG_RUNTIME_DIR/micold/orchestrator.sock`).
+
+1. `micold-daemon orchestrator` with no `[database]`: `~/.local/share/micold-ai-ide/orchestrator/orchestrator.db` appears with mode 0600.
+   **Recorded**: appears, mode `600` (with `-wal`/`-shm` beside it).
+2. Link a daemon, stop the orchestrator, start it again: the `daemons` row survives and the daemon
+   is listed again (offline, then online when it relinks). **Recorded**: row `('default', 'local',
+   'qs box', 'online', 'unowned')`; after a restart the row is back and online; with its owner set
+   to `alice` by hand before the restart, the relink kept `alice`; with the daemon stopped the row
+   went `offline`, still `alice`.
 3. Put a v1 `registry.json` beside it before the first start: it is imported and renamed `registry.json.imported`.
-4. `micold-daemon config check` with `[database] url_file = "/nonexistent"`: fails naming the key and path.
-5. Newer schema: `sqlite3 orchestrator.db "insert into _sqlx_migrations(version,description,success,checksum,execution_time) values (99,'x',1,x'00',0)"`, start: refused, both versions in the message; the file's checksum (`sha256sum`) is unchanged by the attempt.
+   **Recorded**: imported as `('old', 'offline', 'unowned')`, file renamed.
+4. `micold-daemon config check <file> --files` with `[database] url_file = "/nonexistent"`: fails
+   (exit 2) naming the key and path. Without `--files` it exits 0 and lists the path as
+   `(missing)`. **Recorded**: `c.toml:8:12: database.url_file /nonexistent: missing`, exit 2.
+5. Newer schema: insert version 99 into `_sqlx_migrations` (`sqlite3 orchestrator.db "insert into _sqlx_migrations(version,description,success,checksum,execution_time) values (99,'x',1,x'00',0)"`, or Python's `sqlite3` where the CLI is absent), start: refused, both versions in the message; the file's checksum (`sha256sum`) is unchanged by the attempt.
+   **Recorded**: `database schema version 99 is newer than this build's 1`, exit 1, checksum unchanged.

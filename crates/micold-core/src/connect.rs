@@ -42,6 +42,9 @@ pub enum Transport {
     Loopback(tokio::net::TcpStream),
     /// The stdio of an `ssh` child that runs the remote helper's bridge (feature 489).
     Ssh(crate::ssh::SshStdio),
+    /// One routed conn of the client's orchestrator connection (#1726, R6): an in-memory pipe whose
+    /// other end the client's orchestrator multiplexer reads and writes.
+    Routed(tokio::io::DuplexStream),
 }
 
 macro_rules! delegate {
@@ -50,6 +53,7 @@ macro_rules! delegate {
             Transport::Local(s) => Pin::new(s).$method($($arg),*),
             Transport::Loopback(s) => Pin::new(s).$method($($arg),*),
             Transport::Ssh(s) => Pin::new(s).$method($($arg),*),
+            Transport::Routed(s) => Pin::new(s).$method($($arg),*),
         }
     };
 }
@@ -381,29 +385,59 @@ pub async fn connect_or_spawn_reading(
     data_dir: Option<&std::path::Path>,
 ) -> io::Result<Connected> {
     let since_secs = crate::startup_result::now_secs();
-    // The daemon is ready when it *accepts*, not when exec returns — poll until it answers.
+    connect_or_spawn_with(
+        endpoint,
+        timeout,
+        || async move {
+            if let Some(connected) = connect(endpoint, client_build).await? {
+                return Ok(Some(connected));
+            }
+            // A start the script refused ends at once with its failure block.
+            match data_dir.and_then(|d| crate::startup_result::fresh_refusal(d, since_secs)) {
+                Some(block) => Err(io::Error::other(block)),
+                None => Ok(None),
+            }
+        },
+        || crate::spawn::spawn_detached_daemon().map(|_| ()),
+        "micold-daemon",
+    )
+    .await
+}
+
+/// The loop under [`connect_or_spawn`], with what it connects and what it spawns as parameters
+/// (#1726, R6): the desktop app starts the orchestrator through it as it starts the host daemon.
+/// `connect` answers `None` while nothing accepts on `endpoint`; `spawn` starts one, again after
+/// [`RESPAWN_AFTER`] while nothing accepts (a start that lost the singleton race exits). `what` names
+/// the process in the timeout error.
+pub async fn connect_or_spawn_with<T, C, Fut, S>(
+    endpoint: &Endpoint,
+    timeout: Duration,
+    mut connect: C,
+    mut spawn: S,
+    what: &str,
+) -> io::Result<T>
+where
+    C: FnMut() -> Fut,
+    Fut: std::future::Future<Output = io::Result<Option<T>>>,
+    S: FnMut() -> io::Result<()>,
+{
+    // Ready when it *accepts*, not when exec returns — poll until it answers.
     let deadline = std::time::Instant::now() + timeout;
     let mut backoff = Duration::from_millis(10);
     let mut spawned_at: Option<std::time::Instant> = None;
     loop {
-        if let Some(connected) = connect(endpoint, client_build).await? {
+        if let Some(connected) = connect().await? {
             return Ok(connected);
         }
         if spawned_at.is_none_or(|at| at.elapsed() >= RESPAWN_AFTER) {
-            let pid = crate::spawn::spawn_detached_daemon()?;
-            let _ = pid; // the daemon is intentionally not ours to wait on
+            spawn()?;
             spawned_at = Some(std::time::Instant::now());
-        }
-        if let Some(block) =
-            data_dir.and_then(|d| crate::startup_result::fresh_refusal(d, since_secs))
-        {
-            return Err(io::Error::other(block));
         }
         if std::time::Instant::now() >= deadline {
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
                 format!(
-                    "spawned micold-daemon did not start accepting on {} within {:?}",
+                    "spawned {what} did not start accepting on {} within {:?}",
                     endpoint.socket_path.display(),
                     timeout
                 ),
