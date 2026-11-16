@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
-| M5 | T032–T035 | full | Migration safety | | in progress |
+| M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | | pending |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
@@ -68,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
 | M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
 | M5 A | 1 | M5 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CHANGES: 4 fixed (one SQLite retry not enough past one migration; WAL sidecars left by a refused read-only check; PG check/run race names VersionMissing; read-only URL by string replace) and 2 MINOR fixed; 4 declined (see below) |
+| M5 B | 1 | M5 diff (conformance, sonnet, run by the orchestrator) | eec56ae53 | (see commit) | CHANGES: drift record missing (F1 MAJOR), T035 "retries once" text (F2 MINOR); both fixed in drift-M5.md |
 
 ## Declined review findings
 
