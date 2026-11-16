@@ -270,3 +270,103 @@ fn a_registry_over_a_dropped_table_is_unavailable_and_a_bad_row_is_corrupt() {
         Err(StoreError::Unavailable { .. })
     ));
 }
+
+fn migration_names(dialect: &str) -> Vec<String> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations")
+        .join(dialect);
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+        .map(|f| f.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn both_dialects_list_the_same_versions_and_descriptions() {
+    let sqlite = migration_names("sqlite");
+    assert!(!sqlite.is_empty());
+    assert_eq!(migration_names("postgres"), sqlite);
+}
+
+#[test]
+fn an_unreachable_postgres_server_is_unavailable_naming_host_and_port_not_the_password() {
+    // Port 1 on loopback refuses at once.
+    let outcome = StoreHandle::open_postgres(
+        "postgres://micold:s3cr3t-pw@127.0.0.1:1/orchestrator",
+        None,
+        2,
+    );
+    match outcome {
+        Err(error @ StoreError::Unavailable { .. }) => {
+            let StoreError::Unavailable { target, reason } = &error else {
+                unreachable!()
+            };
+            assert_eq!(target, "127.0.0.1:1");
+            assert!(!reason.is_empty());
+            let text = error.to_string();
+            assert!(text.contains("127.0.0.1:1"), "{text}");
+            assert!(!text.contains("s3cr3t-pw"), "password leaked: {text}");
+            assert!(!text.contains("postgres://"), "URL leaked: {text}");
+        }
+        other => panic!("got {:?}", other.map(|_| ())),
+    }
+}
+
+#[test]
+fn a_url_that_does_not_parse_is_unavailable_and_does_not_echo_it() {
+    match StoreHandle::open_postgres("postgres://micold:s3cr3t-pw@[bad/x", None, 2) {
+        Err(error @ StoreError::Unavailable { .. }) => {
+            assert!(!error.to_string().contains("s3cr3t-pw"), "{error}");
+        }
+        other => panic!("got {:?}", other.map(|_| ())),
+    }
+}
+
+#[test]
+fn a_missing_ca_file_is_unavailable() {
+    let missing = Path::new("/nonexistent/micold-ca.pem");
+    let outcome =
+        StoreHandle::open_postgres("postgres://micold:pw@127.0.0.1:1/db", Some(missing), 2);
+    assert!(
+        matches!(outcome, Err(StoreError::Unavailable { .. })),
+        "got {:?}",
+        outcome.map(|_| ())
+    );
+}
+
+#[test]
+fn opening_postgres_applies_the_v1_schema_once() {
+    let Some(db) = super::store_support::PostgresDatabase::create() else {
+        return;
+    };
+    drop(db.open());
+    let handle = db.open();
+    assert_eq!(
+        scalar_int(&handle, "SELECT count(*) FROM _sqlx_migrations"),
+        1
+    );
+    assert_eq!(
+        scalar_text(&handle, "SELECT description FROM _sqlx_migrations"),
+        "orchestrator schema"
+    );
+    assert_eq!(
+        handle.target().rsplit_once(':').map(|(_, p)| p.is_empty()),
+        Some(false)
+    );
+}
+
+#[test]
+fn a_present_ca_file_asks_for_verify_full_and_still_reports_an_unreachable_server() {
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, b"not checked before the connection").unwrap();
+    match StoreHandle::open_postgres("postgres://micold:pw-9x@127.0.0.1:1/db", Some(&ca), 0) {
+        Err(error @ StoreError::Unavailable { .. }) => {
+            assert!(error.to_string().contains("127.0.0.1:1"), "{error}");
+            assert!(!error.to_string().contains("pw-9x"), "{error}");
+        }
+        other => panic!("got {:?}", other.map(|_| ())),
+    }
+}

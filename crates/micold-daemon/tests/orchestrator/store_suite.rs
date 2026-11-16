@@ -12,7 +12,9 @@ use micold_core::orchestrator::{
 };
 use micold_core::protocol::routing::WireDaemonId;
 
-use super::store_support::{Backend, FullBackend, JsonBackend, MemoryBackend, SqliteBackend};
+use super::store_support::{
+    Backend, FullBackend, JsonBackend, MemoryBackend, PostgresBackend, SqliteBackend,
+};
 
 fn tenant(name: &str) -> TenantId {
     TenantId::new(Some(name))
@@ -157,7 +159,8 @@ macro_rules! registry_tests {
         $(
             #[test]
             fn $case() {
-                super::$case(&mut $make);
+                let Some(mut backend) = $make else { return };
+                super::$case(&mut backend);
             }
         )+
     };
@@ -486,7 +489,8 @@ macro_rules! auth_tests {
         $(
             #[test]
             fn $case() {
-                super::$case(&mut $make);
+                let Some(mut backend) = $make else { return };
+                super::$case(&mut backend);
             }
         )+
     };
@@ -578,24 +582,31 @@ macro_rules! audit_tests {
         $(
             #[test]
             fn $case() {
-                super::$case(&mut $make);
+                let Some(mut backend) = $make else { return };
+                super::$case(&mut backend);
             }
         )+
     };
 }
 
 mod memory {
-    registry_tests!(super::MemoryBackend::new());
-    auth_tests!(super::MemoryBackend::new());
-    audit_tests!(super::MemoryBackend::new());
+    registry_tests!(Some(super::MemoryBackend::new()));
+    auth_tests!(Some(super::MemoryBackend::new()));
+    audit_tests!(Some(super::MemoryBackend::new()));
 }
 
 mod json {
-    registry_tests!(super::JsonBackend::new());
+    registry_tests!(Some(super::JsonBackend::new()));
 }
 
 mod sqlite {
-    registry_tests!(super::SqliteBackend::new());
-    auth_tests!(super::SqliteBackend::new());
-    audit_tests!(super::SqliteBackend::new());
+    registry_tests!(Some(super::SqliteBackend::new()));
+    auth_tests!(Some(super::SqliteBackend::new()));
+    audit_tests!(Some(super::SqliteBackend::new()));
+}
+
+mod postgres {
+    registry_tests!(super::PostgresBackend::new());
+    auth_tests!(super::PostgresBackend::new());
+    audit_tests!(super::PostgresBackend::new());
 }
