@@ -10,14 +10,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-9m447v
 - **Started**: 2026-11-16
-- **Phase**: M2 review round 1 fixed (3f48434a4), pushed; PR body at /tmp/claude-pr-1735-m2.md
-- **Next step**: orchestrator opens the M2 PR and re-reviews the fix diff 19e4e86b3..3f48434a4 (round 2, sonnet)
+- **Phase**: M2 merged (#2015)
+- **Next step**: a fresh thread runs `/speckit-autopilot resume` for M3 (T040–T053)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
+| #2015 | M2 | merged | b863fd3393735e9d0ae6a4ac38299e31f30a5855 |
 | #2013 | M1 workspace, CI, theme, i18n, spike | merged | 18aadedf61d2a5c3d512447f30e3a9f33eb12262 |
 
 ## Milestones
@@ -25,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | #2013 | merged |
-| M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | - | pending |
+| M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | #2015 | merged |
 | M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | pending |
 | M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | pending |
 
@@ -69,6 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 
 ## Handover
+
+M2 merged as #2015 (b863fd339); round-2 re-review CLEAN. Start M3 in a fresh thread. Optional round-2 minors to fold into M3: ConnectionManager.stop() should reset `opening`; treat `error: null` as success (`!= null`); guard `/sign-in` check is case-sensitive and ignores percent-escapes.
 
 None.
 
