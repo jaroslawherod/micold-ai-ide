@@ -220,9 +220,10 @@ pub fn prepare_link_at(dir: &Path) -> io::Result<std::path::PathBuf> {
     }
 }
 
-/// `hold-link` (#1726, FR-007): the remote command of the link holder. ssh starts it only after the
-/// link's `-R` is bound (`ExitOnForwardFailure=yes`), so `ready` means the forward is up. It opens
-/// no daemon connection: it holds the ssh session, and so the forward, until stdin ends.
+/// `hold-link` (#1726, FR-007): the remote command of the link holder. `ready` means the session is
+/// up; ssh may start this before the server confirms the link's `-R`, and a refused forward then
+/// ends the session (`ExitOnForwardFailure=yes`), which the client sees as the holder ending. It
+/// opens no daemon connection: it holds the ssh session, and so the forward, until stdin ends.
 pub fn hold_link(mut stdin: impl io::Read, out: &mut impl io::Write) -> i32 {
     if writeln!(out, "ready").and_then(|()| out.flush()).is_err() {
         return 1;

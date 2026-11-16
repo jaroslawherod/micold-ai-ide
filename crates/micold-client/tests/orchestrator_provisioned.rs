@@ -118,6 +118,47 @@ fn unbound_holder() -> SshStdio {
     SshStdio::from_child(child).unwrap()
 }
 
+/// A holder whose session comes up (`ready`) before the server refuses the `-R`: ssh without `-f`
+/// runs the remote command first, then `ExitOnForwardFailure` ends it.
+fn late_refused_holder() -> SshStdio {
+    let child = tokio::process::Command::new("sh")
+        .args([
+            "-c",
+            "echo ready; sleep 0.2; echo 'Error: remote port forwarding failed for listen path /tmp/micold-1000/orchestrator.sock' >&2; exit 255",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    SshStdio::from_child(child).unwrap()
+}
+
+/// An app-owned target on loopback, as a container's (`port` its published SSH port) or a pod's
+/// (`port` the relay's) is.
+fn app_owned(port: u16) -> ProvisionTarget {
+    use micold_core::provision::{Egress, Ownership, StepBounds};
+    use micold_core::ssh::argv::{PinnedReach, Reach};
+    ProvisionTarget {
+        reach: Reach::Pinned(PinnedReach {
+            host: "127.0.0.1".into(),
+            port,
+            user: "micold".into(),
+            key: "/nonexistent/key".into(),
+            known_hosts: "/nonexistent/known_hosts".into(),
+        }),
+        owned: Ownership::AppOwned {
+            ai_clis: micold_core::sandbox::AiCliSelection(Default::default()),
+            table: micold_core::provision::ai_cli::AiCliTable::pinned(),
+            state_dir: std::env::temp_dir(),
+            egress: Egress::Direct,
+        },
+        bounds: StepBounds::container(),
+        env: Vec::new(),
+        config: None,
+    }
+}
+
 /// The provisioning bridge's answer: a daemon that welcomes the handshake over it.
 async fn bridge() -> Connected {
     let stdio = micold_core::kube::fake_host::welcoming_bridge();
@@ -144,20 +185,15 @@ fn opts() -> ProvisionOptions {
     }
 }
 
-async fn route(
-    remote: &Remote,
-    id: &WireDaemonId,
-) -> Result<(Connected, Option<micold_core::provision::LinkHolder>), String> {
+type Routed = Result<(Connected, Option<micold_core::provision::LinkHolder>), String>;
+
+async fn route(remote: &Remote, id: &WireDaemonId) -> Routed {
+    route_to(remote, &target(), id).await
+}
+
+async fn route_to(remote: &Remote, target: &ProvisionTarget, id: &WireDaemonId) -> Routed {
     let reason = |f: &micold_core::provision::ProvisionFailure| format!("{:?}", f.cause);
-    daemon::route_provisioned(
-        remote,
-        &target(),
-        &opts(),
-        bridge().await,
-        Some(id),
-        &reason,
-    )
-    .await
+    daemon::route_provisioned(remote, target, &opts(), bridge().await, Some(id), &reason).await
 }
 
 /// One sequential run: the cases share the process's orchestrator, which the last one restarts.
@@ -183,6 +219,27 @@ async fn a_provisioned_daemon_is_routed_through_the_orchestrator() {
     );
     assert_eq!(router().unwrap().connections_opened(), 1);
 
+    // Every placement: a container (its published SSH port) and a pod (its relay's port) route
+    // the same way, each over its own holder and the same one orchestrator connection.
+    for (name, port) in [("box-container", 2222), ("box-pod", 34567)] {
+        let id = WireDaemonId::new(name).unwrap();
+        let (_state, _link) = link_as(world, id.as_str());
+        let (holder, _end) = ready_holder();
+        let remote = Remote::default();
+        remote.holders.lock().unwrap().push(holder);
+        let (routed, held) = route_to(&remote, &app_owned(port), &id)
+            .await
+            .unwrap_or_else(|e| panic!("{name} routed: {e}"));
+        assert!(matches!(routed, Connected::Ready(..)), "{name} refused");
+        assert!(held.is_some(), "{name}: the actor owns the holder");
+        assert_eq!(*remote.opened.lock().unwrap(), 1, "{name}: one holder");
+    }
+    assert_eq!(
+        router().unwrap().connections_opened(),
+        1,
+        "one orchestrator connection for every placement"
+    );
+
     // Orchestrator restart (FR-009): the route ends, the daemon links again over the same holder,
     // and a new route reaches it with nothing provisioned again.
     world.kill_all();
@@ -206,6 +263,20 @@ async fn a_provisioned_daemon_is_routed_through_the_orchestrator() {
         panic!("a refused link was routed")
     };
     assert!(reason.contains("LinkForward"), "{reason}");
+
+    // Failure: a session that came up before the server refused the `-R` ends the holder; the
+    // connect fails with the holder's reason, not the route's deadline.
+    let late = Remote::default();
+    late.holders.lock().unwrap().push(late_refused_holder());
+    let started = std::time::Instant::now();
+    let Err(reason) = route(&late, &WireDaemonId::new("box-late").unwrap()).await else {
+        panic!("a link refused after `ready` was routed")
+    };
+    assert!(reason.contains("LinkForward"), "{reason}");
+    assert!(
+        started.elapsed() < daemon::ROUTE_DEADLINE,
+        "ended by the holder, not the deadline"
+    );
 
     // Failure: a daemon that never links fails the connect once the deadline passes, naming why.
     let (holder, _end) = ready_holder();

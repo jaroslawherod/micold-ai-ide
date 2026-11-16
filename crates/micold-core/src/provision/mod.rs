@@ -645,6 +645,7 @@ async fn start_step(
 /// the forward and so the daemon's link.
 pub struct LinkHolder {
     stdio: crate::ssh::SshStdio,
+    tail: crate::ssh::stdio::StderrTail,
 }
 
 impl std::fmt::Debug for LinkHolder {
@@ -660,11 +661,38 @@ impl LinkHolder {
         let mut buf = [0u8; 64];
         while self.stdio.read(&mut buf).await.is_ok_and(|n| n > 0) {}
     }
+
+    /// Why the holder ended, from what its `ssh` wrote to stderr: a forward the remote could not
+    /// bind is [`FailureCause::LinkForward`]. Call after [`Self::ended`].
+    pub fn failure(&self) -> impl std::future::Future<Output = ProvisionFailure> + Send + 'static {
+        let tail = self.tail.clone();
+        async move { holder_failure(&tail).await }
+    }
+}
+
+/// The failure of a holder that ended, read from its `ssh`'s stderr.
+async fn holder_failure(tail: &crate::ssh::stdio::StderrTail) -> ProvisionFailure {
+    // Give the child a moment to write why it exited before reading its stderr.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let text = tail.text();
+    if let Some(line) = text.lines().find(|l| l.contains(FORWARD_NOT_BOUND)) {
+        let refusal = argv::LinkRefusal::NotBound {
+            detail: line.trim().to_string(),
+        };
+        return fail(Step::Start, FailureCause::LinkForward(refusal)).with_output(text);
+    }
+    fail(
+        Step::Start,
+        FailureCause::Ssh(classify(false, false, true, &text)),
+    )
+    .with_output(text)
 }
 
 /// Open the link holder for `target`: admit the link as [`run`]'s start does, open
-/// `remote hold-link` with the admitted `-R` and return once it prints `ready`, which the remote
-/// command prints only after ssh confirmed the forward (`ExitOnForwardFailure=yes`).
+/// `remote hold-link` with the admitted `-R` and return once it prints `ready`. `ready` means the
+/// session is up, not that the forward is: without `-f`, ssh runs the remote command before the
+/// server confirms a `-R`, and `ExitOnForwardFailure=yes` then ends the holder. So the caller
+/// races [`LinkHolder::ended`] against its route and reads [`LinkHolder::failure`] on an early end.
 pub async fn hold_link(
     host: &dyn SshHost,
     target: &ProvisionTarget,
@@ -699,22 +727,9 @@ pub async fn hold_link(
             }
         };
         if ready {
-            return Ok(LinkHolder { stdio });
+            return Ok(LinkHolder { stdio, tail });
         }
-        // Give the child a moment to write why it exited before reading its stderr.
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        let text = tail.text();
-        if let Some(line) = text.lines().find(|l| l.contains(FORWARD_NOT_BOUND)) {
-            let refusal = argv::LinkRefusal::NotBound {
-                detail: line.trim().to_string(),
-            };
-            return Err(fail(Step::Start, FailureCause::LinkForward(refusal)).with_output(text));
-        }
-        Err(fail(
-            Step::Start,
-            FailureCause::Ssh(classify(false, false, true, &text)),
-        )
-        .with_output(text))
+        Err(holder_failure(&tail).await)
     })
     .await
 }

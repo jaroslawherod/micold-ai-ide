@@ -99,7 +99,11 @@ pub fn ssh_host() -> Option<std::sync::Arc<dyn SshHost>> {
 /// How this process reaches its orchestrator connection for provisioned daemons (#1726, FR-007):
 /// after provisioning, their actors route through it instead of keeping the bridge. The app
 /// installs [`crate::orchestrator_conn::shared`]; a process that installs none (a test of the
-/// provisioning alone) keeps the provisioning bridge as the actor's connection.
+/// provisioning alone) keeps the provisioning bridge as the actor's connection, and has no route.
+///
+/// Process-wide and first-call-wins, so a test that installs a router is its own `[[test]]`
+/// binary (`tests/orchestrator_provisioned.rs`): the `main` binary's provisioning tests need none
+/// installed.
 type Router = fn() -> std::io::Result<&'static crate::orchestrator_conn::OrchestratorConn>;
 static ROUTER: std::sync::OnceLock<Router> = std::sync::OnceLock::new();
 
@@ -121,10 +125,12 @@ pub async fn routed_to(
     wire_id: &micold_core::protocol::routing::WireDaemonId,
     deadline: std::time::Duration,
 ) -> std::io::Result<Connected> {
-    let router = ROUTER
-        .get()
-        .copied()
-        .unwrap_or(crate::orchestrator_conn::shared);
+    let router = ROUTER.get().copied().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotConnected,
+            "no orchestrator connection is installed in this process",
+        )
+    })?;
     router()?.routed_to(wire_id, deadline, CLIENT_BUILD).await
 }
 
@@ -157,13 +163,17 @@ pub async fn route_provisioned(
     if let micold_core::connect::Transport::Ssh(stdio) = bridge.into_inner() {
         stdio.close(BRIDGE_EXIT).await;
     }
-    let holder =
+    let mut holder =
         micold_core::provision::hold_link(host, target, opts, request, &CancelToken::new())
             .await
             .map_err(|f| reason(&f))?;
-    let routed = routed_to(wire_id, ROUTE_DEADLINE)
-        .await
-        .map_err(|e| format!("cannot reach the daemon through the orchestrator: {e}"))?;
+    // `ready` does not confirm the `-R`: a forward the server refuses ends the holder, which is
+    // the attempt's failure with the holder's own reason, not a passed deadline.
+    let routed = tokio::select! {
+        routed = routed_to(wire_id, ROUTE_DEADLINE) => routed
+            .map_err(|e| format!("cannot reach the daemon through the orchestrator: {e}"))?,
+        () = holder.ended() => return Err(reason(&holder.failure().await)),
+    };
     Ok((routed, Some(holder)))
 }
 

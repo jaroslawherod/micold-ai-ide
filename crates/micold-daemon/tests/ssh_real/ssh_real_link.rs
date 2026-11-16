@@ -756,6 +756,8 @@ async fn ssh_real_link_the_holder_keeps_a_provisioned_daemon_linked_without_its_
     let Some(()) = pinned_free(test) else { return };
     let _cleanup = RemoteCleanup;
     let orchestrator = Orchestrator::start().await;
+    // Offline is judged on the orchestrator's clock: without real time it never passes.
+    let _real_time = RealTime::follow(&orchestrator);
     write_remote_config(&host, "ssh", "link-routed");
     let connected = open_pinned(&host, link_opts(&orchestrator))
         .await
@@ -764,6 +766,9 @@ async fn ssh_real_link_the_holder_keeps_a_provisioned_daemon_linked_without_its_
 
     // Swap order: the bridge goes first, then the holder takes the forward over.
     drop(connected);
+    // The bridge's forward is gone: the record is offline before the holder brings it back, so
+    // the `online` below is the holder's link and not a stale record.
+    health_within(&orchestrator, "link-routed", "offline", Instant::now()).await;
     let runner = SystemSsh {
         own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
         bundled_dir: None,
