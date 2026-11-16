@@ -314,11 +314,13 @@ fn a_missing_ca_file_is_unavailable() {
     let missing = Path::new("/nonexistent/micold-ca.pem");
     let outcome =
         StoreHandle::open_postgres("postgres://micold:pw@127.0.0.1:1/db", Some(missing), 2);
-    assert!(
-        matches!(outcome, Err(StoreError::Unavailable { .. })),
-        "got {:?}",
-        outcome.map(|_| ())
-    );
+    match outcome {
+        Err(StoreError::Unavailable { reason, .. }) => assert_eq!(
+            reason,
+            "database.ca_file /nonexistent/micold-ca.pem is not a file"
+        ),
+        other => panic!("got {:?}", other.map(|_| ())),
+    }
 }
 
 #[test]
