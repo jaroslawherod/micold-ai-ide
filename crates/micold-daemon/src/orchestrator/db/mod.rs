@@ -67,7 +67,13 @@ impl StoreHandle {
         };
         create_owner_only(&path).map_err(|e| unavailable(e.to_string()))?;
         let url = sqlite_url(&path);
-        Self::start(target, open_sqlite_pool(&url, &path), &migrate::MIGRATOR)
+        let read_only = url.replace("?mode=rw", "?mode=ro");
+        Self::start(
+            target,
+            Some(read_only),
+            open_sqlite_pool(&url, &path),
+            &migrate::MIGRATOR,
+        )
     }
 
     /// Open the PostgreSQL database `url` names with at most `pool_size` connections, and bring it
@@ -98,12 +104,16 @@ impl StoreHandle {
             None => options.ssl_mode(PgSslMode::Prefer),
         };
         let pool = open_postgres_pool(options, pool_size.max(1), url.to_owned());
-        Self::start(target, pool, &migrate::POSTGRES_MIGRATOR)
+        Self::start(target, None, pool, &migrate::POSTGRES_MIGRATOR)
     }
 
-    /// Build the runtime, open the pool on it and run `migrator` forward.
+    /// Build the runtime, refuse a newer schema (FR-004), open the pool on it and run `migrator`
+    /// forward. With `read_only_url` (SQLite) the check runs on a read-only connection of its own
+    /// before the pool, whose WAL pragma writes, exists; without it, on a pooled connection in a
+    /// `READ ONLY` transaction.
     fn start(
         target: String,
+        read_only_url: Option<String>,
         pool: impl Future<Output = Result<AnyPool, String>>,
         migrator: &'static sqlx::migrate::Migrator,
     ) -> Result<Arc<Self>, StoreError> {
@@ -112,12 +122,32 @@ impl StoreHandle {
             reason,
         };
         install_drivers();
+        let postgres_check = read_only_url.is_none();
         let rt = Builder::new_multi_thread()
             .worker_threads(2)
             .thread_name("micold-store")
             .enable_all()
             .build()
             .map_err(|e| unavailable(e.to_string()))?;
+        if let Some(url) = read_only_url {
+            let checked = run_on(&rt, async {
+                use sqlx::Connection as _;
+                let mut conn = sqlx::AnyConnection::connect(&url)
+                    .await
+                    .map_err(|e| unavailable(e.to_string()))?;
+                let checked = migrate::check_not_newer(migrator, &mut conn, &target).await;
+                // The connection is dropped either way; a failed close changes nothing on disk.
+                let _ = conn.close().await;
+                checked
+            });
+            if let Err(error) = checked
+                .map_err(|reason| unavailable(reason.to_owned()))
+                .and_then(|r| r)
+            {
+                rt.shutdown_background();
+                return Err(error);
+            }
+        }
         let pool = match run_on(&rt, pool) {
             Ok(Ok(pool)) => pool,
             failed => {
@@ -135,7 +165,17 @@ impl StoreHandle {
             pool,
             target,
         });
-        handle.block_on(migrate::run_forward(migrator, handle.pool()))??;
+        handle.block_on(async {
+            if postgres_check {
+                let mut conn = handle
+                    .pool()
+                    .acquire()
+                    .await
+                    .map_err(|e| handle.map_error(&e))?;
+                migrate::check_not_newer(migrator, &mut conn, handle.target()).await?;
+            }
+            migrate::run_forward(migrator, handle.pool()).await
+        })??;
         Ok(handle)
     }
 

@@ -4,7 +4,7 @@
 
 use micold_core::orchestrator::{SchemaError, StoreError};
 use sqlx::migrate::{MigrateError, Migrator};
-use sqlx::AnyPool;
+use sqlx::{AnyConnection, AnyPool, Connection as _, Executor as _};
 
 /// The SQLite dialect's migrations.
 pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations/sqlite");
@@ -12,15 +12,67 @@ pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations/sqlite");
 /// The PostgreSQL dialect's migrations.
 pub static POSTGRES_MIGRATOR: Migrator = sqlx::migrate!("./migrations/postgres");
 
+/// Refuse a database a newer build migrated (FR-004), reading only: the caller passes a read-only
+/// SQLite connection (no WAL pragma), and on PostgreSQL the read runs in a `READ ONLY`
+/// transaction. A database without `_sqlx_migrations` is new, not newer. A driver error is
+/// `Unavailable` at `target`.
+pub async fn check_not_newer(
+    migrator: &Migrator,
+    conn: &mut AnyConnection,
+    target: &str,
+) -> Result<(), StoreError> {
+    let unavailable = |error: sqlx::Error| StoreError::Unavailable {
+        target: target.to_owned(),
+        reason: error.to_string(),
+    };
+    let postgres = conn.backend_name().eq_ignore_ascii_case("postgresql");
+    let mut tx = conn.begin().await.map_err(unavailable)?;
+    if postgres {
+        tx.execute("SET TRANSACTION READ ONLY")
+            .await
+            .map_err(unavailable)?;
+    }
+    let exists = if postgres {
+        "SELECT CAST(count(*) AS BIGINT) FROM information_schema.tables \
+         WHERE table_schema = current_schema() AND table_name = '_sqlx_migrations'"
+    } else {
+        "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'"
+    };
+    let exists: i64 = sqlx::query_scalar(exists)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(unavailable)?;
+    let database: Option<i64> = if exists > 0 {
+        sqlx::query_scalar("SELECT max(version) FROM _sqlx_migrations")
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(unavailable)?
+    } else {
+        None
+    };
+    tx.rollback().await.map_err(unavailable)?;
+    let build = migrator.migrations.last().map_or(0, |m| m.version);
+    match database {
+        Some(database) if database > build => Err(StoreError::Schema(SchemaError::DatabaseNewer {
+            database,
+            build,
+        })),
+        _ => Ok(()),
+    }
+}
+
 /// Apply every migration of `migrator` the database lacks, forward only. PostgreSQL serialises
 /// starters with sqlx's advisory lock. SQLite has none in sqlx's migrator, so a second starter
-/// can lose the race with `table … already exists`: it retries once,
-/// after which the first starter's work is recorded and the run finds nothing to do.
+/// can lose the race with `table … already exists` or a busy database: it retries once, re-reading
+/// `_sqlx_migrations`, after which the first starter's work is recorded and the run finds nothing
+/// to do.
 pub async fn run_forward(migrator: &'static Migrator, pool: &AnyPool) -> Result<(), StoreError> {
     let schema_error = |error| schema_error(migrator, error);
     match migrator.run(pool).await {
         Ok(()) => Ok(()),
-        Err(MigrateError::Execute(error)) if lost_the_race(&error) => {
+        Err(MigrateError::Execute(error) | MigrateError::ExecuteMigration(error, _))
+            if lost_the_race(&error) =>
+        {
             migrator.run(pool).await.map_err(schema_error)
         }
         Err(error) => Err(schema_error(error)),
@@ -46,6 +98,16 @@ fn schema_error(migrator: &Migrator, error: MigrateError) -> StoreError {
             version,
             description: version_of(version),
         },
+        MigrateError::ExecuteMigration(error, version) => SchemaError::Failed {
+            version,
+            reason: error.to_string(),
+        },
+        MigrateError::VersionMissing(version) | MigrateError::Dirty(version) => {
+            SchemaError::Failed {
+                version,
+                reason: error.to_string(),
+            }
+        }
         other => SchemaError::Failed {
             version: 0,
             reason: other.to_string(),

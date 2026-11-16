@@ -153,3 +153,28 @@ exercised by reading the code path, not by a failing run first. Test-after admis
 - refactor: `StoreHandle::start` shared by both opens; `run_forward` takes its migrator.
 - error-arm cases (`a_url_that_does_not_parse…`, `a_missing_ca_file…`, `a_present_ca_file…`) were
   written with the code (test-after), for diff coverage.
+
+## M5 Cycle 1: migration safety (T032-T035)
+
+- test: fixtures `tests/fixtures/orchestrator/{sqlite,postgres}/v0001.sql` (a row in every table);
+  `store_migrations.rs` M5 cases, each over SQLite and PostgreSQL:
+  `a_newer_database_is_refused_naming_both_versions_and_left_unchanged`,
+  `an_older_database_applies_the_missing_migrations_in_order`,
+  `an_edited_migration_is_refused_naming_version_and_description`,
+  `a_migration_that_fails_half_way_leaves_the_previous_version`,
+  `two_starters_on_one_database_apply_each_migration_once`,
+  `every_shipped_version_upgrades_to_the_newest_with_its_data_intact`. The pre-M5
+  `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` is replaced by the first.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations`
+  (PostgreSQL 16 local, `MICOLD_REQUIRE_POSTGRES=1`): 4 failed for the expected reasons —
+  newer: `Failed { version: 0, reason: "migration 999 was previously applied but is missing…" }`;
+  half way: `version` 0, not 2; edited: old text `migration 1 (orchestrator schema) differs…`;
+  two starters: `while executing migration 1: … table daemons already exists` (the retry matched
+  only `Execute`, not `ExecuteMigration`). The older-database and chain cases passed at once (v1 is
+  the only shipped version; they pin behaviour sqlx already gives).
+- green: `migrate::check_not_newer` (read-only SQLite connection before the WAL pool; PostgreSQL
+  `READ ONLY` transaction), called by `StoreHandle::start` before `run_forward`; `run_forward`
+  retries on `ExecuteMigration` too; `ExecuteMigration`/`VersionMissing`/`Dirty` carry their version
+  in `Failed`; `SchemaError` texts are those of contracts/config.md, *Errors at start*. 25 passed;
+  the race case 5 of 5 runs.
+- refactor: none

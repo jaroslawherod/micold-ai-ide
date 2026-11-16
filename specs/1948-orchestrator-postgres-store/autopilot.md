@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
-| M5 | T032–T035 | full | Migration safety | | pending |
+| M5 | T032–T035 | full | Migration safety | | in progress |
 | M6 | T036–T038 | full | No private key in any table | | pending |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
@@ -80,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 merged (PR #1997, squash c3944869a; review B MINOR-ONLY, CI green after merging main in: first run failed only on a corrupt llvm-cov .profraw). Next: dispatch the M5 milestone unit in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: PostgreSQL tests need a local server (apt postgresql, MICOLD_TEST_POSTGRES_URL, MICOLD_REQUIRE_POSTGRES=1); gate.sh needs cargo-nextest and ssh-keygen installed; T035 updates the newer-schema test to DatabaseNewer.
+None.
 
 ## Open escalation
 
@@ -90,7 +90,7 @@ None.
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
 - `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
-- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. `check_not_newer` and a version in `SchemaError::Failed` are M5.
+- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. 
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 
 - M1–M6 and M10 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M7–M9 carry guide tasks.
@@ -98,4 +98,3 @@ None.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
-- M5 (T035): `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` in tests/orchestrator/store_migrations.rs pins the pre-M5 `Failed`; update it to `DatabaseNewer` (M2 review B r3 MINOR).
