@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-9yqz36
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M7 implemented; full gate, push, open PR; then orchestrator merges
+- **Next step**: wait for CI on #2006 and merge it, then dispatch M8
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1997 | M4 | merged | c3944869a |
 | #2001 | M5 | merged | 8e68fa947 |
 | #2003 | M6 | merged | 3d5485c30 |
+| #2006 | M7 | open | |
 
 ## Milestones
 
@@ -35,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
-| M7 | T039–T044 | full | [database] config and backend rule | | in progress |
+| M7 | T039–T044 | full | [database] config and backend rule | #2006 | open |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
