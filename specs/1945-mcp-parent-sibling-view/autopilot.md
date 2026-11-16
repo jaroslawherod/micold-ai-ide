@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-boi1v0
 - **Started**: 2026-11-15
 - **Cloud notes**: units have no Agent tool, so the orchestrator dispatches reviews A (code-review high, opus) and B (conformance, sonnet) itself and sends findings back; merge each PR by MCP squash with expectedHeadSha after `ci complete` is green (jaro approved merge-on-green for this run); `mutants on the diff` fails at baseline on unrelated netns tests (advisory, commented on #1965); `diff coverage` (80%) is required, so cover error paths. Disk is short: wipe target-shared/.
-- **Phase**: merge M3
-- **Next step**: merge #1988 on green `ci complete`, then dispatch the close unit
+- **Phase**: close
+- **Next step**: dispatch the close unit
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1947 | design | MERGED | 00f66d534eedc83b1c08c7614e50f5a32194eaa8 |
 | #1965 | M1 | MERGED | 2d713bcf7f9db032cfd15e828d4e4ead7a81fc2a |
 | #1978 | M2 | MERGED | 1fb7d00e222b74a70a98bc45cc138defe4aa24b8 |
-| #1988 | M3 | open (draft) | - |
+| #1988 | M3 | MERGED | 5160c889a3369f1eab532cf92f9031b57ab334a9 |
 
 ## Milestones
 
@@ -29,14 +29,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T005, T016, T017 | full | Unparented sessions see default and siblings | #1965 | merged |
 | M2 | T006–T014 | full | neighbourhood and send_parent_input tools | #1978 | merged |
-| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | #1988 | round 1 fixed, gate green, awaiting scoped re-review |
+| M3 | T015, T018–T020 | full | Parent recorded before start; agents told | #1988 | merged |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Unparented worktree visibility | Treated as child of `default` for visibility only, no link recorded | user (jaro, 2026-11-15) | issue #1945 scope item 1 |
-| D2 | implement M3 | A worktree directory literally named `default` collides with the root's ref `default` | Reserve the name: refuse creating a worktree named `default` (any create path, clear error naming the reservation), document it in the user guide; an existing dir named `default` keeps M2 behaviour (excluded from the neighbourhood) and the docs say so. Safest: no output format or ref changes, smallest diff; the follow-up MINORs (b),(c) are then moot for new worktrees | orchestrator (2026-11-15; decision card posted to jaro, proceeding on it) | ledger Follow-ups, M2 review A r2 F2 / r3 |
+| D2 | implement M3 | A worktree directory literally named `default` collides with the root's ref `default` | Reserve the name: refuse creating a worktree named `default` (any create path, clear error naming the reservation), document it in the user guide; an existing dir named `default` keeps M2 behaviour (excluded from the neighbourhood) and the docs say so. Safest: no output format or ref changes, smallest diff; the follow-up MINORs (b),(c) are then moot for new worktrees | user (jaro, decision card 2026-11-15) | ledger Follow-ups, M2 review A r2 F2 / r3 |
 
 ## Review rounds
 
