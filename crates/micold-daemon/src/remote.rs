@@ -1,4 +1,4 @@
-//! The remote helper: `micold-daemon remote bridge | status | stop | prune | prepare-link` (feature 489, contracts/ssh-transport.md; `prepare-link`: #1725, contracts/dial.md).
+//! The remote helper: `micold-daemon remote bridge | status | stop | prune | prepare-link | hold-link` (feature 489, contracts/ssh-transport.md; `prepare-link`: #1725, contracts/dial.md; `hold-link`: #1726).
 //!
 //! The client runs these over `ssh` on the host this daemon lives on. `bridge` is the whole
 //! transport: it connects the `ssh` child's stdin and stdout to the daemon's own local endpoint,
@@ -52,9 +52,10 @@ pub fn main(args: &[OsString]) -> i32 {
         "status" => run_status(),
         "stop" => run_stop(),
         "prepare-link" if args.len() == 1 => run_prepare_link(),
+        "hold-link" if args.len() == 1 => hold_link(io::stdin().lock(), &mut io::stdout()),
         _ => {
             eprintln!(
-                "usage: micold-daemon remote bridge | status | stop | prune --keep <n> | prepare-link"
+                "usage: micold-daemon remote bridge | status | stop | prune --keep <n> | prepare-link | hold-link"
             );
             2
         }
@@ -217,6 +218,17 @@ pub fn prepare_link_at(dir: &Path) -> io::Result<std::path::PathBuf> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(path),
         Err(e) => Err(e),
     }
+}
+
+/// `hold-link` (#1726, FR-007): the remote command of the link holder. ssh starts it only after the
+/// link's `-R` is bound (`ExitOnForwardFailure=yes`), so `ready` means the forward is up. It opens
+/// no daemon connection: it holds the ssh session, and so the forward, until stdin ends.
+pub fn hold_link(mut stdin: impl io::Read, out: &mut impl io::Write) -> i32 {
+    if writeln!(out, "ready").and_then(|()| out.flush()).is_err() {
+        return 1;
+    }
+    let _ = io::copy(&mut stdin, &mut io::sink());
+    0
 }
 
 fn run_bridge() -> io::Result<()> {
