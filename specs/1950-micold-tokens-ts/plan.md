@@ -38,7 +38,7 @@ Add `micold_core::tokens::ts::module()`, a pure function beside `tokens::css::st
 | FR-002, SC-001 colours | every `tables::color_roles` entry, both schemes, equals the `stylesheet()` value; `light`/`dark` same keys | `tokens/ts.rs` unit |
 | FR-003 families | type scale, shape, motion, state, spacing values per table; elevation: every `level`, `surface` key, `shadow` null-or-`offsetY`/`blur`/`alpha.light`/`alpha.dark` against `elevation::LEVELS` | `tokens/ts.rs` unit |
 | FR-004 header | first line exact | `tokens/ts.rs` unit |
-| FR-005 binary | `<path>` writes `module()` bytes; no arg prints them; unwritable path exits 1, no file left | `crates/micold-core/tests/tokens_ts_bin.rs` (consolidated test target) |
+| FR-005 binary | `<path>` writes `module()` bytes; no arg prints them; unwritable path exits 1, no file left | `crates/micold-core/tests/tokens_ts_bin.rs` (a `mod` of `tests/main.rs`) |
 | FR-006, FR-007, SC-003, SC-004 drift | equal passes; edited fails and prints file + command; missing fails | `scripts/tests/tokens-ts-drift.test.sh`, run by `scripts/gate.sh` with every `scripts/tests/*.test.sh` |
 | FR-008 | the unit rows above run in `test-core` | - |
 
