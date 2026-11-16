@@ -640,6 +640,85 @@ async fn start_step(
     .await
 }
 
+/// The open link holder (#1726, FR-007): the `ssh` child running `remote hold-link` that keeps the
+/// orchestrator link's `-R` up after the bridge is closed. Dropping it kills the child, which drops
+/// the forward and so the daemon's link.
+pub struct LinkHolder {
+    stdio: crate::ssh::SshStdio,
+}
+
+impl std::fmt::Debug for LinkHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LinkHolder").finish_non_exhaustive()
+    }
+}
+
+impl LinkHolder {
+    /// Wait until the holder ends (its stdout closes): the link's forward is gone.
+    pub async fn ended(&mut self) {
+        use tokio::io::AsyncReadExt;
+        let mut buf = [0u8; 64];
+        while self.stdio.read(&mut buf).await.is_ok_and(|n| n > 0) {}
+    }
+}
+
+/// Open the link holder for `target`: admit the link as [`run`]'s start does, open
+/// `remote hold-link` with the admitted `-R` and return once it prints `ready`, which the remote
+/// command prints only after ssh confirmed the forward (`ExitOnForwardFailure=yes`).
+pub async fn hold_link(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    request: &crate::ssh::provision::LinkRequest,
+    cancel: &CancelToken,
+) -> Result<LinkHolder, ProvisionFailure> {
+    let bound = target.bounds.start;
+    guard(Step::Start, Some(bound), cancel, async {
+        let link = admit_link(host, target, opts, request, bound)
+            .await?
+            .map_err(|refusal| fail(Step::Start, FailureCause::LinkForward(refusal)))?;
+        let cmd = argv::hold_link(
+            &target.reach,
+            opts.platform,
+            opts.timeout_secs,
+            &opts.build_id,
+            &link,
+        );
+        let mut stdio = host.open(cmd).map_err(|e| io_fail(Step::Start, e))?;
+        let tail = stdio.stderr_tail();
+        let mut line = Vec::new();
+        let ready = {
+            use tokio::io::AsyncReadExt;
+            let mut byte = [0u8; 1];
+            loop {
+                match stdio.read(&mut byte).await {
+                    Ok(1) if byte[0] == b'\n' => break line.trim_ascii() == b"ready",
+                    Ok(1) => line.push(byte[0]),
+                    _ => break false,
+                }
+            }
+        };
+        if ready {
+            return Ok(LinkHolder { stdio });
+        }
+        // Give the child a moment to write why it exited before reading its stderr.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let text = tail.text();
+        if let Some(line) = text.lines().find(|l| l.contains(FORWARD_NOT_BOUND)) {
+            let refusal = argv::LinkRefusal::NotBound {
+                detail: line.trim().to_string(),
+            };
+            return Err(fail(Step::Start, FailureCause::LinkForward(refusal)).with_output(text));
+        }
+        Err(fail(
+            Step::Start,
+            FailureCause::Ssh(classify(false, false, true, &text)),
+        )
+        .with_output(text))
+    })
+    .await
+}
+
 /// The CLIs of `selected` the table has a row for, in the table's order.
 fn selected_rows<'a>(
     table: &'a AiCliTable,
@@ -844,6 +923,8 @@ mod tests {
             "last"
         } else if last.contains("remote bridge") {
             "bridge"
+        } else if last.contains("remote hold-link") {
+            "hold_link"
         } else if String::from_utf8_lossy(stdin).contains("MICOLD_PROBE") {
             "probe"
         } else if String::from_utf8_lossy(stdin).contains("MICOLD_HAVE_CLI") {
@@ -861,6 +942,8 @@ mod tests {
         /// Every `run`, with its command line and stdin.
         runs: Mutex<Vec<(&'static str, SshCommand, Vec<u8>)>>,
         bridge: Mutex<Option<SshStdio>>,
+        /// What a `hold_link` open returns.
+        holder: Mutex<Option<SshStdio>>,
         /// Every `open`'s command line.
         opened: Mutex<Vec<SshCommand>>,
         percent: Vec<u8>,
@@ -927,10 +1010,15 @@ mod tests {
             })
         }
         fn open(&self, cmd: SshCommand) -> io::Result<SshStdio> {
-            self.seen.lock().unwrap().push(kind(&cmd, b""));
+            let k = kind(&cmd, b"");
+            self.seen.lock().unwrap().push(k);
             self.opened.lock().unwrap().push(cmd);
-            self.bridge
-                .lock()
+            let slot = if k == "hold_link" {
+                &self.holder
+            } else {
+                &self.bridge
+            };
+            slot.lock()
                 .unwrap()
                 .take()
                 .ok_or_else(|| io::Error::other("no bridge"))
@@ -1980,5 +2068,88 @@ mod tests {
             ),
             "{f:?}"
         );
+    }
+
+    /// A holder whose remote end prints `ready` and then holds the stream open.
+    fn ready_holder() -> SshStdio {
+        let (near, mut far) = tokio::io::duplex(64);
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let _ = far.write_all(b"ready\n").await;
+            let mut buf = [0u8; 8];
+            while far.read(&mut buf).await.is_ok_and(|n| n > 0) {}
+        });
+        let (r, w) = tokio::io::split(near);
+        SshStdio::from_parts(r, w)
+    }
+
+    async fn hold(
+        fake: &Fake,
+        target: &ProvisionTarget,
+    ) -> Result<LinkHolder, ProvisionFailure> {
+        let request = crate::ssh::provision::LinkRequest {
+            local_socket: "/run/o.sock".into(),
+        };
+        hold_link(fake, target, &opts(), &request, &CancelToken::new()).await
+    }
+
+    #[tokio::test]
+    async fn the_holder_admits_the_link_opens_hold_link_and_returns_on_ready() {
+        let mut fake = Fake::default().say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        *fake.holder.get_mut().unwrap() = Some(ready_holder());
+        let target = owned_target(StepBounds::container());
+        let _holder = hold(&fake, &target).await.unwrap();
+        assert_eq!(fake.kinds(), ["prepare_link", "hold_link"]);
+        let opened = opened_bridge(&fake);
+        assert_eq!(reverse_forwards(&opened).len(), 1);
+        assert!(opened.args.last().unwrap().ends_with("remote hold-link"));
+        assert_eq!(fake.count("bridge"), 0, "a holder is never a bridge");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_holder_whose_forward_cannot_bind_names_it_not_bound() {
+        let child = tokio::process::Command::new("sh")
+            .args([
+                "-c",
+                "echo 'Error: remote port forwarding failed for listen path /tmp/micold-1000/orchestrator.sock' >&2; exit 255",
+            ])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut fake = Fake::default().say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        *fake.holder.get_mut().unwrap() = Some(SshStdio::from_child(child).unwrap());
+        let target = owned_target(StepBounds::container());
+        let Err(f) = hold(&fake, &target).await else {
+            panic!("expected a failure")
+        };
+        assert!(
+            matches!(
+                &f.cause,
+                FailureCause::LinkForward(argv::LinkRefusal::NotBound { detail })
+                    if detail.contains("remote port forwarding failed")
+            ),
+            "{f:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_link_opens_no_holder() {
+        let fake = Fake::default().say("resolve", ok("hostname host\nlocalforward 5432 db:5432\n"));
+        let target = user_target(StepBounds::user_host(secs(15)));
+        let Err(f) = hold(&fake, &target).await else {
+            panic!("expected a failure")
+        };
+        assert!(
+            matches!(
+                &f.cause,
+                FailureCause::LinkForward(argv::LinkRefusal::ConfiguredForwards { .. })
+            ),
+            "{f:?}"
+        );
+        assert_eq!(fake.count("hold_link"), 0);
+        assert_eq!(fake.count("prepare_link"), 0);
     }
 }
