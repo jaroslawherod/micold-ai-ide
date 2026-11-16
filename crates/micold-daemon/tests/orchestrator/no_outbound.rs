@@ -370,5 +370,8 @@ fn only_sqlx_connect_calls_are_blanked_in_the_database_directory() {
         [(1, "connect"), (1, "connect_")]
     );
     let after = "AnyPoolOptions::new().connect_with(a); sock.connect_with(b);";
-    assert_eq!(violations(&blank_database_connects(after)), [(1, "connect_")]);
+    assert_eq!(
+        violations(&blank_database_connects(after)),
+        [(1, "connect_")]
+    );
 }

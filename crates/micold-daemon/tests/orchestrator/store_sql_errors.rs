@@ -5,13 +5,13 @@
 use std::sync::Arc;
 
 use micold_core::orchestrator::{
-    AuditStore, AuthStore, CertSerial, Identity, NewAuditEntry, NewEnrollment, NewInvite, NewUser,
-    Provider, RefreshToken, Role, StoreError, TenantId, TokenHash, UserId,
+    AuditStore, AuthStore, CertSerial, Identity, NewAuditEntry, NewEnrollment, Provider, Role,
+    StoreError, TenantId,
 };
 use micold_core::protocol::routing::WireDaemonId;
 use micold_daemon::orchestrator::db::{SqlAuditStore, SqlAuthStore, StoreHandle};
 
-const T: u64 = 1_000;
+use super::store_suite::{hash, invite, new_user, refresh_token, uid, T};
 
 fn open() -> (tempfile::TempDir, Arc<StoreHandle>, SqlAuthStore) {
     let dir = tempfile::tempdir().unwrap();
@@ -25,46 +25,6 @@ fn exec(handle: &StoreHandle, sql: &'static str) {
         .block_on(async { sqlx::query(sql).execute(handle.pool()).await })
         .unwrap()
         .unwrap();
-}
-
-fn uid(text: &str) -> UserId {
-    UserId::new(text).unwrap()
-}
-
-fn hash(text: &str) -> TokenHash {
-    TokenHash::hash_of(text)
-}
-
-fn user(id: &str) -> NewUser {
-    NewUser {
-        id: uid(id),
-        display_name: id.to_owned(),
-        role: Role::Viewer,
-        created_at: T,
-    }
-}
-
-fn token(raw: &str, owner: &str, family: &str) -> RefreshToken {
-    RefreshToken {
-        hash: hash(raw),
-        user: uid(owner),
-        family: family.to_owned(),
-        issued_at: T,
-        expires_at: T + 100,
-        revoked_at: None,
-    }
-}
-
-fn invite(id: &str, raw: &str) -> NewInvite {
-    NewInvite {
-        id: id.to_owned(),
-        token_hash: hash(raw),
-        role: Role::Viewer,
-        email: None,
-        created_by: uid("owner"),
-        created_at: T,
-        expires_at: T + 100,
-    }
 }
 
 fn unavailable<R: std::fmt::Debug>(name: &str, result: Result<R, StoreError>) {
@@ -109,7 +69,10 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
         CertSerial::new("0a").unwrap(),
         WireDaemonId::new("box").unwrap(),
     );
-    unavailable("create_user", auth.create_user(&user("u1")));
+    unavailable(
+        "create_user",
+        auth.create_user(&new_user("u1", Role::Viewer)),
+    );
     unavailable("user", auth.user(&u));
     unavailable("users", auth.users());
     unavailable("set_role", auth.set_role(&u, Role::Owner));
@@ -126,15 +89,21 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
         "user_by_identity",
         auth.user_by_identity(Provider::GitHub, "s"),
     );
-    unavailable("create_invite", auth.create_invite(&invite("i", "x")));
+    unavailable(
+        "create_invite",
+        auth.create_invite(&invite("i", "x", T + 100)),
+    );
     unavailable("redeem_invite", auth.redeem_invite(&h, &u, T));
     unavailable("set_bootstrap", auth.set_bootstrap(&h, T));
     unavailable("bootstrap", auth.bootstrap());
     unavailable("consume_bootstrap", auth.consume_bootstrap(&h, T));
-    unavailable("put_refresh", auth.put_refresh(&token("x", "u1", "f")));
+    unavailable(
+        "put_refresh",
+        auth.put_refresh(&refresh_token("x", "u1", "f", T + 100)),
+    );
     unavailable(
         "rotate_refresh",
-        auth.rotate_refresh(&h, &token("y", "u1", "f"), T),
+        auth.rotate_refresh(&h, &refresh_token("y", "u1", "f", T + 100), T),
     );
     unavailable("revoke_refresh_for", auth.revoke_refresh_for(&u, T));
     unavailable("refresh", auth.refresh(&h));
@@ -227,12 +196,20 @@ fn rows_that_do_not_read_back_are_corrupt() {
 #[test]
 fn a_rotation_that_cannot_insert_its_successor_keeps_the_old_token_active() {
     let (_dir, _handle, auth) = open();
-    auth.create_user(&user("u1")).unwrap();
-    auth.put_refresh(&token("a", "u1", "fam")).unwrap();
-    auth.put_refresh(&token("taken", "u1", "fam")).unwrap();
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.put_refresh(&refresh_token("a", "u1", "fam", T + 100))
+        .unwrap();
+    auth.put_refresh(&refresh_token("taken", "u1", "fam", T + 100))
+        .unwrap();
     for (name, new) in [
-        ("duplicate hash", token("taken", "u1", "fam")),
-        ("unknown user", token("fresh", "ghost", "fam")),
+        (
+            "duplicate hash",
+            refresh_token("taken", "u1", "fam", T + 100),
+        ),
+        (
+            "unknown user",
+            refresh_token("fresh", "ghost", "fam", T + 100),
+        ),
     ] {
         let result = auth.rotate_refresh(&hash("a"), &new, T + 1);
         assert!(
@@ -250,8 +227,9 @@ fn a_rotation_that_cannot_insert_its_successor_keeps_the_old_token_active() {
 #[test]
 fn a_remove_of_an_unknown_user_revokes_nobody_elses_tokens() {
     let (_dir, _handle, auth) = open();
-    auth.create_user(&user("u1")).unwrap();
-    auth.put_refresh(&token("a", "u1", "fam")).unwrap();
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.put_refresh(&refresh_token("a", "u1", "fam", T + 100))
+        .unwrap();
     assert!(matches!(
         auth.remove_user(&uid("ghost"), T + 1),
         Err(StoreError::Refused { .. })
@@ -283,8 +261,8 @@ fn an_invite_and_an_enrollment_name_why_they_were_refused() {
         Err(StoreError::Refused { reason }) => reason,
         other => panic!("expected Refused, got {other:?}"),
     };
-    auth.create_user(&user("u1")).unwrap();
-    auth.create_invite(&invite("i", "tok")).unwrap();
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.create_invite(&invite("i", "tok", T + 100)).unwrap();
     assert!(reason(auth.redeem_invite(&hash("nope"), &uid("u1"), T).map(drop)).contains("unknown"));
     assert!(reason(
         auth.redeem_invite(&hash("tok"), &uid("u1"), T + 100)
@@ -310,8 +288,8 @@ fn an_invite_and_an_enrollment_name_why_they_were_refused() {
 #[test]
 fn of_many_callers_redeeming_one_invite_exactly_one_wins() {
     let (_dir, handle, auth) = open();
-    auth.create_user(&user("u1")).unwrap();
-    auth.create_invite(&invite("i", "tok")).unwrap();
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.create_invite(&invite("i", "tok", T + 100)).unwrap();
     let auth = Arc::new(auth);
     let winners: usize = (0..6)
         .map(|_| {
@@ -340,8 +318,8 @@ fn a_call_from_async_code_is_unavailable_not_a_panic() {
 #[test]
 fn a_stored_refresh_token_keeps_the_revocation_it_arrived_with() {
     let (_dir, _handle, auth) = open();
-    auth.create_user(&user("u1")).unwrap();
-    let mut revoked = token("r", "u1", "fam");
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    let mut revoked = refresh_token("r", "u1", "fam", T + 100);
     revoked.revoked_at = Some(T + 7);
     auth.put_refresh(&revoked).unwrap();
     assert_eq!(auth.refresh(&hash("r")).unwrap(), Some(revoked));

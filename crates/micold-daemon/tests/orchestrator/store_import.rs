@@ -1,36 +1,20 @@
 //! Importing an earlier version's `registry.json` once (#1948, US5, FR-010), on SQLite and on
 //! PostgreSQL (skipped when no server is configured).
 
-use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use micold_core::daemon_config::Kind;
 use micold_core::orchestrator::store::JsonRegistryStore;
 use micold_core::orchestrator::{DaemonRecord, OwnerId, RegistryStore as _, StoreError};
-use micold_core::protocol::routing::WireDaemonId;
 use micold_daemon::orchestrator::db::import::{import_registry_json, Imported};
 use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
 
+use super::store_suite::{daemon, keys};
 use super::store_support::PostgresDatabase;
 
 fn record(tenant: &str, id: &str) -> DaemonRecord {
-    DaemonRecord::new(
-        WireDaemonId::new(id).unwrap(),
-        Kind::Host,
-        id,
-        1,
-        BTreeSet::from(["exec".to_owned()]),
-        Some(tenant),
-    )
-}
-
-fn keys(records: &[DaemonRecord]) -> Vec<(String, String)> {
-    records
-        .iter()
-        .map(|r| (r.tenant.as_str().to_owned(), r.id.as_str().to_owned()))
-        .collect()
+    daemon(tenant, id, id)
 }
 
 /// One case's world: a data directory holding `registry.json` and an open database.

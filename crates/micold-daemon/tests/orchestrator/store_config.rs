@@ -180,7 +180,10 @@ async fn a_second_start_imports_nothing_and_leaves_the_imported_file() {
     let dir = tempfile::tempdir().unwrap();
     seed_json(dir.path(), "seeded");
     starts(dir.path()).await;
-    let imported = dir.path().join("orchestrator").join("registry.json.imported");
+    let imported = dir
+        .path()
+        .join("orchestrator")
+        .join("registry.json.imported");
     let before = std::fs::read(&imported).unwrap();
 
     starts(dir.path()).await;

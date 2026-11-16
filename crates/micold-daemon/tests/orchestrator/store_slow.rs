@@ -272,7 +272,10 @@ pub(crate) fn stderr_lines(stderr: std::process::ChildStderr) -> std::sync::mpsc
 
 /// The lines read from `logged` up to and including the first that holds `needle`; panics with
 /// the lines seen when none does within [`crate::support::WITHIN`].
-pub(crate) fn stderr_until(logged: &std::sync::mpsc::Receiver<String>, needle: &str) -> Vec<String> {
+pub(crate) fn stderr_until(
+    logged: &std::sync::mpsc::Receiver<String>,
+    needle: &str,
+) -> Vec<String> {
     let mut seen = Vec::new();
     loop {
         let line = logged

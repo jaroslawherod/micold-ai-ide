@@ -167,7 +167,7 @@ async fn a_failed_save_leaves_links_working() {
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_failed_local_save_is_reported_on_stderr() {
-    use crate::store_slow::{KillOnDrop, stderr_lines, stderr_until};
+    use crate::store_slow::{stderr_lines, stderr_until, KillOnDrop};
     use sqlx::Connection as _;
 
     let _quiet = children_quiet().await;
