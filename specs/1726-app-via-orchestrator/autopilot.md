@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
 - **Phase**: tasks (M4)
-- **Next step**: plan (M4) r2 review and tasks (M4) r1 review, then M4 milestone unit, then close
+- **Next step**: M4 milestone unit (T023–T034), then close
 - **PR**: none
 
 ## Pull requests
@@ -61,7 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | CHANGES (1 MAJOR Windows exception removed, Linux only #1897; 3 MINOR fixed: platform wording, orchestrator_link unconditional, drift-M3 correction) |
 | plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | CLEAN |
 | tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
-| tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | pending (orchestrator dispatches; fix diff from c3142fa34) |
+| tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | CHANGES fixed (mechanical, no r3) |
 
 ## Declined review findings
 
@@ -69,7 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 
 ## Handover
-Plan (M4) r1 fixes committed (979a3cb6d); M4 tasks T023–T034 appended; plan r2 CLEAN; tasks r1 fixes applied. speckit-analyze run (F1 FR-007 provisioning handshake, F2/F4/F7/F11 T031 cases, F3 swap order, F5 deps, F6 numbering, F8 quickstart, F9 signature, F12 precondition fixed; F10 kept a separate binary like remote_prepare_link.rs); checklists all checked; specs-only gate passed. Next: tasks r2 review, then the M4 milestone unit. Cloud: no mise/gh.
+Plan (M4) r1 fixes committed (979a3cb6d); M4 tasks T023–T034 appended; plan r2 CLEAN; tasks r1 fixes applied. speckit-analyze run (F1 FR-007 provisioning handshake, F2/F4/F7/F11 T031 cases, F3 swap order, F5 deps, F6 numbering, F8 quickstart, F9 signature, F12 precondition fixed; F10 kept a separate binary like remote_prepare_link.rs); checklists all checked; specs-only gate passed. tasks r2 fixes applied. Next: M4 milestone unit, then the M4 milestone unit. Cloud: no mise/gh.
 
 ## Open escalation
 

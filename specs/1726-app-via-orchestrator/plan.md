@@ -185,7 +185,7 @@ Research R7 has the route per placement and the alternatives.
   holder, read `ready` or the `remote port forwarding failed` line, reusing `admit_link` and
   `FORWARD_NOT_BOUND`), `crates/micold-daemon/src/remote.rs` (`hold-link`),
   `crates/micold-client/src/daemon.rs` (`orchestrator_link()` made unconditional: no `cfg!(unix)`,
-  returns a `LinkRequest`, Windows wording dropped, #1897; one `routed_to(wire_id, deadline)` helper generalising
+  returns `io::Result<LinkRequest>` (an unresolvable endpoint shown in the status cell), Windows wording dropped, #1897; one `routed_to(wire_id, deadline)` helper generalising
   `host_routed`; the SSH, container and pod connect paths call it after provisioning).
 - **Tests**: core unit tests with the fake `SshHost` (holder argv carries the `-R` and
   `ExitOnForwardFailure`, never a bridge; not-bound refusal); a daemon test for `remote hold-link`
