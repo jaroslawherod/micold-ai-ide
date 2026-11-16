@@ -12,6 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Started**: 2026-11-16
 - **Phase**: design-pr
 - **Next step**: design PR open as draft; orchestrator waits on CI and merges, then M1
+- **PR**: #1996 (design, draft)
 
 ## Pull requests
 
