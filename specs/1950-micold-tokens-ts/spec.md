@@ -62,6 +62,14 @@ Whoever opens the generated file is told on its first line that it is generated,
 - Failure: the binary writes only to its output path argument or stdout; an unwritable path exits non-zero with a message, never a partial file.
 - `tracking` and component anatomy and density are not emitted, as in the CSS sheet.
 
+## Clarifications
+
+### Session 2026-11-16
+
+- Q: `apps/client/` does not exist yet; who creates `apps/client/src/theme/`? → A: This feature does (it depends on nothing in M4a); it commits only `tokens.generated.ts`, and the Expo app (#1735's successor) is built around it later. _(agent-resolved: specs/1722-rn-client-k8s/issues.md#N2, plan.md#M4a)_
+- Q: Where does the drift check live? → A: A `scripts/tests/*.test.sh` script, which `scripts/gate.sh` already runs in CI's order; the plan names it. _(agent-resolved: scripts/gate.sh header)_
+- Q: Does the TS module follow the CSS sheet in repeating scheme-independent tokens per scheme? → A: No: FR-003 exports them once; repetition in CSS exists only because CSS fails silently on a missing name, which `as const` types do not. _(agent-resolved: crates/micold-core/src/tokens/css.rs#stylesheet doc)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements

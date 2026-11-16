@@ -31,8 +31,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Review rounds
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec.md, checklists/requirements.md | bce68e6d | 5776ddfe:bce68e6d | CHANGES (F1-F4 applied; reviewer dispatched by orchestrator, units lack Agent) |
+| Spec | 2 | design | f46586fdb3937f46e2f8225cab947dbaec854c6f | f46586fdb | CLEAN (sonnet re-review, dispatched by orchestrator) |
 
 ## Declined review findings
 
