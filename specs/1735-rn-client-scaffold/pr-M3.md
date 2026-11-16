@@ -13,11 +13,12 @@
 - M2 round-2 minors folded in: `ConnectionManager.stop()` resets `opening`; `error: null` is success; `isSignInPath` ignores case, percent-escapes and a trailing slash.
 
 ## Agent review
-- Review A (code-review, high): pending (orchestrator)
-- Review B (conformance, sonnet): pending (orchestrator)
+- Review A (code-review, high), round 1: CHANGES (F1-F2 major, F3-F6 minor), all fixed in acc4180b1: stale and replayed changes dropped, row keys in render order (orphans skipped), non-canonical sign-in redirected, card width floored, accessible session rows, "No sessions" shown.
+- Review B (conformance, sonnet), round 1: CLEAN with minors F1-F3, all applied.
+- Round 2 (fix diff b3028a1a9..acc4180b1): pending (orchestrator)
 
 ## Local gate
-Local gate: scoped only, full gate left to CI. By hand at 18bf049c9: Jest 173/173 (32 suites), eslint clean, tsc clean, diff coverage 98.6% (217/220), `web:export` plus `bundle-check.mjs` clean, `scripts/tests/*.test.sh` all pass. No visual pass yet (M4).
+Local gate: scoped only, full gate left to CI. By hand at acc4180b1: Jest 179/179, eslint clean, tsc clean, diff coverage 98.6% (217/220), `web:export` plus `bundle-check.mjs` clean, `scripts/tests/*.test.sh` all pass. No visual pass yet (M4).
 
 Refs #1735
 https://claude.ai/code/session_01NCdYvMW4jW7WkvtvnpRVmD

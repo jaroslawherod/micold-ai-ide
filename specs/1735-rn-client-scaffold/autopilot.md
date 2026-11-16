@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-bazfe4
 - **Started**: 2026-11-16
-- **Phase**: M3 implemented, awaiting reviews A and B
-- **Next step**: orchestrator runs review A (high) and review B on M3, then the PR (body in `pr-M3.md`)
+- **Phase**: M3 round-1 findings fixed, awaiting round-2 review of the fix diff
+- **Next step**: orchestrator runs the round-2 re-review on b3028a1a9..acc4180b1, then opens the M3 PR (body in `pr-M3.md`)
 
 ## Pull requests
 
@@ -69,7 +69,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A (opus, code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1-F3 major, F4-F7 minor), all fixed in the M2 fix commit |
 | Review B (sonnet, conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1 major, F2-F5 minor), all fixed in the M2 fix commit (F5 documented in drift-M2.md) |
 | Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | CLEAN (merged in #2015) |
-| Review A + B | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | pending (orchestrator runs A high and B) |
+| Review A (opus, code-review high) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CHANGES (F1-F2 major, F3-F6 minor), all fixed in acc4180b1 |
+| Review B (sonnet, conformance) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CLEAN with minors F1-F3: F1 with A F6, F2 research R13 reworded, F3 stale tests shown to fail with `isStale` stubbed (cycle-log) |
+| Review A+B fix diff | 2 | M3 b3028a1a9..acc4180b1 | acc4180b108d139c82e52966ce36e7ee221c86d1 | b3028a1a9:acc4180b108d139c82e52966ce36e7ee221c86d1 | pending (orchestrator, sonnet) |
 
 ## Declined review findings
 
