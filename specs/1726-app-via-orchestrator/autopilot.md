@@ -66,3 +66,7 @@ None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tes
 None.
 
 ## Follow-ups not done
+
+## Follow-ups (M2 review)
+- list.rs:111 mid-ask link drop reported as timeout, not offline
+- client.rs:188 uncapped concurrent OrchList per client

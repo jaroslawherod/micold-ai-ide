@@ -26,7 +26,7 @@ names an offline or hung daemon within 2.5 s; the benchmark shows routing within
 | 1,000 4 KiB chunks at 100/s | 2.36–2.58 ms | 3.15–3.25 ms | +0.66–0.79 ms | 16 ms |
 
 ## Agent review
-Pending (orchestrator dispatches).
+Fresh-context diff review (Opus), round 1: **CLEAN** on head 4e21273c. Two minor follow-ups, not blocking: a link dropped mid-ask is reported as `timeout` rather than `offline` (list.rs:111); concurrent `OrchList` per client is uncapped (client.rs:188).
 
 ## Local gate
 fmt and `clippy --workspace --all-targets -D warnings` clean at cdf9174dbd9c2777d88e092a101e165e5b4f7a47; `orchestrator_route` (19 + bench)
