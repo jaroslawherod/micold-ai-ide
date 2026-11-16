@@ -318,6 +318,7 @@ pub fn start<R: CommandRunner>(
         port,
         None,
         &SessionExtras::default(),
+        None,
         runner,
         &CancelToken::new(),
         &mut AttemptLedger::new(),
@@ -337,6 +338,7 @@ pub fn start_attempt<R: CommandRunner>(
     port: u16,
     startup: Option<&StartupTable>,
     extras: &SessionExtras,
+    wire_id: Option<&micold_core::protocol::routing::WireDaemonId>,
     runner: R,
     cancel: &CancelToken,
     ledger: &mut AttemptLedger,
@@ -393,6 +395,7 @@ pub fn start_attempt<R: CommandRunner>(
             git_config.as_deref(),
             startup,
             extras,
+            wire_id,
         ) {
             return Err(preparation_failed(format!(
                 "could not write the daemon's configuration to {}: {e}",
@@ -733,6 +736,8 @@ pub struct BootPlan {
     pub startup: Option<StartupTable>,
     /// The SSH key, signing key, CA file and session files, delivered with it (#1536).
     pub extras: SessionExtras,
+    /// The id its daemon announces to the orchestrator (#1726, R6).
+    pub wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
 }
 
 impl BootPlan {
@@ -781,6 +786,16 @@ impl BootPlan {
             .and_then(DaemonSettings::from_entry)
             .map(|(settings, _)| settings.extras)
             .unwrap_or_default()
+    }
+
+    /// The orchestrator id of the daemon [`Self::identity_of`] names (#1726, R6).
+    pub fn wire_id_of(
+        registry: &micold_core::daemons::DaemonRegistry,
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    ) -> Option<micold_core::protocol::routing::WireDaemonId> {
+        Self::sandbox_daemon(registry, legacy_default)
+            .and_then(|id| registry.get(id))
+            .and_then(|entry| entry.file.wire_id.clone())
     }
 }
 
@@ -865,6 +880,7 @@ impl micold_client::daemon::ContainerStarter for DaemonContainers {
             port,
             setup.startup.as_ref(),
             &setup.extras,
+            setup.wire_id.as_ref(),
             &runner,
             cancel,
             &mut ledger,
@@ -1035,6 +1051,7 @@ impl BringUp {
                 plan.port,
                 plan.startup.as_ref(),
                 &plan.extras,
+                plan.wire_id.as_ref(),
                 &runner,
                 &cancelled,
                 &mut ledger,
@@ -1497,6 +1514,7 @@ mod tests {
             Some(&text),
             None,
             &SessionExtras::default(),
+            None,
         )
         .unwrap();
         let copy = std::fs::read_to_string(
@@ -1567,6 +1585,7 @@ mod tests {
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         };
 
         let messages: Vec<Message> = BringUp::now(plan)
@@ -1676,6 +1695,7 @@ mod tests {
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         };
         let runtime = CancelledDuring::scripted(
             a_runtime_that_creates_the_sandbox_then(Ok(
@@ -1731,6 +1751,7 @@ mod tests {
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         };
         let mut running = None;
         let _task = BringUp::now(plan).run(&mut running);
@@ -1752,6 +1773,7 @@ mod tests {
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         };
         let runtime = CancelledDuring::new(cancel_on);
         let (runtime_log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
@@ -2596,6 +2618,7 @@ mod tests {
             port: DEFAULT_SANDBOX_PORT,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         }
     }
 

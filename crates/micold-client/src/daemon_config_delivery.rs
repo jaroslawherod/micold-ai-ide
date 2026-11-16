@@ -208,6 +208,7 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 /// `git_config` is the sanitized git configuration ([`micold_core::scoped_credential::shared_copy`]):
 /// it goes into `delivery.secrets` and the file names it as `[git] config_file` at
 /// `/run/micold/secrets/gitconfig` (#1530); `None` removes a copy left by an earlier start.
+#[allow(clippy::too_many_arguments)]
 pub fn deliver_container(
     name: &str,
     profile: &micold_core::sandbox::SandboxProfile,
@@ -216,6 +217,7 @@ pub fn deliver_container(
     git_config: Option<&str>,
     startup: Option<&StartupTable>,
     extras: &SessionExtras,
+    wire_id: Option<&micold_core::protocol::routing::WireDaemonId>,
 ) -> io::Result<bool> {
     use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
     use micold_core::sandbox::argv::CONTAINER_SSH_DIR;
@@ -238,6 +240,8 @@ pub fn deliver_container(
                 micold_core::sandbox::SANDBOX_GITCONFIG_FILE
             ))
         }),
+        // The id it announces to the orchestrator (#1726, R6): without it the daemon is `local`.
+        wire_id: wire_id.cloned(),
         ..DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto))
     };
     let files = read_startup_files(&settings)?;

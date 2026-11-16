@@ -33,8 +33,8 @@ kept as small as the goal allows.
   and starts the host daemon when none runs.
 - The revised epic (`specs/1722-rn-client-k8s/plan.md`, *Local mode*) says a systemd user unit
   (`micold-orchestrator.service`) replaces "the desktop app starts the orchestrator". That unit is
-  Linux-only and belongs to the web client's local mode; the iced app still runs on macOS and
-  Windows. See Clarifications.
+  Linux-only and belongs to the web client's local mode; the iced app starts the orchestrator
+  itself. The app is Linux only (#1897). See Clarifications.
 
 ## Clarifications
 
@@ -182,9 +182,7 @@ directly and through a local orchestrator; the difference is within SC-003.
 - Two daemons announce the same project path: rows are kept apart by daemon id, never merged.
 - A daemon on an older protocol (`needs-update`): named in lists; requests to it refused with that
   reason.
-- Platform: the orchestrator socket is a Unix socket on Linux and macOS and a named pipe on Windows,
-  as the daemon's; starting the orchestrator works on all three (Principle VI applies to the client
-  platforms, not browsers, for this feature).
+- Platform: Linux only (#1897): the orchestrator socket is a Unix socket, as the daemon's.
 - A request in flight across a link drop: outcome `unknown`, never retried automatically for
   non-idempotent operations.
 
@@ -212,7 +210,9 @@ directly and through a local orchestrator; the difference is within SC-003.
   leaves nobody to answer; the client re-reads after reconnect, FR-009.)
 - **FR-007**: The desktop app MUST open exactly one client connection, to the orchestrator, and no
   client connection to a daemon. It keeps the SSH connections it holds for provisioning and the
-  reverse forward (#1725). (Orchestrator FR-007)
+  reverse forward (#1725), and the provisioning handshake over the SSH bridge (version check, install
+  on mismatch), which it closes before the daemon's actor routes through the orchestrator.
+  (Orchestrator FR-007)
 - **FR-008**: When no orchestrator answers on the local endpoint, the app MUST start the local
   orchestrator, as it starts the host daemon, and MUST NOT start a second one when one runs or
   another app instance is starting one.

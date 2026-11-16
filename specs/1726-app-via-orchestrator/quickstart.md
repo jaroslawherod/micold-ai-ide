@@ -19,6 +19,7 @@
 | M4 | `micold-client` reconnect test: orchestrator killed, client reconnects and actors re-read | FR-009, SC-005 |
 | M4 | `daemon_config_render` test: rendered config has `[orchestrator_link] enabled = true` and `[daemon] id` | FR-013 |
 | M4 | existing socket-opening client suites run with the client through the orchestrator | SC-002 |
+| M4b (tasks M4) | `remote_hold_link`; `orchestrator_provisioned`: provisioned connect closes the bridge, routes by wire id, opens no lasting daemon connection; refused link and passed deadline in the status cell; holder death and orchestrator restart | FR-007 (all placements), FR-009, SC-004 |
 
 Run: `scripts/gate.sh`; one suite: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator_route`.
 

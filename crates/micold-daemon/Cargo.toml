@@ -118,6 +118,11 @@ path = "tests/main.rs"
 name = "container_over_ssh_without_data_dir"
 path = "tests/container_over_ssh_without_data_dir.rs"
 
+# #1726: runs the built binary's `remote hold-link` with a private HOME.
+[[test]]
+name = "remote_hold_link"
+path = "tests/remote_hold_link.rs"
+
 [[test]]
 name = "activity_pipeline"
 path = "tests/activity_pipeline.rs"
