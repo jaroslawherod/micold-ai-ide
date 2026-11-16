@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M4) | 1 | M4 | 9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | superseded by next row |
 | code A+B (M4) | 1 | M4 | b9ef49cb7a86756da6c801e6c2722d0b3e0a20fb | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | CHANGES (A: 3 MINOR fixed: typed RouteEnded, holder-end race, no fallback router; B: 4 MAJOR fixed: placement + late-refusal tests, cycle-log rows/waivers, T031 Cargo [[test]] text, drift unplanned paths; 2 MINOR fixed: PR body coverage, T033 now run locally with sshd; CI: sandbox_real arity, ssh_real holder RealTime) |
 | code A+B (M4) | 2 | M4 | c6796ee405ac7529d6634b5281e5c67cd63f1860 | 9c0fd3c81:b9ef49cb7 | CLEAN (1 MINOR ledger wording fixed) |
+| close | 1 | close docs + bench-routing task | 8ea2f0f01d5d1bce3b94eb1b405ec103d30350a2 | 5811fa2:8ea2f0f01 | CHANGES (3 MINOR: T038 wording fixed, review row added, spec status names the open TDD remediation) |
 
 ## Declined review findings
 
