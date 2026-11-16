@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-3al8kt
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: orchestrator runs review B on M3, opens the PR, then M4
+- **Next step**: M4 (fresh thread, `/speckit-autopilot resume`)
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | #1970 | M1 | merged | bfb463f60 |
 | #1980 | M2 | merged | 952b8a818 |
+| #1992 | M3 | merged | b3f47d077 |
 
 ## Milestones
 
@@ -27,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
-| M3 | T021–T025 | full | SQLite auth and audit stores | none yet (body: pr-M3.md) | implemented, awaiting review B and PR |
+| M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
 | M5 | T032–T035 | full | Migration safety | | pending |
 | M6 | T036–T038 | full | No private key in any table | | pending |
@@ -77,7 +78,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 implemented and gated on the branch (T021-T025 ticked): `db/auth.rs`, `db/audit.rs`, SQLite factory for the shared suite, `store_scan.rs`, `store_sql_errors.rs`; `MemoryAuthStore::redeem_invite` and the contract now refuse an unknown redeeming user; `rotate_refresh` commits the family revocation then refuses. Review A run inline (CLEAN). Next: the orchestrator runs review B, opens the PR from `pr-M3.md` (label docs-not-needed), waits for CI, merges; then M4 (PostgreSQL store). M4 notes: `ORDER BY id` in `users()` must match the memory order (BINARY collation); `begin_write`'s no-op `DELETE FROM bootstrap WHERE 1 = 0` works on PostgreSQL too; `INSERT ... RETURNING` is used by `append`.
+M3 merged (PR #1992, squash b3f47d077; review B MINOR-ONLY, CI green). Next: dispatch the M4 milestone unit (T026–T031, Tier full: PostgreSQL store and CI service container) in a fresh thread; set the Worktree branch line to that thread's branch. M4 notes: `ORDER BY id` in `users()` must match the memory order (BINARY collation; check PostgreSQL collation); `begin_write`'s no-op `DELETE FROM bootstrap WHERE 1 = 0` works on PostgreSQL too; `INSERT ... RETURNING` is used by `append`; narrow the no_outbound `db/` skip to the `connect` call sites (M2 B F2). Cloud: diff coverage blocks at 80%, have the unit test error arms; `mutants on the diff` is advisory; a green `ci complete` sends no wake, so start a background REST wait after the last push.
 
 ## Open escalation
 
