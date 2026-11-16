@@ -192,7 +192,7 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
     store.release();
 }
 
-/// FR-004 in the process: the orchestrator runs on PostgreSQL through a proxy that then drops
+/// FR-016 in the process: the orchestrator runs on PostgreSQL through a proxy that then drops
 /// every connection; a daemon still links, and the failed save is reported on stderr as a change
 /// that could not be saved, without the password.
 #[test]
@@ -218,6 +218,7 @@ async fn save_lost_on_stderr(database_on_server: &PostgresDatabase) {
         .and_then(|(user, _)| user.split_once(':'))
         .map(|(_, password)| password.to_owned())
         .unwrap_or_default();
+    assert!(!password.is_empty(), "the test URL carries a password");
     let dir = Arc::new(tempfile::tempdir().unwrap());
     database(dir.path(), &url);
     let config = dir.path().join("orchestrator.toml");
@@ -267,7 +268,7 @@ async fn save_lost_on_stderr(database_on_server: &PostgresDatabase) {
         }
     };
     for line in &reported {
-        assert!(password.is_empty() || !line.contains(&password), "{line}");
+        assert!(!line.contains(&password), "{line}");
     }
 }
 

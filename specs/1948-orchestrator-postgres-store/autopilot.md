@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | implemented, awaiting review |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | in PR |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
@@ -77,6 +77,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 | Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
 | Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
+| Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
 
 ## Declined review findings
 
