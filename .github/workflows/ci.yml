@@ -300,9 +300,10 @@ jobs:
         # #959: the Ubuntu leg is dropped on a push its pull request proved (its full test ran there).
         os: ${{ fromJSON(needs.classify.outputs.test_os || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
-    # #1948: the orchestrator's shared store suite runs on PostgreSQL too. The cases skip when
-    # MICOLD_TEST_POSTGRES_URL is unset; MICOLD_REQUIRE_POSTGRES=1 turns that skip into a failure
-    # here, so a missing service cannot pass silently. Each case creates and drops its own database.
+    # #1948: the orchestrator's shared store suite runs on PostgreSQL too. The cases are ignored
+    # when MICOLD_TEST_POSTGRES_URL is unset at build time (micold-daemon's build.rs); set here,
+    # they run, and MICOLD_REQUIRE_POSTGRES=1 fails one that finds no server. Each case creates and
+    # drops its own database.
     env:
       POSTGRES_USER: micold
       POSTGRES_PASSWORD: micold-ci
