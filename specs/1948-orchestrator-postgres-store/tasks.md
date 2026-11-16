@@ -282,19 +282,19 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: an operator's JSON registry moves into the database exactly once (US5; FR-010).
 
-- [ ] T051 [P] [US5] Failing tests in `crates/micold-daemon/tests/orchestrator/store_import.rs` (new,
+- [x] T051 [P] [US5] Failing tests in `crates/micold-daemon/tests/orchestrator/store_import.rs` (new,
   registered), both backends: an un-imported file with an empty registry imports every record under
   its own `tenant` and is renamed `registry.json.imported`; a second start imports nothing and
   changes nothing; a corrupt file fails the start naming it and imports nothing; rows present with
   no matching marker refuse, naming the file and the row count; rows plus a marker whose digest
   matches the file (a crash after the import transaction) only rename.
-- [ ] T052 [US5] `crates/micold-daemon/src/orchestrator/db/import.rs`: parse with
+- [x] T052 [US5] `crates/micold-daemon/src/orchestrator/db/import.rs`: parse with
   `JsonRegistryStore::load`, count `daemons` rows over all tenants, one transaction inserting every
   record (owner `UNOWNED`) and an `imports` row `(tenant_id, source, digest, imported_at)` with
   `digest` the SHA-1 of the file, then rename (same directory, same mode).
-- [ ] T053 [US5] Call the import in `run()` after `open` and before `serve`'s load
+- [x] T053 [US5] Call the import in `run()` after `open` and before `serve`'s load
   (`crates/micold-daemon/src/orchestrator/mod.rs`); T051 green.
-- [ ] T054 [P] [US5] `docs/user-guide/orchestrator-storage.md`: the import and the `.imported` suffix.
+- [x] T054 [P] [US5] `docs/user-guide/orchestrator-storage.md`: the import and the `.imported` suffix.
 
 ---
 

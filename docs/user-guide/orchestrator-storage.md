@@ -17,10 +17,19 @@ listening on a network address must have a `[database]` table; without one it re
 `micold-daemon config check` fails naming `database.url_file`.
 
 An orchestrator from an earlier version kept its registry in
-`<data_dir>/orchestrator/registry.json`. While that file is there and not marked imported (no
-`registry.json.imported` beside it), the orchestrator refuses to start, with
-`orchestrator registry <path> is not imported yet; this version cannot import it`, rather than
-start on an empty registry. A later version imports it.
+`<data_dir>/orchestrator/registry.json`. On its first start the orchestrator imports that file into
+the database (either backend) in one step, then renames it `registry.json.imported` in the same
+directory, keeping its permissions. Later starts find no `registry.json` and import nothing; keep or
+delete the `.imported` file as you like.
+
+The import refuses, and the orchestrator does not start, when:
+
+- the file cannot be read or parsed: the error names the file, and nothing is imported;
+- the database registry already has daemons in it: the error names the file and the row count
+  (`cannot import <path>: the database registry already has <n> row(s)`), and nothing is imported.
+
+If the orchestrator stopped after the import but before the rename, the next start recognises the
+file by its digest and only renames it.
 
 ## PostgreSQL
 

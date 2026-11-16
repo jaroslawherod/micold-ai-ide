@@ -138,7 +138,7 @@ pub async fn run() -> io::Result<()> {
     let endpoint = endpoint()?;
     let args: Vec<OsString> = std::env::args_os().skip(2).collect();
     let (database, data_dir) = configured(&args)?;
-    let store = open_store(database, data_dir).await?;
+    let store = open_store(database, data_dir, SystemClock.wall_secs()).await?;
     serve(endpoint, Arc::new(SystemClock), store).await
 }
 
@@ -169,34 +169,22 @@ fn configured(args: &[OsString]) -> io::Result<(Option<DatabaseConfig>, PathBuf)
     Ok((config.and_then(|config| config.database), data_dir))
 }
 
-/// Open the store for `database` and `data_dir` on a blocking thread: opening connects and
-/// migrates, which must not stall the runtime. The orchestrator listens on loopback only until
-/// #1732.
+/// Open the store for `database` and `data_dir` on a blocking thread, then import an earlier
+/// version's `registry.json` into it once (FR-010), stamped `now`: opening connects and migrates,
+/// which must not stall the runtime. The orchestrator listens on loopback only until #1732.
 async fn open_store(
     database: Option<DatabaseConfig>,
     data_dir: PathBuf,
+    now: u64,
 ) -> io::Result<Arc<dyn RegistryStore>> {
-    refuse_unimported_json(&data_dir)?;
     let handle = tokio::task::spawn_blocking(move || {
-        db::open(database.as_ref(), BindScope::LoopbackOnly, &data_dir)
+        let handle = db::open(database.as_ref(), BindScope::LoopbackOnly, &data_dir)?;
+        db::import::import_registry_json(&handle, &data_dir, now).map_err(io::Error::other)?;
+        Ok::<_, io::Error>(handle)
     })
     .await
     .map_err(io::Error::other)??;
     Ok(Arc::new(db::SqlRegistryStore::new(handle)))
-}
-
-/// Refuse to start while an earlier version's `<data_dir>/orchestrator/registry.json` is there
-/// and not marked imported: starting on an empty registry would hide it, and daemons relinking
-/// would fill the new store so that the import later refuses it (FR-010).
-fn refuse_unimported_json(data_dir: &std::path::Path) -> io::Result<()> {
-    let json = data_dir.join("orchestrator").join("registry.json");
-    if json.exists() && !json.with_file_name("registry.json.imported").exists() {
-        return Err(io::Error::other(format!(
-            "orchestrator registry {} is not imported yet; this version cannot import it",
-            json.display()
-        )));
-    }
-    Ok(())
 }
 
 /// Run the orchestrator on `socket` with `clock`, on the store `database` and `data_dir` name, as
@@ -207,7 +195,7 @@ pub async fn run_configured(
     database: Option<DatabaseConfig>,
     data_dir: PathBuf,
 ) -> io::Result<()> {
-    let store = open_store(database, data_dir).await?;
+    let store = open_store(database, data_dir, clock.wall_secs()).await?;
     run_with(socket, clock, store).await
 }
 

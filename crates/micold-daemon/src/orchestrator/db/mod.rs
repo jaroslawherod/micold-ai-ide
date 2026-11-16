@@ -24,6 +24,7 @@ use tokio::runtime::{Builder, Handle, Runtime};
 
 mod audit;
 mod auth;
+pub mod import;
 pub mod migrate;
 mod registry;
 

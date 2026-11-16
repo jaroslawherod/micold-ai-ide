@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-g30l62
+- **Worktree branch**: claude/project-thread-hzkb7z
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M8 review (A+B) on origin/main...claude/project-thread-g30l62, then open the M8 PR (body in the unit's scratchpad)
+- **Next step**: open the M9 PR from the pushed branch; orchestrator waits on CI and merges
 
 ## Pull requests
 
@@ -25,6 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2001 | M5 | merged | 8e68fa947 |
 | #2003 | M6 | merged | 3d5485c30 |
 | #2006 | M7 | merged | 3a74d3004 |
+| #2008 | M8 | merged | 2243de02d |
 
 ## Milestones
 
@@ -37,8 +38,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | in PR |
-| M9 | T051–T054 | full | Import registry.json once | | pending |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
+| M9 | T051–T054 | full | Import registry.json once | | review done, PR pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
 ## Decisions
@@ -79,6 +80,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
 | Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
 
+- M9 round 1 (opus A+B): MINOR-ONLY, 2 MINOR fixed: a non-NotFound read error now says `cannot read it`; the start test seeds a record and checks the started store serves it (corrupt-file start failure already covered).
+
 ## Declined review findings
 
 - M2 A: `Drop` skips `pool.close()` on a `spawn_blocking` thread (WAL is recovered on the next open; the context probe cannot tell the thread kinds apart); one runtime per handle (plan decision); `Failed { version: 0 }` and `VersionMissing` to `DatabaseNewer` belong to M5 T035.
@@ -97,7 +100,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 implemented on claude/project-thread-g30l62 (T045–T050; previous PR #2006 merged at 3a74d3004). Review round 1 (2 MAJOR 2 MINOR) fixed in the commit after 71e4c32; full gate green with PostgreSQL. Next: the orchestrator re-reviews the fix diff 71e4c32..HEAD, then opens the PR. registry.json import stays for M9.
+M9 unit (base: M8 merge 2243de02d): T051–T054 implemented and ticked; `db::import::import_registry_json` replaces M8's start refusal (called in `open_store` after `db::open`). Full gate on 790bf21c7: fmt, clippy, all 13486 Rust tests (PostgreSQL configured) green after installing openssh-client; script tests red only on the known-flaky `autopilot.test.sh` facts cases (8 in the gate, 1 alone, varying), no script touched. Next: orchestrator dispatches review A+B on origin/main...HEAD, then fix findings, push, PR.
 
 ## Open escalation
 
@@ -106,7 +109,7 @@ None.
 ## Follow-ups not done
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
-- `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
+- `sha1` in `micold-daemon` is used by M9's import digest (`sha1:<hex>` in `imports.digest`).
 - M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. 
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 

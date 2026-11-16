@@ -230,3 +230,13 @@ reverting each behaviour on the green tree and running its test
   …`. green: the save thread prefixes a non-`Save` error with `a registry change could not be
   saved:`; no line holds the password.
 - refactor: none
+
+## M9 — T051–T053 (registry.json import)
+
+- behavior: US5 1–4 (FR-010), `tests/orchestrator/store_import.rs` on SQLite and PostgreSQL, and
+  `store_config::the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one`.
+  red: on M8 the start refused any un-imported file with `this version cannot import it`, so the
+  start test's readable file never started; `import_registry_json` did not exist (the suite did
+  not compile). green: `db::import` (one transaction: rows, `imports` marker with the file's SHA-1,
+  then rename) called from `open_store` after `db::open`; 11 passed with PostgreSQL configured.
+- refactor: `upsert_row` shared with the registry store (`pub(super)`).
