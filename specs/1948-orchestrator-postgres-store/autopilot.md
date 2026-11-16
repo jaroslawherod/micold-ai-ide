@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-sabfza
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M10 review A+B on the snapshot in *Handover*, then open the M10 PR from /tmp/pr-1948-m10.md
+- **Next step**: M11 (T061–T070), then a new close unit (re-run speckit-tdd-verify)
 
 ## Pull requests
 
@@ -27,6 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2006 | M7 | merged | 3a74d3004 |
 | #2008 | M8 | merged | 2243de02d |
 | #2010 | M9 | merged | 83926c52f |
+| #2011 | M10 | merged | 8005293fe |
 
 ## Milestones
 
@@ -41,7 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
 | M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
-| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | implemented, review pending |
+| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | #2011 | merged (8005293fe) |
+| M11 | T061–T070 | full | TDD remediation (verification.md FAIL: F1–F12), tests and evidence only | | pending |
 
 ## Decisions
 
@@ -105,13 +107,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M10 (T055–T060) implemented, all six ticked; previous PR #2010 merged at 83926c52f. Review snapshot: base `83926c52f` (origin/main), head = the branch tip commit "#1948: M10 ownership columns and adoption" on claude/project-thread-sabfza. Round 1 done (fixes in the next commit); a round-2 re-review covers `9c32afd72...HEAD`, excluding the ledger. Focus: `OwnerId` serde (record.rs), `keeping_owners` + default `reassign_unowned` (core store.rs), SQL insert-only owner + `reassign_unowned` override (daemon db/registry.rs), suite/scan/import tests, quickstart §B record. Full gate result: *Review rounds*. PR body: /tmp/pr-1948-m10.md (label docs-not-needed). Local `store_slow` password-leak failure was the test URL's password `postgres` matching `sqlx_postgres` in the error text, not the code; with another password green 4/4.
+None.
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+- Close: plan drift for M6–M10 recorded in drift-M6..M10.md (no unbuilt work). speckit-tdd-verify verdict FAIL at 40309293a (tdd/verification.md): cut into M11, since this close unit has no Agent tool for per-crate workers and the work is ~10 test tasks. converge skipped: review B CLEAN (or A+B combined CLEAN after fixes) for every milestone.
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
 - `sha1` in `micold-daemon` is used by M9's import digest (`sha1:<hex>` in `imports.digest`).
