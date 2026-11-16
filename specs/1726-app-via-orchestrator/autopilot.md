@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-0lqers
+- **Worktree branch**: claude/project-thread-sn2sdc
 - **Started**: 2026-11-16
-- **Phase**: review (M4)
-- **Next step**: close unit (fresh thread: `/speckit-autopilot resume`)
-- **PR**: none
+- **Phase**: done
+- **Next step**: handoff
+- **PR**: close PR pending (opened by the orchestrator from pr-close.md)
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2004 | M2 | merged | 5ee726f07 |
 | #2007 | M3 | merged | f6aa5b806 |
 | #2012 | M4 | merged | d4e51acab |
+| close | close | pending | |
 
 ## Milestones
 
@@ -88,3 +89,10 @@ None.
 ## Follow-ups (M2 review)
 - list.rs:111 mid-ask link drop reported as timeout, not offline
 - client.rs:188 uncapped concurrent OrchList per client
+
+## Follow-ups (close)
+
+- Close gate (cloud): `scripts/gate.sh` fmt and clippy only; the `cargo test --workspace` run does not fit the disk here and is left to CI.
+- Close checks: `speckit-converge` found no unbuilt behaviour (all T001-T034 done; M2 has no recorded review B, so converge ran); plan-drift unrecorded drift for M2 and M3 recorded in drift-M2.md and drift-M3.md.
+- `speckit-tdd-verify` verdict FAIL (tdd/verification.md, audited 5811fa2): 14 of 18 test-bearing tasks have no recorded red run (squashed M1-M3), the SC-003 benchmark is `#[ignore]` and no gate runs it. Remediation is tasks.md Phase 9 (T035-T045), test-only, not done in this close (no workers or disk for revert-and-run). Done in the close: the `bench-routing` mise task (half of T038; a CI/gate call is still to add). Needs an issue or a decision to waive.
+- Untested by decision (drift-M4.md): status-cell text of a refused link (the cell shows the actor's `ConnectFailed` text unchanged), pod relay teardown order in `LinkLife` (relay dropped after the holder; checked by reading), and "no client connection on the daemon's socket" (the linked test daemon has no socket, so the check would be vacuous).
