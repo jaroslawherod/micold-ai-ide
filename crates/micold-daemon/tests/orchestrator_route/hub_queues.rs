@@ -9,8 +9,8 @@ use bytes::Bytes;
 use micold_core::orchestrator::route::ClientKey;
 use micold_core::protocol::messages::DaemonMsg;
 use micold_core::protocol::routing::{
-    control_body, control_payload, decode_routed_payload, ConnectionId, RoutedBody, StreamEndReason,
-    WireDaemonId,
+    control_body, control_payload, decode_routed_payload, ConnectionId, RoutedBody,
+    StreamEndReason, WireDaemonId,
 };
 use micold_daemon::orchestrator::hub::{Hub, Opened, ROUTE_QUEUE, WRITER_QUEUE};
 use tokio::sync::mpsc;
@@ -133,8 +133,7 @@ async fn a_slow_route_reports_the_dropped_answer_unknown() {
     assert_accounted(&got, reqs, StreamEndReason::SlowConsumer);
     assert!(
         got.iter().any(|(_, req, msg)| {
-            *req == Some(ROUTE_QUEUE as u64 + 1)
-                && matches!(msg, DaemonMsg::OutcomeUnknown { .. })
+            *req == Some(ROUTE_QUEUE as u64 + 1) && matches!(msg, DaemonMsg::OutcomeUnknown { .. })
         }),
         "the dropped answer is reported unknown"
     );

@@ -148,7 +148,10 @@ impl Hub {
         inner.clients.remove(&client);
         inner.ended.retain(|k| k.client != client);
         for dropped in inner.routes.close_client(client) {
-            if let Some(out) = inner.out.remove(&(dropped.key.daemon.clone(), dropped.link_conn)) {
+            if let Some(out) = inner
+                .out
+                .remove(&(dropped.key.daemon.clone(), dropped.link_conn))
+            {
                 out.pump.abort();
                 close_in_order(&out.to_link, dropped.link_conn);
             }
