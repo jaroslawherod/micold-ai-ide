@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection (host only) | #2007 | merged |
-| M4 | T023–T032 | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to review |
+| M4 | T023–T034 | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to review |
 
 ## Decisions
 
@@ -59,16 +59,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
 | code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
 | plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | CHANGES (1 MAJOR Windows exception removed, Linux only #1897; 3 MINOR fixed: platform wording, orchestrator_link unconditional, drift-M3 correction) |
-| plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | pending (orchestrator dispatches; fix diff from 7c108cf44) |
+| plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | CLEAN |
 
-| tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | pending (orchestrator dispatches) |
+| tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
-Plan (M4) r1 fixes committed (979a3cb6d); M4 tasks T023–T032 appended. Next: plan r2 and tasks r1 reviews, then the M4 milestone unit. Cloud: no mise/gh.
+Plan (M4) r1 fixes committed (979a3cb6d); M4 tasks T023–T034 appended; plan r2 CLEAN; tasks r1 fixes applied. speckit-analyze run (F1 FR-007 provisioning handshake, F2/F4/F7/F11 T031 cases, F3 swap order, F5 deps, F6 numbering, F8 quickstart, F9 signature, F12 precondition fixed; F10 kept a separate binary like remote_prepare_link.rs); checklists all checked; specs-only gate passed. Next: tasks r2 review, then the M4 milestone unit. Cloud: no mise/gh.
 
 ## Open escalation
 

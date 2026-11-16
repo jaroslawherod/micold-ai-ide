@@ -140,6 +140,9 @@ untouched), so each merges green on its own. M4 is the only desktop change.
 
 ## Amendment: provisioned daemons through the orchestrator (tasks M4)
 
+Numbering: the milestone table above predates the tasks cut. Plan M1+M2 = tasks M1, plan M3 =
+tasks M2, plan M4 = tasks M3; this amendment is tasks M4 (quickstart: M4b).
+
 Added 2026-11-16 after M3 (#2007) shipped the host daemon only (drift-M3.md, *Scope narrowed*);
 jaro chose to finish FR-007 for SSH, container and Kubernetes placements in one more milestone.
 Research R7 has the route per placement and the alternatives.
@@ -158,6 +161,19 @@ Research R7 has the route per placement and the alternatives.
   route to the daemon's wire id on the one orchestrator connection and handshakes on it, retrying
   while the orchestrator answers `not_found` (the daemon's link not up yet) until a 10 s deadline,
   the loop `host_routed` already runs for `local`.
+- **Swap order**: (1) the provisioning handshake ends and the app closes the bridge's stdin; (2) it
+  waits for the bridge's ssh child to exit, which releases the remote socket of the `-R`
+  (`prepare-link` removes a stale socket file before each bind, #1725); (3) it opens the holder.
+  `ready` is printed by the remote command, which ssh starts only after the forward is confirmed
+  under `ExitOnForwardFailure=yes`, so `ready` means "forward bound", not "link up". The daemon's
+  link drops at (1) and redials with its backoff; `routed_to`'s retry on `not_found` until the 10 s
+  deadline covers it coming back.
+- **Precondition**: the daemon's config carries `[daemon] id` and `[orchestrator_link]` (M3's
+  FR-013 writer, re-rendered on every provision/connect, T020), so the wire id exists before
+  `routed_to` is called.
+- **Orchestrator restart** (FR-009): the holder and `-R` survive; the daemon redials the restarted
+  orchestrator; the actor's route ends and it re-routes with `routed_to` over the same holder, with
+  no re-provisioning. Only a dead holder re-provisions.
 - **Lifetime**: the actor owns the holder (and, for a pod, the relay it rides on) for as long as its
   route lives. A dead holder drops the daemon's link, the orchestrator ends the route with
   `daemon offline`, and the actor's existing reconnect re-provisions, as a dead bridge does today.
@@ -169,7 +185,7 @@ Research R7 has the route per placement and the alternatives.
   holder, read `ready` or the `remote port forwarding failed` line, reusing `admit_link` and
   `FORWARD_NOT_BOUND`), `crates/micold-daemon/src/remote.rs` (`hold-link`),
   `crates/micold-client/src/daemon.rs` (`orchestrator_link()` made unconditional: no `cfg!(unix)`,
-  returns a `LinkRequest`, Windows wording dropped, #1897; one `routed_to(wire_id)` helper generalising
+  returns a `LinkRequest`, Windows wording dropped, #1897; one `routed_to(wire_id, deadline)` helper generalising
   `host_routed`; the SSH, container and pod connect paths call it after provisioning).
 - **Tests**: core unit tests with the fake `SshHost` (holder argv carries the `-R` and
   `ExitOnForwardFailure`, never a bridge; not-bound refusal); a daemon test for `remote hold-link`

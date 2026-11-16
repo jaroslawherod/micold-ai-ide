@@ -210,7 +210,9 @@ directly and through a local orchestrator; the difference is within SC-003.
   leaves nobody to answer; the client re-reads after reconnect, FR-009.)
 - **FR-007**: The desktop app MUST open exactly one client connection, to the orchestrator, and no
   client connection to a daemon. It keeps the SSH connections it holds for provisioning and the
-  reverse forward (#1725). (Orchestrator FR-007)
+  reverse forward (#1725), and the provisioning handshake over the SSH bridge (version check, install
+  on mismatch), which it closes before the daemon's actor routes through the orchestrator.
+  (Orchestrator FR-007)
 - **FR-008**: When no orchestrator answers on the local endpoint, the app MUST start the local
   orchestrator, as it starts the host daemon, and MUST NOT start a second one when one runs or
   another app instance is starting one.
