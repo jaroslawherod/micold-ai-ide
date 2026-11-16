@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use interprocess::local_socket::traits::tokio::Listener as _;
+use micold_core::daemon_config::DatabaseConfig;
 use micold_core::endpoint::Endpoint;
-use micold_core::orchestrator::{JsonRegistryStore, Registry, RegistryStore, Snapshot};
+use micold_core::orchestrator::{BindScope, Registry, RegistryStore, Snapshot};
 
 pub mod client;
 pub mod db;
@@ -129,18 +130,70 @@ fn endpoint() -> io::Result<Endpoint> {
     micold_core::endpoint::orchestrator_endpoint()
 }
 
-/// Run the orchestrator on the user's endpoint until the process is stopped, keeping its registry
-/// in `orchestrator/registry.json` under the data directory.
+/// Run the orchestrator on the user's endpoint until the process is stopped, on the store the
+/// configuration names (FR-009): `--config <path>` after `orchestrator`, else
+/// `<data_dir>/daemon.toml` when it exists. With no `[database]` table that is the SQLite file
+/// under the data directory.
 pub async fn run() -> io::Result<()> {
     let endpoint = endpoint()?;
-    let data_dir = micold_core::paths::data_dir().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            "no data directory to keep the orchestrator registry in",
-        )
-    })?;
-    let store = Arc::new(JsonRegistryStore::in_data_dir(&data_dir));
+    let args: Vec<OsString> = std::env::args_os().skip(2).collect();
+    let (database, data_dir) = configured(&args)?;
+    let store = open_store(database, data_dir).await?;
     serve(endpoint, Arc::new(SystemClock), store).await
+}
+
+/// The `[database]` table and the data directory of the configuration file `args` name.
+fn configured(args: &[OsString]) -> io::Result<(Option<DatabaseConfig>, PathBuf)> {
+    let args = crate::config_load::parse_args(args)
+        .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
+    let default = micold_core::paths::data_dir().map(|dir| dir.join("daemon.toml"));
+    let path = args.config.or(default.filter(|path| path.is_file()));
+    let config = match path {
+        Some(path) => Some(
+            crate::config_load::load_file(&path)
+                .map_err(io::Error::other)?
+                .config,
+        ),
+        None => None,
+    };
+    let data_dir = config
+        .as_ref()
+        .and_then(|config| micold_core::daemon_config::resolved_view(config).data_dir)
+        .or_else(micold_core::paths::data_dir)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "no data directory to keep the orchestrator registry in",
+            )
+        })?;
+    Ok((config.and_then(|config| config.database), data_dir))
+}
+
+/// Open the store for `database` and `data_dir` on a blocking thread: opening connects and
+/// migrates, which must not stall the runtime. The orchestrator listens on loopback only until
+/// #1732.
+async fn open_store(
+    database: Option<DatabaseConfig>,
+    data_dir: PathBuf,
+) -> io::Result<Arc<dyn RegistryStore>> {
+    let handle = tokio::task::spawn_blocking(move || {
+        db::open(database.as_ref(), BindScope::LoopbackOnly, &data_dir)
+    })
+    .await
+    .map_err(io::Error::other)??;
+    Ok(Arc::new(db::SqlRegistryStore::new(handle)))
+}
+
+/// Run the orchestrator on `socket` with `clock`, on the store `database` and `data_dir` name, as
+/// [`run`] does after reading the configuration (tests pass their own).
+pub async fn run_configured(
+    socket: PathBuf,
+    clock: Arc<dyn Clock>,
+    database: Option<DatabaseConfig>,
+    data_dir: PathBuf,
+) -> io::Result<()> {
+    let store = open_store(database, data_dir).await?;
+    run_with(socket, clock, store).await
 }
 
 /// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
@@ -176,6 +229,15 @@ fn start(
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<(SaveWorker, Arc<Shared>)> {
     let registry = Registry::restore(store.load().map_err(io::Error::other)?);
+    started(clock, store, registry)
+}
+
+/// [`start`] with the registry already restored.
+fn started(
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+    registry: Registry,
+) -> io::Result<(SaveWorker, Arc<Shared>)> {
     let (saving, saves) = SaveWorker::start(store)?;
     Ok((saving, Arc::new(Shared::new(clock, registry, saves))))
 }
@@ -221,7 +283,15 @@ async fn serve(
     // Declared before `links`, so dropped after them: when this future ends, the link tasks are
     // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
     // writes the registry file after that.
-    let (_saving, shared) = start(clock, store)?;
+    // The load runs on a blocking thread: a SQL store blocks on its own runtime.
+    let loaded = tokio::task::spawn_blocking({
+        let store = Arc::clone(&store);
+        move || store.load()
+    })
+    .await
+    .map_err(io::Error::other)?
+    .map_err(io::Error::other)?;
+    let (_saving, shared) = started(clock, store, Registry::restore(loaded))?;
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {

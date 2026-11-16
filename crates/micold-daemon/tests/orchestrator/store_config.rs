@@ -106,3 +106,46 @@ fn a_missing_ca_file_or_url_key_fails_naming_the_key() {
     assert_eq!(status, 2);
     assert!(err.contains("database.url_file"), "{err}");
 }
+
+/// SC-005 and US4.3: with only a data directory and no `[database]`, the orchestrator creates the
+/// owner-only SQLite file and a linked daemon is listed, offline, after a restart.
+#[tokio::test]
+async fn only_a_data_directory_starts_on_sqlite_and_keeps_the_registry_across_a_restart() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
+
+    let dir = std::sync::Arc::new(tempfile::tempdir().unwrap());
+    let orchestrator = Orchestrator::start_configured(std::sync::Arc::clone(&dir)).await;
+    let file = dir.path().join("orchestrator").join("orchestrator.db");
+    let mode = std::fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "{}", file.display());
+
+    let link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
+    record_when(&orchestrator, "box", |r| r["health"] == "online").await;
+    drop(link);
+    // The save thread writes in the background: wait until the row is in the file.
+    let started = std::time::Instant::now();
+    while !stored(&file) {
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let dir = orchestrator.stop().await;
+    let restarted = Orchestrator::start_configured(dir).await;
+    let record = record_when(&restarted, "box", |_| true).await;
+    assert_eq!(record["health"], "offline");
+}
+
+/// Whether the SQLite registry at `file` holds a row.
+fn stored(file: &Path) -> bool {
+    let data_dir = file.parent().and_then(Path::parent).unwrap().to_path_buf();
+    std::thread::spawn(move || {
+        use micold_core::orchestrator::RegistryStore as _;
+        let handle = micold_daemon::orchestrator::db::StoreHandle::open_sqlite(&data_dir).unwrap();
+        micold_daemon::orchestrator::db::SqlRegistryStore::new(handle)
+            .load()
+            .is_ok_and(|s| !s.is_empty())
+    })
+    .join()
+    .unwrap()
+}
