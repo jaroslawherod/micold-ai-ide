@@ -107,7 +107,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M10 merged (#2011, 8005293fe). Close unit found TDD-verify FAIL and cut M11 (T061–T070, tests/evidence only). Next: dispatch the M11 milestone unit in a fresh thread (set Worktree branch), then a new close unit that re-runs tdd-verify.
+M11 unit 1 (branch claude/project-thread-0phzsu, no PR yet; previous PR #2011 merged at 8005293fe): T061–T067 done and ticked, evidence in tdd/cycle-log.md "M11". T068 part: the refresh-token case split into five (mutant 7 fails exactly one); still to split: users (`users_are_created_read_listed_and_soft_removed`), identity, bootstrap cases in store_suite.rs, and store_sql_errors.rs eager cases (`every_auth_method_over_lost_tables_is_unavailable`, the one near old line 173). Next: finish T068, then T069 (store_slow FR-014 clock ordering; two-migration Migrator for the M5 older-database/chain cases; drop map_error/positional INSERT from store_migrations tests), T070 (baseline at f5f8e812a~1, or note why not), then verify/review/gate/PR body per the cloud overrides. Local PostgreSQL for the PG cases: /usr/lib/postgresql/16/bin, data in /var/tmp/pg1948 (port 5433, URL postgres://micold:pw@localhost:5433/postgres; start with `su postgres -s /bin/sh -c "pg_ctl -D /var/tmp/pg1948/data -o '-p 5433 -k /var/tmp/pg1948' start"`). Mutant 16 (migration retry bound) survives; recorded in the cycle log.
 
 ## Open escalation
 

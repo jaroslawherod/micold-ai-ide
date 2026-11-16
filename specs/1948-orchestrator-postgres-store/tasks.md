@@ -451,19 +451,19 @@ not done until T061 to T064 (F1 to F4) are cleared. F1 and F2 are weakened exist
 are the silent PostgreSQL skip and the missing red evidence. Fixes here are separate, explicit work:
 the audit changed no test or source.
 
-- [ ] T061 [US4] F1 (HIGH): restore the FR-008 guard in `crates/micold-daemon/tests/orchestrator/no_outbound.rs:44-55,231-245`.
+- [x] T061 [US4] F1 (HIGH): restore the FR-008 guard in `crates/micold-daemon/tests/orchestrator/no_outbound.rs:44-55,231-245`.
   Blank `.connect_with(` and `AnyConnection::connect(` under `orchestrator/db/` only where the receiver
   is a sqlx pool, options or connection type (not for any text match), or have `netns.rs` run the SQL
   store and prove it dials only the configured database. Verify:
   `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator no_outbound` passes, and the
   same command fails when a `std::net::TcpStream::connect(` or a non-sqlx `.connect_with(` is added
   to `db/mod.rs` (add it, observe, revert).
-- [ ] T062 [US4] F2 (HIGH): put the removed assertion back for the default local mode. A failed save
+- [x] T062 [US4] F2 (HIGH): put the removed assertion back for the default local mode. A failed save
   in a process, or in `run_with` with captured stderr, must produce `a registry change could not be saved`
   without PostgreSQL (`restart.rs:147`; `save.rs:91`). Verify:
   `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator restart` passes with
   `MICOLD_TEST_POSTGRES_URL` unset, and fails when the `eprintln!` at `save.rs:91` is deleted.
-- [ ] T063 [US1] F3 (HIGH): make a skipped PostgreSQL case visible instead of `ok`. Replace the
+- [x] T063 [US1] F3 (HIGH): make a skipped PostgreSQL case visible instead of `ok`. Replace the
   `let Some(..) else { return }` exits (`store_suite.rs:246,583,676`, `store_migrations.rs:326`,
   `store_scan.rs:43,199,226,233,248,271`, `store_slow.rs:55,75,201`, `store_import.rs:77`) with a
   mechanism that reports them as skipped or ignored, and keep CI running them. Verify:
@@ -471,7 +471,7 @@ the audit changed no test or source.
   PostgreSQL cases as ignored (0 `ok` with zero assertions), and with
   `MICOLD_TEST_POSTGRES_URL=... MICOLD_REQUIRE_POSTGRES=1` it runs all of them (record the count from
   the CI `test` job in `tdd/cycle-log.md`).
-- [ ] T064 [US3] F4 (HIGH, process): add the missing M6 entry to `tdd/cycle-log.md` and give each
+- [x] T064 [US3] F4 (HIGH, process): add the missing M6 entry to `tdd/cycle-log.md` and give each
   `TEST_AFTER` behavior in `verification.md` rows 4, 6, 7, 9, 11, 13, 15 to 19, 24 to 26 a recorded red
   by deliberate mutant (one change, observe the named test fail, restore, re-run green). Priority
   order: row 17 (add a `private_key` column to a migration; `sqlite_holds_no_key_material` must fail),
@@ -480,17 +480,17 @@ the audit changed no test or source.
   not sample. Verify: every row has a command and a failing test name in the log, and
   `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator && scripts/build-lock.sh
   cargo test -p micold-core --lib orchestrator::` is green after each restore.
-- [ ] T065 [US5] F5 (MED): add start-level tests in `crates/micold-daemon/tests/orchestrator/store_config.rs`
+- [x] T065 [US5] F5 (MED): add start-level tests in `crates/micold-daemon/tests/orchestrator/store_config.rs`
   for US5.2 (a second `run_configured` start imports nothing and leaves `registry.json.imported`) and
   US5.4 (an un-imported file beside a database that has rows fails the start naming the file and the
   row count). Verify: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator
   store_config` passes, and fails when `import.rs:82` is mutated to `rows > 1000000`.
-- [ ] T066 [P] F6 (MED): reuse the shared fixtures. `store_sql_errors.rs:14-68` and
+- [x] T066 [P] F6 (MED): reuse the shared fixtures. `store_sql_errors.rs:14-68` and
   `store_import.rs:18-34` import `T`, `uid`, `hash`, `new_user`, `refresh_token`, `invite`, `daemon`
   and `keys` from `store_suite` and drop their copies. Verify:
   `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_` passes and `mise run
   duplication` does not grow.
-- [ ] T067 [P] F7, F8 (MED): replace `!reason.is_empty()` and the `rsplit_once(':')` check
+- [x] T067 [P] F7, F8 (MED): replace `!reason.is_empty()` and the `rsplit_once(':')` check
   (`store_migrations.rs:186,292,340,667`) with the pinned value (the host and port, the failing
   version), and restore the exact message in `store_config.rs:172-175`. Verify: the same targets pass,
   and each fails when the named text or port is changed in `db/mod.rs`.
