@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-ygs15x
+- **Worktree branch**: claude/project-thread-3al8kt
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 PR CI and merge; then M3 (fresh thread)
+- **Next step**: orchestrator runs review B on M3, opens the PR, then M4
 
 ## Pull requests
 
@@ -19,15 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | #1970 | M1 | merged | bfb463f60 |
-| #1980 | M2 | open | |
+| #1980 | M2 | merged | 952b8a818 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
-| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | PR open |
-| M3 | T021–T025 | full | SQLite auth and audit stores | | pending |
+| M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
+| M3 | T021–T025 | full | SQLite auth and audit stores | none yet (body: pr-M3.md) | implemented, awaiting review B and PR |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
 | M5 | T032–T035 | full | Migration safety | | pending |
 | M6 | T036–T038 | full | No private key in any table | | pending |
@@ -56,9 +56,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 1 | M1 diff (code-review high, run by the unit: no Agent tool) | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN (1 MINOR noted as a follow-up) |
 | M1 A | 1 | M1 diff | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN |
 | M2 A | 1 | M2 diff (code-review high, run by the unit: no Agent tool) | 1c5e8c6bda32fc3ca960ce3a62d7282506a25826 | (see commit) | CHANGES: 0 BLOCKER, 3 MAJOR-ish (non-ASCII URL, SQLITE_BUSY as Refused, save lock upgrade) all fixed with 4 MINOR; 3 declined (see below) |
+| M3 A | 1 | M3 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CLEAN (1 MINOR fixed: `put_refresh` dropped `revoked_at`; noted: PostgreSQL `ORDER BY id` collation may differ from the memory order, M4) |
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
 | M2 B | 1 | M2 | 60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | 5b6a0087c24bfaa47a2eee1e527d2ff41066c334:60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | CHANGES: 1 MAJOR (cycle 2 no red for review A fixes), fixed by red-by-revert evidence; 1 MINOR (db/ blanket skip in no_outbound scan) declined |
 | M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
+| M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
+| M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
 
 ## Declined review findings
 
@@ -74,7 +77,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 code done and pushed (T014–T020 ticked, review A fixed, gate green). Next: the orchestrator runs review B, opens the PR from `specs/1948-orchestrator-postgres-store/pr-M2.md`, merges; then dispatch M3 (T021–T025) in a fresh thread.
+M3 implemented and gated on the branch (T021-T025 ticked): `db/auth.rs`, `db/audit.rs`, SQLite factory for the shared suite, `store_scan.rs`, `store_sql_errors.rs`; `MemoryAuthStore::redeem_invite` and the contract now refuse an unknown redeeming user; `rotate_refresh` commits the family revocation then refuses. Review A run inline (CLEAN). Next: the orchestrator runs review B, opens the PR from `pr-M3.md` (label docs-not-needed), waits for CI, merges; then M4 (PostgreSQL store). M4 notes: `ORDER BY id` in `users()` must match the memory order (BINARY collation); `begin_write`'s no-op `DELETE FROM bootstrap WHERE 1 = 0` works on PostgreSQL too; `INSERT ... RETURNING` is used by `append`.
 
 ## Open escalation
 
@@ -82,7 +85,6 @@ None.
 
 ## Follow-ups not done
 
-- M2 (SQL auth store): `rotate_refresh` on a revoked token must commit the family revocation and then return `Refused`, so it cannot be one transaction that rolls back on the error; the memory store revokes then refuses.
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
 - `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
 - M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. `check_not_newer` and a version in `SchemaError::Failed` are M5.
@@ -93,4 +95,4 @@ None.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
-- M3 (SQL auth store): `redeem_invite` must refuse an unknown redeeming user, like `put_refresh`, `rotate_refresh` and `link_identity`, or contracts/store-traits.md must say the caller guarantees it (M1 review B F2). Also M1 review A: a SQL `rotate_refresh` commits the family revocation before returning `Refused`.
+- M5 (T035): `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` in tests/orchestrator/store_migrations.rs pins the pre-M5 `Failed`; update it to `DatabaseNewer` (M2 review B r3 MINOR).

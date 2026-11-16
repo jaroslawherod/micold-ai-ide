@@ -20,9 +20,13 @@ use sqlx::any::{AnyConnectOptions, AnyPoolOptions};
 use sqlx::{AnyPool, Executor as _, Row as _};
 use tokio::runtime::{Builder, Handle, Runtime};
 
+mod audit;
+mod auth;
 pub mod migrate;
 mod registry;
 
+pub use audit::SqlAuditStore;
+pub use auth::SqlAuthStore;
 pub use registry::SqlRegistryStore;
 
 /// The directory under the data directory that holds the database (shared with the JSON store).
@@ -101,6 +105,35 @@ impl StoreHandle {
         }
     }
 
+    /// Run `work` to completion and map a driver error with [`map_error`](Self::map_error).
+    pub(crate) fn run<T>(
+        &self,
+        work: impl Future<Output = Result<T, sqlx::Error>>,
+    ) -> Result<T, StoreError> {
+        self.block_on(work)?.map_err(|error| self.map_error(&error))
+    }
+
+    /// A transaction that holds the write lock from its start: SQLite refuses at once, ignoring
+    /// the busy timeout, to upgrade a read snapshot another writer has overtaken, so the first
+    /// statement is a write that changes nothing.
+    pub(crate) async fn begin_write(
+        &self,
+    ) -> Result<sqlx::Transaction<'static, sqlx::Any>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM bootstrap WHERE 1 = 0")
+            .execute(&mut *tx)
+            .await?;
+        Ok(tx)
+    }
+
+    /// A row that cannot be read back: the file is named, the row's content is not.
+    pub(crate) fn corrupt(&self, reason: impl Into<String>) -> StoreError {
+        StoreError::Corrupt {
+            path: self.path(),
+            reason: reason.into(),
+        }
+    }
+
     /// The connection pool.
     pub fn pool(&self) -> &AnyPool {
         &self.pool
@@ -147,6 +180,16 @@ impl Drop for StoreHandle {
         }
         rt.shutdown_background();
     }
+}
+
+/// A stored count or time as the signed column holds it.
+pub(crate) fn to_i64(value: u64) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
+}
+
+/// A column's time as the unsigned value the traits use.
+pub(crate) fn to_u64(value: i64) -> u64 {
+    u64::try_from(value).unwrap_or(0)
 }
 
 const IN_RUNTIME: &str =

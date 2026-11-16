@@ -136,20 +136,20 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: users and audit entries survive a restart in local mode (US1 scenario 2 complete).
 
-- [ ] T021 [P] [US1] Run the auth and audit cases (T007, T008) on the SQLite factory in
+- [x] T021 [P] [US1] Run the auth and audit cases (T007, T008) on the SQLite factory in
   `store_support.rs` (red).
-- [ ] T022 [P] [US1] `crates/micold-daemon/tests/orchestrator/store_scan.rs` (new, registered): raw
+- [x] T022 [P] [US1] `crates/micold-daemon/tests/orchestrator/store_scan.rs` (new, registered): raw
   `UPDATE` and `DELETE` on `audit_log` fail with `audit_log is append-only` (FR-011); the migration
   texts under `crates/micold-daemon/migrations/` contain no `GRANT`.
-- [ ] T023 [US1] `crates/micold-daemon/src/orchestrator/db/auth.rs`: `SqlAuthStore::new(db, tenant)`;
+- [x] T023 [US1] `crates/micold-daemon/src/orchestrator/db/auth.rs`: `SqlAuthStore::new(db, tenant)`;
   every statement binds `tenant_id`; `redeem_invite` and `redeem_enrollment` are one compare-and-set
   `UPDATE … WHERE redeemed_at IS NULL` (and not expired) so exactly one caller wins;
   `rotate_refresh` revokes the old and inserts the new in one transaction; `remove_user` soft-removes
   and revokes in one transaction; `consume_bootstrap` likewise.
-- [ ] T024 [P] [US1] `crates/micold-daemon/src/orchestrator/db/audit.rs`: `SqlAuditStore::new(db,
+- [x] T024 [P] [US1] `crates/micold-daemon/src/orchestrator/db/audit.rs`: `SqlAuditStore::new(db,
   tenant)`: `append` returns the stored row with `seq`, `recent` keyset by `seq`, `by_actor`; no
   update or delete statement exists.
-- [ ] T025 [US1] Export both from `db/mod.rs`; T021 and T022 green on SQLite.
+- [x] T025 [US1] Export both from `db/mod.rs`; T021 and T022 green on SQLite.
 
 ---
 

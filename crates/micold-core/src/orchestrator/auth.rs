@@ -319,7 +319,8 @@ pub trait AuthStore: Send + Sync {
     ) -> Result<Option<User>, StoreError>;
     /// Create an invite; refused when its id or token hash exists.
     fn create_invite(&self, invite: &NewInvite) -> Result<(), StoreError>;
-    /// Redeem an invite once, atomically; refused when unknown, redeemed or expired.
+    /// Redeem an invite once, atomically; refused when unknown, redeemed or expired, or when the
+    /// redeeming user is unknown.
     fn redeem_invite(&self, hash: &TokenHash, by: &UserId, at: u64) -> Result<Invite, StoreError>;
     /// Set the bootstrap code hash; refused once it was consumed.
     fn set_bootstrap(&self, hash: &TokenHash, at: u64) -> Result<(), StoreError>;
@@ -559,6 +560,7 @@ impl AuthStore for MemoryAuthStore {
 
     fn redeem_invite(&self, hash: &TokenHash, by: &UserId, at: u64) -> Result<Invite, StoreError> {
         self.with(|rows| {
+            let users = &rows.users;
             let Some(invite) = rows.invites.iter_mut().find(|i| &i.token_hash == hash) else {
                 return refused("the invite is unknown");
             };
@@ -567,6 +569,9 @@ impl AuthStore for MemoryAuthStore {
             }
             if at >= invite.expires_at {
                 return refused("the invite has expired");
+            }
+            if !users.contains_key(by) {
+                return refused(format!("user {by} is unknown"));
             }
             invite.redeemed_by = Some(by.clone());
             invite.redeemed_at = Some(at);

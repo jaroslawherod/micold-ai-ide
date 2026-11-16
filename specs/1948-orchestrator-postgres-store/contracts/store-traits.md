@@ -54,7 +54,7 @@ pub trait AuthStore: Send + Sync {
     fn user_by_identity(&self, provider: Provider, subject: &str) -> Result<Option<User>, StoreError>;
     // invites
     fn create_invite(&self, invite: &NewInvite) -> Result<(), StoreError>;
-    fn redeem_invite(&self, hash: &TokenHash, by: &UserId, at: u64) -> Result<Invite, StoreError>; // Refused if expired, unknown or redeemed; atomic
+    fn redeem_invite(&self, hash: &TokenHash, by: &UserId, at: u64) -> Result<Invite, StoreError>; // Refused if expired, unknown or redeemed, or if `by` is not a user; atomic
     // bootstrap
     fn set_bootstrap(&self, hash: &TokenHash, at: u64) -> Result<(), StoreError>;
     fn bootstrap(&self) -> Result<Option<Bootstrap>, StoreError>;

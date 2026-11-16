@@ -9,7 +9,7 @@ use micold_core::orchestrator::{
     AuditStore, AuthStore, JsonRegistryStore, MemoryAuditStore, MemoryAuthStore,
     MemoryRegistryStore, RegistryStore, TenantId,
 };
-use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+use micold_daemon::orchestrator::db::{SqlAuditStore, SqlAuthStore, SqlRegistryStore, StoreHandle};
 
 /// A backend of the registry store.
 pub trait Backend {
@@ -116,5 +116,21 @@ impl Backend for SqliteBackend {
         // so the file is open once, as after a restart.
         self.handle = None;
         self.handle = Some(StoreHandle::open_sqlite(self.dir.path()).unwrap());
+    }
+}
+
+impl FullBackend for SqliteBackend {
+    fn auth(&self, tenant: &TenantId) -> Arc<dyn AuthStore> {
+        Arc::new(SqlAuthStore::new(
+            Arc::clone(self.handle.as_ref().expect("open")),
+            tenant.clone(),
+        ))
+    }
+
+    fn audit(&self, tenant: &TenantId) -> Arc<dyn AuditStore> {
+        Arc::new(SqlAuditStore::new(
+            Arc::clone(self.handle.as_ref().expect("open")),
+            tenant.clone(),
+        ))
     }
 }

@@ -101,3 +101,36 @@ Seven tests in `store_migrations.rs` (see drift-M2.md) cover the schema-error ma
 paths, `map_error` and the registry's corrupt-row and driver-error branches. They were written
 after the code, for the diff-coverage gate, against behaviour that already existed: each passed on
 first run and none was shown red by breaking its branch.
+
+## M3 Cycle 1: SQL auth and audit stores on SQLite (T021-T025)
+
+- test: `store_suite.rs` `sqlite` module now runs `auth_tests!` (7 cases) and `audit_tests!` (4 cases)
+  through `SqliteBackend: FullBackend`; `store_scan.rs` `a_raw_update_of_the_audit_log_fails`,
+  `a_raw_delete_from_the_audit_log_fails`, `no_migration_text_grants_anything` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator --no-run` ->
+  `error[E0432]: unresolved imports micold_daemon::orchestrator::db::SqlAuditStore, SqlAuthStore`
+  (2 errors; the stores did not exist). The `store_scan` cases need no new code (the migration's
+  triggers exist since M2), so they were green on first run and pin FR-011.
+- green: `db/auth.rs`, `db/audit.rs`, exports; `cargo test ... store_` 57 passed, 1 failed (below)
+- refactor: `StoreHandle::run`, `begin_write`, `to_i64`/`to_u64` shared with `registry.rs`
+
+## M3 Cycle 2: redeem_invite refuses an unknown redeeming user (M1 review B F2)
+
+- test: `an_invite_is_redeemed_once` (shared suite) creates its users and asserts
+  `redeem_invite(tok-1, ghost)` is `Refused`
+- red: `store_suite::memory::an_invite_is_redeemed_once ... FAILED`: `expected Refused, got
+  Ok(Invite { id: "i1", ... redeemed_by: Some(UserId("ghost")), redeemed_at: Some(1011) })`
+  (the SQL backend already passed: it checks the user)
+- green: `MemoryAuthStore::redeem_invite` checks the user; contract line and trait doc updated;
+  66 passed
+- refactor: none
+
+## M3 Cycle 3: failure arms (CI diff coverage), `store_sql_errors.rs`
+
+Nine tests (see drift-M3.md) written after the code, for the diff-coverage gate: they passed on first
+run and none was shown red by breaking its branch. The behaviours they pin (rollback of a failed
+rotation, one CAS winner, `Corrupt` on unreadable rows, `Unavailable` on lost tables) were each
+exercised by reading the code path, not by a failing run first. Test-after admission, as in M2 cycle 3.
+- review A MINOR fixed after the fact: `put_refresh` wrote `revoked_at` as NULL where the memory store
+  keeps the token as given; now bound. `a_stored_refresh_token_keeps_the_revocation_it_arrived_with`
+  was written with the fix (test-after, no red run).

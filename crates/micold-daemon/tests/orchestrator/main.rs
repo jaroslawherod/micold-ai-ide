@@ -14,5 +14,7 @@ mod not_hosted;
 mod one_link_per_id;
 mod restart;
 mod store_migrations;
+mod store_scan;
+mod store_sql_errors;
 mod store_suite;
 mod version_mismatch;
