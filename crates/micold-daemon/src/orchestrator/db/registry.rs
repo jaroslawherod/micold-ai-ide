@@ -54,7 +54,10 @@ fn from_name<T: serde::de::DeserializeOwned>(name: &str) -> Result<T, String> {
         .map_err(|e| format!("{name:?}: {e}"))
 }
 
-async fn upsert_row(conn: &mut AnyConnection, record: &DaemonRecord) -> Result<(), sqlx::Error> {
+pub(super) async fn upsert_row(
+    conn: &mut AnyConnection,
+    record: &DaemonRecord,
+) -> Result<(), sqlx::Error> {
     // A set of strings always serialises.
     let capabilities = serde_json::to_string(&record.capabilities).unwrap_or_else(|_| "[]".into());
     sqlx::query(UPSERT)

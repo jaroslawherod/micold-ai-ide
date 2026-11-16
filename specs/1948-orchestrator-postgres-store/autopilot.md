@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-hzkb7z
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: dispatch the M9 milestone unit in a fresh thread (previous PR #2008 merged at 2243de02d)
+- **Next step**: M9 review (A+B) of origin/main...HEAD on claude/project-thread-hzkb7z, then PR
 
 ## Pull requests
 
@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
-| M9 | T051–T054 | full | Import registry.json once | | pending |
+| M9 | T051–T054 | full | Import registry.json once | | implemented, in review |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
 ## Decisions
@@ -98,7 +98,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 merged (PR #2008, squash 2243de02d; opus A+B round 1 CHANGES 2 MAJOR 2 MINOR fixed, sonnet round 2 MINOR-ONLY fixed; first CI run red on a corrupt llvm-cov profraw, green on the next head). M8 makes the orchestrator refuse to start while an unimported registry.json exists: M9 (T051–T054) must replace that refusal with the import. Next: dispatch the M9 unit in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest/openssh-client setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0. Units have no Agent tool: the orchestrator dispatches the review.
+M9 unit (base: M8 merge 2243de02d): T051–T054 implemented and ticked; `db::import::import_registry_json` replaces M8's start refusal (called in `open_store` after `db::open`). Full gate run before the review snapshot. Next: orchestrator dispatches review A+B on origin/main...HEAD, then fix findings, push, PR.
 
 ## Open escalation
 
@@ -107,7 +107,7 @@ None.
 ## Follow-ups not done
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
-- `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
+- `sha1` in `micold-daemon` is used by M9's import digest (`sha1:<hex>` in `imports.digest`).
 - M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. 
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 

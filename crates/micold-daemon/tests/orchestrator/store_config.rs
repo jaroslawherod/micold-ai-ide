@@ -150,14 +150,13 @@ fn stored(file: &Path) -> bool {
     .unwrap()
 }
 
-/// FR-010: a `registry.json` from an earlier version that is not imported yet refuses the start,
-/// naming the file, rather than starting on an empty registry; once marked imported it starts.
+/// FR-010: a corrupt `registry.json` from an earlier version fails the start naming the file; a
+/// readable one is imported at start and renamed `registry.json.imported`, and the start goes on.
 #[tokio::test]
-async fn an_unimported_registry_json_refuses_the_start_naming_the_file() {
+async fn the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one() {
     let dir = tempfile::tempdir().unwrap();
-    let orchestrator_dir = dir.path().join("orchestrator");
-    std::fs::create_dir_all(&orchestrator_dir).unwrap();
-    let json = orchestrator_dir.join("registry.json");
+    let json = dir.path().join("orchestrator").join("registry.json");
+    std::fs::create_dir_all(json.parent().unwrap()).unwrap();
     std::fs::write(&json, "{}").unwrap();
     let start = || {
         micold_daemon::orchestrator::run_configured(
@@ -172,16 +171,14 @@ async fn an_unimported_registry_json_refuses_the_start_naming_the_file() {
         .await
         .expect("the start returns at once")
         .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        format!(
-            "orchestrator registry {} is not imported yet; this version cannot import it",
-            json.display()
-        )
+    assert!(
+        error.to_string().contains(&json.display().to_string()),
+        "{error}"
     );
-    assert!(!orchestrator_dir.join("orchestrator.db").exists());
+    assert!(json.exists());
 
-    std::fs::write(orchestrator_dir.join("registry.json.imported"), "").unwrap();
+    std::fs::write(&json, r#"{"version":1,"daemons":[]}"#).unwrap();
     let running = tokio::time::timeout(std::time::Duration::from_secs(2), start()).await;
-    assert!(running.is_err(), "the marked start returned: {running:?}");
+    assert!(running.is_err(), "the start returned: {running:?}");
+    assert!(!json.exists() && json.with_file_name("registry.json.imported").exists());
 }

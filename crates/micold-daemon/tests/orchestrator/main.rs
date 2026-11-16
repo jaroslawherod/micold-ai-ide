@@ -14,6 +14,7 @@ mod not_hosted;
 mod one_link_per_id;
 mod restart;
 mod store_config;
+mod store_import;
 mod store_migrations;
 mod store_scan;
 mod store_slow;
