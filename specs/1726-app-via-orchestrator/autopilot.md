@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
 - **Phase**: review (M4)
-- **Next step**: M4 code review A+B round 1 (snapshot in Review rounds), then PR from pr-m4.md
+- **Next step**: close unit (fresh thread: `/speckit-autopilot resume`)
 - **PR**: none
 
 ## Pull requests
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1999 | M1 | merged | 2f62cbf31 |
 | #2004 | M2 | merged | 5ee726f07 |
 | #2007 | M3 | merged | f6aa5b806 |
+| #2012 | M4 | merged | d4e51acab |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection (host only) | #2007 | merged |
-| M4 | T023–T034 | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to review |
+| M4 | T023–T034 | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | #2012 | merged |
 
 ## Decisions
 
@@ -62,8 +63,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | CLEAN |
 | tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
 | tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | CHANGES fixed (mechanical, no r3) |
-| code A+B (M4) | 1 | M4 | 9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | pending (orchestrator dispatches) |
+| code A+B (M4) | 1 | M4 | 9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | superseded by next row |
 | code A+B (M4) | 1 | M4 | b9ef49cb7a86756da6c801e6c2722d0b3e0a20fb | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | CHANGES (A: 3 MINOR fixed: typed RouteEnded, holder-end race, no fallback router; B: 4 MAJOR fixed: placement + late-refusal tests, cycle-log rows/waivers, T031 Cargo [[test]] text, drift unplanned paths; 2 MINOR fixed: PR body coverage, T033 now run locally with sshd; CI: sandbox_real arity, ssh_real holder RealTime) |
+| code A+B (M4) | 2 | M4 | c6796ee405ac7529d6634b5281e5c67cd63f1860 | 9c0fd3c81:b9ef49cb7 | CLEAN (1 MINOR ledger wording fixed) |
 
 ## Declined review findings
 
@@ -79,7 +81,7 @@ None.
 
 ## Follow-ups not done
 
-- M4 gate (cloud): `scripts/gate.sh` fmt and clippy pass; `cargo nextest` is not installed here, and a `cargo test --workspace` fallback filled the disk (link failures), so the workspace test run is CI's. Targeted runs passed: `orchestrator_provisioned`, `daemon_config_delivery_host`, `orchestrator_single_connection`. The `ssh_real_link` routed case is unrun (no sshd). Warning: `scripts/tests/autopilot.test.sh` (or a sibling) checked out `main` in this worktree and left stray files; restored by hand.
+- M4 gate (cloud): `scripts/gate.sh` fmt and clippy pass; `cargo nextest` is not installed here, and a `cargo test --workspace` fallback filled the disk (link failures), so the workspace test run is CI's. Targeted runs passed: `orchestrator_provisioned`, `daemon_config_delivery_host`, `orchestrator_single_connection`. The `ssh_real_link` routed case passed locally with sshd. Warning: `scripts/tests/autopilot.test.sh` (or a sibling) checked out `main` in this worktree and left stray files; restored by hand.
 
 - M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); jaro chose 2026-11-16 to do it as M4.
 
