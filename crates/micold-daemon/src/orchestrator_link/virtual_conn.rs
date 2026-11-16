@@ -16,7 +16,6 @@ use micold_core::protocol::routing::{
 };
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio_util::codec::FramedRead;
 
 use crate::state::DaemonState;
@@ -47,7 +46,6 @@ pub fn answer_req(payload: &[u8]) -> Option<u64> {
 /// One virtual connection. Dropping it ends it: the server sees the client leave.
 pub struct VirtualConn {
     inbound: mpsc::Sender<Bytes>,
-    writer: JoinHandle<()>,
 }
 
 impl VirtualConn {
@@ -66,7 +64,10 @@ impl VirtualConn {
             }
         });
         // Inner frame payloads in, length-prefixed as a socket client would write them.
-        let writer = tokio::spawn(async move {
+        // Ends when `inbound` is dropped with the conn, and then shuts the pipe down: never abort
+        // this task, for the duplex closes only when the write half is shut down (the read half
+        // lives on in the reader task) and the server would then never see the client leave.
+        tokio::spawn(async move {
             while let Some(frame) = inbound_rx.recv().await {
                 let len = u32::try_from(frame.len()).unwrap_or(u32::MAX).to_le_bytes();
                 if write_half.write_all(&len).await.is_err()
@@ -104,7 +105,7 @@ impl VirtualConn {
                 .send(Bytes::from(encode_opaque_payload(&header, &[])))
                 .await;
         });
-        Self { inbound, writer }
+        Self { inbound }
     }
 
     /// Hand the server one inner frame payload, waiting while its queue is full: the link stops
@@ -117,14 +118,6 @@ impl VirtualConn {
     /// Whether the server side has gone.
     pub fn is_closed(&self) -> bool {
         self.inbound.is_closed()
-    }
-}
-
-impl Drop for VirtualConn {
-    fn drop(&mut self) {
-        // Dropping the pipe's write half is the client leaving: the server reads end-of-stream,
-        // finishes and releases the client; its output then ends and the reader task follows.
-        self.writer.abort();
     }
 }
 

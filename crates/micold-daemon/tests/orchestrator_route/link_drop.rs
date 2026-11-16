@@ -101,6 +101,15 @@ async fn the_client_reattaches_after_the_daemon_links_again() {
         StreamEndReason::DaemonOffline
     );
 
+    // The abort only drops the virtual conns: their serve tasks see end-of-stream and release the
+    // attachment a moment later, so wait for the daemon to hold no client before relinking.
+    within("the daemon releases the dropped conn", async {
+        while state.client_count() != 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+
     let relinked = Daemon::link_state(&orchestrator, "alpha", state);
     relinked.listed_online(&orchestrator).await;
     client.open("alpha", 2, "c").await;
