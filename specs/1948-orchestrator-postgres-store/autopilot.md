@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-sabfza
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: dispatch the M10 milestone unit in a fresh thread (previous PR #2010 merged at 83926c52f)
+- **Next step**: M10 review A+B on the snapshot in *Handover*, then open the M10 PR from /tmp/pr-1948-m10.md
 
 ## Pull requests
 
@@ -40,11 +40,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
-| M9 | T051–T054 | full | Import registry.json once | | review done, PR pending |
-| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
+| M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
+| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | implemented, review pending |
 
 ## Decisions
 
+- M10: an owner survives an upsert or save on every backend: SQL binds `owner_user_id` on insert only; memory and JSON keep the stored owner when an `unowned` record replaces it (`keeping_owners`), so the default `reassign_unowned` over `load`/`save` can still set one. A non-`unowned` record over a different stored owner is the one place they differ (memory/JSON take it, SQL keeps the stored one); nothing writes that in v1. The registry still announces relinks `unowned`. SQL `reassign_unowned` returns the moved `daemons` count (projects/sessions have no rows in v1). The scan also skips SQLite's internal `sqlite_sequence`.
+- M10: quickstart §B step 1 path was `micold`, really `micold-ai-ide`; step 4 needs `config check --files` to fail (without it, exit 0 with `(missing)`), doc fixed.
 - M6: T036's tests passed on first run: `CertSerial::new` already validated hex (M1), and a PEM block fails both `CertSerial::new` and `TokenHash::from_hex`. T038 needed no `auth.rs` change; the tests pin the rule. Red evidence is T037's negative control.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -81,6 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
 | Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
 
+- M10 full gate (scripts/gate.sh, PostgreSQL, debug=0): fmt, clippy, 13498 nextest passed; 1 failed only because the local test password `postgres` is a substring of `sqlx_postgres` (rerun with another password: store_ 129/129, 4 runs); scripts/tests all pass.
 - M9 round 1 (opus A+B): MINOR-ONLY, 2 MINOR fixed: a non-NotFound read error now says `cannot read it`; the start test seeds a record and checks the started store serves it (corrupt-file start failure already covered).
 
 ## Declined review findings
@@ -101,7 +104,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M9 merged (PR #2010, squash 83926c52f; opus A+B round 1 MINOR-ONLY, 2 MINOR fixed; first CI run red on a corrupt llvm-cov profraw and a sandbox DNS test outside this diff, green on the rerun of failed jobs). Next: dispatch the M10 unit (T055–T060) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest/openssh-client setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0. Units have no Agent tool: the orchestrator dispatches the review.
+M10 (T055–T060) implemented, all six ticked; previous PR #2010 merged at 83926c52f. Review snapshot: base `83926c52f` (origin/main), head = the branch tip commit "#1948: M10 ownership columns and adoption" on claude/project-thread-sabfza. Review A (code-review high) and B (conformance, US6/FR-007, T055–T060) on `83926c52f...HEAD`, excluding the ledger. Focus: `OwnerId` serde (record.rs), `keeping_owners` + default `reassign_unowned` (core store.rs), SQL insert-only owner + `reassign_unowned` override (daemon db/registry.rs), suite/scan/import tests, quickstart §B record. Full gate result: *Review rounds*. PR body: /tmp/pr-1948-m10.md (label docs-not-needed). Local `store_slow` password-leak failure was the test URL's password `postgres` matching `sqlx_postgres` in the error text, not the code; with another password green 4/4.
 
 ## Open escalation
 

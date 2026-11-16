@@ -94,7 +94,9 @@ mod key_scan {
     use micold_daemon::orchestrator::db::StoreHandle;
 
     use super::super::store_suite as suite;
-    use super::super::store_support::{key_material, FullBackend, PostgresBackend, SqliteBackend};
+    use super::super::store_support::{
+        key_material, tables_and_columns, FullBackend, PostgresBackend, SqliteBackend,
+    };
 
     /// A SQL backend the scan reads directly.
     trait Scanned: FullBackend + Sized {
@@ -206,6 +208,8 @@ mod key_scan {
             load_is_ordered_by_tenant_then_id,
             tenant_records_survive_reopen,
             two_writers_upserting_different_ids_lose_neither,
+            an_owner_survives_a_relink_upsert_and_a_whole_list_save,
+            reassign_unowned_moves_the_tenants_unowned_records_once,
             users_are_created_read_listed_and_soft_removed,
             an_identity_links_to_one_user,
             an_invite_is_redeemed_once,
@@ -234,6 +238,38 @@ mod key_scan {
             .unwrap();
         let found = key_material(&backend.store(), B::POSTGRES);
         assert_eq!(found, vec!["cert_revocations.reason: a value".to_owned()]);
+    }
+
+    /// US6 scenario 1 (FR-007): every data table has `tenant_id`, and the daemon, project and
+    /// session tables `owner_user_id`. The migration bookkeeping table (and SQLite's own
+    /// `sqlite_sequence`) hold no orchestrator data.
+    fn every_table_has_a_tenant_and_the_owned_ones_an_owner<B: Scanned>() {
+        let Some(backend) = B::make() else { return };
+        let columns = tables_and_columns(&backend.store(), B::POSTGRES);
+        let mut tables: Vec<&str> = columns
+            .iter()
+            .map(|(table, _)| table.as_str())
+            .filter(|t| !matches!(*t, "_sqlx_migrations" | "sqlite_sequence"))
+            .collect();
+        tables.dedup();
+        assert!(tables.contains(&"audit_log"), "{tables:?}");
+        let has =
+            |table: &str, column: &str| columns.iter().any(|(t, c)| t == table && c == column);
+        let untenanted: Vec<_> = tables.iter().filter(|t| !has(t, "tenant_id")).collect();
+        assert!(untenanted.is_empty(), "no tenant_id: {untenanted:?}");
+        for table in ["daemons", "projects", "sessions"] {
+            assert!(has(table, "owner_user_id"), "{table} has no owner_user_id");
+        }
+    }
+
+    #[test]
+    fn sqlite_tables_carry_tenant_and_owner() {
+        every_table_has_a_tenant_and_the_owned_ones_an_owner::<SqliteBackend>();
+    }
+
+    #[test]
+    fn postgres_tables_carry_tenant_and_owner() {
+        every_table_has_a_tenant_and_the_owned_ones_an_owner::<PostgresBackend>();
     }
 
     #[test]

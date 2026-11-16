@@ -13,7 +13,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
-use super::record::{DaemonRecord, TenantId};
+use super::auth::UserId;
+use super::record::{DaemonRecord, OwnerId, TenantId};
 use super::registry::Snapshot;
 use crate::protocol::routing::WireDaemonId;
 
@@ -153,6 +154,46 @@ pub trait RegistryStore: Send + Sync {
     fn remove(&self, tenant: &TenantId, id: &WireDaemonId) -> Result<bool, StoreError> {
         remove_from(self.load()?, tenant, id, |all| self.save(all))
     }
+
+    /// Hand every `unowned` record of `tenant` to `owner` (#1948, FR-007): the first owner user
+    /// adopts what existed before any user did. Returns how many records moved; a second call
+    /// moves none. Other tenants' records stay. The default loads and saves; a SQL store also
+    /// moves the tenant's projects and sessions, in one transaction.
+    fn reassign_unowned(&self, tenant: &TenantId, owner: &UserId) -> Result<u64, StoreError> {
+        let mut records = self.load()?;
+        let mut moved = 0;
+        for record in records
+            .iter_mut()
+            .filter(|r| &r.tenant == tenant && r.owner == OwnerId::Unowned)
+        {
+            record.owner = OwnerId::User(owner.clone());
+            moved += 1;
+        }
+        if moved > 0 {
+            self.save(&records)?;
+        }
+        Ok(moved)
+    }
+}
+
+/// `records`, each `unowned` one taking the owner its `(tenant, id)` has in `stored`: an upsert
+/// or a save never clears an owner (a relinked daemon is announced `unowned`).
+fn keeping_owners(stored: &[DaemonRecord], records: &[DaemonRecord]) -> Vec<DaemonRecord> {
+    records
+        .iter()
+        .map(|record| {
+            let mut record = record.clone();
+            if record.owner == OwnerId::Unowned {
+                if let Some(earlier) = stored
+                    .iter()
+                    .find(|s| s.tenant == record.tenant && s.id == record.id)
+                {
+                    record.owner = earlier.owner.clone();
+                }
+            }
+            record
+        })
+        .collect()
 }
 
 /// `records` ordered by `(tenant, id)`, the order every store loads in.
@@ -251,9 +292,11 @@ impl RegistryStore for JsonRegistryStore {
     }
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
+        // An unreadable copy has no owner to keep; the save replaces it.
+        let records = keeping_owners(&self.load().unwrap_or_default(), records);
         let stored = StoredRef {
             version: STORE_VERSION,
-            daemons: records,
+            daemons: &records,
         };
         crate::owner_only::write_with(&self.dir, REGISTRY_FILE, |file| {
             let mut out = io::BufWriter::new(file);
@@ -352,7 +395,7 @@ impl MemoryRegistryStore {
                 reason: "injected save failure".to_owned(),
             });
         }
-        *stored = records.to_vec();
+        *stored = keeping_owners(stored, records);
         self.saves.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }

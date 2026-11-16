@@ -240,3 +240,20 @@ reverting each behaviour on the green tree and running its test
   not compile). green: `db::import` (one transaction: rows, `imports` marker with the file's SHA-1,
   then rename) called from `open_store` after `db::open`; 11 passed with PostgreSQL configured.
 - refactor: `upsert_row` shared with the registry store (`pub(super)`).
+
+## M10 — Ownership columns and adoption (T055–T060)
+
+- T055/T058 `record.rs`: red: `OwnerId` and `DaemonRecord.owner` did not exist (the two new
+  record tests did not compile). green: `OwnerId::{Unowned, User}` serialised as its text, serde
+  default `unowned`; 125 core orchestrator tests pass.
+- T056/T058/T059 `store_suite.rs`: red by revert: with `db/registry.rs` back at M9 (owner bound
+  as `UNOWNED`, not read on load) `an_owner_survives_a_relink_upsert_and_a_whole_list_save` fails
+  on SQLite and PostgreSQL (`left: [("a", "unowned")] right: [("a", "alice")]`). green: the owner
+  is bound on insert only and read on load; memory and JSON keep a stored owner when an `unowned`
+  record replaces it (`keeping_owners`); `reassign_unowned` default over `load`/`save`, SQL
+  override one transaction over `daemons`, `projects`, `sessions`.
+- T057 `store_scan.rs`: every table but `_sqlx_migrations` (and SQLite's `sqlite_sequence`) has
+  `tenant_id`, the three owned ones `owner_user_id`; green on arrival (the M2/M4 schema already
+  had them), kept as the US6 scenario 1 guard.
+- T059 `store_import.rs`: an owner the file carries is kept, a missing one is `unowned`; green
+  with the insert-only bind.
