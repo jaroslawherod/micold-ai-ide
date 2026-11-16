@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1950
 - **Worktree branch**: claude/project-thread-rib1g7
 - **Started**: 2026-11-16
-- **Phase**: spec
-- **Next step**: dispatch round-1 spec review (opus, autopilot-reviewer; spec.md + checklists/requirements.md); the Agent tool was unavailable in the spec unit, so no review ran. Then clarify.
+- **Phase**: plan
+- **Next step**: plan review round 1 (opus, orchestrator dispatches; rubrics/plan.md), then tasks unit
 
 ## Pull requests
 
