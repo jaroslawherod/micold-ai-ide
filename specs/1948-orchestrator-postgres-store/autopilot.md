@@ -107,7 +107,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M10 merged (#2011, 8005293fe). Close unit found TDD-verify FAIL and cut M11 (T061–T070, tests/evidence only). Next: dispatch the M11 milestone unit in a fresh thread (set Worktree branch), then a new close unit that re-runs tdd-verify.
 
 ## Open escalation
 
