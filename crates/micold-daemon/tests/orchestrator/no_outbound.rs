@@ -40,12 +40,55 @@ const PURE_DIAL_LINES: [&str; 2] = ["pub mod dial;", "pub use dial::"];
 
 /// The SQL store (#1948) opens a database, never a daemon: its pool connecting to a SQLite file or
 /// the operator's PostgreSQL is not covered by FR-008. Only those call sites, in this directory,
-/// are blanked before the scan; anything else there that dials is still reported. `netns.rs` still
-/// proves the running orchestrator dials no daemon.
+/// are blanked before the scan, and only where the receiver is a sqlx type: a `.connect_with(`
+/// that ends a chain started by [`DATABASE_POOL_BUILDER`], and the fully qualified
+/// [`DATABASE_CONNECTION`]. Any other connect there is still reported. `netns.rs` still proves the
+/// running orchestrator dials no daemon.
 const DATABASE_DIR: &str = "crates/micold-daemon/src/orchestrator/db";
 
-/// The database pool's connect calls, and the read-only schema check's, in [`DATABASE_DIR`].
-const DATABASE_LINES: [&str; 2] = [".connect_with(", "AnyConnection::connect("];
+/// The sqlx pool builder whose chain may end in `.connect_with(`.
+const DATABASE_POOL_BUILDER: &str = "AnyPoolOptions::new()";
+
+/// The pool's connect call, allowed only on a [`DATABASE_POOL_BUILDER`] chain.
+const DATABASE_POOL_CONNECT: &str = ".connect_with(";
+
+/// The read-only schema check's single connection, by its full sqlx path.
+const DATABASE_CONNECTION: &str = "sqlx::AnyConnection::connect(";
+
+/// The expression `code[..end]` ends: back to the `;`, or the unclosed bracket, that starts it.
+fn expression_before(code: &str, end: usize) -> &str {
+    let mut depth = 0i32;
+    for (i, c) in code[..end].char_indices().rev() {
+        match c {
+            ')' | ']' | '}' => depth += 1,
+            '(' | '[' | '{' if depth == 0 => return &code[i + 1..end],
+            '(' | '[' | '{' => depth -= 1,
+            ';' if depth == 0 => return &code[i + 1..end],
+            _ => {}
+        }
+    }
+    &code[..end]
+}
+
+/// `source` (comments and strings already blanked) with the sqlx connect calls blanked.
+fn blank_database_connects(code: &str) -> String {
+    let mut out = code.replace(DATABASE_CONNECTION, &" ".repeat(DATABASE_CONNECTION.len()));
+    let mut from = 0;
+    while let Some(found) = out[from..].find(DATABASE_POOL_CONNECT) {
+        let at = from + found;
+        if expression_before(&out, at)
+            .trim_start()
+            .starts_with(DATABASE_POOL_BUILDER)
+        {
+            out.replace_range(
+                at..at + DATABASE_POOL_CONNECT.len(),
+                &" ".repeat(DATABASE_POOL_CONNECT.len()),
+            );
+        }
+        from = at + DATABASE_POOL_CONNECT.len();
+    }
+    out
+}
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -239,9 +282,7 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
             source = source.replace(line, &" ".repeat(line.len()));
         }
         if file.starts_with(root.join(DATABASE_DIR)) {
-            for line in DATABASE_LINES {
-                source = source.replace(line, &" ".repeat(line.len()));
-            }
+            source = blank_database_connects(&code_only(&source));
         }
         for (line, word) in violations(&source) {
             report.push(format!("{}:{line}: `{word}`", file.display()));
@@ -314,4 +355,20 @@ fn the_scan_catches_a_call_and_ignores_comments_strings_and_longer_words() {
         "fn disconnect() { reconnect_later(); connected(); }\n",
     );
     assert_eq!(violations(fine), []);
+}
+
+#[test]
+fn only_sqlx_connect_calls_are_blanked_in_the_database_directory() {
+    let pool = "AnyPoolOptions::new()\n    .after_connect(|c, _| { f(c); g() })\n    .connect_with(any)\n    .await;";
+    assert_eq!(violations(&blank_database_connects(pool)), []);
+    let conn = "let c = sqlx::AnyConnection::connect(&url).await;";
+    assert_eq!(violations(&blank_database_connects(conn)), []);
+
+    let other = "let s = Client::new().connect_with(addr); std::net::TcpStream::connect(a);";
+    assert_eq!(
+        violations(&blank_database_connects(other)),
+        [(1, "connect"), (1, "connect_")]
+    );
+    let after = "AnyPoolOptions::new().connect_with(a); sock.connect_with(b);";
+    assert_eq!(violations(&blank_database_connects(after)), [(1, "connect_")]);
 }
