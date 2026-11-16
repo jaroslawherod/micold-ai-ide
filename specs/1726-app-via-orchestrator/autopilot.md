@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-jwbvyd
+- **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
 - **Phase**: milestones
 - **Next step**: plan + tasks for new milestone M4 (route SSH/container/Kubernetes placements through the orchestrator, FR-007 in full; jaro chose this 2026-11-16), then M4 milestone unit, then close
