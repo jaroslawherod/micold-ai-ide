@@ -32,6 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
+| Spec | 1 | spec.md, checklists/requirements.md | bce68e6d | 5776ddfe:bce68e6d | CHANGES (F1-F4 applied; reviewer dispatched by orchestrator, units lack Agent) |
 
 ## Declined review findings
 
@@ -40,7 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec and checklist written and pushed; round-1 spec review NOT run (no Agent tool in the unit). Next: run it (snapshot via review-snapshot.sh), act on findings, then clarify. Part 2 (2026-11-16) also had no Agent tool (not in tool list or ToolSearch); review still not run. Pre-review snapshot from part 1: dd60df35...:b3f47d07. Needs a unit dispatched from a context that has Agent, or the orchestrator runs the autopilot-reviewer itself.
+Spec round 1 CHANGES applied (F1 empty input, F2 checklist re-ticked after F1, F3 layout, F4 invocation). Next: sonnet re-review (orchestrator), then clarify.
 
 ## Open escalation
 
