@@ -177,7 +177,9 @@ state, a session in `default` reports none.
   worktree; it MUST accept only `default` or an existing worktree of the same project, and refuse
   anything else without creating a worktree.
 - **FR-003**: A worktree created by the user in the app, or before this feature, MUST have no
-  parent, and no later operation MUST assign one implicitly.
+  parent, and no later operation MUST assign one implicitly. *(Amended by spec 1945: such a
+  worktree has no recorded parent, but is treated as a child of `default` for visibility and for
+  `send_parent_input`.)*
 - **FR-004**: The parent MUST be fixed when the worktree is created. Changing it after creation is
   out of scope for this feature (see Assumptions).
 - **FR-005**: The recorded parent MUST remain correct across a rename of the parent or the child,
@@ -204,7 +206,7 @@ state, a session in `default` reports none.
   input, interrupting, creating a session, renaming, deleting). A session in `default` sees and
   addresses everything, as today; it is exempt from this limit only, not from the constitution's
   ban on a Default session renaming or removing a worktree (those stay refused, test
-  `a_default_session_is_refused_rename_worktree`). An unparented worktree's session sees itself and its children.
+  `a_default_session_is_refused_rename_worktree`). An unparented worktree's session sees itself and its children. *(Amended by spec 1945: an unparented worktree is an implicit child of `default`, so its session also sees `default` and its siblings.)*
 - **FR-016**: A non-`default` caller MUST be able to name only a worktree it can see as the explicit
   `parent` of a new worktree; it cannot name `default` or a worktree outside its set.
 - **FR-017**: Communication outside a session's scope MUST go through the hierarchy: a session that

@@ -43,8 +43,8 @@ use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
-    self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
-    CreateMode,
+    self, explain_directory_taken, explain_reserved_name, BlockReason, BranchOrigin,
+    BranchSituation, CreateError, CreateMode,
 };
 use micold_core::worktree_parent::{neighbourhood, ParentChoice, ParentSide, ParentView};
 use serde_json::{json, Value};
@@ -2017,8 +2017,14 @@ async fn send_parent_input(
             .find(|s| s.id == target)
             .cloned()
             .expect("parent_session picked a session of this project");
-        // The checks `send_session_input` runs on its target (review A round 2, F4).
-        Scope::new(&project, &views, caller).session(&summary)?;
+        // The target is the caller's own parent, which its scope always holds (FR-015): the check
+        // `send_session_input` runs on its target cannot fail here.
+        debug_assert!(
+            Scope::new(&project, &views, caller)
+                .session(&summary)
+                .is_ok(),
+            "the parent's session is outside the caller's scope"
+        );
         Ok((who, project, summary, parent))
     })
     .await?;
@@ -2069,15 +2075,19 @@ fn parent_session(
                     .iter()
                     .map(|s| (s.id, s.worktree_dir.as_deref(), &s.lifecycle))
             };
-            let ai_cli = sessions().filter(|(id, ..)| modes.get(id) == Some(&TerminalMode::AiCli));
+            let is_ai_cli = |id: &SessionId| modes.get(id) == Some(&TerminalMode::AiCli);
+            let ai_cli = sessions().filter(|(id, ..)| is_ai_cli(id));
             if let Some(target) = parent_target(ai_cli, dir) {
                 return Ok((target, name));
             }
-            // A running shell is listed by neighbourhood, so say it was passed over on purpose.
-            let what = if parent_target(sessions(), dir).is_some() {
-                "no running AI CLI session (only shell sessions)"
-            } else {
+            // A running shell is listed by neighbourhood, so say it was passed over on purpose, but
+            // only when the parent has no AI CLI session at all (a stopped one is not "a shell").
+            let what = if parent_target(sessions(), dir).is_none() {
                 "no running session"
+            } else if sessions().any(|(id, d, _)| d == dir && is_ai_cli(&id)) {
+                "no running AI CLI session"
+            } else {
+                "no running AI CLI session (only shell sessions)"
             };
             Err(OpError::new(
                 ErrorCategory::Conflict,
@@ -2350,6 +2360,9 @@ fn create_failure(scope: &Scope, failure: ops::CreateFailure) -> OpError {
             ErrorCategory::Conflict,
             explain_directory_taken(&dir).to_string(),
         ),
+        ops::CreateFailure::Create(CreateError::ReservedName { dir }) => {
+            OpError::invalid_input(explain_reserved_name(&dir))
+        }
         ops::CreateFailure::Create(CreateError::RolledBack(stderr)) => {
             OpError::service_error(format!("git failed to create the worktree: {stderr}"))
         }

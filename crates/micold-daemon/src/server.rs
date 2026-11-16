@@ -24,8 +24,8 @@ use micold_core::protocol::messages::{
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
-    branch_candidates, explain_directory_taken, parse_worktrees, preflight, CreateError,
-    CreateProgressEvent,
+    branch_candidates, explain_directory_taken, explain_reserved_name, parse_worktrees, preflight,
+    CreateError, CreateProgressEvent,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -2094,10 +2094,16 @@ where
                     // operation, so the reply names both, or neither for a missing CLI.
                     let asked = tokio::time::Instant::now();
                     let created = match &session {
-                        None => ops::create_worktree(state, project, names, mode, Some(progress))
-                            .await
-                            .map(|_setup| None)
-                            .map_err(ops::WorktreeStartFailure::Create),
+                        None => ops::create_unparented_worktree(
+                            state,
+                            project,
+                            names,
+                            mode,
+                            Some(progress),
+                        )
+                        .await
+                        .map(|_setup| None)
+                        .map_err(ops::WorktreeStartFailure::Create),
                         Some(definition) => ops::create_worktree_with_session(
                             state,
                             project,
@@ -3035,6 +3041,9 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
             explain_directory_taken(&dir).to_string(),
             None,
         ),
+        CreateError::ReservedName { dir } => {
+            (ErrorKind::InvalidInput, explain_reserved_name(&dir), None)
+        }
         CreateError::RolledBack(stderr) => (
             ErrorKind::GitFailed,
             "git failed to create the worktree".into(),
@@ -3509,6 +3518,17 @@ mod create_error_tests {
         });
         assert!(message.contains("feat-login"), "{message}");
         assert!(message.contains("Choose a different name"), "{message}");
+    }
+
+    /// Spec 1945 D2: a reserved name is the caller's mistake, said in core's words.
+    #[test]
+    fn the_reserved_name_is_an_invalid_input_in_cores_own_words() {
+        let (kind, message, detail) = describe_create_error(CreateError::ReservedName {
+            dir: "default".into(),
+        });
+        assert_eq!(kind, ErrorKind::InvalidInput);
+        assert_eq!(message, explain_reserved_name("default"));
+        assert_eq!(detail, None);
     }
 }
 

@@ -132,6 +132,12 @@ created. The details are read beside the lookup, so the call waits for them at m
 after the read starts, and usually not beyond the time the worktree takes to create. A call without
 `github_issue` reads nothing more, and a refused call carries no `issue` object.
 
+The name `default` is reserved for the project folder: a worktree cannot be created under it, in any
+tool or in the app, whether it comes from the branch, a `name` or the form, whatever its capitals. The
+call is refused with `invalid_input` naming the reservation and nothing is created. A folder already
+named `default` under `.claude/worktrees/` (made by hand before this rule) is left alone, but the
+tools never treat it as a child, sibling or parent: `default` always means the project folder.
+
 A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
 branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch
 name git does not accept. Nothing is created when a request fails. When several requests race for
@@ -160,6 +166,11 @@ out otherwise). `parent_state` is `known`, or `removed` once the parent worktree
 worktree's direct children (`default` is allowed; a name that is not a worktree gives an empty
 list). The parent also decides what a session can see: see
 [Which worktrees a session can see](#which-worktrees-a-session-can-see).
+
+The link is recorded as soon as the worktree exists, before the session of a `create_worktree` call
+with `ai_cli` or `prompt` starts, so that session sees its parent from its first tool call. A worktree
+that cannot be created gets no link; one created whose link cannot be written is reported, keeps no
+session, and stays.
 
 A parent follows its worktree through a rename of either one and through a restart of the app.
 Deleting a parent, in the app or with `delete_worktree`, does not delete or change its children:
@@ -373,7 +384,8 @@ which a restart keeps). So repeated messages reach the same session while it run
 
 Nothing is typed, and the request says why, when the session runs in `default` (it has no
 parent), when the parent worktree was removed, or when no session of the parent worktree is
-running (the parent worktree is named). Everything else is as for `send_session_input`: the
+running (the parent worktree is named; it says "only shell sessions" when the parent has no AI CLI
+session at all). Everything else is as for `send_session_input`: the
 option above, the folder-trust check and the one submission apply in the same way, and at
 **Confirm each send** you are asked about the parent session by its name.
 

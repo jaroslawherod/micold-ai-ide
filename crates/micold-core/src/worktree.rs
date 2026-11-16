@@ -497,6 +497,25 @@ pub fn explain_directory_taken(dir: &Path) -> DirectoryClash {
     }
 }
 
+/// The worktree name no create accepts (spec 1945, D2): MCP tools, `neighbourhood` and the
+/// sidebar all call the project folder `default`.
+pub const RESERVED_WORKTREE_NAME: &str = "default";
+
+/// Whether `dir` is the reserved name. Case-insensitive: on a case-folding filesystem `Default`
+/// is the same folder.
+pub fn is_reserved_worktree_name(dir: &str) -> bool {
+    dir.eq_ignore_ascii_case(RESERVED_WORKTREE_NAME)
+}
+
+/// The sentence for a refused [`CreateError::ReservedName`], built here so every create path says
+/// the same thing.
+pub fn explain_reserved_name(dir: &str) -> String {
+    format!(
+        "The worktree name '{dir}' is reserved: '{RESERVED_WORKTREE_NAME}' is the name of the \
+         project folder. Choose a different name."
+    )
+}
+
 /// [`explain_directory_taken`], naming the daemon the clashing worktree runs on (feature 491,
 /// FR-016); `None` for a folder no daemon holds.
 pub fn explain_directory_taken_on(dir: &Path, daemon: Option<&str>) -> DirectoryClash {
@@ -873,6 +892,9 @@ pub enum CreateError {
     /// The branch's situation changed between the user's answer and the act, so the operation
     /// was abandoned before touching anything (feature 016, FR-009).
     SituationChanged,
+    /// The directory name is `default`, which every tool uses for the project folder (spec 1945,
+    /// D2), so no worktree may take it. Refused before anything is touched.
+    ReservedName { dir: String },
     /// Creation failed and was rolled back cleanly (FR-006b); carries the git error text.
     RolledBack(String),
 }
@@ -1123,6 +1145,11 @@ pub fn create_worktree(
     included: &[PathBuf],
     on_progress: &mut dyn FnMut(CreateProgressEvent),
 ) -> Result<Worktree, CreateError> {
+    if is_reserved_worktree_name(&names.dir_name) {
+        return Err(CreateError::ReservedName {
+            dir: names.dir_name.clone(),
+        });
+    }
     // Pre-flight (fail fast, no mutation). Re-run here rather than trusting whatever the caller
     // observed before prompting: the user's answer is separated from the act by think-time, in
     // which another terminal can create, delete, or check out the branch (feature 016, FR-009).
