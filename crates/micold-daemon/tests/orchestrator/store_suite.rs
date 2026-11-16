@@ -452,16 +452,28 @@ pub(super) fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend
     );
 }
 
-pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
-    backend: &mut impl FullBackend,
-) {
+/// A tenant with user `u1` and its refresh token `a` in family `fam`.
+fn with_refresh_token(backend: &mut impl FullBackend) -> TenantId {
     let t = tenant("default");
     let auth = backend.auth(&t);
     auth.create_user(&new_user("u1", Role::Owner)).unwrap();
     auth.put_refresh(&refresh_token("a", "u1", "fam", T + 100))
         .unwrap();
+    t
+}
+
+pub(super) fn a_refresh_token_is_refused_twice_and_for_an_unknown_user(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     refused(auth.put_refresh(&refresh_token("a", "u1", "fam", T + 100)));
     refused(auth.put_refresh(&refresh_token("z", "ghost", "fam", T + 100)));
+}
+
+pub(super) fn a_rotation_revokes_the_old_token_and_stores_the_new(backend: &mut impl FullBackend) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     refused(auth.rotate_refresh(
         &hash("unknown"),
         &refresh_token("b", "u1", "fam", T + 100),
@@ -474,7 +486,15 @@ pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
         Some(T + 1)
     );
     assert_eq!(auth.refresh(&hash("b")).unwrap().unwrap().revoked_at, None);
-    // A token of another family is untouched by the reuse below.
+}
+
+pub(super) fn a_reused_refresh_token_revokes_its_family_and_no_other(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
+    auth.rotate_refresh(&hash("a"), &refresh_token("b", "u1", "fam", T + 100), T + 1)
+        .unwrap();
     auth.put_refresh(&refresh_token("other", "u1", "fam-2", T + 100))
         .unwrap();
     // The revoked token comes back: refused, and the family it belongs to is revoked.
@@ -488,17 +508,32 @@ pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
         auth.refresh(&hash("other")).unwrap().unwrap().revoked_at,
         None
     );
-    // An expired token is refused and stays as it was.
+}
+
+pub(super) fn an_expired_refresh_token_is_refused_and_stays_as_it_was(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     refused(auth.rotate_refresh(
-        &hash("other"),
-        &refresh_token("d", "u1", "fam-2", T + 300),
+        &hash("a"),
+        &refresh_token("d", "u1", "fam", T + 300),
         T + 100,
     ));
+    assert_eq!(auth.refresh(&hash("a")).unwrap().unwrap().revoked_at, None);
+    assert_eq!(auth.refresh(&hash("d")).unwrap(), None);
+}
+
+pub(super) fn revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reopen(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     assert_eq!(auth.revoke_refresh_for(&uid("u1"), T + 3).unwrap(), 1);
     assert_eq!(auth.revoke_refresh_for(&uid("u1"), T + 4).unwrap(), 0);
     drop(auth);
     backend.reopen();
-    let after = backend.auth(&t).refresh(&hash("other")).unwrap().unwrap();
+    let after = backend.auth(&t).refresh(&hash("a")).unwrap().unwrap();
     assert_eq!(after.revoked_at, Some(T + 3));
 }
 
@@ -584,7 +619,11 @@ macro_rules! auth_tests {
             an_identity_links_to_one_user,
             an_invite_is_redeemed_once,
             the_bootstrap_code_is_consumed_once,
-            refresh_tokens_rotate_and_a_reused_one_revokes_its_family,
+            a_refresh_token_is_refused_twice_and_for_an_unknown_user,
+            a_rotation_revokes_the_old_token_and_stores_the_new,
+            a_reused_refresh_token_revokes_its_family_and_no_other,
+            an_expired_refresh_token_is_refused_and_stays_as_it_was,
+            revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reopen,
             serials_revocations_and_enrollments,
             two_tenants_on_one_backend_see_disjoint_rows
         );
