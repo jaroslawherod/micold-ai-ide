@@ -225,7 +225,7 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: `[database]` parses and checks, and the backend rule exists (US4 scenarios 1, 2, 4; FR-008, FR-009).
 
-- [ ] T039 [P] [US4] Failing tests in `crates/micold-core/src/daemon_config/tests.rs`: `[database]`
+- [x] T039 [P] [US4] Failing tests in `crates/micold-core/src/daemon_config/tests.rs`: `[database]`
   with `url_file`, `ca_file`, `pool_size` parses and `deny_unknown_fields` rejects another key;
   `pool_size` default 5, outside 1..=64 fails naming the key; `[database]` without `url_file` fails
   naming `database.url_file`; `url_file` missing, unreadable or blank after trimming fails
@@ -233,20 +233,20 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   only the scheme, never the rest of the URL; a missing `ca_file` fails `database.ca_file <path>:
   missing`; the resolved view shows `database.url_file = <path> (readable|missing|empty)`,
   `database.ca_file`, `database.pool_size`, never the URL, host or password.
-- [ ] T040 [P] [US4] Failing unit tests in `crates/micold-core/src/orchestrator/backend.rs` (new):
+- [x] T040 [P] [US4] Failing unit tests in `crates/micold-core/src/orchestrator/backend.rs` (new):
   `choose_store(Option<&DatabaseConfig>, BindScope, data_dir)` returns PostgreSQL when the table is
   present on any bind, SQLite at `<data_dir>/orchestrator/orchestrator.db` when absent and
   `LoopbackOnly`, and an error naming `database.url_file` when absent and `Network`.
-- [ ] T041 [P] [US4] `crates/micold-daemon/tests/orchestrator/store_config.rs` (new, registered): (red, before T042) a
+- [x] T041 [P] [US4] `crates/micold-daemon/tests/orchestrator/store_config.rs` (new, registered): (red, before T042) a
   `config check` run on files with and without `[database]` passes or fails as T039 states, naming
   key and path.
-- [ ] T042 [US4] `DatabaseConfig { url_file, ca_file, pool_size }` in
+- [x] T042 [US4] `DatabaseConfig { url_file, ca_file, pool_size }` in
   `crates/micold-core/src/daemon_config/mod.rs`, the checks in `files.rs`, the view in `resolved.rs`;
   T039 and T041 green.
-- [ ] T043 [US4] `backend.rs`: `BindScope`, `StoreChoice`, `choose_store`, re-exported in
+- [x] T043 [US4] `backend.rs`: `BindScope`, `StoreChoice`, `choose_store`, re-exported in
   `orchestrator/mod.rs`; `config check` calls it with `LoopbackOnly` (until #1732 adds the bind key);
   T040 green.
-- [ ] T044 [P] [US4] `docs/user-guide/daemon-configuration.md`: `[database]` rows (`url_file`,
+- [x] T044 [P] [US4] `docs/user-guide/daemon-configuration.md`: `[database]` rows (`url_file`,
   `ca_file`, `pool_size`, what a missing key does).
 
 ---

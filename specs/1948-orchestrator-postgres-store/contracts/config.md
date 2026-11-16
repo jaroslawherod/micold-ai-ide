@@ -26,7 +26,8 @@ Until #1732 adds a listener key, the bind scope the orchestrator passes is `Loop
 3. `ca_file` set but not an existing file: fails `database.ca_file <path>: missing`.
 4. `pool_size` outside 1..=64: fails naming the key.
 5. `[database]` without `url_file`: fails naming `database.url_file`.
-6. Resolved view: `database.url_file = <path> (readable|missing|empty)`, `database.ca_file = <path> (…)`, `database.pool_size = N`; no URL, host or password.
+6. D6: `choose_store` fails when there is no `[database]` table and the bind is a network address, naming `database.url_file`. `config check` asks it with `LoopbackOnly` until #1732, so it cannot fail there yet.
+7. Resolved view: `database.url_file = <path> (readable|missing|empty)`, `database.ca_file = <path> (…)`, `database.pool_size = N`; no URL, host or password.
 
 ## Errors at start
 

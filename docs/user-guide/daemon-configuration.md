@@ -243,6 +243,33 @@ daemon.toml:12:1: `[orchestrator]` needs `enrollment_token_file`, or `cert_file`
 daemon.toml:14:7: `orchestrator.url` "http://orch.example" must use the https scheme
 ```
 
+### `[database]`
+
+Where the orchestrator keeps its state (#1948). Absent, an orchestrator that listens on loopback only
+uses a SQLite file, `orchestrator/orchestrator.db` in its data directory (owner-only), and needs no
+database server. Present, it uses the PostgreSQL server the table names. Absent with a bind beyond
+loopback, the orchestrator refuses to start and `config check` fails naming `database.url_file`
+(the key that sets a bind lands with #1732).
+
+```toml
+[database]
+url_file  = "/run/secrets/orchestrator-db-url"
+ca_file   = "/run/secrets/db-ca.pem"   # optional
+pool_size = 5                           # optional, 1 to 64
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `database.url_file` | required | Secret. Absolute path to a file holding the PostgreSQL URL, password included. The URL is trimmed; its scheme must be `postgres` or `postgresql`. |
+| `database.ca_file` | none | Absolute path to the CA that signs the server's certificate, for TLS. |
+| `database.pool_size` | `5` | Connections the orchestrator keeps open, 1 to 64. |
+
+`config check` shows `database.url_file = <path> (readable, 0600)` (or `missing`, `empty`),
+`database.ca_file` and `database.pool_size`, never the URL, host or password. With `--files` a
+missing, unreadable or blank `url_file`, a `url_file` with another scheme (the message names only the
+scheme) and a missing `ca_file` are errors naming the key and the path; a `url_file` readable by
+others is a warning on a host or SSH daemon and an error in a container or pod.
+
 ### `[orchestrator_link]`
 
 Makes this daemon dial the orchestrator (#1725), so the orchestrator lists it `online`. Independent
