@@ -69,8 +69,18 @@ impl Starter {
     }
 }
 
-/// The routes of one connection, by `(target, conn)`.
-type Routes = Arc<Mutex<HashMap<(WireDaemonId, u64), mpsc::Sender<Bytes>>>>;
+/// The routes of one connection, by `(target, conn)`; `None` once the connection has ended, so
+/// no route can be added to a dead link.
+type Routes = Arc<Mutex<Option<HashMap<(WireDaemonId, u64), mpsc::Sender<Bytes>>>>>;
+
+/// Remove one route, if the link is still live.
+fn remove_route(routes: &Routes, key: &(WireDaemonId, u64)) -> bool {
+    routes
+        .lock()
+        .expect("routes lock")
+        .as_mut()
+        .is_some_and(|map| map.remove(key).is_some())
+}
 
 /// What a route hands the connection: an inner frame, or empty for "this conn ends".
 struct Outbound {
@@ -121,12 +131,23 @@ impl OrchestratorConn {
     /// The returned transport is what a daemon socket would be: the caller sends `Hello` on it.
     pub async fn open(&self, target: &WireDaemonId) -> io::Result<Transport> {
         let mut guard = self.link.lock().await;
-        if guard.as_ref().is_none_or(|l| l.outbound.is_closed()) {
-            *guard = Some(self.connect().await?);
-        }
-        let link = guard.as_ref().expect("connected above");
         let conn = self.next_conn.fetch_add(1, Ordering::SeqCst);
-        Ok(Transport::Routed(open_route(link, target.clone(), conn)))
+        // A link can end between the check and the insert; the insert itself refuses a dead
+        // link, and then one fresh connection is tried.
+        for _ in 0..2 {
+            if guard.as_ref().is_none_or(|l| l.outbound.is_closed()) {
+                *guard = Some(self.connect().await?);
+            }
+            let link = guard.as_ref().expect("connected above");
+            if let Some(io) = open_route(link, target.clone(), conn) {
+                return Ok(Transport::Routed(io));
+            }
+            *guard = None;
+        }
+        Err(io::Error::new(
+            io::ErrorKind::NotConnected,
+            "the orchestrator connection ended while opening a route",
+        ))
     }
 
     async fn connect(&self) -> io::Result<Link> {
@@ -142,7 +163,7 @@ impl OrchestratorConn {
         .await?;
         self.connections.fetch_add(1, Ordering::SeqCst);
         let (outbound, outbound_rx) = mpsc::channel(QUEUE);
-        let routes: Routes = Arc::default();
+        let routes: Routes = Arc::new(Mutex::new(Some(HashMap::new())));
         tokio::spawn(run_link(framed, outbound_rx, Arc::clone(&routes)));
         Ok(Link { outbound, routes })
     }
@@ -181,14 +202,16 @@ async fn introduce(endpoint: &Endpoint) -> io::Result<Option<Framed>> {
     }
 }
 
-/// Register `(target, conn)` and return the actor's end of its pipe.
-fn open_route(link: &Link, target: WireDaemonId, conn: u64) -> tokio::io::DuplexStream {
+/// Register `(target, conn)` and return the actor's end of its pipe; `None` when the link has
+/// already ended.
+fn open_route(link: &Link, target: WireDaemonId, conn: u64) -> Option<tokio::io::DuplexStream> {
     let (actor_io, route_io) = tokio::io::duplex(PIPE_BYTES);
     let (read_half, mut write_half) = tokio::io::split(route_io);
     let (inbound, mut inbound_rx) = mpsc::channel::<Bytes>(QUEUE);
     link.routes
         .lock()
         .expect("routes lock")
+        .as_mut()?
         .insert((target.clone(), conn), inbound);
 
     // Frames from the orchestrator into the pipe. Ends when the route is removed, then shuts the
@@ -216,15 +239,12 @@ fn open_route(link: &Link, target: WireDaemonId, conn: u64) -> tokio::io::Duplex
                 inner: frame.freeze(),
             };
             if outbound.send(out).await.is_err() {
+                // The link is gone: drop the route so the actor reads the end and reconnects.
+                remove_route(&routes, &(target, conn));
                 return;
             }
         }
-        if routes
-            .lock()
-            .expect("routes lock")
-            .remove(&(target.clone(), conn))
-            .is_some()
-        {
+        if remove_route(&routes, &(target.clone(), conn)) {
             let _ = outbound
                 .send(Outbound {
                     target,
@@ -234,7 +254,7 @@ fn open_route(link: &Link, target: WireDaemonId, conn: u64) -> tokio::io::Duplex
                 .await;
         }
     });
-    actor_io
+    Some(actor_io)
 }
 
 /// The `req` header of an inner frame: set for a control message that carries one.
@@ -312,15 +332,21 @@ async fn run_link(framed: Framed, mut outbound: mpsc::Receiver<Outbound>, routes
             frame = stream.next() => {
                 let Some(Ok(frame)) = frame else { break };
                 let (Some(key), what) = delivery(&frame) else { continue };
-                let route = routes.lock().expect("routes lock").get(&key).cloned();
+                let route = routes
+                    .lock()
+                    .expect("routes lock")
+                    .as_ref()
+                    .and_then(|map| map.get(&key).cloned());
                 match (what, route) {
+                    // Never wait on one actor: a full queue ends that route alone, and its
+                    // actor reconnects and re-reads.
                     (Delivery::Frame(inner), Some(route)) => {
-                        if route.send(inner).await.is_err() {
-                            routes.lock().expect("routes lock").remove(&key);
+                        if route.try_send(inner).is_err() {
+                            remove_route(&routes, &key);
                         }
                     }
                     (Delivery::End, _) => {
-                        routes.lock().expect("routes lock").remove(&key);
+                        remove_route(&routes, &key);
                     }
                     _ => {}
                 }
@@ -328,8 +354,10 @@ async fn run_link(framed: Framed, mut outbound: mpsc::Receiver<Outbound>, routes
         }
     }
     // Dropping every route's sender shuts its pipe: each actor reads the end and reconnects.
-    routes.lock().expect("routes lock").clear();
+    // Close first, then mark the table dead under its lock: `open` either sees the closed link or
+    // fails to insert, never leaves a route on a dead link.
     outbound.close();
+    routes.lock().expect("routes lock").take();
 }
 
 static SHARED: OnceLock<OrchestratorConn> = OnceLock::new();
