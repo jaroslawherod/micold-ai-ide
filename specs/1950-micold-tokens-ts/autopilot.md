@@ -17,6 +17,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1995 | design (draft) | open | — |
 
 ## Milestones
 
@@ -44,6 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| #1995 | design (draft) | open | — |
 
 ## Handover
 
