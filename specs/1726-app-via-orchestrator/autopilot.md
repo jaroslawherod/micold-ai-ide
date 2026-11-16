@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-gq91k7
+- **Worktree branch**: claude/project-thread-35d9jf
 - **Started**: 2026-11-16
 - **Phase**: milestones
 - **Next step**: M2 (fresh thread, `/speckit-autopilot resume`)
