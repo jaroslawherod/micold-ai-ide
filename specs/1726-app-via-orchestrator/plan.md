@@ -46,9 +46,7 @@ integration tests that spawn a real orchestrator and real daemons
 (`crates/micold-daemon/tests/orchestrator_route/`), one headless client test for the single
 connection and the start (`crates/micold-client/tests/`).
 
-**Target Platform**: orchestrator and daemons on Linux (and macOS for the local pair); the app on
-Linux, macOS, Windows (orchestrator endpoint is a named pipe on Windows via the existing
-`endpoint::orchestrator_endpoint`).
+**Target Platform**: Linux only (#1897): orchestrator, daemons and the app.
 
 **Project Type**: Rust workspace: core library, daemon/orchestrator binary, iced desktop client.
 
@@ -78,8 +76,8 @@ SC-004: orchestrator running and connected within 5 s of app start.
 - [~] **V. TS + RN client**: the change touches the iced client, which the constitution marks for
   retirement. Justified in Complexity Tracking: kept to the transport seam; the contract is
   client-neutral for the RN client.
-- [x] **VI. Linux daemons, web reach**: daemons/orchestrator Linux; endpoint abstraction covers
-  macOS/Windows for the app; no browser code. PASS.
+- [x] **VI. Linux daemons, web reach**: daemons/orchestrator Linux; Linux only (#1897); no browser
+  code. PASS.
 - [x] **VII. Docs**: `docs/` user guide gains "the app connects through the orchestrator" and the
   troubleshooting of an orchestrator that cannot start (US3 scenario 4); contract under
   `specs/orchestrator/contracts/`. PASS.
@@ -149,7 +147,7 @@ Research R7 has the route per placement and the alternatives.
 - **Route (all three placements, R7)**: the existing #1725 reverse forward. Containers and pods are
   already reached over SSH with a pinned reach (`container_options`, the pod's relay on
   `127.0.0.1:<port>`), and all three `ProvisionOptions` already carry `link: orchestrator_link()`,
-  so every provisioned daemon on a Unix client already dials the orchestrator through `-R`. No new
+  so every provisioned daemon already dials the orchestrator through `-R`. No new
   transport, no dial-out to a TCP address, no new kube port-forward.
 - **What changes**: the bridge (`micold-daemon remote bridge`) is today both the holder of the
   `-R` and the actor's daemon client connection. Provisioning keeps it as is up to the handshake
@@ -166,15 +164,12 @@ Research R7 has the route per placement and the alternatives.
 - **Failure**: a refused link (`LinkRefusal`, e.g. a user's `ssh_config` forward) or a passed
   deadline fails the connect with the cause in the daemon's status cell; no fallback to the direct
   bridge (FR-007).
-- **Windows clients**: `orchestrator_link()` is `None` there (a named pipe cannot be the local end
-  of `-R`, #1725), so no provisioned daemon can reach the orchestrator. Those actors keep the
-  direct bridge, as today, rather than losing every remote daemon (Principle VI); the user guide
-  names the limit. This is the one exception to FR-007, recorded as ledger decision 5.
 - **Code**: `crates/micold-core/src/ssh/argv.rs` (`hold_link` argv, shares `bridge_with_link`'s
   prefix), `crates/micold-core/src/provision/mod.rs` (`hold_link` step: admit the link, open the
   holder, read `ready` or the `remote port forwarding failed` line, reusing `admit_link` and
   `FORWARD_NOT_BOUND`), `crates/micold-daemon/src/remote.rs` (`hold-link`),
-  `crates/micold-client/src/daemon.rs` (one `routed_to(wire_id)` helper generalising
+  `crates/micold-client/src/daemon.rs` (`orchestrator_link()` made unconditional: no `cfg!(unix)`,
+  returns a `LinkRequest`, Windows wording dropped, #1897; one `routed_to(wire_id)` helper generalising
   `host_routed`; the SSH, container and pod connect paths call it after provisioning).
 - **Tests**: core unit tests with the fake `SshHost` (holder argv carries the `-R` and
   `ExitOnForwardFailure`, never a bridge; not-bound refusal); a daemon test for `remote hold-link`

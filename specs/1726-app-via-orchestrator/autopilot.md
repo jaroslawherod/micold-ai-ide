@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify | Who writes `[orchestrator_link]` into provisioned daemons | this feature, the app on provision (FR-013) | agent | specs/1725-daemons-dial-orchestrator/spec.md#Assumptions |
 | 3 | tasks | M1 has no observable user story (milestones rule 1) | superseded by #4: contract+core merged into the US2 milestone | agent | tasks review r1 F1 |
 | 4 | tasks | Milestones bundling two stories (rule 2) | keep combined, reasons in each milestone's Note (US4 halves and US5 have no code of their own) | agent | tasks review r1 F4 |
-| 5 | plan (M4) | Provisioned daemons on a Windows client (no `-R` for a named pipe) | keep the direct bridge there; user guide names the limit | agent | research R7, spec Clarifications (Principle VI) |
+| 5 | plan (M4) | Provisioned daemons on non-Linux clients | Linux only, #1897: no exception, FR-007 holds for every placement | user (plan r1 F1) | #1897 |
 
 ## Review rounds
 
@@ -58,7 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M3) | 1 | M3 | 0deffa8b600c9fccf833c546c3a4af79d9ddd400 | 1a054e45102f489bfff8d934d5a83c5d148f659d:0deffa8b600c9fccf833c546c3a4af79d9ddd400 | CHANGES fixed: A F1 (dead-link route: close before marking table dead, insert refused under lock, writer drops route on send failure), A F2 (try_send, full queue ends that route), B F2 (T021 run + drift entry), B F3, B F4 (tdd/cycle-log.md); B F1 to user, in Follow-ups |
 | code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
 | code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
-| plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | pending (orchestrator dispatches) |
+| plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | CHANGES (1 MAJOR Windows exception removed, Linux only #1897; 3 MINOR fixed: platform wording, orchestrator_link unconditional, drift-M3 correction) |
 
 ## Declined review findings
 

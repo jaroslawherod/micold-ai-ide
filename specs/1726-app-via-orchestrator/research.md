@@ -141,6 +141,4 @@ admitted `-R`) and route the actor by wire id on the app's orchestrator connecti
   options and a host path the sandbox otherwise hides; pods cannot use it.
 - *A second kube port-forward for the link*: a port-forward is client-to-pod; the daemon needs
   pod-to-client, which is what `-R` over the existing relay gives.
-- *Windows clients*: a named pipe cannot be the local end of `-R`, so there is no route at all;
-  failing every provisioned daemon there was rejected (Principle VI). They keep the direct bridge
-  (plan, *Amendment*, Windows clients).
+Platform: Linux only (#1897), so FR-007 holds for every placement with no exception.
