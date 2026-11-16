@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A (opus) | 1 | M1 | dc3f3cd2b7fdc41559cc2aea0866aaea888545ba | - | CLEAN minors F1 (ci.yml client condition) and F2 (lcov SF paths) both fixed in 9b64585a458f441d7632f65b0f6a7c3532f1d467 |
 | Review B (conformance) | 1 | M1 | dc3f3cd2b7fdc41559cc2aea0866aaea888545ba | - | CHANGES F1 major (plan drift, drift-M1.md written, plan-drift.sh clean), F2 minor (lcov normalisation noted); fixed in 9b64585a458f441d7632f65b0f6a7c3532f1d467 |
 | Review A+B fix diff | 2 | M1 | 9b64585a458f441d7632f65b0f6a7c3532f1d467 | - | CLEAN (merged in #2013) |
+| Review A (code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | pending (orchestrator dispatches) |
+| Review B (conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
@@ -77,4 +79,5 @@ None.
 
 - M1 spike gaps (spike.md): FlatList never unmounts rendered rows (#1736 evaluates FlashList); select-all over a virtualized transcript needs a copy action (#1736); the diff is an unvirtualized ScrollView (diff view issue, M6 of #1722); only Chromium measured.
 - T020 wording is for the web client only; the desktop `appearance-theming.md` sections are untouched.
+- M2 local gate: `scripts/gate.sh` passed fmt and clippy, then stopped at `cargo nextest` (not installed in the cloud container; installing it was refused). No Rust changed; the client suites (`bundle-check`, `client-pins`, `classify-change`, `diff-coverage`, `tokens-ts-drift`) pass by hand, Jest 117/117, lint and typechecks clean. The full gate is left to CI.
 - #1732 and #1733 not built: the mock must be swapped for the real client and generated types (constitution V) in a follow-up once they land.
