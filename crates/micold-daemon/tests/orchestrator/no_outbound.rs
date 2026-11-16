@@ -44,8 +44,8 @@ const PURE_DIAL_LINES: [&str; 2] = ["pub mod dial;", "pub use dial::"];
 /// proves the running orchestrator dials no daemon.
 const DATABASE_DIR: &str = "crates/micold-daemon/src/orchestrator/db";
 
-/// The database pool's connect calls in [`DATABASE_DIR`].
-const DATABASE_LINES: [&str; 1] = [".connect_with("];
+/// The database pool's connect calls, and the read-only schema check's, in [`DATABASE_DIR`].
+const DATABASE_LINES: [&str; 2] = [".connect_with(", "AnyConnection::connect("];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
