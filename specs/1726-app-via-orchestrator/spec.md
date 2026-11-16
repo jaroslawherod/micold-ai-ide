@@ -38,7 +38,11 @@ kept as small as the goal allows.
 
 ## Clarifications
 
-_None yet; open points are marked `[NEEDS CLARIFICATION]` for the clarify unit._
+### Session 2026-11-16
+
+- Q: What is the per-daemon list deadline (FR-002)? → A: 2 s per daemon, daemons asked in parallel, so a list answers within about 2 s however many daemons hang; a daemon past it is named `timeout`. It fits inside SC-004's 5 s start budget. _(agent-resolved: specs/1726-app-via-orchestrator/spec.md#SC-004)_
+- Q: Does this feature write `[orchestrator_link] enabled = true` into the daemons the app provisions, or #1957? → A: This feature: the app, which provisions today, writes it when it provisions or updates a daemon (FR-013); #1957 moves that writer into the orchestrator with provisioning. _(agent-resolved: specs/1725-daemons-dial-orchestrator/spec.md#Assumptions)_
+- Spec review round 1 minors applied: stream end `daemon offline` and re-attach got FR-012 and US2 scenario 5; FR-006 scoped to the daemon link drop (a client drop is covered by FR-009); SC-003 measurement parameters stated.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -92,6 +96,10 @@ daemon linked; they pass unchanged (SC-002).
    **Then** it is refused `not_found`, as a missing target is today.
 4. **Given** two clients attached to one session, **When** one takes over, **Then** both see the
    takeover as they do with a direct connection.
+5. **Given** a client attached to a session's stream, **When** that daemon's link drops, **Then**
+   the client is told the stream ended with reason `daemon offline`; **When** the daemon links again,
+   **Then** the client re-attaches (asked by the app) and receives the stream from the daemon's
+   current state.
 
 ---
 
@@ -159,8 +167,9 @@ directly and through a local orchestrator; the difference is within SC-003.
 
 1. **Given** a local orchestrator and a linked daemon, **When** 1,000 requests are timed through it
    and directly, **Then** the p95 difference is at most 5 ms.
-2. **Given** a terminal producing output, **When** delivery is timed through the orchestrator,
-   **Then** it adds at most one frame (16 ms) to the time a chunk reaches the client.
+2. **Given** a terminal producing 4 KiB chunks at 100 chunks/s, **When** 1,000 chunks are timed from
+   the daemon writing them to the client receiving them, through the orchestrator and directly,
+   **Then** the p95 difference is at most one frame (16 ms).
 
 ### Edge Cases
 
@@ -188,7 +197,7 @@ directly and through a local orchestrator; the difference is within SC-003.
   ref, and MUST name every daemon it did not get an answer from with a reason (`offline`,
   `needs-update`, `timeout`, `error`). (Orchestrator FR-005)
 - **FR-002**: The orchestrator MUST answer a list within a deadline even when a daemon does not
-  answer; the deadline is [NEEDS CLARIFICATION: list deadline per daemon, default proposed 2 s].
+  answer; the deadline is 2 s per daemon, daemons asked in parallel; a daemon past it is named `timeout`.
 - **FR-003**: The orchestrator MUST route every non-list request to the daemon named by its
   daemon-qualified ref and the answer back to the requesting client only, over the daemon's link
   (`RoutedEnvelope`). (Orchestrator FR-006)
@@ -198,8 +207,9 @@ directly and through a local orchestrator; the difference is within SC-003.
   stream does not delay others.
 - **FR-005**: A request whose ref names an unknown daemon or target MUST be refused `not_found`; one
   naming a `needs-update` or offline daemon MUST be refused with that reason.
-- **FR-006**: A request in flight when the daemon's link or the client's connection drops MUST be
-  answered with outcome `unknown`; the orchestrator MUST NOT retry it.
+- **FR-006**: A request in flight when the owning daemon's link drops MUST be answered to its client
+  with outcome `unknown`; the orchestrator MUST NOT retry it. (A drop of the client's own connection
+  leaves nobody to answer; the client re-reads after reconnect, FR-009.)
 - **FR-007**: The desktop app MUST open exactly one client connection, to the orchestrator, and no
   client connection to a daemon. It keeps the SSH connections it holds for provisioning and the
   reverse forward (#1725). (Orchestrator FR-007)
@@ -211,6 +221,11 @@ directly and through a local orchestrator; the difference is within SC-003.
   daemons' state; it MUST treat an `unknown` outcome by re-reading the target. (Orchestrator FR-010)
 - **FR-010**: While the orchestrator is down, daemons MUST keep every session running (already true
   from #1725; this feature MUST NOT regress it).
+- **FR-012**: When a daemon's link drops, the orchestrator MUST end every client subscription to that
+  daemon's streams with reason `daemon offline`; when the daemon links again, the app MUST re-attach
+  the streams it still shows, and the stream resumes from the daemon's current state.
+- **FR-013**: When the app provisions or updates a daemon, it MUST write `[orchestrator_link]
+  enabled = true` into that daemon's config, so the daemon dials the orchestrator.
 - **FR-011**: The orchestrator's client protocol for lists and routed traffic MUST be specified in a
   contract under `specs/orchestrator/contracts/`, so the web client (#1732, #1735) uses the same one.
 
@@ -229,7 +244,7 @@ directly and through a local orchestrator; the difference is within SC-003.
 - **SC-002**: The existing client acceptance suites pass with the client connected through the
   orchestrator.
 - **SC-003**: Routing through a local orchestrator adds at most 5 ms (p95) to a request and at most
-  one frame (16 ms) to terminal output.
+  one frame (16 ms) to terminal output (p95 over 1,000 4 KiB chunks at 100 chunks/s).
 - **SC-004**: With no orchestrator running, the app has a running orchestrator and one connection to
   it within 5 s of start; two concurrent starts leave exactly one orchestrator.
 - **SC-005**: Killing the orchestrator ends no session; after it is back, the app's lists match the
@@ -248,10 +263,8 @@ directly and through a local orchestrator; the difference is within SC-003.
 - Desktop-side changes are limited to where the app opens its connection and handles the
   aggregated answer, the `unknown` outcome and reconnect; views are unchanged.
 - Which daemons the app manages (provisions, holds SSH connections to) stays as today; how a
-  provisioned daemon gets `[orchestrator_link] enabled = true` written to its config is
-  [NEEDS CLARIFICATION: does this feature write `[orchestrator_link]` into the daemons the app
-  provisions, or does #1957 do it? Proposed: this feature, since otherwise remote daemons are not
-  reachable once the app talks only to the orchestrator].
+  provisioned daemon gets `[orchestrator_link] enabled = true` written to its config: this feature,
+  by the app when it provisions (FR-013); #1957 moves it into the orchestrator.
 
 ## Out of Scope
 

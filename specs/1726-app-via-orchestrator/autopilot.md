@@ -10,7 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-v4iabl
 - **Started**: 2026-11-16
-- **Phase**: clari- **Next step**: plan (clarify done, 1 round, all agent-resolved)er)
+- **Phase**: clarify
+- **Next step**: plan (clarify done, 1 round, all agent-resolved)
 
 ## Pull requests
 
@@ -24,10 +25,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- FR-002 list deadline 2 s per daemon, parallel (agent-resolved).
-- This feature writes `[orchestrator_link]` into app-provisioned daemons, FR-013 (agent-resolved: 1725 spec Assumptions).
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | FR-002 per-daemon list deadline | 2 s, daemons asked in parallel | agent | SC-004 budget |
+| 2 | clarify | Who writes `[orchestrator_link]` into provisioned daemons | this feature, the app on provision (FR-013) | agent | specs/1725-daemons-dial-orchestrator/spec.md#Assumptions |
 
 ## Review rounds
 
