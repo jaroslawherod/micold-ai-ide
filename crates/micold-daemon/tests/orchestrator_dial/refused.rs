@@ -14,28 +14,17 @@ use micold_core::orchestrator::{LinkStatus, LinkVerdict, RefuseReason};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
 use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::ssh::reconnect::MAX_DELAY;
-use micold_daemon::orchestrator_link::{announcement, spawn, spawn_as, LinkHandle};
+use micold_daemon::orchestrator_link::{announcement, spawn, spawn_as};
 use tokio::time::Instant;
 
-use crate::support::{
-    announcement as peer_announcement, record_when, within, FakeDaemon, Orchestrator,
-};
-use crate::{link_to, Captured, FakeOrchestrator, Incoming};
+use crate::support::{announcement as peer_announcement, record_when, FakeDaemon, Orchestrator};
+use crate::{link_to, status_is, Captured, FakeOrchestrator, Incoming};
 
 /// SC-004's run.
 const RUN: Duration = Duration::from_secs(60);
 
 /// Slack for the dial itself on a paused clock.
 const SLACK: Duration = Duration::from_millis(50);
-
-async fn status_is(handle: &LinkHandle, want: LinkStatus) {
-    within("the status settles", async {
-        while handle.status() != want {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
-    .await;
-}
 
 fn refusal(reason: RefuseReason) -> LinkVerdict {
     LinkVerdict::Refused {

@@ -1120,13 +1120,20 @@ async fn a_running_session_outside_the_scope_is_never_reached() {
 
 /// A sandbox whose caller's parent is `b`, holding one running plain shell, first in the catalog.
 async fn with_a_running_shell_in_the_parent() -> Sandbox {
-    let s = Sandbox::with(vec![session(
+    with_a_running_shell_in_the_parent_beside(Vec::new()).await
+}
+
+/// [`with_a_running_shell_in_the_parent`], with `beside` sessions added after the shell.
+async fn with_a_running_shell_in_the_parent_beside(
+    beside: Vec<micold_core::session::Session>,
+) -> Sandbox {
+    let shell = session(
         sid(SHELL),
         Some("b"),
         TerminalMode::Regular,
         AiCli::ClaudeCode,
-    )])
-    .await;
+    );
+    let s = Sandbox::with([shell].into_iter().chain(beside).collect()).await;
     s.link_caller_to("b");
     s.child_ok("start_session", json!({"session": reference(sid(SHELL))}))
         .await;
@@ -1195,5 +1202,26 @@ async fn a_parent_running_only_a_shell_is_refused_as_having_no_ai_cli_session() 
             && message.contains("no running AI CLI session (only shell sessions)"),
         "{error}"
     );
+    assert_eq!(s.shown(sid(SHELL)), 0, "{:?}", s.screen(sid(SHELL)));
+}
+
+/// Review A round 3 (a): a parent whose AI CLI session exists but is not running, beside a running
+/// shell, is not "only shell sessions": the refusal says no AI CLI session is running.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_parent_with_a_stopped_ai_cli_session_is_not_described_as_only_shells() {
+    let _guard = ENV.lock().await;
+    let stopped = session(
+        sid(SHELL + 1),
+        Some("b"),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    );
+    let s = with_a_running_shell_in_the_parent_beside(vec![stopped]).await;
+
+    let error = s.child_err("send_parent_input", to_parent()).await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("no running AI CLI session"), "{error}");
+    assert!(!message.contains("only shell sessions"), "{error}");
     assert_eq!(s.shown(sid(SHELL)), 0, "{:?}", s.screen(sid(SHELL)));
 }

@@ -18,7 +18,8 @@ use micold_core::runs::store::RunsFile;
 use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus, RunStep, MAX_RUNS, MIN_RUNS};
 use micold_core::session::{AiCli, SessionId};
 use micold_core::worktree::{
-    explain_directory_taken, remove_worktree, remove_worktree_dir, CreateError, CreateMode,
+    explain_directory_taken, explain_reserved_name, remove_worktree, remove_worktree_dir,
+    CreateError, CreateMode,
 };
 
 use crate::catalog::Catalog;
@@ -440,7 +441,8 @@ async fn run_one(
     };
     let mode = CreateMode::NewBranchAt { start: base_commit };
     if let Err(failure) =
-        ops::create_worktree(&state, project.clone(), run.names.clone(), mode, None).await
+        ops::create_unparented_worktree(&state, project.clone(), run.names.clone(), mode, None)
+            .await
     {
         let reason = worktree_reason(failure, &run.names.branch);
         set(
@@ -532,6 +534,7 @@ fn worktree_reason(failure: ops::CreateFailure, branch: &str) -> String {
             // A run's branch is always new: one that exists already is left as it is.
             CreateError::SituationChanged => format!("the branch {branch} already exists"),
             CreateError::DuplicateDir { dir } => explain_directory_taken(&dir).to_string(),
+            CreateError::ReservedName { dir } => explain_reserved_name(&dir),
             CreateError::RolledBack(stderr) => {
                 format!("git failed to create the worktree: {}", stderr.trim())
             }
@@ -542,6 +545,17 @@ fn worktree_reason(failure: ops::CreateFailure, branch: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_runs_reserved_worktree_name_is_explained_as_the_create_does() {
+        let failure = ops::CreateFailure::Create(CreateError::ReservedName {
+            dir: "default".into(),
+        });
+        assert_eq!(
+            worktree_reason(failure, "default"),
+            explain_reserved_name("default")
+        );
+    }
     use micold_core::naming::{ConventionalType, DerivedNames};
     use micold_core::settings::JsonFileSettingsStore;
     use micold_core::store::JsonFileStore;

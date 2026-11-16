@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: Draft
+**Status**: Closed 2026-11-15 — shipped in PRs #1848, #1905, #1913, #1946, #1968, #1972, #1977
 
 **Input**: GitHub issue #1786 "feat: sidebar: let the user create groups". Labels: enhancement,
 flow:feature. Related: #1718 (`specs/1718-sidebar-stable-order`), which removed grouping by state.

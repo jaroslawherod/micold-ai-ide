@@ -751,3 +751,42 @@ fn the_one_line_form_of_a_directory_clash_carries_both_halves() {
         "one line is the two parts joined, never a third wording of them"
     );
 }
+
+#[test]
+fn a_worktree_named_default_is_refused_before_anything_is_touched() {
+    // Spec 1945 D2: `default` names the project folder in every tool, so no worktree may take it.
+    for dir in ["default", "Default"] {
+        let git = FakeGit::new().with_repo("/repo");
+        let names = micold_core::naming::DerivedNames {
+            dir_name: dir.to_string(),
+            branch: "default".to_string(),
+        };
+
+        let err = micold_core::worktree::create_worktree(
+            &git,
+            &repo(),
+            &repo().join(".claude/worktrees").join(dir),
+            &names,
+            false,
+            &CreateMode::NewBranch,
+            &[],
+            &mut |_| {},
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err,
+            CreateError::ReservedName {
+                dir: dir.to_string()
+            }
+        );
+        assert!(git.worktrees(&repo()).is_empty());
+    }
+}
+
+#[test]
+fn the_reserved_name_is_explained_in_one_sentence_naming_the_reservation() {
+    let said = micold_core::worktree::explain_reserved_name("default");
+    assert!(said.contains("'default' is reserved"), "{said}");
+    assert!(said.contains("project folder"), "{said}");
+}

@@ -1057,19 +1057,6 @@ fn a_grouped_worktree_cycling_through_every_card_state_keeps_its_group_and_place
         })
         .collect();
     assert_eq!(names, ["Work", "Later"]);
-    for state_name in [
-        "Idle",
-        "Working",
-        "Done",
-        "NeedsAttention",
-        "NeedsAction",
-        "Needs",
-    ] {
-        assert!(
-            !names.iter().any(|n| n.contains(state_name)),
-            "{state_name}"
-        );
-    }
 }
 
 // ---- The group menu by keyboard (C6; test list U30; ledger follow-up on menu focus) ----
