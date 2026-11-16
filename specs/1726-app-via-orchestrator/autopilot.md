@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-35d9jf
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M2 reviews (A+B) on the snapshot below, then open the M2 PR with specs/1726-app-via-orchestrator/pr-m2.md
+- **Next step**: M3 (fresh thread, `/speckit-autopilot resume`)
 - **PR**: none
 
 ## Pull requests
@@ -58,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 
 ## Handover
+
+M2 merged (#2004, 5ee726f07) 2026-11-16. Next: M3 in a fresh thread from main; take this ledger from branch claude/project-thread-35d9jf. Warning: running scripts/tests/*.test.sh outside gate.sh resets the branch.
 
 None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tests/*.test.sh run outside gate.sh reset this worktree's branch and cleaned untracked files once; never run them bare here.)
 
