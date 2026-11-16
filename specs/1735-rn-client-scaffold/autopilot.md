@@ -71,7 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | CLEAN (merged in #2015) |
 | Review A (opus, code-review high) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CHANGES (F1-F2 major, F3-F6 minor), all fixed in acc4180b1 |
 | Review B (sonnet, conformance) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CLEAN with minors F1-F3: F1 with A F6, F2 research R13 reworded, F3 stale tests shown to fail with `isStale` stubbed (cycle-log) |
-| Review A+B fix diff | 2 | M3 b3028a1a9..acc4180b1 | acc4180b108d139c82e52966ce36e7ee221c86d1 | b3028a1a9:acc4180b108d139c82e52966ce36e7ee221c86d1 | pending (orchestrator, sonnet) |
+| Review A+B fix diff | 2 | M3 b3028a1a9..acc4180b1 | acc4180b108d139c82e52966ce36e7ee221c86d1 | b3028a1a9:acc4180b108d139c82e52966ce36e7ee221c86d1 | CLEAN (sonnet re-review; minor groupBy O(n²) noted, not blocking) |
 
 ## Declined review findings
 
