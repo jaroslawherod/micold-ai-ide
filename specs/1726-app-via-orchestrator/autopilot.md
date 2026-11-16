@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jwbvyd
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M3 round-2 reviews A+B on the snapshot (orchestrator dispatches), then PR from specs/1726-app-via-orchestrator/pr-m3.md
+- **Next step**: plan + tasks for new milestone M4 (route SSH/container/Kubernetes placements through the orchestrator, FR-007 in full; jaro chose this 2026-11-16), then M4 milestone unit, then close
 - **PR**: none
 
 ## Pull requests
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1996 | design | merged | 9f6e6784d |
 | #1999 | M1 | merged | 2f62cbf31 |
 | #2004 | M2 | merged | 5ee726f07 |
+| #2007 | M3 | merged | f6aa5b806 |
 | #2007 | M3 | open; CI red round 1 fixed (flaky stand-in race in micold-daemon ai_cli_config test) | |
 
 ## Milestones
@@ -64,7 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tests/*.test.sh run outside gate.sh reset this worktree's branch and cleaned untracked files once; never run them bare here.)
+M3 merged #2007 (f6aa5b806), host daemon only. jaro chose (decision card 2026-11-16) to route SSH, container and Kubernetes placements through the orchestrator too, as a new milestone M4 before close. drift-M3.md records why they were left direct (container/pod daemons have no route to the local orchestrator socket): M4 needs a plan amendment (dial-out or forwarded socket per placement) and tasks, then implementation. Cloud: scripts/tests/*.test.sh only via gate.sh; no cargo-nextest locally.
 
 ## Open escalation
 
