@@ -50,7 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec, plan, tasks CLEAN. speckit-analyze: 0 CRITICAL, 1 HIGH fixed (tokens_ts_bin wired as mod of tests/main.rs), MEDIUM spacing added to FR-003. Specs-only gate (check-criteria-observables) passed. Design PR opened (see Pull requests). Next: after merge, milestone M1.
+M1 implemented and committed locally (T001-T009 ticked, review A recorded, plan-drift clean, pr-M1.md written). Not pushed: the auto-mode classifier denied `git push` (and my write of the gate-ok marker, because the full `scripts/gate.sh` could not finish: disk quota, workspace test link). Next: orchestrator pushes `claude/project-thread-wlrb6d` (or runs the full gate where disk allows), opens the PR from pr-M1.md, runs review B.
 
 ## Open escalation
 
