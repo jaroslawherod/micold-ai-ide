@@ -10,6 +10,10 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
 AllowTcpForwarding remote
+# The orchestrator link (#1725): the app's connection carries one `-R` of a Unix socket in the
+# daemon's owner-only runtime directory; remote forwards only, and a stale socket is replaced.
+AllowStreamLocalForwarding remote
+StreamLocalBindUnlink yes
 GatewayPorts no
 X11Forwarding no
 PermitTTY no

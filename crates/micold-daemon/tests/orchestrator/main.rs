@@ -13,5 +13,6 @@ mod no_outbound;
 mod not_hosted;
 mod one_link_per_id;
 mod restart;
+mod store_migrations;
 mod store_suite;
 mod version_mismatch;

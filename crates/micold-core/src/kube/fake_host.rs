@@ -65,6 +65,22 @@ impl SshRunner for Host {
         _deadline: Option<Duration>,
         _progress: Option<crate::ssh::ProvisionProgress>,
     ) -> BoxFuture<'_, io::Result<SshOutput>> {
+        // The orchestrator link's `remote prepare-link` (#1725) is answered here, not from the
+        // script, so a pod start reads the same scripted answers with or without the link.
+        if cmd
+            .args
+            .last()
+            .is_some_and(|a| a.ends_with(" remote prepare-link"))
+        {
+            self.commands.lock().unwrap().push(cmd.args);
+            return Box::pin(async {
+                Ok(SshOutput {
+                    status: Some(0),
+                    stdout: b"/tmp/micold-1000/orchestrator.sock\n".to_vec(),
+                    ..SshOutput::default()
+                })
+            });
+        }
         self.commands.lock().unwrap().push(cmd.args);
         let next = self.runs.lock().unwrap().pop_front();
         let hang = next.is_none() && self.hang.load(std::sync::atomic::Ordering::Relaxed);

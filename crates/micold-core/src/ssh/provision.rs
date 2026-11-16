@@ -167,6 +167,17 @@ pub struct ProvisionOptions {
     pub build_id: String,
     /// The client's build string presented in `Hello`.
     pub client_build: String,
+    /// Open the orchestrator link's reverse forward with the bridge (#1725, FR-004); `None` opens
+    /// no forward.
+    pub link: Option<LinkRequest>,
+}
+
+/// What the holder of the SSH connection asks of the link's forward: the orchestrator's socket on
+/// this machine. The remote end is what `remote prepare-link` prints there (research R3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkRequest {
+    /// The local end: the orchestrator's socket.
+    pub local_socket: std::path::PathBuf,
 }
 
 pub(crate) fn io_failure(e: io::Error) -> SshFailure {
@@ -202,6 +213,10 @@ fn ssh_failure_of(failure: ProvisionFailure) -> SshFailure {
         FailureCause::NoMatchingBuild { os, arch } => SshFailure::NoMatchingBuild { os, arch },
         FailureCause::CopyFailed => SshFailure::RemoteNotWritable,
         FailureCause::AuthRefused => SshFailure::AuthRefused,
+        // The refusal names its cause; the tool output (ssh's text) follows it.
+        FailureCause::LinkForward(refusal) => SshFailure::Other {
+            tail: refusal.to_string(),
+        },
         _ => SshFailure::HelperFailed {
             tail: failure
                 .output
@@ -398,6 +413,7 @@ mod tests {
             timeout_secs: 15,
             build_id: "1.0.0-abcdef123456".into(),
             client_build: "test".into(),
+            link: None,
         }
     }
 

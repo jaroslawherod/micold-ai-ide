@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no
 - **Issue**: #1786
-- **Worktree branch**: claude/project-thread-r3rop0
+- **Worktree branch**: claude/project-thread-919twg
 - **Started**: 2026-11-11
-- **Phase**: milestones (M6)
-- **Next step**: M6: orchestrator runs review B and the visual pass (T045), full gate left to CI, opens the PR (body in the scratchpad pr-body.md)
+- **Phase**: close
+- **Next step**: close PR gate and review done; merge it, then handoff
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1946 | M3 | merged 2026-11-15 | cae50ef59af4fac194e5559b72608cc0ac814a23 |
 | #1968 | M4 | merged 2026-11-15 | d1712abc888fad5ab736f08d5fb3e877bad784cf |
 | #1972 | M5 | merged 2026-11-15 | 719e9f3b9cd09310ee41249f26d9603941c1f69e |
+| #1977 | M6 | merged 2026-11-15 | 77ee454535b69b39d0d56c4702d2acb9f09786d6 |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T024–T028 | full | Move to group from the menu | #1946 | merged |
 | M4 | T029–T034 | full | Drag between lists and cancel | #1968 | merged |
 | M5 | T035–T042 | full | Reorder, collapse, no state grouping | #1972 | merged |
-| M6 | T043, T045 | full | Showcase poses and visual pass | #… | T043 done; T045 pending |
+| M6 | T043, T045 | full | Showcase poses and visual pass | #1977 | merged |
 
 ## Decisions
 
@@ -127,5 +128,8 @@ None.
 - M5 review A MINOR: a reveal that opens a collapsed group marks the layout unsaved after the shell's save step of that message, so it is written with the next message.
 - Seen in the M2 visual pass, not isolated: after Ctrl+Shift+G (New group) the More menu stayed open behind the naming dialog and after Create.
 
+- TDD audit follow-ups left open at close (tdd/verification.md): F3/T049 (empty-area menu has no recorded red), F5/T051 (review-fix tests have no red run), F8/T053 (one eager view test), F11/T055 (duplicated test fixtures), F14/T056 (dark-theme visual pass, with the M6 one below).
+- Layout save failure (close review, MINOR): `after_update` empties `layouts_unsaved` before saving, so a failed save is not retried until the layout changes again; kept in memory only, as R9 says.
+- M6 visual pass (T045): light theme only, the theme toggle ignored clicks under Xvfb; dark-theme visual check of the M6 poses not done.
 
 M6 unit: T043 done (drop highlight pose; drop marker pose already shipped in M1). Review A inline, no findings. Scoped gate green; full gate not run (disk full, nextest missing; CI validates). T045 and review B left to the orchestrator.

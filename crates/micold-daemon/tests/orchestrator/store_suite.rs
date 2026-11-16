@@ -12,7 +12,7 @@ use micold_core::orchestrator::{
 };
 use micold_core::protocol::routing::WireDaemonId;
 
-use super::store_support::{Backend, FullBackend, JsonBackend, MemoryBackend};
+use super::store_support::{Backend, FullBackend, JsonBackend, MemoryBackend, SqliteBackend};
 
 fn tenant(name: &str) -> TenantId {
     TenantId::new(Some(name))
@@ -588,4 +588,8 @@ mod memory {
 
 mod json {
     registry_tests!(super::JsonBackend::new());
+}
+
+mod sqlite {
+    registry_tests!(super::SqliteBackend::new());
 }

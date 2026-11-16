@@ -23,6 +23,14 @@ older than 6.7): `ssh` reports "remote port forwarding failed" and `ExitOnForwar
 connection with that text; the app shows it (FR-005). The daemon stays `offline`. A TCP fallback is not
 offered. For the basic image the repair is the two config lines.
 
+**Checked (M4, T036, by reading the config; no container runtime in the session that made the change)**:
+`ListenAddress 0.0.0.0` on port 2222 accepts the pod's loopback connection that `Cluster::port_forward`
+opens (the kubelet's forward connects to the pod's `127.0.0.1:2222`, which `0.0.0.0` covers); no change.
+The two lines are in `packaging/basic/sshd_config`, the content hash pin moved with them
+(`BASIC_IMAGE_CONTENT_HASH`); the published `BASIC_IMAGE` digest follows in the image's pin PR, and the
+image it names today defaults `AllowStreamLocalForwarding` to `yes`, so the link works on it meanwhile.
+The `ssh_real_link` suite starts its `sshd` with the same two lines.
+
 **Rejected**: a loopback TCP remote port (any local user of the remote reaches it; spec 489 R1 rejected the
 same shape); relying on the default silently (a later hardening of the file would break the link unnoticed).
 
@@ -36,9 +44,12 @@ the daemon's link ends and the heartbeat shows `offline` (US3) with no extra tea
 cannot be scoped to "all but this `-R`". A `Reach::Pinned` target uses `-F none`, so no configured forward
 exists. For `Reach::UserConfig` the link step first reads the effective settings (`ssh -G`, `argv::resolve`, already
 used by the connection check) and, if the host's configuration sets any `localforward`, `remoteforward` or
-`dynamicforward`, does not open the link forward: the connection still opens without it, the daemon stays
-`offline`, and the app shows "link not opened: your SSH configuration for <host> sets port forwards". FR-005
-(no other destination) wins over the link.
+`dynamicforward`, does not open the link forward. **Superseded by tasks.md T028 (M4)**, which this
+decision first read as "the connection still opens without it": the open fails with a message naming the
+configured forwards (`LinkRefusal::ConfiguredForwards`), and a failing `ssh -G` fails it naming its text,
+so the connection never runs without the forward. FR-005 (no other destination) wins over the link. The
+link's command passes `ClearAllForwardings=no` explicitly, so a configured `ClearAllForwardings yes`
+cannot clear the `-R` (M4 review A).
 
 **Rejected**: a second, dedicated `ssh -N` process (two connections to supervise, two lifetimes to keep
 equal; the app already restarts the bridge on a drop through `ssh::reconnect`); a ControlMaster `-O forward`

@@ -9,7 +9,8 @@ published image serves every client, released or not.
 ## What it carries, and what it must not
 
 Carries: `sshd` (config `/etc/micold/sshd_config`, port 2222, key auth only, run as the container's
-uid), Node 24 and `npm` (the AI CLIs are npm packages), `git`, `git-lfs`, `gh`, `curl`, `wget`,
+uid; `AllowStreamLocalForwarding remote` and `StreamLocalBindUnlink yes` let the app's connection
+carry the orchestrator link's one Unix-socket remote forward, #1725), Node 24 and `npm` (the AI CLIs are npm packages), `git`, `git-lfs`, `gh`, `curl`, `wget`,
 `jq`, `ripgrep`, `openssh-client`, `flock`, `bash`, `procps`, `less`, `tzdata`, glibc 2.41
 (trixie), and `/var/lib/micold-ai-ide` for the daemon's state (named by `daemon.data_dir` in the delivered
 configuration file, not by a variable).

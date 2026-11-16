@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1725
-- **Worktree branch**: claude/project-thread-2igsm0
+- **Worktree branch**: claude/project-thread-ns8w9i
 - **Started**: 2026-11-15
-- **Phase**: milestones
-- **Next step**: M3 review B (orchestrator), then open the M3 PR from pr-title.md/pr-body.md
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1969 | design (spec, plan, tasks) | merged (squash) | 1d36b93ffb1aef3d5c470eaea25454a384126984 |
 | #1971 | M1 host link | merged (squash) | 8921b61679a59818fde86a852ec1a87cf7a86d37 |
 | #1975 | M2 outage + bounded sends | merged (squash) | 1e9b379e3c749ce740aefcf0bd6a118991b3506a |
+| #1976 | M3 backoff + link status | merged (squash) | 2880eeb17 |
+| #1979 | M4 reverse forward | merged (squash) | bc0a44f22 |
+| #1989 | M5 drop/reopen | merged (squash) | d8b39fd3149babbbf2057874c24fb658f22500e8 |
+| (close) | close the spec | PR opened by the orchestrator from pr-title.md | — |
 
 ## Milestones
 
@@ -27,9 +31,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Host daemon links to the local orchestrator (US1; 15 tasks: setup and foundational cannot be split off, nothing observable) | #1971 | merged (squash 8921b6167) |
 | M2 | T016–T020 | full | Sessions survive an orchestrator outage; handshake sends bounded (US4) | #1975 | merged (squash 1e9b379e3) |
-| M3 | T021–T027 | full | Refusals back off; link status observable (US5) | pending (branch claude/project-thread-2igsm0) | implemented, review A clean; awaiting review B, PR |
-| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | | pending |
-| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | | pending |
+| M3 | T021–T027 | full | Refusals back off; link status observable (US5) | #1976 | merged (squash 2880eeb17) |
+| M4 | T028–T037 | full | Container, SSH-host and pod daemons link through a reverse forward (US2) | #1979 | merged (squash bc0a44f22) |
+| M5 | T038–T040 | full | Drop shows offline, reopen restores online (US3) | #1989 | merged (squash d8b39fd31) |
 
 ## Decisions
 
@@ -37,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+- M4: a user-config host whose `ssh -G` shows a configured forward, or fails, fails the open with a message (tasks.md T028), not "connect without the link" (research R2, plan ledger line). Review A F2 flagged that this stops SSH hosts with a `LocalForward`/`RemoteForward`/`DynamicForward` from connecting through the app. Kept: T028 is the later, more specific artifact and FR-005 says the connection never runs silently without the forward. Reversible in one `match` in `provision::admit_link`; the orchestrator may ask the user.
 
 ## Review rounds
 
@@ -57,6 +62,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B | 1 | M2 | d120a5c13b499fc7f04b3d9a923813229864c532 | 43ea938da69a7ebd31566488c5881cbcc07b885c:d120a5c13b499fc7f04b3d9a923813229864c532 | MINOR-ONLY: 2 MINOR declined (orchestrator, sonnet); Verify 7 passed, no plan drift |
 | Review A | 1 | M3 | 11cf6ef6aacaa53f201f8e063e94ea6e94dcdaeb | b6c2d388a5ead6484138edc3efa314604677c7e0:02fd9250fb4dd000800238ca044234da717f8a4b | MINOR-ONLY: CLEAN with 3 MINOR (refused-to-absent change not logged, spawn_as public seam, SC-004 log test could not catch a per-retry line); all fixed in 11cf6ef6a, no new round (MINOR only) |
 | Review B | 1 | M3 | 7f09644ad | HEAD | CLEAN (orchestrator, sonnet): 1 MINOR accepted (T022 never red; cycle 10 records mutation checks); Verify 7+53 passed, no plan drift |
+| Review B | 1 | M4 | 3cb569d6ab1f015c24d50888a2849667dd040d3a | cfb92da73b2f574658db5d0f3f4b07ba8ab15897:3cb569d6ab1f015c24d50888a2849667dd040d3a | CLEAN (orchestrator, sonnet; also review A round 2 of the F1 fix): 1 MINOR declined (no ssh_real case with a user ClearAllForwardings yes; argv unit test covers it); Verify 4+52 passed, no plan drift |
+| Review B | 1 | M5 | d5493331f76e6d0f653a32812dd85b19b5abd99a | bc0a44f22:d5493331f76e6d0f653a32812dd85b19b5abd99a | CLEAN (orchestrator, sonnet): 0 findings; T039 no-product-code claim verified in source; orchestrator_dial 25 passed, no plan drift |
+| Review A | 1 | M5 | 1871be935c12be9c289d152a5c69f2a079c1523f | 1b3545cc891476ff9fe2b8f2b31449d69306e35d:40f9119251e73984f2a54108b07dbfba9e1231c9 | MINOR-ONLY: CLEAN with 3 MINOR (SIGKILL test's online check vacuous, clock-step comment, docs overclaim); all fixed, no new round (MINOR only) |
+- M4 review A round 1 (opus, headless, snapshot 5d226ed04ff2b56679eb538fb78df9e077fde4a1:e7dbd2a39a4bba360d2f05781b9e794843ecd9a0): CHANGES, 2 MAJOR, 2 MINOR. F1 fixed (`ClearAllForwardings=no` on the link, argv test); F2 fixed, prose only (research R2 marked superseded by T028; behaviour kept, see Decisions); F3 fixed (test renamed, asserts `Prepare`); F4 declined. Fix diff is code (F1): round 2 left to the orchestrator with review B (sonnet).
 
 ## Declined review findings
 
@@ -65,8 +74,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | spec | Spec review 1 | none | all six findings fixed |
 | M2 | Review B 1 | F1 MINOR: outage tests' session/client half has no red mutant | log states it; the behaviour predates M2 and the test is a regression guard |
 | M2 | Review B 1 | F2 MINOR: `pub struct Detached` is test-only API | recorded in drift-M2.md; daemon crate is internal, no public API surface |
+- M4 A F4 (second `ssh -G` per user-config connection): declined; it only reads files under a 5 s bound, and carrying the first answer through `ProvisionOptions` couples the timeout probe to the link; not worth the coupling.
 
 ## Handover
+
+2026-11-15, close unit (branch claude/project-thread-ns8w9i, previous PR #1989 merged at d8b39fd31): plan-drift clean for M1-M5; converge skipped (CLEAN review B for every milestone); tdd-verify verdict FAIL (test-after cycles, unprovable after squash merges), see Follow-ups. Done: T042 (ssh_real_link 6 passed with sshd), T047 (status_is shared). Review (headless sonnet) CHANGES: 1 BLOCKER unused imports (fixed), 2 MINOR (fixed). Spec Status set to Closed. PR not opened: pr-title.md/pr-body.md ready, branch pushed. Nothing further after the close PR merges.
+2026-11-15, M5 thread (branch claude/project-thread-2hmeav): PR #1989 squash-merged (d8b39fd31) on green `ci complete`, first run (all checks green, mutants included). Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) CLEAN, 0 findings. T039 needed no product code. origin/main merged back; diff vs main is ledger only. Next: close unit in a fresh cloud thread running `/speckit-autopilot resume` (update the Worktree branch line). Unit took ~175k tokens over ~26 min in one part.
+2026-11-15, M5 unit (branch claude/project-thread-2hmeav, previous PR #1979 merged at bc0a44f22): T038–T040 done and ticked. T039 needed no product code (stale-socket removal and the quiet connect failure already held; the red was the harness's hand-moved TestClock, now driven by `RealTime` in the tests); cycle 15 in tdd/cycle-log.md, drift-M5.md written, plan-drift clean. Review A round 1 (opus, headless) CLEAN with 3 MINOR, all fixed in 1871be935. ssh_real_link 6 passed (openssh-server installed in the sandbox), orchestrator_dial 25 passed, clippy -D warnings and fmt clean; scripts/gate.sh stopped at missing cargo-nextest, full gate left to CI. Not run by the unit: review B (orchestrator). PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review B on origin/main...HEAD, then open the PR; after M5 merges the run goes to close.
+2026-11-15, M4 thread (branch claude/project-thread-t27ol0): PR #1979 squash-merged (bc0a44f22) on green `ci complete` after one fix: diff coverage (80%) failed because the `prepare-link` subprocess run is invisible to lcov; the command was split into `prepare_link_command` (resolver injected) and tested in process. Review A round 1 CHANGES (fixed), review B + round 2 CLEAN, 1 MINOR declined. Mutants (advisory) cancelled/red as before. Behaviour decision for jaro: SSH hosts with their own forwards, or a failing `ssh -G`, now fail to connect with a message (T028; revert is one match in `provision::admit_link`). Next: M5 (T038–T040) in a fresh thread.
+2026-11-15, M4 unit (branch claude/project-thread-t27ol0, previous PR #1976 merged at 2880eeb17): T028–T037 done and ticked; cycles 11–14 and review A fixes in tdd/cycle-log.md; drift-M4.md written, plan-drift clean. Review A round 1 (opus, headless) CHANGES: F1 fixed in code (`ClearAllForwardings=no`), F2 prose + Decisions (T028 fail-the-open kept; may need the user), F3 fixed, F4 declined. Round 2 of A on the F1 fix not run by the unit. ssh_real_link 4 passed against a real sshd installed in the sandbox (`apt-get install openssh-server`, `mkdir /run/sshd`). Full gate: Rust green; scripts/tests/autopilot.test.sh flaky from sandbox git (`push negotiation failed`), left to CI. PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review A round 2 + review B, then open the PR.
 
 2026-11-15, M3 unit (branch claude/project-thread-2igsm0, previous PR #1975 merged at 1e9b379e3c749ce740aefcf0bd6a118991b3506a): T021–T027 done and ticked; cycles 8–10 and review A fixes in tdd/cycle-log.md; drift-M3.md written, plan-drift clean. Review A (opus, headless) CLEAN with 3 MINOR, all fixed in 11cf6ef6a. Not run by the unit (orchestrator runs them): review B, visual pass (nothing visible changed). PR not opened: pr-title.md/pr-body.md ready, branch pushed. Next: review B on origin/main...HEAD, then open the PR.
 2026-11-15, M2 thread (branch claude/project-thread-itbg1f): PR #1975 squash-merged (1e9b379e3) on green `ci complete`. Review A CLEAN (3 MINOR fixed), review B (orchestrator, sonnet) MINOR-ONLY, 2 MINOR declined. Mutants (advisory) red again from the job's environment, not the diff: baseline failed on netns test (`unshare -rn` unavailable); on M1 it was documentation_is_not_read (no .git in the copy). Reported to the coordinator for a chore. origin/main merged back; diff vs main is ledger only. Next: M3 (T021–T027, tier full) in a fresh cloud thread running `/speckit-autopilot resume` (update the Worktree branch line to that thread's branch). Unit took ~250k tokens over ~73 min in one part.
@@ -76,6 +92,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 Cloud notes: same as the design handover. Units have no Agent tool: they run review A headless (`claude -p "<prompt>" --agent autopilot-reviewer --model <m> --permission-mode auto --allowedTools "Read,Grep,Glob,Bash(git *),Bash(grep *),Bash(ls *)"`); the orchestrator runs review B (sonnet, rubrics/conformance.md) and a sonnet worker for its fixes. Brief units to record every UNPLANNED path (tests included) in drift-M<K>.md and run plan-drift.sh. Full gate needs `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`; cargo-nextest and openssh-client may need installing. Open the PR via GitHub MCP from pr-title.md/pr-body.md (attribution block first), draft=false, wait on `ci complete` via `gh api .../commits/<head>/check-runs`, squash with expectedHeadSha, then `git merge origin/main` and check the diff is ledger only.
 
 ## Follow-ups not done
+
+- Behaviour decision for jaro (from M4, T028): SSH hosts with their own forwards, or where `ssh -G` fails, now fail to connect with a message. Revert is one match in `provision::admit_link`.
+- TDD verification (tdd/verification.md, verdict FAIL: 6 of 15 behaviors test-after, none provable after squash merges): deferred T041 (mutants for cycles 1, 2, 3, 7, 10, 11; cargo-mutants not installed), T043 (human acceptance of the `PURE_DIAL_RULES` exemption in `no_outbound.rs`), T044 (probe a foreign client address through the forward), T045 (outage test cannot detect a link task touching `DaemonState`), T046 (replace fixed sleeps in host.rs and ssh_real_link.rs; repeat suite 20 times), T048 (FR-004 close-with-connection assertion; log the five extra `remote_prepare_link` tests). Also: `ssh_real_link` tests pass while skipping when sshd cannot start. T042 and T047 done in the close unit.
 
 - CI "mutants on the diff" is red for reasons outside this flow: on PR #1971 the unmutated baseline failed (exit 4, no mutant tested) because cargo-mutants copies the tree without `.git`, so `micold-core --test main documentation_is_not_read` (`git check-attr`) fails. Likely fix: `--copy-vcs true` in `scripts/mutants-diff.sh`. Reported to the coordinator 2026-11-15 (M2 thread).
 

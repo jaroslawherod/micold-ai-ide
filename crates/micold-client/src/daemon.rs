@@ -41,7 +41,7 @@ use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::{AiCliSelection, NetworkPosture};
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
 use micold_core::ssh::argv::{PinnedReach, Reach};
-use micold_core::ssh::provision::ProvisionOptions;
+use micold_core::ssh::provision::{LinkRequest, ProvisionOptions};
 use micold_core::ssh::reconnect::Backoff;
 use micold_core::ssh::remote_path;
 use micold_core::ssh::{ClientPlatform, ReasonContext, SshHost, SshTarget};
@@ -1370,6 +1370,7 @@ async fn ssh_options(host: &dyn SshHost, target: &SshTarget) -> ProvisionOptions
         timeout_secs,
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
+        link: orchestrator_link(),
     }
 }
 
@@ -1609,6 +1610,21 @@ fn container_pinned_reach(login: String, port: u16, keys: &DaemonKeys) -> Pinned
     }
 }
 
+/// The orchestrator link's forward every SSH connection opens with its bridge (#1725, FR-004):
+/// the orchestrator's socket on this machine. Unix clients only: a Windows pipe cannot be the
+/// local end of `-R`.
+fn orchestrator_link() -> Option<LinkRequest> {
+    if cfg!(unix) {
+        endpoint::orchestrator_endpoint()
+            .ok()
+            .map(|orchestrator| LinkRequest {
+                local_socket: orchestrator.socket_path,
+            })
+    } else {
+        None
+    }
+}
+
 /// The options of every step run in a container: its bounds are the app's, not a user's
 /// `ConnectTimeout`.
 fn container_options() -> ProvisionOptions {
@@ -1618,6 +1634,7 @@ fn container_options() -> ProvisionOptions {
         timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
+        link: orchestrator_link(),
     }
 }
 
@@ -2210,6 +2227,7 @@ pub async fn kube_attempt(
         timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
+        link: orchestrator_link(),
     };
     let connect = ConnectRequest {
         host: &*env.host,
@@ -3061,6 +3079,16 @@ mod tests {
         let set =
             super::ssh_options(&ConfiguredSsh("hostname box\nconnecttimeout 7\n"), &target).await;
         assert_eq!(set.timeout_secs, 7);
+        #[cfg(unix)]
+        assert_eq!(
+            set.link.map(|l| l.local_socket),
+            Some(
+                micold_core::endpoint::orchestrator_endpoint()
+                    .unwrap()
+                    .socket_path
+            ),
+            "every SSH connection opens the orchestrator link's forward (#1725)"
+        );
         let unset = super::ssh_options(&ConfiguredSsh("hostname box\n"), &target).await;
         assert_eq!(
             unset.timeout_secs,
