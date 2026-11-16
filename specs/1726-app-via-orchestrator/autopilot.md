@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-jwbvyd
+- **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
-- **Phase**: milestones
-- **Next step**: M3 round-2 reviews A+B on the snapshot (orchestrator dispatches), then PR from specs/1726-app-via-orchestrator/pr-m3.md
+- **Phase**: review (M4)
+- **Next step**: M4 code review A+B round 1 (snapshot in Review rounds), then PR from pr-m4.md
 - **PR**: none
 
 ## Pull requests
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1996 | design | merged | 9f6e6784d |
 | #1999 | M1 | merged | 2f62cbf31 |
 | #2004 | M2 | merged | 5ee726f07 |
-| #2007 | M3 | open; CI red round 1 fixed (flaky stand-in race in micold-daemon ai_cli_config test) | |
+| #2007 | M3 | merged | f6aa5b806 |
 
 ## Milestones
 
@@ -29,7 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
-| M3 | T017–T022 | full | desktop app uses one orchestrator connection | #2007 | PR open |
+| M3 | T017–T022 | full | desktop app uses one orchestrator connection (host only) | #2007 | merged |
+| M4 | T023–T034 | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to review |
 
 ## Decisions
 
@@ -39,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify | Who writes `[orchestrator_link]` into provisioned daemons | this feature, the app on provision (FR-013) | agent | specs/1725-daemons-dial-orchestrator/spec.md#Assumptions |
 | 3 | tasks | M1 has no observable user story (milestones rule 1) | superseded by #4: contract+core merged into the US2 milestone | agent | tasks review r1 F1 |
 | 4 | tasks | Milestones bundling two stories (rule 2) | keep combined, reasons in each milestone's Note (US4 halves and US5 have no code of their own) | agent | tasks review r1 F4 |
+| 5 | plan (M4) | Provisioned daemons on non-Linux clients | Linux only, #1897: no exception, FR-007 holds for every placement | user (plan r1 F1) | #1897 |
 
 ## Review rounds
 
@@ -56,6 +58,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M3) | 1 | M3 | 0deffa8b600c9fccf833c546c3a4af79d9ddd400 | 1a054e45102f489bfff8d934d5a83c5d148f659d:0deffa8b600c9fccf833c546c3a4af79d9ddd400 | CHANGES fixed: A F1 (dead-link route: close before marking table dead, insert refused under lock, writer drops route on send failure), A F2 (try_send, full queue ends that route), B F2 (T021 run + drift entry), B F3, B F4 (tdd/cycle-log.md); B F1 to user, in Follow-ups |
 | code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
 | code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
+| plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | CHANGES (1 MAJOR Windows exception removed, Linux only #1897; 3 MINOR fixed: platform wording, orchestrator_link unconditional, drift-M3 correction) |
+| plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | CLEAN |
+| tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
+| tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | CHANGES fixed (mechanical, no r3) |
+| code A+B (M4) | 1 | M4 | 9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | pending (orchestrator dispatches) |
+| code A+B (M4) | 1 | M4 | b9ef49cb7a86756da6c801e6c2722d0b3e0a20fb | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | CHANGES (A: 3 MINOR fixed: typed RouteEnded, holder-end race, no fallback router; B: 4 MAJOR fixed: placement + late-refusal tests, cycle-log rows/waivers, T031 Cargo [[test]] text, drift unplanned paths; 2 MINOR fixed: PR body coverage, T033 now run locally with sshd; CI: sandbox_real arity, ssh_real holder RealTime) |
 
 ## Declined review findings
 
@@ -63,8 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 
 ## Handover
-
-None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tests/*.test.sh run outside gate.sh reset this worktree's branch and cleaned untracked files once; never run them bare here.)
+None.
 
 ## Open escalation
 
@@ -72,7 +79,9 @@ None.
 
 ## Follow-ups not done
 
-- M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); with the user as a decision.
+- M4 gate (cloud): `scripts/gate.sh` fmt and clippy pass; `cargo nextest` is not installed here, and a `cargo test --workspace` fallback filled the disk (link failures), so the workspace test run is CI's. Targeted runs passed: `orchestrator_provisioned`, `daemon_config_delivery_host`, `orchestrator_single_connection`. The `ssh_real_link` routed case is unrun (no sshd). Warning: `scripts/tests/autopilot.test.sh` (or a sibling) checked out `main` in this worktree and left stray files; restored by hand.
+
+- M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); jaro chose 2026-11-16 to do it as M4.
 
 ## Follow-ups (M2 review)
 - list.rs:111 mid-ask link drop reported as timeout, not offline

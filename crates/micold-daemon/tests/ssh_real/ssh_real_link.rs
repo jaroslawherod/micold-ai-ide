@@ -739,3 +739,69 @@ async fn within_link(
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
+
+/// #1726 M4 (T033, FR-007): after provisioning the bridge is closed and the link holder keeps the
+/// daemon's forward; the daemon stays linked under its wire id with no bridge, and ending the holder
+/// takes it `offline`. The route itself is opened by id through the orchestrator
+/// (`micold-client` `orchestrator_provisioned`).
+#[tokio::test(flavor = "multi_thread")]
+async fn ssh_real_link_the_holder_keeps_a_provisioned_daemon_linked_without_its_bridge() {
+    let test = "ssh_real_link_the_holder_keeps_a_provisioned_daemon_linked_without_its_bridge";
+    let Some(host) = Sshd::start_with(LINK_SSHD)
+        .map_err(|e| eprintln!("SKIP {test}: {e}"))
+        .ok()
+    else {
+        return;
+    };
+    let Some(()) = pinned_free(test) else { return };
+    let _cleanup = RemoteCleanup;
+    let orchestrator = Orchestrator::start().await;
+    // Offline is judged on the orchestrator's clock: without real time it never passes.
+    let _real_time = RealTime::follow(&orchestrator);
+    write_remote_config(&host, "ssh", "link-routed");
+    let connected = open_pinned(&host, link_opts(&orchestrator))
+        .await
+        .expect("the open succeeds");
+    record_when(&orchestrator, "link-routed", |r| r["health"] == "online").await;
+
+    // Swap order: the bridge goes first, then the holder takes the forward over.
+    drop(connected);
+    // The bridge's forward is gone: the record is offline before the holder brings it back, so
+    // the `online` below is the holder's link and not a stale record.
+    health_within(&orchestrator, "link-routed", "offline", Instant::now()).await;
+    let runner = SystemSsh {
+        own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
+        bundled_dir: None,
+        ssh_path: None,
+        cancel: None,
+    };
+    let opts = ProvisionOptions {
+        platform: ClientPlatform::current(),
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs: 30,
+        build_id: micold_core::ssh::argv::current_build_id(),
+        client_build: "micold-ai-ide/ssh-real-link".to_string(),
+        link: link_opts(&orchestrator),
+    };
+    let target = ProvisionTarget {
+        reach: pinned_reach(&host),
+        owned: provision::Ownership::UserHost,
+        bounds: provision::StepBounds::user_host(Duration::from_secs(30)),
+        env: Vec::new(),
+        config: None,
+    };
+    let request = opts.link.clone().expect("the link is asked for");
+    let holder = provision::hold_link(&runner, &target, &opts, &request, &CancelToken::new())
+        .await
+        .expect("the holder opens");
+    record_when(&orchestrator, "link-routed", |r| r["health"] == "online").await;
+
+    let dropped = Instant::now();
+    drop(holder);
+    let waited = health_within(&orchestrator, "link-routed", "offline", dropped).await;
+    assert!(
+        waited <= OFFLINE_WITHIN + POLL_SLACK,
+        "offline {waited:?} after the holder ended"
+    );
+    stop_remote_daemon();
+}

@@ -46,9 +46,7 @@ integration tests that spawn a real orchestrator and real daemons
 (`crates/micold-daemon/tests/orchestrator_route/`), one headless client test for the single
 connection and the start (`crates/micold-client/tests/`).
 
-**Target Platform**: orchestrator and daemons on Linux (and macOS for the local pair); the app on
-Linux, macOS, Windows (orchestrator endpoint is a named pipe on Windows via the existing
-`endpoint::orchestrator_endpoint`).
+**Target Platform**: Linux only (#1897): orchestrator, daemons and the app.
 
 **Project Type**: Rust workspace: core library, daemon/orchestrator binary, iced desktop client.
 
@@ -78,8 +76,8 @@ SC-004: orchestrator running and connected within 5 s of app start.
 - [~] **V. TS + RN client**: the change touches the iced client, which the constitution marks for
   retirement. Justified in Complexity Tracking: kept to the transport seam; the contract is
   client-neutral for the RN client.
-- [x] **VI. Linux daemons, web reach**: daemons/orchestrator Linux; endpoint abstraction covers
-  macOS/Windows for the app; no browser code. PASS.
+- [x] **VI. Linux daemons, web reach**: daemons/orchestrator Linux; Linux only (#1897); no browser
+  code. PASS.
 - [x] **VII. Docs**: `docs/` user guide gains "the app connects through the orchestrator" and the
   troubleshooting of an orchestrator that cannot start (US3 scenario 4); contract under
   `specs/orchestrator/contracts/`. PASS.
@@ -139,6 +137,62 @@ and registry; the reusable, render-free parts (route table, list merge, envelope
 
 M1 to M3 leave the app as it is (direct connections still work: the daemon's own listener is
 untouched), so each merges green on its own. M4 is the only desktop change.
+
+## Amendment: provisioned daemons through the orchestrator (tasks M4)
+
+Numbering: the milestone table above predates the tasks cut. Plan M1+M2 = tasks M1, plan M3 =
+tasks M2, plan M4 = tasks M3; this amendment is tasks M4 (quickstart: M4b).
+
+Added 2026-11-16 after M3 (#2007) shipped the host daemon only (drift-M3.md, *Scope narrowed*);
+jaro chose to finish FR-007 for SSH, container and Kubernetes placements in one more milestone.
+Research R7 has the route per placement and the alternatives.
+
+- **Route (all three placements, R7)**: the existing #1725 reverse forward. Containers and pods are
+  already reached over SSH with a pinned reach (`container_options`, the pod's relay on
+  `127.0.0.1:<port>`), and all three `ProvisionOptions` already carry `link: orchestrator_link()`,
+  so every provisioned daemon already dials the orchestrator through `-R`. No new
+  transport, no dial-out to a TCP address, no new kube port-forward.
+- **What changes**: the bridge (`micold-daemon remote bridge`) is today both the holder of the
+  `-R` and the actor's daemon client connection. Provisioning keeps it as is up to the handshake
+  (version check, install on mismatch: that connection is part of provisioning, FR-007 keeps it).
+  Then the app closes it and opens a **link holder**: the same `ssh` argv with the admitted link
+  (`ExitOnForwardFailure=yes`) running a new remote subcommand `micold-daemon remote hold-link`,
+  which opens no daemon connection, prints `ready` and waits for stdin EOF. The actor then opens a
+  route to the daemon's wire id on the one orchestrator connection and handshakes on it, retrying
+  while the orchestrator answers `not_found` (the daemon's link not up yet) until a 10 s deadline,
+  the loop `host_routed` already runs for `local`.
+- **Swap order**: (1) the provisioning handshake ends and the app closes the bridge's stdin; (2) it
+  waits for the bridge's ssh child to exit, which releases the remote socket of the `-R`
+  (`prepare-link` removes a stale socket file before each bind, #1725); (3) it opens the holder.
+  `ready` is printed by the remote command, which ssh starts only after the forward is confirmed
+  under `ExitOnForwardFailure=yes`, so `ready` means "forward bound", not "link up". The daemon's
+  link drops at (1) and redials with its backoff; `routed_to`'s retry on `not_found` until the 10 s
+  deadline covers it coming back.
+- **Precondition**: the daemon's config carries `[daemon] id` and `[orchestrator_link]` (M3's
+  FR-013 writer, re-rendered on every provision/connect, T020), so the wire id exists before
+  `routed_to` is called.
+- **Orchestrator restart** (FR-009): the holder and `-R` survive; the daemon redials the restarted
+  orchestrator; the actor's route ends and it re-routes with `routed_to` over the same holder, with
+  no re-provisioning. Only a dead holder re-provisions.
+- **Lifetime**: the actor owns the holder (and, for a pod, the relay it rides on) for as long as its
+  route lives. A dead holder drops the daemon's link, the orchestrator ends the route with
+  `daemon offline`, and the actor's existing reconnect re-provisions, as a dead bridge does today.
+- **Failure**: a refused link (`LinkRefusal`, e.g. a user's `ssh_config` forward) or a passed
+  deadline fails the connect with the cause in the daemon's status cell; no fallback to the direct
+  bridge (FR-007).
+- **Code**: `crates/micold-core/src/ssh/argv.rs` (`hold_link` argv, shares `bridge_with_link`'s
+  prefix), `crates/micold-core/src/provision/mod.rs` (`hold_link` step: admit the link, open the
+  holder, read `ready` or the `remote port forwarding failed` line, reusing `admit_link` and
+  `FORWARD_NOT_BOUND`), `crates/micold-daemon/src/remote.rs` (`hold-link`),
+  `crates/micold-client/src/daemon.rs` (`orchestrator_link()` made unconditional: no `cfg!(unix)`,
+  returns `io::Result<LinkRequest>` (an unresolvable endpoint shown in the status cell), Windows wording dropped, #1897; one `routed_to(wire_id, deadline)` helper generalising
+  `host_routed`; the SSH, container and pod connect paths call it after provisioning).
+- **Tests**: core unit tests with the fake `SshHost` (holder argv carries the `-R` and
+  `ExitOnForwardFailure`, never a bridge; not-bound refusal); a daemon test for `remote hold-link`
+  (no connection to the daemon socket, exits on EOF); a client test with a real orchestrator and a
+  linked daemon announcing a non-`local` wire id (route opened before the link is up succeeds once
+  it is; deadline names the daemon). `ssh_real_link` gains a routed case (runs where sshd exists;
+  `kube_real` cannot run in the cloud and is not extended).
 
 ## Risks
 

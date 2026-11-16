@@ -51,9 +51,28 @@
 - [x] T021 [US3] Run the socket-opening client suites `crates/micold-client/tests/daemon_routing.rs`, `crates/micold-client/tests/catalog_two_daemons.rs`, `crates/micold-client/tests/notifications.rs` and `crates/micold-client/tests/attention_notify.rs` with the client through the orchestrator and fix what fails (SC-002)
 - [x] T022 [US3] User guide in `docs/user-guide/`: the app connects through the orchestrator and starts it; troubleshooting an orchestrator that cannot start (US3 scenario 4, Constitution VII)
 
+## Phase 8: FR-007 in full — SSH, container and pod daemons through the orchestrator (P1)
+
+Plan *Amendment*, research R7. Linux only (#1897).
+
+- [x] T023 [P] [US3] Failing tests in `crates/micold-core/src/ssh/argv.rs`: `hold_link` argv carries the admitted `-R`, `ClearAllForwardings=no`, `ExitOnForwardFailure=yes` and the remote command `remote hold-link`, never `remote bridge`
+- [x] T024 [US3] Add `argv::hold_link`, sharing `bridge_with_link`'s prefix, so T023 passes
+- [x] T025 [US3] Failing tests in `crates/micold-core/src/provision/mod.rs` with the fake `SshHost`: a `hold_link` step admits the link (reusing `admit_link`), opens the holder and returns on its `ready` line; a `remote port forwarding failed` line gives `FailureCause::LinkForward(NotBound)`; a refused link opens nothing
+- [x] T026 [US3] Implement the `hold_link` step in `crates/micold-core/src/provision/mod.rs` (holder handle owning the ssh child, reusing `FORWARD_NOT_BOUND`) so T025 passes
+- [x] T027 [P] [US3] Failing test in `crates/micold-daemon/tests/remote_hold_link.rs` (new `[[test]]` in `crates/micold-daemon/Cargo.toml`): `micold-daemon remote hold-link` prints `ready`, opens no connection to the daemon socket and exits 0 on stdin EOF
+- [x] T028 [US3] Add the `hold-link` subcommand to `crates/micold-daemon/src/remote.rs` (usage line too) so T027 passes
+- [x] T029 [US3] Failing test in `crates/micold-client/tests/orchestrator_single_connection.rs`: with a real orchestrator, a route to a non-`local` wire id opened before that daemon links succeeds once it links and handshakes; with no daemon the deadline error names the wire id; the client still has one connection and none to the daemon socket (FR-007); a unit test in `crates/micold-client/src/daemon.rs` that `ssh_options`, `container_options` and the pod options carry the link from the unconditional `orchestrator_link()`
+- [x] T030 [US3] In `crates/micold-client/src/daemon.rs`: make `orchestrator_link()` unconditional (no `cfg!(unix)`, #1897) returning `io::Result<LinkRequest>` (the `orchestrator_endpoint()` error is no longer dropped by `.ok()`; a connect path surfaces it in the daemon's status cell); add `routed_to(wire_id, deadline)` generalising `host_routed` (10 s), `host_routed` built on it, so T029 passes
+- [x] T031 [US3] Failing test `crates/micold-client/tests/orchestrator_provisioned.rs` (its own `[[test]]` target in `crates/micold-client/Cargo.toml`, not a module of `tests/main.rs`: the router it installs is process-wide; drift-M4.md *Tests* lists the parts not covered), driving the provisioned connect path with the fake `SshHost` and a real orchestrator plus linked daemon: after provisioning the bridge is closed, the holder is open and the actor's transport is the route; a refused link (`LinkRefusal`) ends the connect with its cause in the daemon's status cell and opens no bridge for the actor; a passed `routed_to` deadline is shown in the status cell; after the swap the linked daemon counts no client connection on its socket (only the orchestrator link); the holder ending ends the route (`daemon offline`) and the actor's reconnect re-provisions; an orchestrator restart re-routes over the same holder without re-provisioning (FR-009); one case per placement (SSH host, container, pod with its relay dropped after the holder) (plan *Amendment*: Swap order, Lifetime, Failure, Orchestrator restart)
+- [x] T032 [US3] Wire the SSH, container and pod connect paths in `crates/micold-client/src/daemon.rs`: after provisioning drop the bridge and await its ssh child's exit (releasing the remote socket, which `prepare_link_at` then removes), then start the holder (the pod's relay kept beside it), hand the actor `routed_to`'s `Connected`; the actor owns the holder for its route's life; no fallback to the bridge. T031 passes
+- [x] T033 [US3] Extend `crates/micold-daemon/tests/ssh_real/ssh_real_link.rs` with a routed case (holder + route by wire id); runs where sshd exists, not in the cloud; `kube_real` not extended
+- [x] T034 [US3] Update `docs/user-guide/orchestrator-mode.md`: remote, container and pod daemons also go through the orchestrator; a refused link forward is shown in the daemon's status cell (Constitution VII); add a line to `drift-M3.md`'s follow-up that M4 closed it
+
 ## Dependencies
 
-Setup -> Foundational -> US2 -> US4 (orchestrator) -> US1 -> US5 -> US3/US4 (app). US1 needs US2's client session; the app phase needs all orchestrator work. Quickstart Part B is done by the close unit.
+Phase 8: T023→T024→T025→T026; T027→T028; T029→T030; T026, T028, T030 → T031 → T032; T033 after T032; T034 last. T023 and T027 may run in parallel.
+
+Setup -> Foundational -> US2 -> US4 (orchestrator) -> US1 -> US5 -> US3/US4 (app) -> FR-007 in full (Phase 8, needs the app phase's orchestrator connection). US1 needs US2's client session; the app phase needs all orchestrator work. Quickstart Part B is done by the close unit.
 
 ## Implementation Strategy
 
@@ -92,3 +111,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M1–M2
 - **Tier**: full
 - **Note**: US3 and US4 (app half) share one milestone: reconnect (US4) is the same `orchestrator_conn.rs` that US3 introduces, and the app cannot ship US3 without surviving an outage.
+
+### M4 — Provisioned daemons through the orchestrator
+
+- **Tasks**: T023–T034
+- **Deliverable**: SSH-host, container and pod daemons are reached through the app's one orchestrator connection: after provisioning the bridge is replaced by a `remote hold-link` holder of the #1725 `-R`, and the actor routes by wire id; the app opens no client connection to any daemon (FR-007 in full).
+- **Satisfies**: US3 scenario 1 for every placement; FR-007, SC-004
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --lib -- ssh::argv provision`; `scripts/build-lock.sh cargo test -p micold-daemon --test remote_hold_link`; `scripts/build-lock.sh cargo test -p micold-client --test main -- orchestrator_single_connection::`; `scripts/build-lock.sh cargo test -p micold-client --test orchestrator_provisioned`; `scripts/build-lock.sh cargo test -p micold-client --lib -- daemon::`; `scripts/build-lock.sh cargo test -p micold-daemon --features ssh-real-runtime --test ssh_real -- ssh_real_link` (needs sshd)
+- **Depends on**: M3
+- **Tier**: full
+- **Note**: process boundary (a new remote subcommand, holder lifetime), so full.

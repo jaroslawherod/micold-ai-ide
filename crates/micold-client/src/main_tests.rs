@@ -1145,6 +1145,7 @@ fn app_with_a_failed_sandbox() -> App {
         port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
         startup: None,
         extras: Default::default(),
+        wire_id: None,
     });
     app
 }

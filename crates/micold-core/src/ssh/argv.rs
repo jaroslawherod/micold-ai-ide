@@ -599,6 +599,19 @@ pub fn bridge_with_link(
     )
 }
 
+/// The link holder (#1726, FR-007): [`bridge_with_link`]'s prefix and forward, running the remote
+/// `hold-link`, which opens no daemon connection, prints `ready` and holds the `-R` until stdin EOF.
+pub fn hold_link(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+    link: &AdmittedLink,
+) -> SshCommand {
+    let remote = format!("\"{}/micold-daemon\" remote hold-link", remote_dir(build));
+    command(reach, platform, timeout, &remote, Some(Forward::Link(link)))
+}
+
 /// The helper's `prepare-link`: makes the remote's owner-only runtime directory, removes a stale
 /// `orchestrator.sock` and prints the path the link's `-R` binds (contracts/dial.md).
 pub fn prepare_link(
@@ -1067,6 +1080,42 @@ mod tests {
                 bridge(&reach, ClientPlatform::Linux, 15, "b").args.last(),
                 "the remote command is the bridge's"
             );
+        }
+    }
+
+    #[test]
+    fn the_link_holder_carries_the_admitted_forward_and_runs_hold_link_never_a_bridge() {
+        for reach in [pinned(), target()] {
+            let cmd = hold_link(&reach, ClientPlatform::Linux, 15, "b", &admitted(&reach));
+            let a = &cmd.args;
+            let r: Vec<usize> = (0..a.len()).filter(|i| a[*i] == "-R").collect();
+            assert_eq!(r.len(), 1, "one -R: {a:?}");
+            assert_eq!(
+                a[r[0] + 1],
+                "/tmp/micold-1000/orchestrator.sock:/run/user/1000/micold/orchestrator.sock"
+            );
+            for option in ["ExitOnForwardFailure=yes", "ClearAllForwardings=no"] {
+                assert!(
+                    a.windows(2).any(|w| w[0] == "-o" && w[1] == option),
+                    "{option}: {a:?}"
+                );
+            }
+            assert!(!a.iter().any(|x| x == "ClearAllForwardings=yes"), "{a:?}");
+            assert_eq!(
+                a.last().unwrap(),
+                "\"$HOME/.micold/remote/b/micold-daemon\" remote hold-link"
+            );
+            assert!(!a.iter().any(|x| x.contains("remote bridge")), "{a:?}");
+            // The same prefix as the link bridge: only the remote command differs.
+            let bridge = bridge_with_link(
+                &reach,
+                ClientPlatform::Linux,
+                15,
+                "b",
+                &[],
+                &admitted(&reach),
+            );
+            assert_eq!(a[..a.len() - 1], bridge.args[..bridge.args.len() - 1]);
         }
     }
 

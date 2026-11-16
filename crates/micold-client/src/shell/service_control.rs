@@ -210,6 +210,7 @@ mod tests {
             port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         });
 
         let _ = on_restart_service_requested(&mut app);
@@ -341,6 +342,7 @@ mod tests {
             port: 7001,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         });
         assert_eq!(
             app.sandbox_daemon(),
@@ -377,6 +379,7 @@ mod tests {
             port: 7001,
             startup: None,
             extras: Default::default(),
+            wire_id: None,
         });
         let mut registry = app.core.settings.daemons.clone();
         registry
