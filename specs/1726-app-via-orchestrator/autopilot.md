@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-v4iabl
 - **Started**: 2026-11-16
-- **Phase**: plan
-- **Next step**: plan review round 1 (opus, rubric rubrics/plan.md) on snapshot 8487a8d58e89bb17100164e9cf76b5dfba6a0c1d:e458a16fca33bf98126ebd10ded77ccc18266133; then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks review round 1 (opus, rubrics/tasks.md) on the snapshot in the latest commit; then apply findings, specs-only gate, design PR
 
 ## Pull requests
 
@@ -22,6 +22,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T008 | full | contract + core routing types at protocol 83 | | pending |
+| M2 | T009–T013 | full | requests and streams routed through the orchestrator | | pending |
+| M3 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
+| M4 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
 ## Decisions
 
@@ -29,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | clarify | FR-002 per-daemon list deadline | 2 s, daemons asked in parallel | agent | SC-004 budget |
 | 2 | clarify | Who writes `[orchestrator_link]` into provisioned daemons | this feature, the app on provision (FR-013) | agent | specs/1725-daemons-dial-orchestrator/spec.md#Assumptions |
+| 3 | tasks | M1 has no observable user story (milestones rule 1) | keep contract+core as M1 per plan: shared wire for M2 and #1732 | agent | plan.md#Milestones |
 
 ## Review rounds
 
@@ -37,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | spec | 1 | design | 7c25a28d9e4bec1417923f0dd050b8627f79bebd | f3b201b3e2dc11ea9d3cb4d365efcd62e7a71cae:b3f47d077d50c0a5339d29f608b5f351591a7057 | CLEAN (3 MINOR applied in clarify) |
 | plan | 1 | design | e458a16fca33bf98126ebd10ded77ccc18266133 | 8487a8d58e89bb17100164e9cf76b5dfba6a0c1d:e458a16fca33bf98126ebd10ded77ccc18266133 | pending |
 | plan | 2 | design | 6e241d6b1c3744d78f712e7998d7f26265227f3a | a6f9de08200acab60e831c1660b93e5f63aeb46a:6e241d6b1c3744d78f712e7998d7f26265227f3a | pending |
+| plan | 2 | design | 6e241d6b1c3744d78f712e7998d7f26265227f3a | a6f9de08200acab60e831c1660b93e5f63aeb46a:6e241d6b1c3744d78f712e7998d7f26265227f3a | CLEAN (1 MINOR applied: R6 slugify trim/fallback) |
 
 ## Declined review findings
 

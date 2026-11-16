@@ -100,7 +100,8 @@ makes concurrent starts converge on one (US3 scenario 3). Each daemon actor gets
 host daemon `local`; for provisioned daemons the app writes `[daemon] id = <wire id>` and `[orchestrator_link] enabled = true` into the rendered config (FR-013).
 The wire id is not the registry's `DaemonId(u32)` (a per-app counter): it is
 `WireDaemonId::new(format!("{}-{}", slugify(name), short_uuid))`, where `slugify` lowercases,
-maps other characters to `-`, trims to fit 63 with the suffix, and `short_uuid` is 8 hex
+maps other characters to `-`, trims leading and trailing `-`, falls back to `daemon` when
+the result is empty, trims to fit 63 with the suffix, and `short_uuid` is 8 hex
 characters of a UUID generated once per provisioned daemon and stored in its registry entry
 (`wire_id`), so two machines' daemons never collide. Existing provisioned daemons have no
 `wire_id`: the app generates and stores one on its next connect and re-renders the config

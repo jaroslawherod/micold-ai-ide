@@ -5,4 +5,4 @@
 - [x] Success criteria are measurable.
 - [x] Edge cases cover empty input, failure, concurrency and cross-platform.
 - [x] Out-of-scope items listed.
-- [ ] Clarifications (2 open): list deadline per daemon (FR-002); who writes `[orchestrator_link]` into provisioned daemons (Assumptions). For the clarify unit.
+- [x] Clarifications (resolved in spec.md Clarifications, Session 2026-11-16): list deadline per daemon (FR-002); who writes `[orchestrator_link]` into provisioned daemons (Assumptions). For the clarify unit.
