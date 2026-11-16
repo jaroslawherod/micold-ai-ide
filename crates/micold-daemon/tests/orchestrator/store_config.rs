@@ -177,8 +177,24 @@ async fn the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one
     );
     assert!(json.exists());
 
-    std::fs::write(&json, r#"{"version":1,"daemons":[]}"#).unwrap();
+    {
+        use micold_core::orchestrator::RegistryStore as _;
+        micold_core::orchestrator::store::JsonRegistryStore::in_data_dir(dir.path())
+            .save(&[micold_core::orchestrator::DaemonRecord::new(
+                micold_core::protocol::routing::WireDaemonId::new("seeded").unwrap(),
+                micold_core::daemon_config::Kind::Host,
+                "seeded",
+                1,
+                Default::default(),
+                Some("acme"),
+            )])
+            .unwrap();
+    }
     let running = tokio::time::timeout(std::time::Duration::from_secs(2), start()).await;
     assert!(running.is_err(), "the start returned: {running:?}");
     assert!(!json.exists() && json.with_file_name("registry.json.imported").exists());
+    // The started orchestrator's store serves the imported record.
+    assert!(stored(
+        &dir.path().join("orchestrator").join("orchestrator.db")
+    ));
 }

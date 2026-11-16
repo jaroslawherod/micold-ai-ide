@@ -50,7 +50,7 @@ pub fn import_registry_json(
         Err(e) => {
             return Err(StoreError::Corrupt {
                 path,
-                reason: e.to_string(),
+                reason: format!("cannot read it: {e}"),
             })
         }
     };

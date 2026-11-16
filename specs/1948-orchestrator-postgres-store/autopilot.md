@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-hzkb7z
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M9 review (A+B) of origin/main...HEAD on claude/project-thread-hzkb7z, then PR
+- **Next step**: open the M9 PR from the pushed branch; orchestrator waits on CI and merges
 
 ## Pull requests
 
@@ -39,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
-| M9 | T051–T054 | full | Import registry.json once | | implemented, in review |
+| M9 | T051–T054 | full | Import registry.json once | | review done, PR pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
 ## Decisions
@@ -79,6 +79,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
 | Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
 | Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
+
+- M9 round 1 (opus A+B): MINOR-ONLY, 2 MINOR fixed: a non-NotFound read error now says `cannot read it`; the start test seeds a record and checks the started store serves it (corrupt-file start failure already covered).
 
 ## Declined review findings
 
