@@ -134,13 +134,24 @@ pub async fn run(
     config: config::OrchestratorConfig,
     database: Option<DatabaseConfig>,
 ) -> io::Result<()> {
-    // Bound first, so a probe sees not-ready (rather than refused) while the store opens.
     let ops = match config.ops_addr {
         Some(addr) => Some(Ops::bind(addr).await?),
         None => None,
     };
-    let store = open_store(database, config.data_dir, SystemClock.wall_secs()).await?;
-    serve(config.endpoint, Arc::new(SystemClock), store, ops).await
+    let opened = open_store(database, config.data_dir, SystemClock.wall_secs());
+    run_ops_first(config.endpoint, ops, opened).await
+}
+
+/// Start the ops listener, then wait for `opened` and serve: a probe sees 200 on `/healthz` and
+/// 503 on `/readyz` (rather than a hang or a refusal) while the store opens.
+async fn run_ops_first(
+    endpoint: Endpoint,
+    ops: Option<Ops>,
+    opened: impl std::future::Future<Output = io::Result<Arc<dyn RegistryStore>>>,
+) -> io::Result<()> {
+    let running = ops.map(Ops::start);
+    let store = opened.await?;
+    serve(endpoint, Arc::new(SystemClock), store, running).await
 }
 
 /// The configuration file's `[database]` table and data directory: the file `--config` names,
@@ -259,6 +270,20 @@ impl Ops {
             readiness: Arc::default(),
         })
     }
+
+    /// Serve the listener on its own task, until the returned guard is dropped.
+    fn start(self) -> RunningOps {
+        RunningOps {
+            readiness: Arc::clone(&self.readiness),
+            _task: AbortOnDrop(tokio::spawn(ops::serve_ops(self.listener, self.readiness))),
+        }
+    }
+}
+
+/// A served ops listener: the readiness to report, and the task, aborted on drop.
+struct RunningOps {
+    readiness: Arc<ops::Readiness>,
+    _task: AbortOnDrop<io::Result<()>>,
 }
 
 /// The registry `store` holds, restored, and the saving thread that keeps it: what every link
@@ -317,12 +342,11 @@ async fn serve(
     endpoint: Endpoint,
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
-    ops: Option<Ops>,
+    ops: Option<RunningOps>,
 ) -> io::Result<()> {
+    // Held until this future ends, so the ops listener closes with the orchestrator.
     let readiness = ops.as_ref().map(|ops| Arc::clone(&ops.readiness));
-    // Aborted when this future ends, so the ops listener closes with the orchestrator.
-    let _ops_task =
-        ops.map(|ops| AbortOnDrop(tokio::spawn(ops::serve_ops(ops.listener, ops.readiness))));
+    let _ops = ops;
     // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
     // Declared before `links`, so dropped after them: when this future ends, the link tasks are
     // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
@@ -576,7 +600,12 @@ mod tests {
         let store = Arc::new(SlowLoad(Mutex::new(gate)));
         let (ops, addr) = ops_on_loopback().await;
         let endpoint = config::endpoint_at(dir.path().join("o.sock"));
-        let task = tokio::spawn(serve(endpoint, Arc::new(SystemClock), store, Some(ops)));
+        let task = tokio::spawn(serve(
+            endpoint,
+            Arc::new(SystemClock),
+            store,
+            Some(ops.start()),
+        ));
         assert!(ops::tests::get(addr, "/healthz")
             .await
             .starts_with("HTTP/1.1 200 "));
@@ -595,6 +624,23 @@ mod tests {
         task.abort();
     }
 
+    /// Review A r1: probes answer while the store is still opening.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn probes_answer_while_the_store_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ops, addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let never = std::future::pending::<io::Result<Arc<dyn RegistryStore>>>();
+        let task = tokio::spawn(run_ops_first(endpoint, Some(ops), never));
+        assert!(ops::tests::get(addr, "/healthz")
+            .await
+            .starts_with("HTTP/1.1 200 "));
+        assert!(ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 503 "));
+        task.abort();
+    }
+
     /// US3-4: a store that cannot load ends `serve` with its error.
     #[tokio::test(flavor = "multi_thread")]
     async fn a_failing_store_ends_serve_with_the_error() {
@@ -604,7 +650,7 @@ mod tests {
         let store = Arc::new(SlowLoad(Mutex::new(gate)));
         let (ops, _addr) = ops_on_loopback().await;
         let endpoint = config::endpoint_at(dir.path().join("o.sock"));
-        let error = serve(endpoint, Arc::new(SystemClock), store, Some(ops))
+        let error = serve(endpoint, Arc::new(SystemClock), store, Some(ops.start()))
             .await
             .unwrap_err();
         assert!(error.to_string().contains("store unreachable"), "{error}");

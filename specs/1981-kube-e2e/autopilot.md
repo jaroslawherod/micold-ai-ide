@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-mxfy6x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 (#1983) review A and B (dispatched by the orchestrator), then full gate and PR.
+- **Next step**: M2 (#1983) PR open; orchestrator waits on CI and merges.
 
 ## Pull requests
 
@@ -51,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 3 | scoped | (fix commit) | cbba162d5b20441d5f920eec269f7ec432a34a65:12c6d39d415b4c76ddbb1a7a0c81cec4b4601bed | CLEAN: 5 MINOR; 2 fixed (norepo pattern tolerant of older helm; ci/default.yaml must be `{}`), 3 left (fail-safe kube_paths on an unclassifiable proven push; created-not-started smoke container; schema reformat) |
 | M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 8 fixed, 2 declined (appVersion tag; socket dir mode, documented) |
 | tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
+| M2 A+B (opus) | 1 | full | 5272ef54e | abb5d2e251df1baf302e677ce8074d310c49842a:5272ef54ed19168fc8a76e056116d3135072b743 | CHANGES: 1 MAJOR (ops served only inside serve, probes hang while the store opens), 3 MINOR (head size check, silent timeout, tests); all fixed |
 | Review B | 1 | M1 | 49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | 7c47de4556526f50ff9beb7412373b4d950c17e4:49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | CLEAN (1 MINOR, no fix needed) |
 
 ## Declined review findings

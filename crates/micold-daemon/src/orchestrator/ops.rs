@@ -42,6 +42,15 @@ const READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Serve `listener` until the future is dropped; each connection runs on its own task.
 pub async fn serve_ops(listener: TcpListener, readiness: Arc<Readiness>) -> io::Result<()> {
+    serve_ops_with(listener, readiness, READ_TIMEOUT).await
+}
+
+/// [`serve_ops`] with `read_timeout` for the request head (tests shorten it).
+async fn serve_ops_with(
+    listener: TcpListener,
+    readiness: Arc<Readiness>,
+    read_timeout: Duration,
+) -> io::Result<()> {
     loop {
         let (stream, _) = match listener.accept().await {
             Ok(conn) => conn,
@@ -53,18 +62,21 @@ pub async fn serve_ops(listener: TcpListener, readiness: Arc<Readiness>) -> io::
         };
         let readiness = Arc::clone(&readiness);
         tokio::spawn(async move {
-            let _ = answer(stream, &readiness).await;
+            let _ = answer(stream, &readiness, read_timeout).await;
         });
     }
 }
 
-async fn answer(mut stream: TcpStream, readiness: &Readiness) -> io::Result<()> {
-    let head = tokio::time::timeout(READ_TIMEOUT, read_head(&mut stream))
-        .await
-        .map_err(|_| io::Error::from(io::ErrorKind::TimedOut))??;
-    let (status, body) = match head {
-        Some(line) => respond(&line, readiness),
-        None => ("400 Bad Request", "bad request"),
+async fn answer(
+    mut stream: TcpStream,
+    readiness: &Readiness,
+    read_timeout: Duration,
+) -> io::Result<()> {
+    let (status, body) = match tokio::time::timeout(read_timeout, read_head(&mut stream)).await {
+        Err(_) => ("408 Request Timeout", "request timeout"),
+        Ok(Ok(Some(line))) => respond(&line, readiness),
+        Ok(Ok(None)) => ("400 Bad Request", "bad request"),
+        Ok(Err(e)) => return Err(e),
     };
     let response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -79,12 +91,12 @@ async fn read_head(stream: &mut TcpStream) -> io::Result<Option<String>> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
-        if buf.len() > MAX_HEAD {
-            return Ok(None);
-        }
         let n = stream.read(&mut chunk).await?;
         if n == 0 {
             break;
+        }
+        if buf.len() + n > MAX_HEAD {
+            return Ok(None);
         }
         buf.extend_from_slice(&chunk[..n]);
     }
@@ -127,12 +139,40 @@ pub(crate) mod tests {
         raw(addr, &format!("GET {path} HTTP/1.1\r\nHost: x\r\n\r\n")).await
     }
 
-    async fn started() -> (std::net::SocketAddr, Arc<Readiness>) {
+    async fn started_with(read_timeout: Duration) -> (std::net::SocketAddr, Arc<Readiness>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let readiness = Arc::new(Readiness::default());
-        tokio::spawn(serve_ops(listener, Arc::clone(&readiness)));
+        tokio::spawn(serve_ops_with(
+            listener,
+            Arc::clone(&readiness),
+            read_timeout,
+        ));
         (addr, readiness)
+    }
+
+    async fn started() -> (std::net::SocketAddr, Arc<Readiness>) {
+        started_with(READ_TIMEOUT).await
+    }
+
+    /// A head past the limit is 400; exactly one byte over, so the server has read everything
+    /// sent and closes cleanly.
+    #[tokio::test]
+    async fn an_oversized_head_is_refused() {
+        let (addr, _readiness) = started().await;
+        let long = format!("GET /{}", "a".repeat(MAX_HEAD - 4));
+        assert_eq!(long.len(), MAX_HEAD + 1);
+        let response = raw(addr, &long).await;
+        assert!(response.starts_with("HTTP/1.1 400 "), "{response}");
+    }
+
+    /// A peer that never finishes its head is answered 408 and closed.
+    #[tokio::test]
+    async fn a_slow_head_times_out_with_408() {
+        let (addr, _readiness) = started_with(Duration::from_millis(100)).await;
+        let response = raw(addr, "GET /healthz HTTP/1.1\r\n").await;
+        assert!(response.starts_with("HTTP/1.1 408 "), "{response}");
+        assert!(response.contains("Connection: close"), "{response}");
     }
 
     #[tokio::test]
