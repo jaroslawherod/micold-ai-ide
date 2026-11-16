@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | CLEAN |
 
 | tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
+| tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | pending (orchestrator dispatches; fix diff from c3142fa34) |
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
