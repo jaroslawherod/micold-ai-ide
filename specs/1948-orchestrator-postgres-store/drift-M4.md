@@ -24,3 +24,5 @@ Recorded against `scripts/autopilot/plan-drift.sh specs/1948-orchestrator-postgr
   reason (the parser's text could echo the URL).
 - `PgConnectOptions` is converted to `sqlx::Any` through `to_url_lossy()`, which carries the
   password; every driver error is passed through `redact` (URL and password cut) before it is kept.
+- `db/registry.rs`, `db/auth.rs`, `db/audit.rs` (named by T029, reported MISSING): unchanged on
+  purpose; every statement already runs on both dialects, which the `postgres` suite proves.
