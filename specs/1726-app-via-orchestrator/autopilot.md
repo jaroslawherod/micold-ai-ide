@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-35d9jf
+- **Worktree branch**: claude/project-thread-jwbvyd
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M2 reviews (A+B) on the snapshot below, then open the M2 PR with specs/1726-app-via-orchestrator/pr-m2.md
+- **Next step**: M3 milestone unit (T017–T022)
 - **PR**: none
 
 ## Pull requests
@@ -20,13 +20,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1996 | design | merged | 9f6e6784d |
 | #1999 | M1 | merged | 2f62cbf31 |
+| #2004 | M2 | merged | 5ee726f07 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
-| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | implemented, review pending |
+| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
 ## Decisions
