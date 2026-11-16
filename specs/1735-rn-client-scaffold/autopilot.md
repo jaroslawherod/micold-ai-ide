@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
 | #2015 | M2 | merged | b863fd3393735e9d0ae6a4ac38299e31f30a5855 |
+| (M3) | M3: body in `pr-M3.md` | not opened | - |
 | #2013 | M1 workspace, CI, theme, i18n, spike | merged | 18aadedf61d2a5c3d512447f30e3a9f33eb12262 |
 
 ## Milestones
@@ -67,7 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B fix diff | 2 | M1 | 9b64585a458f441d7632f65b0f6a7c3532f1d467 | - | CLEAN (merged in #2013) |
 | Review A (opus, code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1-F3 major, F4-F7 minor), all fixed in the M2 fix commit |
 | Review B (sonnet, conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1 major, F2-F5 minor), all fixed in the M2 fix commit (F5 documented in drift-M2.md) |
-| Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | pending (orchestrator re-reviews) |
+| Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | CLEAN (merged in #2015) |
+| Review A + B | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | pending (orchestrator runs A high and B) |
 
 ## Declined review findings
 
