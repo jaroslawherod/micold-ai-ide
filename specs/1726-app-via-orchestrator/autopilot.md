@@ -22,7 +22,6 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1999 | M1 | merged | 2f62cbf31 |
 | #2004 | M2 | merged | 5ee726f07 |
 | #2007 | M3 | merged | f6aa5b806 |
-| #2007 | M3 | open; CI red round 1 fixed (flaky stand-in race in micold-daemon ai_cli_config test) | |
 
 ## Milestones
 
@@ -30,7 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
-| M3 | T017–T022 | full | desktop app uses one orchestrator connection | #2007 | PR open |
+| M3 | T017–T022 | full | desktop app uses one orchestrator connection (host only) | #2007 | merged |
+| M4 | TBD | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to plan |
 
 ## Decisions
 
@@ -73,7 +73,7 @@ None.
 
 ## Follow-ups not done
 
-- M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); with the user as a decision.
+- M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); jaro chose 2026-11-16 to do it as M4.
 
 ## Follow-ups (M2 review)
 - list.rs:111 mid-ask link drop reported as timeout, not offline
