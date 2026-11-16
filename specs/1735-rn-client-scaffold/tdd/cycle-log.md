@@ -14,3 +14,18 @@ Commands: `scripts/tests/classify-change.test.sh`; `pnpm --filter @micold/client
 | T021/T022 | `tests/app/spike.test.tsx`, `spikeFixtures`, `spikeScreen` | modules missing; first route draft read the env at import (untestable), moved the check into render | route renders the spike only when `EXPO_PUBLIC_API_MODE === "mock"` |
 
 Refactor while green: `chooseLocale` takes an injectable `languages` source so the locale store test needs no `navigator` spy.
+
+## M2
+
+| Tasks | Test | Red (why it failed) | Green |
+|---|---|---|---|
+| T024/T025 | `packages/protocol/tests/api.test.ts`, `types.test-d.ts` | modules `src/api`, `src/types` missing | branded ids, `ConnectionState` union with `assertNever`, `createAuthSession` with a non-enumerable token |
+| T026/T027 | `packages/protocol/tests/connection.test.ts` | module `src/connection` missing; review round: gap snapshot sent twice, unknown error code passed through, retryNow reopened while connected | `ConnectionManager`: full jitter, offline after maxAttempts, resume, one in-flight snapshot retried on next open, codes validated, `onUnauthenticated` |
+| T028/T029 | `packages/protocol/tests/mock.test.ts` | module `src/mock` missing; then `structuredClone` undefined in Jest; review round: sentinel not used at runtime | fixture 2/6/30/60, feed, mock auth; JSON clone; sentinel set on `globalThis` |
+| T030/T031 | `apps/client/tests/api/select.test.ts`, `ApiProvider.test.tsx` | module `src/api/select` missing | synchronous guarded `require` of the mock; real mode throws and the app shows `api.unavailable` |
+| T032/T033 | `apps/client/tests/auth/*` | modules `src/auth/*` missing; review round: protected child rendered before the redirect, `/sign-in/` and control characters accepted as `returnTo` | memory store, `(app)` group gate returning `Redirect`, URL-parsed `returnTo` |
+| T034/T035 | `apps/client/tests/app/signIn.test.tsx` | `app/sign-in` missing; catalog test refused `signIn.*` ids; review round: a rejected sign-in left the buttons disabled | sign-in page, `signin.*` messages en/pl, `signin.failed` with retry |
+| T036/T037 | `apps/client/tests/components/ConnectionBanner.test.tsx` | component missing; then a `View` with a role but not `accessible` was not found by role | banner over `useSyncExternalStore` |
+| T038/T039 | `scripts/tests/bundle-check.test.sh` | `scripts/client/bundle-check.mjs` missing | sentinel scan, exit 0/1/2; CI checks the real export and that a mock export fails |
+
+Refactor while green: `renderWithApi` test helper shared by the sign-in and banner tests.

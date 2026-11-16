@@ -1,10 +1,10 @@
 import React from "react";
 import { View } from "react-native";
 import { Text, useTheme } from "react-native-paper";
-import { LocalePicker } from "../src/components/LocalePicker";
-import { useT } from "../src/i18n/IntlProvider";
-import { useTitle } from "../src/i18n/useTitle";
-import { spacing } from "../src/theme/tokens.generated";
+import { LocalePicker } from "../../src/components/LocalePicker";
+import { useT } from "../../src/i18n/IntlProvider";
+import { useTitle } from "../../src/i18n/useTitle";
+import { spacing } from "../../src/theme/tokens.generated";
 
 export default function Index() {
   const t = useT();

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo } from "react";
 import { Slot } from "expo-router";
 import { PaperProvider } from "react-native-paper";
 import { ApiProvider } from "../src/api/ApiProvider";
-import { AuthGate } from "../src/auth/AuthGate";
 import { SessionProvider } from "../src/auth/SessionProvider";
 import { ConnectionBanner } from "../src/components/ConnectionBanner";
 import { IntlProvider } from "../src/i18n/IntlProvider";
@@ -22,9 +21,7 @@ export default function RootLayout() {
         <ApiProvider>
           <SessionProvider>
             <ConnectionBanner />
-            <AuthGate>
-              <Slot />
-            </AuthGate>
+            <Slot />
           </SessionProvider>
         </ApiProvider>
       </IntlProvider>

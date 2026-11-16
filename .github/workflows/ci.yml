@@ -236,6 +236,13 @@ jobs:
         run: pnpm --filter @micold/client web:export
       - name: Bundle check (no mock in the production export)
         run: node scripts/client/bundle-check.mjs apps/client/dist
+      # The check must see the mock where it is: a mock export has to fail it.
+      - name: Bundle check refuses a mock export
+        run: |
+          pnpm --filter @micold/client web:export:mock
+          status=0
+          node scripts/client/bundle-check.mjs apps/client/dist-mock || status=$?
+          test "$status" = 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:

@@ -16,5 +16,6 @@
   "signin.retry": "Try again",
   "signin.loadFailed": "The sign-in options could not be loaded.",
   "connection.reconnecting": "Connection lost. Reconnecting (attempt {attempt})…",
-  "connection.offline": "Offline. The orchestrator cannot be reached."
+  "connection.offline": "Offline. The orchestrator cannot be reached.",
+  "signin.failed": "The sign-in with {provider} failed. Check the connection and try again."
 }

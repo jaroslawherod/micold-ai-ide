@@ -65,6 +65,8 @@ function apply(snap: Snapshot, change: Change): void {
 }
 
 export function createMockApi(): { api: Api; control: MockControl } {
+  // Used at runtime, so no minifier can drop the string the bundle check looks for.
+  (globalThis as Record<string, unknown>)[MOCK_SENTINEL] = true;
   const snap = buildFixture();
   const log: Change[] = [];
   const feeds = new Set<(b: Change[]) => void>();

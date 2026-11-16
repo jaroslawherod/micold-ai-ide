@@ -15,10 +15,11 @@ describe("route guard", () => {
     expect(returnTarget("/sessions/s1")).toBe("/sessions/s1");
     expect(returnTarget(["/a", "/b"])).toBe("/a");
     expect(returnTarget(decodeURIComponent("%2Fsessions%2Fs1"))).toBe("/sessions/s1");
+    expect(returnTarget("/sessions/s1?tab=diff#top")).toBe("/sessions/s1?tab=diff#top");
   });
 
   it("never returns off-site, to sign-in, or to nothing", () => {
-    for (const bad of [undefined, "", "https://evil.example", "//evil.example", "/\\evil", "/sign-in", "/sign-in?returnTo=/x"]) {
+    for (const bad of [undefined, "", "https://evil.example", "//evil.example", "/\\evil", "/sign-in", "/sign-in?returnTo=/x", "/sign-in/", "/sign-in#x", "/\tx", "/a\nb", "/%2F/evil.example"]) {
       expect(returnTarget(bad)).toBe("/");
     }
   });

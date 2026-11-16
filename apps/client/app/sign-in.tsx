@@ -15,7 +15,9 @@ import { useTitle } from "../src/i18n/useTitle";
 import { spacing } from "../src/theme/tokens.generated";
 
 type Providers = AuthProvider[] | "loading" | "failed";
-type Failure = { reason: "refused" | "cancelled"; provider: AuthProvider } | null;
+type Failure = { reason: "refused" | "cancelled" | "error"; provider: AuthProvider } | null;
+
+const FAILURE_MESSAGE = { refused: "signin.refused", cancelled: "signin.cancelled", error: "signin.failed" } as const;
 
 export default function SignIn() {
   const t = useT();
@@ -41,8 +43,15 @@ export default function SignIn() {
   const signIn = async (provider: AuthProvider) => {
     setBusy(true);
     setFailure(null);
-    const result = await auth.signIn(provider.id);
-    setBusy(false);
+    let result: Awaited<ReturnType<typeof auth.signIn>>;
+    try {
+      result = await auth.signIn(provider.id);
+    } catch {
+      setFailure({ reason: "error", provider });
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (isAuthFailure(result)) {
       setFailure({ reason: result.failure, provider });
       return;
@@ -81,7 +90,7 @@ export default function SignIn() {
       {failure && (
         <View style={{ gap: spacing.sm }}>
           <Text accessibilityRole="alert" style={{ color: theme.colors.error }}>
-            {t(failure.reason === "refused" ? "signin.refused" : "signin.cancelled", { provider: failure.provider.name })}
+            {t(FAILURE_MESSAGE[failure.reason], { provider: failure.provider.name })}
           </Text>
           <Button mode="outlined" onPress={() => void signIn(failure.provider)} accessibilityLabel={t("signin.retry")}>
             {t("signin.retry")}

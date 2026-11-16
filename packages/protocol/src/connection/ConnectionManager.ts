@@ -17,12 +17,22 @@ interface Pending {
 }
 
 const DEFAULT_MAX_ATTEMPTS = 8;
+const ERROR_CODES: readonly ApiErrorCode[] = ["unauthenticated", "unavailable", "timeout"];
+
+/** An error code from the wire; anything not in the contract is `unavailable`. */
+function toErrorCode(raw: unknown): ApiErrorCode {
+  return ERROR_CODES.find((c) => c === raw) ?? "unavailable";
+}
 
 export class ConnectionManager {
   private state: ConnectionState = { kind: "offline" };
   private listeners = new Set<(s: ConnectionState) => void>();
   private eventListeners = new Set<(f: EventFrame) => void>();
   private snapshotListeners = new Set<(s: unknown) => void>();
+  private unauthListeners = new Set<() => void>();
+  private snapshotInFlight = false;
+  private snapshotNeeded = false;
+  private opening = false;
   private pending = new Map<number, Pending>();
   private nextId = 1;
   private attempt = 0;
@@ -66,8 +76,15 @@ export class ConnectionManager {
     return () => this.snapshotListeners.delete(cb);
   }
 
+  /** An answer was `unauthenticated`; the real auth client wires this to `onSessionLost`. */
+  onUnauthenticated(cb: () => void): Unsubscribe {
+    this.unauthListeners.add(cb);
+    return () => this.unauthListeners.delete(cb);
+  }
+
   start(): void {
     this.stopped = false;
+    this.opening = true;
     this.transport.open();
   }
 
@@ -80,6 +97,7 @@ export class ConnectionManager {
 
   /** Leave `offline` (or skip the wait) and open now. */
   retryNow(): void {
+    if (this.state.kind === "connected" || this.opening) return;
     this.cancelRetry();
     this.attempt = 0;
     this.start();
@@ -96,13 +114,16 @@ export class ConnectionManager {
   }
 
   private handleOpen(): void {
+    this.opening = false;
     this.attempt = 0;
     if (this.everOpened) this.transport.send(JSON.stringify({ method: "resume", params: { sinceSeq: this.seq } }));
     this.everOpened = true;
     this.setState({ kind: "connected" });
+    if (this.snapshotNeeded) this.fetchSnapshot();
   }
 
   private handleClose(): void {
+    this.opening = false;
     for (const id of [...this.pending.keys()]) this.settle(id, "unavailable");
     if (this.stopped) return;
     this.attempt += 1;
@@ -115,6 +136,7 @@ export class ConnectionManager {
     const ceiling = Math.min(this.options.maxMs, this.options.baseMs * 2 ** (this.attempt - 1));
     this.retryTimer = this.clock.setTimeout(() => {
       this.retryTimer = undefined;
+      this.opening = true;
       this.transport.open();
     }, this.options.random() * ceiling);
   }
@@ -131,7 +153,7 @@ export class ConnectionManager {
     if (typeof f.id === "number") {
       const p = this.pending.get(f.id);
       if (!p) return;
-      if (typeof f.error === "string") this.settle(f.id, f.error as ApiErrorCode);
+      if (f.error !== undefined) this.settle(f.id, toErrorCode(f.error));
       else this.settle(f.id, undefined, f.result);
       return;
     }
@@ -141,18 +163,30 @@ export class ConnectionManager {
   private handleEvent(frame: EventFrame): void {
     if (frame.seq <= this.seq) return;
     if (frame.seq > this.seq + 1) {
-      void this.request("snapshot").then(
-        (snapshot) => {
-          const s = (snapshot as { seq?: unknown } | null)?.seq;
-          if (typeof s === "number") this.seq = s;
-          for (const cb of this.snapshotListeners) cb(snapshot);
-        },
-        () => undefined,
-      );
+      this.fetchSnapshot();
       return;
     }
     this.seq = frame.seq;
     for (const cb of this.eventListeners) cb(frame);
+  }
+
+  /** One snapshot request at a time; a failed one is asked for again on the next open. */
+  private fetchSnapshot(): void {
+    this.snapshotNeeded = true;
+    if (this.snapshotInFlight) return;
+    this.snapshotInFlight = true;
+    this.request("snapshot").then(
+      (snapshot) => {
+        this.snapshotInFlight = false;
+        this.snapshotNeeded = false;
+        const s = (snapshot as { seq?: unknown } | null)?.seq;
+        if (typeof s === "number" && s > this.seq) this.seq = s;
+        for (const cb of this.snapshotListeners) cb(snapshot);
+      },
+      () => {
+        this.snapshotInFlight = false;
+      },
+    );
   }
 
   private settle(id: number, error: ApiErrorCode | undefined, result?: unknown): void {
@@ -160,6 +194,7 @@ export class ConnectionManager {
     if (!p) return;
     this.pending.delete(id);
     this.clock.clear(p.timer);
+    if (error === "unauthenticated") for (const cb of this.unauthListeners) cb();
     if (error) p.reject(new ApiError(error));
     else p.resolve(result);
   }

@@ -16,5 +16,6 @@
   "signin.retry": "Spróbuj ponownie",
   "signin.loadFailed": "Nie udało się wczytać opcji logowania.",
   "connection.reconnecting": "Utracono połączenie. Ponowne łączenie (próba {attempt})…",
-  "connection.offline": "Brak połączenia. Nie można połączyć się z orkiestratorem."
+  "connection.offline": "Brak połączenia. Nie można połączyć się z orkiestratorem.",
+  "signin.failed": "Logowanie przez {provider} nie powiodło się. Sprawdź połączenie i spróbuj ponownie."
 }

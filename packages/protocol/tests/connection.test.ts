@@ -186,4 +186,63 @@ describe("ConnectionManager", () => {
     transport.accept();
     expect(seen).toEqual([]);
   });
+
+  it("keeps one snapshot request in flight across two gaps and never moves seq back", async () => {
+    const { transport, manager } = setup();
+    manager.start();
+    transport.accept();
+    transport.deliver({ seq: 1 });
+    transport.deliver({ seq: 5 });
+    transport.deliver({ seq: 9 });
+    const snaps = transport.sent.filter((f) => f.method === "snapshot");
+    expect(snaps).toHaveLength(1);
+    transport.deliver({ seq: 2 });
+    transport.deliver({ id: snaps[0]!.id, result: { seq: 1 } });
+    await Promise.resolve();
+    expect(manager.lastSeq).toBe(2);
+  });
+
+  it("asks again for a snapshot that failed, on the next open", async () => {
+    const { transport, clock, manager } = setup(0);
+    manager.start();
+    transport.accept();
+    transport.deliver({ seq: 3 });
+    transport.drop();
+    await Promise.resolve();
+    clock.advance(0);
+    transport.sent = [];
+    transport.accept();
+    expect(transport.sent.map((f) => f.method)).toEqual(["resume", "snapshot"]);
+  });
+
+  it("maps an unknown error code to unavailable", async () => {
+    const { transport, manager } = setup();
+    manager.start();
+    transport.accept();
+    const p = manager.request("x");
+    transport.deliver({ id: transport.sent[0]!.id, error: "boom" });
+    await expect(p).rejects.toMatchObject({ code: "unavailable" });
+  });
+
+  it("reports an unauthenticated answer so the auth service can drop the session", async () => {
+    const { transport, manager } = setup();
+    const lost = jest.fn();
+    manager.onUnauthenticated(lost);
+    manager.start();
+    transport.accept();
+    const p = manager.request("x");
+    transport.deliver({ id: transport.sent[0]!.id, error: "unauthenticated" });
+    await expect(p).rejects.toMatchObject({ code: "unauthenticated" });
+    expect(lost).toHaveBeenCalledTimes(1);
+  });
+
+  it("retryNow does nothing while connected or while an open is in flight", () => {
+    const { transport, manager } = setup();
+    manager.start();
+    manager.retryNow();
+    expect(transport.opens).toBe(1);
+    transport.accept();
+    manager.retryNow();
+    expect(transport.opens).toBe(1);
+  });
 });

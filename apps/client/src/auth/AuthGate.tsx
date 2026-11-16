@@ -1,16 +1,14 @@
-// Applies the route guard to whatever the router renders below it.
-import React, { useEffect, type ReactNode } from "react";
-import { usePathname, useRouter } from "expo-router";
+// Applies the route guard in the `(app)` group layout: a signed-out visitor is redirected before
+// any protected route renders, and an expired session redirects with the open route as `returnTo`.
+import React, { type ReactNode } from "react";
+import { Redirect, usePathname } from "expo-router";
 import { guardRedirect } from "./guard";
 import { useSession } from "./SessionProvider";
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const signedIn = useSession((s) => s.session !== null);
   const target = guardRedirect(pathname, signedIn);
-  useEffect(() => {
-    if (target) router.replace(target);
-  }, [target, router]);
+  if (target) return <Redirect href={target as never} />;
   return <>{children}</>;
 }

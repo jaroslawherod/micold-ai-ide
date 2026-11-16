@@ -88,6 +88,17 @@ describe("sign-in page", () => {
     expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
   });
 
+  it("shows an error with a retry when the sign-in call itself fails", async () => {
+    const mock = createMockApi();
+    jest.spyOn(mock.api.auth, "signIn").mockRejectedValueOnce(new Error("network"));
+    await show(mock);
+    await fireEvent.press(screen.getByRole("button", { name: "Sign in with GitHub" }));
+    expect(screen.getByText("The sign-in with GitHub failed. Check the connection and try again.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).not.toBeDisabled();
+    await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+    expect(sessionProbe.signedIn).toBe(true);
+  });
+
   it("takes every string from the catalog (Polish)", async () => {
     localeStore.getState().setLocale("pl");
     await show();

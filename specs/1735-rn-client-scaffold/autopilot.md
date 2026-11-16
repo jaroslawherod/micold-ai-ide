@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2: protocol tests run as a third Jest project (`protocol`, rootDir `packages/protocol`, babel-preset-expo) of `apps/client/jest.config.js`, so one lcov covers both packages. babel-plugin-istanbul instruments only files under the process cwd, so the client's `test` script runs Jest from the repository root; lcov paths are now repository paths and the ci.yml `SF:` rewrite of M1 is gone.
 - M2: `select.ts` uses a guarded synchronous `require("@micold/protocol/mock")` (the spike's pattern), not a dynamic `import()`, which Metro would split into an async chunk that still ships. Checked: the `real` export passes `bundle-check.mjs`, the `mock` export fails it.
 - M2: without a real client (`real` mode) `ApiProvider` renders the catalog message `api.unavailable` instead of crashing; the error text "real client not built (#1732)" stays the thrown error.
-- M2: the route guard is `AuthGate` (an effect calling `router.replace`) around the root `Slot`, not `Redirect`: the root navigator must mount before navigating. `returnTo` is honoured only for a same-origin path that is not sign-in.
+- M2: the route guard is `AuthGate` in the `(app)` group layout (`app/(app)/_layout.tsx`), returning `Redirect` before any protected route renders (review A F2); `app/index.tsx` moved into the group. Sign-in and the spike stay outside. `returnTo` is honoured only for a same-origin path that is not sign-in.
 - M2: catalog area ids must be lowercase (M1 catalog test), so the sign-in messages are `signin.*`.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -59,8 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A (opus) | 1 | M1 | dc3f3cd2b7fdc41559cc2aea0866aaea888545ba | - | CLEAN minors F1 (ci.yml client condition) and F2 (lcov SF paths) both fixed in 9b64585a458f441d7632f65b0f6a7c3532f1d467 |
 | Review B (conformance) | 1 | M1 | dc3f3cd2b7fdc41559cc2aea0866aaea888545ba | - | CHANGES F1 major (plan drift, drift-M1.md written, plan-drift.sh clean), F2 minor (lcov normalisation noted); fixed in 9b64585a458f441d7632f65b0f6a7c3532f1d467 |
 | Review A+B fix diff | 2 | M1 | 9b64585a458f441d7632f65b0f6a7c3532f1d467 | - | CLEAN (merged in #2013) |
-| Review A (code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | pending (orchestrator dispatches) |
-| Review B (conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | pending (orchestrator dispatches) |
+| Review A (opus, code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1-F3 major, F4-F7 minor), all fixed in the M2 fix commit |
+| Review B (sonnet, conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1 major, F2-F5 minor), all fixed in the M2 fix commit (F5 documented in drift-M2.md) |
 
 ## Declined review findings
 

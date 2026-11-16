@@ -8,6 +8,12 @@ describe("mock orchestrator", () => {
     expect(MOCK_SENTINEL).toBe("__MICOLD_MOCK__");
   });
 
+  it("marks the realm at runtime, so a minifier cannot drop the sentinel", () => {
+    delete (globalThis as Record<string, unknown>)[MOCK_SENTINEL];
+    createMockApi();
+    expect((globalThis as Record<string, unknown>)[MOCK_SENTINEL]).toBe(true);
+  });
+
   it("serves the fixture: 2 daemons, 6 projects, 30 worktrees, 60 sessions, linked", async () => {
     const { api } = createMockApi();
     const snap = await api.orchestrator.getSnapshot();

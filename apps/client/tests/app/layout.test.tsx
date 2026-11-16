@@ -12,7 +12,8 @@ jest.mock("expo-router", () => {
 });
 
 import RootLayout from "../../app/_layout";
-import Index from "../../app/index";
+import Index from "../../app/(app)/index";
+import ProtectedLayout from "../../app/(app)/_layout";
 import { IntlProvider } from "../../src/i18n/IntlProvider";
 import { PaperProvider } from "react-native-paper";
 import { buildTheme } from "../../src/theme/buildTheme";
@@ -26,6 +27,22 @@ describe("root layout and index", () => {
   it("renders the routed slot inside the providers", async () => {
     process.env.EXPO_PUBLIC_API_MODE = "mock";
     await render(<RootLayout />);
+    expect(screen.getByTestId("slot")).toBeTruthy();
+  });
+
+  it("wraps the protected group's routes in the auth gate", async () => {
+    process.env.EXPO_PUBLIC_API_MODE = "mock";
+    const { ApiProvider } = require("../../src/api/ApiProvider");
+    const { SessionProvider } = require("../../src/auth/SessionProvider");
+    await render(
+      <IntlProvider>
+        <ApiProvider>
+          <SessionProvider>
+            <ProtectedLayout />
+          </SessionProvider>
+        </ApiProvider>
+      </IntlProvider>,
+    );
     expect(screen.getByTestId("slot")).toBeTruthy();
   });
 
