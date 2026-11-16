@@ -9,12 +9,12 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 committed=apps/client/src/theme/tokens.generated.ts
-regen="cargo run -p micold-core --bin micold-tokens-ts -- $committed"
+regen="scripts/build-lock.sh cargo run -p micold-core --bin micold-tokens-ts -- $committed"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-cargo run -q -p micold-core --bin micold-tokens-ts -- "$tmp/fresh.ts"
+scripts/build-lock.sh cargo run -q -p micold-core --bin micold-tokens-ts -- "$tmp/fresh.ts"
 
 # check <file>: succeeds when <file> equals the freshly generated module; otherwise prints the
 # file and the command that regenerates it, and fails.

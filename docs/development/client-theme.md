@@ -8,7 +8,7 @@ from the same Rust tokens the application and the docs site render with (`micold
 ## Regenerate
 
 ```sh
-cargo run -p micold-core --bin micold-tokens-ts -- apps/client/src/theme/tokens.generated.ts
+scripts/build-lock.sh cargo run -p micold-core --bin micold-tokens-ts -- apps/client/src/theme/tokens.generated.ts
 ```
 
 With no path argument the module is printed to stdout. The file is written atomically, so a failed

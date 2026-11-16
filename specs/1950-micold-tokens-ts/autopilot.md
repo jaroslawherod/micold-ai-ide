@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | design | 02504dfad970ca6a8acecac160a7576d8d07fc10 | f4413c54:bc96b57c | CLEAN (3 MINOR applied; dispatched by orchestrator) |
 | M1 B | 1 | diff | 9b31e0ac4 | 9b31e0ac4 | MINOR-ONLY (F1-F3 applied; sonnet, dispatched by orchestrator) |
 | Diff A (self, no Agent tool) | 1 | M1 origin/main...HEAD | HEAD | - | CLEAN (1 MINOR applied: `named()` depth arg simplified; checked: colours vs stylesheet, atomic write, tables byte-identical CSS; typeScale has no `font` since no font token exists, recorded in drift-M1.md) |
+| M2 diff | 1 | origin/main...HEAD | ceee7d97 | ceee7d97 | MINOR-ONLY (F1-F2 applied: build-lock.sh in drift test and docs; sonnet, dispatched by orchestrator) |
 
 ## Declined review findings
 
