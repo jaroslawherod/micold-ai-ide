@@ -330,6 +330,9 @@ pub enum Dial {
         /// The repositories of the daemon's saved projects, which pick the GitHub tokens the pod
         /// receives (#1760, FR-009); identity as for `startup`.
         projects: ProjectsDial,
+        /// The id the pod's daemon announces to the orchestrator (#1726), which the actor routes
+        /// to after provisioning.
+        wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
     },
 }
 
@@ -473,6 +476,8 @@ pub struct ContainerBringUp {
     /// The SSH key, signing key, CA file and session files, delivered with it (#1536); identity as
     /// for `startup`.
     pub extras: micold_core::daemons::SessionExtras,
+    /// The id the daemon announces to the orchestrator (#1726, R6), written into its configuration.
+    pub wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
 }
 
 impl std::hash::Hash for ContainerBringUp {
@@ -490,6 +495,7 @@ impl std::hash::Hash for ContainerBringUp {
         serde_json::to_string(&self.extras)
             .unwrap_or_default()
             .hash(state);
+        self.wire_id.hash(state);
     }
 }
 
@@ -660,6 +666,7 @@ pub fn actor_specs_answered(
                                     extras: DaemonSettings::from_entry(entry)
                                         .map(|(settings, _)| settings.extras)
                                         .unwrap_or_default(),
+                                    wire_id: entry.file.wire_id.clone(),
                                 }
                             })
                         })
@@ -694,6 +701,7 @@ pub fn actor_specs_answered(
                     } else {
                         ProjectsDial::default()
                     },
+                    wire_id: entry.file.wire_id.clone(),
                 },
                 _ => return None,
             };
@@ -768,7 +776,7 @@ struct ConnectFailures {
 
 /// What the attempts of one actor so far have shown. Owned by the reconnect loop rather than by
 /// one attempt: the whole point is what the *previous* attempt did.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default)]
 struct LinkLife {
     /// The streak of failed connects (feature 028).
     failures: ConnectFailures,
@@ -777,6 +785,48 @@ struct LinkLife {
     established: bool,
     /// The latest attempt reached `Connected`: the next delay starts again from the first.
     connected: bool,
+    /// A provisioned daemon's link holder (and a pod's relay) from the last routed attempt, kept
+    /// across a lost route: the next attempt routes over it again without provisioning (#1726,
+    /// FR-009, an orchestrator restart).
+    kept: Option<KeptLink>,
+}
+
+/// The link of a provisioned daemon that outlives one route (#1726, FR-009). The holder is
+/// declared first, so it drops before the relay it rides.
+struct KeptLink {
+    holder: micold_core::provision::LinkHolder,
+    _relay: Option<crate::kube::relay::Relay>,
+    wire_id: micold_core::protocol::routing::WireDaemonId,
+}
+
+impl std::fmt::Debug for KeptLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeptLink")
+            .field("wire_id", &self.wire_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl KeptLink {
+    /// Route to the daemon again over this link. `None` when the holder has ended, or the daemon
+    /// did not link within [`ROUTE_DEADLINE`]: the caller provisions afresh.
+    async fn reroute(&mut self) -> Option<Connected> {
+        use iced::futures::FutureExt;
+        if self.holder.ended().now_or_never().is_some() {
+            return None;
+        }
+        routed_to(&self.wire_id, ROUTE_DEADLINE).await.ok()
+    }
+}
+
+/// The id a provisioned dial routes to (#1726): `None` for the host, the boot sandbox and a daemon
+/// saved without one.
+fn dial_wire_id(dial: &Dial) -> Option<&micold_core::protocol::routing::WireDaemonId> {
+    match dial {
+        Dial::Ssh { settings, .. } => settings.0.wire_id.as_ref(),
+        Dial::ContainerSsh { wire_id, .. } | Dial::Kubernetes { wire_id, .. } => wire_id.as_ref(),
+        Dial::Host(_) | Dial::Container { .. } => None,
+    }
 }
 
 impl ConnectFailures {
@@ -995,7 +1045,20 @@ async fn connect_and_pump(
     // of a provisioned daemon (#1726): dropping it drops the daemon's link and so the route.
     let mut held_relay: Option<crate::kube::relay::Relay> = None;
     let mut held_link: Option<micold_core::provision::LinkHolder> = None;
+    // A link kept from the last route is tried first; one that cannot route again is dropped
+    // here, before provisioning starts over (FR-009).
+    let rerouted = match life.kept.take() {
+        Some(mut kept) => match kept.reroute().await {
+            Some(c) => {
+                life.kept = Some(kept);
+                Some(c)
+            }
+            None => None,
+        },
+        None => None,
+    };
     let attempt = match (&spec.dial, endpoint) {
+        _ if rerouted.is_some() => Ok(rerouted.expect("checked")),
         // Deliver the host's config (write-if-changed, mode 0600) before spawning it, so a cold
         // start — and any later reconnect after a settings change — always starts from the
         // current settings (#1526, FR-005/FR-014). Only the host entry ever reaches here; a
@@ -1087,6 +1150,7 @@ async fn connect_and_pump(
                 startup,
                 extras,
                 projects,
+                wire_id,
             },
             _,
         ) => {
@@ -1104,34 +1168,25 @@ async fn connect_and_pump(
             // there: a drift found then is kept.
             // A daemon that never connected is on its first start, which creates the pod if it
             // is missing: that is the user's Start, not a re-dial.
+            let pod = PodDial {
+                name,
+                settings: &settings.0,
+                startup: startup.0.as_ref(),
+                extras: &extras.0,
+                projects: &projects.0,
+                wire_id: wire_id.as_ref(),
+            };
             let tried = if life.established {
-                kube_reconnect(
-                    env,
-                    name,
-                    &settings.0,
-                    startup.0.as_ref(),
-                    &extras.0,
-                    &projects.0,
-                    &sink,
-                )
-                .await
+                kube_reconnect_routed(env, &pod, &sink).await
             } else {
-                kube_attempt(
-                    env,
-                    name,
-                    &settings.0,
-                    startup.0.as_ref(),
-                    &extras.0,
-                    &projects.0,
-                    drift.0,
-                    &sink,
-                )
-                .await
-                .map_err(KubeReconnectError::Attempt)
+                kube_attempt_routed(env, &pod, drift.0, &sink)
+                    .await
+                    .map_err(KubeReconnectError::Attempt)
             };
             match tried {
-                Ok((c, relay)) => {
+                Ok((c, relay, holder)) => {
                     held_relay = Some(relay);
+                    held_link = holder;
                     Ok(c)
                 }
                 // The pod is gone: the daemon stops with the reason and nothing is recreated until
@@ -1187,6 +1242,14 @@ async fn connect_and_pump(
     // holder rides the relay, so it is declared after it and dropped first.
     let _relay_lives_until_return = &held_relay;
     let _holder_lives_until_return = &held_link;
+    // A routed attempt's link is kept for the next one (FR-009): the actor owns it.
+    if let (Some(holder), Some(wire_id)) = (held_link.take(), dial_wire_id(&spec.dial)) {
+        life.kept = Some(KeptLink {
+            holder,
+            _relay: held_relay.take(),
+            wire_id: wire_id.clone(),
+        });
+    }
 
     let connected = match attempt {
         Ok(c) => c,
@@ -2152,7 +2215,45 @@ pub async fn kube_reconnect(
     projects: &[micold_core::github::GithubRepo],
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeReconnectError> {
+    let pod = PodDial {
+        name,
+        settings,
+        startup,
+        extras,
+        projects,
+        wire_id: None,
+    };
+    kube_reconnect_routed(env, &pod, sink)
+        .await
+        .map(|(connected, relay, _)| (connected, relay))
+}
+
+/// What one pod dial is made of: the actor's [`Dial::Kubernetes`] fields, borrowed.
+pub struct PodDial<'a> {
+    pub name: &'a str,
+    pub settings: &'a KubeSettings,
+    pub startup: Option<&'a daemon_config_render::StartupTable>,
+    pub extras: &'a micold_core::daemons::SessionExtras,
+    pub projects: &'a [micold_core::github::GithubRepo],
+    /// Written into the pod's `daemon.toml` as `[daemon] id`; the dial routes to it (#1726).
+    pub wire_id: Option<&'a micold_core::protocol::routing::WireDaemonId>,
+}
+
+/// A pod bring-up with its relay and, once routed through the orchestrator, its link holder (#1726).
+type PodRouted = (
+    Connected,
+    crate::kube::relay::Relay,
+    Option<micold_core::provision::LinkHolder>,
+);
+
+/// [`kube_reconnect`] for a [`PodDial`], routed through the orchestrator after provisioning.
+pub async fn kube_reconnect_routed(
+    env: &KubeEnv,
+    pod: &PodDial<'_>,
+    sink: &EventSink,
+) -> Result<PodRouted, KubeReconnectError> {
     use micold_core::kube::classify::PodGone;
+    let (name, settings) = (pod.name, pod.settings);
     let (context, namespace) = (&settings.context.0, &settings.namespace.0);
     let names = micold_core::kube::names::ResourceNames::new(context, namespace, name);
     let lookup = |e: String| KubeReconnectError::Lookup(format!("cannot look up the pod: {e}"));
@@ -2167,18 +2268,9 @@ pub async fn kube_reconnect(
     if let Some(gone) = PodGone::classify(status.as_ref(), true) {
         return Err(KubeReconnectError::Gone(gone.to_string()));
     }
-    kube_attempt(
-        env,
-        name,
-        settings,
-        startup,
-        extras,
-        projects,
-        DriftChoice::Keep,
-        sink,
-    )
-    .await
-    .map_err(KubeReconnectError::Attempt)
+    kube_attempt_routed(env, pod, DriftChoice::Keep, sink)
+        .await
+        .map_err(KubeReconnectError::Attempt)
 }
 
 /// The stored GitHub tokens a pod start delivers (#1760): none unless the daemon's
@@ -2226,10 +2318,40 @@ pub async fn kube_attempt(
     drift: DriftChoice,
     sink: &EventSink,
 ) -> Result<(Connected, crate::kube::relay::Relay), KubeAttemptError> {
+    let pod = PodDial {
+        name,
+        settings,
+        startup,
+        extras,
+        projects,
+        wire_id: None,
+    };
+    kube_attempt_routed(env, &pod, drift, sink)
+        .await
+        .map(|(connected, relay, _)| (connected, relay))
+}
+
+/// [`kube_attempt`] for a [`PodDial`]: once the pod's daemon answered over the bridge, the bridge
+/// is closed and the actor is routed to it through the orchestrator, with the link holder riding
+/// the relay ([`route_provisioned`]).
+pub async fn kube_attempt_routed(
+    env: &KubeEnv,
+    pod: &PodDial<'_>,
+    drift: DriftChoice,
+    sink: &EventSink,
+) -> Result<PodRouted, KubeAttemptError> {
     use micold_core::kube::start::{
         connect_pod, pod_target, start, ConnectOutcome, ConnectRequest, StartOutcome, StartPhase,
         StartRequest,
     };
+    let PodDial {
+        name,
+        settings,
+        startup,
+        extras,
+        projects,
+        wire_id,
+    } = *pod;
     let fail =
         |f: micold_core::kube::classify::KubeFailure| KubeAttemptError::Failed(f.to_string());
     // Read before this attempt's first cluster call, so a token the pod cannot take stops the
@@ -2271,6 +2393,7 @@ pub async fn kube_attempt(
     pod_settings.startup = startup.cloned();
     pod_settings.extras = extras.clone();
     pod_settings.github_tokens = tokens.entries;
+    pod_settings.wire_id = wire_id.cloned();
     let delivered = crate::daemon_config_delivery::pod_startup(&pod_settings)
         .map_err(|e| format!("cannot deliver the start script to the pod: {e}"))?;
     // The values stay `SecretToken`s until here, and only ever go into the startup Secret;
@@ -2384,7 +2507,21 @@ pub async fn kube_attempt(
     })
     .await
     {
-        ConnectOutcome::Ready(done) => Ok((done.connected, relay)),
+        ConnectOutcome::Ready(done) => {
+            let reason = |f: &micold_core::provision::ProvisionFailure| {
+                f.reason(&ReasonContext {
+                    host: "127.0.0.1".to_string(),
+                    port: relay.addr().port(),
+                    timeout_secs: opts.timeout_secs,
+                    platform: ClientPlatform::current(),
+                })
+            };
+            let (connected, holder) =
+                route_provisioned(&*env.host, &target, &opts, done.connected, wire_id, &reason)
+                    .await
+                    .map_err(KubeAttemptError::Failed)?;
+            Ok((connected, relay, holder))
+        }
         ConnectOutcome::Failed(failure) => Err(fail(failure)),
     }
 }

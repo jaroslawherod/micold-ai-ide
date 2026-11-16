@@ -20,4 +20,5 @@ Paths M3 changed that its tasks do not name, each with the reason.
 
 - Correction (M4 plan): container and pod daemons do have a route, the same #1725 `-R`; see research R7.
 - Only the **host** daemon's actor is routed through the orchestrator. SSH, container and Kubernetes actors still hand over the `Connected` their provisioning step returns (a direct connection), though their rendered config now links them under their wire id. Routing them needs each provisioned daemon to reach the orchestrator socket (the SSH reverse forward of #1725 exists; container and pod placements have none), which is larger than the minimal desktop change this sunsetting app gets. Follow-up: route provisioned daemons by wire id once they are listed online.
+- Closed by M4 (#1726): SSH, container and Kubernetes actors are routed through the orchestrator after provisioning (drift-M4.md).
 - `OutcomeUnknown` and `StreamEnded` end the actor's route; the actor's existing reconnect then re-handshakes, and the fresh `Welcome` is the re-read of the target (T019). No per-request snapshot message was added.

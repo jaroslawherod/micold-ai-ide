@@ -216,6 +216,7 @@ pub fn deliver_container(
     git_config: Option<&str>,
     startup: Option<&StartupTable>,
     extras: &SessionExtras,
+    wire_id: Option<&micold_core::protocol::routing::WireDaemonId>,
 ) -> io::Result<bool> {
     use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
     use micold_core::sandbox::argv::CONTAINER_SSH_DIR;
@@ -238,6 +239,8 @@ pub fn deliver_container(
                 micold_core::sandbox::SANDBOX_GITCONFIG_FILE
             ))
         }),
+        // The id it announces to the orchestrator (#1726, R6): without it the daemon is `local`.
+        wire_id: wire_id.cloned(),
         ..DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto))
     };
     let files = read_startup_files(&settings)?;

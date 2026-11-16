@@ -25,6 +25,14 @@ Every daemon the app sets up gets `[orchestrator_link] enabled = true` in its `d
 dials the orchestrator. The host daemon links as `local`; a daemon the app provisions gets its own
 id, such as `build-box-1a2b3c4d`, written as `[daemon] id` and kept in the app's settings.
 
+Remote, container and Kubernetes daemons go through the orchestrator too. The app sets one up over
+SSH as before, then closes that SSH session and keeps a small one open whose only job is the
+link's forward to the orchestrator; from then on the app reaches the daemon by its id through the
+orchestrator. If the forward is refused (your SSH configuration forbids it, or the remote cannot
+bind the socket), or the daemon does not link within 10 seconds, the daemon's status cell in
+Settings → Daemons says why; the app does not fall back to the SSH session. A daemon saved before
+it had an id gets one the next time Settings is saved.
+
 If the orchestrator stops, your sessions keep running on their daemons. The app shows the daemon
 as reconnecting, starts the orchestrator again, and re-reads what the daemons say, so sessions that
 ended meanwhile show as ended and new ones appear.

@@ -386,6 +386,10 @@ fn boot() -> (App, Task<Message>) {
                 &core.settings.daemons,
                 core.settings.legacy_default_daemon,
             ),
+            wire_id: crate::shell::sandbox::BootPlan::wire_id_of(
+                &core.settings.daemons,
+                core.settings.legacy_default_daemon,
+            ),
         }
     });
 
