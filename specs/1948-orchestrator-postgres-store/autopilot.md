@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-ku8tdh
+- **Worktree branch**: claude/project-thread-q5lrv2
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: dispatch the M5 milestone unit in a fresh thread (previous PR #1997 merged at c3944869a)
+- **Next step**: open the M6 PR (title "#1948: <issue title>"), then CI and merge
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1970 | M1 | merged | bfb463f60 |
 | #1980 | M2 | merged | 952b8a818 |
 | #1992 | M3 | merged | b3f47d077 |
+| #1997 | M4 | merged | c3944869a |
+| #2001 | M5 | merged | 8e68fa947 |
 
 ## Milestones
 
@@ -30,14 +32,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
-| M5 | T032–T035 | full | Migration safety | | in progress |
-| M6 | T036–T038 | full | No private key in any table | | pending |
+| M5 | T032–T035 | full | Migration safety | #2001 | merged |
+| M6 | T036–T038 | full | No private key in any table | | ready for PR |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
 ## Decisions
+
+- M6: T036's tests passed on first run: `CertSerial::new` already validated hex (M1), and a PEM block fails both `CertSerial::new` and `TokenHash::from_hex`. T038 needed no `auth.rs` change; the tests pin the rule. Red evidence is T037's negative control.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -66,6 +70,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
 | M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
 | M5 A | 1 | M5 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CHANGES: 4 fixed (one SQLite retry not enough past one migration; WAL sidecars left by a refused read-only check; PG check/run race names VersionMissing; read-only URL by string replace) and 2 MINOR fixed; 4 declined (see below) |
+| M5 B | 1 | M5 diff (conformance, sonnet, run by the orchestrator) | eec56ae53 | (see commit) | CHANGES: drift record missing (F1 MAJOR), T035 "retries once" text (F2 MINOR); both fixed in drift-M5.md |
+| A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
+| B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 
 ## Declined review findings
 
@@ -85,7 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 implemented (T032–T035 ticked), review A round 1 fixed, full gate (scripts/gate.sh, PostgreSQL required) green at the head pushed. Next: review B (prompt /tmp/claude-0/-home-user/4d804786-2bb7-5074-ac8b-1bd59a00ee19/scratchpad/review-B-M5.md, snapshot b45284b82970b37cab6937de8fd50ae97f17803d:eec56ae5302bbe2a83b3d21c9eabae9005d2756b; the later commit only extends the no_outbound allow-list), then open the PR with body /tmp/claude-0/-home-user/4d804786-2bb7-5074-ac8b-1bd59a00ee19/scratchpad/pr-body-M5.md. Cloud: the gate needs CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 to fit the disk.
+None.
 
 ## Open escalation
 

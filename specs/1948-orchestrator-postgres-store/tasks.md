@@ -209,14 +209,14 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: a scan of every column after the full suite finds no key material (US3; FR-006, SC-003).
 
-- [ ] T036 [P] [US3] Failing unit tests in `auth.rs`: `CertSerial::new` rejects non-hex text (a PEM
+- [x] T036 [P] [US3] Failing unit tests in `auth.rs`: `CertSerial::new` rejects non-hex text (a PEM
   block included); `TokenHash::from_hex` rejects a PEM block.
-- [ ] T037 [US3] Scan test in `store_scan.rs` and a table-and-column lister in `store_support.rs`
+- [x] T037 [US3] Scan test in `store_scan.rs` and a table-and-column lister in `store_support.rs`
   (`information_schema` or `sqlite_master`): after the shared suite's writes plus one write per store
   method, cast every column of every table to text and fail on `-----BEGIN` or `PRIVATE KEY`; fail on
   a column name matching `private`, `secret` or ending `_key`, no exception list; both backends; a
   negative control seeds a free-text field with a PEM block and expects the scanner to fail.
-- [ ] T038 [US3] Make T036 pass in `auth.rs` (`CertSerial::new` validates hex); T037 green on both
+- [x] T038 [US3] Make T036 pass in `auth.rs` (`CertSerial::new` validates hex); T037 green on both
   backends.
 
 ---
