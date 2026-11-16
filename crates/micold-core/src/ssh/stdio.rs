@@ -93,6 +93,20 @@ impl SshStdio {
         })
     }
 
+    /// Close the stream and wait (up to `within`) for the child to exit, killing it after that
+    /// (#1726, plan Amendment *Swap order*): the bridge's `-R` is released before the holder's
+    /// binds the same remote socket.
+    pub async fn close(mut self, within: std::time::Duration) {
+        use tokio::io::AsyncWriteExt;
+        let _ = self.writer.shutdown().await;
+        drop(self.writer);
+        if let Some(mut child) = self._child.take() {
+            if tokio::time::timeout(within, child.wait()).await.is_err() {
+                let _ = child.kill().await;
+            }
+        }
+    }
+
     /// A handle on the stderr tail, usable after the stream is consumed by the handshake.
     pub fn stderr_tail(&self) -> StderrTail {
         StderrTail(self.stderr_tail.clone())

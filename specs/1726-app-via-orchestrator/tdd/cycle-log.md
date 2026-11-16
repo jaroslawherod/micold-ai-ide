@@ -14,3 +14,13 @@ evidence is therefore not available from history. Green evidence, on the round-1
 
 Round-1 review fixes (dead-link route, full actor queue) are concurrency races with no
 deterministic test added; covered by the existing reconnect test staying green.
+
+## M4
+
+| Task | Test | Red | Green |
+|---|---|---|---|
+| T023 | `ssh::argv::tests::the_link_holder_carries_the_admitted_forward_and_runs_hold_link_never_a_bridge` | compile error: no `hold_link` | ok |
+| T025 | `provision::tests::the_holder_admits_the_link_opens_hold_link_and_returns_on_ready`, `a_holder_whose_forward_cannot_bind_names_it_not_bound`, `a_refused_link_opens_no_holder` | compile error: no `LinkHolder`/`hold_link` | ok |
+| T027 | `remote_hold_link::hold_link_prints_ready_touches_no_daemon_and_exits_on_stdin_eof` | assertion: usage text, no `ready` | ok |
+| T029 | `orchestrator_single_connection::a_route_to_a_provisioned_daemon_waits_for_its_link_and_reaches_it`, `a_daemon_that_never_links_fails_the_route_naming_its_wire_id`; `daemon::tests::container_and_pod_options_carry_the_orchestrator_link` | not captured (written with `routed_to`); first run failed for a real reason: the orchestrator answers `StreamEnded{NotFound}`, not EOF, fixed in `not_linked` | ok |
+

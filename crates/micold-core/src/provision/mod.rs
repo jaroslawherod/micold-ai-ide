@@ -2083,10 +2083,7 @@ mod tests {
         SshStdio::from_parts(r, w)
     }
 
-    async fn hold(
-        fake: &Fake,
-        target: &ProvisionTarget,
-    ) -> Result<LinkHolder, ProvisionFailure> {
+    async fn hold(fake: &Fake, target: &ProvisionTarget) -> Result<LinkHolder, ProvisionFailure> {
         let request = crate::ssh::provision::LinkRequest {
             local_socket: "/run/o.sock".into(),
         };
@@ -2095,7 +2092,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_holder_admits_the_link_opens_hold_link_and_returns_on_ready() {
-        let mut fake = Fake::default().say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        let mut fake =
+            Fake::default().say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
         *fake.holder.get_mut().unwrap() = Some(ready_holder());
         let target = owned_target(StepBounds::container());
         let _holder = hold(&fake, &target).await.unwrap();
@@ -2119,7 +2117,8 @@ mod tests {
             .stderr(std::process::Stdio::piped())
             .spawn()
             .unwrap();
-        let mut fake = Fake::default().say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
+        let mut fake =
+            Fake::default().say("prepare_link", ok("/tmp/micold-1000/orchestrator.sock\n"));
         *fake.holder.get_mut().unwrap() = Some(SshStdio::from_child(child).unwrap());
         let target = owned_target(StepBounds::container());
         let Err(f) = hold(&fake, &target).await else {

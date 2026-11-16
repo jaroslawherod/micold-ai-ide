@@ -96,6 +96,77 @@ pub fn ssh_host() -> Option<std::sync::Arc<dyn SshHost>> {
     SSH_HOST.get().cloned()
 }
 
+/// How this process reaches its orchestrator connection for provisioned daemons (#1726, FR-007):
+/// after provisioning, their actors route through it instead of keeping the bridge. The app
+/// installs [`crate::orchestrator_conn::shared`]; a process that installs none (a test of the
+/// provisioning alone) keeps the provisioning bridge as the actor's connection.
+type Router = fn() -> std::io::Result<&'static crate::orchestrator_conn::OrchestratorConn>;
+static ROUTER: std::sync::OnceLock<Router> = std::sync::OnceLock::new();
+
+/// Install how provisioned daemons are routed (the first call wins).
+pub fn install_router(router: Router) {
+    let _ = ROUTER.set(router);
+}
+
+/// How long an actor waits for a provisioned daemon's link once its bridge is closed (plan
+/// Amendment): the daemon redials with its backoff.
+pub const ROUTE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long the closed bridge's `ssh` may take to exit before it is killed.
+const BRIDGE_EXIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// A route to the daemon announcing `wire_id` on the installed orchestrator connection, waiting
+/// up to `deadline` for its link (#1726, FR-007).
+pub async fn routed_to(
+    wire_id: &micold_core::protocol::routing::WireDaemonId,
+    deadline: std::time::Duration,
+) -> std::io::Result<Connected> {
+    let router = ROUTER
+        .get()
+        .copied()
+        .unwrap_or(crate::orchestrator_conn::shared);
+    router()?.routed_to(wire_id, deadline, CLIENT_BUILD).await
+}
+
+/// After provisioning: close the bridge, open the link holder and route to the daemon by its wire
+/// id (plan Amendment, *Swap order*). A refusal is returned as it is (the caller explains it over
+/// the bridge's answer); a refused link or a passed deadline is the attempt's failure, with no
+/// fallback to the bridge. With no router installed the bridge stays the connection.
+pub async fn route_provisioned(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    connected: Connected,
+    wire_id: Option<&micold_core::protocol::routing::WireDaemonId>,
+    reason: &(dyn Fn(&micold_core::provision::ProvisionFailure) -> String + Sync),
+) -> Result<(Connected, Option<micold_core::provision::LinkHolder>), String> {
+    if ROUTER.get().is_none() {
+        return Ok((connected, None));
+    }
+    let Connected::Ready(bridge, _) = connected else {
+        return Ok((connected, None));
+    };
+    let Some(wire_id) = wire_id else {
+        return Err(
+            "this daemon has no orchestrator id yet: save it once in Settings → Daemons".into(),
+        );
+    };
+    let Some(request) = &opts.link else {
+        return Err("the orchestrator link was not requested".into());
+    };
+    if let micold_core::connect::Transport::Ssh(stdio) = bridge.into_inner() {
+        stdio.close(BRIDGE_EXIT).await;
+    }
+    let holder =
+        micold_core::provision::hold_link(host, target, opts, request, &CancelToken::new())
+            .await
+            .map_err(|f| reason(&f))?;
+    let routed = routed_to(wire_id, ROUTE_DEADLINE)
+        .await
+        .map_err(|e| format!("cannot reach the daemon through the orchestrator: {e}"))?;
+    Ok((routed, Some(holder)))
+}
+
 /// The host's IANA time zone, which a container daemon the bridge starts is told as `TZ`.
 static HOST_TIME_ZONE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
 
@@ -231,6 +302,9 @@ pub enum Dial {
         survive_logout: bool,
         /// The AI CLIs this daemon offers once installed (FR-010).
         ai_clis: AiCliSelection,
+        /// The id the container's daemon announces to the orchestrator (#1726), which the actor
+        /// routes to after provisioning.
+        wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
         /// Set when this actor creates the container before dialling it: a daemon added in
         /// Settings has no other bring-up (BUG-868). `None` for the daemon the application's own
         /// sandbox boot brings up.
@@ -574,6 +648,7 @@ pub fn actor_specs_answered(
                     image: c.profile.image.reference().to_string(),
                     survive_logout: c.profile.survive_logout,
                     ai_clis: c.profile.ai_clis.clone(),
+                    wire_id: entry.file.wire_id.clone(),
                     bring_up: (boot_owner != Some(entry.id))
                         .then(|| {
                             entry.state_dir(state_dir, legacy_default).map(|state_dir| {
@@ -866,20 +941,15 @@ async fn host_routed(
         endpoint,
         SPAWN_TIMEOUT,
         || async move {
-            let route = orchestrator
-                .open(&micold_core::protocol::routing::WireDaemonId::local())
-                .await?;
-            match micold_core::connect::handshake(route, CLIENT_BUILD).await {
-                Ok(connected) => Ok(Some(connected)),
-                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    match data_dir
-                        .and_then(|d| micold_core::startup_result::fresh_refusal(d, since_secs))
-                    {
-                        Some(block) => Err(std::io::Error::other(block)),
-                        None => Ok(None),
-                    }
-                }
-                Err(e) => Err(e),
+            let local = micold_core::protocol::routing::WireDaemonId::local();
+            match orchestrator.route_once(&local, CLIENT_BUILD).await? {
+                Some(connected) => Ok(Some(connected)),
+                None => match data_dir
+                    .and_then(|d| micold_core::startup_result::fresh_refusal(d, since_secs))
+                {
+                    Some(block) => Err(std::io::Error::other(block)),
+                    None => Ok(None),
+                },
             }
         },
         || {
@@ -921,8 +991,10 @@ async fn connect_and_pump(
     output: &mut mpsc::Sender<Message>,
     life: &mut LinkLife,
 ) -> PumpEnd {
-    // The relay of a Kubernetes daemon lives as long as its connection.
+    // The relay of a Kubernetes daemon lives as long as its connection; so does the link holder
+    // of a provisioned daemon (#1726): dropping it drops the daemon's link and so the route.
     let mut held_relay: Option<crate::kube::relay::Relay> = None;
+    let mut held_link: Option<micold_core::provision::LinkHolder> = None;
     let attempt = match (&spec.dial, endpoint) {
         // Deliver the host's config (write-if-changed, mode 0600) before spawning it, so a cold
         // start — and any later reconnect after a settings change — always starts from the
@@ -940,7 +1012,10 @@ async fn connect_and_pump(
         (Dial::Ssh { target, settings }, _) => {
             let sink = provisioning_sink(id, output);
             match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, &settings.0, &sink).await {
-                Ok(c) => Ok(c),
+                Ok((c, holder)) => {
+                    held_link = holder;
+                    Ok(c)
+                }
                 // A link that was up and is down is retried; a start that never connected is
                 // reported once and ends the actor.
                 Err(reason) if life.established => {
@@ -962,6 +1037,7 @@ async fn connect_and_pump(
                 network,
                 ai_clis,
                 bring_up,
+                wire_id,
                 // The image and the keep-running opt-in only decide the actor's identity: the
                 // container's `daemon.toml` carries them (#1527).
                 ..
@@ -979,6 +1055,7 @@ async fn connect_and_pump(
                 ai_clis,
                 time_zone: HOST_TIME_ZONE.get().and_then(|z| z.as_deref()),
                 home: CONTAINER_HOME.get().and_then(|h| h.as_deref()),
+                wire_id: wire_id.as_ref(),
             };
             match container_attempt(
                 SSH_HOST.get().map(|h| &**h),
@@ -988,7 +1065,10 @@ async fn connect_and_pump(
             )
             .await
             {
-                Ok(c) => Ok(c),
+                Ok((c, holder)) => {
+                    held_link = holder;
+                    Ok(c)
+                }
                 Err(reason) if life.established => {
                     return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
                 }
@@ -1103,8 +1183,10 @@ async fn connect_and_pump(
             }
         }
     };
-    // Dropping the relay ends the pod's forward: it lives until this function returns.
+    // Dropping the relay ends the pod's forward: it lives until this function returns. The link
+    // holder rides the relay, so it is declared after it and dropped first.
     let _relay_lives_until_return = &held_relay;
+    let _holder_lives_until_return = &held_link;
 
     let connected = match attempt {
         Ok(c) => c,
@@ -1393,19 +1475,19 @@ fn provisioning_sink(id: DaemonId, output: &mpsc::Sender<Message>) -> EventSink 
 /// that installed no runner.
 /// What an attempt on `target` needs. The connect watchdog: no attempt hangs the client. The
 /// user's `ConnectTimeout` replaces the default when their SSH configuration sets one (FR-009).
-async fn ssh_options(host: &dyn SshHost, target: &SshTarget) -> ProvisionOptions {
+async fn ssh_options(host: &dyn SshHost, target: &SshTarget) -> std::io::Result<ProvisionOptions> {
     let platform = ClientPlatform::current();
     let timeout_secs = micold_core::ssh::config_hosts::resolve(host, target, platform)
         .await
         .map_or(DEFAULT_CONNECT_TIMEOUT_SECS, |e| e.timeout_secs());
-    ProvisionOptions {
+    Ok(ProvisionOptions {
         platform,
         client_arch: std::env::consts::ARCH.to_string(),
         timeout_secs,
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
-        link: orchestrator_link(),
-    }
+        link: Some(orchestrator_link()?),
+    })
 }
 
 /// How the app reaches a mismatched daemon to ask what it runs and to replace it (feature 489,
@@ -1436,7 +1518,7 @@ async fn resolve_reach(
 ) -> Option<(Reach, ProvisionOptions)> {
     match reach {
         RemoteReach::Ssh(target) => {
-            let opts = ssh_options(host, &target).await;
+            let opts = ssh_options(host, &target).await.ok()?;
             Some((Reach::UserConfig(target), opts))
         }
         RemoteReach::Container {
@@ -1460,7 +1542,7 @@ async fn resolve_reach(
             .ok()?;
             Some((
                 Reach::Pinned(container_pinned_reach(login, port, &keys)),
-                container_options(),
+                container_options().ok()?,
             ))
         }
     }
@@ -1544,27 +1626,38 @@ async fn ssh_attempt(
     target: &SshTarget,
     settings: &DaemonSettings,
     sink: &EventSink,
-) -> Result<Connected, String> {
+) -> Result<(Connected, Option<micold_core::provision::LinkHolder>), String> {
     let Some(host) = host else {
         return Err("this build cannot run `ssh`".to_string());
     };
     let platform = ClientPlatform::current();
-    let opts = ssh_options(host, target).await;
+    let opts = ssh_options(host, target).await.map_err(link_unresolved)?;
     let timeout_secs = opts.timeout_secs;
     let mut provision_target = ProvisionTarget::user_host(
         target,
         std::time::Duration::from_secs(u64::from(timeout_secs)),
     );
     provision_target.config = Some(ssh_delivery(settings)?);
-    let provisioned = ssh_run(host, &provision_target, &opts, &CancelToken::new(), sink).await;
-    provisioned.map(|p| p.connected).map_err(|failure| {
+    let reason = |failure: &micold_core::provision::ProvisionFailure| {
         failure.reason(&ReasonContext {
             host: target.host.clone(),
             port: target.port.unwrap_or(22),
             timeout_secs,
             platform,
         })
-    })
+    };
+    let provisioned = ssh_run(host, &provision_target, &opts, &CancelToken::new(), sink)
+        .await
+        .map_err(|f| reason(&f))?;
+    route_provisioned(
+        host,
+        &provision_target,
+        &opts,
+        provisioned.connected,
+        settings.wire_id.as_ref(),
+        &reason,
+    )
+    .await
 }
 
 /// What one container bring-up needs beyond the shared sequence.
@@ -1580,6 +1673,8 @@ struct ContainerReach<'a> {
     time_zone: Option<&'a str>,
     /// The container's home (`home` of its `daemon.toml`, `HOME` here), which the daemon and its sessions must run with.
     home: Option<&'a Path>,
+    /// The id its daemon announces to the orchestrator (#1726).
+    wire_id: Option<&'a micold_core::protocol::routing::WireDaemonId>,
 }
 
 /// The environment of a daemon the bridge starts in a container. sshd builds a session's
@@ -1645,31 +1740,35 @@ fn container_pinned_reach(login: String, port: u16, keys: &DaemonKeys) -> Pinned
 }
 
 /// The orchestrator link's forward every SSH connection opens with its bridge (#1725, FR-004):
-/// the orchestrator's socket on this machine. Unix clients only: a Windows pipe cannot be the
-/// local end of `-R`.
-fn orchestrator_link() -> Option<LinkRequest> {
-    if cfg!(unix) {
-        endpoint::orchestrator_endpoint()
-            .ok()
-            .map(|orchestrator| LinkRequest {
-                local_socket: orchestrator.socket_path,
-            })
-    } else {
-        None
-    }
+/// the orchestrator's socket on this machine. Every client (Linux only, #1897); an endpoint that
+/// cannot be resolved is the connect's failure, shown in the daemon's status cell.
+fn orchestrator_link() -> std::io::Result<LinkRequest> {
+    endpoint::orchestrator_endpoint().map(|orchestrator| LinkRequest {
+        local_socket: orchestrator.socket_path,
+    })
+}
+
+/// [`orchestrator_link`]'s failure in the user's words.
+fn link_unresolved(e: std::io::Error) -> String {
+    format!("the orchestrator's socket cannot be resolved: {e}")
 }
 
 /// The options of every step run in a container: its bounds are the app's, not a user's
 /// `ConnectTimeout`.
-fn container_options() -> ProvisionOptions {
-    ProvisionOptions {
+fn container_options() -> std::io::Result<ProvisionOptions> {
+    Ok(ProvisionOptions {
         platform: ClientPlatform::current(),
         client_arch: std::env::consts::ARCH.to_string(),
         timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
-        link: orchestrator_link(),
-    }
+        link: Some(orchestrator_link()?),
+    })
+}
+
+/// The options of a pod's steps: the container's, over the pod's relay.
+fn pod_options() -> std::io::Result<ProvisionOptions> {
+    container_options()
 }
 
 /// The state directory inside a container (the basic image's contract).
@@ -1714,7 +1813,7 @@ async fn container_attempt(
     reach: &ContainerReach<'_>,
     sink: &EventSink,
     roll_back: bool,
-) -> Result<Connected, String> {
+) -> Result<(Connected, Option<micold_core::provision::LinkHolder>), String> {
     let Some(host) = host else {
         return Err("this build cannot run `ssh`".to_string());
     };
@@ -1760,7 +1859,7 @@ async fn container_attempt(
         })?;
     keys.write_known_hosts(reach.port)
         .map_err(|e| format!("could not pin the container's host key: {e}"))?;
-    let opts = container_options();
+    let opts = container_options().map_err(link_unresolved)?;
     let timeout_secs = opts.timeout_secs;
     // Dropping this future is the cancel (the actor is aborted); the token is for the steps' own
     // guards and is never shared.
@@ -1772,26 +1871,29 @@ async fn container_attempt(
         undo.keep_what_was_not_created();
     }
     let recording = undo.recording_sink(sink, &name);
-    let result = ssh_run(
-        host,
-        &container_target(login, reach, &keys),
-        &opts,
-        &cancel,
-        &recording,
-    )
-    .await;
-    match result {
-        Ok(p) => {
-            undo.disarm();
-            Ok(p.connected)
-        }
-        Err(failure) => Err(failure.reason(&ReasonContext {
+    let target = container_target(login, reach, &keys);
+    let reason = |failure: &micold_core::provision::ProvisionFailure| {
+        failure.reason(&ReasonContext {
             host: "127.0.0.1".to_string(),
             port: reach.port,
             timeout_secs,
             platform,
-        })),
-    }
+        })
+    };
+    let provisioned = ssh_run(host, &target, &opts, &cancel, &recording)
+        .await
+        .map_err(|f| reason(&f))?;
+    // The container is kept once its daemon answered; a failed route is retried by the actor.
+    undo.disarm();
+    route_provisioned(
+        host,
+        &target,
+        &opts,
+        provisioned.connected,
+        reach.wire_id,
+        &reason,
+    )
+    .await
 }
 
 /// Stops the container whose daemon an attempt started when the attempt ends any way but
@@ -2255,14 +2357,7 @@ pub async fn kube_attempt(
         },
         settings,
     );
-    let opts = ProvisionOptions {
-        platform: ClientPlatform::current(),
-        client_arch: std::env::consts::ARCH.to_string(),
-        timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
-        build_id: current_build_id(),
-        client_build: CLIENT_BUILD.to_string(),
-        link: orchestrator_link(),
-    };
+    let opts = pod_options().map_err(link_unresolved)?;
     let connect = ConnectRequest {
         host: &*env.host,
         target: &target,
@@ -2732,6 +2827,7 @@ mod tests {
             ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: Some("Europe/Berlin"),
             home: Some(std::path::Path::new("/home/jaro")),
+            wire_id: None,
         };
         let target = container_target("node".into(), &reach, &keys);
         let Reach::Pinned(pinned) = &target.reach else {
@@ -2841,6 +2937,7 @@ mod tests {
             ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: None,
             home: None,
+            wire_id: None,
         };
         // `NoSsh` never finds the container, so the attempt is still waiting when the timeout ends it.
         let waited = tokio::time::timeout(
@@ -3110,10 +3207,10 @@ mod tests {
     #[tokio::test]
     async fn the_connect_watchdog_uses_the_users_connect_timeout() {
         let target = SshTarget::new("build-box", None, None, None).unwrap();
-        let set =
-            super::ssh_options(&ConfiguredSsh("hostname box\nconnecttimeout 7\n"), &target).await;
+        let set = super::ssh_options(&ConfiguredSsh("hostname box\nconnecttimeout 7\n"), &target)
+            .await
+            .unwrap();
         assert_eq!(set.timeout_secs, 7);
-        #[cfg(unix)]
         assert_eq!(
             set.link.map(|l| l.local_socket),
             Some(
@@ -3123,11 +3220,26 @@ mod tests {
             ),
             "every SSH connection opens the orchestrator link's forward (#1725)"
         );
-        let unset = super::ssh_options(&ConfiguredSsh("hostname box\n"), &target).await;
+        let unset = super::ssh_options(&ConfiguredSsh("hostname box\n"), &target)
+            .await
+            .unwrap();
         assert_eq!(
             unset.timeout_secs,
             micold_core::ssh::argv::DEFAULT_CONNECT_TIMEOUT_SECS
         );
+    }
+
+    /// #1726 M4: every provisioned placement's options carry the link of the unconditional
+    /// `orchestrator_link()` (no `cfg!(unix)`, #1897).
+    #[test]
+    fn container_and_pod_options_carry_the_orchestrator_link() {
+        let want = super::orchestrator_link().unwrap().local_socket;
+        for opts in [super::container_options(), super::pod_options()] {
+            assert_eq!(
+                opts.unwrap().link.map(|l| l.local_socket),
+                Some(want.clone())
+            );
+        }
     }
 
     /// S-6 against the real retry rather than a copy of it: an unattended bring-up after a failed

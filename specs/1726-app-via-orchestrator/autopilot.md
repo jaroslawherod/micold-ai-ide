@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
-- **Phase**: tasks (M4)
-- **Next step**: M4 milestone unit (T023–T034), then close
+- **Phase**: implement (M4)
+- **Next step**: M4 milestone unit continues from Handover (T031–T034, T032 rest)
 - **PR**: none
 
 ## Pull requests
@@ -69,7 +69,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 
 ## Handover
-Plan (M4) r1 fixes committed (979a3cb6d); M4 tasks T023–T034 appended; plan r2 CLEAN; tasks r1 fixes applied. speckit-analyze run (F1 FR-007 provisioning handshake, F2/F4/F7/F11 T031 cases, F3 swap order, F5 deps, F6 numbering, F8 quickstart, F9 signature, F12 precondition fixed; F10 kept a separate binary like remote_prepare_link.rs); checklists all checked; specs-only gate passed. tasks r2 fixes applied. Next: M4 milestone unit, then the M4 milestone unit. Cloud: no mise/gh.
+M4 unit 1 (prev PR #2007 merged f6aa5b806). Done and committed: T023–T030 (argv::hold_link; provision::hold_link + LinkHolder; `remote hold-link`; OrchestratorConn::routed_to/route_once, host_routed on route_once; orchestrator_link() unconditional, ssh/container/pod options return io::Result). T032 partly: `daemon::route_provisioned` (close bridge via SshStdio::close, hold_link, routed_to 10 s) wired into ssh_attempt and container_attempt; connect_and_pump keeps `held_link`; app installs `daemon::install_router(orchestrator_conn::shared)` in shell/startup.rs (no router installed = bridge kept, for provisioning-only tests). Dial::ContainerSsh/ContainerReach carry `wire_id` from the entry.
+Next: (1) container and pod daemon.toml must carry `[daemon] id`: `deliver_container` (2 callers in shell/sandbox.rs) and `DaemonSettings::for_pod` have no wire_id, so those daemons announce `local` today; (2) pod path: add wire_id to Dial::Kubernetes and kube_attempt/kube_reconnect, call route_provisioned after connect_pod, keep holder beside the relay (declared so it drops first); (3) orchestrator restart re-route over the same holder without re-provisioning (FR-009) not done: today a route end re-provisions; (4) T031 orchestrator_provisioned.rs, T033 ssh_real_link routed case, T034 docs + drift-M3 line; (5) full gate (only targeted tests run: core argv/provision, daemon remote_hold_link, client orchestrator_single_connection + lib daemon::), then code review A+B snapshot. Drift to record: route_once detects "not linked" by the `StreamEnded` text of the handshake error.
 
 ## Open escalation
 

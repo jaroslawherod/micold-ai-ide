@@ -237,3 +237,61 @@ async fn after_the_orchestrator_is_killed_the_app_starts_it_again_and_re_handsha
     assert_eq!(world.running(), 1);
     drop(state);
 }
+
+/// A real daemon linked to the world's orchestrator under the wire id `id` (a provisioned one).
+fn link_as(world: &World, id: &str) -> (Arc<DaemonState>, LinkHandle) {
+    let text = format!(
+        "schema = 1\n[daemon]\nname = \"Box\"\nid = \"{id}\"\nkind = \"ssh\"\n\
+         [orchestrator_link]\nenabled = true\nsocket = \"{}\"\n",
+        world.socket().display()
+    );
+    let config =
+        Arc::new(micold_core::daemon_config::parse(&text, "daemon.toml").expect("a valid config"));
+    let state = Arc::new(DaemonState::new(Catalog::ephemeral()));
+    let link = spawn_with(&config, announcement(&config), Some(Arc::clone(&state)))
+        .expect("the link is enabled");
+    (state, link)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_route_to_a_provisioned_daemon_waits_for_its_link_and_reaches_it() {
+    let world = World::new(daemon_binary());
+    let conn = Arc::new(OrchestratorConn::new(world.starter.clone()));
+    let id = WireDaemonId::new("box-1").unwrap();
+    // FR-007, M4: the route is asked for before the daemon has linked (its bridge was just closed
+    // and its link redials); it succeeds once the daemon links and handshakes.
+    let routed = {
+        let (conn, id) = (Arc::clone(&conn), id.clone());
+        tokio::spawn(async move {
+            conn.routed_to(&id, Duration::from_secs(10), "test-app")
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let (_state, _link) = link_as(&world, "box-1");
+    match routed.await.unwrap().expect("routed") {
+        Connected::Ready(..) => {}
+        Connected::Refused(reason) => panic!("refused: {reason:?}"),
+    }
+    assert_eq!(
+        conn.connections_opened(),
+        1,
+        "one connection, none to a daemon"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_that_never_links_fails_the_route_naming_its_wire_id() {
+    let world = World::new(daemon_binary());
+    let conn = OrchestratorConn::new(world.starter.clone());
+    let id = WireDaemonId::new("box-2").unwrap();
+    let Err(err) = conn
+        .routed_to(&id, Duration::from_secs(1), "test-app")
+        .await
+    else {
+        panic!("nothing links, yet the route was made")
+    };
+    assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+    assert!(err.to_string().contains("box-2"), "{err}");
+    assert_eq!(conn.connections_opened(), 1);
+}

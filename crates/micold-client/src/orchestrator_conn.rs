@@ -39,6 +39,9 @@ pub const START_TIMEOUT: Duration = Duration::from_secs(10);
 /// Frames waiting for one route's pipe, and for the connection.
 const QUEUE: usize = 1024;
 
+/// How long [`OrchestratorConn::routed_to`] waits before looking for a daemon's link again.
+const ROUTE_RETRY: Duration = Duration::from_millis(100);
+
 /// One route's in-memory pipe.
 const PIPE_BYTES: usize = 64 * 1024;
 
@@ -148,6 +151,49 @@ impl OrchestratorConn {
             io::ErrorKind::NotConnected,
             "the orchestrator connection ended while opening a route",
         ))
+    }
+
+    /// A route to `target` and a handshake on it, looking again while the orchestrator ends the
+    /// route (the daemon's link is not up yet) until `deadline` passes (#1726, FR-007). A passed
+    /// deadline is `TimedOut` naming the wire id.
+    pub async fn routed_to(
+        &self,
+        target: &WireDaemonId,
+        deadline: std::time::Duration,
+        client_build: &str,
+    ) -> io::Result<micold_core::connect::Connected> {
+        let until = tokio::time::Instant::now() + deadline;
+        loop {
+            if let Some(connected) = self.route_once(target, client_build).await? {
+                return Ok(connected);
+            }
+            if tokio::time::Instant::now() >= until {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!(
+                        "daemon `{}` did not link to the orchestrator within {} s",
+                        target.as_str(),
+                        deadline.as_secs_f32()
+                    ),
+                ));
+            }
+            tokio::time::sleep(ROUTE_RETRY).await;
+        }
+    }
+
+    /// One route to `target` and its handshake; `None` when the orchestrator ended the route
+    /// before the daemon answered (its link is not up).
+    pub async fn route_once(
+        &self,
+        target: &WireDaemonId,
+        client_build: &str,
+    ) -> io::Result<Option<micold_core::connect::Connected>> {
+        let route = self.open(target).await?;
+        match micold_core::connect::handshake(route, client_build).await {
+            Ok(connected) => Ok(Some(connected)),
+            Err(e) if not_linked(&e) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     async fn connect(&self) -> io::Result<Link> {
@@ -358,6 +404,13 @@ async fn run_link(framed: Framed, mut outbound: mpsc::Receiver<Outbound>, routes
     // fails to insert, never leaves a route on a dead link.
     outbound.close();
     routes.lock().expect("routes lock").take();
+}
+
+/// Whether a handshake on a route failed because the daemon is not linked: the route closed, or
+/// the orchestrator ended it in place of the daemon's `Welcome` (`StreamEnded`, e.g. `NotFound`).
+fn not_linked(e: &io::Error) -> bool {
+    e.kind() == io::ErrorKind::UnexpectedEof
+        || (e.kind() == io::ErrorKind::InvalidData && e.to_string().contains("StreamEnded"))
 }
 
 static SHARED: OnceLock<OrchestratorConn> = OnceLock::new();

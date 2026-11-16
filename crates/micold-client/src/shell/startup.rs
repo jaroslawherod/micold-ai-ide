@@ -242,6 +242,9 @@ fn boot() -> (App, Task<Message>) {
     micold_client::daemon::install_ssh_host(std::sync::Arc::new(
         crate::shell::daemons::system_ssh(),
     ));
+    // Provisioned daemons are reached through the app's one orchestrator connection (#1726,
+    // FR-007), never through their provisioning bridge.
+    micold_client::daemon::install_router(micold_client::orchestrator_conn::shared);
     // The zone a container daemon started over SSH is told (the container's own `-e TZ` reaches
     // only the daemon the entrypoint starts).
     micold_client::daemon::install_container_starter(std::sync::Arc::new(
