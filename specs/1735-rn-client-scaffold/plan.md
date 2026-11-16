@@ -104,12 +104,12 @@ package.json                     # new: private workspace root, scripts only
 pnpm-workspace.yaml              # new: apps/*, packages/*
 pnpm-lock.yaml                   # new
 mise.toml                        # edit: add `pnpm` tool (node = "24" exists); tasks client-test, client-web, client-e2e
-.github/workflows/ci.yml         # edit: `client` job, path-gated on apps/client, packages/protocol
+.github/workflows/ci.yml         # edit: `client` job, path-gated on apps/client, packages/protocol; runs `scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info`; `ci-complete` needs the client job
+.gitattributes                   # edit: `micold-client` attribute on apps/client/**, packages/protocol/**, pnpm-lock.yaml, pnpm-workspace.yaml, package.json (classify-change.sh reads it)
 scripts/client/bundle-check.mjs  # new
 scripts/guardrails-scope.conf    # edit: [web] gets apps/client/src/**, apps/client/app/**, packages/protocol/src/** (mock/ stays IN scope: it is test-support shipped in src and its logic is what SC-001 relies on, so it is covered like the rest; only generated files and tests are out)
 scripts/classify-change.sh       # edit: new `client` verdict for apps/client/**, packages/protocol/**, pnpm files
 scripts/tests/classify-change.test.sh  # edit: cases for the client verdict
-.github/workflows/ci.yml         # (above) also: client job runs `scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info`; `ci-complete` needs the client job
 docs/development/client.md       # new; linked from docs/SUMMARY.md
 docs/user-guide/appearance-theming.md  # edit: language and theme-follows-system note
 

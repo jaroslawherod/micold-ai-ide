@@ -10,4 +10,4 @@
 - [x] Scope bounded; out-of-scope listed
 - [x] What is mocked is stated explicitly (table in spec) and the swap point is the `OrchestratorApi` interface
 - [x] i18n is a requirement (FR-014 to FR-016, US5, SC-004)
-- [ ] No `[NEEDS CLARIFICATION]` markers remain: 2 open (locales, mock in deployed bundle), left for the clarify unit
+- [x] No `[NEEDS CLARIFICATION]` markers remain (both resolved in the clarify session; 0 markers in spec.md)
