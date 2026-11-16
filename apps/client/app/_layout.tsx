@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo } from "react";
 import { Slot } from "expo-router";
 import { PaperProvider } from "react-native-paper";
+import { ApiProvider } from "../src/api/ApiProvider";
+import { SessionProvider } from "../src/auth/SessionProvider";
+import { ConnectionBanner } from "../src/components/ConnectionBanner";
 import { IntlProvider } from "../src/i18n/IntlProvider";
 import { loadBundledFonts } from "../src/platform/fonts";
 import { buildTheme } from "../src/theme/buildTheme";
@@ -15,7 +18,12 @@ export default function RootLayout() {
   return (
     <PaperProvider theme={theme}>
       <IntlProvider>
-        <Slot />
+        <ApiProvider>
+          <SessionProvider>
+            <ConnectionBanner />
+            <Slot />
+          </SessionProvider>
+        </ApiProvider>
       </IntlProvider>
     </PaperProvider>
   );

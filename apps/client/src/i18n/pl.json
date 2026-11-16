@@ -5,5 +5,17 @@
   "locale.name.en": "English",
   "locale.name.pl": "Polski",
   "locale.name.pseudo": "Pseudo (test)",
-  "session.count": "{count, plural, one {# sesja} few {# sesje} many {# sesji} other {# sesji}}"
+  "session.count": "{count, plural, one {# sesja} few {# sesje} many {# sesji} other {# sesji}}",
+  "api.unavailable": "Połączenie z orkiestratorem nie jest dostępne w tej wersji.",
+  "signin.title": "Zaloguj się do Micold",
+  "signin.with": "Zaloguj przez {provider}",
+  "signin.loading": "Wczytywanie opcji logowania…",
+  "signin.notSetUp": "Logowanie nie jest skonfigurowane. Poproś właściciela tego Micold o skonfigurowanie dostawcy logowania.",
+  "signin.refused": "{provider} odmówił logowania. Nie rozpoczęto sesji.",
+  "signin.cancelled": "Logowanie przez {provider} zostało anulowane.",
+  "signin.retry": "Spróbuj ponownie",
+  "signin.loadFailed": "Nie udało się wczytać opcji logowania.",
+  "connection.reconnecting": "Utracono połączenie. Ponowne łączenie (próba {attempt})…",
+  "connection.offline": "Brak połączenia. Nie można połączyć się z orkiestratorem.",
+  "signin.failed": "Logowanie przez {provider} nie powiodło się. Sprawdź połączenie i spróbuj ponownie."
 }
