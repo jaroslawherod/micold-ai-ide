@@ -33,12 +33,12 @@
 
 ## Phase 5: User Story 1 — lists show every daemon's rows (P1)
 
-- [ ] T014 [US1] Failing case `lists` in `crates/micold-daemon/tests/orchestrator_route/`: two daemons 100 % rows; one stopped named `offline`; one hung named `timeout` within 2.5 s (FR-001, FR-002, SC-001)
-- [ ] T015 [US1] Implement `OrchList` fan-out in `crates/micold-daemon/src/orchestrator/client.rs`: every linked daemon in parallel with a 2 s deadline, `merge_lists`, needs-update/offline links named without asking (R4)
+- [x] T014 [US1] Failing case `lists` in `crates/micold-daemon/tests/orchestrator_route/`: two daemons 100 % rows; one stopped named `offline`; one hung named `timeout` within 2.5 s (FR-001, FR-002, SC-001)
+- [x] T015 [US1] Implement `OrchList` fan-out in `crates/micold-daemon/src/orchestrator/client.rs`: every linked daemon in parallel with a 2 s deadline, `merge_lists`, needs-update/offline links named without asking (R4)
 
 ## Phase 6: User Story 5 — routing is not noticeably slower (P2)
 
-- [ ] T016 [US5] `#[ignore]` benchmark case `bench` in `crates/micold-daemon/tests/orchestrator_route/`: 1,000 requests and 1,000 4 KiB chunks at 100/s, direct vs routed, asserts p95 deltas within 5 ms / 16 ms; run it in the milestone and record the numbers in the PR (SC-003)
+- [x] T016 [US5] `#[ignore]` benchmark case `bench` in `crates/micold-daemon/tests/orchestrator_route/`: 1,000 requests and 1,000 4 KiB chunks at 100/s, direct vs routed, asserts p95 deltas within 5 ms / 16 ms; run it in the milestone and record the numbers in the PR (SC-003)
 
 ## Phase 7: User Story 3 + US4 (app half) — one connection, started when absent (P1)
 

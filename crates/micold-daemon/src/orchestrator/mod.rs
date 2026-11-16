@@ -20,6 +20,7 @@ pub mod client;
 pub mod db;
 pub mod hub;
 pub mod link;
+pub mod list;
 pub mod query;
 mod save;
 

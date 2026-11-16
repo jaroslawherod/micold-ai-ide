@@ -7,9 +7,11 @@
 #[path = "../orchestrator/support.rs"]
 mod support;
 
+mod bench;
 mod hub_queues;
 mod link_drop;
 mod link_full;
+mod lists;
 mod outage;
 mod refusals;
 mod requests;
@@ -311,6 +313,37 @@ impl Client {
     pub async fn expect_quiet(&mut self, wait: Duration) {
         if let Ok(Some(Ok(payload))) = tokio::time::timeout(wait, self.framed.next()).await {
             panic!("an unexpected frame: {:?}", decode_routed_payload(&payload));
+        }
+    }
+
+    /// Ask the orchestrator itself for a `kind` list on conn `conn` and read its answer.
+    pub async fn list(
+        &mut self,
+        conn: u64,
+        req: u64,
+        kind: micold_core::protocol::routing::ListKind,
+    ) -> DaemonMsg {
+        self.seq += 1;
+        let header = RoutedHeader {
+            target: None,
+            conn: ConnectionId(conn),
+            seq: Sequence(self.seq),
+            req: Some(req),
+        };
+        let payload = micold_core::protocol::routing::encode_json_payload(
+            &header,
+            &ClientMsg::OrchList { req, kind },
+        )
+        .unwrap();
+        self.framed
+            .send(Bytes::from(payload))
+            .await
+            .expect("list sent");
+        loop {
+            let got = self.recv().await;
+            if got.header.target.is_none() && got.header.conn.0 == conn {
+                return got.msg.expect("the orchestrator answers in JSON");
+            }
         }
     }
 
