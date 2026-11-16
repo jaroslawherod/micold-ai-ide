@@ -39,6 +39,25 @@ fn a_raw_delete_from_the_audit_log_fails() {
 }
 
 #[test]
+fn postgres_refuses_a_raw_update_or_delete_of_the_audit_log() {
+    let Some(db) = super::store_support::PostgresDatabase::create() else {
+        return;
+    };
+    let handle = db.open();
+    SqlAuditStore::new(std::sync::Arc::clone(&handle), TenantId::default())
+        .append(&NewAuditEntry::new(1, "u1", "user.invite", "u2", "").unwrap())
+        .unwrap();
+    for sql in [
+        "UPDATE audit_log SET actor = 'mallory'",
+        "DELETE FROM audit_log",
+    ] {
+        let error = raw(&handle, sql).unwrap_err();
+        assert!(error.contains("audit_log is append-only"), "{sql}: {error}");
+    }
+    drop(handle);
+}
+
+#[test]
 fn no_migration_text_grants_anything() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
     let mut scanned = 0;

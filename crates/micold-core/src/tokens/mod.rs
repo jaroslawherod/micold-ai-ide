@@ -26,6 +26,8 @@ pub mod motion;
 pub mod palette;
 pub mod shape;
 pub mod state;
+pub mod tables;
+pub mod ts;
 pub mod typography;
 
 /// A plain 8-bit-per-channel sRGB color. The GUI maps this to `iced::Color`.

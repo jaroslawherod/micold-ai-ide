@@ -201,6 +201,7 @@ mod tokens_contrast;
 mod tokens_density;
 mod tokens_move;
 mod tokens_scales;
+mod tokens_ts_bin;
 mod toolchain_path;
 mod tooltip_clamp;
 mod tooltip_rest;
