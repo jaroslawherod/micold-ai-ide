@@ -208,6 +208,7 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 /// `git_config` is the sanitized git configuration ([`micold_core::scoped_credential::shared_copy`]):
 /// it goes into `delivery.secrets` and the file names it as `[git] config_file` at
 /// `/run/micold/secrets/gitconfig` (#1530); `None` removes a copy left by an earlier start.
+#[allow(clippy::too_many_arguments)]
 pub fn deliver_container(
     name: &str,
     profile: &micold_core::sandbox::SandboxProfile,
