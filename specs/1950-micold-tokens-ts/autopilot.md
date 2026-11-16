@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec.md, checklists/requirements.md | bce68e6d | 5776ddfe:bce68e6d | CHANGES (F1-F4 applied; reviewer dispatched by orchestrator, units lack Agent) |
 | Spec | 2 | design | f46586fdb3937f46e2f8225cab947dbaec854c6f | f46586fdb | CLEAN (sonnet re-review, dispatched by orchestrator) |
+| Plan | 1 | design | f6e05888740451cc3632bbef42831b4ac109f394 | 02f657f9:ad8718a6 | CHANGES (F1-F5 applied; reviewer dispatched by orchestrator) |
 
 ## Declined review findings
 

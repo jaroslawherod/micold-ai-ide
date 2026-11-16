@@ -54,7 +54,7 @@ Whoever opens the generated file is told on its first line that it is generated,
 ### Edge Cases
 
 - A token name that is not a valid TypeScript identifier or is a reserved word: names are emitted as object keys in a fixed casing rule; the unit test asserts every emitted key is a valid identifier.
-- Scheme-independent families (type scale, shape, elevation, motion, state opacity) are exported once; only colour roles are split into `light` and `dark`. A test asserts both colour schemes have the same role keys.
+- Scheme-independent families (type scale, shape, elevation, motion, state opacity) are exported once; only colour roles are split into `light` and `dark`; elevation is exported once, with its per-scheme shadow alpha nested as `{ light, dark }`. A test asserts both colour schemes have the same role keys.
 - Empty input: with no path argument the binary prints the module to stdout. An empty token family still emits an empty object (`{} as const`), so every export always exists.
 - Floating-point values (radii, opacities, elevations) print identically on every platform: output has no locale, no trailing-zero or exponent variation.
 - Concurrency (Principle II): the generator is a pure function with no file, environment or clock input, so concurrent sessions or CI jobs produce the same bytes.
@@ -76,7 +76,7 @@ Whoever opens the generated file is told on its first line that it is generated,
 
 - **FR-001**: `micold_core::tokens::ts::module()` MUST return the complete TypeScript module text as a pure function of the token set: no environment, file or clock input.
 - **FR-002**: The module MUST contain every colour role in light and dark as `#rrggbb` strings, equal to the values `tokens::css::stylesheet()` emits for the same roles.
-- **FR-003**: The module MUST contain the type scale, corner radii, elevation levels, motion durations and easings, and state-layer opacities, each equal to the corresponding desktop token, each exported once (scheme-independent); only colour roles are split by scheme.
+- **FR-003**: The module MUST contain the type scale, corner radii, elevation levels, motion durations and easings, and state-layer opacities, each equal to the corresponding desktop token, each exported once; only colour roles are split by scheme, and elevation nests its per-scheme shadow alpha as `{ light, dark }`.
 - **FR-004**: The module MUST open with a header comment naming `micold-tokens-ts` and `crates/micold-core/src/tokens/` and saying not to edit it.
 - **FR-005**: The `micold-tokens-ts` binary MUST output exactly what `module()` returns, deciding nothing itself: `micold-tokens-ts <path>` writes the file at `<path>`, and `micold-tokens-ts` with no argument writes to stdout. The client file is regenerated with `cargo run -p micold-core --bin micold-tokens-ts -- apps/client/src/theme/tokens.generated.ts`, the command FR-007 prints.
 - **FR-006**: The committed `apps/client/src/theme/tokens.generated.ts` MUST equal the generator's output.
