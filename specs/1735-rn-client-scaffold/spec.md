@@ -32,10 +32,10 @@ The mock is selected by one build-time switch and is never reachable in a produc
 
 ## Clarifications
 
-### Open questions (for the clarify unit)
+### Session 2026-11-16
 
-- [NEEDS CLARIFICATION: Which locales ship in v1 of the catalog? English is the source and default; the proposal is English plus one pseudo-locale for tests, with a real second language added by translators later. Is a real second language (which one) required now?]
-- [NEEDS CLARIFICATION: Does the mock ship in the deployed static bundle behind a "demo" switch, or only in development, test and CI builds? The proposal is dev, test and CI only (SC-006).]
+- Q: Which locales ship in v1? → A: English (source, default) plus Polish as the one real second locale, which proves runtime switching, plural rules and persistence; the pseudo-locale is for tests only; more languages are added by translators later. _(agent-resolved: specs/1735-rn-client-scaffold/spec.md#User Story 5; the issue requires i18n from the start and FR-015 needs a real switch target; a translation is not otherwise in scope, so Polish strings are kept minimal to the screens of this feature)_
+- Q: Does the mock ship in the deployed bundle? → A: No. The mock is in development, test and CI builds only; a production export has none (SC-006). A separate, explicit demo flag may include it for a labelled demo build; it is off by default, and the production bundle check runs on builds without it. _(agent-resolved: specs/1735-rn-client-scaffold/spec.md#What is mocked, and what is real)_ in the deployed static bundle behind a "demo" switch, or only in development, test and CI builds? The proposal is dev, test and CI only (SC-006).]
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -72,6 +72,7 @@ A signed-in person sees, in a sidebar, the projects, worktrees and sessions of e
 3. **Given** a daemon is offline in the fixture, **When** the sidebar renders, **Then** its rows stay listed, marked offline, and no other daemon's rows move.
 4. **Given** the list is empty (no daemons, or a daemon with no projects), **When** the sidebar renders, **Then** an empty state with a message shows.
 5. **Given** two state changes arrive in one batch, **When** applied, **Then** the final state of each row is shown and order is unchanged.
+6. **Given** the fixture holds structured and terminal sessions, **When** the sidebar renders, **Then** terminal sessions are listed with their state exactly like structured ones, the kind shown by a glyph or text.
 
 ---
 
@@ -144,11 +145,11 @@ A developer runs `mise run client-test` and `mise run client-web`; CI runs lint,
 
 ---
 
-### User Story 7 - The spike: a long transcript and a diff render with Paper on the web (Priority: P2, first)
+### User Story 7 - The spike: a long transcript and a diff render with Paper on the web (Priority: P1)
 
 Before the rest is built, a spike renders a long transcript and a diff with Paper on the web and records what works and what does not, so a gap shows early.
 
-**Why this priority**: it de-risks #1736 and the diff view (M6); it ships no user feature.
+**Why this priority**: it de-risks #1736 and the diff view (M6); it ships no user feature. It is P1 because it must precede the sidebar and Overview work (ordering is fixed in FR-020, not by priority).
 
 **Independent Test**: the spike page renders fixed fixtures (a 5,000-entry transcript, a 2,000-line diff) in the web export; the recorded result in `specs/1735-rn-client-scaffold/spike.md` states frame cost, scroll behaviour, selection and copy, and the gaps found.
 
@@ -190,13 +191,13 @@ Before the rest is built, a spike renders a long transcript and a diff with Pape
 - **FR-012** (FR-035): The Overview MUST render one card per location in the iced app's arrangement on wide screens, and the layout MUST stack into one column below 600 px.
 - **FR-013**: An offline or stale daemon MUST stay listed, marked as such, with its last known rows.
 - **FR-014**: Every user-visible string, including accessibility labels, empty states, errors, state names and the title of the page, MUST come from a message catalog (ICU-style messages with plural and format support); a lint rule MUST fail CI on a user-visible literal in a component.
-- **FR-015**: The locale MUST be switchable at runtime from a control in the Client without a reload, persisted as a preference, defaulting to the browser's language and falling back to English; a missing message MUST fall back to English.
+- **FR-015**: The catalog MUST ship English and Polish (plus a test-only pseudo-locale). The locale MUST be switchable at runtime from a control in the Client without a reload, persisted as a preference, defaulting to the browser's language and falling back to English; a missing message MUST fall back to English.
 - **FR-016**: The Client MUST use logical (start/end) layout properties so a right-to-left locale mirrors without code change.
 - **FR-017**: The Client MUST NOT include a terminal emulator (FR-045); CI MUST fail when the bundle or the dependency list contains one (SC-007 of `specs/orchestrator/`).
-- **FR-018**: CI MUST run lint, typecheck, Jest, the web export, a Playwright smoke test of sign-in, sidebar, Overview and the order-stable state change, and the bundle check, on every change to `apps/client/` or `packages/protocol/`.
+- **FR-018**: CI MUST run lint, typecheck, Jest, the web export, a Playwright smoke test (in Chromium, Firefox and WebKit) of sign-in, sidebar, Overview and the order-stable state change, and the bundle check, on every change to `apps/client/` or `packages/protocol/`.
 - **FR-019**: The Client MUST meet the accessibility baseline of the iced app's pass: keyboard-reachable sign-in, sidebar and locale control, visible focus, names on every control, and contrast of the theme's roles.
 - **FR-020**: A spike MUST come first and be recorded in `specs/1735-rn-client-scaffold/spike.md` (long transcript and diff with Paper on the web, measured), before the sidebar and Overview are built; its page MUST NOT be reachable in a production export.
-- **FR-021**: Screenshots at 1280, 800 and 390 px in light and dark MUST be captured by the Playwright run and pass the visual pass against the iced app's.
+- **FR-021**: Screenshots at 1280, 800 and 390 px in light and dark MUST be captured by the Playwright run (in Chromium, the reference browser for the visual pass) and pass the visual pass against the iced app's.
 
 ### Key Entities
 
@@ -213,11 +214,11 @@ Before the rest is built, a spike renders a long transcript and a diff with Pape
 ### Measurable Outcomes
 
 - **SC-001**: With the fixture of 2 daemons, 6 projects, 30 worktrees and 60 sessions, every item appears in the sidebar, and across 100 scripted state changes the order of rows is identical to the initial order in 100 percent of checks.
-- **SC-002**: A state change reaches the visible indicator within 100 ms of the mock's feed delivering it (measured in the Jest/Playwright test), and no row index changes.
+- **SC-002**: A state change reaches the visible indicator within 100 ms of the mock's feed delivering it (measured in the automated tests of FR-018), and no row index changes.
 - **SC-003**: The Overview shows one column at every width below 600 px and the wide layout at 600 px and above, at all three tested widths in light and dark (6 screenshots), all passing the visual pass.
 - **SC-004**: 100 percent of user-visible strings on the screens of this feature come from the catalog: the lint check reports 0 literals, and the pseudo-locale run shows 0 untransformed strings.
-- **SC-005**: A clean checkout runs `mise run client-test` and `mise run client-web` to success, and the CI client job completes in under 10 minutes.
-- **SC-006**: A production export contains 0 references to the mock modules (bundle check) and 0 token-shaped values in web storage after sign-in (test).
+- **SC-005**: A clean checkout runs the client test and web export tasks of FR-002 to success, and the CI client job completes in under 10 minutes.
+- **SC-006**: A production export contains 0 references to the mock modules (the bundle check of FR-018) and 0 token-shaped values in web storage after sign-in (test).
 - **SC-007**: The bundle check finds 0 terminal emulator packages in the export and the dependency list; adding one makes it fail.
 - **SC-008**: The spike records, for a 5,000-entry transcript and a 2,000-line diff, render time and scroll behaviour with a verdict, before the sidebar work starts.
 - **SC-009**: Diff coverage of the guarded client code is at least 80 percent, the repository's merge gate.
@@ -235,6 +236,7 @@ Before the rest is built, a spike renders a long transcript and a diff with Pape
 
 - The real WebSocket API, generated protocol types and the real auth flow (#1732, #1733), the HttpOnly refresh cookie and its server side.
 - Serving the bundle from the orchestrator or the Kubernetes web image (FR-021R's serving half, #1954 and M5).
+- Stopping a session (and starting one) is deferred to #1736 onward.
 - Transcript, composer, paste, permission prompts, attention list, quick switcher, command palette, users and invites, daemon management.
-- Native (iOS, Android) builds, and a real second-language translation.
+- Native (iOS, Android) builds, and any language beyond English and Polish.
 - Retiring the iced app.
