@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rib1g7
 - **Started**: 2026-11-16
 - **Phase**: plan
-- **Next step**: plan review round 1 (opus, orchestrator dispatches; rubrics/plan.md), then tasks unit
+- **Next step**: plan re-review round 2 (sonnet, orchestrator dispatches), then tasks unit
 
 ## Pull requests
 
@@ -43,7 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec CLEAN (round 2). Clarify CLEAN (3 agent-resolved Qs). Plan written; pre-review snapshot 02f657f9e5926e1d4f5e4d2c946d14c40a86d635:ad8718a69b11c41539315841bf759aae0f0866c7. Next: plan review round 1 (opus), then tasks unit.
+Spec CLEAN (round 2). Clarify CLEAN. Plan round 1 CHANGES applied (F1-F5); re-review snapshot 45c94fb0bc19e23a2b684906683acaa00be36286:955e5cb11ff02b26a51bce213466e1feb4d04ee8. Next: plan re-review (sonnet), then tasks unit.
 
 ## Open escalation
 
