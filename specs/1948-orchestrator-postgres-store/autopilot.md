@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-hzkb7z
+- **Worktree branch**: claude/project-thread-sabfza
 - **Started**: 2026-11-15
 - **Phase**: milestones
 - **Next step**: dispatch the M10 milestone unit in a fresh thread (previous PR #2010 merged at 83926c52f)
