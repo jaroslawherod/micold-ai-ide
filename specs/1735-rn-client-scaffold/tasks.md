@@ -122,7 +122,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M3 — Sidebar and Overview
 
-- **Tasks**: T032–T044, T045
+- **Tasks**: T032–T045
 - **Deliverable**: After sign-in the sidebar and Overview list the fixture in stable order, update state live, mark offline daemons stale, and stack below 600 px; the user guide describes it.
 - **Satisfies**: US2 scenarios 1–6; US3 scenarios 1–3; US5 scenario 4; FR-010–013, 019; SC-001–004
 - **Verify**: `mise run client-test`; `mise run client-web` then the dev loop of quickstart Part A step 5
@@ -131,7 +131,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M4 — Browser smoke, visual pass, bundle check, docs
 
-- **Tasks**: T046–T052
+- **Tasks**: T046–T053
 - **Deliverable**: CI runs the Playwright smoke in Chromium, Firefox and WebKit, captures six screenshots, enforces the terminal-emulator bundle check, and `docs/development/client.md` exists with the visual pass recorded.
 - **Satisfies**: US3 scenario 4; US6 scenarios 3, 4; FR-017, 018, 021; SC-003, 006, 007, 009
 - **Verify**: `mise run client-e2e`; `node scripts/client/bundle-check.mjs apps/client/dist`; `specs/1735-rn-client-scaffold/visual-pass/`
