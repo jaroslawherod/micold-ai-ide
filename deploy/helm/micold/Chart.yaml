@@ -1,0 +1,11 @@
+apiVersion: v2
+name: micold
+description: The micold orchestrator, and optionally the web UI, on Kubernetes (#1981, #1740).
+type: application
+# The chart's own version; bumped by hand when the templates or values change.
+version: 0.1.0
+# The image tag used when `image.tag` is empty. CI and the kind harness set `image.tag=dev`.
+appVersion: "0.18.0"
+home: https://github.com/jaroslawherod/micold-ai-ide
+sources:
+  - https://github.com/jaroslawherod/micold-ai-ide

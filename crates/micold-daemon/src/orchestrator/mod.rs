@@ -18,6 +18,7 @@ use micold_core::endpoint::Endpoint;
 use micold_core::orchestrator::{BindScope, Registry, RegistryStore, Snapshot};
 
 pub mod client;
+pub mod config;
 pub mod db;
 pub mod hub;
 pub mod link;
@@ -125,48 +126,49 @@ impl Shared {
     }
 }
 
-/// The orchestrator's own endpoint: beside the daemon's, under other names, so both can run.
-fn endpoint() -> io::Result<Endpoint> {
-    micold_core::endpoint::orchestrator_endpoint()
+/// Run the orchestrator where `config` says until the process is stopped, on the store
+/// `database` names (FR-009); with no `[database]` table that is the SQLite file under the data
+/// directory.
+pub async fn run(
+    config: config::OrchestratorConfig,
+    database: Option<DatabaseConfig>,
+) -> io::Result<()> {
+    let store = open_store(database, config.data_dir, SystemClock.wall_secs()).await?;
+    serve(config.endpoint, Arc::new(SystemClock), store).await
 }
 
-/// Run the orchestrator on the user's endpoint until the process is stopped, on the store the
-/// configuration names (FR-009): `--config <path>` after `orchestrator`, else
-/// `<data_dir>/daemon.toml` when it exists. With no `[database]` table that is the SQLite file
-/// under the data directory.
-pub async fn run() -> io::Result<()> {
-    let endpoint = endpoint()?;
-    let args: Vec<OsString> = std::env::args_os().skip(2).collect();
-    let (database, data_dir) = configured(&args)?;
-    let store = open_store(database, data_dir, SystemClock.wall_secs()).await?;
-    serve(endpoint, Arc::new(SystemClock), store).await
-}
-
-/// The `[database]` table and the data directory of the configuration file `args` name.
-fn configured(args: &[OsString]) -> io::Result<(Option<DatabaseConfig>, PathBuf)> {
-    let args = crate::config_load::parse_args(args)
-        .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
-    let default = micold_core::paths::data_dir().map(|dir| dir.join("daemon.toml"));
-    let path = args.config.or(default.filter(|path| path.is_file()));
-    let config = match path {
-        Some(path) => Some(
-            crate::config_load::load_file(&path)
-                .map_err(io::Error::other)?
-                .config,
-        ),
-        None => None,
+/// The configuration file's `[database]` table and data directory: the file `--config` names,
+/// else `<data_dir>/daemon.toml` when it exists, else none.
+fn configured(file: Option<PathBuf>) -> io::Result<(Option<DatabaseConfig>, Option<PathBuf>)> {
+    let default = || micold_core::paths::data_dir().map(|dir| dir.join("daemon.toml"));
+    let path = file.or_else(|| default().filter(|path| path.is_file()));
+    let Some(path) = path else {
+        return Ok((None, None));
     };
-    let data_dir = config
-        .as_ref()
-        .and_then(|config| micold_core::daemon_config::resolved_view(config).data_dir)
-        .or_else(micold_core::paths::data_dir)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "no data directory to keep the orchestrator registry in",
-            )
-        })?;
-    Ok((config.and_then(|config| config.database), data_dir))
+    let config = crate::config_load::load_file(&path)
+        .map_err(io::Error::other)?
+        .config;
+    let data_dir = micold_core::daemon_config::resolved_view(&config).data_dir;
+    Ok((config.database, data_dir))
+}
+
+/// The defaults when neither a flag nor a variable gives a value: the configuration file's data
+/// directory before the user's.
+struct FileDefaults {
+    data_dir: Option<PathBuf>,
+}
+
+impl config::Defaults for FileDefaults {
+    fn data_dir(&self) -> io::Result<PathBuf> {
+        match &self.data_dir {
+            Some(dir) => Ok(dir.clone()),
+            None => config::SystemDefaults.data_dir(),
+        }
+    }
+
+    fn endpoint(&self) -> io::Result<Endpoint> {
+        config::SystemDefaults.endpoint()
+    }
 }
 
 /// Open the store for `database` and `data_dir` on a blocking thread, then import an earlier
@@ -199,8 +201,19 @@ pub async fn run_configured(
     run_with(socket, clock, store).await
 }
 
-/// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
-pub fn main() -> io::Result<()> {
+/// The `orchestrator` argument's whole run: `args` are the arguments after `orchestrator`
+/// (`--data-dir`, `--socket`, each also settable by environment, and `--config`). Settings, a
+/// runtime, then [`run`]. Returns only on an error.
+pub fn main(args: &[OsString]) -> io::Result<()> {
+    let args = config::OrchestratorArgs::parse(args)?;
+    let (database, file_data_dir) = configured(args.config.clone())?;
+    let config = config::OrchestratorConfig::resolve(
+        args,
+        &|name| std::env::var_os(name),
+        &FileDefaults {
+            data_dir: file_data_dir,
+        },
+    )?;
     // Stderr only: the orchestrator keeps no log file. `try_init` so a second call is harmless.
     let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -209,7 +222,7 @@ pub fn main() -> io::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(run())
+        .block_on(run(config, database))
 }
 
 /// Run the orchestrator on `socket` with `clock` and `store` (tests pass their own).
@@ -218,11 +231,7 @@ pub async fn run_with(
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
-    let endpoint = Endpoint {
-        lock_path: socket.with_extension("lock"),
-        socket_path: socket,
-    };
-    serve(endpoint, clock, store).await
+    serve(config::endpoint_at(socket), clock, store).await
 }
 
 /// The registry `store` holds, restored, and the saving thread that keeps it: what every link

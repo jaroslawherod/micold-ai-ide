@@ -1,0 +1,6 @@
+# The web UI on (FR-004): a web Deployment and Service render beside the orchestrator.
+web:
+  enabled: true
+  image:
+    repository: ghcr.io/jaroslawherod/micold-web
+    tag: dev

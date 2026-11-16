@@ -1,0 +1,18 @@
+{{- if .Values.state.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "micold.fullname" . }}-data
+  labels:
+    {{- include "micold.labels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.state.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.state.persistence.size | quote }}
+{{- end }}
