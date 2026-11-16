@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-9m447v
 - **Started**: 2026-11-16
-- **Phase**: M2 implemented (T024–T039 ticked); gate and reviews
-- **Next step**: orchestrator runs review A (`code-review` high) and B (conformance) on the M2 snapshot in *Review rounds*, then continues this unit for fixes, full gate, push and PR body
+- **Phase**: M2 review round 1 fixed (3f48434a4), pushed; PR body at /tmp/claude-pr-1735-m2.md
+- **Next step**: orchestrator opens the M2 PR and re-reviews the fix diff 19e4e86b3..3f48434a4 (round 2, sonnet)
 
 ## Pull requests
 
@@ -61,6 +61,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B fix diff | 2 | M1 | 9b64585a458f441d7632f65b0f6a7c3532f1d467 | - | CLEAN (merged in #2013) |
 | Review A (opus, code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1-F3 major, F4-F7 minor), all fixed in the M2 fix commit |
 | Review B (sonnet, conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1 major, F2-F5 minor), all fixed in the M2 fix commit (F5 documented in drift-M2.md) |
+| Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | pending (orchestrator re-reviews) |
 
 ## Declined review findings
 
@@ -79,5 +80,5 @@ None.
 
 - M1 spike gaps (spike.md): FlatList never unmounts rendered rows (#1736 evaluates FlashList); select-all over a virtualized transcript needs a copy action (#1736); the diff is an unvirtualized ScrollView (diff view issue, M6 of #1722); only Chromium measured.
 - T020 wording is for the web client only; the desktop `appearance-theming.md` sections are untouched.
-- M2 local gate: `scripts/gate.sh` passed fmt and clippy, then stopped at `cargo nextest` (not installed in the cloud container; installing it was refused). No Rust changed; the client suites (`bundle-check`, `client-pins`, `classify-change`, `diff-coverage`, `tokens-ts-drift`) pass by hand, Jest 117/117, lint and typechecks clean. The full gate is left to CI.
+- M2 local gate (also on 3f48434a4): `scripts/gate.sh` passed fmt and clippy, then stopped at `cargo nextest` (not installed in the cloud container; installing it was refused). No Rust changed; every `scripts/tests/*.test.sh` passes by hand, Jest 127/127, diff coverage 99.3%, lint and typechecks clean. The full gate is left to CI.
 - #1732 and #1733 not built: the mock must be swapped for the real client and generated types (constitution V) in a follow-up once they land.
