@@ -266,10 +266,11 @@ where
     }));
     let hub = shared.hub();
     let ping_tx = out_tx.clone();
+    let generation = hub.register_link(daemon, out_tx);
     let _registered = Registered {
         hub,
         daemon,
-        generation: hub.register_link(daemon, out_tx),
+        generation,
     };
     let mut timer = tokio::time::interval(CHECK_INTERVAL);
     timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -279,9 +280,11 @@ where
     let end = |open: &mut bool| {
         if std::mem::take(open) {
             // The id is free before the clients hear the link is gone, so a daemon that links
-            // again at once is not refused as already linked.
+            // again at once is not refused as already linked. The link is unhooked as well, so
+            // a route opened before the deadline runs out is refused `offline` at once rather
+            // than sent into a closed socket (#1726 FR-002).
             shared.update(|registry| registry.ended(link));
-            hub.link_lost(daemon, None);
+            hub.link_lost(daemon, Some(generation));
         }
     };
     loop {

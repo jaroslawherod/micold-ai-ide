@@ -15,7 +15,7 @@ use micold_core::protocol::codec::raw_frame_codec;
 use micold_core::protocol::envelope::{EnvelopeHeader, Kind, HEADER_LEN};
 use micold_core::protocol::handshake;
 use micold_core::protocol::keepalive::LIVENESS_DEADLINE;
-use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, ErrorKind};
+use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg};
 use micold_core::protocol::routing::{
     control_payload, decode_routed_payload, encode_opaque_payload, JsonRouted, RouteRefusal,
     RoutedBody, RoutedHeader, RoutedPayload, Sequence, WireDaemonId,
@@ -148,7 +148,7 @@ where
 }
 
 /// Handle one client frame; `false` ends the session.
-async fn handle(shared: &Shared, client: ClientId, payload: &[u8]) -> io::Result<bool> {
+async fn handle(shared: &Arc<Shared>, client: ClientId, payload: &[u8]) -> io::Result<bool> {
     let (envelope, _) = EnvelopeHeader::parse(payload).map_err(invalid)?;
     match envelope.kind {
         Kind::Routed => {}
@@ -170,9 +170,10 @@ async fn handle(shared: &Shared, client: ClientId, payload: &[u8]) -> io::Result
     Ok(true)
 }
 
-/// A frame with no target is the orchestrator's own: a list request.
+/// A frame with no target is the orchestrator's own: a list request. It is answered in the
+/// background, so a slow daemon never holds up the client's other frames.
 fn answer_orchestrator(
-    shared: &Shared,
+    shared: &Arc<Shared>,
     client: ClientId,
     routed: &RoutedPayload<'_>,
 ) -> io::Result<()> {
@@ -180,17 +181,22 @@ fn answer_orchestrator(
         return Err(invalid("a frame with no target must be a JSON OrchList"));
     };
     let request: JsonRouted<ClientMsg> = serde_json::from_slice(body).map_err(invalid)?;
-    let ClientMsg::OrchList { req, .. } = request.msg else {
+    let ClientMsg::OrchList { req, kind } = request.msg else {
         return Err(invalid("a frame with no target must be an OrchList"));
     };
-    let answer = DaemonMsg::OperationError {
-        req,
-        kind: ErrorKind::Internal,
-        message: "lists are not available yet".to_owned(),
-        detail: None,
-    };
-    let frame = orchestrator_frame(routed.header.conn, 1, Some(req), true, &answer);
-    shared.hub().to_client(client, frame);
+    let conn = routed.header.conn;
+    let shared = Arc::clone(shared);
+    tokio::spawn(async move {
+        let merged = super::list::gather(&shared, kind).await;
+        let answer = DaemonMsg::OrchListed {
+            req,
+            rows: merged.rows,
+            missing: merged.missing,
+            no_daemons: merged.no_daemons,
+        };
+        let frame = orchestrator_frame(conn, 1, Some(req), true, &answer);
+        shared.hub().to_client(client, frame);
+    });
     Ok(())
 }
 

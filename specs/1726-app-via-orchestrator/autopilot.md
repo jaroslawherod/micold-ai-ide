@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-gq91k7
+- **Worktree branch**: claude/project-thread-35d9jf
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: gate, push, PR for M1
+- **Next step**: M2 reviews (A+B) on the snapshot below, then open the M2 PR with specs/1726-app-via-orchestrator/pr-m2.md
 - **PR**: none
 
 ## Pull requests
@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1996 | design | merged | 9f6e6784d |
+| #1999 | M1 | merged | 2f62cbf31 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | | implemented, round 1 fixed, awaiting round 2 |
-| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
+| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
+| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | implemented, review pending |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
 ## Decisions
@@ -58,10 +59,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tests/*.test.sh run outside gate.sh reset this worktree's branch and cleaned untracked files once; never run them bare here.)
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+## Follow-ups (M2 review)
+- list.rs:111 mid-ask link drop reported as timeout, not offline
+- client.rs:188 uncapped concurrent OrchList per client
