@@ -22,10 +22,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T008 | full | contract + core routing types at protocol 83 | | pending |
-| M2 | T009–T013 | full | requests and streams routed through the orchestrator | | pending |
-| M3 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
-| M4 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
+| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | | pending |
+| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
+| M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
 ## Decisions
 
@@ -33,7 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | clarify | FR-002 per-daemon list deadline | 2 s, daemons asked in parallel | agent | SC-004 budget |
 | 2 | clarify | Who writes `[orchestrator_link]` into provisioned daemons | this feature, the app on provision (FR-013) | agent | specs/1725-daemons-dial-orchestrator/spec.md#Assumptions |
-| 3 | tasks | M1 has no observable user story (milestones rule 1) | keep contract+core as M1 per plan: shared wire for M2 and #1732 | agent | plan.md#Milestones |
+| 3 | tasks | M1 has no observable user story (milestones rule 1) | superseded by #4: contract+core merged into the US2 milestone | agent | tasks review r1 F1 |
+| 4 | tasks | Milestones bundling two stories (rule 2) | keep combined, reasons in each milestone's Note (US4 halves and US5 have no code of their own) | agent | tasks review r1 F4 |
 
 ## Review rounds
 
@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | plan | 1 | design | e458a16fca33bf98126ebd10ded77ccc18266133 | 8487a8d58e89bb17100164e9cf76b5dfba6a0c1d:e458a16fca33bf98126ebd10ded77ccc18266133 | pending |
 | plan | 2 | design | 6e241d6b1c3744d78f712e7998d7f26265227f3a | a6f9de08200acab60e831c1660b93e5f63aeb46a:6e241d6b1c3744d78f712e7998d7f26265227f3a | pending |
 | plan | 2 | design | 6e241d6b1c3744d78f712e7998d7f26265227f3a | a6f9de08200acab60e831c1660b93e5f63aeb46a:6e241d6b1c3744d78f712e7998d7f26265227f3a | CLEAN (1 MINOR applied: R6 slugify trim/fallback) |
+| tasks | 1 | design | aac33e2f643fabba7645ab9a83e0acec7db3e0c8 | a3a350cbee7cbea5eb623c27828a8217ba16f17a:aac33e2f643fabba7645ab9a83e0acec7db3e0c8 | CHANGES (2 MAJOR, 2 MINOR; all fixed) |
 
 ## Declined review findings
 
