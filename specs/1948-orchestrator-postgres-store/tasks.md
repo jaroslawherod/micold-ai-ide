@@ -302,22 +302,22 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: owners and tenants round-trip, and the first owner adopts pre-user records (US6; FR-007, FR-046).
 
-- [ ] T055 [P] [US6] Failing tests in `crates/micold-core/src/orchestrator/record.rs`: `OwnerId` is
+- [x] T055 [P] [US6] Failing tests in `crates/micold-core/src/orchestrator/record.rs`: `OwnerId` is
   `unowned` or a `UserId`; `DaemonRecord.owner` defaults to `unowned` when absent, so an old
   `registry.json` loads.
-- [ ] T056 [P] [US6] Failing cases in `store_suite.rs`: an existing owner survives a relink `upsert`
+- [x] T056 [P] [US6] Failing cases in `store_suite.rs`: an existing owner survives a relink `upsert`
   and a whole-list `save`; `reassign_unowned(&TenantId, &UserId)` moves every `unowned` row of the
   tenant and returns the count, a second call returns 0, another tenant's rows stay.
-- [ ] T057 [P] [US6] Test in `store_scan.rs`: every table except `_sqlx_migrations` has `tenant_id`,
+- [x] T057 [P] [US6] Test in `store_scan.rs`: every table except `_sqlx_migrations` has `tenant_id`,
   and `daemons`, `projects`, `sessions` have `owner_user_id`, on both backends (US6 scenario 1).
-- [ ] T058 [US6] `record.rs`: `OwnerId`, `DaemonRecord.owner` (serde default `unowned`); `store.rs`:
+- [x] T058 [US6] `record.rs`: `OwnerId`, `DaemonRecord.owner` (serde default `unowned`); `store.rs`:
   `RegistryStore::reassign_unowned` with a default body over `load` and `save`; memory and JSON
   stores green.
-- [ ] T059 [US6] `db/registry.rs`: write `owner_user_id` from the record on insert only, and override
+- [x] T059 [US6] `db/registry.rs`: write `owner_user_id` from the record on insert only, and override
   `reassign_unowned` with one transaction updating `daemons`, `projects`, `sessions` of the tenant
   `WHERE owner_user_id = 'unowned'`; `db/import.rs` keeps an owner the file carries; T056 and T057
   green.
-- [ ] T060 [US6] Run quickstart §A and §B (`specs/1948-orchestrator-postgres-store/quickstart.md`);
+- [x] T060 [US6] Run quickstart §A and §B (`specs/1948-orchestrator-postgres-store/quickstart.md`);
   record each step's result there and fix the doc where it is wrong.
 
 ---

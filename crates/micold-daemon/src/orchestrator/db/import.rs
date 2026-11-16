@@ -1,9 +1,9 @@
 //! The one-time import of an earlier version's `<data_dir>/orchestrator/registry.json` into the
 //! database (#1948, FR-010).
 //!
-//! One transaction inserts every record and an `imports` marker holding the file's SHA-1; the file
-//! is renamed `registry.json.imported` only after it commits. A crash between the two leaves rows
-//! plus a marker whose digest matches the file, which the next start recognises and only renames.
+//! One transaction inserts every record (with the owner the file carries, `unowned` when none) and
+//! an `imports` marker holding the file's SHA-1; the file is renamed `registry.json.imported` only
+//! after it commits. A crash between the two leaves rows plus a marker whose digest matches the file, which the next start recognises and only renames.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

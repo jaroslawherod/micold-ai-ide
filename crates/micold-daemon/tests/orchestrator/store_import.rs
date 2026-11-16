@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use micold_core::daemon_config::Kind;
 use micold_core::orchestrator::store::JsonRegistryStore;
-use micold_core::orchestrator::{DaemonRecord, RegistryStore as _, StoreError};
+use micold_core::orchestrator::{DaemonRecord, OwnerId, RegistryStore as _, StoreError};
 use micold_core::protocol::routing::WireDaemonId;
 use micold_daemon::orchestrator::db::import::{import_registry_json, Imported};
 use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
@@ -98,6 +98,19 @@ fn an_unimported_file_imports_every_record_under_its_tenant_and_is_renamed() {
         assert_eq!(world.rows(), keys(&records));
         assert!(!world.json().exists());
         assert_eq!(mode(&world.imported()), before);
+    });
+}
+
+#[test]
+fn an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned() {
+    on_both(|world| {
+        let mut owned = record("default", "d1");
+        owned.owner = OwnerId::parse("alice");
+        world.write_json(&[owned, record("default", "d2")]);
+        assert_eq!(world.import().unwrap(), Imported::Records(2));
+        let loaded = SqlRegistryStore::new(Arc::clone(&world.db)).load().unwrap();
+        let owners: Vec<&str> = loaded.iter().map(|r| r.owner.as_str()).collect();
+        assert_eq!(owners, ["alice", "unowned"]);
     });
 }
 
