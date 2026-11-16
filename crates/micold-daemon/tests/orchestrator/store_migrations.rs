@@ -6,8 +6,12 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::sync::Arc;
 
-use micold_core::orchestrator::{RegistryStore as _, SchemaError, StoreError};
-use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+use micold_core::orchestrator::{
+    AuthStore as _, RegistryStore as _, Role, SchemaError, StoreError, TenantId,
+};
+use micold_daemon::orchestrator::db::{SqlAuthStore, SqlRegistryStore, StoreHandle};
+
+use super::store_suite::new_user;
 
 fn scalar_text(handle: &StoreHandle, sql: &'static str) -> String {
     handle
@@ -63,7 +67,8 @@ fn a_second_open_changes_nothing() {
         handle
             .block_on(async {
                 sqlx::query(
-                    "INSERT INTO daemons VALUES ('default','a','host','a',81,'[]','online',1,'unowned')",
+                    "INSERT INTO daemons (tenant_id, id, kind, name, protocol_version, capabilities, health, last_seen, owner_user_id) \
+                     VALUES ('default','a','host','a',81,'[]','online',1,'unowned')",
                 )
                 .execute(handle.pool())
                 .await
@@ -212,18 +217,19 @@ fn a_data_dir_that_is_a_regular_file_is_unavailable() {
 }
 
 #[test]
-fn map_error_refuses_a_violated_constraint_and_reports_anything_else_unavailable() {
+fn a_violated_constraint_is_refused_and_a_lost_table_is_unavailable_naming_the_target() {
     let dir = tempfile::tempdir().unwrap();
     let handle = StoreHandle::open_sqlite(dir.path()).unwrap();
-    let row = "INSERT INTO daemons VALUES ('default','a','host','a',81,'[]','online',1,'unowned')";
-    exec(&handle, row).unwrap();
-    let duplicate = exec(&handle, row).unwrap_err();
+    let auth = SqlAuthStore::new(Arc::clone(&handle), TenantId::default());
+    let user = new_user("u1", Role::Viewer);
+    auth.create_user(&user).unwrap();
     assert!(matches!(
-        handle.map_error(&duplicate),
-        StoreError::Refused { .. }
+        auth.create_user(&user),
+        Err(StoreError::Refused { .. })
     ));
-    match handle.map_error(&sqlx::Error::PoolTimedOut) {
-        StoreError::Unavailable { target, .. } => assert_eq!(target, handle.target()),
+    exec(&handle, "DROP TABLE users").unwrap();
+    match auth.users() {
+        Err(StoreError::Unavailable { target, .. }) => assert_eq!(target, handle.target()),
         other => panic!("got {other:?}"),
     }
 }
@@ -235,7 +241,8 @@ fn a_registry_over_a_dropped_table_is_unavailable_and_a_bad_row_is_corrupt() {
     let registry = SqlRegistryStore::new(Arc::clone(&handle));
     exec(
         &handle,
-        "INSERT INTO daemons VALUES ('default','a','no-such-kind','a',81,'[]','online',1,'unowned')",
+        "INSERT INTO daemons (tenant_id, id, kind, name, protocol_version, capabilities, health, last_seen, owner_user_id) \
+         VALUES ('default','a','no-such-kind','a',81,'[]','online',1,'unowned')",
     )
     .unwrap();
     match registry.load() {

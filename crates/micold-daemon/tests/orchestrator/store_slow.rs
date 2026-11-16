@@ -173,8 +173,7 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
     }
 
     // With the save thread stuck, another daemon links, is pinged and its answer is taken, well
-    // inside the 9 s liveness deadline.
-    let started = std::time::Instant::now();
+    // inside the 9 s liveness deadline on the test clock.
     let mut b = FakeDaemon::link(&orchestrator, &announcement("b")).await;
     let before = orchestrator.clock.wall();
     orchestrator.clock.advance(PING_INTERVAL);
@@ -186,11 +185,8 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
         b["health"] == "online" && b["last_seen"].as_u64() > Some(before)
     })
     .await;
-    assert!(
-        started.elapsed() < Duration::from_secs(9),
-        "{:?}",
-        started.elapsed()
-    );
+    let waited = orchestrator.clock.wall() - before;
+    assert!(waited < 9, "answered {waited} s after the ping went out");
     store.release();
 }
 

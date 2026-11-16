@@ -499,7 +499,7 @@ the audit changed no test or source.
   family revocation are separate cases). Verify:
   `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` passes with more
   cases per backend, and mutant 7 of `verification.md` fails exactly one of them.
-- [ ] T069 [P] F10, F11, F12 (LOW): in `store_slow.rs:175-191` assert on the test clock's ordering,
+- [x] T069 [P] F10, F11, F12 (LOW): in `store_slow.rs:175-191` assert on the test clock's ordering,
   not wall time; make the M5 "older database" and chain cases run a two-migration `Migrator` so
   ordering can fail (`store_migrations.rs`, M5 cases); stop calling `map_error` and positional `INSERT`
   literals from tests (`store_migrations.rs:215-238`). Verify: the same targets pass, and swapping the
