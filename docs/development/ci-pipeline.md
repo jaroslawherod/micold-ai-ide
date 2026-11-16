@@ -25,6 +25,7 @@ shapes:
 | `sandbox against a real runtime (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `container daemon end to end (docker, linux)`, `(podman, linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `remote daemon over a real sshd (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
+| `web client` | runs on main pushes and nightly; on a pull request only with [web client paths](#path-gated-jobs) | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
 
@@ -178,6 +179,14 @@ keep in step. Of `micold-client` only the three files the end-to-end job drives 
 (`src/daemon.rs`, `src/shell/sandbox.rs`, `src/shell/sandbox_real.rs`); the rest of it is built by
 the `test` job. A UI-only change skips the jobs; a daemon change runs them. Every failure path lands
 on `daemon_runtime=true`.
+
+A third, `client` (#1735), is true when **any** touched path is declared `micold-client`:
+`apps/client/**`, `packages/protocol/**`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` and the root
+`package.json`. It gates the `web client` job (pnpm install, lint, typecheck, Jest with coverage,
+diff coverage of the changed lines, the static web export; under ten minutes). `ci.yml` itself is
+in the `micold-daemon-runtime` set, not this one, so an edit to the job rides on that verdict only
+through a `full-ci` label or a client path. Every failure path lands on `client=true`.
+`scripts/tests/client-pins.test.sh` keeps the job's node and pnpm pins equal to `mise.toml`.
 
 To gate another job the same way: declare an attribute in `.gitattributes`, emit one more boolean
 from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it in

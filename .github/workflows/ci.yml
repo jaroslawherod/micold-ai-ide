@@ -56,6 +56,8 @@ jobs:
       daemon_runtime: ${{ steps.verdict.outputs.daemon_runtime }}
       # #1981: a path declared `micold-kube` (chart, orchestrator image, kind harness) changed.
       kube_paths: ${{ steps.verdict.outputs.kube_paths }}
+      # #1735: the change touches the TypeScript web client or its pnpm workspace files.
+      client: ${{ steps.verdict.outputs.client }}
       # #956: the `full-ci` label as a boolean.
       full_ci: ${{ steps.verdict.outputs.full_ci }}
       # #959: a push to main whose tree a merged pull request's run already proved. True skips what
@@ -125,6 +127,7 @@ jobs:
           PACKAGING: ${{ steps.verdict.outputs.packaging }}
           DAEMON_RUNTIME: ${{ steps.verdict.outputs.daemon_runtime }}
           KUBE_PATHS: ${{ steps.verdict.outputs.kube_paths }}
+          CLIENT: ${{ steps.verdict.outputs.client }}
           REASON: ${{ steps.verdict.outputs.reason }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
@@ -144,6 +147,7 @@ jobs:
             echo "Daemon-runtime paths touched: \`${DAEMON_RUNTIME:-unavailable}\`"
             echo
             echo "Kube paths touched: \`${KUBE_PATHS:-unavailable}\`"
+            echo "Web client paths touched: \`${CLIENT:-unavailable}\`"
             if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
               echo
               echo '<details><summary>Paths that made this code-affecting</summary>'
@@ -187,6 +191,74 @@ jobs:
             echo "== $t"
             "$t"
           done
+
+  # #1735: the TypeScript web client (apps/client, packages/protocol): lint, typecheck, Jest with
+  # coverage, diff coverage of the changed lines (scripts/guardrails-scope.conf `[web]`), and the
+  # static web export. Runs for a change that touches the `micold-client` set (`client` verdict of
+  # `classify`; the verdict errs towards running) on a pull request, and on every main and nightly run. The Playwright smoke
+  # test and the bundle check join it with M4 and M2. Node and pnpm versions come from mise.toml;
+  # scripts/tests/client-pins.test.sh keeps this job's pins equal to them.
+  client:
+    name: web client
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.client == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # SC-005: the job stays under ten minutes
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # diff coverage compares against the merge base
+      # pnpm comes from `packageManager` in package.json through corepack; setup-node then caches the pnpm store keyed on the lockfile.
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm --filter @micold/client lint
+      - name: Typecheck
+        run: |
+          pnpm --filter @micold/client typecheck
+          pnpm --filter @micold/protocol typecheck
+      - name: Jest with coverage
+        run: pnpm --filter @micold/client test --coverage
+      # Jest writes lcov paths relative to the package (`../../packages/protocol/...` for a sibling); normalise them to repository paths for diff-coverage.
+      - name: Check the changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
+          python3 - <<'PY'
+          import os
+          p = "apps/client/coverage/lcov.info"
+          out = []
+          for line in open(p):
+              if line.startswith("SF:"):
+                  f = line[3:].rstrip("\n")
+                  if not os.path.isabs(f):
+                      line = "SF:" + os.path.normpath(os.path.join("apps/client", f)) + "\n"
+              out.append(line)
+          open(p, "w").writelines(out)
+          PY
+          scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info --base "origin/$BASE" --summary client-diff-coverage.md
+      - name: Web export
+        run: pnpm --filter @micold/client web:export
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: client-coverage
+          path: |
+            apps/client/coverage/lcov.info
+            client-diff-coverage.md
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Feature 806 (FR-009): the two static Linux daemons every package carries, built once here on
   # Linux and handed to the jobs that need them as an artifact.
@@ -926,7 +998,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -943,6 +1015,7 @@ jobs:
         env:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
+          CLIENT: ${{ needs.client.result }}
           TEST: ${{ needs.test.result }}
           # A red `linux-daemons` skips `test` (it needs its artifact), and a skip reads as
           # satisfied, so it is gated by name too.
@@ -973,6 +1046,7 @@ jobs:
           }
           check classify "$CLASSIFY"
           check lint "$LINT"
+          check client "$CLIENT"
           check test "$TEST"
           check linux-daemons "$LINUXDAEMONS"
           check sandbox "$SANDBOX"
@@ -991,6 +1065,7 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
+            echo "| client | \`$CLIENT\` | yes |"
             echo "| test | \`$TEST\` | yes |"
             echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"

@@ -86,6 +86,7 @@ run_gate() {
 run_pkg() { run_gate packaging "$@"; }
 run_dr() { run_gate daemon_runtime "$@"; }
 run_kube() { run_gate kube_paths "$@"; }
+run_client() { run_gate client "$@"; }
 
 # --- documentation-only ------------------------------------------------------------------------
 
@@ -319,6 +320,46 @@ rm -rf "$d"
 
 d="$(new_repo)"
 run_kube "empty diff" false "$d" HEAD HEAD
+
+# --- client paths (#1735) ----------------------------------------------------------------------
+# `micold-client` marks the TypeScript web client and its pnpm workspace files; the `client` job of
+# ci.yml runs only for a change that touches them. Every failure path lands on `true`.
+
+client_case() { # <name> <want> <path>
+  local d
+  d="$(new_repo)"
+  mkdir -p "$d/$(dirname "$3")"; printf 'a\n' > "$d/$3"; commit_in "$d" client
+  run_client "$1" "$2" "$d" HEAD~1 HEAD
+  rm -rf "$d"
+}
+client_case "client source"              true  apps/client/src/a.ts
+client_case "client route"               true  apps/client/app/index.tsx
+client_case "client test"                true  apps/client/tests/a.test.ts
+client_case "protocol package"           true  packages/protocol/src/index.ts
+client_case "pnpm lockfile"              true  pnpm-lock.yaml
+client_case "pnpm workspace"             true  pnpm-workspace.yaml
+client_case "root package.json"          true  package.json
+client_case "Rust source"                false crates/micold-core/src/a.rs
+client_case "documentation only"         false docs/page.md
+client_case "release.yml"                false .github/workflows/release.yml
+
+d="$(new_repo)"
+mkdir -p "$d/apps/client/src"
+printf 'a\n' > "$d/apps/client/src/a.ts"; printf 'fn a() {}\n' > "$d/crates/micold-core/src/a.rs"
+commit_in "$d" mixed
+run_client "client among Rust" true "$d" HEAD~1 HEAD
+rm -rf "$d"
+
+d="$(new_repo)"
+printf 'a\n' > "$d/docs/page.md"; commit_in "$d" docs
+run_client "unresolvable base ref" true "$d" origin/nope HEAD
+run_client "all-zero base" true "$d" 0000000000000000000000000000000000000000 HEAD
+run_client "FORCE_FULL_CI over docs" true "$d" HEAD~1 HEAD FORCE_FULL_CI=1
+run_client "FORCE_FULL_CI=false over docs" false "$d" HEAD~1 HEAD FORCE_FULL_CI=false
+rm -rf "$d"
+
+d="$(new_repo)"
+run_client "empty diff" false "$d" HEAD HEAD
 rm -rf "$d"
 
 echo
