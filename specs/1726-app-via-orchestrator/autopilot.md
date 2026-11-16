@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | tasks (M4) | 1 | M4 | c3142fa3458e199c0d7a507db721c9922b713cdf | a47e6feffdf13bbc125154a00aa5209affb59f36:c3142fa3458e199c0d7a507db721c9922b713cdf | CHANGES (2 MAJOR: T027 file named, T030 split + T031 provisioned-path test; 3 MINOR fixed) |
 | tasks (M4) | 2 | M4 | 99a436ea5332cc5ac847dfdd5fe130bddee194ce | 2a8a84273ecdd7a70f43c03f0020550dc0b13f9d:99a436ea5332cc5ac847dfdd5fe130bddee194ce | CHANGES fixed (mechanical, no r3) |
 | code A+B (M4) | 1 | M4 | 9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | pending (orchestrator dispatches) |
+| code A+B (M4) | 1 | M4 | b9ef49cb7a86756da6c801e6c2722d0b3e0a20fb | f6aa5b806:9c0fd3c817d60d1b3dc28eb374a17db990bdf21f | CHANGES (A: 3 MINOR fixed: typed RouteEnded, holder-end race, no fallback router; B: 4 MAJOR fixed: placement + late-refusal tests, cycle-log rows/waivers, T031 Cargo [[test]] text, drift unplanned paths; 2 MINOR fixed: PR body coverage, T033 now run locally with sshd; CI: sandbox_real arity, ssh_real holder RealTime) |
 
 ## Declined review findings
 
