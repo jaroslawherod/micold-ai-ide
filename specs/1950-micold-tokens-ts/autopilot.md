@@ -8,23 +8,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: low
 - **Supervised**: no
 - **Issue**: #1950
-- **Worktree branch**: claude/project-thread-wlrb6d
+- **Worktree branch**: claude/project-thread-tafgoe
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M1 PR open by orchestrator, then review B, CI, merge; then M2
+- **Next step**: M2 diff review (fresh reviewer dispatched by orchestrator), then open PR from specs/1950-micold-tokens-ts/pr-M2.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1995 | design | merged | (squash on main) |
+| #1998 | M1 | merged | 2f6dcbead |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | pending open | implemented, review A done |
-| M2 | T010–T012 | light | gate drift check | — | pending |
+| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | #1998 | merged |
+| M2 | T010–T012 | light | gate drift check | pending (push, PR opened by orchestrator) | review pending |
 
 ## Decisions
 
@@ -42,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | design | 02504dfad970ca6a8acecac160a7576d8d07fc10 | f4413c54:bc96b57c | CLEAN (3 MINOR applied; dispatched by orchestrator) |
 | M1 B | 1 | diff | 9b31e0ac4 | 9b31e0ac4 | MINOR-ONLY (F1-F3 applied; sonnet, dispatched by orchestrator) |
 | Diff A (self, no Agent tool) | 1 | M1 origin/main...HEAD | HEAD | - | CLEAN (1 MINOR applied: `named()` depth arg simplified; checked: colours vs stylesheet, atomic write, tables byte-identical CSS; typeScale has no `font` since no font token exists, recorded in drift-M1.md) |
+| M2 diff | 1 | origin/main...HEAD | ceee7d97 | ceee7d97 | MINOR-ONLY (F1-F2 applied: build-lock.sh in drift test and docs; sonnet, dispatched by orchestrator) |
 
 ## Declined review findings
 
@@ -51,7 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 implemented, orchestrator ran full gate (all green except ssh-keygen-missing env test), review B (sonnet) MINOR-ONLY, F1-F3 applied. Next: PR, merge on green, then M2 in a fresh thread.
+M1 merged as 2f6dcbead (PR #1998). Next: M2 (T010–T012) in a fresh thread via `/speckit-autopilot resume`.
 
 ## Open escalation
 
