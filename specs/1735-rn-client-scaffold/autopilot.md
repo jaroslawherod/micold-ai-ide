@@ -10,13 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-hzt36f
 - **Started**: 2026-11-16
-- **Phase**: tasks written (review pending (orchestrator))
-- **Next step**: orchestrator runs the fresh tasks review, then this unit continues for speckit-analyze, gate and design PR
+- **Phase**: design PR open (#2009)
+- **Next step**: orchestrator waits on CI, merges #2009, then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #2009 | Design: spec, plan, tasks | open | - |
 
 ## Milestones
 
