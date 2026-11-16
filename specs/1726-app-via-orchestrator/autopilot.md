@@ -58,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M3) | 1 | M3 | 0deffa8b600c9fccf833c546c3a4af79d9ddd400 | 1a054e45102f489bfff8d934d5a83c5d148f659d:0deffa8b600c9fccf833c546c3a4af79d9ddd400 | CHANGES fixed: A F1 (dead-link route: close before marking table dead, insert refused under lock, writer drops route on send failure), A F2 (try_send, full queue ends that route), B F2 (T021 run + drift entry), B F3, B F4 (tdd/cycle-log.md); B F1 to user, in Follow-ups |
 | code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
 | code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
+| plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | pending (orchestrator dispatches) |
 
 ## Declined review findings
 
@@ -66,7 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 merged #2007 (f6aa5b806), host daemon only. jaro chose (decision card 2026-11-16) to route SSH, container and Kubernetes placements through the orchestrator too, as a new milestone M4 before close. drift-M3.md records why they were left direct (container/pod daemons have no route to the local orchestrator socket): M4 needs a plan amendment (dial-out or forwarded socket per placement) and tasks, then implementation. Cloud: scripts/tests/*.test.sh only via gate.sh; no cargo-nextest locally.
+Plan amendment for M4 committed (plan.md *Amendment*, research R7: all three placements already bridge with the #1725 `-R`; swap the bridge for a `remote hold-link` holder and route by wire id; Windows keeps the direct bridge, decision 5). Next: plan (M4) review round 1 on snapshot a1a5c51dd:7c108cf44, then append T023+ to tasks.md and the M4 milestone, tasks review. Cloud: no mise/gh; scripts/tests/*.test.sh only via gate.sh.
 
 ## Open escalation
 
