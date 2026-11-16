@@ -226,8 +226,14 @@ pub(super) fn reassign_unowned_moves_the_tenants_unowned_records_once(backend: &
 }
 
 macro_rules! registry_tests {
+    (postgres: $make:expr) => {
+        registry_tests!(@cases [cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")] $make);
+    };
     ($make:expr) => {
-        registry_tests!(@each $make,
+        registry_tests!(@cases [cfg_attr(any(), ignore)] $make);
+    };
+    (@cases $attr:tt $make:expr) => {
+        registry_tests!(@each $attr $make,
             upsert_inserts_then_updates,
             remove_reports_whether_a_record_went,
             save_replaces_the_whole_set_across_tenants,
@@ -239,9 +245,10 @@ macro_rules! registry_tests {
             reassign_unowned_moves_the_tenants_unowned_records_once
         );
     };
-    (@each $make:expr, $($case:ident),+) => {
+    (@each $attr:tt $make:expr, $($case:ident),+) => {
         $(
             #[test]
+            #$attr
             fn $case() {
                 let Some(mut backend) = $make else { return };
                 super::$case(&mut backend);
@@ -306,16 +313,54 @@ pub(super) fn refused<R: std::fmt::Debug>(result: Result<R, StoreError>) {
     );
 }
 
-pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl FullBackend) {
+pub(super) fn a_user_is_created_once_and_read_back(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     let created = auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     assert_eq!(created.role, Role::Viewer);
     assert_eq!(created.removed_at, None);
-    auth.create_user(&new_user("u2", Role::Owner)).unwrap();
     refused(auth.create_user(&new_user("u1", Role::Owner)));
+    drop(auth);
+    backend.reopen();
+    let auth = backend.auth(&t);
+    assert_eq!(auth.user(&uid("u1")).unwrap().unwrap().role, Role::Viewer);
+    assert_eq!(auth.user(&uid("nobody")).unwrap(), None);
+}
+
+pub(super) fn a_role_is_set_only_on_a_known_user(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     auth.set_role(&uid("u1"), Role::Operator).unwrap();
     refused(auth.set_role(&uid("nobody"), Role::Owner));
+    drop(auth);
+    backend.reopen();
+    let role = backend.auth(&t).user(&uid("u1")).unwrap().unwrap().role;
+    assert_eq!(role, Role::Operator);
+}
+
+pub(super) fn a_removed_user_is_unlisted_but_kept(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Operator)).unwrap();
+    auth.create_user(&new_user("u2", Role::Owner)).unwrap();
+    auth.remove_user(&uid("u1"), T + 5).unwrap();
+    refused(auth.remove_user(&uid("nobody"), T + 5));
+    drop(auth);
+    backend.reopen();
+    let auth = backend.auth(&t);
+    let listed: Vec<_> = auth.users().unwrap().into_iter().map(|u| u.id).collect();
+    assert_eq!(listed, vec![uid("u2")], "a removed user is not listed");
+    let removed = auth.user(&uid("u1")).unwrap().unwrap();
+    assert_eq!(removed.removed_at, Some(T + 5));
+    assert_eq!(removed.role, Role::Operator);
+}
+
+pub(super) fn removing_a_user_revokes_its_refresh_tokens_only(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.create_user(&new_user("u2", Role::Owner)).unwrap();
     auth.put_refresh(&refresh_token("r1", "u1", "f1", T + 100))
         .unwrap();
     auth.put_refresh(&refresh_token("r2", "u1", "f2", T + 100))
@@ -323,17 +368,9 @@ pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl 
     auth.put_refresh(&refresh_token("r3", "u2", "f3", T + 100))
         .unwrap();
     auth.remove_user(&uid("u1"), T + 5).unwrap();
-    refused(auth.remove_user(&uid("nobody"), T + 5));
     drop(auth);
     backend.reopen();
-
     let auth = backend.auth(&t);
-    let listed: Vec<_> = auth.users().unwrap().into_iter().map(|u| u.id).collect();
-    assert_eq!(listed, vec![uid("u2")], "a removed user is not listed");
-    let removed = auth.user(&uid("u1")).unwrap().unwrap();
-    assert_eq!(removed.removed_at, Some(T + 5));
-    assert_eq!(removed.role, Role::Operator);
-    assert_eq!(auth.user(&uid("nobody")).unwrap(), None);
     for token in ["r1", "r2"] {
         let stored = auth.refresh(&hash(token)).unwrap().unwrap();
         assert_eq!(
@@ -345,49 +382,82 @@ pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl 
     assert_eq!(auth.refresh(&hash("r3")).unwrap().unwrap().revoked_at, None);
 }
 
-pub(super) fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
-    let t = tenant("default");
-    let auth = backend.auth(&t);
-    auth.create_user(&new_user("u1", Role::Owner)).unwrap();
-    auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
-    let identity = |user: &str, email: &str| Identity {
+fn github(user: &str, email: &str) -> Identity {
+    Identity {
         provider: Provider::GitHub,
         subject: "gh-42".to_owned(),
         user: uid(user),
         email: Some(email.to_owned()),
         email_verified: true,
-    };
-    auth.link_identity(&identity("u1", "a@example.test"))
-        .unwrap();
-    auth.link_identity(&identity("u1", "b@example.test"))
-        .unwrap();
-    refused(auth.link_identity(&identity("u2", "a@example.test")));
-    refused(auth.link_identity(&Identity {
-        user: uid("ghost"),
-        subject: "gh-7".to_owned(),
-        ..identity("u1", "x@example.test")
-    }));
-    let google = Identity {
-        provider: Provider::Google,
-        ..identity("u2", "g@example.test")
-    };
-    auth.link_identity(&google).unwrap();
-    drop(auth);
-    backend.reopen();
+    }
+}
 
+/// A tenant with users `u1` (owner) and `u2` (viewer), `gh-42` on GitHub linked to `u1`.
+fn with_identity(backend: &mut impl FullBackend) -> TenantId {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Owner)).unwrap();
+    auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
+    auth.link_identity(&github("u1", "a@example.test")).unwrap();
+    t
+}
+
+pub(super) fn an_identity_relinks_to_its_user_and_survives_reopen(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    backend
+        .auth(&t)
+        .link_identity(&github("u1", "b@example.test"))
+        .unwrap();
+    backend.reopen();
     let auth = backend.auth(&t);
     let found = auth.user_by_identity(Provider::GitHub, "gh-42").unwrap();
     assert_eq!(found.map(|u| u.id), Some(uid("u1")));
+    assert_eq!(
+        auth.user_by_identity(Provider::GitHub, "unknown").unwrap(),
+        None
+    );
+}
+
+pub(super) fn a_linked_identity_is_refused_for_another_user(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
+    refused(auth.link_identity(&github("u2", "a@example.test")));
+    let found = auth.user_by_identity(Provider::GitHub, "gh-42").unwrap();
+    assert_eq!(found.map(|u| u.id), Some(uid("u1")));
+}
+
+pub(super) fn an_identity_for_an_unknown_user_is_refused(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
+    refused(auth.link_identity(&Identity {
+        subject: "gh-7".to_owned(),
+        ..github("ghost", "x@example.test")
+    }));
+    assert_eq!(
+        auth.user_by_identity(Provider::GitHub, "gh-7").unwrap(),
+        None
+    );
+}
+
+pub(super) fn an_identity_subject_is_scoped_by_provider(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
+    let google = Identity {
+        provider: Provider::Google,
+        ..github("u2", "g@example.test")
+    };
+    auth.link_identity(&google).unwrap();
     let found = auth.user_by_identity(Provider::Google, "gh-42").unwrap();
     assert_eq!(
         found.map(|u| u.id),
         Some(uid("u2")),
         "same subject, other provider"
     );
-    assert_eq!(
-        auth.user_by_identity(Provider::GitHub, "unknown").unwrap(),
-        None
-    );
+}
+
+pub(super) fn a_removed_users_identity_finds_nobody(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
     auth.remove_user(&uid("u1"), T).unwrap();
     assert_eq!(
         auth.user_by_identity(Provider::GitHub, "gh-42").unwrap(),
@@ -395,19 +465,45 @@ pub(super) fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
     );
 }
 
-pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
+/// A tenant with users `u1`, `u2` and invites `i1` (`tok-1`, live) and `i2` (`tok-2`, expires at T+10).
+fn with_invites(backend: &mut impl FullBackend) -> TenantId {
     let t = tenant("default");
     let auth = backend.auth(&t);
     auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
     auth.create_invite(&invite("i1", "tok-1", T + 100)).unwrap();
     auth.create_invite(&invite("i2", "tok-2", T + 10)).unwrap();
+    t
+}
+
+pub(super) fn an_invite_id_or_token_is_refused_twice(backend: &mut impl FullBackend) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
     refused(auth.create_invite(&invite("i1", "tok-3", T + 100)));
     refused(auth.create_invite(&invite("i3", "tok-1", T + 100)));
+}
+
+pub(super) fn an_unknown_or_expired_invite_is_refused(backend: &mut impl FullBackend) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
     refused(auth.redeem_invite(&hash("unknown"), &uid("u1"), T + 1));
     refused(auth.redeem_invite(&hash("tok-2"), &uid("u1"), T + 10));
-    // An unknown redeeming user is refused, and the invite stays redeemable (M1 review B F2).
+}
+
+pub(super) fn an_invite_for_an_unknown_user_is_refused_and_stays_redeemable(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
+    // M1 review B F2.
     refused(auth.redeem_invite(&hash("tok-1"), &uid("ghost"), T + 11));
+    auth.redeem_invite(&hash("tok-1"), &uid("u1"), T + 20)
+        .unwrap();
+}
+
+pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
     let redeemed = auth
         .redeem_invite(&hash("tok-1"), &uid("u1"), T + 20)
         .unwrap();
@@ -421,14 +517,26 @@ pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
     refused(auth.redeem_invite(&hash("tok-1"), &uid("u2"), T + 30));
 }
 
-pub(super) fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend) {
+pub(super) fn no_bootstrap_code_is_consumed_before_one_is_set(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     assert_eq!(auth.bootstrap().unwrap(), None);
     refused(auth.consume_bootstrap(&hash("code"), T));
+}
+
+pub(super) fn only_the_latest_bootstrap_code_is_consumed(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
     auth.set_bootstrap(&hash("code"), T).unwrap();
     auth.set_bootstrap(&hash("code-2"), T + 1).unwrap();
     refused(auth.consume_bootstrap(&hash("code"), T + 2));
+    auth.consume_bootstrap(&hash("code-2"), T + 3).unwrap();
+}
+
+pub(super) fn the_bootstrap_code_is_consumed_once_and_then_fixed(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.set_bootstrap(&hash("code-2"), T + 1).unwrap();
     auth.consume_bootstrap(&hash("code-2"), T + 3).unwrap();
     refused(auth.consume_bootstrap(&hash("code-2"), T + 4));
     refused(auth.set_bootstrap(&hash("code-3"), T + 5));
@@ -445,16 +553,28 @@ pub(super) fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend
     );
 }
 
-pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
-    backend: &mut impl FullBackend,
-) {
+/// A tenant with user `u1` and its refresh token `a` in family `fam`.
+fn with_refresh_token(backend: &mut impl FullBackend) -> TenantId {
     let t = tenant("default");
     let auth = backend.auth(&t);
     auth.create_user(&new_user("u1", Role::Owner)).unwrap();
     auth.put_refresh(&refresh_token("a", "u1", "fam", T + 100))
         .unwrap();
+    t
+}
+
+pub(super) fn a_refresh_token_is_refused_twice_and_for_an_unknown_user(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     refused(auth.put_refresh(&refresh_token("a", "u1", "fam", T + 100)));
     refused(auth.put_refresh(&refresh_token("z", "ghost", "fam", T + 100)));
+}
+
+pub(super) fn a_rotation_revokes_the_old_token_and_stores_the_new(backend: &mut impl FullBackend) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     refused(auth.rotate_refresh(
         &hash("unknown"),
         &refresh_token("b", "u1", "fam", T + 100),
@@ -467,7 +587,15 @@ pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
         Some(T + 1)
     );
     assert_eq!(auth.refresh(&hash("b")).unwrap().unwrap().revoked_at, None);
-    // A token of another family is untouched by the reuse below.
+}
+
+pub(super) fn a_reused_refresh_token_revokes_its_family_and_no_other(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
+    auth.rotate_refresh(&hash("a"), &refresh_token("b", "u1", "fam", T + 100), T + 1)
+        .unwrap();
     auth.put_refresh(&refresh_token("other", "u1", "fam-2", T + 100))
         .unwrap();
     // The revoked token comes back: refused, and the family it belongs to is revoked.
@@ -481,50 +609,62 @@ pub(super) fn refresh_tokens_rotate_and_a_reused_one_revokes_its_family(
         auth.refresh(&hash("other")).unwrap().unwrap().revoked_at,
         None
     );
-    // An expired token is refused and stays as it was.
+}
+
+pub(super) fn an_expired_refresh_token_is_refused_and_stays_as_it_was(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     refused(auth.rotate_refresh(
-        &hash("other"),
-        &refresh_token("d", "u1", "fam-2", T + 300),
+        &hash("a"),
+        &refresh_token("d", "u1", "fam", T + 300),
         T + 100,
     ));
+    assert_eq!(auth.refresh(&hash("a")).unwrap().unwrap().revoked_at, None);
+    assert_eq!(auth.refresh(&hash("d")).unwrap(), None);
+}
+
+pub(super) fn revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reopen(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_refresh_token(backend);
+    let auth = backend.auth(&t);
     assert_eq!(auth.revoke_refresh_for(&uid("u1"), T + 3).unwrap(), 1);
     assert_eq!(auth.revoke_refresh_for(&uid("u1"), T + 4).unwrap(), 0);
     drop(auth);
     backend.reopen();
-    let after = backend.auth(&t).refresh(&hash("other")).unwrap().unwrap();
+    let after = backend.auth(&t).refresh(&hash("a")).unwrap().unwrap();
     assert_eq!(after.revoked_at, Some(T + 3));
 }
 
-pub(super) fn serials_revocations_and_enrollments(backend: &mut impl FullBackend) {
+fn serial(text: &str) -> CertSerial {
+    CertSerial::new(text).unwrap()
+}
+
+pub(super) fn a_serial_is_recorded_once_and_unrevoked(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
-    let serial = |text: &str| CertSerial::new(text).unwrap();
     auth.record_serial(&serial("0a"), &wire("box"), T, T + 100)
         .unwrap();
     refused(auth.record_serial(&serial("0a"), &wire("box"), T, T + 100));
     assert!(!auth.is_revoked(&serial("0a")).unwrap());
+}
+
+pub(super) fn a_revocation_keeps_its_first_time_and_reason_across_reopen(
+    backend: &mut impl FullBackend,
+) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.record_serial(&serial("0a"), &wire("box"), T, T + 100)
+        .unwrap();
     auth.revoke_serial(&serial("0a"), T + 2, "lost").unwrap();
     auth.revoke_serial(&serial("0a"), T + 9, "again").unwrap();
     auth.revoke_serial(&serial("0b"), T + 1, "stolen").unwrap();
-    assert!(auth.is_revoked(&serial("0a")).unwrap());
-
-    let enrollment = |token: &str, expires_at: u64| NewEnrollment {
-        token_hash: hash(token),
-        created_by: None,
-        created_at: T,
-        expires_at,
-    };
-    auth.create_enrollment(&enrollment("e1", T + 50)).unwrap();
-    auth.create_enrollment(&enrollment("e2", T + 5)).unwrap();
-    refused(auth.create_enrollment(&enrollment("e1", T + 50)));
-    refused(auth.redeem_enrollment(&hash("unknown"), &wire("box"), T + 1));
-    refused(auth.redeem_enrollment(&hash("e2"), &wire("box"), T + 5));
-    auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 6)
-        .unwrap();
     drop(auth);
     backend.reopen();
-
     let auth = backend.auth(&t);
+    assert!(auth.is_revoked(&serial("0a")).unwrap());
     assert!(auth.is_revoked(&serial("0b")).unwrap());
     assert!(!auth.is_revoked(&serial("0c")).unwrap());
     let revoked = auth.revocations().unwrap();
@@ -533,7 +673,45 @@ pub(super) fn serials_revocations_and_enrollments(backend: &mut impl FullBackend
         .map(|r| (r.serial.as_str(), r.revoked_at, r.reason.as_str()))
         .collect();
     assert_eq!(listed, vec![("0b", T + 1, "stolen"), ("0a", T + 2, "lost")]);
-    refused(auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 7));
+}
+
+fn enrollment(token: &str, expires_at: u64) -> NewEnrollment {
+    NewEnrollment {
+        token_hash: hash(token),
+        created_by: None,
+        created_at: T,
+        expires_at,
+    }
+}
+
+pub(super) fn an_enrollment_token_is_refused_twice(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_enrollment(&enrollment("e1", T + 50)).unwrap();
+    refused(auth.create_enrollment(&enrollment("e1", T + 50)));
+}
+
+pub(super) fn an_unknown_or_expired_enrollment_is_refused(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_enrollment(&enrollment("e2", T + 5)).unwrap();
+    refused(auth.redeem_enrollment(&hash("unknown"), &wire("box"), T + 1));
+    refused(auth.redeem_enrollment(&hash("e2"), &wire("box"), T + 5));
+}
+
+pub(super) fn an_enrollment_is_redeemed_once_across_reopen(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_enrollment(&enrollment("e1", T + 50)).unwrap();
+    auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 6)
+        .unwrap();
+    drop(auth);
+    backend.reopen();
+    refused(
+        backend
+            .auth(&t)
+            .redeem_enrollment(&hash("e1"), &wire("box"), T + 7),
+    );
 }
 
 pub(super) fn two_tenants_on_one_backend_see_disjoint_rows(backend: &mut impl FullBackend) {
@@ -565,20 +743,47 @@ pub(super) fn two_tenants_on_one_backend_see_disjoint_rows(backend: &mut impl Fu
 }
 
 macro_rules! auth_tests {
+    (postgres: $make:expr) => {
+        auth_tests!(@cases [cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")] $make);
+    };
     ($make:expr) => {
-        auth_tests!(@each $make,
-            users_are_created_read_listed_and_soft_removed,
-            an_identity_links_to_one_user,
+        auth_tests!(@cases [cfg_attr(any(), ignore)] $make);
+    };
+    (@cases $attr:tt $make:expr) => {
+        auth_tests!(@each $attr $make,
+            a_user_is_created_once_and_read_back,
+            a_role_is_set_only_on_a_known_user,
+            a_removed_user_is_unlisted_but_kept,
+            removing_a_user_revokes_its_refresh_tokens_only,
+            an_identity_relinks_to_its_user_and_survives_reopen,
+            a_linked_identity_is_refused_for_another_user,
+            an_identity_for_an_unknown_user_is_refused,
+            an_identity_subject_is_scoped_by_provider,
+            a_removed_users_identity_finds_nobody,
+            an_invite_id_or_token_is_refused_twice,
+            an_unknown_or_expired_invite_is_refused,
+            an_invite_for_an_unknown_user_is_refused_and_stays_redeemable,
             an_invite_is_redeemed_once,
-            the_bootstrap_code_is_consumed_once,
-            refresh_tokens_rotate_and_a_reused_one_revokes_its_family,
-            serials_revocations_and_enrollments,
+            no_bootstrap_code_is_consumed_before_one_is_set,
+            only_the_latest_bootstrap_code_is_consumed,
+            the_bootstrap_code_is_consumed_once_and_then_fixed,
+            a_refresh_token_is_refused_twice_and_for_an_unknown_user,
+            a_rotation_revokes_the_old_token_and_stores_the_new,
+            a_reused_refresh_token_revokes_its_family_and_no_other,
+            an_expired_refresh_token_is_refused_and_stays_as_it_was,
+            revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reopen,
+            a_serial_is_recorded_once_and_unrevoked,
+            a_revocation_keeps_its_first_time_and_reason_across_reopen,
+            an_enrollment_token_is_refused_twice,
+            an_unknown_or_expired_enrollment_is_refused,
+            an_enrollment_is_redeemed_once_across_reopen,
             two_tenants_on_one_backend_see_disjoint_rows
         );
     };
-    (@each $make:expr, $($case:ident),+) => {
+    (@each $attr:tt $make:expr, $($case:ident),+) => {
         $(
             #[test]
+            #$attr
             fn $case() {
                 let Some(mut backend) = $make else { return };
                 super::$case(&mut backend);
@@ -661,17 +866,24 @@ pub(super) fn audit_entries_are_per_tenant_and_survive_reopen(backend: &mut impl
 }
 
 macro_rules! audit_tests {
+    (postgres: $make:expr) => {
+        audit_tests!(@cases [cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")] $make);
+    };
     ($make:expr) => {
-        audit_tests!(@each $make,
+        audit_tests!(@cases [cfg_attr(any(), ignore)] $make);
+    };
+    (@cases $attr:tt $make:expr) => {
+        audit_tests!(@each $attr $make,
             append_returns_a_strictly_increasing_seq,
             recent_is_newest_first_by_keyset,
             by_actor_filters_and_orders_newest_first,
             audit_entries_are_per_tenant_and_survive_reopen
         );
     };
-    (@each $make:expr, $($case:ident),+) => {
+    (@each $attr:tt $make:expr, $($case:ident),+) => {
         $(
             #[test]
+            #$attr
             fn $case() {
                 let Some(mut backend) = $make else { return };
                 super::$case(&mut backend);
@@ -697,9 +909,9 @@ mod sqlite {
 }
 
 mod postgres {
-    registry_tests!(super::PostgresBackend::new());
-    auth_tests!(super::PostgresBackend::new());
-    audit_tests!(super::PostgresBackend::new());
+    registry_tests!(postgres: super::PostgresBackend::new());
+    auth_tests!(postgres: super::PostgresBackend::new());
+    audit_tests!(postgres: super::PostgresBackend::new());
 }
 
 // ---- the orchestrator on a SQL store ----
