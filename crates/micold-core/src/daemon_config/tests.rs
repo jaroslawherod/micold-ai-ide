@@ -1637,6 +1637,7 @@ fn database_url_file_missing_empty_or_unreadable_names_key_path_and_state() {
         file_findings(&body)[0].message,
         format!("database.url_file {}: empty", path.display())
     );
+    // A directory in place of the file: unreadable even for root, which ignores mode bits.
     std::fs::remove_file(&path).unwrap();
     std::fs::create_dir(&path).unwrap();
     assert_eq!(

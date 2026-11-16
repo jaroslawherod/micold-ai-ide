@@ -190,3 +190,11 @@ exercised by reading the code path, not by a failing run first. Test-after admis
   the mode; `Dirty`/`VersionMissing` no longer claim "rolled back" with a version. The retry bound
   and the re-check were written with the fix (test-after: one shipped migration cannot race twice).
 - refactor: `shipped_migrations` shared with `migration_names`; `newest_shipped` per dialect.
+
+## M7 Cycle 1: `[database]` config and the backend rule
+
+- T039–T041 (core config tests, `choose_store` tests, `store_config` integration): test-after. The
+  types and checks were written in the same pass as the tests; red was not observed.
+- green: `DatabaseConfig`, rules D1–D5, the resolved view, `orchestrator::backend::choose_store`,
+  `config check` wiring. 13 core cases and 4 `store_config` cases pass; the full gate is green.
+- refactor: none
