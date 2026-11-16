@@ -5,7 +5,14 @@
 **Decision**: every routed `conn` on the link is a virtual client connection: the daemon's link
 task creates a `tokio::io::duplex` per new `conn` and runs the existing
 `server::serve_connection(state, half)` on one half; the link task writes inbound inner frames into
-the other half and wraps what comes out back into routed frames for that `conn`.
+the other half and wraps what comes out back into routed frames for that `conn`. Outbound, the link task splits
+the duplex output into whole frames and decodes each Control/JSON frame's `DaemonMsg` (Grid
+frames stay opaque) only to set the answer header's `req` from the message's `req` (R5).
+`orchestrator_link::spawn_for` and `dial::steady` take an `Arc<DaemonState>` (today `spawn_for`
+takes `&DaemonState` and `steady` none) so each virtual connection can run `serve_connection`;
+the `orchestrator_link/mod.rs` invariant changes from "takes no `DaemonState` lock" to "virtual
+connections lock state exactly as socket clients do; the link task itself takes none" (FR-008
+still holds: an outage ends virtual connections as a dropped socket ends a client).
 
 **Rationale**: `serve_connection<S: AsyncRead + AsyncWrite>` is already generic. Handshake, takeover,
 attention, progress, structured and terminal streams all keep their one implementation, so SC-002
@@ -68,8 +75,15 @@ in the orchestrator (stale after an outage; FR-009 wants the daemons' truth).
 - Link drop: for every route on that link, the orchestrator sends the client
   `DaemonMsg::StreamEnded { reason: DaemonOffline }` on that conn and, for each request id it saw
   forwarded and not yet answered, `DaemonMsg::OutcomeUnknown { req }`. To know pending ids
-  without decoding opaque frames, the client's routed header carries `req` when the inner frame is
-  a request (optional header field), and the daemon's answer header carries the `req` it answers.
+  without decoding opaque frames, the client MUST set the routed header's `req` on every request
+  frame (client-routing.md §2); the orchestrator adds it to `pending[(daemon, link_conn)]` when it
+  forwards. The daemon link task sets the answer header's `req` by decoding outbound JSON frames
+  (R1). Requests resolve to exactly one outcome (messages.rs, FR-020/FR-031), so any outbound
+  message carrying a `req` (its reply variant or `OperationError`) is terminal and clears that
+  `req`; a stream subscription's later frames carry no `req` and clear nothing. Requests never
+  answered stay pending until the route ends: link drop answers them `OutcomeUnknown`, client
+  conn close drops them silently. Core unit tests cover `RouteTable` pending insert, clearance on
+  an answer, idempotent clearance of an unknown `req`, and `drop_link` returning what is left.
   No retry (FR-006).
 - Back-pressure: one bounded `mpsc` (64 frames) per `(link, conn)` towards the client and per
   client conn towards the link writer; a full queue ends that route with `StreamEnded { reason:
@@ -83,8 +97,18 @@ in the orchestrator (stale after an outage; FR-009 wants the daemons' truth).
 and the orchestrator endpoint; the orchestrator's existing singleton (`crate::singleton::acquire`)
 makes concurrent starts converge on one (US3 scenario 3). Each daemon actor gets a channel
 (`target`, its own conn) in place of its socket, keeping its pump, so views are unchanged. Wire id:
-host daemon `local`; for provisioned daemons the app writes `[daemon] id = <actor's DaemonId
-slug>` and `[orchestrator_link] enabled = true` into the rendered config (FR-013). Start failure:
+host daemon `local`; for provisioned daemons the app writes `[daemon] id = <wire id>` and `[orchestrator_link] enabled = true` into the rendered config (FR-013).
+The wire id is not the registry's `DaemonId(u32)` (a per-app counter): it is
+`WireDaemonId::new(format!("{}-{}", slugify(name), short_uuid))`, where `slugify` lowercases,
+maps other characters to `-`, trims to fit 63 with the suffix, and `short_uuid` is 8 hex
+characters of a UUID generated once per provisioned daemon and stored in its registry entry
+(`wire_id`), so two machines' daemons never collide. Existing provisioned daemons have no
+`wire_id`: the app generates and stores one on its next connect and re-renders the config
+(already rendered on each provision/connect), restarting the daemon only if the id changed. A
+daemon reached over SSH gets the same rendered config through the existing provisioning path.
+Collisions: the orchestrator's announce already refuses a second live link with the same id;
+`local` is reserved for the host daemon, and an announce of `local` from a non-host link is
+refused with the existing duplicate-id refusal, shown in the daemon's status cell. Start failure:
 the error from `connect_or_spawn` is shown in the existing connection banner; no fallback to a
 direct daemon socket. Reconnect: the existing `reconnect_loop` backoff applies to the orchestrator
 connection; on reconnect every actor re-handshakes its channel, which re-reads state as a fresh

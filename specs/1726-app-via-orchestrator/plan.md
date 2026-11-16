@@ -109,10 +109,11 @@ crates/micold-daemon/src/
 ├── orchestrator/
 │   ├── link.rs       # steady(): demux inbound routed frames to conns; outbound queues per conn
 │   ├── client.rs     # NEW: client session: Hello, routes, relay, list fan-out
-│   ├── route.rs      # NEW: RouteTable (client conn <-> link conn), pending requests
+│   ├── route.rs      # NEW: RouteTable (client conn <-> link conn), pending requests (unit tests: insert, clear, drop_link)
 │   └── query.rs      # not_hosted() replaced by routing; listing kept
 └── orchestrator_link/
-    ├── dial.rs       # steady(): routed frames -> virtual connections
+    ├── mod.rs        # spawn_for(Arc<DaemonState>); invariant reworded (R1)
+    ├── dial.rs       # steady(framed, Arc<DaemonState>): routed frames -> virtual connections; decodes outbound JSON for answer req
     └── virtual_conn.rs  # NEW: duplex per conn into server::serve_connection
 crates/micold-client/src/
 ├── daemon.rs         # actor transport: orchestrator channel instead of daemon socket

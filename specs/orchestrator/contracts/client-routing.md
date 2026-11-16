@@ -15,13 +15,16 @@ Extends [routed-envelope.md](routed-envelope.md). Protocol version 83. Source of
 
 | Encoding byte | Body |
 |---|---|
-| `0` JSON | `{target, conn, seq, req?, msg}` as in routed-envelope.md §3, plus optional `req` |
+| `0` JSON | `{target, conn, seq, req?, msg}` as in routed-envelope.md §3, plus `req` (see below) |
 | `1` opaque | u32 BE header length, JSON header `{target, conn, seq, req?}`, then one whole inner frame (its own kind, encoding, reserved bytes and body) |
 
 The orchestrator reads only the header. `target` absent: the frame is for the orchestrator and
-must be JSON with an `OrchList` body; anything else is `Malformed`. `req` must equal the inner
-message's `req` when the inner message has one (a mismatch is `Malformed`); it lets the
-orchestrator answer `OutcomeUnknown` without decoding opaque frames.
+must be JSON with an `OrchList` body; anything else is `Malformed`. The client MUST set header `req` on every
+frame whose inner message is a request, and omit it otherwise; it lets the orchestrator refuse
+(§3) and answer `OutcomeUnknown` (§5) without decoding opaque frames. For JSON frames only, the
+orchestrator checks that header `req` equals the inner message's `req` (a mismatch is
+`Malformed`); opaque frames are not decoded, so their header is trusted as sent. On answers from
+a daemon, header `req` is set by the daemon link from the answer's `req`.
 
 A conn is the client's choice, per target. The first frame on a new `(target, conn)` opens a route;
 the inner stream on it starts with the client's `Hello` to the daemon, exactly as on a direct
