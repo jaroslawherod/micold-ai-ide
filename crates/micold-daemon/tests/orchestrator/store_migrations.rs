@@ -252,10 +252,14 @@ fn a_registry_over_a_dropped_table_is_unavailable_and_a_bad_row_is_corrupt() {
     ));
 }
 
-fn migration_names(dialect: &str) -> Vec<String> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+fn shipped_migrations(dialect: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("migrations")
-        .join(dialect);
+        .join(dialect)
+}
+
+fn migration_names(dialect: &str) -> Vec<String> {
+    let dir = shipped_migrations(dialect);
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
         .map(|f| f.unwrap().file_name().to_string_lossy().into_owned())
@@ -501,8 +505,14 @@ impl Target {
         match self {
             Self::Sqlite(dir) => {
                 use sha2::Digest as _;
-                let bytes = std::fs::read(db_file(dir.path())).unwrap();
-                format!("{:x}", sha2::Sha256::digest(bytes))
+                let file = db_file(dir.path());
+                let bytes = std::fs::read(&file).unwrap();
+                let mut files: Vec<_> = std::fs::read_dir(file.parent().unwrap())
+                    .unwrap()
+                    .map(|f| f.unwrap().file_name())
+                    .collect();
+                files.sort();
+                format!("{:x} {files:?}", sha2::Sha256::digest(bytes))
             }
             Self::Postgres(_) => {
                 let rows = self.with_pool(|pool| async move {
@@ -517,12 +527,6 @@ impl Target {
             }
         }
     }
-}
-
-fn shipped_migrations(dialect: &str) -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("migrations")
-        .join(dialect)
 }
 
 /// A directory holding the first `n` shipped migrations of `dialect` and then `extra`.
@@ -547,8 +551,12 @@ fn targets() -> Vec<Target> {
     out
 }
 
-fn newest_shipped() -> i64 {
-    migrate::MIGRATOR.migrations.last().unwrap().version
+fn newest_shipped(dialect: &str) -> i64 {
+    let migrator = match dialect {
+        "sqlite" => &migrate::MIGRATOR,
+        _ => &migrate::POSTGRES_MIGRATOR,
+    };
+    migrator.migrations.last().unwrap().version
 }
 
 #[test]
@@ -567,7 +575,7 @@ fn a_newer_database_is_refused_naming_both_versions_and_left_unchanged() {
                     error,
                     SchemaError::DatabaseNewer {
                         database: 999,
-                        build: newest_shipped()
+                        build: newest_shipped(target.dialect()),
                     },
                     "{}",
                     target.dialect()
@@ -577,7 +585,7 @@ fn a_newer_database_is_refused_naming_both_versions_and_left_unchanged() {
                     text,
                     format!(
                         "database schema version 999 is newer than this build's {}",
-                        newest_shipped()
+                        newest_shipped(target.dialect())
                     )
                 );
             }
@@ -686,7 +694,7 @@ fn two_starters_on_one_database_apply_each_migration_once() {
         }
         assert_eq!(
             target.versions(),
-            (1..=newest_shipped()).collect::<Vec<_>>(),
+            (1..=newest_shipped(target.dialect())).collect::<Vec<_>>(),
             "{}",
             target.dialect()
         );
@@ -737,7 +745,7 @@ fn every_shipped_version_upgrades_to_the_newest_with_its_data_intact() {
             }
             assert_eq!(
                 target.int("SELECT max(version) FROM _sqlx_migrations"),
-                newest_shipped()
+                newest_shipped(target.dialect())
             );
         }
     }

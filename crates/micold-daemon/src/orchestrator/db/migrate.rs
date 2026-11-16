@@ -63,19 +63,22 @@ pub async fn check_not_newer(
 
 /// Apply every migration of `migrator` the database lacks, forward only. PostgreSQL serialises
 /// starters with sqlx's advisory lock. SQLite has none in sqlx's migrator, so a second starter
-/// can lose the race with `table … already exists` or a busy database: it retries once, re-reading
-/// `_sqlx_migrations`, after which the first starter's work is recorded and the run finds nothing
-/// to do.
+/// can lose the race with `table … already exists` or a busy database: it retries, re-reading
+/// `_sqlx_migrations`, until the other starter's work is recorded and the run finds nothing to do.
 pub async fn run_forward(migrator: &'static Migrator, pool: &AnyPool) -> Result<(), StoreError> {
-    let schema_error = |error| schema_error(migrator, error);
-    match migrator.run(pool).await {
-        Ok(()) => Ok(()),
-        Err(MigrateError::Execute(error) | MigrateError::ExecuteMigration(error, _))
-            if lost_the_race(&error) =>
-        {
-            migrator.run(pool).await.map_err(schema_error)
+    // Each lost race means another starter applied (or is applying) at least one migration, so
+    // one retry per migration, and one more, is enough for every starter to finish.
+    let mut retries = migrator.migrations.len() + 1;
+    loop {
+        match migrator.run(pool).await {
+            Ok(()) => return Ok(()),
+            Err(MigrateError::Execute(error) | MigrateError::ExecuteMigration(error, _))
+                if retries > 0 && lost_the_race(&error) =>
+            {
+                retries -= 1;
+            }
+            Err(error) => return Err(schema_error(migrator, error)),
         }
-        Err(error) => Err(schema_error(error)),
     }
 }
 
@@ -102,12 +105,6 @@ fn schema_error(migrator: &Migrator, error: MigrateError) -> StoreError {
             version,
             reason: error.to_string(),
         },
-        MigrateError::VersionMissing(version) | MigrateError::Dirty(version) => {
-            SchemaError::Failed {
-                version,
-                reason: error.to_string(),
-            }
-        }
         other => SchemaError::Failed {
             version: 0,
             reason: other.to_string(),

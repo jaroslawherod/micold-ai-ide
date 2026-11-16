@@ -65,6 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
 | M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
 | M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
+| M5 A | 1 | M5 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CHANGES: 4 fixed (one SQLite retry not enough past one migration; WAL sidecars left by a refused read-only check; PG check/run race names VersionMissing; read-only URL by string replace) and 2 MINOR fixed; 4 declined (see below) |
 
 ## Declined review findings
 
@@ -76,6 +77,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1970 | M1 | merged | bfb463f60 |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
+| M5 | A | `lost_the_race` matches text, also on PostgreSQL | A spurious retry re-runs the migrator and then fails the same way; the advisory lock makes it harmless on PostgreSQL |
+| M5 | A | dialect sniffed by `backend_name` and by `Option` in `start` | Two backends; a third would add its own open |
+| M5 | A | `DatabaseNewer` text lost its remediation hint | The text is contracts/config.md's verbatim |
+| M5 | A | test `with_pool` builds a runtime per query | Test-only; a few ms per case |
 | M2 | B | F2 MINOR: no_outbound scan skips all of `src/orchestrator/db/` | The pool `connect` is the only dial-like construct there; recorded in drift-M2.md; M4 (PostgreSQL) should narrow it to the `connect` call sites |
 
 ## Handover

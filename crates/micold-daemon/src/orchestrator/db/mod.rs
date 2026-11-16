@@ -66,8 +66,8 @@ impl StoreHandle {
             reason,
         };
         create_owner_only(&path).map_err(|e| unavailable(e.to_string()))?;
-        let url = sqlite_url(&path);
-        let read_only = url.replace("?mode=rw", "?mode=ro");
+        let url = sqlite_url(&path, "rw");
+        let read_only = sqlite_url(&path, "ro");
         Self::start(
             target,
             Some(read_only),
@@ -130,6 +130,10 @@ impl StoreHandle {
             .build()
             .map_err(|e| unavailable(e.to_string()))?;
         if let Some(url) = read_only_url {
+            // Reading a WAL database creates `-wal` and `-shm` beside it, which a read-only
+            // connection cannot remove: a refusal removes the ones this check created.
+            let sidecars = sidecars(Path::new(&target));
+            let created: Vec<_> = sidecars.iter().filter(|f| !f.exists()).collect();
             let checked = run_on(&rt, async {
                 use sqlx::Connection as _;
                 let mut conn = sqlx::AnyConnection::connect(&url)
@@ -140,10 +144,13 @@ impl StoreHandle {
                 let _ = conn.close().await;
                 checked
             });
-            if let Err(error) = checked
+            let checked = checked
                 .map_err(|reason| unavailable(reason.to_owned()))
-                .and_then(|r| r)
-            {
+                .and_then(|r| r);
+            if let Err(error) = checked {
+                for file in created {
+                    let _ = std::fs::remove_file(file);
+                }
                 rt.shutdown_background();
                 return Err(error);
             }
@@ -174,7 +181,18 @@ impl StoreHandle {
                     .map_err(|e| handle.map_error(&e))?;
                 migrate::check_not_newer(migrator, &mut conn, handle.target()).await?;
             }
-            migrate::run_forward(migrator, handle.pool()).await
+            let forward = migrate::run_forward(migrator, handle.pool()).await;
+            if let Err(StoreError::Schema(_)) = forward {
+                // A newer build may have migrated between the check and the run (PostgreSQL
+                // takes its lock only in the run): name that, not the migration sqlx missed.
+                let mut conn = handle
+                    .pool()
+                    .acquire()
+                    .await
+                    .map_err(|e| handle.map_error(&e))?;
+                migrate::check_not_newer(migrator, &mut conn, handle.target()).await?;
+            }
+            forward
         })??;
         Ok(handle)
     }
@@ -324,9 +342,18 @@ fn create_owner_only(path: &Path) -> io::Result<()> {
         .set_permissions(std::fs::Permissions::from_mode(0o600))
 }
 
-/// `sqlite://<path>?mode=rw`, every byte but the unreserved ones percent-encoded (sqlx decodes
+/// The `-wal` and `-shm` files SQLite keeps beside a WAL database.
+fn sidecars(path: &Path) -> [PathBuf; 2] {
+    ["-wal", "-shm"].map(|suffix| {
+        let mut name = path.as_os_str().to_owned();
+        name.push(suffix);
+        PathBuf::from(name)
+    })
+}
+
+/// `sqlite://<path>?mode=<mode>`, every byte but the unreserved ones percent-encoded (sqlx decodes
 /// them back), so a space, a `?` or a non-ASCII directory name reaches the same file.
-fn sqlite_url(path: &Path) -> String {
+fn sqlite_url(path: &Path, mode: &str) -> String {
     use std::os::unix::ffi::OsStrExt as _;
     let mut url = String::from("sqlite://");
     for &byte in path.as_os_str().as_bytes() {
@@ -337,7 +364,8 @@ fn sqlite_url(path: &Path) -> String {
             _ => url.push_str(&format!("%{byte:02X}")),
         }
     }
-    url.push_str("?mode=rw");
+    url.push_str("?mode=");
+    url.push_str(mode);
     url
 }
 

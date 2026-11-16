@@ -178,3 +178,15 @@ exercised by reading the code path, not by a failing run first. Test-after admis
   in `Failed`; `SchemaError` texts are those of contracts/config.md, *Errors at start*. 25 passed;
   the race case 5 of 5 runs.
 - refactor: none
+
+## M5 Cycle 2: review A fixes
+
+- red: the newer-schema case's SQLite fingerprint now lists the directory; with the fix reverted it
+  failed `["orchestrator.db", "orchestrator.db-shm", "orchestrator.db-wal"]` vs `["orchestrator.db"]`
+  (the read-only check of a WAL file creates the sidecars).
+- green: a refused check removes the sidecars it created; `run_forward` retries once per migration
+  plus one (one retry was enough only while one migration ships); a schema error from the run
+  re-checks for a newer database (PostgreSQL's lock is taken only in the run); `sqlite_url` takes
+  the mode; `Dirty`/`VersionMissing` no longer claim "rolled back" with a version. The retry bound
+  and the re-check were written with the fix (test-after: one shipped migration cannot race twice).
+- refactor: `shipped_migrations` shared with `migration_names`; `newest_shipped` per dialect.
