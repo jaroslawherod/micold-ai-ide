@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-v4iabl
 - **Started**: 2026-11-16
 - **Phase**: plan
-- **Next step**: plan (clarify done, 1 round, all agent-resolved)
+- **Next step**: plan review round 1 (opus, rubric rubrics/plan.md) on snapshot 8487a8d58e89bb17100164e9cf76b5dfba6a0c1d:e458a16fca33bf98126ebd10ded77ccc18266133; then tasks unit
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | spec | 1 | design | 7c25a28d9e4bec1417923f0dd050b8627f79bebd | f3b201b3e2dc11ea9d3cb4d365efcd62e7a71cae:b3f47d077d50c0a5339d29f608b5f351591a7057 | CLEAN (3 MINOR applied in clarify) |
+| plan | 1 | design | e458a16fca33bf98126ebd10ded77ccc18266133 | 8487a8d58e89bb17100164e9cf76b5dfba6a0c1d:e458a16fca33bf98126ebd10ded77ccc18266133 | pending |
 
 ## Declined review findings
 
