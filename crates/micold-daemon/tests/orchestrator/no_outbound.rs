@@ -281,6 +281,8 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
         for line in PURE_DIAL_LINES {
             source = source.replace(line, &" ".repeat(line.len()));
         }
+        // Only the database directory needs `code_only` here: `blank_database_connects` matches
+        // code text, and `violations` strips comments and literals for every file anyway.
         if file.starts_with(root.join(DATABASE_DIR)) {
             source = blank_database_connects(&code_only(&source));
         }

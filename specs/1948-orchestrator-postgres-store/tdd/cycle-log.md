@@ -6,7 +6,7 @@ failed before the implementation, or says why it had none.
 ## Baseline
 
 - suite: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` at `60277d73d` (`f5f8e812a~1`, before M1), run in M11 (T070): 49 passed, 0 failed, 0 ignored.
-- After M11 (T068, T069): the `store_` filter alone runs 197 cases, PostgreSQL included, all passing.
+- After M11 (T068, T069): the `store_` filter alone runs 209 cases (after the B-F5 split), PostgreSQL included, all passing.
 
 ## M1 Cycle 1: StoreError variants and per-record defaults (T002, T004)
 
@@ -287,7 +287,9 @@ with `git checkout -- <file>` (`git status` clean), then re-run green.
   and `store_import`'s `on_both` became a `<case>::sqlite` / `<case>::postgres` pair.
 - without the URL: `cargo test -p micold-daemon --test orchestrator` 156 passed, 35 ignored (at T063).
 - with the URL and `MICOLD_REQUIRE_POSTGRES=1` (local PostgreSQL 16): 191 passed, 0 ignored. The CI
-  `test` job sets both at job level, so its build has the cfg; its count is to be read from that job.
+  `test` job sets both at job level, so its build has the cfg. CI run 43963469440, job 133640258650
+  (`build + test (ubuntu-latest)`, PR #2014 at `8f9c50e`): workspace 13573 passed, 19 skipped;
+  `micold-daemon::orchestrator` 247 passed, none skipped (36 of them `store_suite::postgres::`).
 
 ### T064 red by deliberate mutant (F4)
 
@@ -312,6 +314,11 @@ makes it a two-migration case.
 | 25 | SQLite migration adds `CREATE TABLE notes (id TEXT)` (no tenant) | `cargo test -p micold-daemon --test orchestrator store_scan` | `store_scan::key_scan::sqlite_tables_carry_tenant_and_owner` |
 | 26 | `db/import.rs` inserts every record as `unowned` | `cargo test -p micold-daemon --test orchestrator store_import` | `store_import::an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned::sqlite`, `store_import::an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned::postgres` |
 
+Rows 7 and 11 were run before T068 split the eager cases, so they name the old cases
+(`refresh_tokens_rotate_and_a_reused_one_revokes_its_family`, `users_are_created_read_listed_and_soft_removed`);
+those are now the `a_rotation_…`, `a_reused_refresh_token_…` and `a_user_…`/`removing_a_user_…` cases.
+T068 below re-runs the refresh-token mutant with the current names.
+
 Row 16 survives: two starters on one database never lose the race here (SQLite waits on its busy
 timeout, PostgreSQL on the advisory lock), so the retry is not reached. Recorded, not hidden.
 
@@ -325,8 +332,28 @@ timeout, PostgreSQL on the advisory lock), so the retry is not reached. Recorded
 ### T066–T068
 
 - T066: `store_sql_errors.rs` and `store_import.rs` use `store_suite`'s fixtures. `mise run duplication`
-  not run (no mise in the cloud container).
+  has no mise here, so its two commands ran directly (`npx -y jscpd@4 crates --format rust --min-lines 8
+  --min-tokens 80 --gitignore`; `similarity-rs crates/*/src --skip-test -t 0.85 -m 8`) on base
+  `8005293fe` and on head: jscpd 303 clones, 4586 lines (1.12 %) on both; similarity-rs 1607 pairs on
+  both. No growth. (The local similarity-rs, freshly installed, counts more pairs than the docs'
+  745 budget on either tree: a tool version difference, equal for base and head.)
 - T067: reasons pinned (`file is not a database`, the pool timeout, `no_such_table`, the CA-file
   reason), the PostgreSQL target equals the URL's `host:port`, the corrupt-file start error is exact.
-- T068 (part): the refresh-token case is five cases. Mutant 7 (`tx.commit()` to `tx.rollback()` on
-  reuse) fails exactly `store_suite::sqlite::a_reused_refresh_token_revokes_its_family_and_no_other`.
+- T068: the eager cases are one case per rule; `serials_revocations_and_enrollments` became five
+  (`a_serial_is_recorded_once_and_unrevoked`, `a_revocation_keeps_its_first_time_and_reason_across_reopen`,
+  `an_enrollment_token_is_refused_twice`, `an_unknown_or_expired_enrollment_is_refused`,
+  `an_enrollment_is_redeemed_once_across_reopen`). `verification.md` mutant 7 re-run (`db/auth.rs:489`,
+  the reuse `UPDATE` given `AND 1 = 0`, so reuse no longer revokes the family), command
+  `cargo test -p micold-daemon --test orchestrator`: failed `store_suite::sqlite::a_reused_refresh_token_revokes_its_family_and_no_other`,
+  `store_suite::postgres::a_reused_refresh_token_revokes_its_family_and_no_other`,
+  `store_scan::key_scan::sqlite_holds_no_key_material`, `store_scan::key_scan::postgres_holds_no_key_material`
+  (255 passed, 4 failed). Restored, `git status` clean of `src/`: 259 passed, 0 failed, 0 ignored.
+
+### T069 two-migration ordering (F10–F12)
+
+- red: swapping the SQL of the two test migrations in `an_older_database_applies_the_missing_migrations_in_order`
+  (`0002_second.sql` gets the `INSERT INTO second`, `0003_third.sql` the `CREATE TABLE second`), command
+  `cargo test -p micold-daemon --test orchestrator store_migrations::an_older`: failed
+  `store_migrations::an_older_database_applies_the_missing_migrations_in_order`.
+- restored with `git checkout -- crates/micold-daemon/tests/orchestrator/store_migrations.rs`: green
+  (the full orchestrator run above, 259 passed).

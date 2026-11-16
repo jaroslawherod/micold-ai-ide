@@ -638,36 +638,33 @@ pub(super) fn revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reop
     assert_eq!(after.revoked_at, Some(T + 3));
 }
 
-pub(super) fn serials_revocations_and_enrollments(backend: &mut impl FullBackend) {
+fn serial(text: &str) -> CertSerial {
+    CertSerial::new(text).unwrap()
+}
+
+pub(super) fn a_serial_is_recorded_once_and_unrevoked(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
-    let serial = |text: &str| CertSerial::new(text).unwrap();
     auth.record_serial(&serial("0a"), &wire("box"), T, T + 100)
         .unwrap();
     refused(auth.record_serial(&serial("0a"), &wire("box"), T, T + 100));
     assert!(!auth.is_revoked(&serial("0a")).unwrap());
+}
+
+pub(super) fn a_revocation_keeps_its_first_time_and_reason_across_reopen(
+    backend: &mut impl FullBackend,
+) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.record_serial(&serial("0a"), &wire("box"), T, T + 100)
+        .unwrap();
     auth.revoke_serial(&serial("0a"), T + 2, "lost").unwrap();
     auth.revoke_serial(&serial("0a"), T + 9, "again").unwrap();
     auth.revoke_serial(&serial("0b"), T + 1, "stolen").unwrap();
-    assert!(auth.is_revoked(&serial("0a")).unwrap());
-
-    let enrollment = |token: &str, expires_at: u64| NewEnrollment {
-        token_hash: hash(token),
-        created_by: None,
-        created_at: T,
-        expires_at,
-    };
-    auth.create_enrollment(&enrollment("e1", T + 50)).unwrap();
-    auth.create_enrollment(&enrollment("e2", T + 5)).unwrap();
-    refused(auth.create_enrollment(&enrollment("e1", T + 50)));
-    refused(auth.redeem_enrollment(&hash("unknown"), &wire("box"), T + 1));
-    refused(auth.redeem_enrollment(&hash("e2"), &wire("box"), T + 5));
-    auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 6)
-        .unwrap();
     drop(auth);
     backend.reopen();
-
     let auth = backend.auth(&t);
+    assert!(auth.is_revoked(&serial("0a")).unwrap());
     assert!(auth.is_revoked(&serial("0b")).unwrap());
     assert!(!auth.is_revoked(&serial("0c")).unwrap());
     let revoked = auth.revocations().unwrap();
@@ -676,7 +673,45 @@ pub(super) fn serials_revocations_and_enrollments(backend: &mut impl FullBackend
         .map(|r| (r.serial.as_str(), r.revoked_at, r.reason.as_str()))
         .collect();
     assert_eq!(listed, vec![("0b", T + 1, "stolen"), ("0a", T + 2, "lost")]);
-    refused(auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 7));
+}
+
+fn enrollment(token: &str, expires_at: u64) -> NewEnrollment {
+    NewEnrollment {
+        token_hash: hash(token),
+        created_by: None,
+        created_at: T,
+        expires_at,
+    }
+}
+
+pub(super) fn an_enrollment_token_is_refused_twice(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_enrollment(&enrollment("e1", T + 50)).unwrap();
+    refused(auth.create_enrollment(&enrollment("e1", T + 50)));
+}
+
+pub(super) fn an_unknown_or_expired_enrollment_is_refused(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_enrollment(&enrollment("e2", T + 5)).unwrap();
+    refused(auth.redeem_enrollment(&hash("unknown"), &wire("box"), T + 1));
+    refused(auth.redeem_enrollment(&hash("e2"), &wire("box"), T + 5));
+}
+
+pub(super) fn an_enrollment_is_redeemed_once_across_reopen(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_enrollment(&enrollment("e1", T + 50)).unwrap();
+    auth.redeem_enrollment(&hash("e1"), &wire("box"), T + 6)
+        .unwrap();
+    drop(auth);
+    backend.reopen();
+    refused(
+        backend
+            .auth(&t)
+            .redeem_enrollment(&hash("e1"), &wire("box"), T + 7),
+    );
 }
 
 pub(super) fn two_tenants_on_one_backend_see_disjoint_rows(backend: &mut impl FullBackend) {
@@ -737,7 +772,11 @@ macro_rules! auth_tests {
             a_reused_refresh_token_revokes_its_family_and_no_other,
             an_expired_refresh_token_is_refused_and_stays_as_it_was,
             revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reopen,
-            serials_revocations_and_enrollments,
+            a_serial_is_recorded_once_and_unrevoked,
+            a_revocation_keeps_its_first_time_and_reason_across_reopen,
+            an_enrollment_token_is_refused_twice,
+            an_unknown_or_expired_enrollment_is_refused,
+            an_enrollment_is_redeemed_once_across_reopen,
             two_tenants_on_one_backend_see_disjoint_rows
         );
     };
