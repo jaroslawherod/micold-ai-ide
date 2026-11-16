@@ -8,11 +8,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-v4iabl
+- **Worktree branch**: claude/project-thread-gq91k7
 - **Started**: 2026-11-16
-- **Phase**: design-pr
-- **Next step**: design PR open as draft; orchestrator waits on CI and merges, then M1
-- **PR**: #1996 (design, draft)
+- **Phase**: milestones
+- **Next step**: M1
+- **PR**: none
 
 ## Pull requests
 
