@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-q5lrv2
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: open the M6 PR (title "#1948: <issue title>"), then CI and merge
+- **Next step**: dispatch the M7 milestone unit in a fresh thread (previous PR #2003 merged at 3d5485c30)
 
 ## Pull requests
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
-| M6 | T036–T038 | full | No private key in any table | | ready for PR |
+| M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
@@ -92,7 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M6 merged (PR #2003, squash 3d5485c30; one opus review A+B APPROVE, 2 nits fixed; CI kube_real kind setup failed once, green on rerun). Next: dispatch the M7 unit (T039–T044) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0.
 
 ## Open escalation
 
