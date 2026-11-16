@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-q5lrv2
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M6 review A and B on the pushed branch (fresh-context reviewer), then full gate and PR
+- **Next step**: open the M6 PR (title "#1948: <issue title>"), then CI and merge
 
 ## Pull requests
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
-| M6 | T036–T038 | full | No private key in any table | | in progress |
+| M6 | T036–T038 | full | No private key in any table | | ready for PR |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
@@ -71,6 +71,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
 | M5 A | 1 | M5 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CHANGES: 4 fixed (one SQLite retry not enough past one migration; WAL sidecars left by a refused read-only check; PG check/run race names VersionMissing; read-only URL by string replace) and 2 MINOR fixed; 4 declined (see below) |
 | M5 B | 1 | M5 diff (conformance, sonnet, run by the orchestrator) | eec56ae53 | (see commit) | CHANGES: drift record missing (F1 MAJOR), T035 "retries once" text (F2 MINOR); both fixed in drift-M5.md |
+| A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
+| B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 
 ## Declined review findings
 
