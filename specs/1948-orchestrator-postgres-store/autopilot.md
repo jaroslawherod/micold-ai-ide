@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-sabfza
+- **Worktree branch**: claude/project-thread-0phzsu
 - **Started**: 2026-11-15
 - **Phase**: milestones
 - **Next step**: M11 (T061–T070), then a new close unit (re-run speckit-tdd-verify)
