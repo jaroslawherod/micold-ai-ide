@@ -20,9 +20,9 @@
 
 ## Phase 3: User Story 2 — drift check (P1)
 
-- [ ] T010 [US2] `scripts/tests/tokens-ts-drift.test.sh`: regenerate to a temp file and `cmp` with the committed one; a self-test case shows an edited copy fails and prints the file path and the regeneration command, and a missing file fails
-- [ ] T011 [US2] Document regeneration in `docs/development/docs-site.md`'s token section (or a new `docs/development/client-theme.md` linked from it): command, drift check, do-not-edit rule
-- [ ] T012 Run the gate (`scripts/gate.sh`); fix what it finds
+- [x] T010 [US2] `scripts/tests/tokens-ts-drift.test.sh`: regenerate to a temp file and `cmp` with the committed one; a self-test case shows an edited copy fails and prints the file path and the regeneration command, and a missing file fails
+- [x] T011 [US2] Document regeneration in `docs/development/docs-site.md`'s token section (or a new `docs/development/client-theme.md` linked from it): command, drift check, do-not-edit rule
+- [x] T012 Run the gate (`scripts/gate.sh`); fix what it finds
 
 ## Implementation Strategy
 

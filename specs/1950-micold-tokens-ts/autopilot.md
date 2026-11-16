@@ -8,23 +8,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: low
 - **Supervised**: no
 - **Issue**: #1950
-- **Worktree branch**: claude/project-thread-wlrb6d
+- **Worktree branch**: claude/project-thread-tafgoe
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M1 PR open by orchestrator, then review B, CI, merge; then M2
+- **Next step**: M2 diff review (fresh reviewer dispatched by orchestrator), then open PR from specs/1950-micold-tokens-ts/pr-M2.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1995 | design | merged | (squash on main) |
+| #1998 | M1 | merged | 2f6dcbead |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | pending open | implemented, review A done |
-| M2 | T010–T012 | light | gate drift check | — | pending |
+| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | #1998 | merged |
+| M2 | T010–T012 | light | gate drift check | pending (push, PR opened by orchestrator) | review pending |
 
 ## Decisions
 
@@ -51,7 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 implemented, orchestrator ran full gate (all green except ssh-keygen-missing env test), review B (sonnet) MINOR-ONLY, F1-F3 applied. Next: PR, merge on green, then M2 in a fresh thread.
+M1 merged as 2f6dcbead (PR #1998). Next: M2 (T010–T012) in a fresh thread via `/speckit-autopilot resume`.
 
 ## Open escalation
 
