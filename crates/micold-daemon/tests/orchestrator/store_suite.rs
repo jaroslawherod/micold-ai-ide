@@ -180,6 +180,25 @@ pub(super) fn an_owner_survives_a_relink_upsert_and_a_whole_list_save(backend: &
     assert_eq!(loaded[0].name, "saved");
 }
 
+pub(super) fn an_owned_record_over_an_unowned_one_takes_its_owner(backend: &mut dyn Backend) {
+    let store = backend.registry();
+    store.upsert(&daemon("default", "a", "a")).unwrap();
+    store.upsert(&owned("default", "a", "bob")).unwrap();
+    store.save(&[daemon("default", "b", "b")]).unwrap();
+    store
+        .save(&[owned("default", "a", "carol"), owned("default", "b", "bob")])
+        .unwrap();
+    backend.reopen();
+    let loaded = backend.registry().load().unwrap();
+    assert_eq!(
+        owners(&loaded),
+        vec![("a".into(), "carol".into()), ("b".into(), "bob".into())]
+    );
+    let store = backend.registry();
+    store.upsert(&owned("default", "a", "bob")).unwrap();
+    assert_eq!(owners(&store.load().unwrap())[0].1, "bob");
+}
+
 pub(super) fn reassign_unowned_moves_the_tenants_unowned_records_once(backend: &mut dyn Backend) {
     let store = backend.registry();
     store
@@ -216,6 +235,7 @@ macro_rules! registry_tests {
             tenant_records_survive_reopen,
             two_writers_upserting_different_ids_lose_neither,
             an_owner_survives_a_relink_upsert_and_a_whole_list_save,
+            an_owned_record_over_an_unowned_one_takes_its_owner,
             reassign_unowned_moves_the_tenants_unowned_records_once
         );
     };

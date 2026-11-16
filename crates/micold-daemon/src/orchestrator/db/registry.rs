@@ -20,7 +20,9 @@ const UPSERT: &str = "INSERT INTO daemons \
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
     ON CONFLICT (tenant_id, id) DO UPDATE SET kind = excluded.kind, name = excluded.name, \
     protocol_version = excluded.protocol_version, capabilities = excluded.capabilities, \
-    health = excluded.health, last_seen = excluded.last_seen";
+    health = excluded.health, last_seen = excluded.last_seen, \
+    owner_user_id = CASE WHEN excluded.owner_user_id = 'unowned' THEN daemons.owner_user_id \
+    ELSE excluded.owner_user_id END";
 
 /// The tables whose rows carry an owner; `reassign_unowned` moves them together.
 const OWNED_TABLES: [&str; 3] = ["daemons", "projects", "sessions"];
@@ -72,7 +74,7 @@ pub(super) async fn upsert_row(
         .bind(capabilities)
         .bind(name_of(&record.health))
         .bind(to_i64(record.last_seen))
-        // Written on insert only: the conflict branch leaves a stored owner as it is.
+        // An `unowned` record never clears a stored owner (the conflict branch's CASE).
         .bind(record.owner.as_str().to_owned())
         .execute(conn)
         .await
@@ -166,6 +168,8 @@ impl RegistryStore for SqlRegistryStore {
         })
     }
 
+    /// Moves the tenant's `unowned` daemons, projects and sessions in one transaction; the count
+    /// is the moved `daemons` rows only.
     fn reassign_unowned(&self, tenant: &TenantId, owner: &UserId) -> Result<u64, StoreError> {
         self.run(async {
             let mut tx = self.db.begin_write().await?;

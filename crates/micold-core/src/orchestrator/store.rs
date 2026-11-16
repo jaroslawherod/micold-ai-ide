@@ -269,6 +269,23 @@ impl JsonRegistryStore {
     }
 }
 
+impl JsonRegistryStore {
+    /// The records a save keeps owners from: none when the file is missing or does not parse
+    /// (the save replaces it); a read error fails the save, so no owner is dropped.
+    fn stored_for_save(&self) -> Result<Vec<DaemonRecord>, StoreError> {
+        match std::fs::read(self.path()) {
+            Ok(bytes) => Ok(serde_json::from_slice::<Stored>(&bytes)
+                .map(|stored| stored.daemons)
+                .unwrap_or_default()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(StoreError::Save {
+                path: self.path(),
+                reason: e.to_string(),
+            }),
+        }
+    }
+}
+
 impl RegistryStore for JsonRegistryStore {
     fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
         let path = self.path();
@@ -292,8 +309,7 @@ impl RegistryStore for JsonRegistryStore {
     }
 
     fn save(&self, records: &[DaemonRecord]) -> Result<(), StoreError> {
-        // An unreadable copy has no owner to keep; the save replaces it.
-        let records = keeping_owners(&self.load().unwrap_or_default(), records);
+        let records = keeping_owners(&self.stored_for_save()?, records);
         let stored = StoredRef {
             version: STORE_VERSION,
             daemons: &records,
@@ -484,6 +500,19 @@ mod tests {
         assert_eq!(json["daemons"][0]["health"], "online");
         assert_eq!(json["daemons"][1]["health"], "needs-update");
         assert_eq!(json["daemons"][0]["tenant"], "acme");
+    }
+
+    #[test]
+    fn a_save_over_an_unreadable_copy_fails_and_one_over_a_corrupt_copy_replaces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = JsonRegistryStore::in_data_dir(dir.path());
+        std::fs::create_dir_all(store.path()).unwrap();
+        let records = vec![record("a", Health::Online)];
+        assert!(matches!(store.save(&records), Err(StoreError::Save { .. })));
+        std::fs::remove_dir(store.path()).unwrap();
+        std::fs::write(store.path(), b"not json").unwrap();
+        store.save(&records).unwrap();
+        assert_eq!(store.load().unwrap(), records);
     }
 
     #[cfg(unix)]

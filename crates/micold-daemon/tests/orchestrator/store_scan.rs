@@ -209,6 +209,7 @@ mod key_scan {
             tenant_records_survive_reopen,
             two_writers_upserting_different_ids_lose_neither,
             an_owner_survives_a_relink_upsert_and_a_whole_list_save,
+            an_owned_record_over_an_unowned_one_takes_its_owner,
             reassign_unowned_moves_the_tenants_unowned_records_once,
             users_are_created_read_listed_and_soft_removed,
             an_identity_links_to_one_user,
@@ -260,6 +261,80 @@ mod key_scan {
         for table in ["daemons", "projects", "sessions"] {
             assert!(has(table, "owner_user_id"), "{table} has no owner_user_id");
         }
+    }
+
+    /// SQL `reassign_unowned` moves the target tenant's unowned projects and sessions too, in
+    /// the same transaction, and no other tenant's rows (FR-007).
+    fn reassign_moves_projects_and_sessions_of_one_tenant<B: Scanned>() {
+        use micold_core::orchestrator::UserId;
+        use sqlx::Row as _;
+        let Some(backend) = B::make() else { return };
+        let registry = backend.registry();
+        registry
+            .save(&[
+                suite::daemon("acme", "d", "d"),
+                suite::daemon("other", "d", "d"),
+            ])
+            .unwrap();
+        let db = backend.store();
+        for tenant in ["acme", "other"] {
+            db.block_on(async {
+                for sql in [
+                    "INSERT INTO projects (tenant_id, id, daemon_id, name, path, owner_user_id, \
+                     created_at) VALUES ($1, 'p', 'd', 'p', '/p', 'unowned', 0)",
+                    "INSERT INTO sessions (tenant_id, id, daemon_id, project_id, owner_user_id, \
+                     created_at) VALUES ($1, 's', 'd', 'p', 'unowned', 0)",
+                ] {
+                    sqlx::query(sql)
+                        .bind(tenant.to_owned())
+                        .execute(db.pool())
+                        .await
+                        .unwrap();
+                }
+            })
+            .unwrap();
+        }
+        let moved = registry
+            .reassign_unowned(&TenantId::new(Some("acme")), &UserId::new("owner").unwrap())
+            .unwrap();
+        assert_eq!(moved, 1, "the count is daemon rows");
+        let owners: Vec<(String, String, String)> = db
+            .block_on(async {
+                sqlx::query(
+                    "SELECT 'daemons', tenant_id, owner_user_id FROM daemons UNION ALL \
+                     SELECT 'projects', tenant_id, owner_user_id FROM projects UNION ALL \
+                     SELECT 'sessions', tenant_id, owner_user_id FROM sessions ORDER BY 1, 2",
+                )
+                .fetch_all(db.pool())
+                .await
+                .unwrap()
+            })
+            .unwrap()
+            .iter()
+            .map(|r| (r.get(0), r.get(1), r.get(2)))
+            .collect();
+        let row = |t: &str, tenant: &str, owner: &str| (t.into(), tenant.into(), owner.into());
+        assert_eq!(
+            owners,
+            vec![
+                row("daemons", "acme", "owner"),
+                row("daemons", "other", "unowned"),
+                row("projects", "acme", "owner"),
+                row("projects", "other", "unowned"),
+                row("sessions", "acme", "owner"),
+                row("sessions", "other", "unowned"),
+            ]
+        );
+    }
+
+    #[test]
+    fn sqlite_reassign_moves_projects_and_sessions_of_one_tenant() {
+        reassign_moves_projects_and_sessions_of_one_tenant::<SqliteBackend>();
+    }
+
+    #[test]
+    fn postgres_reassign_moves_projects_and_sessions_of_one_tenant() {
+        reassign_moves_projects_and_sessions_of_one_tenant::<PostgresBackend>();
     }
 
     #[test]

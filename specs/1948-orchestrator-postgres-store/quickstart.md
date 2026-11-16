@@ -19,8 +19,10 @@ without the URL, PostgreSQL tests print `skipped: MICOLD_TEST_POSTGRES_URL not s
 
 Recorded (M10, 2026-11-16, cloud container, PostgreSQL 16 local): `cargo test -p micold-daemon
 --test orchestrator store_` with `MICOLD_TEST_POSTGRES_URL` and `MICOLD_REQUIRE_POSTGRES=1` set:
-129 passed (memory, JSON, SQLite, PostgreSQL). `test-core` and the gate ran through
-`scripts/gate.sh` (no `mise` there); see the ledger's *Review rounds* for the run.
+129 passed (memory, JSON, SQLite, PostgreSQL); 135 after review round 1. Full gate through
+`scripts/gate.sh` (no `mise` there), 2026-11-16: fmt, clippy, 13498 nextest tests passed and
+every `scripts/tests/*.test.sh`; the one failure is explained next. The ledger's *Review rounds*
+holds the round-1 rerun.
 Use a password that is not a substring of the error text: with `postgres:postgres`,
 `store_slow::a_save_lost_with_the_database_is_reported_on_stderr_without_the_password` fails
 whenever the logged error names `sqlx_postgres` (it found the "password" in the module path).
