@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-g30l62
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: dispatch the M8 milestone unit in a fresh thread (previous PR #2006 merged at 3a74d3004)
+- **Next step**: M8 review (A+B) on origin/main...claude/project-thread-g30l62, then open the M8 PR (body in the unit's scratchpad)
 
 ## Pull requests
 
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | implemented, awaiting review |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
@@ -95,7 +95,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 merged (PR #2006, squash 3a74d3004; opus review A+B MINOR-ONLY, fixes applied; first two CI runs cancelled by quick pushes; mutants advisory red). Next: dispatch the M8 unit (T045–T050) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest/openssh-client setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0. Units have no Agent tool: the orchestrator dispatches the review.
+M8 implemented on claude/project-thread-g30l62 (T045–T050 ticked; previous PR #2006 merged at 3a74d3004). Full gate run locally with PostgreSQL. Not yet reviewed: the orchestrator dispatches review A+B on origin/main...HEAD, then opens the PR. registry.json import stays for M9.
 
 ## Open escalation
 

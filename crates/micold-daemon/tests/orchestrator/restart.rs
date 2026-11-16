@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::support::{
     announcement, child_count, children_quiet, children_quiet_blocking, record_when, FakeDaemon,
-    Orchestrator, WITHIN,
+    Orchestrator,
 };
 
 fn online(record: &Value) -> bool {
@@ -114,85 +114,49 @@ fn orchestrator_process(dir: &Path) -> std::process::Command {
     command
 }
 
-fn registry_file(dir: &Path) -> std::path::PathBuf {
-    dir.join("data").join("orchestrator").join("registry.json")
+/// The process's SQLite file (local mode, #1948).
+fn database_file(dir: &Path) -> std::path::PathBuf {
+    dir.join("data")
+        .join("orchestrator")
+        .join("orchestrator.db")
 }
 
 #[cfg(unix)]
 #[test]
-fn a_corrupt_registry_fails_the_start_naming_the_file_and_leaves_it() {
+fn a_corrupt_database_fails_the_start_naming_the_file_and_leaves_it() {
     let _quiet = children_quiet_blocking();
     let dir = tempfile::tempdir().unwrap();
-    let file = registry_file(dir.path());
+    let file = database_file(dir.path());
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(&file, b"{ \"version\": 1, \"daemons\": [ truncated").unwrap();
+    let garbage = vec![0x5a_u8; 8192];
+    std::fs::write(&file, &garbage).unwrap();
 
     let output = orchestrator_process(dir.path()).output().unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let expected = format!("orchestrator registry {} is unreadable: ", file.display());
+    let expected = format!("orchestrator database {}: ", file.display());
     assert!(stderr.contains(&expected), "{stderr}");
-    assert_eq!(
-        std::fs::read(&file).unwrap(),
-        b"{ \"version\": 1, \"daemons\": [ truncated"
-    );
+    assert_eq!(std::fs::read(&file).unwrap(), garbage);
 }
 
-/// Kills the process when the test ends, passing or not.
-struct Killed(std::process::Child);
-
-impl Drop for Killed {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
+/// A store whose saves fail (FR-004): the orchestrator keeps serving. In this process, on the JSON
+/// store, since the process runs on SQLite (#1948) where no file trick makes a save fail.
 #[cfg(target_os = "linux")]
 #[tokio::test]
-async fn a_failed_save_is_logged_to_stderr_and_links_keep_working() {
-    use std::io::BufRead as _;
-
-    let _quiet = children_quiet().await;
+async fn a_failed_save_leaves_links_working() {
     let dir = Arc::new(tempfile::tempdir().unwrap());
+    let store = Arc::new(micold_core::orchestrator::JsonRegistryStore::in_data_dir(
+        dir.path(),
+    ));
     // The temporary file every save writes first cannot be created, so every save fails.
-    let blocked = registry_file(dir.path()).with_file_name(".registry.json.tmp");
+    let blocked = store.path().with_file_name(".registry.json.tmp");
     std::fs::create_dir_all(&blocked).unwrap();
-    let mut child = orchestrator_process(dir.path())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let stderr = child.stderr.take().unwrap();
-    let _child = Killed(child);
-    let (lines, logged) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        for line in std::io::BufReader::new(stderr)
-            .lines()
-            .map_while(Result::ok)
-        {
-            let _ = lines.send(line);
-        }
-    });
-
-    let socket = dir.path().join("run/micold/orchestrator.sock");
-    let orchestrator = Orchestrator::external(Arc::clone(&dir), socket).await;
+    let orchestrator = Orchestrator::start_with(Arc::clone(&dir), store.clone()).await;
     let _link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
     record_when(&orchestrator, "box", online).await;
-
-    let line = logged
-        .recv_timeout(WITHIN)
-        .expect("a save failure is logged");
-    assert!(
-        line.contains(&format!(
-            "orchestrator registry {} could not be saved",
-            registry_file(dir.path()).display()
-        )),
-        "{line}"
-    );
-    // Still serving: a second daemon links and both are listed.
     let _second = FakeDaemon::link(&orchestrator, &announcement("two")).await;
     record_when(&orchestrator, "two", online).await;
     assert_eq!(orchestrator.daemons().await.len(), 2);
-    assert!(!registry_file(dir.path()).exists());
+    assert!(!store.path().exists());
 }
