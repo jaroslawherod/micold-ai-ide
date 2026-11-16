@@ -67,7 +67,21 @@ pub fn daemon_binary() -> OsString {
 /// started — the daemon is ready when it *accepts*, not when `exec` returns, so the caller polls the
 /// endpoint (see `connect::connect_or_spawn`).
 pub fn spawn_detached_daemon() -> io::Result<u32> {
+    spawn_detached(Command::new(daemon_binary()))
+}
+
+/// The command that starts the local orchestrator: the daemon binary's `orchestrator` mode
+/// (#1724, #1726 R6).
+pub fn orchestrator_command() -> Command {
     let mut command = Command::new(daemon_binary());
+    command.arg("orchestrator");
+    command
+}
+
+/// Start `command` detached, as the daemon is started, with an error that names the program: a
+/// missing binary reads "cannot start <program>: No such file or directory" (#1726, US3.4).
+pub fn spawn_detached(mut command: Command) -> io::Result<u32> {
+    let program = command.get_program().to_string_lossy().into_owned();
     // A detached service owns no terminal; its diagnostics go to its own log sink (FR-045).
     command
         .stdin(Stdio::null())
@@ -77,7 +91,10 @@ pub fn spawn_detached_daemon() -> io::Result<u32> {
     configure_detached(&mut command);
 
     // Deliberately not awaited/waited: the child must outlive us (FR-003).
-    command.spawn().map(|child| child.id())
+    command
+        .spawn()
+        .map(|child| child.id())
+        .map_err(|e| io::Error::new(e.kind(), format!("cannot start {program}: {e}")))
 }
 
 /// The pid the running daemon recorded in its lock file, if any (`None` when the file is absent,

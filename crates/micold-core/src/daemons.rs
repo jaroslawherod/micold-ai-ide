@@ -263,6 +263,23 @@ pub struct FileSettings {
     /// The `[[ai.cli]]` entries Settings → Daemons configures (#1532, FR-013d).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ai_cli: Vec<AiCliSetting>,
+    /// `daemon.id`: the id a provisioned daemon announces to the orchestrator (#1726, R6),
+    /// generated once by [`new_wire_id`]. `None` for the host daemon, which is `local`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wire_id: Option<crate::protocol::routing::WireDaemonId>,
+}
+
+/// A new wire id for the daemon named `name` (#1726, R6): `slugify(name)-<8 hex>`, the hex from a
+/// fresh UUID so two machines' daemons never collide; `daemon-<8 hex>` when nothing of the name is
+/// left, the name part trimmed so the whole fits 63 characters.
+pub fn new_wire_id(name: &str) -> crate::protocol::routing::WireDaemonId {
+    let suffix = &uuid::Uuid::new_v4().simple().to_string()[..8];
+    let mut slug = crate::naming::slugify(name);
+    slug.truncate(crate::protocol::routing::MAX_DAEMON_ID_LEN - suffix.len() - 1);
+    let slug = slug.trim_matches('-');
+    let slug = if slug.is_empty() { "daemon" } else { slug };
+    crate::protocol::routing::WireDaemonId::new(format!("{slug}-{suffix}"))
+        .expect("a slug and hex are a valid id")
 }
 
 /// A file copied into the session home (`[[session.files]]`, #1536).
@@ -526,6 +543,19 @@ pub fn os_free_loopback_port() -> std::io::Result<u16> {
 }
 
 impl DaemonRegistry {
+    /// Give every daemon but the host a wire id it lacks (#1726, R6): entries saved before ids
+    /// existed get one the next time the app loads them. `true` when one was added.
+    pub fn ensure_wire_ids(&mut self) -> bool {
+        let mut added = false;
+        for entry in &mut self.entries {
+            if !matches!(entry.runtime, DaemonRuntime::Host) && entry.file.wire_id.is_none() {
+                entry.file.wire_id = Some(new_wire_id(entry.name.as_str()));
+                added = true;
+            }
+        }
+        added
+    }
+
     /// Every stored container port.
     pub fn container_ports(&self) -> Vec<u16> {
         self.entries
@@ -607,6 +637,7 @@ impl DaemonRegistry {
             notice: None,
             file: FileSettings::default(),
         });
+        self.ensure_wire_ids();
         Ok(id)
     }
 
@@ -656,7 +687,9 @@ impl DaemonRegistry {
             .iter_mut()
             .find(|e| e.id == id)
             .ok_or(RegistryError::UnknownDaemon)?;
-        entry.file = file;
+        // The wire id is the app's, not a setting: a file from Settings never drops it (#1726).
+        let wire_id = file.wire_id.clone().or_else(|| entry.file.wire_id.take());
+        entry.file = FileSettings { wire_id, ..file };
         Ok(())
     }
 

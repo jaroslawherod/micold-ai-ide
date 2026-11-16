@@ -2543,11 +2543,12 @@ fn registry_loaded(
 
 /// The [`Msg::DaemonsLoaded`] a shell sends for stored settings (feature 491).
 pub fn daemons_loaded(stored: &Settings) -> Msg {
+    let mut daemons =
+        micold_core::daemons::DaemonRegistry::new(stored.daemons.clone(), stored.next_daemon_id);
+    // Daemons saved before wire ids get theirs now, rendered into their config on connect (#1726).
+    daemons.ensure_wire_ids();
     Msg::DaemonsLoaded {
-        daemons: micold_core::daemons::DaemonRegistry::new(
-            stored.daemons.clone(),
-            stored.next_daemon_id,
-        ),
+        daemons,
         legacy_default: stored.legacy_default_daemon,
     }
 }
