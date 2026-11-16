@@ -78,7 +78,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 merged (PR #1992, squash b3f47d077; review B MINOR-ONLY, CI green). Next: dispatch the M4 milestone unit (T026–T031, Tier full: PostgreSQL store and CI service container) in a fresh thread; set the Worktree branch line to that thread's branch. M4 notes: claude/project-thread-q3eky9
+M3 merged (PR #1992, squash b3f47d077; review B MINOR-ONLY, CI green). Next: dispatch the M4 milestone unit (T026–T031, Tier full: PostgreSQL store and CI service container) in a fresh thread; set the Worktree branch line to that thread's branch. M4 notes: `ORDER BY id` in `users()` must match the memory order (BINARY collation; check PostgreSQL collation); `begin_write`'s no-op `DELETE FROM bootstrap WHERE 1 = 0` works on PostgreSQL too; `INSERT ... RETURNING` is used by `append`; narrow the no_outbound `db/` skip to the `connect` call sites (M2 B F2). Cloud: diff coverage blocks at 80%, have the unit test error arms; `mutants on the diff` is advisory; a green `ci complete` sends no wake, so start a background REST wait after the last push.
 
 ## Open escalation
 
