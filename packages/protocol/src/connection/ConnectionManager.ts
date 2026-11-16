@@ -90,6 +90,7 @@ export class ConnectionManager {
 
   stop(): void {
     this.stopped = true;
+    this.opening = false;
     this.cancelRetry();
     this.transport.close();
     this.setState({ kind: "offline" });
@@ -153,7 +154,7 @@ export class ConnectionManager {
     if (typeof f.id === "number") {
       const p = this.pending.get(f.id);
       if (!p) return;
-      if (f.error !== undefined) this.settle(f.id, toErrorCode(f.error));
+      if (f.error != null) this.settle(f.id, toErrorCode(f.error));
       else this.settle(f.id, undefined, f.result);
       return;
     }

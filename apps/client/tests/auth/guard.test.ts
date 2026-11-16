@@ -11,6 +11,11 @@ describe("route guard", () => {
     expect(guardRedirect("/sessions/s1", true)).toBeNull();
   });
 
+  it("recognises sign-in whatever its case, escapes or trailing slash", () => {
+    for (const path of ["/Sign-In", "/sign-in/", "/sign%2Din", "/SIGN%2dIN/"]) expect(guardRedirect(path, false)).toBeNull();
+    expect(guardRedirect("/%E0%A4%A", false)).toBe("/sign-in?returnTo=%2F%25E0%25A4%25A");
+  });
+
   it("returns to the asked-for route after sign-in", () => {
     expect(returnTarget("/sessions/s1")).toBe("/sessions/s1");
     expect(returnTarget(["/a", "/b"])).toBe("/a");
@@ -19,7 +24,7 @@ describe("route guard", () => {
   });
 
   it("never returns off-site, to sign-in, or to nothing", () => {
-    for (const bad of [undefined, "", "https://evil.example", "//evil.example", "/\\evil", "/sign-in", "/sign-in?returnTo=/x", "/sign-in/", "/sign-in#x", "/\tx", "/a\nb", "/%2F/evil.example"]) {
+    for (const bad of [undefined, "", "https://evil.example", "//evil.example", "/\\evil", "/sign-in", "/sign-in?returnTo=/x", "/sign-in/", "/Sign-In", "/sign%2din", "/sign-in#x", "/\tx", "/a\nb", "/%2F/evil.example"]) {
       expect(returnTarget(bad)).toBe("/");
     }
   });

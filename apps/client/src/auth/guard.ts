@@ -4,9 +4,20 @@ export const SIGN_IN_PATH = "/sign-in";
 
 const BASE = "http://micold.invalid";
 
+/** Whether `pathname` is the sign-in page, ignoring case, percent-escapes and a trailing slash. */
+export function isSignInPath(pathname: string): boolean {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return false;
+  }
+  return (decoded.replace(/\/+$/, "") || "/").toLowerCase() === SIGN_IN_PATH;
+}
+
 /** Where to send a visitor, or `null` to let the route render. */
 export function guardRedirect(pathname: string, signedIn: boolean): string | null {
-  if (signedIn || pathname === SIGN_IN_PATH) return null;
+  if (signedIn || isSignInPath(pathname)) return null;
   return pathname === "/" ? SIGN_IN_PATH : `${SIGN_IN_PATH}?returnTo=${encodeURIComponent(pathname)}`;
 }
 
@@ -22,7 +33,6 @@ export function returnTarget(returnTo: string | string[] | undefined): string {
     return "/";
   }
   if (url.origin !== BASE || raw.startsWith("//")) return "/";
-  const path = url.pathname.replace(/\/+$/, "") || "/";
-  if (path === SIGN_IN_PATH || /^\/%2f/i.test(url.pathname)) return "/";
+  if (isSignInPath(url.pathname) || /^\/%2f/i.test(url.pathname)) return "/";
   return `${url.pathname}${url.search}${url.hash}`;
 }
