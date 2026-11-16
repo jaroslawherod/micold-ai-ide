@@ -15,7 +15,11 @@ function SessionRow({ row }: { row: SessionRowModel }) {
   const theme = useTheme();
   const { session } = row;
   return (
-    <View testID="session-row" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingStart: spacing.lg }}>
+    <View
+      testID="session-row"
+      accessible
+      accessibilityLabel={t("sidebar.session", { name: session.name, state: t(`state.${session.state}`) })}
+      style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingStart: spacing.lg }}>
       <StateIndicator state={session.state} />
       <Text variant="bodySmall" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
         {session.name}
@@ -60,9 +64,13 @@ function LocationRowView({ row, stale, selected, onSelect }: LocationRowProps) {
           {location.name}
         </Text>
       </Pressable>
-      {row.sessions.map((s) => (
-        <SessionRow key={s.key} row={s} />
-      ))}
+      {row.sessions.length === 0 ? (
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, paddingStart: spacing.lg }}>
+          {t("sidebar.noSessions")}
+        </Text>
+      ) : (
+        row.sessions.map((s) => <SessionRow key={s.key} row={s} />)
+      )}
     </View>
   );
 }

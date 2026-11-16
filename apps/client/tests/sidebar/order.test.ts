@@ -1,5 +1,5 @@
 // The client's snapshot store keeps the orchestrator's order (FR-011, SC-001, US2 scenarios 2, 5).
-import { daemonId, type SessionState } from "@micold/protocol";
+import { daemonId, locationId, rowKeys, type SessionState } from "@micold/protocol";
 import { createMockApi } from "@micold/protocol/mock";
 import { createSnapshotStore, isStale, orderIndex, sidebarTree } from "../../src/features/sidebar/store";
 
@@ -41,6 +41,20 @@ describe("snapshot store", () => {
     const after = store.getState().snapshot!;
     expect([after.sessions[0]!.state, after.sessions[1]!.state]).toEqual(["waiting", "idle"]);
     expect([...orderIndex(after)]).toEqual(before);
+  });
+
+  it("indexes rows in render order when an upsert lands among another project's rows", async () => {
+    const { mock, store } = await started();
+    const snap = store.getState().snapshot!;
+    const extra = { ...snap.locations[0]!, id: locationId("d1-p1-extra") };
+    mock.control.pushChange({ kind: "upsert", entity: { type: "location", value: extra }, afterKey: snap.locations.at(-1)!.id });
+    const after = store.getState().snapshot!;
+    const rendered = sidebarTree(after).flatMap((d) =>
+      d.projects.flatMap((p) => p.locations.flatMap((l) => [l.key, ...l.sessions.map((s) => s.key)])),
+    );
+    expect([...orderIndex(after).keys()]).toEqual(rendered);
+    expect(rowKeys(after)).toEqual(rendered);
+    expect(orderIndex(after).get("d1/d1-p1/d1-p1-extra")).toBe(rendered.indexOf("d1/d1-p1/d1-p1-l5/d1-p1-l5-s2") + 1);
   });
 
   it("groups rows by daemon and project in snapshot order", async () => {

@@ -4,7 +4,6 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import {
   applyChanges,
-  rowKeys,
   type Api,
   type ConnectionState,
   type Daemon,
@@ -60,9 +59,12 @@ export function createSnapshotStore(api: Api, now: () => number = Date.now): Sto
   }));
 }
 
-/** Row key to index, in display order (location, then its sessions). */
+/** Row key to index, in render order: the sidebar tree flattened (a location, then its sessions). */
 export function orderIndex(snapshot: Snapshot): Map<RowKey, number> {
-  return new Map(rowKeys(snapshot).map((key, i) => [key, i]));
+  const keys = sidebarTree(snapshot).flatMap((d) =>
+    d.projects.flatMap((p) => p.locations.flatMap((l) => [l.key, ...l.sessions.map((s) => s.key)])),
+  );
+  return new Map(keys.map((key, i) => [key, i]));
 }
 
 /** A daemon's rows are stale while it is offline or the orchestrator connection is not up (FR-013). */

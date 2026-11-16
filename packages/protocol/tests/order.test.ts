@@ -1,5 +1,5 @@
 // Stable order (FR-011, SC-001): changes mutate row values only; keys and indices never move.
-import { applyChanges, rowKeys, sessionId, daemonId, type Change, type SessionState } from "../src";
+import { applyChanges, rowKeys, sessionId, daemonId, locationId, projectId, type Change, type SessionState } from "../src";
 import { buildFixture } from "../src/mock/fixture";
 
 const STATES: SessionState[] = ["working", "waiting", "idle", "error", "stopped"];
@@ -111,4 +111,34 @@ describe("applyChanges", () => {
     expect([snap.daemons[0]!.name, snap.projects[0]!.name, snap.locations[0]!.name]).toEqual(["renamed", "renamed", "renamed"]);
     expect(snap.seq).toBe(5);
   });
+
+  it("drops a replayed or old change at or below the snapshot's seq", () => {
+    const base = applyChanges(buildFixture(), [{ seq: 5, kind: "session-state", sessionId: buildFixture().sessions[0]!.id, state: "error" }]);
+    const snap = applyChanges(base, [
+      { seq: 3, kind: "session-state", sessionId: base.sessions[0]!.id, state: "idle" },
+      { seq: 5, kind: "session-state", sessionId: base.sessions[0]!.id, state: "working" },
+    ]);
+    expect(snap.sessions[0]!.state).toBe("error");
+    expect(snap.seq).toBe(5);
+    expect(snap).toBe(base);
+  });
 });
+
+describe("rowKeys grouping", () => {
+  it("groups by daemon then project, whatever the flat order, and drops orphans", () => {
+    const base = buildFixture();
+    const lastD2 = base.locations.at(-1)!;
+    const moved = { ...base.locations[0]!, id: locationId("d1-p1-extra"), name: "extra" };
+    const orphan = { ...base.locations[0]!, id: locationId("orphan"), projectId: projectId("absent") };
+    const snap = applyChanges(base, [
+      { seq: 1, kind: "upsert", entity: { type: "location", value: moved }, afterKey: lastD2.id },
+      { seq: 2, kind: "upsert", entity: { type: "location", value: orphan } },
+    ]);
+    const keys = rowKeys(snap);
+    expect(keys.some((k) => k.includes("orphan") || k.startsWith("undefined"))).toBe(false);
+    const lastOfP1 = keys.lastIndexOf("d1/d1-p1/d1-p1-l5/d1-p1-l5-s2");
+    expect(keys[lastOfP1 + 1]).toBe("d1/d1-p1/d1-p1-extra");
+    expect(keys[lastOfP1 + 2]).toBe("d1/d1-p2/d1-p2-l1");
+  });
+});
+

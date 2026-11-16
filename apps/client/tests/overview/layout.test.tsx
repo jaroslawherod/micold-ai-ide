@@ -73,6 +73,15 @@ describe("home layout", () => {
     expect(flat("home-body").flexDirection).toBe("column");
   });
 
+  it("floors a fractional card width so the last card of a row never wraps", async () => {
+    await at(1280);
+    await fireEvent(screen.getByTestId("overview-grid"), "layout", { nativeEvent: { layout: { width: 1000, height: 10, x: 0, y: 0 } } });
+    const [w] = cardWidths();
+    expect(Number.isInteger(w)).toBe(true);
+    expect(w! * 3 + CARD_GAP * 2).toBeLessThanOrEqual(1000);
+    expect(w).toBe(Math.floor((1000 - CARD_GAP * 2) / 3));
+  });
+
   it("keeps a card in place when its state changes", async () => {
     const { mock } = await at(1280);
     const order = screen.getAllByTestId("overview-card").map((c) => c.props.accessibilityLabel);

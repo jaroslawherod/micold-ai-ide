@@ -55,20 +55,38 @@ function applyOne(snap: Snapshot, change: Change): Snapshot {
   }
 }
 
-/** The snapshot after `changes`, applied in sequence order; the input is not touched. */
+/**
+ * The snapshot after `changes`, applied in sequence order; the input is not touched. A change at or
+ * below the snapshot's `seq` (a replay or an old one) is dropped, so state and `seq` never go back.
+ */
 export function applyChanges(snap: Snapshot, changes: readonly Change[]): Snapshot {
-  return [...changes].sort((a, b) => a.seq - b.seq).reduce(applyOne, snap);
+  return changes
+    .filter((c) => c.seq > snap.seq)
+    .sort((a, b) => a.seq - b.seq)
+    .reduce((acc, c) => (c.seq > acc.seq ? applyOne(acc, c) : acc), snap);
 }
 
-/** Every location and session row key, in display order (a location, then its sessions). */
+function groupBy<T>(items: readonly T[], key: (item: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const item of items) out.set(key(item), [...(out.get(key(item)) ?? []), item]);
+  return out;
+}
+
+/**
+ * Every location and session row key, in display order: daemons, then each daemon's projects, then
+ * each project's locations and their sessions, each level in snapshot order. Rows whose parent is
+ * absent are not displayed and get no key. The client's sidebar tree follows the same order.
+ */
 export function rowKeys(snap: Snapshot): RowKey[] {
-  const daemonOf = new Map(snap.projects.map((p) => [p.id as string, p.daemonId as string]));
-  const sessionsOf = new Map<string, string[]>();
-  for (const s of snap.sessions) sessionsOf.set(s.locationId, [...(sessionsOf.get(s.locationId) ?? []), s.id]);
+  const projectsOf = groupBy(snap.projects, (p) => p.daemonId);
+  const locationsOf = groupBy(snap.locations, (l) => l.projectId);
+  const sessionsOf = groupBy(snap.sessions, (s) => s.locationId);
   const keys: RowKey[] = [];
-  for (const l of snap.locations) {
-    const base = `${daemonOf.get(l.projectId)}/${l.projectId}/${l.id}`;
-    keys.push(base, ...(sessionsOf.get(l.id) ?? []).map((s) => `${base}/${s}`));
-  }
+  for (const d of snap.daemons)
+    for (const p of projectsOf.get(d.id) ?? [])
+      for (const l of locationsOf.get(p.id) ?? []) {
+        const base = `${d.id}/${p.id}/${l.id}`;
+        keys.push(base, ...(sessionsOf.get(l.id) ?? []).map((s) => `${base}/${s.id}`));
+      }
   return keys;
 }

@@ -100,6 +100,26 @@ describe("LocationRow", () => {
     expect(screen.getAllByTestId("state-text")).toHaveLength(2);
   });
 
+  it("labels each session row with its name and state, in English and Polish", async () => {
+    const first = renderWithApi(<LocationRow row={row} stale={false} selected={false} onSelect={() => {}} />);
+    await first.view;
+    const [a] = screen.getAllByTestId("session-row");
+    expect(a!.props.accessible).toBe(true);
+    expect(a!.props.accessibilityLabel).toBe(`${row.sessions[0]!.session.name}, Working`);
+    await screen.unmount();
+    await act(async () => localeStore.getState().setLocale("pl"));
+    const second = renderWithApi(<LocationRow row={row} stale={false} selected={false} onSelect={() => {}} />);
+    await second.view;
+    expect(screen.getAllByTestId("session-row")[0]!.props.accessibilityLabel).toBe(`${row.sessions[0]!.session.name}, Pracuje`);
+  });
+
+  it("says a worktree has no sessions", async () => {
+    const { view } = renderWithApi(<LocationRow row={{ ...row, sessions: [] }} stale={false} selected={false} onSelect={() => {}} />);
+    await view;
+    expect(screen.queryAllByTestId("session-row")).toHaveLength(0);
+    expect(screen.getByText("No sessions")).toBeTruthy();
+  });
+
   it("is keyboard reachable, shows a focus ring and reports press and selection", async () => {
     const onSelect = jest.fn();
     const { view } = renderWithApi(<LocationRow row={row} stale selected onSelect={onSelect} />);

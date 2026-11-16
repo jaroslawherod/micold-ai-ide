@@ -18,7 +18,8 @@ export function Overview({ wide, estimatedWidth }: { wide: boolean; estimatedWid
   const [measured, setMeasured] = useState<number | null>(null);
   const width = Math.max(0, measured ?? estimatedWidth);
   const columns = gridColumns(width, wide);
-  const cardWidth = columns === 1 ? width : (width - CARD_GAP * (columns - 1)) / columns;
+  // Floored: a fractional width can round up past the row and wrap its last card.
+  const cardWidth = Math.floor(columns === 1 ? width : (width - CARD_GAP * (columns - 1)) / columns);
   const cards = snapshot
     ? sidebarTree(snapshot).flatMap((d) => {
         const stale = isStale(d.daemon.status, connection);

@@ -11,8 +11,11 @@ describe("route guard", () => {
     expect(guardRedirect("/sessions/s1", true)).toBeNull();
   });
 
-  it("recognises sign-in whatever its case, escapes or trailing slash", () => {
-    for (const path of ["/Sign-In", "/sign-in/", "/sign%2Din", "/SIGN%2dIN/"]) expect(guardRedirect(path, false)).toBeNull();
+  it("sends any other spelling of sign-in to the one the router serves, signed in or not", () => {
+    for (const path of ["/Sign-In", "/sign-in/", "/sign%2Din", "/SIGN%2dIN/"]) {
+      expect(guardRedirect(path, false)).toBe(SIGN_IN_PATH);
+      expect(guardRedirect(path, true)).toBe(SIGN_IN_PATH);
+    }
     expect(guardRedirect("/%E0%A4%A", false)).toBe("/sign-in?returnTo=%2F%25E0%25A4%25A");
   });
 

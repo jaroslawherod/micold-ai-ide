@@ -34,6 +34,7 @@
   "sidebar.empty": "Żaden demon nie jest jeszcze połączony.",
   "sidebar.noProjects": "Ten demon nie ma projektów.",
   "sidebar.noSessions": "Brak sesji",
+  "sidebar.session": "{name}, {state}",
   "sidebar.stale": "Ostatnie znane dane, zaktualizowane {when}",
   "sidebar.location": "{name}, gałąź {branch}",
   "sidebar.locationStale": "{name}, gałąź {branch}, ostatni znany stan",

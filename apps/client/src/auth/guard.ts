@@ -15,9 +15,11 @@ export function isSignInPath(pathname: string): boolean {
   return (decoded.replace(/\/+$/, "") || "/").toLowerCase() === SIGN_IN_PATH;
 }
 
-/** Where to send a visitor, or `null` to let the route render. */
+/** Where to send a visitor, or `null` to let the route render; sign-in is always its canonical path. */
 export function guardRedirect(pathname: string, signedIn: boolean): string | null {
-  if (signedIn || isSignInPath(pathname)) return null;
+  // The router matches case and escapes exactly: send any other spelling to the one it serves.
+  if (isSignInPath(pathname)) return pathname === SIGN_IN_PATH ? null : SIGN_IN_PATH;
+  if (signedIn) return null;
   return pathname === "/" ? SIGN_IN_PATH : `${SIGN_IN_PATH}?returnTo=${encodeURIComponent(pathname)}`;
 }
 

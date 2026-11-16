@@ -34,6 +34,7 @@
   "sidebar.empty": "No daemons are connected yet.",
   "sidebar.noProjects": "No projects on this daemon.",
   "sidebar.noSessions": "No sessions",
+  "sidebar.session": "{name}, {state}",
   "sidebar.stale": "Last known data, updated {when}",
   "sidebar.location": "{name}, branch {branch}",
   "sidebar.locationStale": "{name}, branch {branch}, last known state",
