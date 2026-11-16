@@ -995,7 +995,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
 
 #[test]
 fn the_protocol_version_is_81() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 82);
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 83);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -3175,4 +3175,44 @@ fn a_project_row_carries_its_daemon_and_identity_and_its_ref_survives_both_wires
     assert_eq!(decoded.qualified(), expected);
     json_roundtrip(&decoded.qualified());
     postcard_roundtrip(&decoded.qualified());
+}
+
+// #1726: the client-routing messages round-trip on both wires.
+#[test]
+fn the_client_routing_messages_round_trip_on_both_wires() {
+    use micold_core::protocol::routing::{ListKind, MissingDaemon, MissingReason, StreamEndReason};
+    let daemon: micold_core::protocol::routing::WireDaemonId = "box".parse().unwrap();
+    for kind in [ListKind::Projects, ListKind::Worktrees, ListKind::Sessions] {
+        let msg = ClientMsg::OrchList { req: 3, kind };
+        json_roundtrip(&msg);
+        postcard_roundtrip(&msg);
+    }
+    let listed = DaemonMsg::OrchListed {
+        req: 3,
+        rows: micold_core::protocol::messages::ListRows::Sessions(vec![sample_summary()]),
+        missing: vec![
+            MissingDaemon {
+                daemon: daemon.clone(),
+                reason: MissingReason::Error("x".into()),
+            },
+            MissingDaemon {
+                daemon,
+                reason: MissingReason::Timeout,
+            },
+        ],
+        no_daemons: false,
+    };
+    json_roundtrip(&listed);
+    postcard_roundtrip(&listed);
+    for reason in [
+        StreamEndReason::DaemonOffline,
+        StreamEndReason::SlowConsumer,
+        StreamEndReason::ClientGone,
+        StreamEndReason::Closed,
+    ] {
+        json_roundtrip(&DaemonMsg::StreamEnded { reason });
+        postcard_roundtrip(&DaemonMsg::StreamEnded { reason });
+    }
+    json_roundtrip(&DaemonMsg::OutcomeUnknown { req: 9 });
+    postcard_roundtrip(&DaemonMsg::OutcomeUnknown { req: 9 });
 }

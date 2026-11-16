@@ -6,30 +6,30 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Write the shared contract `specs/orchestrator/contracts/client-routing.md` (client `Hello`, routed envelope opaque form, `OrchList`/`OrchListed`, `MissingReason` wire text, `StreamEnded`, `OutcomeUnknown`, refusals) with one JSON example per frame, and point `specs/1726-app-via-orchestrator/contracts/README.md` at it (FR-011)
+- [x] T001 Write the shared contract `specs/orchestrator/contracts/client-routing.md` (client `Hello`, routed envelope opaque form, `OrchList`/`OrchListed`, `MissingReason` wire text, `StreamEnded`, `OutcomeUnknown`, refusals) with one JSON example per frame, and point `specs/1726-app-via-orchestrator/contracts/README.md` at it (FR-011)
 
 ## Phase 2: Foundational (core, render-free)
 
-- [ ] T002 [P] Failing tests in `crates/micold-core/src/protocol/routing.rs`: opaque-form round trip, header-only decode, `req` mismatch is `Malformed`, contract examples from T001 decode (FR-011)
-- [ ] T003 Implement `RoutedHeader` and the opaque body form of `RoutedEnvelope` in `crates/micold-core/src/protocol/routing.rs` (R3) so T002 passes
-- [ ] T004a [P] Failing serde round-trip tests in `crates/micold-core/src/protocol/messages.rs` and `routing.rs` for `ClientMsg::OrchList`, `DaemonMsg::OrchListed`, `StreamEnded`, `OutcomeUnknown`, `ListKind`, `MissingDaemon`/`MissingReason`, `StreamEndReason`, `RouteRefusal`, each matching its T001 contract example
-- [ ] T004 Add those types in `crates/micold-core/src/protocol/messages.rs` and `routing.rs` so T004a passes; bump `PROTOCOL_VERSION` 82 -> 83 in `crates/micold-core/src/protocol/version.rs`
-- [ ] T005 [P] Failing unit tests for `RouteTable` (bijection, link conns never reused while open, `drop_link` returns every route and pending req) in a new `crates/micold-core/src/orchestrator/route.rs` (data-model)
-- [ ] T006 Implement `RouteTable` in `crates/micold-core/src/orchestrator/route.rs` so T005 passes
-- [ ] T007 [P] Failing unit tests for `merge_lists` (union, same path on two daemons stays two rows, a daemon in rows or missing never both, `no_daemons`) in a new `crates/micold-core/src/orchestrator/list_merge.rs` (FR-001)
-- [ ] T008 Implement `merge_lists` in `crates/micold-core/src/orchestrator/list_merge.rs` so T007 passes
+- [x] T002 [P] Failing tests in `crates/micold-core/src/protocol/routing.rs`: opaque-form round trip, header-only decode, `req` mismatch is `Malformed`, contract examples from T001 decode (FR-011)
+- [x] T003 Implement `RoutedHeader` and the opaque body form of `RoutedEnvelope` in `crates/micold-core/src/protocol/routing.rs` (R3) so T002 passes
+- [x] T004a [P] Failing serde round-trip tests in `crates/micold-core/src/protocol/messages.rs` and `routing.rs` for `ClientMsg::OrchList`, `DaemonMsg::OrchListed`, `StreamEnded`, `OutcomeUnknown`, `ListKind`, `MissingDaemon`/`MissingReason`, `StreamEndReason`, `RouteRefusal`, each matching its T001 contract example
+- [x] T004 Add those types in `crates/micold-core/src/protocol/messages.rs` and `routing.rs` so T004a passes; bump `PROTOCOL_VERSION` 82 -> 83 in `crates/micold-core/src/protocol/version.rs`
+- [x] T005 [P] Failing unit tests for `RouteTable` (bijection, link conns never reused while open, `drop_link` returns every route and pending req) in a new `crates/micold-core/src/orchestrator/route.rs` (data-model)
+- [x] T006 Implement `RouteTable` in `crates/micold-core/src/orchestrator/route.rs` so T005 passes
+- [x] T007 [P] Failing unit tests for `merge_lists` (union, same path on two daemons stays two rows, a daemon in rows or missing never both, `no_daemons`) in a new `crates/micold-core/src/orchestrator/list_merge.rs` (FR-001)
+- [x] T008 Implement `merge_lists` in `crates/micold-core/src/orchestrator/list_merge.rs` so T007 passes
 
 ## Phase 3: User Story 2 — every request and stream reaches the owning daemon (P1)
 
-- [ ] T009 [US2] Failing integration suite `crates/micold-daemon/tests/orchestrator_route/main.rs` with a harness spawning a real orchestrator and two real linked daemons; cases `requests` (FR-003, US2.1), `streams` incl. two-client takeover (FR-004, US2.2, US2.4), `refusals` (FR-005)
-- [ ] T010 [US2] Daemon side: `crates/micold-daemon/src/orchestrator_link/virtual_conn.rs` (duplex per link conn into `server::serve_connection`, R1); `dial.rs` `steady(framed, Arc<DaemonState>)` demuxes routed frames and stamps `req` on answers; `mod.rs` `spawn_for(Arc<DaemonState>)`
-- [ ] T011 [US2] Orchestrator side: new `crates/micold-daemon/src/orchestrator/client.rs` (client session on plain `Hello`, opaque relay via `RouteTable`, refusals `not_found`/`needs-update`/offline); `link.rs` `steady()` demux inbound frames to conns with one bounded queue per `(link, conn)`; replace `query.rs` `not_hosted()` with routing
-- [ ] T012a [US2] Failing cases `link_drop` (`OutcomeUnknown` 100/100, stream ends `daemon-offline`, re-attach after relink; FR-006, FR-012, SC-006) and `slow_client` (`slow-consumer`, other client keeps its rate; FR-004) in `crates/micold-daemon/tests/orchestrator_route/`
-- [ ] T012 [US2] Implement the link-drop and full-queue paths in `crates/micold-daemon/src/orchestrator/client.rs` and `link.rs` so T012a passes
+- [x] T009 [US2] Failing integration suite `crates/micold-daemon/tests/orchestrator_route/main.rs` with a harness spawning a real orchestrator and two real linked daemons; cases `requests` (FR-003, US2.1), `streams` incl. two-client takeover (FR-004, US2.2, US2.4), `refusals` (FR-005)
+- [x] T010 [US2] Daemon side: `crates/micold-daemon/src/orchestrator_link/virtual_conn.rs` (duplex per link conn into `server::serve_connection`, R1); `dial.rs` `steady(framed, Arc<DaemonState>)` demuxes routed frames and stamps `req` on answers; `mod.rs` `spawn_for(Arc<DaemonState>)`
+- [x] T011 [US2] Orchestrator side: new `crates/micold-daemon/src/orchestrator/client.rs` (client session on plain `Hello`, opaque relay via `RouteTable`, refusals `not_found`/`needs-update`/offline); `link.rs` `steady()` demux inbound frames to conns with one bounded queue per `(link, conn)`; replace `query.rs` `not_hosted()` with routing
+- [x] T012a [US2] Failing cases `link_drop` (`OutcomeUnknown` 100/100, stream ends `daemon-offline`, re-attach after relink; FR-006, FR-012, SC-006) and `slow_client` (`slow-consumer`, other client keeps its rate; FR-004) in `crates/micold-daemon/tests/orchestrator_route/`
+- [x] T012 [US2] Implement the link-drop and full-queue paths in `crates/micold-daemon/src/orchestrator/client.rs` and `link.rs` so T012a passes
 
 ## Phase 4: User Story 4 (orchestrator half) — an outage loses no session (P1)
 
-- [ ] T013 [US4] Case `outage` in `crates/micold-daemon/tests/orchestrator_route/`: kill the orchestrator, the session keeps running on the daemon and the link redials (FR-010)
+- [x] T013 [US4] Case `outage` in `crates/micold-daemon/tests/orchestrator_route/`: kill the orchestrator, the session keeps running on the daemon and the link redials (FR-010)
 
 ## Phase 5: User Story 1 — lists show every daemon's rows (P1)
 

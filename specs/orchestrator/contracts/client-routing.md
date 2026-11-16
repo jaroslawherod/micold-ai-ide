@@ -26,6 +26,20 @@ orchestrator checks that header `req` equals the inner message's `req` (a mismat
 `Malformed`); opaque frames are not decoded, so their header is trusted as sent. On answers from
 a daemon, header `req` is set by the daemon link from the answer's `req`.
 
+An opaque frame whose inner part is empty means "this conn ends": a client sends it to close a
+conn, and a daemon sends it when its connection for that conn closed (the client then gets
+`StreamEnded { reason: "closed" }`).
+
+Examples (the test `client_routing_contract` decodes every fence labelled `client-example`):
+
+```json client-example request
+{"target":"build-box","conn":7,"seq":2,"msg":{"Ping":{"nonce":9}}}
+```
+
+```json client-example opaque-header
+{"target":"build-box","conn":7,"seq":3,"req":12}
+```
+
 A conn is the client's choice, per target. The first frame on a new `(target, conn)` opens a route;
 the inner stream on it starts with the client's `Hello` to the daemon, exactly as on a direct
 socket.
@@ -34,9 +48,13 @@ socket.
 
 | Target | Answer on that conn |
 |---|---|
-| unknown daemon id | `OperationError { kind: not_found }` for the `req`, or `StreamEnded { reason: not_found }` when there is none |
-| `needs-update` | `OperationError { kind: refused, message: "needs-update" }` |
-| `offline` | `OperationError { kind: refused, message: "offline" }` |
+| unknown daemon id | `OperationError { kind: not_found }` for the `req`, or `StreamEnded { reason: "not_found" }` when there is none |
+| `needs-update` | `OperationError { kind: refused, message: "needs-update" }`, or `StreamEnded { reason: "needs-update" }` |
+| `offline` | `OperationError { kind: refused, message: "offline" }`, or `StreamEnded { reason: "offline" }` |
+
+```json client-example refusal
+{"target":"nowhere","conn":1,"seq":2,"req":3,"msg":{"OperationError":{"req":3,"kind":"NotFound","message":"unknown daemon","detail":null}}}
+```
 
 ## 4. Lists (FR-001, FR-002)
 
@@ -58,12 +76,27 @@ Answer: `OrchListed { req, rows, missing: [{daemon, reason}], no_daemons }`.
   not yet answered, then `StreamEnded { reason: "daemon-offline" }`. Nothing is retried. The client
   re-reads and re-attaches when the daemon is listed online again.
 - Client drop: the orchestrator closes that client's link conns; the daemon sees a client leave.
+- `StreamEnded.reason` is one of `daemon-offline`, `slow-consumer`, `client-gone`, `closed`,
+  `not_found`, `needs-update`, `offline`.
+
+```json client-example stream-ended
+{"target":"build-box","conn":7,"seq":9,"msg":{"StreamEnded":{"reason":"daemon-offline"}}}
+```
+
+```json client-example outcome-unknown
+{"target":"build-box","conn":7,"seq":10,"req":11,"msg":{"OutcomeUnknown":{"req":11}}}
+```
 
 ## 6. Worked example
 
 Client asks for sessions; `build-box` is offline:
 
-```json
-{"conn":0,"seq":1,"msg":{"OrchList":{"req":5,"kind":"sessions"}}}
-{"conn":0,"seq":1,"msg":{"OrchListed":{"req":5,"rows":{"sessions":[{"daemon":"local","id":"s1"}]},"missing":[{"daemon":"build-box","reason":"offline"}],"no_daemons":false}}}
+```json client-example orch-list
+{"conn":0,"seq":1,"req":5,"msg":{"OrchList":{"req":5,"kind":"sessions"}}}
 ```
+
+```json client-example orch-listed
+{"conn":0,"seq":1,"req":5,"msg":{"OrchListed":{"req":5,"rows":{"sessions":[]},"missing":[{"daemon":"build-box","reason":"offline"}],"no_daemons":false}}}
+```
+
+(A row is a full `SessionSummary` with its `daemon` ref; the example has none.)

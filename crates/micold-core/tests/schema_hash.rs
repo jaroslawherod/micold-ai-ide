@@ -348,8 +348,9 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// (`ConfigRequest`, `Config`, `ConfigChanged`); 75 → 76 for #1533's `ConfigStatus.startup`;
 /// 76 → 77 for #1535's `ConfigStatus.tokens`; 77 → 78 for #1723's daemon-qualified rows.
 /// 78 → 79 for #1530's retired grant messages; 79 → 80 for #1723's project rows; 80 → 81 for #1724's
-/// `LinkPing`/`LinkPong`; 81 → 82 for #1859's `WorktreeSnapshot.parent`.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 82;
+/// `LinkPing`/`LinkPong`; 81 → 82 for #1859's `WorktreeSnapshot.parent`; 82 → 83 for #1726's client
+/// routing (`OrchList`, `OrchListed`, `StreamEnded`, `OutcomeUnknown`).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 83;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
