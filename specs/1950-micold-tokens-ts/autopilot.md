@@ -40,17 +40,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | design | f6e05888740451cc3632bbef42831b4ac109f394 | 02f657f9:ad8718a6 | CHANGES (F1-F5 applied; reviewer dispatched by orchestrator) |
 | Plan | 2 | design | 51bb656aa43d866d8c1d18c5cc0acd1fe192a766 | 45c94fb0:955e5cb1 | CLEAN (sonnet re-review, dispatched by orchestrator) |
 | Tasks | 1 | design | 02504dfad970ca6a8acecac160a7576d8d07fc10 | f4413c54:bc96b57c | CLEAN (3 MINOR applied; dispatched by orchestrator) |
+| M1 B | 1 | diff | 9b31e0ac4 | 9b31e0ac4 | MINOR-ONLY (F1-F3 applied; sonnet, dispatched by orchestrator) |
 | Diff A (self, no Agent tool) | 1 | M1 origin/main...HEAD | HEAD | - | CLEAN (1 MINOR applied: `named()` depth arg simplified; checked: colours vs stylesheet, atomic write, tables byte-identical CSS; typeScale has no `font` since no font token exists, recorded in drift-M1.md) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-| #1995 | design | merged | (squash on main) |
+| — | — | — | none |
 
 ## Handover
 
-M1 implemented and committed locally (T001-T009 ticked, review A recorded, plan-drift clean, pr-M1.md written). Not pushed: the auto-mode classifier denied `git push` (and my write of the gate-ok marker, because the full `scripts/gate.sh` could not finish: disk quota, workspace test link). Next: orchestrator pushes `claude/project-thread-wlrb6d` (or runs the full gate where disk allows), opens the PR from pr-M1.md, runs review B.
+M1 implemented, orchestrator ran full gate (all green except ssh-keygen-missing env test), review B (sonnet) MINOR-ONLY, F1-F3 applied. Next: PR, merge on green, then M2 in a fresh thread.
 
 ## Open escalation
 
