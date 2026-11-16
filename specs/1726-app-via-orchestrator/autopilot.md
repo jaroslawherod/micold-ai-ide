@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
-- **Phase**: plan (M4)
-- **Next step**: plan (M4 amendment) review round 1, then M4 tasks, then M4 milestone unit, then close
+- **Phase**: tasks (M4)
+- **Next step**: plan (M4) r2 review and tasks (M4) r1 review, then M4 milestone unit, then close
 - **PR**: none
 
 ## Pull requests
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection (host only) | #2007 | merged |
-| M4 | TBD | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to plan |
+| M4 | T023–T032 | full | SSH, container and Kubernetes daemons routed through the orchestrator (FR-007 in full) | | to review |
 
 ## Decisions
 
@@ -59,6 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
 | code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
 | plan (M4) | 1 | M4 amendment | 7c108cf44e1683840bf89b351db2dee83f951f2c | a1a5c51dd66f08fa5d7abcc922b1d82d456b4643:7c108cf44e1683840bf89b351db2dee83f951f2c | CHANGES (1 MAJOR Windows exception removed, Linux only #1897; 3 MINOR fixed: platform wording, orchestrator_link unconditional, drift-M3 correction) |
+| plan (M4) | 2 | M4 amendment | 979a3cb6dc220061f18bb1047ba34e49b72fb48f | 82585ae2076bce904f57eb42cf8e961869a5d6af:979a3cb6dc220061f18bb1047ba34e49b72fb48f | pending (orchestrator dispatches; fix diff from 7c108cf44) |
 
 ## Declined review findings
 
@@ -66,8 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 
 ## Handover
-
-Plan amendment for M4 committed (plan.md *Amendment*, research R7: all three placements already bridge with the #1725 `-R`; swap the bridge for a `remote hold-link` holder and route by wire id; Windows keeps the direct bridge, decision 5). Next: plan (M4) review round 1 on snapshot a1a5c51dd:7c108cf44, then append T023+ to tasks.md and the M4 milestone, tasks review. Cloud: no mise/gh; scripts/tests/*.test.sh only via gate.sh.
+Plan (M4) r1 fixes committed (979a3cb6d); M4 tasks T023–T032 appended. Next: plan r2 and tasks r1 reviews, then the M4 milestone unit. Cloud: no mise/gh.
 
 ## Open escalation
 
