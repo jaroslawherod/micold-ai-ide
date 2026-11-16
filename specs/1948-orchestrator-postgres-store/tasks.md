@@ -157,25 +157,25 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: the same suite passes on PostgreSQL in CI (US1 scenario 1; FR-012, SC-004).
 
-- [ ] T026 [P] [US1] Postgres factory in `store_support.rs`: reads `MICOLD_TEST_POSTGRES_URL`, each
+- [x] T026 [P] [US1] Postgres factory in `store_support.rs`: reads `MICOLD_TEST_POSTGRES_URL`, each
   test creates and drops its own database; unset prints `skipped: MICOLD_TEST_POSTGRES_URL not set`,
   and fails instead when `MICOLD_REQUIRE_POSTGRES=1`; every shared-suite case runs on it.
-- [ ] T027 [P] [US1] Test in `store_migrations.rs`: `migrations/postgres/` and `migrations/sqlite/`
+- [x] T027 [P] [US1] Test in `store_migrations.rs`: `migrations/postgres/` and `migrations/sqlite/`
   list the same versions and descriptions; and (red, before T029) a store-level case that opening a
   refused local port returns `StoreError::Unavailable` carrying `host:port`, with no password in its
   `Display` (FR-016).
-- [ ] T028 [US1] `crates/micold-daemon/migrations/postgres/0001_orchestrator_schema.sql`: same schema,
+- [x] T028 [US1] `crates/micold-daemon/migrations/postgres/0001_orchestrator_schema.sql`: same schema,
   `BIGSERIAL PRIMARY KEY` for `audit_log.seq`, a `plpgsql` function plus `CREATE TRIGGER` raising
   `audit_log is append-only` on `BEFORE UPDATE OR DELETE`, no `GRANT`.
-- [ ] T029 [US1] `db/migrate.rs` and `db/mod.rs`: a `MIGRATOR` per backend, `PgConnectOptions` from
+- [x] T029 [US1] `db/migrate.rs` and `db/mod.rs`: a `MIGRATOR` per backend, `PgConnectOptions` from
   the URL (with `ca_file`: `ssl_root_cert` and `VerifyFull`; without: `prefer`), `pool_size`,
   `install_default_drivers`; adjust any statement in `db/registry.rs`, `db/auth.rs`, `db/audit.rs`
   whose form differs per dialect; an unreachable server maps to `StoreError::Unavailable` carrying
   `host:port` and the driver cause with the URL stripped (T027's unreachable case green).
-- [ ] T030 [P] [US1] `.github/workflows/ci.yml`: `services: postgres` (`postgres:17`, user, password and
+- [x] T030 [P] [US1] `.github/workflows/ci.yml`: `services: postgres` (`postgres:17`, user, password and
   db as job env, `pg_isready` health check, port 5432) on the `test` job, with
   `MICOLD_TEST_POSTGRES_URL` and `MICOLD_REQUIRE_POSTGRES=1`.
-- [ ] T031 [P] [US1] `docs/development/ci-pipeline.md`: note the Postgres service container and the
+- [x] T031 [P] [US1] `docs/development/ci-pipeline.md`: note the Postgres service container and the
   `MICOLD_REQUIRE_POSTGRES` rule.
 
 ---

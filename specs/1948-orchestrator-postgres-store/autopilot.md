@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-3al8kt
+- **Worktree branch**: claude/project-thread-q3eky9
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: orchestrator runs review B on M3, opens the PR, then M4
+- **Next step**: M4 PR #1997: wait for green `ci complete`, squash-merge
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1967 | Design (spec, plan, tasks) | merged | f5f8e812a |
 | #1970 | M1 | merged | bfb463f60 |
 | #1980 | M2 | merged | 952b8a818 |
+| #1992 | M3 | merged | b3f47d077 |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
-| M3 | T021–T025 | full | SQLite auth and audit stores | none yet (body: pr-M3.md) | implemented, awaiting review B and PR |
-| M4 | T026–T031 | full | PostgreSQL store and CI service container | | pending |
+| M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
+| M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | review |
 | M5 | T032–T035 | full | Migration safety | | pending |
 | M6 | T036–T038 | full | No private key in any table | | pending |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
@@ -56,6 +57,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A | 1 | M1 diff (code-review high, run by the unit: no Agent tool) | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN (1 MINOR noted as a follow-up) |
 | M1 A | 1 | M1 diff | 6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | 311e34200b5cce2ae68cd49c3a73e1e8bd98ffea:6d4d88cadd058fbd51cb0e2c2de1ebbf21dae2c9 | CLEAN |
 | M2 A | 1 | M2 diff (code-review high, run by the unit: no Agent tool) | 1c5e8c6bda32fc3ca960ce3a62d7282506a25826 | (see commit) | CHANGES: 0 BLOCKER, 3 MAJOR-ish (non-ASCII URL, SQLITE_BUSY as Refused, save lock upgrade) all fixed with 4 MINOR; 3 declined (see below) |
+| M4 A | 1 | M4 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CLEAN (1 MINOR fixed: long doc comments; noted: one-character password redaction is over-eager, safe) |
+| M4 B | 1 | M4 diff (conformance, sonnet, run by the orchestrator) | b4a39c7c3 | (see commit) | MINOR-ONLY (one-char password redaction garbles text; CI postgres creds duplicated; error-arm tests test-after, recorded) |
 | M3 A | 1 | M3 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CLEAN (1 MINOR fixed: `put_refresh` dropped `revoked_at`; noted: PostgreSQL `ORDER BY id` collation may differ from the memory order, M4) |
 | M1 B | 1 | M1 | 7e2b729df2134721ab66d77f85e9f3b65a3422c6 | ffae1d956ca5a1bf2f113872c8d6ce62e5df7d1c:7e2b729df2134721ab66d77f85e9f3b65a3422c6 | CLEAN (2 MINOR: test-after cycle 3 accepted as recorded; redeem_invite unknown user -> M3 follow-up) |
 | M2 B | 1 | M2 | 60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | 5b6a0087c24bfaa47a2eee1e527d2ff41066c334:60bc1cfd3c813ffadbb45340e45bcd0d2b3670f3 | CHANGES: 1 MAJOR (cycle 2 no red for review A fixes), fixed by red-by-revert evidence; 1 MINOR (db/ blanket skip in no_outbound scan) declined |
@@ -77,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 implemented and gated on the branch (T021-T025 ticked): `db/auth.rs`, `db/audit.rs`, SQLite factory for the shared suite, `store_scan.rs`, `store_sql_errors.rs`; `MemoryAuthStore::redeem_invite` and the contract now refuse an unknown redeeming user; `rotate_refresh` commits the family revocation then refuses. Review A run inline (CLEAN). Next: the orchestrator runs review B, opens the PR from `pr-M3.md` (label docs-not-needed), waits for CI, merges; then M4 (PostgreSQL store). M4 notes: `ORDER BY id` in `users()` must match the memory order (BINARY collation); `begin_write`'s no-op `DELETE FROM bootstrap WHERE 1 = 0` works on PostgreSQL too; `INSERT ... RETURNING` is used by `append`.
+M4 implemented (T026–T031 ticked), review A clean, gate green with local PostgreSQL; PR body `specs/1948-orchestrator-postgres-store/pr-M4.md`. Next: orchestrator opens the PR, runs review B, waits on CI (the `test` job now needs the postgres service). Then M5.
 
 ## Open escalation
 
