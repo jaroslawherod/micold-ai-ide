@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1950
 - **Worktree branch**: claude/project-thread-rib1g7
 - **Started**: 2026-11-16
-- **Phase**: plan
-- **Next step**: plan re-review round 2 (sonnet, orchestrator dispatches), then tasks unit
+- **Phase**: tasks
+- **Next step**: tasks review round 1 (opus, orchestrator dispatches; rubrics/tasks.md), then analyze/checklists/specs-only gate/design PR
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T009 | full | generated `tokens.generated.ts` from `micold-tokens-ts` | — | pending |
+| M2 | T010–T012 | light | gate drift check | — | pending |
 
 ## Decisions
 
@@ -35,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | spec.md, checklists/requirements.md | bce68e6d | 5776ddfe:bce68e6d | CHANGES (F1-F4 applied; reviewer dispatched by orchestrator, units lack Agent) |
 | Spec | 2 | design | f46586fdb3937f46e2f8225cab947dbaec854c6f | f46586fdb | CLEAN (sonnet re-review, dispatched by orchestrator) |
 | Plan | 1 | design | f6e05888740451cc3632bbef42831b4ac109f394 | 02f657f9:ad8718a6 | CHANGES (F1-F5 applied; reviewer dispatched by orchestrator) |
+| Plan | 2 | design | 51bb656aa43d866d8c1d18c5cc0acd1fe192a766 | 45c94fb0:955e5cb1 | CLEAN (sonnet re-review, dispatched by orchestrator) |
 
 ## Declined review findings
 
