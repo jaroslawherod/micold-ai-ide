@@ -39,6 +39,7 @@ fn a_raw_delete_from_the_audit_log_fails() {
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn postgres_refuses_a_raw_update_or_delete_of_the_audit_log() {
     let Some(db) = super::store_support::PostgresDatabase::create() else {
         return;
@@ -333,6 +334,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_reassign_moves_projects_and_sessions_of_one_tenant() {
         reassign_moves_projects_and_sessions_of_one_tenant::<PostgresBackend>();
     }
@@ -343,6 +345,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_tables_carry_tenant_and_owner() {
         every_table_has_a_tenant_and_the_owned_ones_an_owner::<PostgresBackend>();
     }
@@ -353,6 +356,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_holds_no_key_material() {
         every_suite_case_then_every_method::<PostgresBackend>();
     }
@@ -363,6 +367,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_scan_finds_a_pem_block() {
         a_pem_block_in_a_free_text_field_is_found::<PostgresBackend>();
     }

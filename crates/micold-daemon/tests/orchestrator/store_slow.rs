@@ -51,6 +51,7 @@ fn an_unreachable_host_fails_the_start_naming_host_and_cause_not_the_password() 
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn a_url_file_opens_postgres_with_its_whitespace_trimmed() {
     let Some(database_on_server) = PostgresDatabase::create() else {
         return;
@@ -70,6 +71,7 @@ fn a_url_file_opens_postgres_with_its_whitespace_trimmed() {
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn a_database_lost_after_start_fails_calls_and_the_next_call_after_it_returns_succeeds() {
     // Created and dropped outside the runtime: both run their own.
     let Some(database_on_server) = PostgresDatabase::create() else {
@@ -196,6 +198,7 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
 /// every connection; a daemon still links, and the failed save is reported on stderr as a change
 /// that could not be saved, without the password.
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn a_save_lost_with_the_database_is_reported_on_stderr_without_the_password() {
     // Created and dropped outside the runtime: both run their own.
     let Some(database_on_server) = PostgresDatabase::create() else {

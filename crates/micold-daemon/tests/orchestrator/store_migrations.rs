@@ -322,6 +322,7 @@ fn a_missing_ca_file_is_unavailable() {
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn opening_postgres_applies_the_v1_schema_once() {
     let Some(db) = super::store_support::PostgresDatabase::create() else {
         return;

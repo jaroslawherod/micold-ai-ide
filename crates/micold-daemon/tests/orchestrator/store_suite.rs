@@ -226,8 +226,14 @@ pub(super) fn reassign_unowned_moves_the_tenants_unowned_records_once(backend: &
 }
 
 macro_rules! registry_tests {
+    (postgres: $make:expr) => {
+        registry_tests!(@cases [cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")] $make);
+    };
     ($make:expr) => {
-        registry_tests!(@each $make,
+        registry_tests!(@cases [cfg_attr(any(), ignore)] $make);
+    };
+    (@cases $attr:tt $make:expr) => {
+        registry_tests!(@each $attr $make,
             upsert_inserts_then_updates,
             remove_reports_whether_a_record_went,
             save_replaces_the_whole_set_across_tenants,
@@ -239,9 +245,10 @@ macro_rules! registry_tests {
             reassign_unowned_moves_the_tenants_unowned_records_once
         );
     };
-    (@each $make:expr, $($case:ident),+) => {
+    (@each $attr:tt $make:expr, $($case:ident),+) => {
         $(
             #[test]
+            #$attr
             fn $case() {
                 let Some(mut backend) = $make else { return };
                 super::$case(&mut backend);
@@ -565,8 +572,14 @@ pub(super) fn two_tenants_on_one_backend_see_disjoint_rows(backend: &mut impl Fu
 }
 
 macro_rules! auth_tests {
+    (postgres: $make:expr) => {
+        auth_tests!(@cases [cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")] $make);
+    };
     ($make:expr) => {
-        auth_tests!(@each $make,
+        auth_tests!(@cases [cfg_attr(any(), ignore)] $make);
+    };
+    (@cases $attr:tt $make:expr) => {
+        auth_tests!(@each $attr $make,
             users_are_created_read_listed_and_soft_removed,
             an_identity_links_to_one_user,
             an_invite_is_redeemed_once,
@@ -576,9 +589,10 @@ macro_rules! auth_tests {
             two_tenants_on_one_backend_see_disjoint_rows
         );
     };
-    (@each $make:expr, $($case:ident),+) => {
+    (@each $attr:tt $make:expr, $($case:ident),+) => {
         $(
             #[test]
+            #$attr
             fn $case() {
                 let Some(mut backend) = $make else { return };
                 super::$case(&mut backend);
@@ -661,17 +675,24 @@ pub(super) fn audit_entries_are_per_tenant_and_survive_reopen(backend: &mut impl
 }
 
 macro_rules! audit_tests {
+    (postgres: $make:expr) => {
+        audit_tests!(@cases [cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")] $make);
+    };
     ($make:expr) => {
-        audit_tests!(@each $make,
+        audit_tests!(@cases [cfg_attr(any(), ignore)] $make);
+    };
+    (@cases $attr:tt $make:expr) => {
+        audit_tests!(@each $attr $make,
             append_returns_a_strictly_increasing_seq,
             recent_is_newest_first_by_keyset,
             by_actor_filters_and_orders_newest_first,
             audit_entries_are_per_tenant_and_survive_reopen
         );
     };
-    (@each $make:expr, $($case:ident),+) => {
+    (@each $attr:tt $make:expr, $($case:ident),+) => {
         $(
             #[test]
+            #$attr
             fn $case() {
                 let Some(mut backend) = $make else { return };
                 super::$case(&mut backend);
@@ -697,9 +718,9 @@ mod sqlite {
 }
 
 mod postgres {
-    registry_tests!(super::PostgresBackend::new());
-    auth_tests!(super::PostgresBackend::new());
-    audit_tests!(super::PostgresBackend::new());
+    registry_tests!(postgres: super::PostgresBackend::new());
+    auth_tests!(postgres: super::PostgresBackend::new());
+    audit_tests!(postgres: super::PostgresBackend::new());
 }
 
 // ---- the orchestrator on a SQL store ----

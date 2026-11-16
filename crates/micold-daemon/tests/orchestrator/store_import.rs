@@ -65,8 +65,7 @@ impl World {
     }
 }
 
-/// Run `case` on SQLite, then on PostgreSQL when a server is configured.
-fn on_both(case: impl Fn(&World)) {
+fn on_sqlite(case: impl Fn(&World)) {
     let data_dir = tempfile::tempdir().unwrap();
     let db = StoreHandle::open_sqlite(data_dir.path()).unwrap();
     case(&World {
@@ -74,104 +73,116 @@ fn on_both(case: impl Fn(&World)) {
         db,
         _postgres: None,
     });
-    if let Some(postgres) = PostgresDatabase::create() {
-        let db = postgres.open();
-        case(&World {
-            data_dir: tempfile::tempdir().unwrap(),
-            db,
-            _postgres: Some(postgres),
-        });
-    }
 }
+
+fn on_postgres(case: impl Fn(&World)) {
+    let postgres = PostgresDatabase::create().expect("MICOLD_TEST_POSTGRES_URL is set");
+    let db = postgres.open();
+    case(&World {
+        data_dir: tempfile::tempdir().unwrap(),
+        db,
+        _postgres: Some(postgres),
+    });
+}
+
+/// A test per backend for each case: `<case>::sqlite`, and `<case>::postgres`, ignored when no
+/// PostgreSQL server is configured.
+macro_rules! on_both {
+    ($($case:ident),+ $(,)?) => {$(
+        mod $case {
+            #[test]
+            fn sqlite() {
+                super::on_sqlite(super::$case);
+            }
+
+            #[test]
+            #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
+            fn postgres() {
+                super::on_postgres(super::$case);
+            }
+        }
+    )+};
+}
+
+on_both!(
+    an_unimported_file_imports_every_record_under_its_tenant_and_is_renamed,
+    an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned,
+    a_second_start_imports_nothing_and_changes_nothing,
+    a_corrupt_file_fails_naming_it_and_imports_nothing,
+    rows_without_a_matching_marker_refuse_naming_the_file_and_the_row_count,
+    rows_plus_a_marker_matching_the_file_only_rename,
+);
 
 fn mode(path: &Path) -> u32 {
     std::fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
-#[test]
-fn an_unimported_file_imports_every_record_under_its_tenant_and_is_renamed() {
-    on_both(|world| {
-        let records = [record("acme", "d1"), record("default", "d2")];
-        world.write_json(&records);
-        let before = mode(&world.json());
-        assert_eq!(world.import().unwrap(), Imported::Records(2));
-        assert_eq!(world.rows(), keys(&records));
-        assert!(!world.json().exists());
-        assert_eq!(mode(&world.imported()), before);
-    });
+fn an_unimported_file_imports_every_record_under_its_tenant_and_is_renamed(world: &World) {
+    let records = [record("acme", "d1"), record("default", "d2")];
+    world.write_json(&records);
+    let before = mode(&world.json());
+    assert_eq!(world.import().unwrap(), Imported::Records(2));
+    assert_eq!(world.rows(), keys(&records));
+    assert!(!world.json().exists());
+    assert_eq!(mode(&world.imported()), before);
 }
 
-#[test]
-fn an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned() {
-    on_both(|world| {
-        let mut owned = record("default", "d1");
-        owned.owner = OwnerId::parse("alice");
-        world.write_json(&[owned, record("default", "d2")]);
-        assert_eq!(world.import().unwrap(), Imported::Records(2));
-        let loaded = SqlRegistryStore::new(Arc::clone(&world.db)).load().unwrap();
-        let owners: Vec<&str> = loaded.iter().map(|r| r.owner.as_str()).collect();
-        assert_eq!(owners, ["alice", "unowned"]);
-    });
+fn an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned(world: &World) {
+    let mut owned = record("default", "d1");
+    owned.owner = OwnerId::parse("alice");
+    world.write_json(&[owned, record("default", "d2")]);
+    assert_eq!(world.import().unwrap(), Imported::Records(2));
+    let loaded = SqlRegistryStore::new(Arc::clone(&world.db)).load().unwrap();
+    let owners: Vec<&str> = loaded.iter().map(|r| r.owner.as_str()).collect();
+    assert_eq!(owners, ["alice", "unowned"]);
 }
 
-#[test]
-fn a_second_start_imports_nothing_and_changes_nothing() {
-    on_both(|world| {
-        world.write_json(&[record("acme", "d1")]);
-        world.import().unwrap();
-        let imported = std::fs::read(world.imported()).unwrap();
-        assert_eq!(world.import().unwrap(), Imported::Nothing);
-        assert_eq!(world.rows(), keys(&[record("acme", "d1")]));
-        assert_eq!(std::fs::read(world.imported()).unwrap(), imported);
-    });
+fn a_second_start_imports_nothing_and_changes_nothing(world: &World) {
+    world.write_json(&[record("acme", "d1")]);
+    world.import().unwrap();
+    let imported = std::fs::read(world.imported()).unwrap();
+    assert_eq!(world.import().unwrap(), Imported::Nothing);
+    assert_eq!(world.rows(), keys(&[record("acme", "d1")]));
+    assert_eq!(std::fs::read(world.imported()).unwrap(), imported);
 }
 
-#[test]
-fn a_corrupt_file_fails_naming_it_and_imports_nothing() {
-    on_both(|world| {
-        std::fs::create_dir_all(world.json().parent().unwrap()).unwrap();
-        std::fs::write(world.json(), "{ not json").unwrap();
-        let error = world.import().unwrap_err();
-        assert!(
-            matches!(&error, StoreError::Corrupt { path, .. } if *path == world.json()),
-            "{error:?}"
-        );
-        assert!(error
-            .to_string()
-            .contains(&world.json().display().to_string()));
-        assert!(world.rows().is_empty());
-        assert!(world.json().exists() && !world.imported().exists());
-    });
+fn a_corrupt_file_fails_naming_it_and_imports_nothing(world: &World) {
+    std::fs::create_dir_all(world.json().parent().unwrap()).unwrap();
+    std::fs::write(world.json(), "{ not json").unwrap();
+    let error = world.import().unwrap_err();
+    assert!(
+        matches!(&error, StoreError::Corrupt { path, .. } if *path == world.json()),
+        "{error:?}"
+    );
+    assert!(error
+        .to_string()
+        .contains(&world.json().display().to_string()));
+    assert!(world.rows().is_empty());
+    assert!(world.json().exists() && !world.imported().exists());
 }
 
-#[test]
-fn rows_without_a_matching_marker_refuse_naming_the_file_and_the_row_count() {
-    on_both(|world| {
-        SqlRegistryStore::new(Arc::clone(&world.db))
-            .upsert(&record("acme", "linked"))
-            .unwrap();
-        world.write_json(&[record("acme", "d1"), record("acme", "d2")]);
-        let error = world.import().unwrap_err().to_string();
-        assert!(
-            error.contains(&world.json().display().to_string()),
-            "{error}"
-        );
-        assert!(error.contains("already has 1 row(s)"), "{error}");
-        assert_eq!(world.rows(), keys(&[record("acme", "linked")]));
-        assert!(world.json().exists() && !world.imported().exists());
-    });
+fn rows_without_a_matching_marker_refuse_naming_the_file_and_the_row_count(world: &World) {
+    SqlRegistryStore::new(Arc::clone(&world.db))
+        .upsert(&record("acme", "linked"))
+        .unwrap();
+    world.write_json(&[record("acme", "d1"), record("acme", "d2")]);
+    let error = world.import().unwrap_err().to_string();
+    assert!(
+        error.contains(&world.json().display().to_string()),
+        "{error}"
+    );
+    assert!(error.contains("already has 1 row(s)"), "{error}");
+    assert_eq!(world.rows(), keys(&[record("acme", "linked")]));
+    assert!(world.json().exists() && !world.imported().exists());
 }
 
-#[test]
-fn rows_plus_a_marker_matching_the_file_only_rename() {
-    on_both(|world| {
-        let records = [record("acme", "d1")];
-        world.write_json(&records);
-        world.import().unwrap();
-        // A crash after the import transaction, before the rename.
-        std::fs::rename(world.imported(), world.json()).unwrap();
-        assert_eq!(world.import().unwrap(), Imported::RenamedOnly);
-        assert_eq!(world.rows(), keys(&records));
-        assert!(!world.json().exists() && world.imported().exists());
-    });
+fn rows_plus_a_marker_matching_the_file_only_rename(world: &World) {
+    let records = [record("acme", "d1")];
+    world.write_json(&records);
+    world.import().unwrap();
+    // A crash after the import transaction, before the rename.
+    std::fs::rename(world.imported(), world.json()).unwrap();
+    assert_eq!(world.import().unwrap(), Imported::RenamedOnly);
+    assert_eq!(world.rows(), keys(&records));
+    assert!(!world.json().exists() && world.imported().exists());
 }
