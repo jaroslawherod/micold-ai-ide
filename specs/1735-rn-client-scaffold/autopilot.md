@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-hzt36f
 - **Started**: 2026-11-16
-- **Phase**: clarify done
-- **Next step**: plan unit
+- **Phase**: plan done (review pending (orchestrator))
+- **Next step**: orchestrator runs the fresh plan review (rubrics/plan.md), then tasks unit
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | Spec | 1 | spec.md | 7180aecdec89025cc8196b00a2f59e84ddce08e2 | e4eb498403faa61c433088be59dc8d505a145b5f:f6aa5b80601f9ce5ef93caddda0c35d1c1c1435e | CLEAN (3 minor F1-F3 applied in clarify) |
+| Plan | 1 | plan.md, research.md, data-model.md, contracts/ | - | - | review pending (orchestrator) |
 
 ## Declined review findings
 
