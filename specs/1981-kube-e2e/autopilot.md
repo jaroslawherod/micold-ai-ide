@@ -11,19 +11,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ltu9ny
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M1 (#1982): full local gate not run (about 5 GB of free disk); orchestrator dispatches review B, opens the PR from specs/1981-kube-e2e/pr-M1.md, waits on CI (kube-chart runs live for the first time: helm/kubeconform pins and the image build are proven only there).
+- **Next step**: M2 (#1983) milestone unit, in a fresh thread (`/speckit-autopilot resume`).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1991 | M1 | merged | a6fc96478a60ddf1960e98ff83ebce27ddc7fb09 |
 | #1987 | Design | merged | 6c2819edede47166c5034a37335c7c62c775fa4d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | review A CLEAN (r3), review B CLEAN; CI pending |
+| M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
 | M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | pending |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | pending |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
@@ -62,8 +63,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 merged as a6fc96478 (PR #1991, 2026-11-16). Main moved three times during M1's CI; the merges in were resolved by the orchestrator:
+- #1948 added `orchestrator --config <path>` (daemon.toml with `[database]`). `config.rs` now has `OrchestratorArgs::parse` (`--data-dir`, `--socket`, `--config`) and `OrchestratorConfig::resolve`; data dir precedence is flag > env > the file's data_dir > user default (`FileDefaults` in `orchestrator/mod.rs`). Merge reviewed by a sonnet reviewer: CLEAN.
+- #1735 added the `client` verdict: `classify-change.sh` `verdict` now takes `[client] [kube_paths]` as args 5 and 6.
+Next: M2 (#1983), tasks T010–T015. Units have no Agent tool in cloud: the orchestrator dispatches review B.
 
 ## Open escalation
 
@@ -71,6 +74,8 @@ None.
 
 ## Follow-ups not done
 
+- Implicit `<data_dir>/daemon.toml` lookup in `orchestrator::configured` uses the user's data dir even when `--data-dir`/env is set (main's behaviour; merge review MINOR). Consider skipping it when a data dir is given, so a container never reads `$HOME`.
+- Chart `state.mode` refuses `sqlite`/`postgres` naming #1948/#1740; #1948's store has merged since, so revisit which modes the chart can render (M2+ or #1740).
 - #1740: publish `micold-orchestrator` (and `micold-web`) images from the release workflow and keep `deploy/helm/micold/Chart.yaml` `appVersion` in step with releases (M1 review A, declined there).
 
 ## Plan notes
