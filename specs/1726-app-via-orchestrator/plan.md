@@ -140,6 +140,49 @@ and registry; the reusable, render-free parts (route table, list merge, envelope
 M1 to M3 leave the app as it is (direct connections still work: the daemon's own listener is
 untouched), so each merges green on its own. M4 is the only desktop change.
 
+## Amendment: provisioned daemons through the orchestrator (tasks M4)
+
+Added 2026-11-16 after M3 (#2007) shipped the host daemon only (drift-M3.md, *Scope narrowed*);
+jaro chose to finish FR-007 for SSH, container and Kubernetes placements in one more milestone.
+Research R7 has the route per placement and the alternatives.
+
+- **Route (all three placements, R7)**: the existing #1725 reverse forward. Containers and pods are
+  already reached over SSH with a pinned reach (`container_options`, the pod's relay on
+  `127.0.0.1:<port>`), and all three `ProvisionOptions` already carry `link: orchestrator_link()`,
+  so every provisioned daemon on a Unix client already dials the orchestrator through `-R`. No new
+  transport, no dial-out to a TCP address, no new kube port-forward.
+- **What changes**: the bridge (`micold-daemon remote bridge`) is today both the holder of the
+  `-R` and the actor's daemon client connection. Provisioning keeps it as is up to the handshake
+  (version check, install on mismatch: that connection is part of provisioning, FR-007 keeps it).
+  Then the app closes it and opens a **link holder**: the same `ssh` argv with the admitted link
+  (`ExitOnForwardFailure=yes`) running a new remote subcommand `micold-daemon remote hold-link`,
+  which opens no daemon connection, prints `ready` and waits for stdin EOF. The actor then opens a
+  route to the daemon's wire id on the one orchestrator connection and handshakes on it, retrying
+  while the orchestrator answers `not_found` (the daemon's link not up yet) until a 10 s deadline,
+  the loop `host_routed` already runs for `local`.
+- **Lifetime**: the actor owns the holder (and, for a pod, the relay it rides on) for as long as its
+  route lives. A dead holder drops the daemon's link, the orchestrator ends the route with
+  `daemon offline`, and the actor's existing reconnect re-provisions, as a dead bridge does today.
+- **Failure**: a refused link (`LinkRefusal`, e.g. a user's `ssh_config` forward) or a passed
+  deadline fails the connect with the cause in the daemon's status cell; no fallback to the direct
+  bridge (FR-007).
+- **Windows clients**: `orchestrator_link()` is `None` there (a named pipe cannot be the local end
+  of `-R`, #1725), so no provisioned daemon can reach the orchestrator. Those actors keep the
+  direct bridge, as today, rather than losing every remote daemon (Principle VI); the user guide
+  names the limit. This is the one exception to FR-007, recorded as ledger decision 5.
+- **Code**: `crates/micold-core/src/ssh/argv.rs` (`hold_link` argv, shares `bridge_with_link`'s
+  prefix), `crates/micold-core/src/provision/mod.rs` (`hold_link` step: admit the link, open the
+  holder, read `ready` or the `remote port forwarding failed` line, reusing `admit_link` and
+  `FORWARD_NOT_BOUND`), `crates/micold-daemon/src/remote.rs` (`hold-link`),
+  `crates/micold-client/src/daemon.rs` (one `routed_to(wire_id)` helper generalising
+  `host_routed`; the SSH, container and pod connect paths call it after provisioning).
+- **Tests**: core unit tests with the fake `SshHost` (holder argv carries the `-R` and
+  `ExitOnForwardFailure`, never a bridge; not-bound refusal); a daemon test for `remote hold-link`
+  (no connection to the daemon socket, exits on EOF); a client test with a real orchestrator and a
+  linked daemon announcing a non-`local` wire id (route opened before the link is up succeeds once
+  it is; deadline names the daemon). `ssh_real_link` gains a routed case (runs where sshd exists;
+  `kube_real` cannot run in the cloud and is not extended).
+
 ## Risks
 
 - **Grid frames through JSON**: avoided by the opaque form (R3); the benchmark in M3 guards it.

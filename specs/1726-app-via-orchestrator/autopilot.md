@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-0lqers
 - **Started**: 2026-11-16
-- **Phase**: milestones
-- **Next step**: plan + tasks for new milestone M4 (route SSH/container/Kubernetes placements through the orchestrator, FR-007 in full; jaro chose this 2026-11-16), then M4 milestone unit, then close
+- **Phase**: plan (M4)
+- **Next step**: plan (M4 amendment) review round 1, then M4 tasks, then M4 milestone unit, then close
 - **PR**: none
 
 ## Pull requests
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify | Who writes `[orchestrator_link]` into provisioned daemons | this feature, the app on provision (FR-013) | agent | specs/1725-daemons-dial-orchestrator/spec.md#Assumptions |
 | 3 | tasks | M1 has no observable user story (milestones rule 1) | superseded by #4: contract+core merged into the US2 milestone | agent | tasks review r1 F1 |
 | 4 | tasks | Milestones bundling two stories (rule 2) | keep combined, reasons in each milestone's Note (US4 halves and US5 have no code of their own) | agent | tasks review r1 F4 |
+| 5 | plan (M4) | Provisioned daemons on a Windows client (no `-R` for a named pipe) | keep the direct bridge there; user guide names the limit | agent | research R7, spec Clarifications (Principle VI) |
 
 ## Review rounds
 
