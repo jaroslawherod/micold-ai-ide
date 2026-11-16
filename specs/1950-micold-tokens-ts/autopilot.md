@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1950
 - **Worktree branch**: claude/project-thread-tafgoe
 - **Started**: 2026-11-16
-- **Phase**: milestones
-- **Next step**: M2 diff review (fresh reviewer dispatched by orchestrator), then open PR from specs/1950-micold-tokens-ts/pr-M2.md
+- **Phase**: done
+- **Next step**: none (run complete)
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1995 | design | merged | (squash on main) |
 | #1998 | M1 | merged | 2f6dcbead |
+| #2000 | M2 | merged | 53649a899 |
 
 ## Milestones
 
@@ -53,7 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 merged as 2f6dcbead (PR #1998). Next: M2 (T010–T012) in a fresh thread via `/speckit-autopilot resume`.
+All milestones merged (M2 as 53649a899, PR #2000). Run complete; issue #1950 closed.
 
 ## Open escalation
 
