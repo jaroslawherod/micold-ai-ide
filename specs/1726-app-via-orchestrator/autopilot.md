@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-35d9jf
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M2 (fresh thread, `/speckit-autopilot resume`)
+- **Next step**: M2 reviews (A+B) on the snapshot below, then open the M2 PR with specs/1726-app-via-orchestrator/pr-m2.md
 - **PR**: none
 
 ## Pull requests
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
-| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
+| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | implemented, review pending |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
 ## Decisions
@@ -59,7 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 merged (#1999, 2f62cbf31) 2026-11-16. Next: M2 (T014–T016) in a fresh thread from main. Note: CI flake in M1 was a real leak (VirtualConn aborted its writer, pipe never closed); fixed in 734f872.
+None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tests/*.test.sh run outside gate.sh reset this worktree's branch and cleaned untracked files once; never run them bare here.)
 
 ## Open escalation
 
