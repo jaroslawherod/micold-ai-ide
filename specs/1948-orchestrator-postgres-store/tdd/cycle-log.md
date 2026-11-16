@@ -5,7 +5,8 @@ failed before the implementation, or says why it had none.
 
 ## Baseline
 
-- suite: not run locally before M1; `origin/main` at `f5f8e812a` is CI's green merge gate.
+- suite: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` at `60277d73d` (`f5f8e812a~1`, before M1), run in M11 (T070): 49 passed, 0 failed, 0 ignored.
+- After M11 (T068, T069): the `store_` filter alone runs 197 cases, PostgreSQL included, all passing.
 
 ## M1 Cycle 1: StoreError variants and per-record defaults (T002, T004)
 

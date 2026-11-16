@@ -504,6 +504,6 @@ the audit changed no test or source.
   ordering can fail (`store_migrations.rs`, M5 cases); stop calling `map_error` and positional `INSERT`
   literals from tests (`store_migrations.rs:215-238`). Verify: the same targets pass, and swapping the
   order of the two test migrations fails the older-database case.
-- [ ] T070 Record a pre-feature baseline in `tdd/cycle-log.md` (the log's "Baseline" says no local run
+- [x] T070 Record a pre-feature baseline in `tdd/cycle-log.md` (the log's "Baseline" says no local run
   before M1): run `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` at
   `f5f8e812a~1` or note why it cannot be reproduced. Verify: the Baseline section holds a count.
