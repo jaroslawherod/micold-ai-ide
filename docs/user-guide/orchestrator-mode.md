@@ -67,8 +67,8 @@ and carries on; the last good file is kept.
 
 ## What it will not do
 
-Asking the orchestrator to start a session is refused with `not hosted by the orchestrator`, and its
-session list is empty. Sessions stay on your daemons.
+The orchestrator starts no session itself: a request to start one is passed to the daemon it names
+and runs there. Sessions stay on your daemons, and keep running if the orchestrator stops.
 
 It never dials a daemon: each daemon dials it, so a firewall or network setting that blocks outbound
 connections from the orchestrator's host changes nothing.

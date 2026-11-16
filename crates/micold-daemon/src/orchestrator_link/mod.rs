@@ -1,8 +1,10 @@
 //! The daemon's side of the orchestrator link (#1725): a background task that dials the
 //! orchestrator, announces this daemon, answers its pings and dials again when the link is lost
 //! or refused. It reads only the configuration it is given and writes only its own status cell:
-//! it takes no `DaemonState` lock a session waits on, so an orchestrator outage never touches a
-//! session (FR-008). A daemon with no `[orchestrator_link] enabled = true` spawns nothing.
+//! the link task itself takes no `DaemonState` lock a session waits on, so an orchestrator outage
+//! never touches a session (FR-008). The orchestrator's clients (#1726) arrive as routed `conn`s,
+//! each a virtual connection served by `server::serve_connection`: those lock state exactly as
+//! socket clients do, and an outage ends them as a dropped socket ends a client. A daemon with no `[orchestrator_link] enabled = true` spawns nothing.
 
 use std::collections::BTreeSet;
 use std::hash::{BuildHasher, Hasher};
@@ -18,6 +20,7 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
 pub mod dial;
+pub mod virtual_conn;
 
 use dial::Handshake;
 
@@ -83,13 +86,24 @@ impl LinkHandle {
 /// Spawn the link task when `[orchestrator_link]` is enabled with a usable endpoint; otherwise
 /// return before spawning, opening or logging anything (FR-010). Never awaited by the caller.
 pub fn spawn(config: &Arc<DaemonConfig>) -> Option<LinkHandle> {
-    spawn_as(config, announcement(config))
+    spawn_with(config, announcement(config), None)
 }
 
 /// [`spawn`], announcing `announcement` instead of the one `config` gives (a test announces
 /// another protocol version this way).
 #[doc(hidden)]
 pub fn spawn_as(config: &Arc<DaemonConfig>, announcement: LinkAnnouncement) -> Option<LinkHandle> {
+    spawn_with(config, announcement, None)
+}
+
+/// [`spawn_as`], serving the orchestrator's routed clients with `state` (#1726); with none they
+/// are ignored.
+#[doc(hidden)]
+pub fn spawn_with(
+    config: &Arc<DaemonConfig>,
+    announcement: LinkAnnouncement,
+    served: Option<Arc<crate::state::DaemonState>>,
+) -> Option<LinkHandle> {
     let link = config.orchestrator_link.as_ref().filter(|l| l.enabled)?;
     // An empty socket is refused by `config check` (L1); a daemon started with one does not dial.
     if link
@@ -106,13 +120,20 @@ pub fn spawn_as(config: &Arc<DaemonConfig>, announcement: LinkAnnouncement) -> O
         .ok()?;
     let reporter = Reporter::new();
     let state = reporter.tx.subscribe();
-    let task = tokio::spawn(run(DialAddress::Local(endpoint), announcement, reporter));
+    let task = tokio::spawn(run(
+        DialAddress::Local(endpoint),
+        announcement,
+        reporter,
+        served,
+    ));
     Some(LinkHandle { state, task })
 }
 
 /// Spawn the link task for the configuration the daemon started with, if it has one.
-pub fn spawn_for(state: &crate::state::DaemonState) -> Option<LinkHandle> {
-    spawn(&state.config_current()?)
+pub fn spawn_for(state: &Arc<crate::state::DaemonState>) -> Option<LinkHandle> {
+    let config = state.config_current()?;
+    let announcement = announcement(&config);
+    spawn_with(&config, announcement, Some(Arc::clone(state)))
 }
 
 /// What a daemon of `config` announces.
@@ -205,7 +226,12 @@ impl Reporter {
     }
 }
 
-async fn run(address: DialAddress, announcement: LinkAnnouncement, mut report: Reporter) {
+async fn run(
+    address: DialAddress,
+    announcement: LinkAnnouncement,
+    mut report: Reporter,
+    state: Option<Arc<crate::state::DaemonState>>,
+) {
     let mut policy = RetryPolicy::new();
     loop {
         let delay = match dial_address(&address).await {
@@ -215,7 +241,7 @@ async fn run(address: DialAddress, announcement: LinkAnnouncement, mut report: R
                     Ok(Handshake::Linked(framed)) => {
                         policy.on_linked();
                         report.set(LinkStatus::Linked, "");
-                        let ended = dial::steady(framed).await;
+                        let ended = dial::steady(framed, state.clone()).await;
                         if let Err(e) = &ended {
                             tracing::debug!(error = %e, "orchestrator link ended");
                         }

@@ -10,16 +10,22 @@ use micold_core::orchestrator::{
     decode_first_frame, refusal_message, Claim, ClaimFailure, ConfirmRefused, FirstFrame,
     LinkAction, LinkAnnouncement, LinkToken, LinkVerdict, RefuseReason, MAX_PREAMBLE_FRAME,
 };
-use micold_core::protocol::codec::{DaemonCodec, Frame};
+use micold_core::protocol::codec::{raw_frame_codec, DaemonCodec, Frame};
+use micold_core::protocol::envelope::{EnvelopeHeader, Kind, HEADER_LEN};
 use micold_core::protocol::handshake;
 use micold_core::protocol::keepalive::{CHECK_INTERVAL, LIVENESS_DEADLINE};
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, RefusalReason};
+use micold_core::protocol::routing::{
+    control_payload, decode_routed_payload, RoutedBody, RoutedPayload, WireDaemonId,
+};
 use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::settings::Settings;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_util::codec::{Encoder, Framed, LengthDelimitedCodec};
+use tokio::sync::mpsc;
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use super::{query, Shared};
+use super::hub::{Hub, WRITER_QUEUE};
+use super::{client, query, Shared};
 use crate::server::daemon_build;
 
 fn preamble_codec() -> LengthDelimitedCodec {
@@ -47,6 +53,9 @@ where
         Some(frame) => frame?,
         None => return Ok(()),
     };
+    if client::is_client_first_frame(&body) {
+        return client::serve(shared, framed, body.freeze()).await;
+    }
     match decode_first_frame(&body).map_err(invalid)? {
         FirstFrame::Query(query) => {
             framed
@@ -131,24 +140,12 @@ where
         return Err(invalid("no Hello within the deadline"));
     };
     let intro = match hello {
-        Some(Ok(Frame::Control(ClientMsg::Hello {
-            protocol_version,
-            schema_hash,
-            client_build,
-            client_instance,
-            client_package_version,
-            auth_token,
-            client_fingerprint,
-            require_fingerprint_match,
-        }))) => handshake::Introduction {
-            protocol_version,
-            schema_hash,
-            package_version: client_package_version,
-            build: client_build,
-            instance: client_instance,
-            auth_token,
-            fingerprint: client_fingerprint,
-            require_fingerprint_match,
+        Some(Ok(Frame::Control(msg))) => match client::introduction_of(msg) {
+            Some(intro) => intro,
+            None => {
+                dropped();
+                return Err(invalid("expected Hello as the first frame"));
+            }
         },
         Some(Ok(_)) => {
             dropped();
@@ -203,7 +200,7 @@ where
     };
     send_bounded(&mut framed, Frame::Control(welcome)).await?;
 
-    steady(shared, framed, link).await
+    steady(shared, framed, link, &announcement.id).await
 }
 
 /// What a `Hello` refusal means for the reservation it ends.
@@ -221,11 +218,10 @@ fn claim_failure(reason: &RefusalReason) -> ClaimFailure {
 /// Send one frame, giving up after the liveness deadline (FR-011): a peer that keeps the socket
 /// open but stops reading must not hold the link task, its reservation or the steady loop, whose
 /// timer would then never mark it offline. A send not done by then is `TimedOut`.
-async fn send_bounded<S, C, I>(framed: &mut Framed<S, C>, item: I) -> io::Result<()>
+async fn send_bounded<K, I>(framed: &mut K, item: I) -> io::Result<()>
 where
-    S: AsyncWrite + Unpin,
-    C: Encoder<I>,
-    C::Error: Into<io::Error>,
+    K: futures_util::Sink<I> + Unpin,
+    K::Error: Into<io::Error>,
 {
     tokio::time::timeout(LIVENESS_DEADLINE, framed.send(item))
         .await
@@ -238,21 +234,43 @@ where
         .map_err(Into::into)
 }
 
-/// The steady state (contracts/link.md, step 4): every inbound frame is an answer, a timer sends
-/// `LinkPing` when the link is idle and marks the daemon `offline` when it has been silent past
-/// the deadline. After `Expired` the loop keeps reading, so a later frame brings the daemon back
-/// `online` on the same link. When the transport ends the id is free for a new link at once
-/// (`Registry::ended`), but the loop lets the deadline run out first, so a drop is seen as silence
-/// and the record turns `offline` like any other. The loop ends as soon as its `LinkToken` is
-/// replaced (a call returns `Stale`), which closes a replaced silent link.
+/// The steady state (contracts/link.md, step 4): every inbound frame is an answer or a routed
+/// frame of a client's conversation (#1726), a timer sends `LinkPing` when the link is idle and
+/// marks the daemon `offline` when it has been silent past the deadline. After `Expired` the loop
+/// keeps reading, so a later frame brings the daemon back `online` on the same link. When the
+/// transport ends the id is free for a new link at once (`Registry::ended`), but the loop lets the
+/// deadline run out first, so a drop is seen as silence and the record turns `offline` like any
+/// other. The loop ends as soon as its `LinkToken` is replaced (a call returns `Stale`), which
+/// closes a replaced silent link. Whenever the link stops being live (transport end, `Goodbye`,
+/// silence, replacement) every client conversation on it ends: `OutcomeUnknown` for each request
+/// not answered, then `StreamEnded` (FR-006, FR-012).
 async fn steady<S>(
     shared: &Shared,
-    mut framed: Framed<S, DaemonCodec>,
+    framed: Framed<S, DaemonCodec>,
     link: LinkToken,
+    daemon: &WireDaemonId,
 ) -> io::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+    // Raw frames: a client's frames are relayed as bytes, never decoded as messages. The socket is
+    // written by a task of its own: a loop that wrote while the daemon wrote back would stop
+    // reading, and two full socket buffers would hold both sides for ever.
+    let (mut sink, mut stream) = framed.map_codec(|_| raw_frame_codec()).split();
+    let (out_tx, mut out_rx) = mpsc::channel::<Bytes>(WRITER_QUEUE);
+    let mut writing = AbortOnDrop(tokio::spawn(async move {
+        while let Some(payload) = out_rx.recv().await {
+            send_bounded(&mut sink, payload).await?;
+        }
+        Ok::<(), io::Error>(())
+    }));
+    let hub = shared.hub();
+    let ping_tx = out_tx.clone();
+    let _registered = Registered {
+        hub,
+        daemon,
+        generation: hub.register_link(daemon, out_tx),
+    };
     let mut timer = tokio::time::interval(CHECK_INTERVAL);
     timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut open = true;
@@ -260,15 +278,18 @@ where
     let mut nonce = 0_u64;
     let end = |open: &mut bool| {
         if std::mem::take(open) {
+            // The id is free before the clients hear the link is gone, so a daemon that links
+            // again at once is not refused as already linked.
             shared.update(|registry| registry.ended(link));
+            hub.link_lost(daemon, None);
         }
     };
     loop {
         tokio::select! {
-            frame = framed.next(), if open => {
+            frame = stream.next(), if open => {
                 // A read error, like the end of the stream, is silence: the deadline runs out
                 // first, so the record turns `offline` and the loop ends after that.
-                let Some(Ok(frame)) = frame else {
+                let Some(Ok(payload)) = frame else {
                     // Already reported offline: nothing is left to wait for.
                     if expired {
                         return Ok(());
@@ -282,36 +303,93 @@ where
                 if answered == LinkAction::Stale {
                     return Ok(());
                 }
-                match frame {
-                    Frame::Control(ClientMsg::Goodbye) => end(&mut open),
-                    Frame::Control(msg) => {
-                        if let Some(answer) = query::not_hosted(&msg) {
-                            if send_bounded(&mut framed, Frame::Control(answer)).await.is_err() {
-                                end(&mut open);
-                            }
-                        }
-                    }
-                    _ => {}
+                match inbound(hub, daemon, &payload) {
+                    Inbound::Goodbye | Inbound::Invalid => end(&mut open),
+                    Inbound::Handled => {}
                 }
+            }
+            _ = &mut writing.0, if open => {
+                // The daemon stopped reading (or the socket failed): the link is lost.
+                end(&mut open);
             }
             _ = timer.tick() => {
                 let action = shared.update(|registry| registry.tick(link, shared.now()));
                 match action {
                     LinkAction::Stale => return Ok(()),
                     LinkAction::Expired if !open => return Ok(()),
-                    LinkAction::Expired => expired = true,
+                    LinkAction::Expired => {
+                        expired = true;
+                        hub.link_lost(daemon, None);
+                    }
                     // Closed after the deadline had already run out: nothing is left to wait for.
                     _ if !open && expired => return Ok(()),
                     LinkAction::SendPing if open => {
                         nonce += 1;
-                        let ping = Frame::Control(DaemonMsg::LinkPing { nonce });
-                        if send_bounded(&mut framed, ping).await.is_err() {
-                            end(&mut open);
-                        }
+                        let ping = Bytes::from(
+                            control_payload(&DaemonMsg::LinkPing { nonce }).expect("a ping encodes"),
+                        );
+                        // A full queue means the writer is stuck: the daemon is not reading, and
+                        // its silence will expire the link.
+                        let _ = ping_tx.try_send(ping);
                     }
                     _ => {}
                 }
             }
         }
+    }
+}
+
+/// Aborts its task when dropped, including when the future owning it is cancelled.
+struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+/// Unhooks the link from the hub, and ends what is left on it, however `steady` returns.
+struct Registered<'a> {
+    hub: &'a Hub,
+    daemon: &'a WireDaemonId,
+    generation: u64,
+}
+
+impl Drop for Registered<'_> {
+    fn drop(&mut self) {
+        self.hub.link_lost(self.daemon, Some(self.generation));
+    }
+}
+
+enum Inbound {
+    Handled,
+    Goodbye,
+    /// A frame that is not a message: the link is treated as silent.
+    Invalid,
+}
+
+/// One frame from a daemon: a routed frame goes to its client, `Goodbye` ends the link, any other
+/// message is ignored.
+fn inbound(hub: &Hub, daemon: &WireDaemonId, payload: &[u8]) -> Inbound {
+    let Ok((envelope, _)) = EnvelopeHeader::parse(payload) else {
+        return Inbound::Invalid;
+    };
+    match envelope.kind {
+        Kind::Control => match serde_json::from_slice::<ClientMsg>(&payload[HEADER_LEN..]) {
+            Ok(ClientMsg::Goodbye) => Inbound::Goodbye,
+            Ok(_) => Inbound::Handled,
+            Err(_) => Inbound::Invalid,
+        },
+        Kind::Routed => match decode_routed_payload(payload) {
+            Ok(RoutedPayload {
+                header,
+                body: RoutedBody::Opaque(inner),
+            }) => {
+                hub.from_daemon(daemon, header.conn.0, header.req, inner);
+                Inbound::Handled
+            }
+            _ => Inbound::Invalid,
+        },
+        Kind::Grid => Inbound::Handled,
     }
 }

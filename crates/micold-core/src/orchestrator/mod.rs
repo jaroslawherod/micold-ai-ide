@@ -6,9 +6,11 @@ pub mod announce;
 pub mod audit;
 pub mod auth;
 pub mod dial;
+pub mod list_merge;
 pub mod liveness;
 pub mod record;
 pub mod registry;
+pub mod route;
 pub mod store;
 
 pub use announce::{

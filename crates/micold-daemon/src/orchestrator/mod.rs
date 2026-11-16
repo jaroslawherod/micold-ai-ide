@@ -3,7 +3,8 @@
 //! `DaemonState`, no supervisor, no PTY. Every decision lives in the pure
 //! [`micold_core::orchestrator::Registry`]; this module wires it to a socket and a clock.
 //!
-//! A listener only: nothing here dials out (FR-008).
+//! A listener only: nothing here dials out (FR-008). Since #1726 it also relays: a client session
+//! ([`client`]) sends routed frames, which the [`hub`] carries to the owning daemon's link and back.
 
 use std::ffi::OsString;
 use std::io;
@@ -15,7 +16,9 @@ use interprocess::local_socket::traits::tokio::Listener as _;
 use micold_core::endpoint::Endpoint;
 use micold_core::orchestrator::{JsonRegistryStore, Registry, RegistryStore, Snapshot};
 
+pub mod client;
 pub mod db;
+pub mod hub;
 pub mod link;
 pub mod query;
 mod save;
@@ -68,6 +71,7 @@ pub struct Shared {
     registry: Mutex<Registry>,
     clock: Arc<dyn Clock>,
     saves: Arc<SaveQueue>,
+    hub: hub::Hub,
 }
 
 impl Shared {
@@ -76,6 +80,7 @@ impl Shared {
             registry: Mutex::new(registry),
             clock,
             saves,
+            hub: hub::Hub::default(),
         }
     }
 
@@ -102,6 +107,11 @@ impl Shared {
         self.registry
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The routes and queues of the links and client sessions.
+    pub(crate) fn hub(&self) -> &hub::Hub {
+        &self.hub
     }
 
     pub(crate) fn now(&self) -> Instant {
