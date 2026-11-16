@@ -73,6 +73,7 @@ Answer: `OrchListed { req, rows, missing: [{daemon, reason}], no_daemons }`.
 - Each route has its own bounded queue toward the client and another toward the daemon; when
   either is full the route ends with `StreamEnded { reason: "slow-consumer" }`, an answer that did
   not fit counting as not answered (`OutcomeUnknown`); frames already queued are still delivered.
+  A daemon stall that outlasts a route's 1024-frame queue toward it ends that route the same way.
   Other routes and the link continue.
 - The daemon's side of a link is one shared pipe: a daemon reads the link in order, so a conn that
   stalls the daemon's own handling stalls the other conns on that link (back-pressure, not loss).
