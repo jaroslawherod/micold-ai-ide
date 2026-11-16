@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1996 | design | merged | 9f6e6784d |
 | #1999 | M1 | merged | 2f62cbf31 |
 | #2004 | M2 | merged | 5ee726f07 |
+| #2007 | M3 | open; CI red round 1 fixed (flaky stand-in race in micold-daemon ai_cli_config test) | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
-| M3 | T017–T022 | full | desktop app uses one orchestrator connection | | implemented |
+| M3 | T017–T022 | full | desktop app uses one orchestrator connection | #2007 | PR open |
 
 ## Decisions
 
