@@ -274,6 +274,51 @@ impl StoreHandle {
     }
 }
 
+/// Open the store the configuration names (FR-009): PostgreSQL from `database.url_file` (trimmed)
+/// and `database.ca_file`, or with no `[database]` table and a loopback-only bind the SQLite file
+/// under `data_dir`. Blocks: call it from `spawn_blocking` in async code.
+///
+/// An unreachable server fails as `orchestrator database <host>:<port> unreachable: <cause>`, a
+/// SQLite file that cannot be opened as `orchestrator database <path>: <cause>` (FR-016); neither
+/// names the URL or its password.
+pub fn open(
+    database: Option<&micold_core::daemon_config::DatabaseConfig>,
+    bind: micold_core::orchestrator::BindScope,
+    data_dir: &Path,
+) -> io::Result<Arc<StoreHandle>> {
+    use micold_core::orchestrator::{choose_store, StoreChoice};
+    let choice = choose_store(database, bind, data_dir)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
+    let (opened, postgres) = match choice {
+        StoreChoice::Sqlite(_) => (StoreHandle::open_sqlite(data_dir), false),
+        StoreChoice::Postgres(database) => {
+            let url_file = database.url_file.as_ref().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "`database.url_file` is required in [database]",
+                )
+            })?;
+            let url = std::fs::read_to_string(url_file.path()).map_err(|e| {
+                io::Error::new(e.kind(), format!("database.url_file {url_file}: {e}"))
+            })?;
+            let ca_file = database.ca_file.as_ref().map(|ca| ca.path());
+            (
+                StoreHandle::open_postgres(url.trim(), ca_file, database.pool_size),
+                true,
+            )
+        }
+    };
+    opened.map_err(|error| match error {
+        StoreError::Unavailable { target, reason } if postgres => io::Error::other(format!(
+            "orchestrator database {target} unreachable: {reason}"
+        )),
+        StoreError::Unavailable { target, reason } => {
+            io::Error::other(format!("orchestrator database {target}: {reason}"))
+        }
+        other => io::Error::other(other.to_string()),
+    })
+}
+
 impl Drop for StoreHandle {
     fn drop(&mut self) {
         let Some(rt) = self.rt.take() else { return };

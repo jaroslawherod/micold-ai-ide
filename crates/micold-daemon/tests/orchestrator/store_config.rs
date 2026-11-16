@@ -106,3 +106,82 @@ fn a_missing_ca_file_or_url_key_fails_naming_the_key() {
     assert_eq!(status, 2);
     assert!(err.contains("database.url_file"), "{err}");
 }
+
+/// SC-005 and US4.3: with only a data directory and no `[database]`, the orchestrator creates the
+/// owner-only SQLite file and a linked daemon is listed, offline, after a restart.
+#[tokio::test]
+async fn only_a_data_directory_starts_on_sqlite_and_keeps_the_registry_across_a_restart() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
+
+    let dir = std::sync::Arc::new(tempfile::tempdir().unwrap());
+    let orchestrator = Orchestrator::start_configured(std::sync::Arc::clone(&dir)).await;
+    let file = dir.path().join("orchestrator").join("orchestrator.db");
+    let mode = std::fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "{}", file.display());
+
+    let link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
+    record_when(&orchestrator, "box", |r| r["health"] == "online").await;
+    drop(link);
+    // The save thread writes in the background: wait until the row is in the file.
+    let started = std::time::Instant::now();
+    while !stored(&file) {
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let dir = orchestrator.stop().await;
+    let restarted = Orchestrator::start_configured(dir).await;
+    let record = record_when(&restarted, "box", |_| true).await;
+    assert_eq!(record["health"], "offline");
+}
+
+/// Whether the SQLite registry at `file` holds a row.
+fn stored(file: &Path) -> bool {
+    let data_dir = file.parent().and_then(Path::parent).unwrap().to_path_buf();
+    std::thread::spawn(move || {
+        use micold_core::orchestrator::RegistryStore as _;
+        let handle = micold_daemon::orchestrator::db::StoreHandle::open_sqlite(&data_dir).unwrap();
+        micold_daemon::orchestrator::db::SqlRegistryStore::new(handle)
+            .load()
+            .is_ok_and(|s| !s.is_empty())
+    })
+    .join()
+    .unwrap()
+}
+
+/// FR-010: a `registry.json` from an earlier version that is not imported yet refuses the start,
+/// naming the file, rather than starting on an empty registry; once marked imported it starts.
+#[tokio::test]
+async fn an_unimported_registry_json_refuses_the_start_naming_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let orchestrator_dir = dir.path().join("orchestrator");
+    std::fs::create_dir_all(&orchestrator_dir).unwrap();
+    let json = orchestrator_dir.join("registry.json");
+    std::fs::write(&json, "{}").unwrap();
+    let start = || {
+        micold_daemon::orchestrator::run_configured(
+            dir.path().join("orchestrator.sock"),
+            crate::support::TestClock::new(0)
+                as std::sync::Arc<dyn micold_daemon::orchestrator::Clock>,
+            None,
+            dir.path().to_path_buf(),
+        )
+    };
+    let error = tokio::time::timeout(std::time::Duration::from_secs(5), start())
+        .await
+        .expect("the start returns at once")
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "orchestrator registry {} is not imported yet; this version cannot import it",
+            json.display()
+        )
+    );
+    assert!(!orchestrator_dir.join("orchestrator.db").exists());
+
+    std::fs::write(orchestrator_dir.join("registry.json.imported"), "").unwrap();
+    let running = tokio::time::timeout(std::time::Duration::from_secs(2), start()).await;
+    assert!(running.is_err(), "the marked start returned: {running:?}");
+}

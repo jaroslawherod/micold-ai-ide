@@ -617,3 +617,61 @@ mod postgres {
     auth_tests!(super::PostgresBackend::new());
     audit_tests!(super::PostgresBackend::new());
 }
+
+// ---- the orchestrator on a SQL store ----
+
+/// `run_with` on a SQL store: `serve`'s load runs off the runtime, and a restart restores.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_with_sql_store_starts_and_restores() {
+    use crate::support::{announcement, record_when, FakeDaemon, Orchestrator};
+    use micold_core::orchestrator::RegistryStore;
+    use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+    use std::path::Path;
+
+    let dir = Arc::new(tempfile::tempdir().unwrap());
+    let open = |dir: &Path| -> Arc<dyn RegistryStore> {
+        Arc::new(SqlRegistryStore::new(
+            StoreHandle::open_sqlite(dir).unwrap(),
+        ))
+    };
+    let path = dir.path().to_path_buf();
+    let store = tokio::task::spawn_blocking(move || open(&path))
+        .await
+        .unwrap();
+    let orchestrator = Orchestrator::start_with(Arc::clone(&dir), Arc::clone(&store)).await;
+    let link = FakeDaemon::link(&orchestrator, &announcement("a")).await;
+    record_when(&orchestrator, "a", |a| a["health"] == "online").await;
+    drop(link);
+    let started = std::time::Instant::now();
+    loop {
+        let store = Arc::clone(&store);
+        let saved = tokio::task::spawn_blocking(move || store.load().unwrap().len())
+            .await
+            .unwrap();
+        if saved == 1 {
+            break;
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let dir = orchestrator.stop().await;
+    let restarted = Orchestrator::start_with(dir, store).await;
+    assert_eq!(
+        record_when(&restarted, "a", |_| true).await["health"],
+        "offline"
+    );
+}
+
+/// The last handle dropping inside async code shuts its runtime down without a panic.
+#[tokio::test]
+async fn dropping_the_last_handle_inside_async_code_does_not_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().to_path_buf();
+    let handle = tokio::task::spawn_blocking(move || {
+        micold_daemon::orchestrator::db::StoreHandle::open_sqlite(&path).unwrap()
+    })
+    .await
+    .unwrap();
+    assert_eq!(Arc::strong_count(&handle), 1);
+    drop(handle);
+}

@@ -255,24 +255,24 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: start with only a data directory, or a PostgreSQL URL from config (US4 scenario 3; FR-009, FR-014, FR-016, SC-005).
 
-- [ ] T045 [P] [US4] `FlakyProxy` (a TCP proxy that can drop and resume) in `store_support.rs`.
-- [ ] T046 [US4] Failing tests in `store_slow.rs` (new, registered): an unreachable host fails the
+- [x] T045 [P] [US4] `FlakyProxy` (a TCP proxy that can drop and resume) in `store_support.rs`.
+- [x] T046 [US4] Failing tests in `store_slow.rs` (new, registered): an unreachable host fails the
   start with `orchestrator database <host>:<port> unreachable: <cause>` and the error text does not
   contain the password (grep); through `FlakyProxy`, a database lost after start makes store calls
   return `Unavailable` while the orchestrator keeps running, and the next call after the proxy
   resumes succeeds (FR-016); with the save thread parked inside a store call, other daemons'
   heartbeats are still answered inside 9 s (FR-014).
-- [ ] T047 [US4] Failing tests in `store_config.rs` and `store_suite.rs`: starting with only a data
+- [x] T047 [US4] Failing tests in `store_config.rs` and `store_suite.rs`: starting with only a data
   directory and no `[database]` creates `orchestrator/orchestrator.db` mode 0600, a linked daemon
   is listed (offline) after a restart (SC-005); `run_with_sql_store_starts_and_restores` starts
   `run_with` on a SQL store and `serve`'s load works; dropping the last handle inside async code
   does not panic.
-- [ ] T048 [US4] `db/mod.rs`: `open(config, bind, data_dir)` driven by `choose_store`, reading
+- [x] T048 [US4] `db/mod.rs`: `open(config, bind, data_dir)` driven by `choose_store`, reading
   `url_file` (trimmed) and `ca_file`.
-- [ ] T049 [US4] `crates/micold-daemon/src/orchestrator/mod.rs`: `run()` opens the stores inside
+- [x] T049 [US4] `crates/micold-daemon/src/orchestrator/mod.rs`: `run()` opens the stores inside
   `spawn_blocking` before `serve`, passing `LoopbackOnly`; `serve` loads through
   `spawn_blocking`, the join error mapped to `io::Error`; T046 and T047 green.
-- [ ] T050 [P] [US4] `docs/user-guide/orchestrator-storage.md` (new): local mode versus PostgreSQL,
+- [x] T050 [P] [US4] `docs/user-guide/orchestrator-storage.md` (new): local mode versus PostgreSQL,
   the `[database]` keys, what is stored and never stored, newer-schema refusal; link it from
   `docs/user-guide/orchestrator-mode.md`.
 

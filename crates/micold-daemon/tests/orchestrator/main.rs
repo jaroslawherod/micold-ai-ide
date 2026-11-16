@@ -16,6 +16,7 @@ mod restart;
 mod store_config;
 mod store_migrations;
 mod store_scan;
+mod store_slow;
 mod store_sql_errors;
 mod store_suite;
 mod version_mismatch;

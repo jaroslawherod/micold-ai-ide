@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-9yqz36
+- **Worktree branch**: claude/project-thread-g30l62
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: wait for CI on #2006 and merge it, then dispatch M8
+- **Next step**: M8 review (A+B) on origin/main...claude/project-thread-g30l62, then open the M8 PR (body in the unit's scratchpad)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1997 | M4 | merged | c3944869a |
 | #2001 | M5 | merged | 8e68fa947 |
 | #2003 | M6 | merged | 3d5485c30 |
-| #2006 | M7 | open | |
+| #2006 | M7 | merged | 3a74d3004 |
 
 ## Milestones
 
@@ -36,8 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
-| M7 | T039–T044 | full | [database] config and backend rule | #2006 | open |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
+| M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | in PR |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
@@ -76,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
 | B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 | Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
+| Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
+| Re-review (sonnet) | 2 | M8 fix diff | 1de38e5 | 71e4c32:1de38e5 | MINOR-ONLY: FR id in comment and vacuous password check fixed; cycle-log line numbers noted |
 
 ## Declined review findings
 
@@ -95,7 +97,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 merged (PR #2003, squash 3d5485c30; one opus review A+B APPROVE, 2 nits fixed; CI kube_real kind setup failed once, green on rerun). Next: dispatch the M7 unit (T039–T044) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0.
+M8 implemented on claude/project-thread-g30l62 (T045–T050; previous PR #2006 merged at 3a74d3004). Review round 1 (2 MAJOR 2 MINOR) fixed in the commit after 71e4c32; full gate green with PostgreSQL. Next: the orchestrator re-reviews the fix diff 71e4c32..HEAD, then opens the PR. registry.json import stays for M9.
 
 ## Open escalation
 
