@@ -1,0 +1,12 @@
+{
+  "name": "micold-workspace",
+  "private": true,
+  "description": "pnpm workspace root for the web client (#1735); scripts only, no code. The Rust workspace is Cargo.toml.",
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "client:lint": "pnpm --filter @micold/client lint",
+    "client:typecheck": "pnpm --filter @micold/client typecheck",
+    "client:test": "pnpm --filter @micold/client test",
+    "client:web": "pnpm --filter @micold/client web:export"
+  }
+}

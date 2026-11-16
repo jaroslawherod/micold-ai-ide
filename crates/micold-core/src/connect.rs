@@ -230,6 +230,24 @@ pub fn hello_message(client_build: &str, credentials: &Credentials) -> ClientMsg
     }
 }
 
+/// The orchestrator ended a routed handshake in place of the daemon's answer (#1726): carried in
+/// the [`io::Error`] [`handshake_with`] returns, read back with [`route_ended`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RouteEnded(pub crate::protocol::routing::StreamEndReason);
+
+impl std::fmt::Display for RouteEnded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the orchestrator ended the route: {:?}", self.0)
+    }
+}
+
+impl std::error::Error for RouteEnded {}
+
+/// Why the orchestrator ended the route `e` came from, when it did.
+pub fn route_ended(e: &io::Error) -> Option<crate::protocol::routing::StreamEndReason> {
+    e.get_ref()?.downcast_ref::<RouteEnded>().map(|r| r.0)
+}
+
 /// Perform the handshake, presenting the token and fingerprint policy in `credentials`.
 pub async fn handshake_with(
     stream: Transport,
@@ -258,6 +276,12 @@ pub async fn handshake_with(
             },
         )),
         Some(Ok(Frame::Control(DaemonMsg::Refused { reason }))) => Ok(Connected::Refused(reason)),
+        // On a route, the orchestrator answers for an absent daemon (#1726): typed, so a caller
+        // tells "not linked yet" from a reason to give up without reading the message.
+        Some(Ok(Frame::Control(DaemonMsg::StreamEnded { reason }))) => Err(io::Error::new(
+            io::ErrorKind::ConnectionAborted,
+            RouteEnded(reason),
+        )),
         Some(Ok(other)) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("expected Welcome or Refused, got {other:?}"),

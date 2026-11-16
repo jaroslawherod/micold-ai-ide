@@ -12,59 +12,59 @@ Paths: `apps/client/` (app), `packages/protocol/` (`@micold/protocol`), `scripts
 
 ## Phase 1: Setup (US6)
 
-- [ ] T001 [US6] Create workspace files `package.json`, `pnpm-workspace.yaml` (`apps/*`, `packages/*`) and add `pnpm` plus tasks `client-test`, `client-web`, `client-e2e` to `mise.toml` (FR-001, FR-002; R1, R7)
-- [ ] T002 [US6] Scaffold `apps/client/` (Expo managed, Expo Router, react-native-web, `app.json`, `tsconfig.json` strict, `app/_layout.tsx` placeholder index) and `packages/protocol/` (`@micold/protocol`, `tsconfig`, empty `src/index.ts`); generate `pnpm-lock.yaml`
-- [ ] T003 [P] [US6] Configure `apps/client/eslint.config.js` (a11y rules, custom rule forbidding physical `left|right|margin*|padding*|border*` props per R14, no-literal-string rule per FR-014) and `jest.config.js` with coverage lcov output to `apps/client/coverage/`
-- [ ] T004 [P] [US6] Edit `.gitattributes` (`micold-client` on `apps/client/**`, `packages/protocol/**`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `package.json`)
+- [x] T001 [US6] Create workspace files `package.json`, `pnpm-workspace.yaml` (`apps/*`, `packages/*`) and add `pnpm` plus tasks `client-test`, `client-web`, `client-e2e` to `mise.toml` (FR-001, FR-002; R1, R7)
+- [x] T002 [US6] Scaffold `apps/client/` (Expo managed, Expo Router, react-native-web, `app.json`, `tsconfig.json` strict, `app/_layout.tsx` placeholder index) and `packages/protocol/` (`@micold/protocol`, `tsconfig`, empty `src/index.ts`); generate `pnpm-lock.yaml`
+- [x] T003 [P] [US6] Configure `apps/client/eslint.config.js` (a11y rules, custom rule forbidding physical `left|right|margin*|padding*|border*` props per R14, no-literal-string rule per FR-014) and `jest.config.js` with coverage lcov output to `apps/client/coverage/`
+- [x] T004 [P] [US6] Edit `.gitattributes` (`micold-client` on `apps/client/**`, `packages/protocol/**`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `package.json`)
 
 ## Phase 2: Foundational CI and guardrails (US6)
 
-- [ ] T005 [US6] TEST FIRST: add cases for the `client` verdict to `scripts/tests/classify-change.test.sh`; run it and see it fail
-- [ ] T006 [US6] Edit `scripts/classify-change.sh` to emit the `client` verdict from the `micold-client` attribute (makes T005 pass)
-- [ ] T007 [US6] Edit `scripts/guardrails-scope.conf` `[web]`: `apps/client/src/**`, `apps/client/app/**`, `packages/protocol/src/**` (generated files and tests excluded), per R11
-- [ ] T008 [US6] Add the `client` job to `.github/workflows/ci.yml` (mise install, pnpm store cache, lint, typecheck, Jest with coverage, `scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info`, web export), path-gated on the `client` verdict; `ci-complete` needs it (FR-018, SC-005). Bundle check added in M2 (T039), Playwright in M4 (T055)
-- [ ] T009 [US6] Confirm `scripts/tests/tokens-ts-drift.test.sh` still passes and note it in the PR (US6 scenario 5)
+- [x] T005 [US6] TEST FIRST: add cases for the `client` verdict to `scripts/tests/classify-change.test.sh`; run it and see it fail
+- [x] T006 [US6] Edit `scripts/classify-change.sh` to emit the `client` verdict from the `micold-client` attribute (makes T005 pass)
+- [x] T007 [US6] Edit `scripts/guardrails-scope.conf` `[web]`: `apps/client/src/**`, `apps/client/app/**`, `packages/protocol/src/**` (generated files and tests excluded), per R11
+- [x] T008 [US6] Add the `client` job to `.github/workflows/ci.yml` (mise install, pnpm store cache, lint, typecheck, Jest with coverage, `scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info`, web export), path-gated on the `client` verdict; `ci-complete` needs it (FR-018, SC-005). Bundle check added in M2 (T039), Playwright in M4 (T055)
+- [x] T009 [US6] Confirm `scripts/tests/tokens-ts-drift.test.sh` still passes and note it in the PR (US6 scenario 5)
 
 ## Phase 3: US4 Theme, US5 i18n core, platform fallbacks (M1)
 
-- [ ] T010 [P] [US4] TEST FIRST `apps/client/tests/theme/buildTheme.test.ts`: every token colour role equals the Paper MD3 role of the same name for light and dark, and an unmapped role fails (FR-003, US4 scenario 1; R4)
-- [ ] T011 [US4] Implement `apps/client/src/theme/buildTheme.ts` importing `tokens.generated.ts` (untouched), and `useColorScheme.ts` following the system scheme (US4 scenario 2); wire `PaperProvider` in `app/_layout.tsx`
-- [ ] T012 [P] [US4] TEST FIRST `apps/client/tests/theme/fonts.test.ts`: Roboto and Fira Mono families are registered in the theme and bundled as assets (US4 scenario 3, FR-003)
-- [ ] T013 [US4] Implement `src/platform/fonts.ts` bundling Roboto and Fira Mono (makes T012 pass)
-- [ ] T014 [P] [US5] TEST FIRST `apps/client/tests/platform/degrade.test.ts`: with `Intl` feature, `matchMedia` or the font-loading API missing, the Client falls back to English, light theme and system fonts without throwing (Edge Cases, Browser differences; Principle VI)
-- [ ] T015 [US5] Implement the guarded wrappers in `src/platform/` (Intl, matchMedia, font loading) with those fallbacks (makes T014 pass)
-- [ ] T016 [P] [US5] TEST FIRST `apps/client/tests/i18n/`: fallback to English, plural `one/few/many/other` for Polish, placeholder parity between `en.json` and `pl.json`, pseudo-locale (accent, +40 percent, brackets), preference stored only as a locale code and tolerant of throwing storage, default from browser language, nearest-language fallback (FR-014, FR-015, US5 scenarios 2-4; R9)
-- [ ] T017 [US5] Implement `src/i18n/` (`en.json`, `pl.json`, `pseudo.ts` dev/test only, `IntlProvider`, locale store, typed ids) and `src/theme/layout.ts` logical-property helpers (FR-016); make T016 pass
-- [ ] T018 [P] [US5] TEST FIRST component test for `src/components/LocalePicker.tsx`: lists locales, switches without reload, keyboard operable, named control (FR-015, FR-019)
-- [ ] T019 [US5] Implement `src/components/LocalePicker.tsx` (makes T018 pass)
-- [ ] T020 [P] [US4] Update `docs/user-guide/appearance-theming.md`: the web client follows the system theme and has a language picker (Constitution VII)
+- [x] T010 [P] [US4] TEST FIRST `apps/client/tests/theme/buildTheme.test.ts`: every token colour role equals the Paper MD3 role of the same name for light and dark, and an unmapped role fails (FR-003, US4 scenario 1; R4)
+- [x] T011 [US4] Implement `apps/client/src/theme/buildTheme.ts` importing `tokens.generated.ts` (untouched), and `useColorScheme.ts` following the system scheme (US4 scenario 2); wire `PaperProvider` in `app/_layout.tsx`
+- [x] T012 [P] [US4] TEST FIRST `apps/client/tests/theme/fonts.test.ts`: Roboto and Fira Mono families are registered in the theme and bundled as assets (US4 scenario 3, FR-003)
+- [x] T013 [US4] Implement `src/platform/fonts.ts` bundling Roboto and Fira Mono (makes T012 pass)
+- [x] T014 [P] [US5] TEST FIRST `apps/client/tests/platform/degrade.test.ts`: with `Intl` feature, `matchMedia` or the font-loading API missing, the Client falls back to English, light theme and system fonts without throwing (Edge Cases, Browser differences; Principle VI)
+- [x] T015 [US5] Implement the guarded wrappers in `src/platform/` (Intl, matchMedia, font loading) with those fallbacks (makes T014 pass)
+- [x] T016 [P] [US5] TEST FIRST `apps/client/tests/i18n/`: fallback to English, plural `one/few/many/other` for Polish, placeholder parity between `en.json` and `pl.json`, pseudo-locale (accent, +40 percent, brackets), preference stored only as a locale code and tolerant of throwing storage, default from browser language, nearest-language fallback (FR-014, FR-015, US5 scenarios 2-4; R9)
+- [x] T017 [US5] Implement `src/i18n/` (`en.json`, `pl.json`, `pseudo.ts` dev/test only, `IntlProvider`, locale store, typed ids) and `src/theme/layout.ts` logical-property helpers (FR-016); make T016 pass
+- [x] T018 [P] [US5] TEST FIRST component test for `src/components/LocalePicker.tsx`: lists locales, switches without reload, keyboard operable, named control (FR-015, FR-019)
+- [x] T019 [US5] Implement `src/components/LocalePicker.tsx` (makes T018 pass)
+- [x] T020 [P] [US4] Update `docs/user-guide/appearance-theming.md`: the web client follows the system theme and has a language picker (Constitution VII)
 
 ## Phase 4: US7 Spike (M1), before any sidebar work (FR-020)
 
-- [ ] T021 [US7] TEST FIRST: a Jest test that the spike route is registered only in dev/mock mode and absent otherwise (US7 scenario 3)
-- [ ] T022 [US7] Implement `apps/client/app/spike.tsx` (5,000 transcript entries, 2,000-line diff with Paper `Text`/`FlatList`, measuring with `performance.now`) (R12)
-- [ ] T023 [US7] Run the spike in the web export in Chromium; write `specs/1735-rn-client-scaffold/spike.md` with render time, scroll, memory, selection/copy and gaps, each gap naming a follow-up or decision (SC-008, US7 scenarios 1-2)
+- [x] T021 [US7] TEST FIRST: a Jest test that the spike route is registered only in dev/mock mode and absent otherwise (US7 scenario 3)
+- [x] T022 [US7] Implement `apps/client/app/spike.tsx` (5,000 transcript entries, 2,000-line diff with Paper `Text`/`FlatList`, measuring with `performance.now`) (R12)
+- [x] T023 [US7] Run the spike in the web export in Chromium; write `specs/1735-rn-client-scaffold/spike.md` with render time, scroll, memory, selection/copy and gaps, each gap naming a follow-up or decision (SC-008, US7 scenarios 1-2)
 
 **M1 checkpoint**: `mise run client-test` and `mise run client-web` pass; app shows themed placeholder with locale picker; spike recorded.
 
 ## Phase 5: US1 Sign-in and protocol boundary (M2)
 
-- [ ] T024 [P] [US1] TEST FIRST `packages/protocol/tests/types.test-d.ts` and `api.test.ts`: branded ids not interchangeable, `ConnectionState` exhaustive, interfaces implementable by a stub (data-model.md)
-- [ ] T025 [US1] Implement `packages/protocol/src/types.ts` (marked `STAND-IN`) and `src/api.ts` (`OrchestratorApi`, `AuthService`, `Transport`) per contracts/orchestrator-api.md and contracts/transport.md
-- [ ] T026 [P] [US1] TEST FIRST `packages/protocol/tests/connection.test.ts`: ConnectionManager over a fake transport with injectable clock and random: backoff with full jitter, resume by last seq, correlation by id with timeout, state surfaced as connected/reconnecting(attempt)/offline (FR-009)
-- [ ] T027 [US1] Implement `packages/protocol/src/connection/` (makes T026 pass)
-- [ ] T028 [P] [US1] TEST FIRST `packages/protocol/tests/mock.test.ts`: mock fixture (2 daemons, 6 projects, 30 worktrees, 60 sessions), feed delivery, mock auth providers (two configured, one not), refusal and cancel (FR-005, SC-001 data)
-- [ ] T029 [US1] Implement `packages/protocol/src/mock/` exporting the `__MICOLD_MOCK__` sentinel, at `@micold/protocol/mock`
-- [ ] T030 [P] [US1] TEST FIRST `apps/client/tests/api/select.test.ts`: mock mode selects the mock, real mode throws "real client not built (#1732)", components import only the interface (FR-004, FR-005)
-- [ ] T031 [US1] Implement `src/api/ApiProvider.tsx` and `src/api/select.ts` behind `EXPO_PUBLIC_API_MODE`; `client-web` sets `real`, dev and `client-e2e` set `mock`
-- [ ] T032 [P] [US1] TEST FIRST `apps/client/tests/auth/`: token held in memory only, no `toJSON`, nothing written to `localStorage`/`sessionStorage`/`IndexedDB`/cookie (FR-006); route guard redirects to sign-in and returns to the requested route (FR-007, FR-008); session expiry mid-use returns to sign-in keeping the open route; two stores (tabs) signed in separately never share a token (Edge Cases, Auth)
-- [ ] T033 [US1] Implement `src/auth/` (memory session store, guard, return-to, expiry handling) and the route guard in `app/_layout.tsx` (makes T032 pass)
-- [ ] T034 [P] [US1] TEST FIRST component tests for `app/sign-in.tsx`: lists only configured providers, "not set up" state, refusal and cancellation messages, all strings from the catalog (US1 scenarios 1, 2, 5)
-- [ ] T035 [US1] Implement `app/sign-in.tsx` and add catalog entries (en, pl) (makes T034 pass)
-- [ ] T036 [P] [US1] TEST FIRST component test for `src/components/ConnectionBanner.tsx`: connected, reconnecting with attempt count, offline (FR-009)
-- [ ] T037 [US1] Implement `src/components/ConnectionBanner.tsx` (makes T036 pass)
-- [ ] T038 [P] [US1] TEST FIRST self-test of `scripts/client/bundle-check.mjs` (`scripts/tests/bundle-check.test.sh`): an export containing the mock sentinel fails, a clean one passes (SC-006)
-- [ ] T039 [US1] Implement the mock-sentinel check in `scripts/client/bundle-check.mjs` and add the bundle-check step to the `client` job in `.github/workflows/ci.yml` (makes T038 pass)
+- [x] T024 [P] [US1] TEST FIRST `packages/protocol/tests/types.test-d.ts` and `api.test.ts`: branded ids not interchangeable, `ConnectionState` exhaustive, interfaces implementable by a stub (data-model.md)
+- [x] T025 [US1] Implement `packages/protocol/src/types.ts` (marked `STAND-IN`) and `src/api.ts` (`OrchestratorApi`, `AuthService`, `Transport`) per contracts/orchestrator-api.md and contracts/transport.md
+- [x] T026 [P] [US1] TEST FIRST `packages/protocol/tests/connection.test.ts`: ConnectionManager over a fake transport with injectable clock and random: backoff with full jitter, resume by last seq, correlation by id with timeout, state surfaced as connected/reconnecting(attempt)/offline (FR-009)
+- [x] T027 [US1] Implement `packages/protocol/src/connection/` (makes T026 pass)
+- [x] T028 [P] [US1] TEST FIRST `packages/protocol/tests/mock.test.ts`: mock fixture (2 daemons, 6 projects, 30 worktrees, 60 sessions), feed delivery, mock auth providers (two configured, one not), refusal and cancel (FR-005, SC-001 data)
+- [x] T029 [US1] Implement `packages/protocol/src/mock/` exporting the `__MICOLD_MOCK__` sentinel, at `@micold/protocol/mock`
+- [x] T030 [P] [US1] TEST FIRST `apps/client/tests/api/select.test.ts`: mock mode selects the mock, real mode throws "real client not built (#1732)", components import only the interface (FR-004, FR-005)
+- [x] T031 [US1] Implement `src/api/ApiProvider.tsx` and `src/api/select.ts` behind `EXPO_PUBLIC_API_MODE`; `client-web` sets `real`, dev and `client-e2e` set `mock`
+- [x] T032 [P] [US1] TEST FIRST `apps/client/tests/auth/`: token held in memory only, no `toJSON`, nothing written to `localStorage`/`sessionStorage`/`IndexedDB`/cookie (FR-006); route guard redirects to sign-in and returns to the requested route (FR-007, FR-008); session expiry mid-use returns to sign-in keeping the open route; two stores (tabs) signed in separately never share a token (Edge Cases, Auth)
+- [x] T033 [US1] Implement `src/auth/` (memory session store, guard, return-to, expiry handling) and the route guard in `app/_layout.tsx` (makes T032 pass)
+- [x] T034 [P] [US1] TEST FIRST component tests for `app/sign-in.tsx`: lists only configured providers, "not set up" state, refusal and cancellation messages, all strings from the catalog (US1 scenarios 1, 2, 5)
+- [x] T035 [US1] Implement `app/sign-in.tsx` and add catalog entries (en, pl) (makes T034 pass)
+- [x] T036 [P] [US1] TEST FIRST component test for `src/components/ConnectionBanner.tsx`: connected, reconnecting with attempt count, offline (FR-009)
+- [x] T037 [US1] Implement `src/components/ConnectionBanner.tsx` (makes T036 pass)
+- [x] T038 [P] [US1] TEST FIRST self-test of `scripts/client/bundle-check.mjs` (`scripts/tests/bundle-check.test.sh`): an export containing the mock sentinel fails, a clean one passes (SC-006)
+- [x] T039 [US1] Implement the mock-sentinel check in `scripts/client/bundle-check.mjs` and add the bundle-check step to the `client` job in `.github/workflows/ci.yml` (makes T038 pass)
 
 **M2 checkpoint**: signing in through the mock lands on an authenticated shell; reload signs out; bundle check passes on a real-mode export.
 

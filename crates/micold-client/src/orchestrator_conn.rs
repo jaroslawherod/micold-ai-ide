@@ -39,6 +39,9 @@ pub const START_TIMEOUT: Duration = Duration::from_secs(10);
 /// Frames waiting for one route's pipe, and for the connection.
 const QUEUE: usize = 1024;
 
+/// How long [`OrchestratorConn::routed_to`] waits before looking for a daemon's link again.
+const ROUTE_RETRY: Duration = Duration::from_millis(100);
+
 /// One route's in-memory pipe.
 const PIPE_BYTES: usize = 64 * 1024;
 
@@ -148,6 +151,49 @@ impl OrchestratorConn {
             io::ErrorKind::NotConnected,
             "the orchestrator connection ended while opening a route",
         ))
+    }
+
+    /// A route to `target` and a handshake on it, looking again while the orchestrator ends the
+    /// route (the daemon's link is not up yet) until `deadline` passes (#1726, FR-007). A passed
+    /// deadline is `TimedOut` naming the wire id.
+    pub async fn routed_to(
+        &self,
+        target: &WireDaemonId,
+        deadline: std::time::Duration,
+        client_build: &str,
+    ) -> io::Result<micold_core::connect::Connected> {
+        let until = tokio::time::Instant::now() + deadline;
+        loop {
+            if let Some(connected) = self.route_once(target, client_build).await? {
+                return Ok(connected);
+            }
+            if tokio::time::Instant::now() >= until {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!(
+                        "daemon `{}` did not link to the orchestrator within {} s",
+                        target.as_str(),
+                        deadline.as_secs_f32()
+                    ),
+                ));
+            }
+            tokio::time::sleep(ROUTE_RETRY).await;
+        }
+    }
+
+    /// One route to `target` and its handshake; `None` when the orchestrator ended the route
+    /// before the daemon answered (its link is not up).
+    pub async fn route_once(
+        &self,
+        target: &WireDaemonId,
+        client_build: &str,
+    ) -> io::Result<Option<micold_core::connect::Connected>> {
+        let route = self.open(target).await?;
+        match micold_core::connect::handshake(route, client_build).await {
+            Ok(connected) => Ok(Some(connected)),
+            Err(e) if not_linked(&e) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     async fn connect(&self) -> io::Result<Link> {
@@ -270,6 +316,8 @@ enum Delivery {
     Frame(Bytes),
     /// The route is over: close it, so its actor re-handshakes (and so re-reads).
     End,
+    /// Hand this inner frame (the orchestrator's `StreamEnded`) to the route, then close it.
+    Last(Bytes),
     /// Not for a route.
     Drop,
 }
@@ -292,19 +340,20 @@ fn delivery(payload: &[u8]) -> (Option<(WireDaemonId, u64)>, Delivery) {
 }
 
 /// A JSON-form frame is the orchestrator's own: a refusal is handed to the actor as its daemon
-/// would have answered; `StreamEnded` and `OutcomeUnknown` end the route (FR-009).
+/// would have answered; `StreamEnded` is handed on and ends the route, `OutcomeUnknown` ends it
+/// (FR-009).
 fn json_delivery(body: &[u8]) -> Delivery {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(body) else {
         return Delivery::Drop;
     };
     let msg = &value["msg"];
-    let ends = msg
-        .as_object()
-        .is_some_and(|m| m.contains_key("StreamEnded") || m.contains_key("OutcomeUnknown"));
-    if ends {
+    let has = |key| msg.as_object().is_some_and(|m| m.contains_key(key));
+    if has("OutcomeUnknown") {
         return Delivery::End;
     }
     match control_payload(msg) {
+        // The actor reads why, then the end.
+        Ok(inner) if has("StreamEnded") => Delivery::Last(Bytes::from(inner)),
         Ok(inner) => Delivery::Frame(Bytes::from(inner)),
         Err(_) => Delivery::Drop,
     }
@@ -345,6 +394,12 @@ async fn run_link(framed: Framed, mut outbound: mpsc::Receiver<Outbound>, routes
                             remove_route(&routes, &key);
                         }
                     }
+                    (Delivery::Last(inner), route) => {
+                        if let Some(route) = route {
+                            let _ = route.try_send(inner);
+                        }
+                        remove_route(&routes, &key);
+                    }
                     (Delivery::End, _) => {
                         remove_route(&routes, &key);
                     }
@@ -358,6 +413,17 @@ async fn run_link(framed: Framed, mut outbound: mpsc::Receiver<Outbound>, routes
     // fails to insert, never leaves a route on a dead link.
     outbound.close();
     routes.lock().expect("routes lock").take();
+}
+
+/// Whether a handshake on a route failed because the daemon is not linked yet: the orchestrator
+/// ended the route for an unknown or offline daemon, or the route closed with no reason. Any other
+/// reason (`needs-update`, `slow-consumer`, ...) is the attempt's answer and surfaces.
+fn not_linked(e: &io::Error) -> bool {
+    use micold_core::protocol::routing::StreamEndReason as R;
+    match micold_core::connect::route_ended(e) {
+        Some(reason) => matches!(reason, R::NotFound | R::DaemonOffline | R::Offline),
+        None => e.kind() == io::ErrorKind::UnexpectedEof,
+    }
 }
 
 static SHARED: OnceLock<OrchestratorConn> = OnceLock::new();
@@ -395,13 +461,16 @@ mod tests {
     }
 
     #[test]
-    fn stream_ended_and_outcome_unknown_end_the_route() {
+    fn stream_ended_is_handed_on_and_both_end_the_route() {
         let ended = encode_json_payload(
             &header(None),
             &serde_json::json!({"StreamEnded": {"reason": "daemon-offline"}}),
         )
         .unwrap();
-        assert_eq!(delivery(&ended).1, Delivery::End);
+        let inner =
+            control_payload(&serde_json::json!({"StreamEnded": {"reason": "daemon-offline"}}))
+                .unwrap();
+        assert_eq!(delivery(&ended).1, Delivery::Last(Bytes::from(inner)));
         let unknown = encode_json_payload(
             &header(Some(11)),
             &serde_json::json!({"OutcomeUnknown": {"req": 11}}),
@@ -414,6 +483,22 @@ mod tests {
             delivery(&encode_opaque_payload(&header(None), &[])).1,
             Delivery::End
         );
+    }
+
+    #[test]
+    fn only_an_unknown_or_offline_daemon_is_not_linked_yet() {
+        use micold_core::connect::RouteEnded;
+        use micold_core::protocol::routing::StreamEndReason as R;
+        let ended = |r| io::Error::new(io::ErrorKind::ConnectionAborted, RouteEnded(r));
+        for r in [R::NotFound, R::DaemonOffline, R::Offline] {
+            assert!(not_linked(&ended(r)), "{r:?}");
+        }
+        for r in [R::NeedsUpdate, R::SlowConsumer, R::ClientGone, R::Closed] {
+            assert!(!not_linked(&ended(r)), "{r:?}");
+        }
+        assert!(not_linked(&io::Error::from(io::ErrorKind::UnexpectedEof)));
+        let text = io::Error::new(io::ErrorKind::InvalidData, "got StreamEnded");
+        assert!(!not_linked(&text), "matched on text");
     }
 
     #[test]

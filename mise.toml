@@ -9,6 +9,9 @@ uv = "latest"
 # rules it implements -- rendered contrast, focus visibility, reachable names -- are properties of a
 # rendered page, not of markup, so there is nothing in the Rust toolchain that could take its place.
 node = "24"
+# The web client (#1735) is a pnpm workspace (package.json, pnpm-workspace.yaml) beside the Rust
+# one; node above is shared with the docs axe check, so only the package manager is added.
+pnpm = "10"
 
 # The clips are encoded from captured frames (feature 028). ffmpeg is the one publication
 # prerequisite with no Rust or npm equivalent, and installing it needs root on most distributions —
@@ -51,6 +54,30 @@ run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-clien
 [tasks.daemon]
 description = "Run the session daemon directly (normally auto-spawned by the client)"
 run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-daemon"
+
+[tasks.client-test]
+description = "Web client: install, lint, typecheck and Jest with coverage (#1735, FR-002)"
+dir = "{{config_root}}"
+run = """
+pnpm install --frozen-lockfile
+pnpm --filter @micold/client lint
+pnpm --filter @micold/client typecheck
+pnpm --filter @micold/protocol typecheck
+pnpm --filter @micold/client test --coverage
+"""
+
+[tasks.client-web]
+description = "Web client: static web export of the production build, into apps/client/dist (#1735, FR-002)"
+dir = "{{config_root}}"
+run = """
+pnpm install --frozen-lockfile
+pnpm --filter @micold/client web:export
+"""
+
+[tasks.client-e2e]
+description = "Web client: Playwright smoke test in Chromium, Firefox and WebKit against the mock export (arrives with M4, T055)"
+dir = "{{config_root}}"
+run = "pnpm --filter @micold/client e2e"
 
 [tasks.screenshot]
 description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"
@@ -203,6 +230,11 @@ run = """
 # task refuses instead. The cluster is deleted afterwards unless MICOLD_KUBE_TEST_KEEP=1.
 CARGO_WRAP={{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/test-kube.sh
 """
+
+[tasks.chart-check]
+description = "Lint and validate the Helm chart deploy/helm/micold (helm lint, kubeconform, conformance test; #1981): needs helm and kubeconform, which scripts/install-kube-tools.sh pins"
+dir = "{{config_root}}"
+run = "scripts/chart-check.sh"
 
 [tasks.build]
 description = "Build the release GUI binary [build-locked]"

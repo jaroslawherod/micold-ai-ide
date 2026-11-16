@@ -277,6 +277,10 @@ name = "material_boundary"
 path = "tests/material_boundary.rs"
 
 [[test]]
+name = "orchestrator_provisioned"
+path = "tests/orchestrator_provisioned.rs"
+
+[[test]]
 name = "packaging_excludes_showcase"
 path = "tests/packaging_excludes_showcase.rs"
 

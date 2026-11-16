@@ -2,131 +2,20 @@
 //! A real `micold-daemon orchestrator` process on a temp runtime dir, started by the connection
 //! itself, and a real daemon (in this process, no socket of its own) linked to it as `local`.
 
-#[path = "daemon_bin/mod.rs"]
-mod daemon_bin;
+#[path = "orchestrator_world/mod.rs"]
+mod orchestrator_world;
 
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use micold_client::orchestrator_conn::{OrchestratorConn, Starter};
+use micold_client::orchestrator_conn::OrchestratorConn;
 use micold_core::connect::{handshake, Connected, DaemonConnection};
-use micold_core::endpoint::Endpoint;
 use micold_core::protocol::routing::WireDaemonId;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::orchestrator_link::{announcement, spawn_with, LinkHandle};
 use micold_daemon::state::DaemonState;
-
-const WITHIN: Duration = Duration::from_secs(20);
-
-fn daemon_binary() -> PathBuf {
-    daemon_bin::built_daemon().unwrap_or_else(|| {
-        panic!(
-            "build micold-daemon first; none above {:?}",
-            std::env::current_exe()
-        )
-    })
-}
-
-/// A temp runtime and data dir, and every orchestrator the starter started.
-struct World {
-    _root: tempfile::TempDir,
-    children: Arc<Mutex<Vec<Child>>>,
-    starter: Starter,
-}
-
-impl World {
-    fn new(binary: PathBuf) -> Self {
-        let root = tempfile::tempdir().expect("temp dir");
-        let runtime = root.path().join("run");
-        std::fs::create_dir(&runtime).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).unwrap();
-        }
-        let dir = runtime.join("micold");
-        let endpoint = Endpoint {
-            socket_path: dir.join("orchestrator.sock"),
-            lock_path: dir.join("orchestrator.lock"),
-        };
-        let children: Arc<Mutex<Vec<Child>>> = Arc::default();
-        let (spawned, home) = (Arc::clone(&children), root.path().to_path_buf());
-        let starter = Starter {
-            endpoint,
-            spawn: Arc::new(move || {
-                let child = Command::new(&binary)
-                    .arg("orchestrator")
-                    .env("XDG_RUNTIME_DIR", home.join("run"))
-                    .env("XDG_DATA_HOME", home.join("data"))
-                    .env("HOME", &home)
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-                    .map_err(|e| {
-                        std::io::Error::new(
-                            e.kind(),
-                            format!("cannot start {}: {e}", binary.display()),
-                        )
-                    })?;
-                spawned.lock().unwrap().push(child);
-                Ok(())
-            }),
-        };
-        Self {
-            _root: root,
-            children,
-            starter,
-        }
-    }
-
-    fn socket(&self) -> &Path {
-        &self.starter.endpoint.socket_path
-    }
-
-    /// How many of the started orchestrators still run.
-    fn running(&self) -> usize {
-        self.children
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .map(|c| matches!(c.try_wait(), Ok(None)))
-            .filter(|running| *running)
-            .count()
-    }
-
-    fn started(&self) -> usize {
-        self.children.lock().unwrap().len()
-    }
-
-    /// Wait until exactly `n` orchestrators run.
-    async fn settles_on(&self, n: usize) {
-        let deadline = Instant::now() + WITHIN;
-        while self.running() != n {
-            assert!(
-                Instant::now() < deadline,
-                "{} orchestrators run, not {n}",
-                self.running()
-            );
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    }
-
-    fn kill_all(&self) {
-        for child in self.children.lock().unwrap().iter_mut() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
-}
-
-impl Drop for World {
-    fn drop(&mut self) {
-        self.kill_all();
-    }
-}
+use orchestrator_world::{daemon_binary, link_as, World, WITHIN};
 
 /// A real daemon linked to the world's orchestrator as `local`.
 fn link_local(world: &World) -> (Arc<DaemonState>, LinkHandle) {
@@ -236,4 +125,47 @@ async fn after_the_orchestrator_is_killed_the_app_starts_it_again_and_re_handsha
     assert!(world.started() >= 2, "started again");
     assert_eq!(world.running(), 1);
     drop(state);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_route_to_a_provisioned_daemon_waits_for_its_link_and_reaches_it() {
+    let world = World::new(daemon_binary());
+    let conn = Arc::new(OrchestratorConn::new(world.starter.clone()));
+    let id = WireDaemonId::new("box-1").unwrap();
+    // FR-007, M4: the route is asked for before the daemon has linked (its bridge was just closed
+    // and its link redials); it succeeds once the daemon links and handshakes.
+    let routed = {
+        let (conn, id) = (Arc::clone(&conn), id.clone());
+        tokio::spawn(async move {
+            conn.routed_to(&id, Duration::from_secs(10), "test-app")
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let (_state, _link) = link_as(&world, "box-1");
+    match routed.await.unwrap().expect("routed") {
+        Connected::Ready(..) => {}
+        Connected::Refused(reason) => panic!("refused: {reason:?}"),
+    }
+    assert_eq!(
+        conn.connections_opened(),
+        1,
+        "one connection, none to a daemon"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_that_never_links_fails_the_route_naming_its_wire_id() {
+    let world = World::new(daemon_binary());
+    let conn = OrchestratorConn::new(world.starter.clone());
+    let id = WireDaemonId::new("box-2").unwrap();
+    let Err(err) = conn
+        .routed_to(&id, Duration::from_secs(1), "test-app")
+        .await
+    else {
+        panic!("nothing links, yet the route was made")
+    };
+    assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+    assert!(err.to_string().contains("box-2"), "{err}");
+    assert_eq!(conn.connections_opened(), 1);
 }

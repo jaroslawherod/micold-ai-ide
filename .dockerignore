@@ -1,0 +1,16 @@
+# Build context of Dockerfile.orchestrator: the workspace sources, without build output, history
+# or the trees the daemon does not compile. rust-toolchain.toml is left out so the builder image's
+# own pinned toolchain builds instead of rustup fetching `stable`.
+.git
+target
+target-shared
+**/node_modules
+.visual-pass
+docs
+site
+specs
+evals
+*.whl
+rust-toolchain.toml
+# Local secrets, gitignored too: never in a build context.
+**/.env*
