@@ -191,3 +191,92 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
     );
     store.release();
 }
+
+/// FR-004 in the process: the orchestrator runs on PostgreSQL through a proxy that then drops
+/// every connection; a daemon still links, and the failed save is reported on stderr as a change
+/// that could not be saved, without the password.
+#[test]
+fn a_save_lost_with_the_database_is_reported_on_stderr_without_the_password() {
+    // Created and dropped outside the runtime: both run their own.
+    let Some(database_on_server) = PostgresDatabase::create() else {
+        return;
+    };
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(save_lost_on_stderr(&database_on_server));
+}
+
+async fn save_lost_on_stderr(database_on_server: &PostgresDatabase) {
+    use std::io::BufRead as _;
+
+    let (_, upstream) = through_port(&database_on_server.url, 0);
+    let proxy = FlakyProxy::start(upstream);
+    let (url, _) = through_port(&database_on_server.url, proxy.port);
+    let password = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.split_once('@'))
+        .and_then(|(user, _)| user.split_once(':'))
+        .map(|(_, password)| password.to_owned())
+        .unwrap_or_default();
+    let dir = Arc::new(tempfile::tempdir().unwrap());
+    database(dir.path(), &url);
+    let config = dir.path().join("orchestrator.toml");
+    std::fs::write(
+        &config,
+        format!(
+            "schema = 1\n[daemon]\nname = \"t\"\nkind = \"host\"\n[listen]\nsocket = \"auto\"\n\
+             [database]\nurl_file = \"{}\"\n",
+            dir.path().join("db-url").display()
+        ),
+    )
+    .unwrap();
+
+    let mut child = crate::restart::orchestrator_process(dir.path())
+        .arg("--config")
+        .arg(&config)
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let _child = KillOnDrop(child);
+    let (lines, logged) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stderr)
+            .lines()
+            .map_while(Result::ok)
+        {
+            let _ = lines.send(line);
+        }
+    });
+    let socket = dir.path().join("run/micold/orchestrator.sock");
+    let orchestrator = Orchestrator::external(Arc::clone(&dir), socket).await;
+
+    proxy.drop_all();
+    let _link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
+    record_when(&orchestrator, "box", |r| r["health"] == "online").await;
+
+    let mut seen = Vec::new();
+    let reported = loop {
+        let line = logged
+            .recv_timeout(crate::support::WITHIN)
+            .unwrap_or_else(|_| panic!("no save failure on stderr: {seen:?}"));
+        let found = line.contains("could not be saved");
+        seen.push(line);
+        if found {
+            break seen;
+        }
+    };
+    for line in &reported {
+        assert!(password.is_empty() || !line.contains(&password), "{line}");
+    }
+}
+
+/// A child process killed when the test ends, pass or fail.
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}

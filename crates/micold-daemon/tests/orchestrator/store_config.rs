@@ -149,3 +149,39 @@ fn stored(file: &Path) -> bool {
     .join()
     .unwrap()
 }
+
+/// FR-010: a `registry.json` from an earlier version that is not imported yet refuses the start,
+/// naming the file, rather than starting on an empty registry; once marked imported it starts.
+#[tokio::test]
+async fn an_unimported_registry_json_refuses_the_start_naming_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let orchestrator_dir = dir.path().join("orchestrator");
+    std::fs::create_dir_all(&orchestrator_dir).unwrap();
+    let json = orchestrator_dir.join("registry.json");
+    std::fs::write(&json, "{}").unwrap();
+    let start = || {
+        micold_daemon::orchestrator::run_configured(
+            dir.path().join("orchestrator.sock"),
+            crate::support::TestClock::new(0)
+                as std::sync::Arc<dyn micold_daemon::orchestrator::Clock>,
+            None,
+            dir.path().to_path_buf(),
+        )
+    };
+    let error = tokio::time::timeout(std::time::Duration::from_secs(5), start())
+        .await
+        .expect("the start returns at once")
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "orchestrator registry {} is not imported yet; this version cannot import it",
+            json.display()
+        )
+    );
+    assert!(!orchestrator_dir.join("orchestrator.db").exists());
+
+    std::fs::write(orchestrator_dir.join("registry.json.imported"), "").unwrap();
+    let running = tokio::time::timeout(std::time::Duration::from_secs(2), start()).await;
+    assert!(running.is_err(), "the marked start returned: {running:?}");
+}

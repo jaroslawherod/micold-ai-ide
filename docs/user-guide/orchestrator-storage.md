@@ -16,6 +16,12 @@ Local mode is allowed only while the orchestrator listens on this machine alone.
 listening on a network address must have a `[database]` table; without one it refuses to start, and
 `micold-daemon config check` fails naming `database.url_file`.
 
+An orchestrator from an earlier version kept its registry in
+`<data_dir>/orchestrator/registry.json`. While that file is there and not marked imported (no
+`registry.json.imported` beside it), the orchestrator refuses to start, with
+`orchestrator registry <path> is not imported yet; this version cannot import it`, rather than
+start on an empty registry. A later version imports it.
+
 ## PostgreSQL
 
 To share an orchestrator, point it at a PostgreSQL server:

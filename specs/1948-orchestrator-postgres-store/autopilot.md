@@ -76,6 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
 | B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 | Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
+| Code A+B (opus) | 1 | M8 | 71e4c32 | 3a74d3004:71e4c32 | CHANGES: 2 MAJOR 2 MINOR, all fixed (F1 refuse unimported registry.json, F2 M8 cycle-log red-by-revert, F3 process stderr test on PostgreSQL, F4 full gate green) |
 
 ## Declined review findings
 
@@ -95,7 +96,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 implemented on claude/project-thread-g30l62 (T045–T050 ticked; previous PR #2006 merged at 3a74d3004). Full gate run locally with PostgreSQL. Not yet reviewed: the orchestrator dispatches review A+B on origin/main...HEAD, then opens the PR. registry.json import stays for M9.
+M8 implemented on claude/project-thread-g30l62 (T045–T050; previous PR #2006 merged at 3a74d3004). Review round 1 (2 MAJOR 2 MINOR) fixed in the commit after 71e4c32; full gate green with PostgreSQL. Next: the orchestrator re-reviews the fix diff 71e4c32..HEAD, then opens the PR. registry.json import stays for M9.
 
 ## Open escalation
 

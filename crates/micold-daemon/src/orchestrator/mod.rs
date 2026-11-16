@@ -176,12 +176,27 @@ async fn open_store(
     database: Option<DatabaseConfig>,
     data_dir: PathBuf,
 ) -> io::Result<Arc<dyn RegistryStore>> {
+    refuse_unimported_json(&data_dir)?;
     let handle = tokio::task::spawn_blocking(move || {
         db::open(database.as_ref(), BindScope::LoopbackOnly, &data_dir)
     })
     .await
     .map_err(io::Error::other)??;
     Ok(Arc::new(db::SqlRegistryStore::new(handle)))
+}
+
+/// Refuse to start while an earlier version's `<data_dir>/orchestrator/registry.json` is there
+/// and not marked imported: starting on an empty registry would hide it, and daemons relinking
+/// would fill the new store so that the import later refuses it (FR-010).
+fn refuse_unimported_json(data_dir: &std::path::Path) -> io::Result<()> {
+    let json = data_dir.join("orchestrator").join("registry.json");
+    if json.exists() && !json.with_file_name("registry.json.imported").exists() {
+        return Err(io::Error::other(format!(
+            "orchestrator registry {} is not imported yet; this version cannot import it",
+            json.display()
+        )));
+    }
+    Ok(())
 }
 
 /// Run the orchestrator on `socket` with `clock`, on the store `database` and `data_dir` name, as

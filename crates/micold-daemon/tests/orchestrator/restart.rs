@@ -96,7 +96,7 @@ async fn the_orchestrator_hosts_no_session_and_writes_only_its_registry() {
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
 
 /// `micold-daemon orchestrator` with its data under `<dir>/data` and its socket under `<dir>/run`.
-fn orchestrator_process(dir: &Path) -> std::process::Command {
+pub(crate) fn orchestrator_process(dir: &Path) -> std::process::Command {
     let run = dir.join("run");
     std::fs::create_dir_all(&run).unwrap();
     #[cfg(unix)]
