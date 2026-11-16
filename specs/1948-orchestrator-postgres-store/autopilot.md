@@ -98,7 +98,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M9 unit (base: M8 merge 2243de02d): T051–T054 implemented and ticked; `db::import::import_registry_json` replaces M8's start refusal (called in `open_store` after `db::open`). Full gate run before the review snapshot. Next: orchestrator dispatches review A+B on origin/main...HEAD, then fix findings, push, PR.
+M9 unit (base: M8 merge 2243de02d): T051–T054 implemented and ticked; `db::import::import_registry_json` replaces M8's start refusal (called in `open_store` after `db::open`). Full gate on 790bf21c7: fmt, clippy, all 13486 Rust tests (PostgreSQL configured) green after installing openssh-client; script tests red only on the known-flaky `autopilot.test.sh` facts cases (8 in the gate, 1 alone, varying), no script touched. Next: orchestrator dispatches review A+B on origin/main...HEAD, then fix findings, push, PR.
 
 ## Open escalation
 
