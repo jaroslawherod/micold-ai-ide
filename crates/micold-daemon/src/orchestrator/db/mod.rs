@@ -1,5 +1,6 @@
 //! The orchestrator's SQL store (#1948): one body of queries over `sqlx::Any`, kept in a SQLite
-//! file in local mode. The stores here are synchronous, as their traits are; a private runtime
+//! file in local mode and on the operator's PostgreSQL otherwise. The stores here are
+//! synchronous, as their traits are; a private runtime
 //! owned by [`StoreHandle`] runs the async driver, so no caller needs one.
 //!
 //! Rules that make that safe: every call from async code goes through `spawn_blocking`;
@@ -17,6 +18,7 @@ use std::time::Duration;
 
 use micold_core::orchestrator::StoreError;
 use sqlx::any::{AnyConnectOptions, AnyPoolOptions};
+use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use sqlx::{AnyPool, Executor as _, Row as _};
 use tokio::runtime::{Builder, Handle, Runtime};
 
@@ -64,6 +66,51 @@ impl StoreHandle {
             reason,
         };
         create_owner_only(&path).map_err(|e| unavailable(e.to_string()))?;
+        let url = sqlite_url(&path);
+        Self::start(target, open_sqlite_pool(&url, &path), &migrate::MIGRATOR)
+    }
+
+    /// Open the PostgreSQL database `url` names with at most `pool_size` connections, and bring it
+    /// to this build's schema. With `ca_file` the server's certificate must chain to it and match
+    /// the host (`verify-full`); without it TLS is used when the server offers it (`prefer`).
+    ///
+    /// An error names the server as `host:port`, never the URL or its password.
+    pub fn open_postgres(
+        url: &str,
+        ca_file: Option<&Path>,
+        pool_size: u32,
+    ) -> Result<Arc<Self>, StoreError> {
+        let options: PgConnectOptions = url.parse().map_err(|_| StoreError::Unavailable {
+            target: "postgres".to_owned(),
+            reason: "the database URL does not parse".to_owned(),
+        })?;
+        let target = format!("{}:{}", options.get_host(), options.get_port());
+        let options = match ca_file {
+            Some(ca) => {
+                if !ca.is_file() {
+                    return Err(StoreError::Unavailable {
+                        target,
+                        reason: format!("database.ca_file {} is not a file", ca.display()),
+                    });
+                }
+                options.ssl_mode(PgSslMode::VerifyFull).ssl_root_cert(ca)
+            }
+            None => options.ssl_mode(PgSslMode::Prefer),
+        };
+        let pool = open_postgres_pool(options, pool_size.max(1), url.to_owned());
+        Self::start(target, pool, &migrate::POSTGRES_MIGRATOR)
+    }
+
+    /// Build the runtime, open the pool on it and run `migrator` forward.
+    fn start(
+        target: String,
+        pool: impl Future<Output = Result<AnyPool, String>>,
+        migrator: &'static sqlx::migrate::Migrator,
+    ) -> Result<Arc<Self>, StoreError> {
+        let unavailable = |reason: String| StoreError::Unavailable {
+            target: target.clone(),
+            reason,
+        };
         install_drivers();
         let rt = Builder::new_multi_thread()
             .worker_threads(2)
@@ -71,8 +118,7 @@ impl StoreHandle {
             .enable_all()
             .build()
             .map_err(|e| unavailable(e.to_string()))?;
-        let url = sqlite_url(&path);
-        let pool = match run_on(&rt, connect(&url, &path)) {
+        let pool = match run_on(&rt, pool) {
             Ok(Ok(pool)) => pool,
             failed => {
                 // Dropping a runtime waits for its threads, which async code must not do.
@@ -89,7 +135,7 @@ impl StoreHandle {
             pool,
             target,
         });
-        handle.block_on(migrate::run_forward(handle.pool()))??;
+        handle.block_on(migrate::run_forward(migrator, handle.pool()))??;
         Ok(handle)
     }
 
@@ -164,7 +210,7 @@ impl StoreHandle {
         &self.target
     }
 
-    /// The database file, for a corrupt-row report.
+    /// The database file (or `host:port`), for a corrupt-row report.
     pub(crate) fn path(&self) -> PathBuf {
         PathBuf::from(&self.target)
     }
@@ -255,7 +301,41 @@ fn sqlite_url(path: &Path) -> String {
     url
 }
 
-async fn connect(url: &str, path: &Path) -> Result<AnyPool, String> {
+/// Open the PostgreSQL pool. The driver's error text is kept, with the URL and its password cut
+/// out should a driver ever echo them.
+async fn open_postgres_pool(
+    options: PgConnectOptions,
+    pool_size: u32,
+    url: String,
+) -> Result<AnyPool, String> {
+    use sqlx::ConnectOptions as _;
+    let full = options.to_url_lossy();
+    let redact = |e: sqlx::Error| redact(&redact(&e.to_string(), full.as_str()), &url);
+    let any = AnyConnectOptions::from_url(&full).map_err(redact)?;
+    AnyPoolOptions::new()
+        .max_connections(pool_size)
+        .acquire_timeout(TIMEOUT)
+        .connect_with(any)
+        .await
+        .map_err(redact)
+}
+
+/// `text` with `url`, and the password in its user part, replaced by `***`.
+fn redact(text: &str, url: &str) -> String {
+    let mut out = text.replace(url, "***");
+    let password = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.split('/').next())
+        .and_then(|authority| authority.rsplit_once('@'))
+        .and_then(|(user, _)| user.split_once(':'))
+        .map(|(_, password)| password);
+    if let Some(password) = password.filter(|p| !p.is_empty()) {
+        out = out.replace(password, "***");
+    }
+    out
+}
+
+async fn open_sqlite_pool(url: &str, path: &Path) -> Result<AnyPool, String> {
     let options: AnyConnectOptions = url.parse().map_err(|e: sqlx::Error| e.to_string())?;
     let file = path.display().to_string();
     AnyPoolOptions::new()

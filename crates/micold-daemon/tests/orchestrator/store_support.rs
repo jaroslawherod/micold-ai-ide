@@ -134,3 +134,138 @@ impl FullBackend for SqliteBackend {
         ))
     }
 }
+
+/// The server the PostgreSQL cases use: `MICOLD_TEST_POSTGRES_URL`, a URL whose user may create and
+/// drop databases. Unset, the cases print `skipped: …` and pass, unless `MICOLD_REQUIRE_POSTGRES=1`
+/// (CI), where they fail instead.
+pub fn postgres_server() -> Option<String> {
+    match std::env::var("MICOLD_TEST_POSTGRES_URL") {
+        Ok(url) if !url.trim().is_empty() => Some(url.trim().to_owned()),
+        _ => {
+            assert!(
+                std::env::var("MICOLD_REQUIRE_POSTGRES").as_deref() != Ok("1"),
+                "MICOLD_REQUIRE_POSTGRES=1 but MICOLD_TEST_POSTGRES_URL is not set"
+            );
+            println!("skipped: MICOLD_TEST_POSTGRES_URL not set");
+            None
+        }
+    }
+}
+
+/// A database of its own on the test server, dropped (with every connection to it) on drop.
+pub struct PostgresDatabase {
+    server: String,
+    name: String,
+    /// The URL of this database.
+    pub url: String,
+}
+
+impl PostgresDatabase {
+    /// Create a fresh database, or `None` when no server is configured.
+    pub fn create() -> Option<Self> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let server = postgres_server()?;
+        let name = format!(
+            "micold_test_{}_{}_{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        );
+        admin(&server, &format!("CREATE DATABASE {name}"));
+        let url = with_database(&server, &name);
+        Some(Self { server, name, url })
+    }
+
+    /// Open the store on this database.
+    pub fn open(&self) -> Arc<StoreHandle> {
+        StoreHandle::open_postgres(&self.url, None, 4).unwrap()
+    }
+}
+
+impl Drop for PostgresDatabase {
+    fn drop(&mut self) {
+        admin(
+            &self.server,
+            &format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", self.name),
+        );
+    }
+}
+
+/// `url` with its path (the database name) replaced by `name`.
+fn with_database(url: &str, name: &str) -> String {
+    let (base, query) = url
+        .split_once('?')
+        .map_or((url, None), |(b, q)| (b, Some(q)));
+    let authority_end = base
+        .find("://")
+        .map(|i| i + 3)
+        .and_then(|start| base[start..].find('/').map(|i| start + i))
+        .unwrap_or(base.len());
+    let mut out = format!("{}/{name}", &base[..authority_end]);
+    if let Some(query) = query {
+        out.push('?');
+        out.push_str(query);
+    }
+    out
+}
+
+/// Run one statement on the server's own database, outside a transaction.
+fn admin(server: &str, sql: &str) {
+    use sqlx::Connection as _;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let mut conn = sqlx::PgConnection::connect(server).await.unwrap();
+        sqlx::query(sql).execute(&mut conn).await.unwrap();
+        conn.close().await.unwrap();
+    });
+}
+
+/// A database of its own on `MICOLD_TEST_POSTGRES_URL`: a restart drops the handle and connects
+/// again.
+pub struct PostgresBackend {
+    handle: Option<Arc<StoreHandle>>,
+    // Dropped after the handle (field order), so no connection is open when it goes.
+    db: PostgresDatabase,
+}
+
+impl PostgresBackend {
+    /// `None` (the case is skipped) when no server is configured.
+    pub fn new() -> Option<Self> {
+        let db = PostgresDatabase::create()?;
+        Some(Self {
+            handle: Some(db.open()),
+            db,
+        })
+    }
+
+    fn handle(&self) -> Arc<StoreHandle> {
+        Arc::clone(self.handle.as_ref().expect("open"))
+    }
+}
+
+impl Backend for PostgresBackend {
+    fn registry(&self) -> Arc<dyn RegistryStore> {
+        Arc::new(SqlRegistryStore::new(self.handle()))
+    }
+
+    fn reopen(&mut self) {
+        self.handle = None;
+        self.handle = Some(self.db.open());
+    }
+}
+
+impl FullBackend for PostgresBackend {
+    fn auth(&self, tenant: &TenantId) -> Arc<dyn AuthStore> {
+        Arc::new(SqlAuthStore::new(self.handle(), tenant.clone()))
+    }
+
+    fn audit(&self, tenant: &TenantId) -> Arc<dyn AuditStore> {
+        Arc::new(SqlAuditStore::new(self.handle(), tenant.clone()))
+    }
+}

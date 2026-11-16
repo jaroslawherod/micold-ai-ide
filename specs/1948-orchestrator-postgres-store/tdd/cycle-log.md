@@ -134,3 +134,22 @@ exercised by reading the code path, not by a failing run first. Test-after admis
 - review A MINOR fixed after the fact: `put_refresh` wrote `revoked_at` as NULL where the memory store
   keeps the token as given; now bound. `a_stored_refresh_token_keeps_the_revocation_it_arrived_with`
   was written with the fix (test-after, no red run).
+
+## M4 Cycle 1: PostgreSQL store (T026-T029)
+
+- test: `store_support.rs` `PostgresDatabase` / `PostgresBackend` (own database per case, skip or
+  fail by `MICOLD_REQUIRE_POSTGRES`); `store_suite.rs` `postgres` module (17 cases);
+  `store_migrations.rs` `both_dialects_list_the_same_versions_and_descriptions`,
+  `an_unreachable_postgres_server_is_unavailable_naming_host_and_port_not_the_password`,
+  `opening_postgres_applies_the_v1_schema_once`; `store_scan.rs` PostgreSQL append-only case
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator --no-run` ->
+  `error[E0599]: no associated function or constant named open_postgres found for struct StoreHandle`
+  (4 call sites); the dialect-parity case had no `migrations/postgres/` directory
+- green: `migrations/postgres/0001_orchestrator_schema.sql`, `POSTGRES_MIGRATOR`,
+  `StoreHandle::open_postgres`; with `MICOLD_TEST_POSTGRES_URL` on a local PostgreSQL 16 and
+  `MICOLD_REQUIRE_POSTGRES=1`: 20 postgres cases passed; `store_` 90 passed without it (skips).
+  No query in `db/registry.rs`, `db/auth.rs`, `db/audit.rs` needed a dialect change (`$N`
+  placeholders, `ON CONFLICT`, `RETURNING` are common to both).
+- refactor: `StoreHandle::start` shared by both opens; `run_forward` takes its migrator.
+- error-arm cases (`a_url_that_does_not_parse…`, `a_missing_ca_file…`, `a_present_ca_file…`) were
+  written with the code (test-after), for diff coverage.
