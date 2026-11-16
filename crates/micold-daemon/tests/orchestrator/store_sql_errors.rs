@@ -41,9 +41,9 @@ fn corrupt<R: std::fmt::Debug>(name: &str, result: Result<R, StoreError>) {
     );
 }
 
-#[test]
-fn every_auth_method_over_lost_tables_is_unavailable() {
-    let (_dir, handle, auth) = open();
+/// An auth store whose tables are all dropped.
+fn lost() -> (tempfile::TempDir, Arc<StoreHandle>, SqlAuthStore) {
+    let (dir, handle, auth) = open();
     for table in [
         "refresh_tokens",
         "identities",
@@ -63,12 +63,13 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
             .unwrap()
             .unwrap();
     }
-    let (u, h, serial, daemon) = (
-        uid("u1"),
-        hash("x"),
-        CertSerial::new("0a").unwrap(),
-        WireDaemonId::new("box").unwrap(),
-    );
+    (dir, handle, auth)
+}
+
+#[test]
+fn user_methods_over_lost_tables_are_unavailable() {
+    let (_dir, _handle, auth) = lost();
+    let u = uid("u1");
     unavailable(
         "create_user",
         auth.create_user(&new_user("u1", Role::Viewer)),
@@ -77,6 +78,12 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
     unavailable("users", auth.users());
     unavailable("set_role", auth.set_role(&u, Role::Owner));
     unavailable("remove_user", auth.remove_user(&u, T));
+}
+
+#[test]
+fn identity_methods_over_lost_tables_are_unavailable() {
+    let (_dir, _handle, auth) = lost();
+    let u = uid("u1");
     let identity = Identity {
         provider: Provider::GitHub,
         subject: "s".to_owned(),
@@ -89,6 +96,12 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
         "user_by_identity",
         auth.user_by_identity(Provider::GitHub, "s"),
     );
+}
+
+#[test]
+fn invite_and_bootstrap_methods_over_lost_tables_are_unavailable() {
+    let (_dir, _handle, auth) = lost();
+    let (u, h) = (uid("u1"), hash("x"));
     unavailable(
         "create_invite",
         auth.create_invite(&invite("i", "x", T + 100)),
@@ -97,6 +110,12 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
     unavailable("set_bootstrap", auth.set_bootstrap(&h, T));
     unavailable("bootstrap", auth.bootstrap());
     unavailable("consume_bootstrap", auth.consume_bootstrap(&h, T));
+}
+
+#[test]
+fn refresh_token_methods_over_lost_tables_are_unavailable() {
+    let (_dir, _handle, auth) = lost();
+    let (u, h) = (uid("u1"), hash("x"));
     unavailable(
         "put_refresh",
         auth.put_refresh(&refresh_token("x", "u1", "f", T + 100)),
@@ -107,6 +126,17 @@ fn every_auth_method_over_lost_tables_is_unavailable() {
     );
     unavailable("revoke_refresh_for", auth.revoke_refresh_for(&u, T));
     unavailable("refresh", auth.refresh(&h));
+}
+
+#[test]
+fn certificate_and_enrollment_methods_over_lost_tables_are_unavailable() {
+    let (_dir, _handle, auth) = lost();
+    let (u, h, serial, daemon) = (
+        uid("u1"),
+        hash("x"),
+        CertSerial::new("0a").unwrap(),
+        WireDaemonId::new("box").unwrap(),
+    );
     unavailable(
         "record_serial",
         auth.record_serial(&serial, &daemon, T, T + 1),
@@ -138,9 +168,9 @@ fn the_audit_store_over_a_lost_table_is_unavailable() {
     unavailable("by_actor", audit.by_actor("u1", 5));
 }
 
-#[test]
-fn rows_that_do_not_read_back_are_corrupt() {
-    let (_dir, handle, auth) = open();
+/// An auth store holding rows the schema's checks refuse.
+fn with_bad_rows() -> (tempfile::TempDir, Arc<StoreHandle>, SqlAuthStore) {
+    let (dir, handle, auth) = open();
     // A role the schema's check refuses, written on one connection with checks off.
     handle
         .block_on(async {
@@ -165,6 +195,12 @@ fn rows_that_do_not_read_back_are_corrupt() {
         })
         .unwrap()
         .unwrap();
+    (dir, handle, auth)
+}
+
+#[test]
+fn user_rows_that_do_not_read_back_are_corrupt() {
+    let (_dir, _handle, auth) = with_bad_rows();
     corrupt("user (role)", auth.user(&uid("badrole")));
     corrupt("users", auth.users());
     corrupt(
@@ -175,8 +211,18 @@ fn rows_that_do_not_read_back_are_corrupt() {
         "user_by_identity (id)",
         auth.user_by_identity(Provider::GitHub, "blank"),
     );
+}
+
+#[test]
+fn bootstrap_and_revocation_rows_that_do_not_read_back_are_corrupt() {
+    let (_dir, _handle, auth) = with_bad_rows();
     corrupt("bootstrap", auth.bootstrap());
     corrupt("revocations", auth.revocations());
+}
+
+#[test]
+fn a_refresh_row_that_does_not_read_back_is_corrupt() {
+    let (_dir, handle, auth) = with_bad_rows();
     // `refresh` finds a row by hash, so plant one whose stored hash is that of the lookup but
     // whose user id is blank.
     let planted = hash("planted");

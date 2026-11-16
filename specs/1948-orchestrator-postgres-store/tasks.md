@@ -494,7 +494,7 @@ the audit changed no test or source.
   (`store_migrations.rs:186,292,340,667`) with the pinned value (the host and port, the failing
   version), and restore the exact message in `store_config.rs:172-175`. Verify: the same targets pass,
   and each fails when the named text or port is changed in `db/mod.rs`.
-- [ ] T068 [P] F9 (MED): split the eager cases (`store_suite.rs:309,398,448,498`,
+- [x] T068 [P] F9 (MED): split the eager cases (`store_suite.rs:309,398,448,498`,
   `store_sql_errors.rs:85,173`) so each rule has a test name (refresh-token reuse, expired token,
   family revocation are separate cases). Verify:
   `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` passes with more

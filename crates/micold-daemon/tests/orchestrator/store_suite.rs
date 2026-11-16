@@ -313,16 +313,54 @@ pub(super) fn refused<R: std::fmt::Debug>(result: Result<R, StoreError>) {
     );
 }
 
-pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl FullBackend) {
+pub(super) fn a_user_is_created_once_and_read_back(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     let created = auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     assert_eq!(created.role, Role::Viewer);
     assert_eq!(created.removed_at, None);
-    auth.create_user(&new_user("u2", Role::Owner)).unwrap();
     refused(auth.create_user(&new_user("u1", Role::Owner)));
+    drop(auth);
+    backend.reopen();
+    let auth = backend.auth(&t);
+    assert_eq!(auth.user(&uid("u1")).unwrap().unwrap().role, Role::Viewer);
+    assert_eq!(auth.user(&uid("nobody")).unwrap(), None);
+}
+
+pub(super) fn a_role_is_set_only_on_a_known_user(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     auth.set_role(&uid("u1"), Role::Operator).unwrap();
     refused(auth.set_role(&uid("nobody"), Role::Owner));
+    drop(auth);
+    backend.reopen();
+    let role = backend.auth(&t).user(&uid("u1")).unwrap().unwrap().role;
+    assert_eq!(role, Role::Operator);
+}
+
+pub(super) fn a_removed_user_is_unlisted_but_kept(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Operator)).unwrap();
+    auth.create_user(&new_user("u2", Role::Owner)).unwrap();
+    auth.remove_user(&uid("u1"), T + 5).unwrap();
+    refused(auth.remove_user(&uid("nobody"), T + 5));
+    drop(auth);
+    backend.reopen();
+    let auth = backend.auth(&t);
+    let listed: Vec<_> = auth.users().unwrap().into_iter().map(|u| u.id).collect();
+    assert_eq!(listed, vec![uid("u2")], "a removed user is not listed");
+    let removed = auth.user(&uid("u1")).unwrap().unwrap();
+    assert_eq!(removed.removed_at, Some(T + 5));
+    assert_eq!(removed.role, Role::Operator);
+}
+
+pub(super) fn removing_a_user_revokes_its_refresh_tokens_only(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
+    auth.create_user(&new_user("u2", Role::Owner)).unwrap();
     auth.put_refresh(&refresh_token("r1", "u1", "f1", T + 100))
         .unwrap();
     auth.put_refresh(&refresh_token("r2", "u1", "f2", T + 100))
@@ -330,17 +368,9 @@ pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl 
     auth.put_refresh(&refresh_token("r3", "u2", "f3", T + 100))
         .unwrap();
     auth.remove_user(&uid("u1"), T + 5).unwrap();
-    refused(auth.remove_user(&uid("nobody"), T + 5));
     drop(auth);
     backend.reopen();
-
     let auth = backend.auth(&t);
-    let listed: Vec<_> = auth.users().unwrap().into_iter().map(|u| u.id).collect();
-    assert_eq!(listed, vec![uid("u2")], "a removed user is not listed");
-    let removed = auth.user(&uid("u1")).unwrap().unwrap();
-    assert_eq!(removed.removed_at, Some(T + 5));
-    assert_eq!(removed.role, Role::Operator);
-    assert_eq!(auth.user(&uid("nobody")).unwrap(), None);
     for token in ["r1", "r2"] {
         let stored = auth.refresh(&hash(token)).unwrap().unwrap();
         assert_eq!(
@@ -352,49 +382,82 @@ pub(super) fn users_are_created_read_listed_and_soft_removed(backend: &mut impl 
     assert_eq!(auth.refresh(&hash("r3")).unwrap().unwrap().revoked_at, None);
 }
 
-pub(super) fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
-    let t = tenant("default");
-    let auth = backend.auth(&t);
-    auth.create_user(&new_user("u1", Role::Owner)).unwrap();
-    auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
-    let identity = |user: &str, email: &str| Identity {
+fn github(user: &str, email: &str) -> Identity {
+    Identity {
         provider: Provider::GitHub,
         subject: "gh-42".to_owned(),
         user: uid(user),
         email: Some(email.to_owned()),
         email_verified: true,
-    };
-    auth.link_identity(&identity("u1", "a@example.test"))
-        .unwrap();
-    auth.link_identity(&identity("u1", "b@example.test"))
-        .unwrap();
-    refused(auth.link_identity(&identity("u2", "a@example.test")));
-    refused(auth.link_identity(&Identity {
-        user: uid("ghost"),
-        subject: "gh-7".to_owned(),
-        ..identity("u1", "x@example.test")
-    }));
-    let google = Identity {
-        provider: Provider::Google,
-        ..identity("u2", "g@example.test")
-    };
-    auth.link_identity(&google).unwrap();
-    drop(auth);
-    backend.reopen();
+    }
+}
 
+/// A tenant with users `u1` (owner) and `u2` (viewer), `gh-42` on GitHub linked to `u1`.
+fn with_identity(backend: &mut impl FullBackend) -> TenantId {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.create_user(&new_user("u1", Role::Owner)).unwrap();
+    auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
+    auth.link_identity(&github("u1", "a@example.test")).unwrap();
+    t
+}
+
+pub(super) fn an_identity_relinks_to_its_user_and_survives_reopen(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    backend
+        .auth(&t)
+        .link_identity(&github("u1", "b@example.test"))
+        .unwrap();
+    backend.reopen();
     let auth = backend.auth(&t);
     let found = auth.user_by_identity(Provider::GitHub, "gh-42").unwrap();
     assert_eq!(found.map(|u| u.id), Some(uid("u1")));
+    assert_eq!(
+        auth.user_by_identity(Provider::GitHub, "unknown").unwrap(),
+        None
+    );
+}
+
+pub(super) fn a_linked_identity_is_refused_for_another_user(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
+    refused(auth.link_identity(&github("u2", "a@example.test")));
+    let found = auth.user_by_identity(Provider::GitHub, "gh-42").unwrap();
+    assert_eq!(found.map(|u| u.id), Some(uid("u1")));
+}
+
+pub(super) fn an_identity_for_an_unknown_user_is_refused(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
+    refused(auth.link_identity(&Identity {
+        subject: "gh-7".to_owned(),
+        ..github("ghost", "x@example.test")
+    }));
+    assert_eq!(
+        auth.user_by_identity(Provider::GitHub, "gh-7").unwrap(),
+        None
+    );
+}
+
+pub(super) fn an_identity_subject_is_scoped_by_provider(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
+    let google = Identity {
+        provider: Provider::Google,
+        ..github("u2", "g@example.test")
+    };
+    auth.link_identity(&google).unwrap();
     let found = auth.user_by_identity(Provider::Google, "gh-42").unwrap();
     assert_eq!(
         found.map(|u| u.id),
         Some(uid("u2")),
         "same subject, other provider"
     );
-    assert_eq!(
-        auth.user_by_identity(Provider::GitHub, "unknown").unwrap(),
-        None
-    );
+}
+
+pub(super) fn a_removed_users_identity_finds_nobody(backend: &mut impl FullBackend) {
+    let t = with_identity(backend);
+    let auth = backend.auth(&t);
     auth.remove_user(&uid("u1"), T).unwrap();
     assert_eq!(
         auth.user_by_identity(Provider::GitHub, "gh-42").unwrap(),
@@ -402,19 +465,45 @@ pub(super) fn an_identity_links_to_one_user(backend: &mut impl FullBackend) {
     );
 }
 
-pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
+/// A tenant with users `u1`, `u2` and invites `i1` (`tok-1`, live) and `i2` (`tok-2`, expires at T+10).
+fn with_invites(backend: &mut impl FullBackend) -> TenantId {
     let t = tenant("default");
     let auth = backend.auth(&t);
     auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     auth.create_user(&new_user("u2", Role::Viewer)).unwrap();
     auth.create_invite(&invite("i1", "tok-1", T + 100)).unwrap();
     auth.create_invite(&invite("i2", "tok-2", T + 10)).unwrap();
+    t
+}
+
+pub(super) fn an_invite_id_or_token_is_refused_twice(backend: &mut impl FullBackend) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
     refused(auth.create_invite(&invite("i1", "tok-3", T + 100)));
     refused(auth.create_invite(&invite("i3", "tok-1", T + 100)));
+}
+
+pub(super) fn an_unknown_or_expired_invite_is_refused(backend: &mut impl FullBackend) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
     refused(auth.redeem_invite(&hash("unknown"), &uid("u1"), T + 1));
     refused(auth.redeem_invite(&hash("tok-2"), &uid("u1"), T + 10));
-    // An unknown redeeming user is refused, and the invite stays redeemable (M1 review B F2).
+}
+
+pub(super) fn an_invite_for_an_unknown_user_is_refused_and_stays_redeemable(
+    backend: &mut impl FullBackend,
+) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
+    // M1 review B F2.
     refused(auth.redeem_invite(&hash("tok-1"), &uid("ghost"), T + 11));
+    auth.redeem_invite(&hash("tok-1"), &uid("u1"), T + 20)
+        .unwrap();
+}
+
+pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
+    let t = with_invites(backend);
+    let auth = backend.auth(&t);
     let redeemed = auth
         .redeem_invite(&hash("tok-1"), &uid("u1"), T + 20)
         .unwrap();
@@ -428,14 +517,26 @@ pub(super) fn an_invite_is_redeemed_once(backend: &mut impl FullBackend) {
     refused(auth.redeem_invite(&hash("tok-1"), &uid("u2"), T + 30));
 }
 
-pub(super) fn the_bootstrap_code_is_consumed_once(backend: &mut impl FullBackend) {
+pub(super) fn no_bootstrap_code_is_consumed_before_one_is_set(backend: &mut impl FullBackend) {
     let t = tenant("default");
     let auth = backend.auth(&t);
     assert_eq!(auth.bootstrap().unwrap(), None);
     refused(auth.consume_bootstrap(&hash("code"), T));
+}
+
+pub(super) fn only_the_latest_bootstrap_code_is_consumed(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
     auth.set_bootstrap(&hash("code"), T).unwrap();
     auth.set_bootstrap(&hash("code-2"), T + 1).unwrap();
     refused(auth.consume_bootstrap(&hash("code"), T + 2));
+    auth.consume_bootstrap(&hash("code-2"), T + 3).unwrap();
+}
+
+pub(super) fn the_bootstrap_code_is_consumed_once_and_then_fixed(backend: &mut impl FullBackend) {
+    let t = tenant("default");
+    let auth = backend.auth(&t);
+    auth.set_bootstrap(&hash("code-2"), T + 1).unwrap();
     auth.consume_bootstrap(&hash("code-2"), T + 3).unwrap();
     refused(auth.consume_bootstrap(&hash("code-2"), T + 4));
     refused(auth.set_bootstrap(&hash("code-3"), T + 5));
@@ -615,10 +716,22 @@ macro_rules! auth_tests {
     };
     (@cases $attr:tt $make:expr) => {
         auth_tests!(@each $attr $make,
-            users_are_created_read_listed_and_soft_removed,
-            an_identity_links_to_one_user,
+            a_user_is_created_once_and_read_back,
+            a_role_is_set_only_on_a_known_user,
+            a_removed_user_is_unlisted_but_kept,
+            removing_a_user_revokes_its_refresh_tokens_only,
+            an_identity_relinks_to_its_user_and_survives_reopen,
+            a_linked_identity_is_refused_for_another_user,
+            an_identity_for_an_unknown_user_is_refused,
+            an_identity_subject_is_scoped_by_provider,
+            a_removed_users_identity_finds_nobody,
+            an_invite_id_or_token_is_refused_twice,
+            an_unknown_or_expired_invite_is_refused,
+            an_invite_for_an_unknown_user_is_refused_and_stays_redeemable,
             an_invite_is_redeemed_once,
-            the_bootstrap_code_is_consumed_once,
+            no_bootstrap_code_is_consumed_before_one_is_set,
+            only_the_latest_bootstrap_code_is_consumed,
+            the_bootstrap_code_is_consumed_once_and_then_fixed,
             a_refresh_token_is_refused_twice_and_for_an_unknown_user,
             a_rotation_revokes_the_old_token_and_stores_the_new,
             a_reused_refresh_token_revokes_its_family_and_no_other,
