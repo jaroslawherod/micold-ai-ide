@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Micold",
+    "slug": "micold-client",
+    "version": "0.0.0",
+    "scheme": "micold",
+    "platforms": ["web"],
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

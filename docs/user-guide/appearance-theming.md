@@ -219,6 +219,19 @@ three choices:
 Your choice takes effect when you press **Save** and is remembered across restarts. Going back to
 **Follow the system** resumes tracking your OS preference and switching live when it changes.
 
+## The web client: theme and language
+
+The web client (work in progress, #1735) draws from the same colour, type and shape tokens as the
+desktop app, so it looks the same.
+
+- **Theme** — it follows your system's light or dark setting and switches live when the system
+  setting changes, with no reload. There is no theme chooser in the web client yet.
+- **Language** — a **Language** control lists English and Polski. Pick one and every label changes
+  at once, without reloading the page. The choice is remembered in the browser as a preference (only
+  the language code is stored). With no choice made, the browser's language is used, and English
+  when the browser's language is not offered.
+- **Fonts** — Roboto and Fira Mono ship with the client; nothing is fetched from a third party.
+
 ## Motion & animations
 
 The interface uses brief, consistent motion so changes feel considered rather than abrupt:
