@@ -46,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec CLEAN (round 2). Clarify CLEAN. Plan round 1 CHANGES applied (F1-F5); re-review snapshot 45c94fb0bc19e23a2b684906683acaa00be36286:955e5cb11ff02b26a51bce213466e1feb4d04ee8. Next: plan re-review (sonnet), then tasks unit.
+Spec CLEAN (r2). Clarify CLEAN. Plan CLEAN (r2). Tasks written (M1 full T001-T009, M2 light T010-T012); tasks pre-review snapshot f4413c548918627577dc75e749af0571259baade:bc96b57c2cc2e10a3dc2ec2899783320b714c915. speckit-analyze not yet run. Next: tasks review, then checklists, specs-only gate, design PR.
 
 ## Open escalation
 
