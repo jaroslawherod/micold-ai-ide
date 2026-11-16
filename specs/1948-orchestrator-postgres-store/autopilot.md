@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-hzkb7z
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: open the M9 PR from the pushed branch; orchestrator waits on CI and merges
+- **Next step**: dispatch the M10 milestone unit in a fresh thread (previous PR #2010 merged at 83926c52f)
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2003 | M6 | merged | 3d5485c30 |
 | #2006 | M7 | merged | 3a74d3004 |
 | #2008 | M8 | merged | 2243de02d |
+| #2010 | M9 | merged | 83926c52f |
 
 ## Milestones
 
@@ -100,7 +101,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M9 unit (base: M8 merge 2243de02d): T051–T054 implemented and ticked; `db::import::import_registry_json` replaces M8's start refusal (called in `open_store` after `db::open`). Full gate on 790bf21c7: fmt, clippy, all 13486 Rust tests (PostgreSQL configured) green after installing openssh-client; script tests red only on the known-flaky `autopilot.test.sh` facts cases (8 in the gate, 1 alone, varying), no script touched. Next: orchestrator dispatches review A+B on origin/main...HEAD, then fix findings, push, PR.
+M9 merged (PR #2010, squash 83926c52f; opus A+B round 1 MINOR-ONLY, 2 MINOR fixed; first CI run red on a corrupt llvm-cov profraw and a sandbox DNS test outside this diff, green on the rerun of failed jobs). Next: dispatch the M10 unit (T055–T060) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest/openssh-client setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0. Units have no Agent tool: the orchestrator dispatches the review.
 
 ## Open escalation
 
