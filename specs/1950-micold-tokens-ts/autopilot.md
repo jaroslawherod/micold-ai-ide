@@ -40,7 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec and checklist written and pushed; round-1 spec review NOT run (no Agent tool in the unit). Next: run it (snapshot via review-snapshot.sh), act on findings, then clarify.
+Spec and checklist written and pushed; round-1 spec review NOT run (no Agent tool in the unit). Next: run it (snapshot via review-snapshot.sh), act on findings, then clarify. Part 2 (2026-11-16) also had no Agent tool (not in tool list or ToolSearch); review still not run. Pre-review snapshot from part 1: dd60df35...:b3f47d07. Needs a unit dispatched from a context that has Agent, or the orchestrator runs the autopilot-reviewer itself.
 
 ## Open escalation
 
