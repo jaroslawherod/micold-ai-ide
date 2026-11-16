@@ -2,7 +2,7 @@
 
 ## Part A: automated
 
-1. `mise install` (node, pnpm), `pnpm install --frozen-lockfile`.
+1. `mise install` (node 24 already pinned, plus pnpm), `pnpm install --frozen-lockfile`.
 2. `mise run client-test` (lint, typecheck, Jest with coverage).
 3. `mise run client-web` (static export to `apps/client/dist`), then `node scripts/client/bundle-check.mjs apps/client/dist`.
 4. `mise run client-e2e` (Playwright, three browsers, mock build; writes screenshots to `apps/client/e2e/screenshots/`).

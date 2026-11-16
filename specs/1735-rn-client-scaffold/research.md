@@ -14,7 +14,7 @@ Each entry: decision, rationale, rejected alternatives.
 
 **R6 Mock seam.** Interface in `@micold/protocol`, mock in `@micold/protocol/mock`, selected by env in `select.ts` (plan, design notes). Rejected: MSW/network mocking (the real transport is a socket, not HTTP; the interface is the contract); runtime query flag (would ship the mock in production).
 
-**R7 Pins and CI.** `mise.toml` gains `node` and `pnpm`; CI installs through `mise` like other jobs, caches the pnpm store, runs `client-test`, `client-web`, Playwright (`--project chromium firefox webkit`), bundle check, path-gated by the existing `classify` job (new `client` output). Rejected: separate `setup-node` (two sources of version truth).
+**R7 Pins and CI.** `mise.toml` already pins `node = "24"` (docs axe check), reused; it gains only `pnpm`; CI installs through `mise` like other jobs, caches the pnpm store, runs `client-test`, `client-web`, Playwright (`--project chromium firefox webkit`), bundle check, path-gated by the existing `classify` job (new `client` output). Rejected: separate `setup-node` (two sources of version truth).
 
 **R8 Auth in the client.** In-memory `AuthSession` (access token held in a module closure inside the store, not serialisable, not in persisted state). Return-to route kept in a router param, not storage. Rejected: `sessionStorage` for return-to or token (violates FR-006 and US1 AC4).
 
@@ -22,7 +22,7 @@ Each entry: decision, rationale, rejected alternatives.
 
 **R10 Test ordering (Principle I).** For each unit the failing test is written first: theme, i18n, connection, mock/order, auth/guard, sidebar, overview, layout, bundle check. Tool: Jest + Testing Library; Playwright for browser. `speckit-tdd-setup` records the commands.
 
-**R11 Coverage and bundle check.** Jest `--coverage --coverageReporters=lcov` output merged to the existing `scripts/diff-coverage.py` input so SC-009's 80 percent diff gate applies to client code (the script's lcov format is language neutral; the tasks unit verifies paths). Bundle check is a Node script scanning `dist/` and `pnpm-lock.yaml` for a denylist (`xterm`, `@xterm/`, `node-pty`, `hterm`, `term.js`) and the mock sentinel.
+**R11 Coverage and bundle check.** `scripts/guardrails-scope.conf` `[web]` is empty today, so `diff-coverage.py --lang web` checks nothing: the plan adds the client and protocol source globs there, and the CI client job runs `scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info` on Jest's lcov (the tasks unit verifies lcov paths resolve to repo paths). Bundle check is a Node script scanning `dist/` and `pnpm-lock.yaml` for a denylist (`xterm`, `@xterm/`, `node-pty`, `hterm`, `term.js`) and the mock sentinel.
 
 **R12 Spike.** A dev-only route renders 5,000 transcript entries and a 2,000-line diff with Paper `Text`/`FlatList`, measured with `performance.now`, Chromium trace and `performance.memory`; written to `spike.md`. Production exclusion: the route file re-exports a stub unless the mock/dev flag is set, and the bundle check covers the sentinel. Candidates if it fails: FlashList, `react-window` through `react-native-web` view; the finding names #1736 as owner.
 
