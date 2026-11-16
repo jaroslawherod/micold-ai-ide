@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1726
 - **Worktree branch**: claude/project-thread-v4iabl
 - **Started**: 2026-11-16
-- **Phase**: clarify
+- **Phase**: plan
 - **Next step**: plan (clarify done, 1 round, all agent-resolved)
 
 ## Pull requests
