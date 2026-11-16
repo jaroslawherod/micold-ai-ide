@@ -10,25 +10,33 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-hzt36f
 - **Started**: 2026-11-16
-- **Phase**: design PR open (#2009)
-- **Next step**: orchestrator waits on CI, merges #2009, then milestone M1
+- **Phase**: M1 implemented, reviews A and B pending (orchestrator)
+- **Next step**: orchestrator runs review A (`code-review` high) and B (conformance), then continues this unit for fixes, scoped and full gate, and the M1 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #2009 | Design: spec, plan, tasks | open | - |
+| #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | - | pending |
+| M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | - | implemented, awaiting reviews |
 | M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | - | pending |
 | M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | pending |
 | M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | pending |
 
 ## Decisions
+
+- M1: Jest runs two projects. `web` (`jest-expo/web`, jsdom) for logic touching `window`/`matchMedia`/`navigator`; `components` (`jest-expo`, native host) for Testing Library, whose renderer rejects the react-native-web DOM host. Component tests need no DOM, so `tests/support/nativeSetup.js` gives them an in-memory `localStorage`.
+- M1: the `client` CI job installs through `corepack` + `actions/setup-node` (no `mise` action is pinned in the repo), so R7's "one source of truth" is kept by `scripts/tests/client-pins.test.sh` (node and pnpm majors vs `mise.toml`).
+- M1: R14's lint rule is `no-restricted-syntax` selectors in `apps/client/eslint.config.js`, not a plugin (research R14 allows either). `react-native-a11y/has-accessibility-hint` is off: it demands a hint beside every label.
+- M1: LocalePicker is a custom radio group on `Pressable`, not Paper `SegmentedButtons` (which forces `accessibilityRole="button"`).
+- M1: the production export keeps a `/spike` route file that redirects home; the spike module is folded out by Metro (checked: no `__MICOLD_MOCK__` in `dist/`). A route file cannot be wholly absent in Expo Router without a build-time file switch.
+- M1: Jest writes lcov paths relative to `apps/client`; the CI step rewrites `SF:` to repository paths before `scripts/diff-coverage.py --lang web`.
+- M1: `client-e2e` exists as a task whose script fails with "arrives with M4 (T055)"; CI does not run it yet.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -57,4 +65,6 @@ None.
 
 ## Follow-ups not done
 
+- M1 spike gaps (spike.md): FlatList never unmounts rendered rows (#1736 evaluates FlashList); select-all over a virtualized transcript needs a copy action (#1736); the diff is an unvirtualized ScrollView (diff view issue, M6 of #1722); only Chromium measured.
+- T020 wording is for the web client only; the desktop `appearance-theming.md` sections are untouched.
 - #1732 and #1733 not built: the mock must be swapped for the real client and generated types (constitution V) in a follow-up once they land.

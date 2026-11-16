@@ -1,0 +1,14 @@
+{
+  "name": "@micold/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Orchestrator API boundary of the web client (#1735): types, interfaces, connection logic and the mock.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0"
+  }
+}
