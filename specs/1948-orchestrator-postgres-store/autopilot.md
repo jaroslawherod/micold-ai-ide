@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-q5lrv2
+- **Worktree branch**: claude/project-thread-9yqz36
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: open the M6 PR (title "#1948: <issue title>"), then CI and merge
+- **Next step**: wait for CI on #2006 and merge it, then dispatch M8
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1992 | M3 | merged | b3f47d077 |
 | #1997 | M4 | merged | c3944869a |
 | #2001 | M5 | merged | 8e68fa947 |
+| #2003 | M6 | merged | 3d5485c30 |
+| #2006 | M7 | open | |
 
 ## Milestones
 
@@ -33,8 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
 | M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
-| M6 | T036–T038 | full | No private key in any table | | ready for PR |
-| M7 | T039–T044 | full | [database] config and backend rule | | pending |
+| M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
+| M7 | T039–T044 | full | [database] config and backend rule | #2006 | open |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
@@ -73,6 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 B | 1 | M5 diff (conformance, sonnet, run by the orchestrator) | eec56ae53 | (see commit) | CHANGES: drift record missing (F1 MAJOR), T035 "retries once" text (F2 MINOR); both fixed in drift-M5.md |
 | A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
 | B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
+| Code A+B (opus) | 1 | M7 | 16c2b1e | | MINOR-ONLY: cycle-log, unreadable case (directory, exercised under root), D6 note fixed |
 
 ## Declined review findings
 
@@ -92,7 +95,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M6 merged (PR #2003, squash 3d5485c30; one opus review A+B APPROVE, 2 nits fixed; CI kube_real kind setup failed once, green on rerun). Next: dispatch the M7 unit (T039–T044) in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0.
 
 ## Open escalation
 

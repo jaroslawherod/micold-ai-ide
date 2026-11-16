@@ -56,6 +56,8 @@ pub fn check_files(text: &str, origin: &str, config: &DaemonConfig) -> Vec<Confi
         }
     }
 
+    database_files(config, &mut push);
+
     // V14: a secret must be owner-only. A pod's secrets are Secret mounts the kubelet makes
     // `root:<fsGroup>` mode 0440 so the daemon's group can read them; only "other" bits count there.
     let wide = if config.daemon.kind == super::Kind::Kubernetes {
@@ -146,6 +148,9 @@ pub fn secret_entries(config: &DaemonConfig) -> Vec<(String, &Path)> {
     if let Some(p) = config.startup.as_ref().and_then(|s| s.env_file.as_ref()) {
         secrets.push(("startup.env_file".into(), p.path()));
     }
+    if let Some(p) = config.database.as_ref().and_then(|d| d.url_file.as_ref()) {
+        secrets.push(("database.url_file".into(), p.path()));
+    }
     for (key, file) in orchestrator_files(config) {
         if matches!(key, "key_file" | "enrollment_token_file") {
             secrets.push((format!("orchestrator.{key}"), file));
@@ -168,4 +173,57 @@ fn orchestrator_files(config: &DaemonConfig) -> Vec<(&'static str, &Path)> {
     .into_iter()
     .filter_map(|(key, p)| p.as_ref().map(|p| (key, p.path())))
     .collect()
+}
+
+/// D3 to D5 (#1948): `database.url_file` is readable, not blank and names a PostgreSQL URL;
+/// `database.ca_file` exists. A message names the key, the path and a state, or only the scheme:
+/// never the URL, its host or its password.
+fn database_files(
+    config: &DaemonConfig,
+    push: &mut impl FnMut(&'static str, &str, Severity, String),
+) {
+    let Some(d) = &config.database else { return };
+    if let Some(url_file) = &d.url_file {
+        let path = url_file.path().display();
+        let key = "database.url_file";
+        let mut fail = |rule, state: &str| {
+            push(rule, key, Severity::Error, format!("{key} {path}: {state}"));
+        };
+        match url_file.read() {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => fail("D3", "missing"),
+            Err(_) => fail("D3", "unreadable"),
+            Ok(value) if value.expose().trim().is_empty() => fail("D3", "empty"),
+            Ok(value) => {
+                if let Err(why) = check_url_scheme(value.expose().trim()) {
+                    fail("D4", &why);
+                }
+            }
+        }
+    }
+    if let Some(ca) = &d.ca_file {
+        if !ca.path().is_file() {
+            push(
+                "D5",
+                "database.ca_file",
+                Severity::Error,
+                format!("database.ca_file {}: missing", ca.path().display()),
+            );
+        }
+    }
+}
+
+/// `postgres` or `postgresql`; on a refusal the text names only the scheme.
+fn check_url_scheme(url: &str) -> Result<(), String> {
+    let scheme = url.split_once("://").map(|(scheme, _)| scheme).filter(|s| {
+        !s.is_empty()
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"+.-".contains(&b))
+    });
+    match scheme {
+        Some(s) if s.eq_ignore_ascii_case("postgres") || s.eq_ignore_ascii_case("postgresql") => {
+            Ok(())
+        }
+        Some(s) => Err(format!("scheme \"{s}\" is not postgres or postgresql")),
+        None => Err("has no URL scheme, not postgres or postgresql".to_string()),
+    }
 }

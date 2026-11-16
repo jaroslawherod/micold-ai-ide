@@ -5,6 +5,7 @@
 pub mod announce;
 pub mod audit;
 pub mod auth;
+pub mod backend;
 pub mod dial;
 pub mod list_merge;
 pub mod liveness;
@@ -22,6 +23,7 @@ pub use auth::{
     AuthStore, Bootstrap, CertSerial, Identity, Invite, MemoryAuthStore, NewEnrollment, NewInvite,
     NewUser, Provider, RefreshToken, Revocation, Role, TokenHash, User, UserId,
 };
+pub use backend::{choose_store, BindScope, MissingDatabase, StoreChoice};
 pub use dial::{jittered, LinkStatus, RetryPolicy};
 pub use liveness::Heartbeat;
 pub use record::{DaemonRecord, Health, TenantId, UNOWNED};

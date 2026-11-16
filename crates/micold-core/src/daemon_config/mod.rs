@@ -25,7 +25,9 @@ mod validate;
 mod tests;
 
 pub use files::{check_files, secret_entries};
-pub use resolved::{readable_by_others, resolved_view, ResolvedView, SecretState, SecretStatus};
+pub use resolved::{
+    readable_by_others, resolved_view, DatabaseView, ResolvedView, SecretState, SecretStatus,
+};
 pub use secret::{SecretPath, SecretValue};
 pub(crate) use validate::version_ok;
 pub use validate::{diagnose, parse, session_file_refusal, ConfigError, Severity};
@@ -67,6 +69,8 @@ pub struct DaemonConfig {
     pub orchestrator: Option<Orchestrator>,
     #[serde(default)]
     pub orchestrator_link: Option<OrchestratorLink>,
+    #[serde(default)]
+    pub database: Option<DatabaseConfig>,
 }
 
 /// What kind of daemon the file is for; sets defaults and is reported, nothing more.
@@ -278,6 +282,29 @@ pub struct Orchestrator {
     pub cert_file: Option<SecretPath>,
     pub key_file: Option<SecretPath>,
     pub enrollment_token_file: Option<SecretPath>,
+}
+
+/// `[database]` (#1948): the orchestrator's PostgreSQL server. `url_file` names a file holding the
+/// URL with its password; no URL is ever held or shown here.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseConfig {
+    /// Required (rule D1); an `Option` so its absence is reported by key, not as a parse error.
+    pub url_file: Option<SecretPath>,
+    /// The CA for TLS to the server.
+    pub ca_file: Option<SecretPath>,
+    /// Connections in the pool, 1 to 64 (rule D2).
+    #[serde(default = "default_pool_size")]
+    pub pool_size: u32,
+}
+
+/// The pool size when `[database]` gives none.
+pub const DEFAULT_POOL_SIZE: u32 = 5;
+/// The largest pool size `[database]` accepts.
+pub const MAX_POOL_SIZE: u32 = 64;
+
+fn default_pool_size() -> u32 {
+    DEFAULT_POOL_SIZE
 }
 
 /// `[orchestrator_link]` (#1725): whether this daemon dials the orchestrator, and where. Independent
