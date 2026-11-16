@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Closed 2026-11-16 — shipped in PRs #1947, #1965, #1978, #1988 and this close PR
 
 **Input**: User description: "MCP: let a session see its parent session, parent worktree and siblings, and message its parent (issue #1945)"
 
