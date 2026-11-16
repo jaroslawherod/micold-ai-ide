@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-q3eky9
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M4 PR #1997: wait for green `ci complete`, squash-merge
+- **Next step**: dispatch the M5 milestone unit in a fresh thread (previous PR #1997 merged at c3944869a)
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
-| M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | review |
+| M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
 | M5 | T032–T035 | full | Migration safety | | pending |
 | M6 | T036–T038 | full | No private key in any table | | pending |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
@@ -80,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 implemented (T026–T031 ticked), review A clean, gate green with local PostgreSQL; PR body `specs/1948-orchestrator-postgres-store/pr-M4.md`. Next: orchestrator opens the PR, runs review B, waits on CI (the `test` job now needs the postgres service). Then M5.
+M4 merged (PR #1997, squash c3944869a; review B MINOR-ONLY, CI green after merging main in: first run failed only on a corrupt llvm-cov .profraw). Next: dispatch the M5 milestone unit in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: PostgreSQL tests need a local server (apt postgresql, MICOLD_TEST_POSTGRES_URL, MICOLD_REQUIRE_POSTGRES=1); gate.sh needs cargo-nextest and ssh-keygen installed; T035 updates the newer-schema test to DatabaseNewer.
 
 ## Open escalation
 
