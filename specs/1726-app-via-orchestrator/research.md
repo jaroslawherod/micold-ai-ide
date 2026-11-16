@@ -117,3 +117,28 @@ connect does today; on `OutcomeUnknown` the actor re-requests the target's snaps
 
 **Alternatives**: rewriting the client around the aggregated list (large UI change on an app being
 retired).
+
+## R7: A route to the orchestrator for SSH, container and pod daemons (tasks M4)
+
+**Finding**: drift-M3.md said container and pod daemons have no route to the local orchestrator
+socket. They do: provisioning reaches all three placements over SSH (`provision/mod.rs`: one start
+sequence; containers and pods use a pinned reach, the pod's through the kube port-forward relay),
+and `crates/micold-client/src/daemon.rs` passes `link: orchestrator_link()` in all three
+`ProvisionOptions`, so `start_step` already bridges with the `-R` of #1725. What is missing is only
+that the actor keeps using the bridge's daemon connection instead of a route.
+
+**Decision**: one route for all three placements, the existing reverse forward. After the
+provisioning handshake, swap the bridge for a link holder (`remote hold-link` under the same
+admitted `-R`) and route the actor by wire id on the app's orchestrator connection (plan,
+*Amendment*).
+
+**Alternatives**:
+- *Keep the bridge open beside the route*: the `-R` stays, but the bridge is itself a client
+  connection to the daemon, which FR-007 forbids.
+- *Daemon dials out to a TCP orchestrator address*: needs the orchestrator to listen on TCP with
+  authentication, a new attack surface (#1725 chose the forwarded socket for that reason).
+- *Bind-mount the orchestrator socket into containers*: container-only, needs the runtime's mount
+  options and a host path the sandbox otherwise hides; pods cannot use it.
+- *A second kube port-forward for the link*: a port-forward is client-to-pod; the daemon needs
+  pod-to-client, which is what `-R` over the existing relay gives.
+Platform: Linux only (#1897), so FR-007 holds for every placement with no exception.

@@ -188,6 +188,30 @@ mod container {
         }
     }
 
+    /// #1726: a container daemon announces its own orchestrator id, not `local`, so the client
+    /// can route to it through the orchestrator.
+    #[test]
+    fn the_file_names_the_daemons_orchestrator_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let id = micold_core::daemons::new_wire_id("Box");
+        deliver_container(
+            "box",
+            &profile(false),
+            Path::new("/home/jaro"),
+            &delivery,
+            None,
+            None,
+            &Default::default(),
+            Some(&id),
+        )
+        .unwrap();
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
+        assert!(errors.is_empty(), "{errors:?}\n{text}");
+        assert_eq!(config.unwrap().wire_id(), id);
+    }
+
     #[test]
     fn the_file_carries_what_the_create_arguments_no_longer_do_and_is_valid() {
         let dir = tempfile::tempdir().unwrap();
@@ -201,7 +225,8 @@ mod container {
             &delivery,
             None,
             None,
-            &Default::default()
+            &Default::default(),
+            None
         )
         .unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -247,6 +272,7 @@ mod container {
             None,
             None,
             &micold_core::daemons::SessionExtras::default(),
+            None,
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -297,7 +323,8 @@ mod container {
             &delivery,
             None,
             None,
-            &Default::default()
+            &Default::default(),
+            None
         )
         .unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -309,7 +336,8 @@ mod container {
             &delivery,
             None,
             None,
-            &Default::default()
+            &Default::default(),
+            None
         )
         .unwrap());
         assert!(deliver_container(
@@ -319,7 +347,8 @@ mod container {
             &delivery,
             None,
             None,
-            &Default::default()
+            &Default::default(),
+            None
         )
         .unwrap());
     }
@@ -357,6 +386,7 @@ mod container {
             None,
             Some(&startup),
             &Default::default(),
+            None,
         )
         .unwrap();
 
@@ -400,6 +430,7 @@ mod container {
             None,
             Some(&startup),
             &Default::default(),
+            None,
         )
         .unwrap();
 
@@ -411,6 +442,7 @@ mod container {
             None,
             None,
             &Default::default(),
+            None,
         )
         .unwrap();
 
@@ -435,6 +467,7 @@ mod container {
             Some("[user]\n\tname = \"Ada\"\n"),
             None,
             &Default::default(),
+            None,
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -452,6 +485,7 @@ mod container {
             None,
             None,
             &Default::default(),
+            None,
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -491,6 +525,7 @@ mod container {
                 None,
                 None,
                 extras,
+                None,
             )
             .unwrap();
             std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap()
@@ -559,6 +594,7 @@ mod container {
             None,
             None,
             &extras,
+            None,
         )
         .unwrap();
         for (name, body) in [("session-file-0", "FIRST"), ("session-file-1", "SECOND")] {
@@ -595,6 +631,7 @@ mod container {
             None,
             Some(&startup),
             &Default::default(),
+            None,
         )
         .unwrap_err();
         assert!(err.to_string().contains("gone.sh"), "{err}");

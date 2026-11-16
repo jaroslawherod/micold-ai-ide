@@ -175,6 +175,37 @@ crates/micold-client/tests/support/fake_github.rs micold-daemon-runtime
 # The workflow itself: an edit to a job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-daemon-runtime
 
+# The kube set (#1981).
+#
+# `micold-kube` marks paths that can change what the chart and kind jobs of ci.yml check: the Helm
+# chart, the orchestrator image and the sources it is built from, the kind harness, the pinned
+# kube tools, the e2e crate and the workflow. Pull
+# requests run `kube-chart` only when a change touches the set -- or carries `full-ci` -- and main
+# pushes always run it. The failure direction is "run it". Read by scripts/classify-change.sh
+# (`kube_paths=` output), pinned by scripts/tests/classify-change.test.sh.
+deploy/helm/**                        micold-kube
+/Dockerfile.orchestrator              micold-kube
+scripts/e2e-kind.sh                   micold-kube
+scripts/install-kube-tools.sh         micold-kube
+# The chart job's own check and the tests only it runs.
+scripts/chart-check.sh                micold-kube
+scripts/tests/chart-conformance.test.sh micold-kube
+scripts/tests/chart-check.test.sh     micold-kube
+scripts/tests/install-kube-tools.test.sh micold-kube
+# What the orchestrator image is built from, so a change that breaks its build or its command line
+# runs the image smoke before it reaches main.
+crates/micold-core/**                 micold-kube
+crates/micold-daemon/**               micold-kube
+/Cargo.toml                           micold-kube
+/Cargo.lock                           micold-kube
+/.cargo/config.toml                   micold-kube
+/.dockerignore                        micold-kube
+/CHANGELOG.md                         micold-kube
+crates/*/Cargo.toml                   micold-kube
+# The workflow itself: an edit to the job's steps is proven by the PR that makes it.
+/.github/workflows/ci.yml             micold-kube
+crates/micold-e2e/**                  micold-kube
+
 # The web client set (#1735).
 #
 # `micold-client` marks the TypeScript web client and the pnpm workspace around it: the paths whose
