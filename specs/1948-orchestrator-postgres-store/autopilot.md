@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1948
 - **Worktree branch**: claude/project-thread-0phzsu
 - **Started**: 2026-11-15
-- **Phase**: milestones
-- **Next step**: M11 review A (code-review high) and review B (conformance) on origin/main...HEAD, then the M11 PR, then a new close unit (re-run speckit-tdd-verify)
+- **Phase**: close
+- **Next step**: orchestrator decision on the second tdd-verify FAIL (cae46cf): cut T071–T075 into M12, or accept mutant reds for the TEST_AFTER rows (F4)
 
 ## Pull requests
 
@@ -28,6 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2008 | M8 | merged | 2243de02d |
 | #2010 | M9 | merged | 83926c52f |
 | #2011 | M10 | merged | 8005293fe |
+| #2014 | M11 | merged | c5c184a03 |
 
 ## Milestones
 
@@ -43,7 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
 | M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | #2011 | merged (8005293fe) |
-| M11 | T061–T070 | full | TDD remediation (verification.md FAIL: F1–F12), tests and evidence only | | pending |
+| M11 | T061–T070 | full | TDD remediation (verification.md FAIL: F1–F12), tests and evidence only | #2014 | merged (c5c184a03) |
 
 ## Decisions
 
@@ -129,3 +130,4 @@ None.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
+- Close (after M11): speckit-tdd-verify re-run at cae46cf: FAIL. Resolved F1-F3, F5-F7, F11; partly F8, F9, F12; not F4 (14/25 TEST_AFTER, history) or F10. New N1 (HIGH, migrate.rs:71 retry bound, mutant survives ~half), N2-N4 (MED), N5-N7 (LOW). verification.md overwritten, tasks.md Phase 14 T071-T075 appended. Not cut into a milestone: returned to orchestrator.

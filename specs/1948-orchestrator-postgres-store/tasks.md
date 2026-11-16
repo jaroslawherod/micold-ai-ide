@@ -507,3 +507,29 @@ the audit changed no test or source.
 - [x] T070 Record a pre-feature baseline in `tdd/cycle-log.md` (the log's "Baseline" says no local run
   before M1): run `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` at
   `f5f8e812a~1` or note why it cannot be reproduced. Verify: the Baseline section holds a count.
+
+## Phase 14: TDD remediation (re-verify at `cae46cf`)
+
+Source: [tdd/verification.md](tdd/verification.md), verdict **FAIL**. The feature is not done until
+T071 (N1) is cleared and the `TEST_AFTER` rows (F4) are either waived in `spec.md`/`autopilot.md` as
+accepted history or the owner accepts the mutant reds recorded in M11. The audit changed no test or
+source.
+
+- [ ] T071 [US1] N1 (HIGH): give the migration retry bound a deterministic test. Make the migrator
+  see a concurrent starter on demand (a hook or a second connection holding the lock between
+  migrations) so `db/migrate.rs:71` is exercised every run. Verify:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_migrations` passes, and
+  fails on every one of 5 runs with `migrator.migrations.len() + 1` replaced by `0` (revert after).
+- [ ] T072 [P] N2 (MED): in `store_slow.rs:179-189` replace `waited < 9` with a check against
+  `LIVENESS_DEADLINE` that can fail (the daemon is not marked offline while the save is parked), or
+  drop it. Verify: `... --test orchestrator store_slow` passes and fails when the store call blocks
+  the heartbeat path.
+- [ ] T073 [P] N3 (MED): split `store_sql_errors.rs:287,304` into one case per refusal and pin the
+  `Refused` reason by a constant the store exports, not by substring. Verify:
+  `... --test orchestrator store_sql_errors` passes with more cases.
+- [ ] T074 [P] N4 (MED): replace the fixed 2 s in `store_config.rs:245-249` with a wait on the
+  imported file or row. Verify: `... --test orchestrator store_config` passes 5 times in a row under
+  load.
+- [ ] T075 [P] N5, N6, N7 (LOW): document the password requirement at `store_support.rs:145` (or build
+  the URL with one), name the columns in `store_sql_errors.rs:182-188,231`, and drop serde's wording
+  from `store_config.rs:163-169`. Verify: `... --test orchestrator store_` passes.
