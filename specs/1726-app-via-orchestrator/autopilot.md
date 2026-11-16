@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jwbvyd
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M3 reviews A+B on the snapshot (orchestrator dispatches), then PR from specs/1726-app-via-orchestrator/pr-m3.md
+- **Next step**: M3 round-2 reviews A+B on the snapshot (orchestrator dispatches), then PR from specs/1726-app-via-orchestrator/pr-m3.md
 - **PR**: none
 
 ## Pull requests
@@ -53,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M1) | 1 | M1 | c2d10f85181940a6640d88ff0061ac7680fefb1f | 181479f93ce2eaed78d7913c940dba7f37a4ea0b:52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | CHANGES fixed: A F1-F5 (hub keeps queued answers, answered only once queued, per-route queue toward link, seq gap; F4 documented in contract), B F1 (drift-M1.md) |
 | code A+B (M1) | 2 | M1 | 2aa9f0a4e5ba1b186cb09e0b8a2c7bf7ce2c1ee6 | 5aa7439a20be847cc0dd0815fc78ff252713794f:2aa9f0a4e5ba1b186cb09e0b8a2c7bf7ce2c1ee6 | CLEAN (MINOR 1 fixed in contract prose; 2 and 3 declined as bounded/unchanged) |
 | code A+B (M3) | 1 | M3 | 0deffa8b600c9fccf833c546c3a4af79d9ddd400 | 1a054e45102f489bfff8d934d5a83c5d148f659d:0deffa8b600c9fccf833c546c3a4af79d9ddd400 | CHANGES fixed: A F1 (dead-link route: close before marking table dead, insert refused under lock, writer drops route on send failure), A F2 (try_send, full queue ends that route), B F2 (T021 run + drift entry), B F3, B F4 (tdd/cycle-log.md); B F1 to user, in Follow-ups |
+| code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
 
 ## Declined review findings
 
