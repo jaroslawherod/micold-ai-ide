@@ -57,15 +57,14 @@ impl fmt::Display for SchemaError {
         match self {
             Self::DatabaseNewer { database, build } => write!(
                 f,
-                "the database schema is at version {database}, newer than this build's {build}; \
-                 upgrade the orchestrator or point it at another database"
+                "database schema version {database} is newer than this build's {build}"
             ),
             Self::ChecksumChanged {
                 version,
                 description,
             } => write!(
                 f,
-                "migration {version} ({description}) differs from the one the database applied"
+                "migration {version} {description} was edited after it was applied"
             ),
             Self::Failed { version, reason } => {
                 write!(

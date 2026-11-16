@@ -184,9 +184,9 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: forward-only, checksummed, all-or-nothing migrations (US2; FR-003, FR-004, FR-005, FR-013, SC-002).
 
-- [ ] T032 [P] [US2] Seed fixtures `crates/micold-daemon/tests/fixtures/orchestrator/sqlite/v0001.sql`
+- [x] T032 [P] [US2] Seed fixtures `crates/micold-daemon/tests/fixtures/orchestrator/sqlite/v0001.sql`
   and `…/postgres/v0001.sql`: rows in every table at schema version 1.
-- [ ] T033 [US2] Failing tests in `store_migrations.rs`, SQLite and PostgreSQL: a database with a
+- [x] T033 [US2] Failing tests in `store_migrations.rs`, SQLite and PostgreSQL: a database with a
   recorded version above the build's newest is refused, the message names both versions and the
   SQLite file's SHA-256 is identical before and after (PostgreSQL: `_sqlx_migrations` untouched);
   an older database applies the missing migrations in order; an edited migration is refused naming
@@ -195,11 +195,11 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
   migration exactly once; the chain test seeds each `tests/fixtures/orchestrator/<dialect>/vNNNN.sql`
   at version N, upgrades to the newest and finds the data intact, and fails when a migration has no
   fixture.
-- [ ] T034 [US2] `db/migrate.rs`: `check_not_newer()` read-only (SQLite `read_only(true)` and no WAL
+- [x] T034 [US2] `db/migrate.rs`: `check_not_newer()` read-only (SQLite `read_only(true)` and no WAL
   pragma; PostgreSQL `READ ONLY` transaction) comparing `max(version)` of `_sqlx_migrations`, when
   the table exists, with `MIGRATOR.migrations.last()`; `MigrateError::DatabaseNewer { database,
   build }` and the `SchemaError` mapping with the texts of contracts/config.md, *Errors at start*.
-- [ ] T035 [US2] `db/mod.rs` `open()`: call `check_not_newer` before `run_forward`; `run_forward`
+- [x] T035 [US2] `db/mod.rs` `open()`: call `check_not_newer` before `run_forward`; `run_forward`
   retries once after re-reading `_sqlx_migrations` on a SQLite busy or "already exists" failure;
   map a checksum mismatch to `SchemaError::ChecksumChanged`; T033 green.
 
@@ -209,14 +209,14 @@ merging, nothing here does. `mise run gate` and CI's `linux-daemons` job prove t
 
 **Goal**: a scan of every column after the full suite finds no key material (US3; FR-006, SC-003).
 
-- [ ] T036 [P] [US3] Failing unit tests in `auth.rs`: `CertSerial::new` rejects non-hex text (a PEM
+- [x] T036 [P] [US3] Failing unit tests in `auth.rs`: `CertSerial::new` rejects non-hex text (a PEM
   block included); `TokenHash::from_hex` rejects a PEM block.
-- [ ] T037 [US3] Scan test in `store_scan.rs` and a table-and-column lister in `store_support.rs`
+- [x] T037 [US3] Scan test in `store_scan.rs` and a table-and-column lister in `store_support.rs`
   (`information_schema` or `sqlite_master`): after the shared suite's writes plus one write per store
   method, cast every column of every table to text and fail on `-----BEGIN` or `PRIVATE KEY`; fail on
   a column name matching `private`, `secret` or ending `_key`, no exception list; both backends; a
   negative control seeds a free-text field with a PEM block and expects the scanner to fail.
-- [ ] T038 [US3] Make T036 pass in `auth.rs` (`CertSerial::new` validates hex); T037 green on both
+- [x] T038 [US3] Make T036 pass in `auth.rs` (`CertSerial::new` validates hex); T037 green on both
   backends.
 
 ---

@@ -816,4 +816,28 @@ mod tests {
         assert!(CertSerial::new("").is_err());
         assert!(CertSerial::new("xyz").is_err());
     }
+
+    /// A PEM block, so no key material can reach a serial or hash column (FR-006).
+    const PEM: &str =
+        "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIA==\n-----END PRIVATE KEY-----\n";
+
+    #[test]
+    fn a_cert_serial_rejects_non_hex_text_and_a_pem_block() {
+        for bad in ["0a-1b", "0x0a", "0a 1b", "zz", PEM, "-----BEGIN"] {
+            assert!(
+                matches!(CertSerial::new(bad), Err(StoreError::Refused { .. })),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_token_hash_rejects_a_pem_block() {
+        assert!(matches!(
+            TokenHash::from_hex(PEM),
+            Err(StoreError::Refused { .. })
+        ));
+        // The first 64 bytes of the PEM: the right length for a hash, but not hex.
+        assert!(TokenHash::from_hex(&PEM[..64]).is_err());
+    }
 }

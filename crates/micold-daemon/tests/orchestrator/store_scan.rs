@@ -82,3 +82,177 @@ fn no_migration_text_grants_anything() {
         dir.display()
     );
 }
+
+// ---- no key material in any table (#1948 US3, FR-006, SC-003) ----
+
+mod key_scan {
+    use std::sync::Arc;
+
+    use micold_core::orchestrator::{
+        CertSerial, Identity, NewEnrollment, Provider, Role, TenantId,
+    };
+    use micold_daemon::orchestrator::db::StoreHandle;
+
+    use super::super::store_suite as suite;
+    use super::super::store_support::{key_material, FullBackend, PostgresBackend, SqliteBackend};
+
+    /// A SQL backend the scan reads directly.
+    trait Scanned: FullBackend + Sized {
+        const POSTGRES: bool;
+        fn make() -> Option<Self>;
+        fn store(&self) -> Arc<StoreHandle>;
+    }
+
+    impl Scanned for SqliteBackend {
+        const POSTGRES: bool = false;
+        fn make() -> Option<Self> {
+            Some(Self::new())
+        }
+        fn store(&self) -> Arc<StoreHandle> {
+            self.handle()
+        }
+    }
+
+    impl Scanned for PostgresBackend {
+        const POSTGRES: bool = true;
+        fn make() -> Option<Self> {
+            Self::new()
+        }
+        fn store(&self) -> Arc<StoreHandle> {
+            self.handle()
+        }
+    }
+
+    /// One write through every write method of every store.
+    fn write_through_every_method(backend: &impl FullBackend) {
+        let t = TenantId::default();
+        let registry = backend.registry();
+        let one = suite::daemon("default", "box", "Box");
+        registry.save(std::slice::from_ref(&one)).unwrap();
+        registry
+            .upsert(&suite::daemon("default", "box2", "Box 2"))
+            .unwrap();
+        registry.remove(&one.tenant, &one.id).unwrap();
+
+        let auth = backend.auth(&t);
+        auth.create_user(&suite::new_user("owner", Role::Owner))
+            .unwrap();
+        auth.create_user(&suite::new_user("u1", Role::Viewer))
+            .unwrap();
+        auth.set_role(&suite::uid("u1"), Role::Operator).unwrap();
+        auth.link_identity(&Identity {
+            provider: Provider::Google,
+            subject: "g-1".to_owned(),
+            user: suite::uid("u1"),
+            email: Some("u1@example.test".to_owned()),
+            email_verified: true,
+        })
+        .unwrap();
+        auth.create_invite(&suite::invite("i1", "itok", suite::T + 50))
+            .unwrap();
+        auth.redeem_invite(&suite::hash("itok"), &suite::uid("u1"), suite::T + 1)
+            .unwrap();
+        auth.set_bootstrap(&suite::hash("boot"), suite::T).unwrap();
+        auth.consume_bootstrap(&suite::hash("boot"), suite::T + 1)
+            .unwrap();
+        auth.put_refresh(&suite::refresh_token("r1", "u1", "f1", suite::T + 50))
+            .unwrap();
+        auth.rotate_refresh(
+            &suite::hash("r1"),
+            &suite::refresh_token("r2", "u1", "f1", suite::T + 60),
+            suite::T + 2,
+        )
+        .unwrap();
+        auth.revoke_refresh_for(&suite::uid("u1"), suite::T + 3)
+            .unwrap();
+        let serial = CertSerial::new("0a").unwrap();
+        auth.record_serial(&serial, &suite::wire("box2"), suite::T, suite::T + 100)
+            .unwrap();
+        auth.revoke_serial(&serial, suite::T + 4, "lost").unwrap();
+        auth.create_enrollment(&NewEnrollment {
+            token_hash: suite::hash("e1"),
+            created_by: Some(suite::uid("owner")),
+            created_at: suite::T,
+            expires_at: suite::T + 50,
+        })
+        .unwrap();
+        auth.redeem_enrollment(&suite::hash("e1"), &suite::wire("box3"), suite::T + 5)
+            .unwrap();
+        auth.remove_user(&suite::uid("u1"), suite::T + 6).unwrap();
+
+        backend
+            .audit(&t)
+            .append(&suite::entry(suite::T, "owner", "user.invite"))
+            .unwrap();
+    }
+
+    fn assert_clean<B: Scanned>(backend: &B, after: &str) {
+        let found = key_material(&backend.store(), B::POSTGRES);
+        assert!(found.is_empty(), "after {after}: {found:?}");
+    }
+
+    fn every_suite_case_then_every_method<B: Scanned>() {
+        macro_rules! scan_after {
+            ($($case:ident),+ $(,)?) => {$(
+                let Some(mut backend) = B::make() else { return };
+                suite::$case(&mut backend);
+                assert_clean(&backend, stringify!($case));
+            )+};
+        }
+        scan_after!(
+            upsert_inserts_then_updates,
+            remove_reports_whether_a_record_went,
+            save_replaces_the_whole_set_across_tenants,
+            load_is_ordered_by_tenant_then_id,
+            tenant_records_survive_reopen,
+            two_writers_upserting_different_ids_lose_neither,
+            users_are_created_read_listed_and_soft_removed,
+            an_identity_links_to_one_user,
+            an_invite_is_redeemed_once,
+            the_bootstrap_code_is_consumed_once,
+            refresh_tokens_rotate_and_a_reused_one_revokes_its_family,
+            serials_revocations_and_enrollments,
+            two_tenants_on_one_backend_see_disjoint_rows,
+            append_returns_a_strictly_increasing_seq,
+            recent_is_newest_first_by_keyset,
+            by_actor_filters_and_orders_newest_first,
+            audit_entries_are_per_tenant_and_survive_reopen,
+        );
+        let Some(backend) = B::make() else { return };
+        write_through_every_method(&backend);
+        assert_clean(&backend, "one write per store method");
+    }
+
+    /// Negative control: a PEM block in a free-text field is found, so the scan can fail.
+    fn a_pem_block_in_a_free_text_field_is_found<B: Scanned>() {
+        let Some(backend) = B::make() else { return };
+        let pem =
+            "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIA==\n-----END PRIVATE KEY-----";
+        backend
+            .auth(&TenantId::default())
+            .revoke_serial(&CertSerial::new("0b").unwrap(), suite::T, pem)
+            .unwrap();
+        let found = key_material(&backend.store(), B::POSTGRES);
+        assert_eq!(found, vec!["cert_revocations.reason: a value".to_owned()]);
+    }
+
+    #[test]
+    fn sqlite_holds_no_key_material() {
+        every_suite_case_then_every_method::<SqliteBackend>();
+    }
+
+    #[test]
+    fn postgres_holds_no_key_material() {
+        every_suite_case_then_every_method::<PostgresBackend>();
+    }
+
+    #[test]
+    fn sqlite_scan_finds_a_pem_block() {
+        a_pem_block_in_a_free_text_field_is_found::<SqliteBackend>();
+    }
+
+    #[test]
+    fn postgres_scan_finds_a_pem_block() {
+        a_pem_block_in_a_free_text_field_is_found::<PostgresBackend>();
+    }
+}

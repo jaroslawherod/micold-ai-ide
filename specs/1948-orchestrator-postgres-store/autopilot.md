@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-q3eky9
+- **Worktree branch**: claude/project-thread-q5lrv2
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M4 PR #1997: wait for green `ci complete`, squash-merge
+- **Next step**: open the M6 PR (title "#1948: <issue title>"), then CI and merge
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1970 | M1 | merged | bfb463f60 |
 | #1980 | M2 | merged | 952b8a818 |
 | #1992 | M3 | merged | b3f47d077 |
+| #1997 | M4 | merged | c3944869a |
+| #2001 | M5 | merged | 8e68fa947 |
 
 ## Milestones
 
@@ -29,15 +31,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Registry, auth and audit stores in memory, shared suite (MVP) | #1970 | merged |
 | M2 | T014–T020 | full | SQLite handle, schema, registry store | #1980 | merged |
 | M3 | T021–T025 | full | SQLite auth and audit stores | #1992 | merged |
-| M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | review |
-| M5 | T032–T035 | full | Migration safety | | pending |
-| M6 | T036–T038 | full | No private key in any table | | pending |
+| M4 | T026–T031 | full | PostgreSQL store and CI service container | #1997 | merged |
+| M5 | T032–T035 | full | Migration safety | #2001 | merged |
+| M6 | T036–T038 | full | No private key in any table | | ready for PR |
 | M7 | T039–T044 | full | [database] config and backend rule | | pending |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | | pending |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
 ## Decisions
+
+- M6: T036's tests passed on first run: `CertSerial::new` already validated hex (M1), and a PEM block fails both `CertSerial::new` and `TokenHash::from_hex`. T038 needed no `auth.rs` change; the tests pin the rule. Red evidence is T037's negative control.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -65,6 +69,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 B | 2 | M2 | ea2972ed97ec4ceff9cb503b819dd57387a3a328 | 1ac7f9902a0d54aa80ffda09815d4d620b824d07:ea2972ed97ec4ceff9cb503b819dd57387a3a328 | CLEAN (fix diff: cycle-log red evidence) |
 | M2 B | 3 | M2 | 195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | b5009125e83d663182f1adc7f4be9bdf5a8cc5f1:195e0b5d85d6086e57868e0f627f6e92d1dd4bb0 | CLEAN (coverage tests; 1 MINOR -> M5 follow-up) |
 | M3 B | 1 | M3 | b071596c50a13aba7866a7442129758ed98cf556 | d8fb2cf1746d72e9c998e885c4ca241604bd3bd6:b071596c50a13aba7866a7442129758ed98cf556 | MINOR-ONLY (1 MINOR: cycle 3 error-arm tests test-after, recorded; accepted) |
+| M5 A | 1 | M5 diff (code-review high, run by the unit: no Agent tool) | HEAD at return | (see commit) | CHANGES: 4 fixed (one SQLite retry not enough past one migration; WAL sidecars left by a refused read-only check; PG check/run race names VersionMissing; read-only URL by string replace) and 2 MINOR fixed; 4 declined (see below) |
+| M5 B | 1 | M5 diff (conformance, sonnet, run by the orchestrator) | eec56ae53 | (see commit) | CHANGES: drift record missing (F1 MAJOR), T035 "retries once" text (F2 MINOR); both fixed in drift-M5.md |
+| A | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | MINOR-ONLY (opus fresh context, covers A and B: 2 nits fixed, prose/test-comment only: PEM[..64] slice, key_material scan limit noted) |
+| B | 1 | M6 | ad4e9f7661bbfb976df082ceb69bd7255cc0f290 | 51b9ed137f67d821c60d4d72fb36ae33ff930585:c19f093a6971d0bd33e5d660278e33dfd2105806 | CLEAN (same opus review, APPROVE) |
 
 ## Declined review findings
 
@@ -76,11 +84,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1970 | M1 | merged | bfb463f60 |
 | tasks | analyze | D1 Principle IV CRITICAL | Decided by jaro (2026-11-14/15), recorded in plan Complexity Tracking; #1949 amends the text; tasks.md header says a network deployment waits on it |
 | tasks | analyze | D2 Principle VI CRITICAL | Linux only per jaro (#1897); CI linux-daemons job covers the build |
+| M5 | A | `lost_the_race` matches text, also on PostgreSQL | A spurious retry re-runs the migrator and then fails the same way; the advisory lock makes it harmless on PostgreSQL |
+| M5 | A | dialect sniffed by `backend_name` and by `Option` in `start` | Two backends; a third would add its own open |
+| M5 | A | `DatabaseNewer` text lost its remediation hint | The text is contracts/config.md's verbatim |
+| M5 | A | test `with_pool` builds a runtime per query | Test-only; a few ms per case |
 | M2 | B | F2 MINOR: no_outbound scan skips all of `src/orchestrator/db/` | The pool `connect` is the only dial-like construct there; recorded in drift-M2.md; M4 (PostgreSQL) should narrow it to the `connect` call sites |
 
 ## Handover
 
-M4 implemented (T026–T031 ticked), review A clean, gate green with local PostgreSQL; PR body `specs/1948-orchestrator-postgres-store/pr-M4.md`. Next: orchestrator opens the PR, runs review B, waits on CI (the `test` job now needs the postgres service). Then M5.
+None.
 
 ## Open escalation
 
@@ -90,7 +102,7 @@ None.
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
 - `sqlx` is now used (M2). `sha1` in `micold-daemon`'s dependencies is still unused (no M2 task needs it; M9's import digest is the likely user).
-- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. `check_not_newer` and a version in `SchemaError::Failed` are M5.
+- M2 `StoreHandle` takes the `Handle`-less guard `run_on`; M3/M4 stores must call it from `spawn_blocking` or a plain thread. 
 - Cloud gate: `scripts/gate.sh` was red twice on script tests that passed alone (`check-assertions-frozen` case 028, `autopilot.test.sh` facts cases) and green on the third run on the same tree; the scoped gate fails two root-only permission tests in micold-core as root (gate.sh runs them unprivileged).
 
 - M1–M6 and M10 carry no user-guide change (daemon crate is not micold-user-facing): use label docs-not-needed. M7–M9 carry guide tasks.
@@ -98,4 +110,3 @@ None.
 - #1949 (constitution 2.0.0, PostgreSQL for network deployments) is not merged: nothing here depends on it; it must merge before a network deployment ships. Constitution Principle IV currently says local-first storage.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
-- M5 (T035): `a_database_from_a_newer_build_is_a_failed_schema_error_naming_the_version` in tests/orchestrator/store_migrations.rs pins the pre-M5 `Failed`; update it to `DatabaseNewer` (M2 review B r3 MINOR).

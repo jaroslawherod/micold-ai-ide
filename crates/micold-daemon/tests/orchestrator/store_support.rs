@@ -104,6 +104,13 @@ impl SqliteBackend {
     }
 }
 
+impl SqliteBackend {
+    /// The open store handle.
+    pub fn handle(&self) -> Arc<StoreHandle> {
+        Arc::clone(self.handle.as_ref().expect("open"))
+    }
+}
+
 impl Backend for SqliteBackend {
     fn registry(&self) -> Arc<dyn RegistryStore> {
         Arc::new(SqlRegistryStore::new(Arc::clone(
@@ -244,7 +251,8 @@ impl PostgresBackend {
         })
     }
 
-    fn handle(&self) -> Arc<StoreHandle> {
+    /// The open store handle.
+    pub fn handle(&self) -> Arc<StoreHandle> {
         Arc::clone(self.handle.as_ref().expect("open"))
     }
 }
@@ -268,4 +276,64 @@ impl FullBackend for PostgresBackend {
     fn audit(&self, tenant: &TenantId) -> Arc<dyn AuditStore> {
         Arc::new(SqlAuditStore::new(self.handle(), tenant.clone()))
     }
+}
+
+/// Every `(table, column)` of the store's schema, ordered: `sqlite_master` on SQLite,
+/// `information_schema` (the current schema) on PostgreSQL.
+pub fn tables_and_columns(handle: &StoreHandle, postgres: bool) -> Vec<(String, String)> {
+    use sqlx::Row as _;
+    let sql = if postgres {
+        "SELECT CAST(table_name AS TEXT), CAST(column_name AS TEXT) \
+         FROM information_schema.columns WHERE table_schema = current_schema() \
+         ORDER BY 1, 2"
+    } else {
+        "SELECT m.name, p.name FROM sqlite_master AS m, pragma_table_info(m.name) AS p \
+         WHERE m.type = 'table' ORDER BY 1, 2"
+    };
+    let rows = handle
+        .block_on(async { sqlx::query(sql).fetch_all(handle.pool()).await })
+        .unwrap()
+        .unwrap();
+    rows.iter()
+        .map(|row| (row.get::<String, _>(0), row.get::<String, _>(1)))
+        .collect()
+}
+
+/// What looks like key material in the store (FR-006): a column named for a private key or a
+/// secret, or a value of any column, cast to text, holding a PEM marker. Empty when clean.
+/// Limit: the scan finds PEM armour only, not key material in another encoding (raw or base64
+/// without the `-----BEGIN` line).
+pub fn key_material(handle: &StoreHandle, postgres: bool) -> Vec<String> {
+    use sqlx::Row as _;
+    let columns = tables_and_columns(handle, postgres);
+    assert!(!columns.is_empty(), "the scan found no table");
+    let mut found = Vec::new();
+    for (table, column) in &columns {
+        let name = column.to_ascii_lowercase();
+        if name.contains("private") || name.contains("secret") || name.ends_with("_key") {
+            found.push(format!("{table}.{column}: the column name"));
+        }
+        // PostgreSQL casts any type to text; SQLite reads the bytes, so a BLOB scans too.
+        let sql = if postgres {
+            format!("SELECT CAST(\"{column}\" AS TEXT) FROM \"{table}\"")
+        } else {
+            format!("SELECT CAST(\"{column}\" AS BLOB) FROM \"{table}\"")
+        };
+        let rows = handle
+            .block_on(async { sqlx::query(&sql).fetch_all(handle.pool()).await })
+            .unwrap()
+            .unwrap_or_else(|e| panic!("{sql}: {e}"));
+        for row in &rows {
+            let value = if postgres {
+                row.get::<Option<String>, _>(0)
+            } else {
+                row.get::<Option<Vec<u8>>, _>(0)
+                    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            };
+            if value.is_some_and(|v| v.contains("-----BEGIN") || v.contains("PRIVATE KEY")) {
+                found.push(format!("{table}.{column}: a value"));
+            }
+        }
+    }
+    found
 }
