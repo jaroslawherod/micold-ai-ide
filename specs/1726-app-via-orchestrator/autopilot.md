@@ -54,6 +54,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M1) | 2 | M1 | 2aa9f0a4e5ba1b186cb09e0b8a2c7bf7ce2c1ee6 | 5aa7439a20be847cc0dd0815fc78ff252713794f:2aa9f0a4e5ba1b186cb09e0b8a2c7bf7ce2c1ee6 | CLEAN (MINOR 1 fixed in contract prose; 2 and 3 declined as bounded/unchanged) |
 | code A+B (M3) | 1 | M3 | 0deffa8b600c9fccf833c546c3a4af79d9ddd400 | 1a054e45102f489bfff8d934d5a83c5d148f659d:0deffa8b600c9fccf833c546c3a4af79d9ddd400 | CHANGES fixed: A F1 (dead-link route: close before marking table dead, insert refused under lock, writer drops route on send failure), A F2 (try_send, full queue ends that route), B F2 (T021 run + drift entry), B F3, B F4 (tdd/cycle-log.md); B F1 to user, in Follow-ups |
 | code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
+| code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
 
 ## Declined review findings
 
