@@ -36,6 +36,33 @@ spec:
             - orchestrator
             - --data-dir=/var/lib/micold
             - --socket=/run/micold/orchestrator.sock
+            {{- if .Values.ops.enabled }}
+            - --ops-addr=0.0.0.0:{{ .Values.ops.port }}
+            {{- end }}
+          {{- if .Values.ops.enabled }}
+          ports:
+            - name: ops
+              containerPort: {{ .Values.ops.port }}
+          # Startup allows the store a minute to open; readiness follows /readyz, liveness only
+          # asks that the process answers.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: ops
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ops
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ops
+            periodSeconds: 10
+            failureThreshold: 3
+          {{- end }}
           securityContext:
             {{- include "micold.containerSecurityContext" . | nindent 12 }}
           {{- with .Values.resources }}

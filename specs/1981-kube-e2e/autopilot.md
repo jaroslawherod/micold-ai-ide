@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1981
-- **Worktree branch**: claude/project-thread-ltu9ny
+- **Worktree branch**: claude/project-thread-mxfy6x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 (#1983) milestone unit, in a fresh thread (`/speckit-autopilot resume`).
+- **Next step**: M2 (#1983) review A and B (dispatched by the orchestrator), then full gate and PR.
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
-| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | pending |
+| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | implemented, in review |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | pending |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
 | M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
@@ -63,10 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 merged as a6fc96478 (PR #1991, 2026-11-16). Main moved three times during M1's CI; the merges in were resolved by the orchestrator:
-- #1948 added `orchestrator --config <path>` (daemon.toml with `[database]`). `config.rs` now has `OrchestratorArgs::parse` (`--data-dir`, `--socket`, `--config`) and `OrchestratorConfig::resolve`; data dir precedence is flag > env > the file's data_dir > user default (`FileDefaults` in `orchestrator/mod.rs`). Merge reviewed by a sonnet reviewer: CLEAN.
-- #1735 added the `client` verdict: `classify-change.sh` `verdict` now takes `[client] [kube_paths]` as args 5 and 6.
-Next: M2 (#1983), tasks T010–T015. Units have no Agent tool in cloud: the orchestrator dispatches review B.
+None.
 
 ## Open escalation
 
@@ -79,6 +76,8 @@ None.
 - #1740: publish `micold-orchestrator` (and `micold-web`) images from the release workflow and keep `deploy/helm/micold/Chart.yaml` `appVersion` in step with releases (M1 review A, declined there).
 
 ## Plan notes
+
+- M2 (2026-11-16): T010-T015 done. `ops.rs` hand-written HTTP; `Ops` bound in `run` before the store opens, so probes see 503 not refused. Diff coverage 93.9% (cargo-llvm-cov, lib tests). Chart: `ops.enabled`/`ops.port`, `templates/service.yaml` (`<release>-orchestrator`), probes; conformance 56/56 with helm built from source (get.helm.sh blocked in cloud).
 
 - Clarify unit skipped by the orchestrator (no markers left in the spec). Milestones reordered: M2 ops before M3 harness (smoke needs the readiness probe); spec table updated. Plan written, plan review pending (reviewer round 1 not run: unit has no Agent tool).
 - Tasks cut (T001-T030, M1-M5). Plan deviation: install-kube-tools.sh is created in M1 with helm and kubeconform pins (kube-chart job needs them); M3 adds kind and kubectl. No user-guide tasks (no end-user surface). Tasks review pending; gate and PR pending.

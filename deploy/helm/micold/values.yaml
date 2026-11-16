@@ -26,6 +26,12 @@ database:
   # Reserved for #1948 and #1740: the Secret holding the database URL. Unused by `state.mode=file`.
   existingSecret: ""
 
+ops:
+  # The orchestrator's ops listener: `--ops-addr=0.0.0.0:<port>`, a Service on that port and the
+  # startup, readiness (/readyz) and liveness (/healthz) probes. false renders none of them.
+  enabled: true
+  port: 9090
+
 web:
   # The web UI. Off by default; when off the chart renders no web resource at all.
   enabled: false

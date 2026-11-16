@@ -17,11 +17,15 @@ it into the cluster, e.g. `kind load docker-image`) as above.
 
 | Values | Resources |
 |---|---|
-| defaults | orchestrator `Deployment` (1 replica, `Recreate`) and its `PersistentVolumeClaim` |
-| `state.persistence.enabled=false` | the `Deployment` only; the data directory is an `emptyDir` |
+| defaults | orchestrator `Deployment` (1 replica, `Recreate`), its `PersistentVolumeClaim` and its ops `Service` |
+| `state.persistence.enabled=false` | no `PersistentVolumeClaim`; the data directory is an `emptyDir` |
+| `ops.enabled=false` | no ops `Service`, no `--ops-addr` and no probes |
 | `web.enabled=true` | also a web `Deployment` and `Service` (needs `web.image.repository`) |
 
-The orchestrator's Service and probes arrive with its ops listener (#1983).
+With `ops.enabled` the orchestrator runs `--ops-addr=0.0.0.0:<ops.port>`: `GET /healthz` answers
+200 whenever the process does, `GET /readyz` 200 once the registry is loaded and the link listener
+is bound (503 before). The startup and liveness probes use `/healthz`, the readiness probe `/readyz`,
+and the `<release>-orchestrator` Service exposes the port. No `/metrics` yet (#1742).
 
 Every pod runs as UID 65532 with `runAsNonRoot`, a read-only root filesystem, no privilege
 escalation, all capabilities dropped, the `RuntimeDefault` seccomp profile and no service account
@@ -43,6 +47,7 @@ registry is `orchestrator/registry.json` inside it), `--socket=/run/micold/orche
 | `state.persistence.size` | `1Gi` | |
 | `state.persistence.storageClass` | `""` | empty uses the cluster default |
 | `database.existingSecret` | `""` | reserved for #1948 / #1740 |
+| `ops.enabled` / `ops.port` | `true` / `9090` | the ops listener, its Service and the probes |
 | `web.enabled` | `false` | renders nothing when false |
 | `web.image.repository` / `tag` / `pullPolicy` | `ghcr.io/jaroslawherod/micold-web` / `appVersion` / `IfNotPresent` | |
 | `web.containerPort` / `web.service.port` | `8080` / `80` | |
