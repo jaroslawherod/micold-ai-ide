@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-gq91k7
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: gate, push, PR for M1
+- **Next step**: M2 (fresh thread, `/speckit-autopilot resume`)
 - **PR**: none
 
 ## Pull requests
@@ -19,12 +19,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1996 | design | merged | 9f6e6784d |
+| #1999 | M1 | merged | 2f62cbf31 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | | implemented, round 1 fixed, awaiting round 2 |
+| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
@@ -58,7 +59,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 merged (#1999, 2f62cbf31) 2026-11-16. Next: M2 (T014–T016) in a fresh thread from main. Note: CI flake in M1 was a real leak (VirtualConn aborted its writer, pipe never closed); fixed in 734f872.
 
 ## Open escalation
 
