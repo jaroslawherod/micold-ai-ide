@@ -191,7 +191,7 @@ jobs:
   # #1735: the TypeScript web client (apps/client, packages/protocol): lint, typecheck, Jest with
   # coverage, diff coverage of the changed lines (scripts/guardrails-scope.conf `[web]`), and the
   # static web export. Runs for a change that touches the `micold-client` set (`client` verdict of
-  # `classify`; the verdict errs towards running) and on main and nightly runs. The Playwright smoke
+  # `classify`; the verdict errs towards running) on a pull request, and on every main and nightly run. The Playwright smoke
   # test and the bundle check join it with M4 and M2. Node and pnpm versions come from mise.toml;
   # scripts/tests/client-pins.test.sh keeps this job's pins equal to them.
   client:
@@ -201,7 +201,7 @@ jobs:
       ${{ !cancelled()
       && needs.classify.result == 'success'
       && needs.classify.outputs.docs_only != 'true'
-      && needs.classify.outputs.client == 'true' }}
+      && (github.event_name != 'pull_request' || needs.classify.outputs.client == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10 # SC-005: the job stays under ten minutes
     steps:
@@ -224,14 +224,25 @@ jobs:
           pnpm --filter @micold/protocol typecheck
       - name: Jest with coverage
         run: pnpm --filter @micold/client test --coverage
-      # Jest writes lcov paths relative to the package; diff-coverage wants repository paths.
+      # Jest writes lcov paths relative to the package (`../../packages/protocol/...` for a sibling); normalise them to repository paths for diff-coverage.
       - name: Check the changed lines
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.base_ref }}
         run: |
           git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
-          sed -i '/^SF:apps\//!s#^SF:#SF:apps/client/#' apps/client/coverage/lcov.info
+          python3 - <<'PY'
+          import os
+          p = "apps/client/coverage/lcov.info"
+          out = []
+          for line in open(p):
+              if line.startswith("SF:"):
+                  f = line[3:].rstrip("\n")
+                  if not os.path.isabs(f):
+                      line = "SF:" + os.path.normpath(os.path.join("apps/client", f)) + "\n"
+              out.append(line)
+          open(p, "w").writelines(out)
+          PY
           scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info --base "origin/$BASE" --summary client-diff-coverage.md
       - name: Web export
         run: pnpm --filter @micold/client web:export
