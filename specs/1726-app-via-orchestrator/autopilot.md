@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-gq91k7
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M1 review A+B (orchestrator), then gate and PR
+- **Next step**: M1 review round 2 (orchestrator dispatches A+B re-review of the fix diff), then gate and PR
 - **PR**: none
 
 ## Pull requests
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | | implemented, awaiting review A and B |
+| M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | | implemented, round 1 fixed, awaiting round 2 |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | pending |
 | M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
 
@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | tasks | 1 | design | aac33e2f643fabba7645ab9a83e0acec7db3e0c8 | a3a350cbee7cbea5eb623c27828a8217ba16f17a:aac33e2f643fabba7645ab9a83e0acec7db3e0c8 | CHANGES (2 MAJOR, 2 MINOR; all fixed) |
 | tasks | 2 | design | 64197e73ad0729840a83965f8c5364b7950443fd | c73c0d8512eb2c789d089baa13c46fcb6cb0613a:64197e73ad0729840a83965f8c5364b7950443fd | CLEAN |
 | code A+B (M1) | 1 | M1 | 52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | 181479f93ce2eaed78d7913c940dba7f37a4ea0b:52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | pending (orchestrator dispatches) |
+| code A+B (M1) | 1 | M1 | c2d10f85181940a6640d88ff0061ac7680fefb1f | 181479f93ce2eaed78d7913c940dba7f37a4ea0b:52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | CHANGES fixed: A F1-F5 (hub keeps queued answers, answered only once queued, per-route queue toward link, seq gap; F4 documented in contract), B F1 (drift-M1.md) |
 
 ## Declined review findings
 
