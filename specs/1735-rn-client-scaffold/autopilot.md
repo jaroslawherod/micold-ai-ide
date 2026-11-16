@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-hzt36f
 - **Started**: 2026-11-16
-- **Phase**: M1 implemented, reviews A and B pending (orchestrator)
+- **Phase**: M1 reviews round 1 fixed; gate then PR
 - **Next step**: orchestrator runs review A (`code-review` high) and B (conformance), then continues this unit for fixes, scoped and full gate, and the M1 PR
 
 ## Pull requests
@@ -49,6 +49,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | plan.md, research.md, data-model.md, contracts/ | 7d38edbc4 | - | CHANGES (F1-F2 major, F3-F4 minor), all applied |
 | Plan | 2 | plan.md, research.md, data-model.md, contracts/ | - | - | CLEAN with minors (sonnet re-review; both applied: `.gitattributes` entry, merged duplicate ci.yml entries) |
 | Tasks | 1 | tasks.md | - | - | CHANGES (F1-F3 major, F4-F6 minor), all applied: bundle check moved to M2 (T039), test/impl split for fonts, platform fallbacks, LocalePicker, ConnectionBanner, bundle-check, edge-case tests (viewport, reduced motion, auth expiry, tab isolation), SC-005 moved to M4, dependencies added; tasks renumbered T001-T062 |
+| Review A (opus) | 1 | M1 | dc3f3cd2b7fdc41559cc2aea0866aaea888545ba | - | CLEAN minors F1 (ci.yml client condition) and F2 (lcov SF paths) both fixed in 9b64585a458f441d7632f65b0f6a7c3532f1d467 |
+| Review B (conformance) | 1 | M1 | dc3f3cd2b7fdc41559cc2aea0866aaea888545ba | - | CHANGES F1 major (plan drift, drift-M1.md written, plan-drift.sh clean), F2 minor (lcov normalisation noted); fixed in 9b64585a458f441d7632f65b0f6a7c3532f1d467 |
+| Review A+B fix diff | 2 | M1 | 9b64585a458f441d7632f65b0f6a7c3532f1d467 | - | pending (orchestrator re-reviews the fix diff) |
 
 ## Declined review findings
 
