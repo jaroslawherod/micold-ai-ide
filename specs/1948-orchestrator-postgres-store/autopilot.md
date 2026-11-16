@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-g30l62
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M8 review (A+B) on origin/main...claude/project-thread-g30l62, then open the M8 PR (body in the unit's scratchpad)
+- **Next step**: dispatch the M9 milestone unit in a fresh thread (previous PR #2008 merged at 2243de02d)
 
 ## Pull requests
 
@@ -25,6 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2001 | M5 | merged | 8e68fa947 |
 | #2003 | M6 | merged | 3d5485c30 |
 | #2006 | M7 | merged | 3a74d3004 |
+| #2008 | M8 | merged | 2243de02d |
 
 ## Milestones
 
@@ -37,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T032–T035 | full | Migration safety | #2001 | merged |
 | M6 | T036–T038 | full | No private key in any table | #2003 | merged (3d5485c30) |
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
-| M8 | T045–T050 | full | Orchestrator starts on the chosen store | | in PR |
+| M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
 | M9 | T051–T054 | full | Import registry.json once | | pending |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | pending |
 
@@ -97,7 +98,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 implemented on claude/project-thread-g30l62 (T045–T050; previous PR #2006 merged at 3a74d3004). Review round 1 (2 MAJOR 2 MINOR) fixed in the commit after 71e4c32; full gate green with PostgreSQL. Next: the orchestrator re-reviews the fix diff 71e4c32..HEAD, then opens the PR. registry.json import stays for M9.
+M8 merged (PR #2008, squash 2243de02d; opus A+B round 1 CHANGES 2 MAJOR 2 MINOR fixed, sonnet round 2 MINOR-ONLY fixed; first CI run red on a corrupt llvm-cov profraw, green on the next head). M8 makes the orchestrator refuse to start while an unimported registry.json exists: M9 (T051–T054) must replace that refusal with the import. Next: dispatch the M9 unit in a fresh thread; set the Worktree branch line to that thread's branch. Cloud: same PostgreSQL/nextest/openssh-client setup; full gate with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0. Units have no Agent tool: the orchestrator dispatches the review.
 
 ## Open escalation
 
