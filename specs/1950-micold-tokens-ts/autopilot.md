@@ -8,16 +8,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: low
 - **Supervised**: no
 - **Issue**: #1950
-- **Worktree branch**: claude/project-thread-rib1g7
+- **Worktree branch**: claude/project-thread-wlrb6d
 - **Started**: 2026-11-16
-- **Phase**: tasks
-- **Next step**: design PR merge (orchestrator), then M1
+- **Phase**: milestones
+- **Next step**: M1 (milestone unit)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #1995 | design (draft) | open | — |
+| #1995 | design | merged | (squash on main) |
 
 ## Milestones
 
@@ -45,7 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
-| #1995 | design (draft) | open | — |
+| #1995 | design | merged | (squash on main) |
 
 ## Handover
 
