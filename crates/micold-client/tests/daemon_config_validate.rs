@@ -73,13 +73,22 @@ fn the_errors_reach_the_daemons_view_model_and_a_valid_file_clears_them() {
 fn expected(entry: &DaemonEntry) -> (DaemonSettings, Kind) {
     let name = entry.name.as_str();
     let host = || DaemonSettings::new(name, Listen::Socket(SocketSpec::Auto));
+    // A provisioned daemon announces the wire id its entry keeps (#1726); the host is `local`.
+    let wire_id = entry.file.wire_id.clone();
     let sandbox = || DaemonSettings {
         client_token_file: Some(micold_core::protocol::auth::CONTAINER_TOKEN_PATH.into()),
+        wire_id: wire_id.clone(),
         ..DaemonSettings::new(name, Listen::Tcp("0.0.0.0:7000".parse().unwrap()))
     };
     match &entry.runtime {
         DaemonRuntime::Host => (host(), Kind::Host),
-        DaemonRuntime::Ssh(_) => (host(), Kind::Ssh),
+        DaemonRuntime::Ssh(_) => (
+            DaemonSettings {
+                wire_id: wire_id.clone(),
+                ..host()
+            },
+            Kind::Ssh,
+        ),
         DaemonRuntime::Container(_) => (sandbox(), Kind::Container),
         DaemonRuntime::Kubernetes(_) => (sandbox(), Kind::Kubernetes),
         other => panic!("no file for {other:?}"),
@@ -231,6 +240,7 @@ fn from_entry_builds_the_file_from_the_saved_settings() {
         startup: None,
         extras: Default::default(),
         ai_cli: vec![],
+        wire_id: None,
     };
     w.registry.set_file(id, file.clone()).unwrap();
     let (settings, kind) = DaemonSettings::from_entry(w.registry.get(id).unwrap()).unwrap();
@@ -254,7 +264,15 @@ fn file_settings_survive_the_stored_registry() {
     w.registry.set_file(w.boxed, file.clone()).unwrap();
     let json = serde_json::to_value(w.registry.get(w.boxed).unwrap()).unwrap();
     let back: DaemonEntry = serde_json::from_value(json).unwrap();
-    assert_eq!(back.file, file);
+    // The entry's wire id (#1726) is kept beside the settings Settings saved.
+    assert!(back.file.wire_id.is_some());
+    assert_eq!(
+        back.file,
+        FileSettings {
+            wire_id: back.file.wire_id.clone(),
+            ..file
+        }
+    );
     let host = serde_json::to_value(w.registry.get(w.host).unwrap()).unwrap();
     assert!(
         host.get("file").is_none(),

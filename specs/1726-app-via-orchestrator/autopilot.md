@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1726
-- **Worktree branch**: claude/project-thread-35d9jf
+- **Worktree branch**: claude/project-thread-jwbvyd
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M2 reviews (A+B) on the snapshot below, then open the M2 PR with specs/1726-app-via-orchestrator/pr-m2.md
+- **Next step**: M3 round-2 reviews A+B on the snapshot (orchestrator dispatches), then PR from specs/1726-app-via-orchestrator/pr-m3.md
 - **PR**: none
 
 ## Pull requests
@@ -20,14 +20,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1996 | design | merged | 9f6e6784d |
 | #1999 | M1 | merged | 2f62cbf31 |
+| #2004 | M2 | merged | 5ee726f07 |
+| #2007 | M3 | open; CI red round 1 fixed (flaky stand-in race in micold-daemon ai_cli_config test) | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
-| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | | implemented, review pending |
-| M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
+| M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
+| M3 | T017–T022 | full | desktop app uses one orchestrator connection | #2007 | PR open |
 
 ## Decisions
 
@@ -51,6 +53,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | code A+B (M1) | 1 | M1 | 52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | 181479f93ce2eaed78d7913c940dba7f37a4ea0b:52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | pending (orchestrator dispatches) |
 | code A+B (M1) | 1 | M1 | c2d10f85181940a6640d88ff0061ac7680fefb1f | 181479f93ce2eaed78d7913c940dba7f37a4ea0b:52b08b293b4bf90cb8227ce28d2724bdbcd4cebe | CHANGES fixed: A F1-F5 (hub keeps queued answers, answered only once queued, per-route queue toward link, seq gap; F4 documented in contract), B F1 (drift-M1.md) |
 | code A+B (M1) | 2 | M1 | 2aa9f0a4e5ba1b186cb09e0b8a2c7bf7ce2c1ee6 | 5aa7439a20be847cc0dd0815fc78ff252713794f:2aa9f0a4e5ba1b186cb09e0b8a2c7bf7ce2c1ee6 | CLEAN (MINOR 1 fixed in contract prose; 2 and 3 declined as bounded/unchanged) |
+| code A+B (M3) | 1 | M3 | 0deffa8b600c9fccf833c546c3a4af79d9ddd400 | 1a054e45102f489bfff8d934d5a83c5d148f659d:0deffa8b600c9fccf833c546c3a4af79d9ddd400 | CHANGES fixed: A F1 (dead-link route: close before marking table dead, insert refused under lock, writer drops route on send failure), A F2 (try_send, full queue ends that route), B F2 (T021 run + drift entry), B F3, B F4 (tdd/cycle-log.md); B F1 to user, in Follow-ups |
+| code A+B (M3) | 2 | M3 | c5c93f8ef6579f879265921f41fabd306d60e9bb | 0deffa8b600c9fccf833c546c3a4af79d9ddd400:c5c93f8ef6579f879265921f41fabd306d60e9bb | pending |
+| code A+B (M3) | 2 | M3 | d4561fb3d4b9619c6c11b56e850be0fcd729da40 | 0deffa8b6:c5c93f8ef | CLEAN (1 MINOR declined: log on full-queue drop optional) |
 
 ## Declined review findings
 
@@ -66,6 +71,8 @@ None. (M1 merged #1999 at 2f62cbf31. M2 implemented and gated; note: scripts/tes
 None.
 
 ## Follow-ups not done
+
+- M3 review B F1 (FR-007): SSH, container and Kubernetes actors still connect directly (drift-M3.md "Scope narrowed"); with the user as a decision.
 
 ## Follow-ups (M2 review)
 - list.rs:111 mid-ask link drop reported as timeout, not offline

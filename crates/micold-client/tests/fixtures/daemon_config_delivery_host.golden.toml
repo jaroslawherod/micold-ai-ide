@@ -7,3 +7,6 @@ kind = "host"
 
 [listen]
 socket = "auto"
+
+[orchestrator_link]
+enabled = true

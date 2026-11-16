@@ -21,3 +21,6 @@ remote = "https://github.com/acme/app.git"
 
 [[projects]]
 path = "/home/me/src/added"
+
+[orchestrator_link]
+enabled = true
