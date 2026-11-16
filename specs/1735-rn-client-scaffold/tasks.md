@@ -49,22 +49,22 @@ Paths: `apps/client/` (app), `packages/protocol/` (`@micold/protocol`), `scripts
 
 ## Phase 5: US1 Sign-in and protocol boundary (M2)
 
-- [ ] T024 [P] [US1] TEST FIRST `packages/protocol/tests/types.test-d.ts` and `api.test.ts`: branded ids not interchangeable, `ConnectionState` exhaustive, interfaces implementable by a stub (data-model.md)
-- [ ] T025 [US1] Implement `packages/protocol/src/types.ts` (marked `STAND-IN`) and `src/api.ts` (`OrchestratorApi`, `AuthService`, `Transport`) per contracts/orchestrator-api.md and contracts/transport.md
-- [ ] T026 [P] [US1] TEST FIRST `packages/protocol/tests/connection.test.ts`: ConnectionManager over a fake transport with injectable clock and random: backoff with full jitter, resume by last seq, correlation by id with timeout, state surfaced as connected/reconnecting(attempt)/offline (FR-009)
-- [ ] T027 [US1] Implement `packages/protocol/src/connection/` (makes T026 pass)
-- [ ] T028 [P] [US1] TEST FIRST `packages/protocol/tests/mock.test.ts`: mock fixture (2 daemons, 6 projects, 30 worktrees, 60 sessions), feed delivery, mock auth providers (two configured, one not), refusal and cancel (FR-005, SC-001 data)
-- [ ] T029 [US1] Implement `packages/protocol/src/mock/` exporting the `__MICOLD_MOCK__` sentinel, at `@micold/protocol/mock`
-- [ ] T030 [P] [US1] TEST FIRST `apps/client/tests/api/select.test.ts`: mock mode selects the mock, real mode throws "real client not built (#1732)", components import only the interface (FR-004, FR-005)
-- [ ] T031 [US1] Implement `src/api/ApiProvider.tsx` and `src/api/select.ts` behind `EXPO_PUBLIC_API_MODE`; `client-web` sets `real`, dev and `client-e2e` set `mock`
-- [ ] T032 [P] [US1] TEST FIRST `apps/client/tests/auth/`: token held in memory only, no `toJSON`, nothing written to `localStorage`/`sessionStorage`/`IndexedDB`/cookie (FR-006); route guard redirects to sign-in and returns to the requested route (FR-007, FR-008); session expiry mid-use returns to sign-in keeping the open route; two stores (tabs) signed in separately never share a token (Edge Cases, Auth)
-- [ ] T033 [US1] Implement `src/auth/` (memory session store, guard, return-to, expiry handling) and the route guard in `app/_layout.tsx` (makes T032 pass)
-- [ ] T034 [P] [US1] TEST FIRST component tests for `app/sign-in.tsx`: lists only configured providers, "not set up" state, refusal and cancellation messages, all strings from the catalog (US1 scenarios 1, 2, 5)
-- [ ] T035 [US1] Implement `app/sign-in.tsx` and add catalog entries (en, pl) (makes T034 pass)
-- [ ] T036 [P] [US1] TEST FIRST component test for `src/components/ConnectionBanner.tsx`: connected, reconnecting with attempt count, offline (FR-009)
-- [ ] T037 [US1] Implement `src/components/ConnectionBanner.tsx` (makes T036 pass)
-- [ ] T038 [P] [US1] TEST FIRST self-test of `scripts/client/bundle-check.mjs` (`scripts/tests/bundle-check.test.sh`): an export containing the mock sentinel fails, a clean one passes (SC-006)
-- [ ] T039 [US1] Implement the mock-sentinel check in `scripts/client/bundle-check.mjs` and add the bundle-check step to the `client` job in `.github/workflows/ci.yml` (makes T038 pass)
+- [x] T024 [P] [US1] TEST FIRST `packages/protocol/tests/types.test-d.ts` and `api.test.ts`: branded ids not interchangeable, `ConnectionState` exhaustive, interfaces implementable by a stub (data-model.md)
+- [x] T025 [US1] Implement `packages/protocol/src/types.ts` (marked `STAND-IN`) and `src/api.ts` (`OrchestratorApi`, `AuthService`, `Transport`) per contracts/orchestrator-api.md and contracts/transport.md
+- [x] T026 [P] [US1] TEST FIRST `packages/protocol/tests/connection.test.ts`: ConnectionManager over a fake transport with injectable clock and random: backoff with full jitter, resume by last seq, correlation by id with timeout, state surfaced as connected/reconnecting(attempt)/offline (FR-009)
+- [x] T027 [US1] Implement `packages/protocol/src/connection/` (makes T026 pass)
+- [x] T028 [P] [US1] TEST FIRST `packages/protocol/tests/mock.test.ts`: mock fixture (2 daemons, 6 projects, 30 worktrees, 60 sessions), feed delivery, mock auth providers (two configured, one not), refusal and cancel (FR-005, SC-001 data)
+- [x] T029 [US1] Implement `packages/protocol/src/mock/` exporting the `__MICOLD_MOCK__` sentinel, at `@micold/protocol/mock`
+- [x] T030 [P] [US1] TEST FIRST `apps/client/tests/api/select.test.ts`: mock mode selects the mock, real mode throws "real client not built (#1732)", components import only the interface (FR-004, FR-005)
+- [x] T031 [US1] Implement `src/api/ApiProvider.tsx` and `src/api/select.ts` behind `EXPO_PUBLIC_API_MODE`; `client-web` sets `real`, dev and `client-e2e` set `mock`
+- [x] T032 [P] [US1] TEST FIRST `apps/client/tests/auth/`: token held in memory only, no `toJSON`, nothing written to `localStorage`/`sessionStorage`/`IndexedDB`/cookie (FR-006); route guard redirects to sign-in and returns to the requested route (FR-007, FR-008); session expiry mid-use returns to sign-in keeping the open route; two stores (tabs) signed in separately never share a token (Edge Cases, Auth)
+- [x] T033 [US1] Implement `src/auth/` (memory session store, guard, return-to, expiry handling) and the route guard in `app/_layout.tsx` (makes T032 pass)
+- [x] T034 [P] [US1] TEST FIRST component tests for `app/sign-in.tsx`: lists only configured providers, "not set up" state, refusal and cancellation messages, all strings from the catalog (US1 scenarios 1, 2, 5)
+- [x] T035 [US1] Implement `app/sign-in.tsx` and add catalog entries (en, pl) (makes T034 pass)
+- [x] T036 [P] [US1] TEST FIRST component test for `src/components/ConnectionBanner.tsx`: connected, reconnecting with attempt count, offline (FR-009)
+- [x] T037 [US1] Implement `src/components/ConnectionBanner.tsx` (makes T036 pass)
+- [x] T038 [P] [US1] TEST FIRST self-test of `scripts/client/bundle-check.mjs` (`scripts/tests/bundle-check.test.sh`): an export containing the mock sentinel fails, a clean one passes (SC-006)
+- [x] T039 [US1] Implement the mock-sentinel check in `scripts/client/bundle-check.mjs` and add the bundle-check step to the `client` job in `.github/workflows/ci.yml` (makes T038 pass)
 
 **M2 checkpoint**: signing in through the mock lands on an authenticated shell; reload signs out; bundle check passes on a real-mode export.
 

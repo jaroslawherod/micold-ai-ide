@@ -224,28 +224,18 @@ jobs:
           pnpm --filter @micold/protocol typecheck
       - name: Jest with coverage
         run: pnpm --filter @micold/client test --coverage
-      # Jest writes lcov paths relative to the package (`../../packages/protocol/...` for a sibling); normalise them to repository paths for diff-coverage.
+      # Jest runs from the repository root (apps/client/package.json), so its lcov paths are repository paths.
       - name: Check the changed lines
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.base_ref }}
         run: |
           git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
-          python3 - <<'PY'
-          import os
-          p = "apps/client/coverage/lcov.info"
-          out = []
-          for line in open(p):
-              if line.startswith("SF:"):
-                  f = line[3:].rstrip("\n")
-                  if not os.path.isabs(f):
-                      line = "SF:" + os.path.normpath(os.path.join("apps/client", f)) + "\n"
-              out.append(line)
-          open(p, "w").writelines(out)
-          PY
           scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info --base "origin/$BASE" --summary client-diff-coverage.md
       - name: Web export
         run: pnpm --filter @micold/client web:export
+      - name: Bundle check (no mock in the production export)
+        run: node scripts/client/bundle-check.mjs apps/client/dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:

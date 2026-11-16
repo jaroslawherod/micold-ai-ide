@@ -5,5 +5,16 @@
   "locale.name.en": "English",
   "locale.name.pl": "Polski",
   "locale.name.pseudo": "Pseudo (test)",
-  "session.count": "{count, plural, one {# session} other {# sessions}}"
+  "session.count": "{count, plural, one {# session} other {# sessions}}",
+  "api.unavailable": "The orchestrator connection is not available in this build.",
+  "signin.title": "Sign in to Micold",
+  "signin.with": "Sign in with {provider}",
+  "signin.loading": "Loading sign-in options…",
+  "signin.notSetUp": "Sign-in is not set up. Ask the owner of this Micold to configure a sign-in provider.",
+  "signin.refused": "{provider} refused the sign-in. No session was started.",
+  "signin.cancelled": "The sign-in with {provider} was cancelled.",
+  "signin.retry": "Try again",
+  "signin.loadFailed": "The sign-in options could not be loaded.",
+  "connection.reconnecting": "Connection lost. Reconnecting (attempt {attempt})…",
+  "connection.offline": "Offline. The orchestrator cannot be reached."
 }
