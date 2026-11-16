@@ -20,3 +20,6 @@ path = "/home/dev/repos/app"
 [[projects]]
 path = "/home/dev/repos/lib"
 remote = "https://github.com/acme/lib.git"
+
+[orchestrator_link]
+enabled = true

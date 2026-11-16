@@ -64,6 +64,10 @@ serde_json = { workspace = true }
 # Timer for the connection keepalive (US5, FR-026). The client already runs on tokio via iced's
 # tokio executor; this makes the dependency explicit rather than transitive.
 tokio = { workspace = true }
+# #1726: the one orchestrator connection frames routed conns itself (`orchestrator_conn.rs`).
+tokio-util = { workspace = true }
+bytes = { workspace = true }
+futures-util = { workspace = true }
 # Feature 1464 (research R1): the "Add attachment" button's native file picker.
 rfd = { workspace = true }
 # Feature 613 (research R7): `notification_icon::render` draws the kind glyph from the bundled font
@@ -90,8 +94,8 @@ wayland-protocols = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-# Feature 686: the `kube_real_*` tests speak the daemon protocol over the relay.
-futures-util = { workspace = true }
+# #1726: `orchestrator_single_connection` links a real daemon to the orchestrator it starts.
+micold-daemon = { path = "../micold-daemon" }
 # Feature 686: `kube::fake::FakeCluster` for the Kubernetes daemon tests.
 micold-core = { workspace = true, features = ["kube-fake"] }
 # Feature 1262: the shared headless renderer of the component tests.

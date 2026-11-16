@@ -126,6 +126,8 @@ pub struct DaemonSettings {
     pub extras: SessionExtras,
     /// The `[[ai.cli]]` entries Settings → Daemons configures (#1532, FR-013d).
     pub ai_cli: Vec<AiCliSetting>,
+    /// `daemon.id`, the id announced to the orchestrator (#1726, R6); `None` announces `local`.
+    pub wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
 }
 
 impl DaemonSettings {
@@ -149,6 +151,7 @@ impl DaemonSettings {
             github_tokens: Vec::new(),
             git_config_file: None,
             ai_cli: Vec::new(),
+            wire_id: None,
         }
     }
 
@@ -247,6 +250,8 @@ impl DaemonSettings {
             extras: file.extras.clone(),
             projects: file.projects.clone(),
             ai_cli: file.ai_cli.clone(),
+            // The host is `local`, whatever its entry holds.
+            wire_id: file.wire_id.clone().filter(|_| kind != Kind::Host),
             startup: file
                 .startup
                 .as_ref()
@@ -269,6 +274,9 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "{HEADER}\nschema = 1\n\n[daemon]");
     let _ = writeln!(out, "name = {}", quote(&settings.name));
+    if let Some(id) = &settings.wire_id {
+        let _ = writeln!(out, "id = {}", quote(id.as_str()));
+    }
     let _ = writeln!(out, "kind = {}", quote(kind.as_str()));
     key_path(&mut out, "data_dir", &settings.data_dir);
     key_path(&mut out, "home", &settings.home);
@@ -329,6 +337,9 @@ pub fn render(settings: &DaemonSettings, kind: Kind) -> String {
     if let Some(startup) = &settings.startup {
         render_startup(&mut out, startup);
     }
+    // Every daemon the app provisions dials the orchestrator, through which the app reaches it
+    // (#1726, FR-013); the socket is the kind's default.
+    out.push_str("\n[orchestrator_link]\nenabled = true\n");
     out
 }
 
@@ -462,4 +473,79 @@ fn quote(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::daemons::{ContainerSettings, DaemonRegistry, DaemonRuntime};
+
+    fn parsed(text: &str) -> micold_core::daemon_config::DaemonConfig {
+        micold_core::daemon_config::parse(text, ORIGIN)
+            .unwrap_or_else(|errors| panic!("{errors:#?}\n{text}"))
+    }
+
+    fn container() -> DaemonRuntime {
+        DaemonRuntime::Container(ContainerSettings {
+            profile: micold_core::sandbox::SandboxProfile::default(),
+            container_name: "box-ctr".into(),
+            port: 7001,
+            migration: None,
+        })
+    }
+
+    #[test]
+    fn a_provisioned_daemon_links_to_the_orchestrator_under_its_wire_id() {
+        let mut registry = DaemonRegistry::new(Vec::new(), 1);
+        let id = registry.add("Build Box", container(), true).unwrap();
+        let entry = registry.get(id).unwrap();
+        let wire = entry
+            .file
+            .wire_id
+            .clone()
+            .expect("a provisioned daemon has a wire id");
+        let (settings, kind) = DaemonSettings::from_entry(entry).unwrap();
+        let config = parsed(&render(&settings, kind));
+        assert_eq!(config.wire_id(), wire);
+        assert!(config.orchestrator_link.expect("the table").enabled);
+        let (slug, hex) = wire.as_str().rsplit_once('-').unwrap();
+        assert_eq!(slug, "build-box");
+        assert_eq!(hex.len(), 8);
+        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn the_host_daemon_links_as_local() {
+        let mut registry = DaemonRegistry::new(Vec::new(), 1);
+        let id = registry.add("Host", DaemonRuntime::Host, true).unwrap();
+        let entry = registry.get(id).unwrap();
+        assert_eq!(entry.file.wire_id, None);
+        let (settings, kind) = DaemonSettings::from_entry(entry).unwrap();
+        let text = render(&settings, kind);
+        assert!(!text.contains("\nid = "), "{text}");
+        let config = parsed(&text);
+        assert_eq!(config.wire_id().as_str(), "local");
+        assert!(config.orchestrator_link.expect("the table").enabled);
+    }
+
+    #[test]
+    fn an_entry_saved_without_a_wire_id_gets_one_once() {
+        let mut registry = DaemonRegistry::new(Vec::new(), 1);
+        registry.add("Box", container(), true).unwrap();
+        let mut entries = registry.entries().to_vec();
+        entries[0].file.wire_id = None;
+        let mut loaded = DaemonRegistry::new(entries, 2);
+        assert!(loaded.ensure_wire_ids(), "an id is generated");
+        let first = loaded.entries()[0].file.wire_id.clone();
+        assert!(!loaded.ensure_wire_ids(), "and kept");
+        assert_eq!(loaded.entries()[0].file.wire_id, first);
+    }
+
+    #[test]
+    fn a_name_with_nothing_usable_or_too_long_still_gives_a_valid_id() {
+        let fallback = micold_core::daemons::new_wire_id("!!!");
+        assert!(fallback.as_str().starts_with("daemon-"), "{fallback:?}");
+        let long = micold_core::daemons::new_wire_id(&"x".repeat(100));
+        assert_eq!(long.as_str().len(), 63);
+    }
 }

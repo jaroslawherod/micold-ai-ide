@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jwbvyd
 - **Started**: 2026-11-16
 - **Phase**: milestones
-- **Next step**: M3 milestone unit (T017–T022)
+- **Next step**: M3 review snapshot (code A+B), then gate fixes and PR body
 - **PR**: none
 
 ## Pull requests
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | contract, core, requests and streams routed through the orchestrator | #1999 | merged |
 | M2 | T014–T016 | full | aggregated lists, 2 s deadline, SC-003 bench | #2004 | merged |
-| M3 | T017–T022 | full | desktop app uses one orchestrator connection | | pending |
+| M3 | T017–T022 | full | desktop app uses one orchestrator connection | | implemented |
 
 ## Decisions
 

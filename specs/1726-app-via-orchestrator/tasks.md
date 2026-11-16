@@ -42,14 +42,14 @@
 
 ## Phase 7: User Story 3 + US4 (app half) — one connection, started when absent (P1)
 
-- [ ] T017 [US3] Failing headless test `crates/micold-client/tests/orchestrator_single_connection.rs`: orchestrator spawned, exactly one client connection and none to a daemon socket; two concurrent starts leave one orchestrator; a missing binary gives a named error (FR-007, FR-008, SC-004)
-- [ ] T018 [US3] Generalise `connect::connect_or_spawn` to take the spawn command and endpoint; new `crates/micold-client/src/orchestrator_conn.rs` (one connection, channel per `(target, conn)`, `reconnect_loop` backoff); `crates/micold-client/src/daemon.rs` actors use a channel instead of a socket; start error in the existing connection banner (R6)
-- [ ] T019a [US4] Failing reconnect test in `crates/micold-client/tests/orchestrator_single_connection.rs`: orchestrator killed, client reconnects, actors re-handshake and re-read; `OutcomeUnknown` makes the actor re-request the target's snapshot (FR-009, SC-005)
-- [ ] T019 [US4] Implement re-handshake/re-read on reconnect and the `OutcomeUnknown` snapshot re-request in `crates/micold-client/src/orchestrator_conn.rs` and `crates/micold-client/src/daemon.rs` so T019a passes
-- [ ] T020a [P] [US3] Failing test in `crates/micold-client/src/daemon_config_render.rs`: rendered config has `[orchestrator_link] enabled = true` and `[daemon] id = <wire id>` (FR-013)
-- [ ] T020 [US3] Render those keys in `crates/micold-client/src/daemon_config_render.rs` and add `wire_id` (`slugify(name)-<8 hex>`, `local` for the host) to the provisioned registry entry, generated on next connect for existing entries, so T020a passes (R6)
-- [ ] T021 [US3] Run the socket-opening client suites `crates/micold-client/tests/daemon_routing.rs`, `crates/micold-client/tests/catalog_two_daemons.rs`, `crates/micold-client/tests/notifications.rs` and `crates/micold-client/tests/attention_notify.rs` with the client through the orchestrator and fix what fails (SC-002)
-- [ ] T022 [US3] User guide in `docs/user-guide/`: the app connects through the orchestrator and starts it; troubleshooting an orchestrator that cannot start (US3 scenario 4, Constitution VII)
+- [x] T017 [US3] Failing headless test `crates/micold-client/tests/orchestrator_single_connection.rs`: orchestrator spawned, exactly one client connection and none to a daemon socket; two concurrent starts leave one orchestrator; a missing binary gives a named error (FR-007, FR-008, SC-004)
+- [x] T018 [US3] Generalise `connect::connect_or_spawn` to take the spawn command and endpoint; new `crates/micold-client/src/orchestrator_conn.rs` (one connection, channel per `(target, conn)`, `reconnect_loop` backoff); `crates/micold-client/src/daemon.rs` actors use a channel instead of a socket; start error in the existing connection banner (R6)
+- [x] T019a [US4] Failing reconnect test in `crates/micold-client/tests/orchestrator_single_connection.rs`: orchestrator killed, client reconnects, actors re-handshake and re-read; `OutcomeUnknown` makes the actor re-request the target's snapshot (FR-009, SC-005)
+- [x] T019 [US4] Implement re-handshake/re-read on reconnect and the `OutcomeUnknown` snapshot re-request in `crates/micold-client/src/orchestrator_conn.rs` and `crates/micold-client/src/daemon.rs` so T019a passes
+- [x] T020a [P] [US3] Failing test in `crates/micold-client/src/daemon_config_render.rs`: rendered config has `[orchestrator_link] enabled = true` and `[daemon] id = <wire id>` (FR-013)
+- [x] T020 [US3] Render those keys in `crates/micold-client/src/daemon_config_render.rs` and add `wire_id` (`slugify(name)-<8 hex>`, `local` for the host) to the provisioned registry entry, generated on next connect for existing entries, so T020a passes (R6)
+- [x] T021 [US3] Run the socket-opening client suites `crates/micold-client/tests/daemon_routing.rs`, `crates/micold-client/tests/catalog_two_daemons.rs`, `crates/micold-client/tests/notifications.rs` and `crates/micold-client/tests/attention_notify.rs` with the client through the orchestrator and fix what fails (SC-002)
+- [x] T022 [US3] User guide in `docs/user-guide/`: the app connects through the orchestrator and starts it; troubleshooting an orchestrator that cannot start (US3 scenario 4, Constitution VII)
 
 ## Dependencies
 

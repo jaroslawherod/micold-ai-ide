@@ -13,3 +13,6 @@ dir = "/run/micold/ssh"
 
 [storage]
 clone_root = "/data/repos"
+
+[orchestrator_link]
+enabled = true

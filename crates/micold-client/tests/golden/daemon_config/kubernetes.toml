@@ -15,3 +15,6 @@ client_token_file = "/run/micold/secrets/client-token"
 
 [storage]
 clone_root = "/data/repos"
+
+[orchestrator_link]
+enabled = true
