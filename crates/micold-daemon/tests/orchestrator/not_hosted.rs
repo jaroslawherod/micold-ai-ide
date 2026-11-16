@@ -1,52 +1,10 @@
-//! User Story 1, scenario 2 (FR-001): the orchestrator hosts no session.
+//! User Story 1, scenario 2 (FR-001): the orchestrator hosts no session. Since #1726 it relays a
+//! client's session requests to the owning daemon (`tests/orchestrator_route`) and answers none
+//! itself.
 
-use std::path::PathBuf;
-
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind};
-use micold_core::session::AiCli;
+use micold_core::protocol::messages::ClientMsg;
 
 use crate::support::{announcement, child_count, children_quiet, FakeDaemon, Orchestrator};
-
-#[tokio::test]
-async fn a_session_start_is_refused_not_hosted() {
-    let orchestrator = Orchestrator::start().await;
-    let mut link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
-    link.send(ClientMsg::SessionCreate {
-        req: 7,
-        project: PathBuf::from("/p"),
-        worktree_dir: "w".into(),
-        provider: AiCli::default(),
-        allow_additional_session: false,
-        kind: Default::default(),
-        permission_mode: Default::default(),
-    })
-    .await;
-    match link.next().await {
-        DaemonMsg::OperationError {
-            req, kind, message, ..
-        } => {
-            assert_eq!(req, 7);
-            assert_eq!(kind, ErrorKind::Refused);
-            assert_eq!(message, "not hosted by the orchestrator");
-        }
-        other => panic!("expected a refusal, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn a_session_list_is_empty() {
-    let orchestrator = Orchestrator::start().await;
-    let mut link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
-    link.send(ClientMsg::Attach {
-        project: PathBuf::from("/p"),
-        force: false,
-    })
-    .await;
-    match link.next().await {
-        DaemonMsg::Attached { sessions, .. } => assert!(sessions.is_empty()),
-        other => panic!("expected an empty list, got {other:?}"),
-    }
-}
 
 #[tokio::test]
 async fn no_child_process_is_spawned() {

@@ -69,6 +69,17 @@ pub enum Frame<C> {
     Grid(GridFrame),
 }
 
+/// The length framing of every wire frame without the envelope decoded: `u32` little-endian
+/// length, then the payload (its 4-byte envelope header and body). The orchestrator relays frames
+/// through it, reading only the routed header (#1726).
+pub fn raw_frame_codec() -> LengthDelimitedCodec {
+    LengthDelimitedCodec::builder()
+        .length_field_type::<u32>()
+        .little_endian()
+        .max_frame_length(MAX_FRAME_LENGTH)
+        .new_codec()
+}
+
 /// The role-parameterised wire codec. `In` is the control type decoded from the peer; `Out` is the
 /// control type encoded to the peer.
 pub struct WireCodec<In, Out> {

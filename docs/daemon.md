@@ -616,9 +616,14 @@ continues with the usual `Hello`/`Welcome` handshake. The orchestrator then list
 these fields: `id`, `kind`, `name`, `protocol_version`, `capabilities`, `health`, `last_seen` (unix
 seconds) and `tenant` (`default` when the daemon announces none). A connection whose first frame is
 `{ "query": "list" }` is answered with `{ "daemons": [...], "orchestrator_version": N }`, sorted by
-id, and closed. A session start sent over an accepted link is refused with
-`not hosted by the orchestrator`; a session list is empty. The wire shapes are in
-`specs/1724-orchestrator-registry-daemon-link/contracts/link.md`.
+id, and closed. The orchestrator hosts no session: a client (a connection whose first frame is a
+plain `Hello`, protocol 83) sends routed frames naming a daemon, and the orchestrator relays them
+over that daemon's link, as opaque bytes, to a virtual client connection the daemon serves with
+its ordinary connection code, and relays the answers and streams back. A request naming an unknown,
+`needs-update` or offline daemon is refused with that reason; a request in flight when the link
+drops is answered `OutcomeUnknown`, and the conversation ends `daemon-offline`. The wire shapes are
+in `specs/1724-orchestrator-registry-daemon-link/contracts/link.md` and
+`specs/orchestrator/contracts/client-routing.md`.
 
 The orchestrator pings each link with `LinkPing { nonce }` every 3 s when the link is idle; the
 daemon answers `LinkPong { nonce }` (protocol 81). Any frame counts as an answer. A link silent for

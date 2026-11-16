@@ -278,7 +278,9 @@
 /// And 80 → 81 for #1724's orchestrator heartbeat: `DaemonMsg::LinkPing` and `ClientMsg::LinkPong`.
 /// And 81 → 82 for #1859's sidebar parent label: `WorktreeSnapshot.parent` (`ParentLabel`), which
 /// shifts the postcard layout `WorktreeSnapshot` carries.
-pub const PROTOCOL_VERSION: u32 = 82;
+/// And 82 → 83 for #1726's client routing: `ClientMsg::OrchList`, `DaemonMsg::{OrchListed, StreamEnded,
+/// OutcomeUnknown}` and the routed header's opaque form (`protocol/routing.rs`).
+pub const PROTOCOL_VERSION: u32 = 83;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

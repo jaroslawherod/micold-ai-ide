@@ -28,6 +28,7 @@ use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
 use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
+use crate::protocol::routing::{ListKind, MissingDaemon, StreamEndReason};
 use crate::pull_request::BranchPrState;
 use crate::review::comment::{CommentId, Move, Outcome, PrAnchor, ReviewComment, Scope};
 use crate::review::marks::{ChangeId, ReviewMark};
@@ -1089,6 +1090,14 @@ pub enum ClientMsg {
         /// Echo of the [`DaemonMsg::LinkPing`] nonce.
         nonce: u64,
     },
+    /// Ask the orchestrator (a routed frame with no `target`) for every linked daemon's projects,
+    /// worktrees or sessions (#1726 FR-001). Answered [`DaemonMsg::OrchListed`].
+    OrchList {
+        /// Correlation id.
+        req: u64,
+        /// Which rows.
+        kind: ListKind,
+    },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1213,6 +1222,31 @@ pub enum DaemonMsg {
     LinkPing {
         /// Opaque echo value.
         nonce: u64,
+    },
+    /// The answer to [`ClientMsg::OrchList`]: every reachable daemon's rows, and every daemon
+    /// whose rows are missing with the reason (#1726 FR-001, FR-002). Rows keep their
+    /// daemon-qualified refs and are never merged across daemons.
+    OrchListed {
+        /// Correlation id.
+        req: u64,
+        /// The rows.
+        rows: ListRows,
+        /// The daemons not in `rows`.
+        missing: Vec<MissingDaemon>,
+        /// No daemon is linked at all (not an error).
+        no_daemons: bool,
+    },
+    /// The orchestrator ended a routed conversation (#1726 FR-004, FR-012). Nothing more arrives on
+    /// that conn; the client re-reads and re-attaches when it wants the stream back.
+    StreamEnded {
+        /// Why.
+        reason: StreamEndReason,
+    },
+    /// A request in flight when its daemon's link dropped: whether it took effect is not known.
+    /// Never retried by the orchestrator (#1726 FR-006).
+    OutcomeUnknown {
+        /// The request.
+        req: u64,
     },
 
     // --- State projection (pushed, unsolicited) ---
@@ -1841,6 +1875,63 @@ pub enum WithdrawReason {
     SessionRemoved,
     /// The CLI's tool call hung up before an answer.
     AgentHungUp,
+}
+
+/// The rows of an [`DaemonMsg::OrchListed`] answer, one kind per answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListRows {
+    /// Projects.
+    Projects(Vec<ProjectSnapshot>),
+    /// Worktrees.
+    Worktrees(Vec<WorktreeSnapshot>),
+    /// Sessions.
+    Sessions(Vec<SessionSummary>),
+}
+
+impl ListRows {
+    /// No rows of `kind`.
+    pub fn empty(kind: ListKind) -> Self {
+        match kind {
+            ListKind::Projects => ListRows::Projects(Vec::new()),
+            ListKind::Worktrees => ListRows::Worktrees(Vec::new()),
+            ListKind::Sessions => ListRows::Sessions(Vec::new()),
+        }
+    }
+
+    /// Which kind these rows are.
+    pub fn kind(&self) -> ListKind {
+        match self {
+            ListRows::Projects(_) => ListKind::Projects,
+            ListRows::Worktrees(_) => ListKind::Worktrees,
+            ListRows::Sessions(_) => ListKind::Sessions,
+        }
+    }
+
+    /// How many rows.
+    pub fn len(&self) -> usize {
+        match self {
+            ListRows::Projects(rows) => rows.len(),
+            ListRows::Worktrees(rows) => rows.len(),
+            ListRows::Sessions(rows) => rows.len(),
+        }
+    }
+
+    /// Whether there are none.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Append `other`'s rows when it is the same kind; `false` (nothing appended) otherwise.
+    pub fn extend(&mut self, other: ListRows) -> bool {
+        match (self, other) {
+            (ListRows::Projects(a), ListRows::Projects(b)) => a.extend(b),
+            (ListRows::Worktrees(a), ListRows::Worktrees(b)) => a.extend(b),
+            (ListRows::Sessions(a), ListRows::Sessions(b)) => a.extend(b),
+            _ => return false,
+        }
+        true
+    }
 }
 
 /// The projected summary of a single session, sent for **every** session so the client can render
