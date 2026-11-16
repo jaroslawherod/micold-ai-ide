@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Spec round 1 CHANGES applied (F1 empty input, F2 checklist re-ticked after F1, F3 layout, F4 invocation). Next: sonnet re-review (orchestrator), then clarify.
+Spec CLEAN (round 2). Clarify CLEAN (3 agent-resolved Qs). Plan written; pre-review snapshot 02f657f9e5926e1d4f5e4d2c946d14c40a86d635:ad8718a69b11c41539315841bf759aae0f0866c7. Next: plan review round 1 (opus), then tasks unit.
 
 ## Open escalation
 
