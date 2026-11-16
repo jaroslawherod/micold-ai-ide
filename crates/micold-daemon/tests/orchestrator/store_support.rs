@@ -301,6 +301,8 @@ pub fn tables_and_columns(handle: &StoreHandle, postgres: bool) -> Vec<(String, 
 
 /// What looks like key material in the store (FR-006): a column named for a private key or a
 /// secret, or a value of any column, cast to text, holding a PEM marker. Empty when clean.
+/// Limit: the scan finds PEM armour only, not key material in another encoding (raw or base64
+/// without the `-----BEGIN` line).
 pub fn key_material(handle: &StoreHandle, postgres: bool) -> Vec<String> {
     use sqlx::Row as _;
     let columns = tables_and_columns(handle, postgres);

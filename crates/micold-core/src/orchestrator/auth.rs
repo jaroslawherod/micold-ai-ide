@@ -837,7 +837,7 @@ mod tests {
             TokenHash::from_hex(PEM),
             Err(StoreError::Refused { .. })
         ));
-        let padded = format!("{PEM:a<64}");
-        assert!(TokenHash::from_hex(&padded[..64]).is_err());
+        // The first 64 bytes of the PEM: the right length for a hash, but not hex.
+        assert!(TokenHash::from_hex(&PEM[..64]).is_err());
     }
 }
