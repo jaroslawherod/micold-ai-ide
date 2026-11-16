@@ -183,7 +183,7 @@ fn a_file_that_is_not_a_database_is_unavailable_and_names_the_file() {
     match StoreHandle::open_sqlite(dir.path()) {
         Err(StoreError::Unavailable { target, reason }) => {
             assert!(target.ends_with("orchestrator.db"), "target: {target}");
-            assert!(!reason.is_empty());
+            assert!(reason.contains("file is not a database"), "{reason}");
             assert!(!reason.contains("sqlite://"), "no URL: {reason}");
         }
         other => panic!("got {:?}", other.map(|_| ())),
@@ -289,7 +289,10 @@ fn an_unreachable_postgres_server_is_unavailable_naming_host_and_port_not_the_pa
                 unreachable!()
             };
             assert_eq!(target, "127.0.0.1:1");
-            assert!(!reason.is_empty());
+            assert_eq!(
+                reason,
+                "pool timed out while waiting for an open connection"
+            );
             let text = error.to_string();
             assert!(text.contains("127.0.0.1:1"), "{text}");
             assert!(!text.contains("s3cr3t-pw"), "password leaked: {text}");
@@ -339,10 +342,13 @@ fn opening_postgres_applies_the_v1_schema_once() {
         scalar_text(&handle, "SELECT description FROM _sqlx_migrations"),
         "orchestrator schema"
     );
-    assert_eq!(
-        handle.target().rsplit_once(':').map(|(_, p)| p.is_empty()),
-        Some(false)
-    );
+    // The target is the server's `host:port`, as the test URL names it.
+    let authority = db
+        .url
+        .split_once('@')
+        .and_then(|(_, rest)| rest.split('/').next())
+        .unwrap();
+    assert_eq!(handle.target(), authority);
 }
 
 #[test]
@@ -667,7 +673,7 @@ fn a_migration_that_fails_half_way_leaves_the_previous_version() {
         match target.run_migrations(broken.path()) {
             Err(StoreError::Schema(SchemaError::Failed { version, reason })) => {
                 assert_eq!(version, 2, "{dialect}");
-                assert!(!reason.is_empty());
+                assert!(reason.contains("no_such_table"), "{dialect}: {reason}");
             }
             other => panic!("{dialect}: got {other:?}"),
         }

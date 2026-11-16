@@ -160,9 +160,12 @@ async fn the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one
     std::fs::create_dir_all(json.parent().unwrap()).unwrap();
     std::fs::write(&json, "{}").unwrap();
     let error = start_fails(dir.path()).await;
-    assert!(
-        error.to_string().contains(&json.display().to_string()),
-        "{error}"
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "orchestrator registry {} is unreadable: missing field `version` at line 1 column 2",
+            json.display()
+        )
     );
     assert!(json.exists());
 
