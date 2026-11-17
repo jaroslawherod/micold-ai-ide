@@ -79,11 +79,27 @@ fn hello() -> ClientMsg {
 
 /// Ask `daemon` for its `kind` rows: `Hello` on a conversation of the orchestrator's own, rows
 /// from the `Welcome`.
-async fn ask(
+pub(crate) async fn ask(
     shared: &Shared,
     daemon: &WireDaemonId,
     kind: ListKind,
 ) -> Result<ListRows, MissingReason> {
+    converse(shared, daemon, None, |msg| match msg {
+        DaemonMsg::Welcome { catalog, .. } => Some(rows_of(kind, catalog)),
+        _ => None,
+    })
+    .await
+}
+
+/// A one-shot conversation with `daemon` on its link: `Hello`, then `request` once the `Welcome`
+/// is in (when there is one), until `answer` takes a message. A `Refused` or a `StreamEnded` ends
+/// it with an error; so does the link going away. The conversation ends when this returns.
+pub(crate) async fn converse<T>(
+    shared: &Shared,
+    daemon: &WireDaemonId,
+    mut request: Option<ClientMsg>,
+    mut answer: impl FnMut(DaemonMsg) -> Option<T>,
+) -> Result<T, MissingReason> {
     let (writer, mut answers) = mpsc::channel::<Bytes>(WRITER_QUEUE);
     let asker = Asker(shared, shared.hub().register_client(writer));
     let key = ClientKey {
@@ -95,18 +111,22 @@ async fn ask(
         Some(Opened::Route { link_conn }) => link_conn,
         _ => return Err(MissingReason::Offline),
     };
-    let hello = control_payload(&hello()).map_err(|e| MissingReason::Error(e.to_string()))?;
-    let header = RoutedHeader {
-        target: None,
-        conn: ConnectionId(link_conn),
-        seq: Sequence(1),
-        req: None,
+    let send = |seq: u64, msg: &ClientMsg| -> Result<(), MissingReason> {
+        let body = control_payload(msg).map_err(|e| MissingReason::Error(e.to_string()))?;
+        let header = RoutedHeader {
+            target: None,
+            conn: ConnectionId(link_conn),
+            seq: Sequence(seq),
+            req: None,
+        };
+        shared.hub().to_daemon(
+            &key,
+            link_conn,
+            Bytes::from(encode_opaque_payload(&header, &body)),
+        );
+        Ok(())
     };
-    shared.hub().to_daemon(
-        &key,
-        link_conn,
-        Bytes::from(encode_opaque_payload(&header, &hello)),
-    );
+    send(1, &hello())?;
     while let Some(payload) = answers.recv().await {
         let Ok(routed) = decode_routed_payload(&payload) else {
             continue;
@@ -117,15 +137,24 @@ async fn ask(
         let Some(Ok(msg)) = control_body(inner).map(serde_json::from_slice::<DaemonMsg>) else {
             continue;
         };
+        if matches!(msg, DaemonMsg::Welcome { .. }) {
+            if let Some(request) = request.take() {
+                send(2, &request)?;
+                continue;
+            }
+        }
         match msg {
-            DaemonMsg::Welcome { catalog, .. } => return Ok(rows_of(kind, catalog)),
             DaemonMsg::Refused { reason } => {
                 return Err(MissingReason::Error(format!("refused: {reason:?}")))
             }
             DaemonMsg::StreamEnded { reason } => {
                 return Err(MissingReason::Error(format!("ended: {reason:?}")))
             }
-            _ => {}
+            other => {
+                if let Some(found) = answer(other) {
+                    return Ok(found);
+                }
+            }
         }
     }
     Err(MissingReason::Offline)

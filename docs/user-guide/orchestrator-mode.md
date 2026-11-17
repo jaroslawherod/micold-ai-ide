@@ -103,6 +103,29 @@ If the database cannot be opened, the orchestrator does not start and says why. 
 full disk or a lost database server, for example), the orchestrator says so on its error output and
 carries on; the next change tries again.
 
+## Let a web page use it (`--api-addr`)
+
+The orchestrator can also serve an API for the web client: JSON messages over a WebSocket at
+`/api/ws`. It is off unless you give it an address:
+
+```sh
+micold-daemon orchestrator --api-addr 127.0.0.1:8730 --allow-origin http://127.0.0.1:8731
+```
+
+| Setting | Environment variable | What it does |
+|---|---|---|
+| `--api-addr <address:port>` | `MICOLD_ORCHESTRATOR_API_ADDR` | Where the API listens. Without it, nothing listens. Only a loopback address (`127.0.0.1`, `::1`) is accepted for now: the API has no TLS or sign-in yet. |
+| `--allow-origin <origin>` (repeat it for each) | `MICOLD_ORCHESTRATOR_ALLOW_ORIGINS` (comma separated) | The web pages allowed to connect, each an exact origin with its port, such as `http://127.0.0.1:8731`. `http://127.0.0.1:8731` does not allow `http://127.0.0.1:9999`. There is no wildcard. |
+
+A flag wins over its variable. A page from any other origin is refused before it can send anything,
+and the orchestrator logs `refused origin <origin>` as a warning. A program that is not a browser
+(and so sends no origin) may connect from the same machine only.
+
+Through the API a page can list your daemons and sessions, read a structured session's conversation,
+and follow changes to the list. It cannot see a terminal session's screen. If the connection drops,
+the page picks up where it left off, without missing or repeating a change; after an orchestrator
+restart it reloads the whole list instead.
+
 ## What it will not do
 
 The orchestrator starts no session itself: a request to start one is passed to the daemon it names

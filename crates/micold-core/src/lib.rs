@@ -15,6 +15,7 @@ pub mod agent_run;
 pub mod attach;
 pub mod attention;
 pub mod cli_reason;
+pub mod client_api;
 pub mod clock;
 pub mod connect;
 pub mod context_header;

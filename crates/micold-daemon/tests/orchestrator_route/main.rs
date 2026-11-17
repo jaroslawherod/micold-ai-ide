@@ -18,16 +18,18 @@ mod requests;
 mod slow_client;
 mod streams;
 
+// The real linked daemon, shared with the orchestrator suite's client API tests.
+#[path = "../support/linked_daemon.rs"]
+mod linked_daemon;
+pub use linked_daemon::{config, Daemon};
+
 use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use interprocess::local_socket::tokio::Stream;
 use micold_core::connect::{hello_message, Credentials};
-use micold_core::daemon_config;
-use micold_core::orchestrator::LinkStatus;
 use micold_core::protocol::codec::raw_frame_codec;
 use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg};
 use micold_core::protocol::routing::{
@@ -35,68 +37,9 @@ use micold_core::protocol::routing::{
     ConnectionId, RoutedBody, RoutedHeader, Sequence, StreamEndReason,
 };
 use micold_daemon::catalog::Catalog;
-use micold_daemon::orchestrator_link::{announcement, spawn_with, LinkHandle};
-use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
 
-use support::{record_when, within, Orchestrator};
-
-/// A real daemon linked to the orchestrator: its state and its link task.
-pub struct Daemon {
-    pub id: String,
-    pub state: Arc<DaemonState>,
-    pub link: LinkHandle,
-}
-
-/// The configuration of a host daemon named `id` that dials `socket`.
-pub fn config(id: &str, socket: &Path) -> Arc<daemon_config::DaemonConfig> {
-    let text = format!(
-        "schema = 1\n[daemon]\nname = \"Daemon {id}\"\nid = \"{id}\"\nkind = \"host\"\n\
-         [orchestrator_link]\nenabled = true\nsocket = \"{}\"\n",
-        socket.display()
-    );
-    Arc::new(
-        daemon_config::parse(&text, "daemon.toml")
-            .unwrap_or_else(|errors| panic!("a valid test config: {errors:#?}")),
-    )
-}
-
-impl Daemon {
-    /// Start daemon `id` and wait until the orchestrator lists it online.
-    pub async fn start(orchestrator: &Orchestrator, id: &str) -> Self {
-        let state = Arc::new(DaemonState::new(Catalog::ephemeral()));
-        let daemon = Self::link_state(orchestrator, id, state);
-        daemon.listed_online(orchestrator).await;
-        daemon
-    }
-
-    /// Link `state` as daemon `id`, without waiting.
-    pub fn link_state(orchestrator: &Orchestrator, id: &str, state: Arc<DaemonState>) -> Self {
-        let config = config(id, &orchestrator.socket);
-        let link = spawn_with(&config, announcement(&config), Some(Arc::clone(&state)))
-            .expect("the link is enabled");
-        Self {
-            id: id.to_owned(),
-            state,
-            link,
-        }
-    }
-
-    pub async fn listed_online(&self, orchestrator: &Orchestrator) {
-        record_when(orchestrator, &self.id, |r| r["health"] == "online").await;
-        within("the link settles", async {
-            while self.link.status() != LinkStatus::Linked {
-                tokio::time::sleep(Duration::from_millis(20)).await;
-            }
-        })
-        .await;
-    }
-
-    /// Drop the link as a crash would: the task and its socket go, the state stays.
-    pub fn drop_link(&self) {
-        self.link.abort();
-    }
-}
+use support::{within, Orchestrator};
 
 /// A catalog with one restored shell (Regular-mode) session at `project`, kept in `store`, and its
 /// id: starting it spawns the platform shell, so no AI CLI is needed.
