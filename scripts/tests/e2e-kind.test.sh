@@ -39,7 +39,12 @@ stub helm 'case "$*" in
 esac
 exit "${STUB_HELM_RC:-0}"'
 stub cargo 'echo "MICOLD_E2E=${MICOLD_E2E:-} REQUIRED=${MICOLD_E2E_REQUIRED:-} NS=${MICOLD_E2E_NAMESPACE:-}" >>"'"$calls"'"
-if [ -s "'"$work"'/breakage" ]; then exit "${STUB_BREAK_CARGO_RC:-1}"; fi
+if [ -s "'"$work"'/breakage" ]; then
+  b="$(cat "'"$work"'/breakage")"; want=ops; [ "$b" = volume ] && want=restart
+  [ -n "${STUB_FAIL_SUITE:-}" ] && want="$STUB_FAIL_SUITE"
+  case "$*" in *"--test $want "*) exit "${STUB_BREAK_CARGO_RC:-1}" ;; esac
+  exit 0
+fi
 exit "${STUB_CARGO_RC:-0}"'
 stub kubectl 'case "$*" in *"get pods"*) printf "%s\n" "${STUB_PODS:-micold-0 1/1 Running}" ;; *) echo "kubectl-out $*" ;; esac'
 stub uname 'case "$1" in -s) echo "${STUB_OS:-Linux}" ;; -m) echo "${STUB_ARCH:-x86_64}" ;; esac'
@@ -84,7 +89,7 @@ check "the matrix installs each of the five breakages" \
 check "the matrix runs after refusal" '[ "$(line_of "^cargo test -p micold-e2e --test refusal")" -lt "$(line_of "^helm upgrade .*--set testing.breakage=")" ]'
 check "the PVC is deleted before every breakage" \
   '[ "$(grep -c "^helm uninstall micold" "$calls")" -eq 5 ] && [ "$(grep -c "^kubectl .*delete pvc --all" "$calls")" -eq 5 ]'
-check "a breakage the suites catch passes the run" '[ "$rc" -eq 0 ] && grep -q "breakage opsPort: caught" <<<"$out"'
+check "a breakage the suites catch passes the run" '[ "$rc" -eq 0 ] && grep -q "breakage opsPort: caught by suite ops" <<<"$out"'
 check "cluster deleted at exit" '[ "$(grep -c "^kind delete cluster --name micold-e2e" "$calls")" -ge 2 ]'
 
 run MICOLD_E2E_CLUSTER=other-e2e
@@ -122,6 +127,13 @@ check "MICOLD_E2E_MATRIX=1 runs the matrix for a chosen selection" '[ "$(grep -c
 
 run MICOLD_E2E_MATRIX=0
 check "MICOLD_E2E_MATRIX=0 skips the matrix" '[ "$rc" -eq 0 ] && ! grep -q "testing.breakage" "$calls"'
+
+run STUB_BREAK_CARGO_RC=0
+run STUB_FAIL_SUITE=link
+check "a breakage caught by the wrong suite fails the run" '[ "$rc" -ne 0 ] && grep -q "NOT caught by its suite: link failed first, expected ops" <<<"$out"'
+
+run
+check "the matrix names the suite that caught each breakage" 'grep -q "breakage volume: caught by suite restart" <<<"$out" && grep -q "breakage command: caught by suite ops" <<<"$out"'
 
 run STUB_BREAK_CARGO_RC=0
 check "a seeded breakage no suite catches fails the run, naming it" \

@@ -55,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 A+B (opus) | 1 | full | 5272ef54e | abb5d2e251df1baf302e677ce8074d310c49842a:5272ef54ed19168fc8a76e056116d3135072b743 | CHANGES: 1 MAJOR (ops served only inside serve, probes hang while the store opens), 3 MINOR (head size check, silent timeout, tests); all fixed |
 | M3 A+B | 1 | full | add5ae6 | fa797890b48f66604a3b3de8e670619dd51ecc22:c33f47eb2c42cddf280eef7576f332cf2f3f5f13 | CLEAN (A opus: 1 optional MINOR build-fail hint, left; note: rust-cache misses target-shared, SC-002 timing; B sonnet CLEAN) |
 | Review B | 1 | M1 | 49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | 7c47de4556526f50ff9beb7412373b4d950c17e4:49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | CLEAN (1 MINOR, no fix needed) |
+- M4 diff review A r1 (opus): CLEAN, 3 MINOR, all fixed (refusal waits for the corrupt-registry pod before asserting; T029 wording says uninstall then install; matrix requires the intended suite to fail first and logs it).
 
 ## Declined review findings
 

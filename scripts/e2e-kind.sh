@@ -13,7 +13,7 @@
 #   matrix   SC-003, with the default selection or MICOLD_E2E_MATRIX=1: for each seeded breakage
 #            (command user volume dataDir opsPort) uninstall the release (this deletes its PVC, so a
 #            corrupt registry.json cannot leak), install it with `--set testing.breakage=<v>` and
-#            run ops, restart and link until one fails. A breakage no suite catches fails the run.
+#            run ops, restart and link until one fails; it must be the suite meant to catch it (volume: restart, the rest: ops). Otherwise the run fails.
 # On failure the pods, describe output, events and container logs go to the log dir; the cluster
 # is deleted at exit unless MICOLD_E2E_KEEP=1.
 # Environment: specs/1981-kube-e2e/contracts/harness-env.md, docs/development/kube-e2e.md.
@@ -164,12 +164,18 @@ if [ "$matrix" = 1 ]; then
     kubectl --context "kind-$cluster" -n "$ns" delete pvc --all --wait=true >/dev/null 2>&1 || true
     say "breakage $breakage: install; the suites must fail"
     install_chart wait 60s --set "testing.breakage=$breakage" || say "breakage $breakage: not Ready (expected for most)"
-    caught=0
+    # Each breakage has the suite that must catch it: the first suite to fail has to be that one,
+    # so an infrastructure failure elsewhere cannot pass for a catch.
+    case "$breakage" in volume) expected=restart ;; *) expected=ops ;; esac
+    failed=""
     for s in ops restart link; do
-      run_suite "$s" || { caught=1; break; }
+      run_suite "$s" || { failed="$s"; break; }
     done
-    if [ "$caught" = 1 ]; then
-      say "breakage $breakage: caught"
+    if [ "$failed" = "$expected" ]; then
+      say "breakage $breakage: caught by suite $failed"
+    elif [ -n "$failed" ]; then
+      say "breakage $breakage: NOT caught by its suite: $failed failed first, expected $expected" >&2
+      note_rc 1
     else
       say "breakage $breakage: NOT caught: ops, restart and link all passed against a deliberately wrong chart" >&2
       note_rc 1

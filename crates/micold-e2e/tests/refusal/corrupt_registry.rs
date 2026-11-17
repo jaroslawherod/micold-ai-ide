@@ -11,6 +11,22 @@ fn a_corrupt_registry_keeps_the_pod_unready_and_the_log_names_the_file() {
     let Some(cluster) = cluster_or_skip("refusal::corrupt_registry") else {
         return;
     };
+    // The harness reinstalls without waiting, so the old Ready pod may still be there: wait for the
+    // pod of the corrupt-registry release (its init container) before asserting anything.
+    let started = Instant::now();
+    loop {
+        let init = cluster
+            .pod_value("{.spec.initContainers[*].name}")
+            .unwrap_or_default();
+        if init.contains("corrupt-registry") {
+            break;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(120),
+            "no pod with the corrupt-registry init container within 120 s (init: {init:?})"
+        );
+        std::thread::sleep(Duration::from_secs(2));
+    }
     let started = Instant::now();
     let mut named = false;
     while started.elapsed() < Duration::from_secs(90) {
