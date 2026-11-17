@@ -1134,7 +1134,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, local-stack-kind, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -1163,6 +1163,7 @@ jobs:
           KUBECLUSTER: ${{ needs.kube-cluster.result }}
           KUBECHART: ${{ needs.kube-chart.result }}
           KUBEE2E: ${{ needs.kube-e2e.result }}
+          LOCALSTACKKIND: ${{ needs.local-stack-kind.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
           # #1931: the guardrails; whether each blocks is the workflow-level GUARDRAIL_* switch.
@@ -1194,6 +1195,7 @@ jobs:
           check kube-cluster "$KUBECLUSTER"
           check kube-chart "$KUBECHART"
           check kube-e2e "$KUBEE2E"
+          check local-stack-kind "$LOCALSTACKKIND"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           guardrail diff-coverage "$DIFFCOVERAGE" "$GUARDRAIL_COVERAGE_BLOCK"
@@ -1215,6 +1217,7 @@ jobs:
             echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
             echo "| kube-chart | \`$KUBECHART\` | yes |"
             echo "| kube-e2e | \`$KUBEE2E\` | yes |"
+            echo "| local-stack-kind | \`$LOCALSTACKKIND\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
             echo "| diff-coverage | \`$DIFFCOVERAGE\` | $GUARDRAIL_COVERAGE_BLOCK |"
