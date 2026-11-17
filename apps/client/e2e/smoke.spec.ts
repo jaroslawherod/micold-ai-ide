@@ -14,7 +14,7 @@ test("sign-in shows the sidebar and the Overview", async ({ page }) => {
   await expect(page).toHaveTitle("Micold");
 });
 
-test("a state change reaches the indicator within 100 ms and keeps every row in place", async ({ page }) => {
+test("a state change reaches the indicator within 100 ms and keeps every row in place", async ({ page, browserName }) => {
   await signIn(page);
   const before = await rowNames(page);
   expect(before[0]).toBe("session 1, Working");
@@ -39,7 +39,8 @@ test("a state change reaches the indicator within 100 ms and keeps every row in 
         setTimeout(() => reject(new Error("the indicator did not change within 1 s")), 1000);
       }),
   );
-  expect(elapsed).toBeLessThan(100);
+  // SC-002's 100 ms is measured in Chromium, the reference browser; the other engines check the order only.
+  if (browserName === "chromium") expect(elapsed).toBeLessThan(100);
   const after = await rowNames(page);
   expect(after).toEqual(["session 1, Error", ...before.slice(1)]);
 });
@@ -65,13 +66,15 @@ test("web storage and cookies hold no token after sign-in", async ({ page, conte
 });
 
 test("the keyboard reaches sign-in, the locale control and the sidebar with a visible focus", async ({ page, browserName }) => {
-  // WebKit on macOS skips buttons on Tab unless the platform setting is on; Playwright's WebKit does too.
-  test.skip(browserName === "webkit", "WebKit does not move Tab focus to buttons by default");
+  // WebKit on macOS moves Tab focus to links and fields only (Option+Tab reaches every control); on
+  // Linux, where CI runs, and with the explicit tabindex react-native-web sets, Tab reaches them.
+  const tab = browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+  await page.locator("body").focus();
   await page.goto("/");
   await expect(page.getByRole("button", { name: /GitHub/ })).toBeVisible();
   const focusTo = async (name: RegExp) => {
     for (let i = 0; i < 20; i += 1) {
-      await page.keyboard.press("Tab");
+      await page.keyboard.press(tab);
       const label = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent ?? "");
       if (name.test(label)) return;
     }

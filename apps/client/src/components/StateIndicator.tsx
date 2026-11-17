@@ -9,7 +9,7 @@ import type { MessageId } from "../i18n/catalog";
 import { useReducedMotion } from "../platform/reducedMotion";
 import { spacing } from "../theme/tokens.generated";
 
-const GLYPH: Record<SessionState, string> = { working: "◐", waiting: "◆", idle: "○", error: "✕", stopped: "■" };
+const GLYPH: Record<SessionState, string> = { working: "●", waiting: "◆", idle: "○", error: "✕", stopped: "■" };
 
 function label(state: SessionState): MessageId {
   switch (state) {

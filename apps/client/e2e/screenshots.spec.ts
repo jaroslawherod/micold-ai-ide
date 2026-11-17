@@ -1,5 +1,6 @@
 // Screenshots for the visual pass (#1735, FR-021, SC-003, T057): the home route at 1280, 800 and
-// 390 px in light and dark, in Chromium, to e2e/screenshots/. Also asserts the Overview's column
+// 390 px in light and dark, in Chromium, to e2e/screenshots-out/ (gitignored;
+// the committed e2e/screenshots/ are the recorded set of the visual pass). Also asserts the Overview's column
 // count: one column below the sidebar under 600 px, the sidebar beside it from 600 px.
 import { expect, test } from "@playwright/test";
 import { signIn } from "./helpers";
@@ -19,11 +20,11 @@ for (const scheme of ["light", "dark"] as const) {
       } else {
         expect(overview.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width - 1);
       }
-      await page.screenshot({ path: `e2e/screenshots/home-${width}-${scheme}.png` });
+      await page.screenshot({ path: `e2e/screenshots-out/home-${width}-${scheme}.png` });
       if (width < 600) {
         // The Overview sits under the sidebar in the one scroll view: show where it starts.
         await page.getByTestId("overview-pane").evaluate((el) => el.scrollIntoView());
-        await page.screenshot({ path: `e2e/screenshots/home-${width}-${scheme}-overview.png` });
+        await page.screenshot({ path: `e2e/screenshots-out/home-${width}-${scheme}-overview.png` });
       }
     });
   }

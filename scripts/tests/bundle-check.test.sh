@@ -33,6 +33,11 @@ mkdir -p "$tmp/term"
 cp -r "$tmp/clean/." "$tmp/term/"
 echo 'var t=document.querySelector(".xterm-helper-textarea");' >"$tmp/term/_expo/static/js/web/term-chunk.js"
 
+mkdir -p "$tmp/near"
+cp -r "$tmp/clean/." "$tmp/near/"
+echo 'var a="shterm",b="xtermish",c="myhterm";' >"$tmp/near/_expo/static/js/web/near-chunk.js"
+printf 'xterm' >"$tmp/near/_expo/static/js/web/font.ttf"
+
 check() { node scripts/client/bundle-check.mjs "$@" >"$tmp/out" 2>&1; }
 refused() { # <what> <file to name> <args...>
   local what="$1" name="$2" status=0
@@ -54,6 +59,8 @@ fi
 refused "a lockfile with @xterm/xterm" "@xterm/xterm" "$tmp/clean" --lock "$tmp/xterm.yaml"
 refused "a lockfile with node-pty" "node-pty" "$tmp/clean" --lock "$tmp/pty.yaml"
 refused "an export with a terminal emulator" "term-chunk.js" "$tmp/term" --lock "$tmp/clean.yaml"
+
+if check "$tmp/near" --lock "$tmp/clean.yaml"; then pass "near-miss words and non-script files pass"; else fail "a near-miss export was refused: $(cat "$tmp/out")"; fi
 
 status=0
 check "$tmp/clean" --lock "$tmp/absent.yaml" || status=$?

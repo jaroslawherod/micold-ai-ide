@@ -10,8 +10,10 @@ import { join, relative } from "node:path";
 
 const SENTINEL = "__MICOLD_MOCK__";
 const TERMINAL = ["xterm", "node-pty", "hterm", "term.js"];
-// An export file naming a terminal emulator (its CSS classes, its package path).
-const IN_EXPORT = /xterm|node-pty|hterm|term\.js/;
+// A script, stylesheet or page of the export naming a terminal emulator (its CSS classes, its
+// package path), as a whole word: `xterm-helper`, `@xterm/xterm`, `node-pty`, not `myxtermish`.
+const SCANNED = /\.(?:js|css|html)$/;
+const IN_EXPORT = /(?<![\w$])(?:xterm|node-pty|hterm|term\.js)(?![\w$])/;
 // A lockfile package key: `  xterm@5.3.0:`, `  '@xterm/xterm@5.5.0':`, `  /node-pty@1.0.0:`.
 const IN_LOCK = /^\s+'?\/?((?:@xterm\/[^@\s']+)|xterm(?:-[a-z0-9-]+)?|node-pty|hterm(?:-[a-z0-9-]+)?|term\.js)@/gm;
 
@@ -38,7 +40,7 @@ const findings = [];
 for (const f of all) {
   const text = readFileSync(f, "latin1");
   if (text.includes(SENTINEL)) findings.push(`the mock sentinel ${SENTINEL} is in ${relative(dir, f)}`);
-  if (IN_EXPORT.test(text)) findings.push(`a terminal emulator is in ${relative(dir, f)}`);
+  if (SCANNED.test(f) && IN_EXPORT.test(text)) findings.push(`a terminal emulator is in ${relative(dir, f)}`);
 }
 for (const m of readFileSync(lock, "utf8").matchAll(IN_LOCK)) findings.push(`${lock} lists the terminal emulator ${m[1]}`);
 if (findings.length) {

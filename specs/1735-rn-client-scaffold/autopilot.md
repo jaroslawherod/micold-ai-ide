@@ -73,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A (opus, code-review high) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CHANGES (F1-F2 major, F3-F6 minor), all fixed in acc4180b1 |
 | Review B (sonnet, conformance) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CLEAN with minors F1-F3: F1 with A F6, F2 research R13 reworded, F3 stale tests shown to fail with `isStale` stubbed (cycle-log) |
 | Review A+B fix diff | 2 | M3 b3028a1a9..acc4180b1 | acc4180b108d139c82e52966ce36e7ee221c86d1 | b3028a1a9:acc4180b108d139c82e52966ce36e7ee221c86d1 | CLEAN (sonnet re-review; minor groupBy O(n²) noted, not blocking) |
+| Review A (opus) | 1 | M4 origin/main...HEAD | 44515efaa | - | CHANGES (F1-F2 major, F3-F6 minor), all fixed in the M4 fix commit: e2e in its own `client-e2e` job (20 min, in ci-complete) with actions/cache v6.1.0 on ~/.cache/ms-playwright; 100 ms assert Chromium only; screenshots to gitignored screenshots-out/; serve.mjs try/catch and index.html check; bundle-check scans .js/.css/.html word-bounded, near-miss case; --with-deps documented |
+| Review B (sonnet, conformance) | 1 | M4 origin/main...HEAD | 44515efaa | - | CHANGES (F1-F2 major, F3 minor), fixed in the M4 fix commit: Working glyph now `●`, screenshots re-recorded; iced comparison split to T060a (open follow-up); T055 text amended; WebKit keyboard test unskipped (Option+Tab only on macOS WebKit), documented |
 
 ## Declined review findings
 
@@ -81,7 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 (prev #2018, dfd448cec7c5e1f317fc8092407381dc2ed11859) implemented on claude/project-thread-9il8pd: T054–T061 done, T062 open until the PR's CI run. Playwright ran locally only in Chromium via installed Chrome (17/17); Firefox/WebKit downloads are blocked in the cloud, so CI is their first run. Fixed for axe: LocalePicker `aria-checked`, focusable Overview ScrollView. Visual pass recorded with F1 open (Working glyph sliver) and the iced comparison outstanding. Next: reviews, then PR.
+M4 (prev #2018, dfd448cec7c5e1f317fc8092407381dc2ed11859) implemented on claude/project-thread-9il8pd: T054–T061 done, T062 open until the PR's CI run. Playwright ran locally only in Chromium via installed Chrome (17/17); Firefox/WebKit downloads are blocked in the cloud, so CI is their first run. Fixed for axe: LocalePicker `aria-checked`, focusable Overview ScrollView. Visual pass recorded with F1 open (Working glyph sliver) and the iced comparison outstanding. Round-1 review fixes applied; next: round-2 review of the fix diff, then PR (body in pr-M4.md).
 
 ## Open escalation
 
@@ -89,8 +91,7 @@ None.
 
 ## Follow-ups not done
 
-- M4: CI installs the Playwright browsers each run with no cache (no pinned `actions/cache` SHA reachable from the cloud session); add one if SC-005 gets tight.
-- M4 visual pass: side-by-side with the iced app not done (no desktop/cargo build in the cloud); F1 Working glyph `◐` renders as a sliver in the container Chrome.
+- M4 T060a (deferred): side-by-side visual comparison with the iced app not done (no desktop/cargo build in the cloud; jaro, 2026-11-15: the iced app is being sunset). Orchestrator flags the deferral to jaro.
 
 - M1 spike gaps (spike.md): FlatList never unmounts rendered rows (#1736 evaluates FlashList); select-all over a virtualized transcript needs a copy action (#1736); the diff is an unvirtualized ScrollView (diff view issue, M6 of #1722); only Chromium measured.
 - T020 wording is for the web client only; the desktop `appearance-theming.md` sections are untouched.

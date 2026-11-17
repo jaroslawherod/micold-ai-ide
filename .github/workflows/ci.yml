@@ -195,8 +195,8 @@ jobs:
   # #1735: the TypeScript web client (apps/client, packages/protocol): lint, typecheck, Jest with
   # coverage, diff coverage of the changed lines (scripts/guardrails-scope.conf `[web]`), and the
   # static web export. Runs for a change that touches the `micold-client` set (`client` verdict of
-  # `classify`; the verdict errs towards running) on a pull request, and on every main and nightly run. The Playwright smoke
-  # test and the bundle check join it with M4 and M2. Node and pnpm versions come from mise.toml;
+  # `classify`; the verdict errs towards running) on a pull request, and on every main and nightly run. The bundle check joined it
+  # with M2; the Playwright specs run in `client-e2e` below. Node and pnpm versions come from mise.toml;
   # scripts/tests/client-pins.test.sh keeps this job's pins equal to them.
   client:
     name: web client
@@ -247,22 +247,6 @@ jobs:
           status=0
           node scripts/client/bundle-check.mjs apps/client/dist-mock || status=$?
           test "$status" = 1
-      # FR-018, T055: the Playwright smoke, pseudo-locale and screenshot specs against the mock export
-      # built just above, in Chromium, Firefox and WebKit (screenshots in Chromium only).
-      - name: Playwright browsers
-        run: pnpm --filter @micold/client exec playwright install --with-deps chromium firefox webkit
-      - name: Playwright
-        run: pnpm --filter @micold/client e2e
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ !cancelled() }}
-        with:
-          name: client-e2e
-          path: |
-            apps/client/e2e/screenshots/
-            apps/client/playwright-report/
-            apps/client/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
@@ -270,6 +254,51 @@ jobs:
           path: |
             apps/client/coverage/lcov.info
             client-diff-coverage.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # #1735 (FR-018, T055): the Playwright smoke, pseudo-locale and screenshot specs against the mock
+  # export, in Chromium, Firefox and WebKit (screenshots in Chromium only). A job of its own so the
+  # browser download does not count against the `client` job's ten minutes (SC-005); the browsers
+  # are cached under ~/.cache/ms-playwright, keyed on the lockfile, which pins Playwright's version.
+  # `--with-deps` still installs the system packages each run (apt, not cacheable here).
+  client-e2e:
+    name: web client e2e
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.client == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Playwright browsers
+        run: pnpm --filter @micold/client exec playwright install --with-deps chromium firefox webkit
+      - name: Mock web export
+        run: pnpm --filter @micold/client web:export:mock
+      - name: Playwright
+        run: pnpm --filter @micold/client e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: client-e2e
+          path: |
+            apps/client/e2e/screenshots-out/
+            apps/client/playwright-report/
+            apps/client/test-results/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -1012,7 +1041,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, client, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -1030,6 +1059,7 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
           CLIENT: ${{ needs.client.result }}
+          CLIENTE2E: ${{ needs.client-e2e.result }}
           TEST: ${{ needs.test.result }}
           # A red `linux-daemons` skips `test` (it needs its artifact), and a skip reads as
           # satisfied, so it is gated by name too.
@@ -1061,6 +1091,7 @@ jobs:
           check classify "$CLASSIFY"
           check lint "$LINT"
           check client "$CLIENT"
+          check client-e2e "$CLIENTE2E"
           check test "$TEST"
           check linux-daemons "$LINUXDAEMONS"
           check sandbox "$SANDBOX"
@@ -1080,6 +1111,7 @@ jobs:
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
             echo "| client | \`$CLIENT\` | yes |"
+            echo "| client-e2e | \`$CLIENTE2E\` | yes |"
             echo "| test | \`$TEST\` | yes |"
             echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"

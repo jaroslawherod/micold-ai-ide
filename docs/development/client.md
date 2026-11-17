@@ -26,13 +26,26 @@ lives beside the Rust workspace as a pnpm workspace (`package.json`, `pnpm-works
 | `mise run client-web` | the production web export into `apps/client/dist` |
 | `mise run client-e2e` | the mock export into `apps/client/dist-mock`, then Playwright in Chromium, Firefox and WebKit |
 
+`mise run client-e2e` installs the browsers without their system libraries. On a fresh Linux
+machine, run `pnpm --filter @micold/client exec playwright install --with-deps chromium firefox
+webkit` once (it needs `sudo` for the apt packages); CI's `web client e2e` job does this every run.
+
 Screenshots for the visual pass (1280, 800 and 390 px, light and dark) land in
-`apps/client/e2e/screenshots/`; CI uploads them as the `client-e2e` artifact. Where the Playwright
+`apps/client/e2e/screenshots-out/` (gitignored); CI uploads them as the `client-e2e` artifact.
+`apps/client/e2e/screenshots/` holds the recorded set of the last visual pass; copy a new run over
+it only when you record a new pass. Where the Playwright
 browsers cannot be downloaded, `PW_CHROMIUM_CHANNEL=chrome pnpm --filter @micold/client exec
 playwright test --project=chromium` runs against an installed Chrome.
 
-CI's `web client` job runs all of this, then the bundle check on the production export, and checks
-that a mock export fails it.
+CI's `web client` job runs the tests, the bundle check on the production export, and checks that a
+mock export fails it. The Playwright specs run in their own `web client e2e` job, with the browsers
+cached under `~/.cache/ms-playwright` keyed on `pnpm-lock.yaml`, so the download stays out of the
+`web client` job's ten minutes (SC-005).
+
+Two checks differ by browser: the 100 ms state-change bound (SC-002) is asserted in Chromium only,
+the reference browser, while Firefox and WebKit check that every row keeps its place. The keyboard
+test presses Option+Tab in WebKit on macOS, where plain Tab skips buttons; on Linux (CI) it presses
+Tab in all three browsers.
 
 ## The mock switch
 
