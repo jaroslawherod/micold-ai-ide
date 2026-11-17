@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-9il8pd
 - **Started**: 2026-11-16
-- **Phase**: M4 implemented, review ready
-- **Next step**: orchestrator runs Review A and B on M4 (origin/main...HEAD), then PR; T062 (SC-005, SC-009) is confirmed from that PR's CI run
+- **Phase**: M4 merged (#2020)
+- **Next step**: a fresh thread runs `/speckit-autopilot resume` for the close unit
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
 | #2015 | M2 | merged | b863fd3393735e9d0ae6a4ac38299e31f30a5855 |
 | (M3) | M3: body in `pr-M3.md` | not opened | - |
+| #2020 | M4 | merged | 630fe595eff4a02f0eed3f1b813debff1b84fac0 |
 | #2018 | M3 | merged | dfd448cec7c5e1f317fc8092407381dc2ed11859 |
 | #2013 | M1 workspace, CI, theme, i18n, spike | merged | 18aadedf61d2a5c3d512447f30e3a9f33eb12262 |
 
@@ -85,7 +86,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 (prev #2018, dfd448cec7c5e1f317fc8092407381dc2ed11859) implemented on claude/project-thread-9il8pd: T054–T061 done, T062 open until the PR's CI run. Playwright ran locally only in Chromium via installed Chrome (17/17); Firefox/WebKit downloads are blocked in the cloud, so CI is their first run. Fixed for axe: LocalePicker `aria-checked`, focusable Overview ScrollView. Visual pass recorded with F1 open (Working glyph sliver) and the iced comparison outstanding. Round-1 review fixes applied; next: round-2 review of the fix diff, then PR (body in pr-M4.md).
+M4 merged as #2020 (630fe595e) after round-2 CLEAN and green CI (Firefox/WebKit passed in CI). Main was merged in once (ci.yml needs: conflict with kube-e2e). Next: close unit in a fresh thread. Open: T060a iced comparison deferred (flagged to jaro), client-e2e node pin not covered by client-pins.test.sh.
 
 ## Open escalation
 
