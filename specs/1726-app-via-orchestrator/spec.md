@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft
+**Status**: Closed 2026-11-16 — shipped in PRs #1996, #1999, #2004, #2007, #2012; TDD remediation T035-T045 (verification FAIL) kept as follow-ups (jaro, 2026-11-17)
 
 **Input**: GitHub issue #1726, part of epic #1722 (plans: `specs/orchestrator/`, revised by
 `specs/1722-rn-client-k8s/`). "The app opens one connection, to the orchestrator, and starts the

@@ -119,6 +119,10 @@ run = """
 description = "Test the render-free core only (fast, no GUI / no iced) [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-targets"
 
+[tasks.bench-routing]
+description = "Run the SC-003 routing latency benchmark (ignored in the gate) [build-locked]"
+run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-daemon --release --test orchestrator_route -- --ignored bench"
+
 [tasks.test-scripts]
 description = "Run every scripts/tests/*.test.sh (the docs-only local gate)"
 dir = "{{config_root}}"
