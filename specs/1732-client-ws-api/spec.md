@@ -215,7 +215,7 @@ Requirement numbers are local to this spec; each names the parent requirement it
 - **Client message**: a request from a client (list daemons, list sessions, read session,
   subscribe, ping), each classified read or change.
 - **Server message**: a reply, a change batch with sequence numbers, a resync-needed notice, a
-  typed error, or a ping.
+  typed error, or a pong.
 - **Sequence number**: per orchestrator, strictly increasing; the client's resume position.
 - **Origin allow-list**: configured list of web origins allowed to open the API.
 - **Link directory**: maps a daemon to the link that reaches it; in-process now.

@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-mezck0
 - **Started**: 2026-11-17
-- **Phase**: clarify
-- **Next step**: clarify unit on specs/1732-client-ws-api/spec.md (no NEEDS CLARIFICATION markers; FR-012 sidebar computed-vs-ported left to plan).
+- **Phase**: plan
+- **Next step**: plan unit. Clarify round 1: no critical ambiguities (retention window, backoff timings, ports, FR-012 sidebar approach deferred to plan).
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -36,6 +36,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 |---|---|---|---|---|---|
 
 | spec review | 1 | spec.md | ff1592a91dce73ab8455582abb7ab45d7e31ad09 | ab6207b8a448c2329fff6fbbbcd821854aa4f518:ff1592a91dce73ab8455582abb7ab45d7e31ad09 | CHANGES: 2 MAJOR (F1 browser parity, F2 app-level heartbeat), 3 MINOR (F3 unreachable/snapshot, F4 FR-001 contract, F5 addresses/US3 check) — all fixed in spec.md; behaviour-bearing, round 2 re-review (sonnet) due |
+| spec review | 2 | spec.md | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | CLEAN (sonnet re-review); nit Key Entities ping->pong fixed |
 
 ## Declined review findings
 
