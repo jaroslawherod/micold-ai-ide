@@ -92,11 +92,24 @@ fn blank_database_connects(code: &str) -> String {
 
 /// The ops listener's unit tests (#1983) dial the orchestrator's *own* `/healthz` listener on
 /// loopback, a self-probe like `singleton::acquire`, never a daemon. Only that call, in this file,
-/// is blanked before the scan.
+/// is blanked before the scan, and only inside its test module.
 const OPS_FILE: &str = "crates/micold-daemon/src/orchestrator/ops.rs";
 
 /// The ops tests' client call in [`OPS_FILE`].
 const OPS_LINE: &str = "TcpStream::connect(addr)";
+
+/// Where [`OPS_FILE`]'s unit tests start: only that part is blanked, so production code stays scanned.
+const OPS_TESTS: &str = "#[cfg(test)]\npub(crate) mod tests";
+
+/// `source` with [`OPS_LINE`] blanked in its `#[cfg(test)] pub(crate) mod tests` part only.
+fn blank_ops_self_probe(source: &str) -> String {
+    let at = source.find(OPS_TESTS).unwrap_or(source.len());
+    let (code, tests) = source.split_at(at);
+    format!(
+        "{code}{}",
+        tests.replace(OPS_LINE, &" ".repeat(OPS_LINE.len()))
+    )
+}
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -295,7 +308,7 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
             source = blank_database_connects(&code_only(&source));
         }
         if file.ends_with(OPS_FILE) {
-            source = source.replace(OPS_LINE, &" ".repeat(OPS_LINE.len()));
+            source = blank_ops_self_probe(&source);
         }
         for (line, word) in violations(&source) {
             report.push(format!("{}:{line}: `{word}`", file.display()));
@@ -387,4 +400,16 @@ fn only_sqlx_connect_calls_are_blanked_in_the_database_directory() {
         violations(&blank_database_connects(after)),
         [(1, "connect_")]
     );
+}
+
+#[test]
+fn ops_self_probe_is_blanked_only_in_the_test_module() {
+    let source = format!("fn f() {{ {OPS_LINE}; }}\n{OPS_TESTS} {{ fn t() {{ {OPS_LINE}; }} }}\n");
+    let blanked = blank_ops_self_probe(&source);
+    assert_eq!(
+        blanked.matches(OPS_LINE).count(),
+        1,
+        "a production dial in ops.rs must stay visible to the scan"
+    );
+    assert!(blanked.find(OPS_LINE) < blanked.find(OPS_TESTS));
 }

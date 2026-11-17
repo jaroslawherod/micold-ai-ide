@@ -71,3 +71,7 @@ Files M4 changed that tasks.md T023–T034 do not name:
 | `crates/micold-core/src/ssh/stdio.rs` | `SshStdio::close`: the bridge's `-R` is released before the holder binds |
 | `crates/micold-core/src/connect.rs` | `RouteEnded` / `route_ended` (review A1) |
 | `crates/micold-daemon/tests/sandbox_real_support/mod.rs` | `deliver_container`'s new argument (`None`: no orchestrator in that suite); CI's sandbox job failed to compile without it |
+
+## Planned paths not touched
+
+`drift-M3.md` and `drift-M4.md` are named by tasks but live in the spec directory, outside the code diff plan-drift compares (the M3 correction note is in `drift-M3.md`, this file is M4's record).

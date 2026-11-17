@@ -22,3 +22,14 @@ Paths M3 changed that its tasks do not name, each with the reason.
 - Only the **host** daemon's actor is routed through the orchestrator. SSH, container and Kubernetes actors still hand over the `Connected` their provisioning step returns (a direct connection), though their rendered config now links them under their wire id. Routing them needs each provisioned daemon to reach the orchestrator socket (the SSH reverse forward of #1725 exists; container and pod placements have none), which is larger than the minimal desktop change this sunsetting app gets. Follow-up: route provisioned daemons by wire id once they are listed online.
 - Closed by M4 (#1726): SSH, container and Kubernetes actors are routed through the orchestrator after provisioning (drift-M4.md).
 - `OutcomeUnknown` and `StreamEnded` end the actor's route; the actor's existing reconnect then re-handshakes, and the fresh `Welcome` is the re-read of the target (T019). No per-request snapshot message was added.
+
+## Files named by path (plan-drift)
+
+The golden and test files of the `[orchestrator_link]` rendering change, one per path:
+`crates/micold-client/tests/daemon_config_render.rs`, `crates/micold-client/tests/daemon_config_validate.rs`,
+`crates/micold-client/tests/fixtures/daemon_config_delivery_host.golden.toml`,
+`crates/micold-client/tests/golden/daemon_config/container.toml`, `crates/micold-client/tests/golden/daemon_config/host.toml`, `crates/micold-client/tests/golden/daemon_config/host_project_added.toml`, `crates/micold-client/tests/golden/daemon_config/kubernetes.toml`, `crates/micold-client/tests/golden/daemon_config/pod.toml`, `crates/micold-client/tests/golden/daemon_config/ssh.toml`:
+each rendered file ends with `[orchestrator_link] enabled = true`; provisioned kinds carry `[daemon] id`.
+`crates/micold-daemon/tests/ai_cli_config.rs`: its expected config text gained the same section.
+Planned but not touched: `crates/micold-client/tests/attention_notify.rs`, `crates/micold-client/tests/catalog_two_daemons.rs`,
+`crates/micold-client/tests/daemon_routing.rs`, `crates/micold-client/tests/notifications.rs` are modules of `tests/main.rs`, run unchanged (T021: no change needed, above).

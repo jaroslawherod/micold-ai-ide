@@ -74,6 +74,15 @@ pnpm install --frozen-lockfile
 pnpm --filter @micold/client web:export
 """
 
+[tasks.client-start]
+description = "Web client: Expo dev server for the web against the in-memory mock API (#2025)"
+alias = "web"
+dir = "{{config_root}}"
+run = """
+pnpm install --frozen-lockfile
+pnpm --filter @micold/client start
+"""
+
 [tasks.client-e2e]
 description = "Web client: Playwright smoke, pseudo-locale and screenshot specs in Chromium, Firefox and WebKit against the mock export (#1735, T055)"
 dir = "{{config_root}}"
@@ -118,6 +127,10 @@ run = """
 [tasks.test-core]
 description = "Test the render-free core only (fast, no GUI / no iced) [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-targets"
+
+[tasks.bench-routing]
+description = "Run the SC-003 routing latency benchmark (ignored in the gate) [build-locked]"
+run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-daemon --release --test orchestrator_route -- --ignored bench"
 
 [tasks.test-scripts]
 description = "Run every scripts/tests/*.test.sh (the docs-only local gate)"

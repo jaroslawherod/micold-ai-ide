@@ -8,15 +8,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1981
-- **Worktree branch**: claude/project-thread-837fjj
+- **Worktree branch**: claude/project-thread-emvt5c
 - **Started**: 2026-11-15
-- **Phase**: milestones
-- **Next step**: M5 diff review (light tier: A code-review + B conformance) on the snapshot in Handover, then open the PR (body specs/1981-kube-e2e/pr-body-m5.md), wait for CI, merge. Then final: Phase done.
+- **Phase**: close
+- **Next step**: done once close PR #2024 squash-merges; live kind run (T022/T030/T033) is a follow-up (jaro, 2026-11-17).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #2023 | M5 | merged | 0b0c74a23 |
+| #2019 | M3 | merged | 7bcb978d5 |
 | #2021 | M4 | merged | a59a74729 |
 | #2017 | M2 | merged | 7cd3811f7 |
 | #1991 | M1 | merged | a6fc96478a60ddf1960e98ff83ebce27ddc7fb09 |
@@ -30,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #2017 | merged 7cd3811f7 |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #2019 | merged 7bcb978d5 |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #2021 | merged a59a74729 |
-| M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | built, awaiting review |
+| M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #2023 | merged 0b0c74a23 |
 
 ## Decisions
 
@@ -68,7 +70,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T031-T032) built, scoped checks green (e2e-kind.test.sh 39 cases, clippy/test/fmt -p micold-e2e); full gate left to CI. Review snapshot: see the commit this ledger lands in (`git log -1`). Placeholders: PLACEHOLDERS in scripts/e2e-kind.sh skip network (#1732) and ui (#1954) without a cargo run. Next: orchestrator dispatches reviews A and B on origin/main...HEAD, then the PR.
+Close unit 1 (2026-11-17): plan drift run for M1-M5; drift-M2..M5.md recorded (no unbuilt work, MISSING entries are spec-relative paths/invoked tools). Converge needed (no CLEAN review B for M4, M5). Next: tdd-verify + converge results, then step 3 of tasks/close.md.
+
+Close unit 2 (2026-11-17): previous PR #2023 merged as 0b0c74a23. T034 (placeholders `#[ignore]`) and T035 (ops self-probe blanked only in the test module, plus a case) done; spec Closed; close PR opened.
 
 ## Open escalation
 
@@ -79,6 +83,10 @@ None.
 - Implicit `<data_dir>/daemon.toml` lookup in `orchestrator::configured` uses the user's data dir even when `--data-dir`/env is set (main's behaviour; merge review MINOR). Consider skipping it when a data dir is given, so a container never reads `$HOME`.
 - Chart `state.mode` refuses `sqlite`/`postgres` naming #1948/#1740; #1948's store has merged since, so revisit which modes the chart can render (M2+ or #1740).
 - #1740: publish `micold-orchestrator` (and `micold-web`) images from the release workflow and keep `deploy/helm/micold/Chart.yaml` `appVersion` in step with releases (M1 review A, declined there).
+
+- T022, T030, T033: live `kube-e2e` rounds not yet seen green. On main for 0b0c74a23 (run 44010225993) the job "orchestrator end to end on kind" was skipped (push proven by its PR); trigger it on this PR or a later chart change and record durations (SC-002) and link/restart reds. T024/T026 ticks stand unverified until then.
+- T036-T039 (tdd/verification.md, non-blocking): cycle-log backfill for M2/M3/M5, `runAsGroup` assertions, ops test messages and 404/405/400 split, refusal-suite wait helper and per-setting security asserts.
+- Placeholder suites `network` and `ui` (M5) wait for #1732 and #1954: replace them with real tests there.
 
 ## Plan notes
 
