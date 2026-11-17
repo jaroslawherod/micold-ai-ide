@@ -10,13 +10,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1981
 - **Worktree branch**: claude/project-thread-emvt5c
 - **Started**: 2026-11-15
-- **Phase**: milestones
-- **Next step**: M5 diff review (light tier: A code-review + B conformance) on the snapshot in Handover, then open the PR (body specs/1981-kube-e2e/pr-body-m5.md), wait for CI, merge. Then final: Phase done.
+- **Phase**: close
+- **Next step**: close: orchestrator dispatches speckit-tdd-verify and speckit-converge (autopilot-worker; units have no Agent tool), then fresh close unit applies findings, Status Closed, review, gate, close PR.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #2023 | M5 | merged | 0b0c74a23 |
+| #2019 | M3 | merged | 7bcb978d5 |
 | #2021 | M4 | merged | a59a74729 |
 | #2017 | M2 | merged | 7cd3811f7 |
 | #1991 | M1 | merged | a6fc96478a60ddf1960e98ff83ebce27ddc7fb09 |
@@ -68,8 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 merged as 0b0c74a23 (PR #2023, 2026-11-17). Review A r1 (sonnet): 4 MINOR, doc path fixed; left: placeholders-subset-of-known-suites assertion, MICOLD_E2E_WEB_URL is a planned contract. CI green first round.
-Next: close unit (`/speckit-autopilot resume` in a fresh thread). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
+Close unit 1 (2026-11-17): plan drift run for M1-M5; drift-M2..M5.md recorded (no unbuilt work, MISSING entries are spec-relative paths/invoked tools). Converge needed (no CLEAN review B for M4, M5). Next: tdd-verify + converge results, then step 3 of tasks/close.md.
 
 ## Open escalation
 
@@ -80,6 +81,8 @@ None.
 - Implicit `<data_dir>/daemon.toml` lookup in `orchestrator::configured` uses the user's data dir even when `--data-dir`/env is set (main's behaviour; merge review MINOR). Consider skipping it when a data dir is given, so a container never reads `$HOME`.
 - Chart `state.mode` refuses `sqlite`/`postgres` naming #1948/#1740; #1948's store has merged since, so revisit which modes the chart can render (M2+ or #1740).
 - #1740: publish `micold-orchestrator` (and `micold-web`) images from the release workflow and keep `deploy/helm/micold/Chart.yaml` `appVersion` in step with releases (M1 review A, declined there).
+
+- Placeholder suites `network` and `ui` (M5) wait for #1732 and #1954: replace them with real tests there.
 
 ## Plan notes
 
