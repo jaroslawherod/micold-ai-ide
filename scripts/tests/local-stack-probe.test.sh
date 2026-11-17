@@ -27,7 +27,10 @@ srv.on("upgrade", (req, sock) => {
   sock.on("data", (d) => {
     if ((d[0] & 0x0f) !== 1) return;
     const len = d[1] & 0x7f, mask = d.subarray(2, 6), body = Buffer.from(d.subarray(6, 6 + len).map((x, i) => x ^ mask[i % 4])).toString();
-    if (JSON.parse(body).type === "list_sessions") sock.write(frame(JSON.stringify({ type: "sessions", rows: JSON.parse(rows) })));
+    const req = JSON.parse(body);
+    // Like the orchestrator: a request without a numeric id is refused, not answered.
+    if (typeof req.id !== "number") sock.write(frame(JSON.stringify({ type: "error", code: "bad_request", message: "missing field `id`" })));
+    else if (req.type === "list_sessions") sock.write(frame(JSON.stringify({ id: req.id, type: "sessions", rows: JSON.parse(rows) })));
   });
   sock.on("error", () => {});
 });

@@ -16,13 +16,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function listed() {
   return new Promise((resolve) => {
     let ws;
-    const done = (v) => { try { ws?.close(); } catch {} resolve(v); };
+    let settled = false;
+    // Once only: close() can fire onerror again, which would recurse.
+    const done = (v) => { if (settled) return; settled = true; try { ws?.close(); } catch {} resolve(v); };
     const timer = setTimeout(() => done("no answer to list_sessions"), 5000);
     try { ws = new WebSocket(`ws://127.0.0.1:${api}/api/ws`); } catch (e) { clearTimeout(timer); return resolve(String(e)); }
-    ws.onopen = () => ws.send(JSON.stringify({ type: "list_sessions" }));
+    // Every request carries a client-chosen `id` (client_api::messages::ClientRequest).
+    ws.onopen = () => ws.send(JSON.stringify({ id: 1, type: "list_sessions" }));
     ws.onerror = () => { clearTimeout(timer); done(`cannot connect to ws://127.0.0.1:${api}/api/ws`); };
     ws.onmessage = (m) => {
       const msg = JSON.parse(m.data);
+      if (msg.type === "error") { clearTimeout(timer); return done(`list_sessions refused: ${msg.code}: ${msg.message}`); }
       if (msg.type !== "sessions") return;
       clearTimeout(timer);
       done(msg.rows.some((r) => r.id === SEEDED) ? true : `seeded session ${SEEDED} not listed`);
