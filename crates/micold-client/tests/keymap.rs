@@ -76,6 +76,7 @@ fn arrows_and_home_end_in_app_cursor_mode() {
     let m = TermMode {
         app_cursor: true,
         alt_screen: false,
+        ..TermMode::default()
     };
     let cases: &[(NamedKey, &[u8])] = &[
         (NamedKey::ArrowUp, b"\x1bOA"),
@@ -355,6 +356,27 @@ fn copy_paste_chords() {
     );
 }
 
+#[test]
+fn plain_ctrl_v_pastes_only_in_ai_sessions() {
+    let ctrl = Mods {
+        ctrl: true,
+        ..Mods::NONE
+    };
+    let ai = TermMode {
+        ctrl_v_pastes: true,
+        ..TermMode::default()
+    };
+    assert_eq!(
+        encode(&ki(Key::Char('v'), ctrl, None), ai),
+        KeyOutput::Paste
+    );
+    // A shell keeps ^V (quoted-insert).
+    assert_eq!(
+        encode(&ki(Key::Char('v'), ctrl, None), TermMode::default()),
+        KeyOutput::Bytes(vec![0x16])
+    );
+}
+
 // ---- Printable & ignore ----
 
 #[test]
@@ -440,6 +462,7 @@ fn encode_is_total() {
         TermMode {
             app_cursor: true,
             alt_screen: true,
+            ..TermMode::default()
         },
     ] {
         for m in modsets {
@@ -545,6 +568,7 @@ fn pane_chords_are_app_actions_never_bytes() {
             TermMode {
                 app_cursor: true,
                 alt_screen: true,
+                ..TermMode::default()
             },
         );
         assert!(matches!(out, KeyOutput::Pane(_)));

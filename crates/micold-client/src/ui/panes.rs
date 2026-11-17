@@ -301,6 +301,7 @@ pub fn view<'a>(
                         let mut p = TerminalPane::new(grid, TermPalette::from_scheme(scheme))
                             .focused(is_focused && keyboard)
                             .session(t.session)
+                            .ctrl_v_pastes(t.process == SessionProcess::Primary)
                             .link_context(link_context.clone())
                             .pane(pane.id());
                         if is_focused {

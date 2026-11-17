@@ -245,6 +245,10 @@ pub fn switcher_chord_label() -> String {
 pub struct TermMode {
     pub app_cursor: bool,
     pub alt_screen: bool,
+    /// Plain `Ctrl+V` pastes, as `Ctrl+Shift+V` does. Set for an AI session's primary pane: its
+    /// CLI reads a raw `^V` as "paste image" from the (possibly container's) empty clipboard, so
+    /// the chord would never paste text. Unset for a shell, where `^V` is quoted-insert.
+    pub ctrl_v_pastes: bool,
 }
 
 /// A pane shortcut (feature 484, FR-009).
@@ -315,7 +319,7 @@ pub fn encode(input: &KeyInput, mode: TermMode) -> KeyOutput {
         return KeyOutput::Pane(action);
     }
     // 2. Copy / paste chords.
-    if let Some(action) = copy_paste_action(&input.key, input.mods) {
+    if let Some(action) = copy_paste_action(&input.key, input.mods, mode.ctrl_v_pastes) {
         return action;
     }
     // 3 & 4. Named keys and control chords.
@@ -499,11 +503,14 @@ fn pane_action(key: &Key, mods: Mods) -> Option<PaneAction> {
 }
 
 /// Copy/paste chords (macOS `Cmd+C`/`Cmd+V`, else `Ctrl+Shift+C`/`Ctrl+Shift+V`).
-fn copy_paste_action(key: &Key, mods: Mods) -> Option<KeyOutput> {
+fn copy_paste_action(key: &Key, mods: Mods, ctrl_v_pastes: bool) -> Option<KeyOutput> {
     let ch = match key {
         Key::Char(c) => c.to_ascii_lowercase(),
         _ => return None,
     };
+    if ctrl_v_pastes && ch == 'v' && mods.ctrl && !mods.shift && !mods.alt && !mods.logo {
+        return Some(KeyOutput::Paste);
+    }
     let matches = mods.ctrl && mods.shift && !mods.alt && !mods.logo;
     if !matches {
         return None;
