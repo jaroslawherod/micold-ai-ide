@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-emvt5c
 - **Started**: 2026-11-15
 - **Phase**: close
-- **Next step**: close: orchestrator dispatches speckit-tdd-verify and speckit-converge (autopilot-worker; units have no Agent tool), then fresh close unit applies findings, Status Closed, review, gate, close PR.
+- **Next step**: done once close PR #2024 squash-merges; live kind run (T022/T030/T033) is a follow-up (jaro, 2026-11-17).
 
 ## Pull requests
 

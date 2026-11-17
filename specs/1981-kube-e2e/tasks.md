@@ -116,7 +116,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ## Phase 6: TDD remediation
 
-Source: `specs/1981-kube-e2e/tdd/verification.md` (verdict FAIL at `5ca427862`). **The feature is not done until T033-T035 are cleared**; T036 onward are non-blocking.
+Source: `specs/1981-kube-e2e/tdd/verification.md` (verdict FAIL at `5ca427862`). T034-T035 are done; T033 (first live kind run) and T036 onward are follow-ups, by jaro's decision on 2026-11-17 to close the epic first.
 
 - [ ] T033 [US3] Finding 3: run T022 and T030 (live `kube-e2e` rounds), then for each of `link` and `restart` record the red against the chart without the `testDaemon` sidecar (`helm upgrade --install ... --set testDaemon.enabled=false`) in `tdd/cycle-log.md`; do not tick T024, T026 or T030 until the suites are seen passing, with durations against SC-002. Proof: `scripts/e2e-kind.sh` exits 0 and the log shows `ops`, `link`, `restart`, `refusal` and all five breakages caught.
 - [x] T034 [US4] Finding 1: replace the `println!` placeholders in `crates/micold-e2e/tests/network/main.rs:4` and `crates/micold-e2e/tests/ui/main.rs:4` with `#[ignore = "blocked on #1732"]` / `#[ignore = "blocked on #1954"]`; adjust the `e2e-kind.test.sh` case that lists placeholders as skipped. Proof: `scripts/build-lock.sh cargo test -p micold-e2e --test ui` reports `1 ignored` and `bash scripts/tests/e2e-kind.test.sh` passes.
