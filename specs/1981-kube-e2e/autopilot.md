@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
 | M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #2017 | merged 7cd3811f7 |
-| M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | T016–T021 done; review pending; T022 needs CI |
+| M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #2019 | merged 7bcb978d5 |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
 | M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
 
@@ -66,7 +66,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 merged as 7bcb978d5 (PR #2019, 2026-11-17). Reviews A (opus) and B (sonnet) CLEAN r1. Live `orchestrator end to end on kind (linux)` passed on the first CI round (T022). Optional notes: rust-cache misses target-shared in kube-e2e (cold build, check vs SC-002); e2e-kind.sh could say "image build failed".
+Next: M4 (#1985), tasks T023-T030 (API e2e suite). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
 
 ## Open escalation
 
