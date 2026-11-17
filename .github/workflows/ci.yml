@@ -826,7 +826,7 @@ jobs:
   # pointed at the suite) loaded into it, and the `kube_real_*` tests of `micold-client`. The
   # client-side rules (kubeconfig candidates, separators, exec-plugin resolution) are pure core tests
   # that the `test` job runs.
-  # `kind` and `kubectl` are pinned by version and sha256, and the node image is one stable
+  # `kind` and `kubectl` are pinned by version and sha256 (scripts/install-kube-tools.sh), and the node image is one stable
   # Kubernetes version, so the job is the same on every run. It runs on every non-documentation
   # change (the docs-only skip of `ssh-remote`, without its path gate).
   kube-cluster:
@@ -840,23 +840,16 @@ jobs:
       && needs.classify.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      KIND_VERSION: v0.30.0
-      KIND_SHA256: 517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889
-      KUBECTL_VERSION: v1.34.0
-      KUBECTL_SHA256: cfda68cba5848bc3b6c6135ae2f20ba2c78de20059f68789c090166d6abc3e2c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Install kind and kubectl at pinned versions
+        # The pins live in scripts/install-kube-tools.sh (#1984, FR-009), shared with kube-e2e.
         run: |
           set -euo pipefail
-          curl -sSLfo kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
-          echo "${KIND_SHA256}  kind" | sha256sum --check
-          curl -sSLfo kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check
-          sudo install -m 0755 kind kubectl /usr/local/bin/
+          scripts/install-kube-tools.sh kind kubectl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Run the real-cluster tests
         run: scripts/test-kube.sh
 
@@ -894,6 +887,46 @@ jobs:
         env:
           DOCKER_BUILDKIT: "1"
         run: scripts/chart-check.sh --image
+
+  kube-e2e:
+    name: orchestrator end to end on kind (linux)
+    # #1981/#1984 (FR-008, FR-009, FR-014, SC-002): the orchestrator image built, loaded into a
+    # throwaway kind cluster, the chart installed with ci/e2e.yaml and the `micold-e2e` suites run
+    # against it by scripts/e2e-kind.sh, which deletes the cluster at exit. Gated like kube-chart.
+    # The image build uses the Dockerfile's BuildKit cache mounts only: a cold build is inside the
+    # budget, so no cross-run layer cache yet (revisit from measured times, SC-002).
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (needs.classify.outputs.pr_proven != 'true' || needs.classify.outputs.kube_paths != 'true')
+      && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install kind, kubectl and helm at pinned versions
+        run: |
+          set -euo pipefail
+          scripts/install-kube-tools.sh kind kubectl helm
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The harness's own cases
+        run: scripts/tests/e2e-kind.test.sh
+      - name: Run the kind end-to-end suites
+        env:
+          DOCKER_BUILDKIT: "1"
+          MICOLD_NO_BUILD_LOCK: "1"
+        run: scripts/e2e-kind.sh
+      - name: Upload the failure logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kube-e2e-logs
+          path: target/e2e-logs
+          if-no-files-found: ignore
 
   assertions:
     name: assertion freeze
@@ -1041,7 +1074,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -1069,6 +1102,7 @@ jobs:
           SSHREMOTE: ${{ needs.ssh-remote.result }}
           KUBECLUSTER: ${{ needs.kube-cluster.result }}
           KUBECHART: ${{ needs.kube-chart.result }}
+          KUBEE2E: ${{ needs.kube-e2e.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
           # #1931: the guardrails; whether each blocks is the workflow-level GUARDRAIL_* switch.
@@ -1099,6 +1133,7 @@ jobs:
           check ssh-remote "$SSHREMOTE"
           check kube-cluster "$KUBECLUSTER"
           check kube-chart "$KUBECHART"
+          check kube-e2e "$KUBEE2E"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           guardrail diff-coverage "$DIFFCOVERAGE" "$GUARDRAIL_COVERAGE_BLOCK"
@@ -1119,6 +1154,7 @@ jobs:
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
             echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
             echo "| kube-chart | \`$KUBECHART\` | yes |"
+            echo "| kube-e2e | \`$KUBEE2E\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
             echo "| diff-coverage | \`$DIFFCOVERAGE\` | $GUARDRAIL_COVERAGE_BLOCK |"
