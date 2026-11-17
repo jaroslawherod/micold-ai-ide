@@ -1,7 +1,7 @@
 // The one way a component gets text (FR-014): `t(id, values)` formats the ICU message of the
 // chosen locale, falls back to English for a missing message and reports the gap (FR-015).
 import { createIntl, createIntlCache } from "@formatjs/intl";
-import { formatDateTime, formatRelativeTime, type RelativeUnit } from "../platform/intl";
+import { formatDateTime, formatRelativeTime, relativeParts, type RelativeUnit } from "../platform/intl";
 import { PSEUDO_LOCALE, SOURCE_LOCALE, catalogs as defaultCatalogs, type Catalog, type MessageId } from "./catalog";
 import { pseudoCatalog } from "./pseudo";
 
@@ -11,6 +11,8 @@ export interface Translator {
   locale: string;
   t: (id: MessageId, values?: Values) => string;
   formatRelative: (value: number, unit: RelativeUnit) => string;
+  /** How long ago `then` was, seen from `now` (both epoch milliseconds), in the locale. */
+  formatSince: (then: number, now: number) => string;
   formatDate: (date: Date) => string;
 }
 
@@ -43,6 +45,10 @@ export function createTranslator(locale: string, options: TranslatorOptions = {}
       return intl.formatMessage({ id }, values as Record<string, string | number | boolean | Date | null | undefined>);
     },
     formatRelative: (value, unit) => formatRelativeTime(formatLocale, value, unit),
+    formatSince: (then, now) => {
+      const { value, unit } = relativeParts(then, now);
+      return formatRelativeTime(formatLocale, value, unit);
+    },
     formatDate: (date) => formatDateTime(formatLocale, date),
   };
 }

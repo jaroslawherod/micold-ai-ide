@@ -5,7 +5,8 @@ failed before the implementation, or says why it had none.
 
 ## Baseline
 
-- suite: not run locally before M1; `origin/main` at `f5f8e812a` is CI's green merge gate.
+- suite: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` at `60277d73d` (`f5f8e812a~1`, before M1), run in M11 (T070): 49 passed, 0 failed, 0 ignored.
+- After M11 (T068, T069): the `store_` filter alone runs 209 cases (after the B-F5 split), PostgreSQL included, all passing.
 
 ## M1 Cycle 1: StoreError variants and per-record defaults (T002, T004)
 
@@ -257,3 +258,102 @@ reverting each behaviour on the green tree and running its test
   had them), kept as the US6 scenario 1 guard.
 - T059 `store_import.rs`: an owner the file carries is kept, a missing one is `unowned`; green
   with the insert-only bind.
+
+## M11 — TDD remediation (T061–T070)
+
+Tests and evidence only; no production behaviour change. Every mutant below was one change, run with
+`MICOLD_TEST_POSTGRES_URL` set to a local PostgreSQL 16 and `MICOLD_REQUIRE_POSTGRES=1`, restored
+with `git checkout -- <file>` (`git status` clean), then re-run green.
+
+### T061 FR-008 scan (F1)
+
+- red: adding `std::net::TcpStream::connect(` to `db/mod.rs` fails
+  `no_outbound::the_orchestrator_source_opens_no_outbound_connection` (`connect`); adding
+  `sqlx::AnyPool::connect_with(o)` (not on an `AnyPoolOptions::new()` chain) fails it at
+  `db/mod.rs:452` (`connect_`). Restored: `cargo test -p micold-daemon --test orchestrator no_outbound` 4 passed.
+- green: only `.connect_with(` ending an `AnyPoolOptions::new()` chain and the full path
+  `sqlx::AnyConnection::connect(` are blanked; `only_sqlx_connect_calls_are_blanked_in_the_database_directory` pins both sides.
+
+### T062 local-mode save failure (F2)
+
+- red: deleting the `eprintln!` at `save.rs:91` fails `restart::a_failed_local_save_is_reported_on_stderr`
+  (no `a registry change could not be saved` on stderr), with `MICOLD_TEST_POSTGRES_URL` unset.
+- green: the process runs on SQLite; a trigger added behind it aborts every daemon insert.
+
+### T063 PostgreSQL skips (F3)
+
+- `build.rs` sets `cfg(micold_postgres)` when `MICOLD_TEST_POSTGRES_URL` is set at build time; every
+  PostgreSQL case carries `#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]`,
+  and `store_import`'s `on_both` became a `<case>::sqlite` / `<case>::postgres` pair.
+- without the URL: `cargo test -p micold-daemon --test orchestrator` 156 passed, 35 ignored (at T063).
+- with the URL and `MICOLD_REQUIRE_POSTGRES=1` (local PostgreSQL 16): 191 passed, 0 ignored. The CI
+  `test` job sets both at job level, so its build has the cfg. CI run 43963469440, job 133640258650
+  (`build + test (ubuntu-latest)`, PR #2014 at `8f9c50e`): workspace 13573 passed, 19 skipped;
+  `micold-daemon::orchestrator` 247 passed, none skipped (36 of them `store_suite::postgres::`).
+
+### T064 red by deliberate mutant (F4)
+
+M6 (T036–T038, FR-006) had no cycle-log entry and no source change: its tests arrived green. Its red
+is row 17 below. Row 15 (older-database upgrade) keeps `verification.md` mutant 1 as its red; T069
+makes it a two-migration case.
+
+| Row | Mutant | Command | Failed |
+| --- | ------ | ------- | ------ |
+| 4 | core `store.rs:201` `sorted` reverses instead of sorting | `cargo test -p micold-daemon --test orchestrator store_suite::` | `store_suite::json::load_is_ordered_by_tenant_then_id`, `store_suite::json::an_owned_record_over_an_unowned_one_takes_its_owner`, `store_suite::json::an_owner_survives_a_relink_upsert_and_a_whole_list_save`, `store_suite::json::tenant_records_survive_reopen`, `store_suite::memory::an_owned_record_over_an_unowned_one_takes_its_owner`, `store_suite::memory::an_owner_survives_a_relink_upsert_and_a_whole_list_save`, `store_suite::memory::load_is_ordered_by_tenant_then_id`, `store_suite::memory::tenant_records_survive_reopen`, `store_suite::memory::upsert_inserts_then_updates` |
+| 6 | `db/mod.rs` `sqlite_url` pushes every byte raw (no percent-encoding) | `cargo test -p micold-daemon --test orchestrator store_` | `store_migrations::a_directory_with_a_space_and_non_ascii_letters_opens` |
+| 7 | `db/mod.rs` `map_error` maps a non-database error to `Refused`, not `Unavailable` | `cargo test -p micold-daemon --test orchestrator store_sql_errors` | `store_sql_errors::every_auth_method_over_lost_tables_is_unavailable`, `store_sql_errors::the_audit_store_over_a_lost_table_is_unavailable` |
+| 9 | SQLite migration drops the `audit_log_no_update` trigger | `cargo test -p micold-daemon --test orchestrator store_scan` | `store_scan::a_raw_update_of_the_audit_log_fails` |
+| 11 | `db/auth.rs:132` reads `revoked_at` back as `None` | `cargo test -p micold-daemon --test orchestrator store_` | `store_scan::key_scan::sqlite_holds_no_key_material`, `store_scan::key_scan::postgres_holds_no_key_material`, `store_sql_errors::a_stored_refresh_token_keeps_the_revocation_it_arrived_with`, `store_suite::postgres::refresh_tokens_rotate_and_a_reused_one_revokes_its_family`, `store_suite::postgres::users_are_created_read_listed_and_soft_removed`, `store_suite::sqlite::refresh_tokens_rotate_and_a_reused_one_revokes_its_family`, `store_suite::sqlite::users_are_created_read_listed_and_soft_removed` |
+| 13 | `db/mod.rs:100` CA-file reason `is not a file` to `is missing` | `cargo test -p micold-daemon --test orchestrator store_` | `store_migrations::a_missing_ca_file_is_unavailable` (survived first; the test now pins the reason, T064) |
+| 16 | `db/migrate.rs` retry bound `migrations.len() + 1` to `0` | `cargo test -p micold-daemon --test orchestrator store_` | **none: survived** |
+| 17 | SQLite migration adds a `private_key TEXT` column to `users` | `cargo test -p micold-daemon --test orchestrator store_scan` | `store_scan::key_scan::sqlite_holds_no_key_material`, `store_scan::key_scan::sqlite_scan_finds_a_pem_block` |
+| 18 | core `validate.rs:1095` pool-size range `1..=` to `0..=` | `cargo test -p micold-core --lib daemon_config::` | `daemon_config::tests::database_pool_size_outside_one_to_sixty_four_names_the_key` |
+| 19 | `orchestrator/mod.rs` `open_store` skips `import_registry_json` | `cargo test -p micold-daemon --test orchestrator store_config` | `store_config::the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one` |
+| 24 | `db/registry.rs` `reassign_unowned` drops `tenant_id = $2` | `cargo test -p micold-daemon --test orchestrator store_` | `store_scan::key_scan::postgres_reassign_moves_projects_and_sessions_of_one_tenant`, `store_scan::key_scan::sqlite_holds_no_key_material`, `store_scan::key_scan::sqlite_reassign_moves_projects_and_sessions_of_one_tenant`, `store_scan::key_scan::postgres_holds_no_key_material`, `store_suite::postgres::reassign_unowned_moves_the_tenants_unowned_records_once`, `store_suite::sqlite::reassign_unowned_moves_the_tenants_unowned_records_once` |
+| 24 | `db/registry.rs` upsert overwrites the owner (no `CASE` for `unowned`) | `cargo test -p micold-daemon --test orchestrator store_suite` | `store_suite::postgres::an_owner_survives_a_relink_upsert_and_a_whole_list_save`, `store_suite::sqlite::an_owner_survives_a_relink_upsert_and_a_whole_list_save` |
+| 25 | SQLite migration adds `CREATE TABLE notes (id TEXT)` (no tenant) | `cargo test -p micold-daemon --test orchestrator store_scan` | `store_scan::key_scan::sqlite_tables_carry_tenant_and_owner` |
+| 26 | `db/import.rs` inserts every record as `unowned` | `cargo test -p micold-daemon --test orchestrator store_import` | `store_import::an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned::sqlite`, `store_import::an_owner_the_file_carries_is_kept_and_a_missing_one_is_unowned::postgres` |
+
+Rows 7 and 11 were run before T068 split the eager cases, so they name the old cases
+(`refresh_tokens_rotate_and_a_reused_one_revokes_its_family`, `users_are_created_read_listed_and_soft_removed`);
+those are now the `a_rotation_…`, `a_reused_refresh_token_…` and `a_user_…`/`removing_a_user_…` cases.
+T068 below re-runs the refresh-token mutant with the current names.
+
+Row 16 survives: two starters on one database never lose the race here (SQLite waits on its busy
+timeout, PostgreSQL on the advisory lock), so the retry is not reached. Recorded, not hidden.
+
+### T065 start-level US5.2 and US5.4 (F5)
+
+- red: `import.rs:82` `rows > 0` to `rows > 1000000` fails
+  `store_config::an_unimported_file_beside_rows_fails_the_start_naming_file_and_row_count`.
+- `a_second_start_imports_nothing_and_leaves_the_imported_file` covers US5.2 (green on arrival: the
+  rename is what stops the import; row 19's mutant is its red).
+
+### T066–T068
+
+- T066: `store_sql_errors.rs` and `store_import.rs` use `store_suite`'s fixtures. `mise run duplication`
+  has no mise here, so its two commands ran directly (`npx -y jscpd@4 crates --format rust --min-lines 8
+  --min-tokens 80 --gitignore`; `similarity-rs crates/*/src --skip-test -t 0.85 -m 8`) on base
+  `8005293fe` and on head: jscpd 303 clones, 4586 lines (1.12 %) on both; similarity-rs 1607 pairs on
+  both. No growth. (The local similarity-rs, freshly installed, counts more pairs than the docs'
+  745 budget on either tree: a tool version difference, equal for base and head.)
+- T067: reasons pinned (`file is not a database`, the pool timeout, `no_such_table`, the CA-file
+  reason), the PostgreSQL target equals the URL's `host:port`, the corrupt-file start error is exact.
+- T068: the eager cases are one case per rule; `serials_revocations_and_enrollments` became five
+  (`a_serial_is_recorded_once_and_unrevoked`, `a_revocation_keeps_its_first_time_and_reason_across_reopen`,
+  `an_enrollment_token_is_refused_twice`, `an_unknown_or_expired_enrollment_is_refused`,
+  `an_enrollment_is_redeemed_once_across_reopen`). `verification.md` mutant 7 re-run (`db/auth.rs:489`,
+  the reuse `UPDATE` given `AND 1 = 0`, so reuse no longer revokes the family), command
+  `cargo test -p micold-daemon --test orchestrator`: failed `store_suite::sqlite::a_reused_refresh_token_revokes_its_family_and_no_other`,
+  `store_suite::postgres::a_reused_refresh_token_revokes_its_family_and_no_other`,
+  `store_scan::key_scan::sqlite_holds_no_key_material`, `store_scan::key_scan::postgres_holds_no_key_material`
+  (255 passed, 4 failed). Restored, `git status` clean of `src/`: 259 passed, 0 failed, 0 ignored.
+
+### T069 two-migration ordering (F10–F12)
+
+- red: swapping the SQL of the two test migrations in `an_older_database_applies_the_missing_migrations_in_order`
+  (`0002_second.sql` gets the `INSERT INTO second`, `0003_third.sql` the `CREATE TABLE second`), command
+  `cargo test -p micold-daemon --test orchestrator store_migrations::an_older`: failed
+  `store_migrations::an_older_database_applies_the_missing_migrations_in_order`.
+- restored with `git checkout -- crates/micold-daemon/tests/orchestrator/store_migrations.rs`: green
+  (the full orchestrator run above, 259 passed).

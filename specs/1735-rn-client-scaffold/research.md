@@ -26,6 +26,8 @@ Each entry: decision, rationale, rejected alternatives.
 
 **R12 Spike.** A dev-only route renders 5,000 transcript entries and a 2,000-line diff with Paper `Text`/`FlatList`, measured with `performance.now`, Chromium trace and `performance.memory`; written to `spike.md`. Production exclusion: the route file re-exports a stub unless the mock/dev flag is set, and the bundle check covers the sentinel. Candidates if it fails: FlashList, `react-window` through `react-native-web` view; the finding names #1736 as owner.
 
-**R13 Overview arrangement.** Task 1 of M3 reads `crates/micold-client/src/ui/overview.rs` (card width, gap, column rule) and records the numbers in `quickstart.md` Part B; the grid uses `flexWrap` with the measured card min-width. Rejected: CSS grid (not portable to RN style objects).
+**R13 Overview arrangement.** Task 1 of M3 reads `crates/micold-client/src/ui/overview.rs` (card width, gap, column rule) and records the numbers below (*Measured*); the grid uses `flexWrap` with the measured card min-width. Rejected: CSS grid (not portable to RN style objects).
+
+  *Measured (M3, T040)* from `crates/micold-client/src/ui/material/card_grid.rs` and `ui/overview.rs`: card min-width `MIN_WIDTH = 280`, gap `spacing::MD = 16`, at most `MAX_COLUMNS = 5` per row, column rule `clamp(floor((width + gap) / (min + gap)), 1, 5)` with the row's width shared equally (wider panes make wider cards, not more of them); the pane is padded `spacing::LG = 24` and its header sits `spacing::SM = 8` above the grid. The web client's `gridColumns()` uses the same rule and numbers; below 600 px it is one column regardless.
 
 **R14 Logical layout.** Custom ESLint rule (or `no-restricted-syntax`) forbids `left|right|marginLeft|marginRight|paddingLeft|paddingRight|borderLeft*|borderRight*|textAlign: 'left'|'right'` in `apps/client/src`; use `start/end` equivalents.

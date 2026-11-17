@@ -39,6 +39,7 @@ fn a_raw_delete_from_the_audit_log_fails() {
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn postgres_refuses_a_raw_update_or_delete_of_the_audit_log() {
     let Some(db) = super::store_support::PostgresDatabase::create() else {
         return;
@@ -211,12 +212,32 @@ mod key_scan {
             an_owner_survives_a_relink_upsert_and_a_whole_list_save,
             an_owned_record_over_an_unowned_one_takes_its_owner,
             reassign_unowned_moves_the_tenants_unowned_records_once,
-            users_are_created_read_listed_and_soft_removed,
-            an_identity_links_to_one_user,
+            a_user_is_created_once_and_read_back,
+            a_role_is_set_only_on_a_known_user,
+            a_removed_user_is_unlisted_but_kept,
+            removing_a_user_revokes_its_refresh_tokens_only,
+            an_identity_relinks_to_its_user_and_survives_reopen,
+            a_linked_identity_is_refused_for_another_user,
+            an_identity_for_an_unknown_user_is_refused,
+            an_identity_subject_is_scoped_by_provider,
+            a_removed_users_identity_finds_nobody,
+            an_invite_id_or_token_is_refused_twice,
+            an_unknown_or_expired_invite_is_refused,
+            an_invite_for_an_unknown_user_is_refused_and_stays_redeemable,
             an_invite_is_redeemed_once,
-            the_bootstrap_code_is_consumed_once,
-            refresh_tokens_rotate_and_a_reused_one_revokes_its_family,
-            serials_revocations_and_enrollments,
+            no_bootstrap_code_is_consumed_before_one_is_set,
+            only_the_latest_bootstrap_code_is_consumed,
+            the_bootstrap_code_is_consumed_once_and_then_fixed,
+            a_refresh_token_is_refused_twice_and_for_an_unknown_user,
+            a_rotation_revokes_the_old_token_and_stores_the_new,
+            a_reused_refresh_token_revokes_its_family_and_no_other,
+            an_expired_refresh_token_is_refused_and_stays_as_it_was,
+            revoking_a_users_refresh_tokens_counts_live_ones_and_survives_reopen,
+            a_serial_is_recorded_once_and_unrevoked,
+            a_revocation_keeps_its_first_time_and_reason_across_reopen,
+            an_enrollment_token_is_refused_twice,
+            an_unknown_or_expired_enrollment_is_refused,
+            an_enrollment_is_redeemed_once_across_reopen,
             two_tenants_on_one_backend_see_disjoint_rows,
             append_returns_a_strictly_increasing_seq,
             recent_is_newest_first_by_keyset,
@@ -333,6 +354,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_reassign_moves_projects_and_sessions_of_one_tenant() {
         reassign_moves_projects_and_sessions_of_one_tenant::<PostgresBackend>();
     }
@@ -343,6 +365,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_tables_carry_tenant_and_owner() {
         every_table_has_a_tenant_and_the_owned_ones_an_owner::<PostgresBackend>();
     }
@@ -353,6 +376,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_holds_no_key_material() {
         every_suite_case_then_every_method::<PostgresBackend>();
     }
@@ -363,6 +387,7 @@ mod key_scan {
     }
 
     #[test]
+    #[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
     fn postgres_scan_finds_a_pem_block() {
         a_pem_block_in_a_free_text_field_is_found::<PostgresBackend>();
     }

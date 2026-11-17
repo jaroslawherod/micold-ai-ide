@@ -160,3 +160,38 @@ async fn a_failed_save_leaves_links_working() {
     assert_eq!(orchestrator.daemons().await.len(), 2);
     assert!(!store.path().exists());
 }
+
+/// FR-004 in the default local mode (no PostgreSQL): the process runs on SQLite, a trigger added
+/// behind its back makes every save fail, and the failure is reported on stderr as a registry
+/// change that could not be saved while the daemon still links.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_failed_local_save_is_reported_on_stderr() {
+    use crate::store_slow::{stderr_lines, stderr_until, KillOnDrop};
+    use sqlx::Connection as _;
+
+    let _quiet = children_quiet().await;
+    let dir = Arc::new(tempfile::tempdir().unwrap());
+    let mut child = orchestrator_process(dir.path())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let logged = stderr_lines(child.stderr.take().unwrap());
+    let _child = KillOnDrop(child);
+    let socket = dir.path().join("run/micold/orchestrator.sock");
+    let orchestrator = Orchestrator::external(Arc::clone(&dir), socket).await;
+
+    let url = format!("sqlite://{}", database_file(dir.path()).display());
+    let mut conn = sqlx::SqliteConnection::connect(&url).await.unwrap();
+    sqlx::query(
+        "CREATE TRIGGER no_insert BEFORE INSERT ON daemons BEGIN SELECT RAISE(ABORT, 'blocked'); END",
+    )
+    .execute(&mut conn)
+    .await
+    .unwrap();
+    conn.close().await.unwrap();
+
+    let _link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
+    record_when(&orchestrator, "box", online).await;
+    stderr_until(&logged, "a registry change could not be saved");
+}

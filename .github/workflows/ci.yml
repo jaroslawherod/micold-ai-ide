@@ -228,28 +228,25 @@ jobs:
           pnpm --filter @micold/protocol typecheck
       - name: Jest with coverage
         run: pnpm --filter @micold/client test --coverage
-      # Jest writes lcov paths relative to the package (`../../packages/protocol/...` for a sibling); normalise them to repository paths for diff-coverage.
+      # Jest runs from the repository root (apps/client/package.json), so its lcov paths are repository paths.
       - name: Check the changed lines
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.base_ref }}
         run: |
           git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
-          python3 - <<'PY'
-          import os
-          p = "apps/client/coverage/lcov.info"
-          out = []
-          for line in open(p):
-              if line.startswith("SF:"):
-                  f = line[3:].rstrip("\n")
-                  if not os.path.isabs(f):
-                      line = "SF:" + os.path.normpath(os.path.join("apps/client", f)) + "\n"
-              out.append(line)
-          open(p, "w").writelines(out)
-          PY
           scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info --base "origin/$BASE" --summary client-diff-coverage.md
       - name: Web export
         run: pnpm --filter @micold/client web:export
+      - name: Bundle check (no mock in the production export)
+        run: node scripts/client/bundle-check.mjs apps/client/dist
+      # The check must see the mock where it is: a mock export has to fail it.
+      - name: Bundle check refuses a mock export
+        run: |
+          pnpm --filter @micold/client web:export:mock
+          status=0
+          node scripts/client/bundle-check.mjs apps/client/dist-mock || status=$?
+          test "$status" = 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
@@ -303,9 +300,10 @@ jobs:
         # #959: the Ubuntu leg is dropped on a push its pull request proved (its full test ran there).
         os: ${{ fromJSON(needs.classify.outputs.test_os || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
-    # #1948: the orchestrator's shared store suite runs on PostgreSQL too. The cases skip when
-    # MICOLD_TEST_POSTGRES_URL is unset; MICOLD_REQUIRE_POSTGRES=1 turns that skip into a failure
-    # here, so a missing service cannot pass silently. Each case creates and drops its own database.
+    # #1948: the orchestrator's shared store suite runs on PostgreSQL too. The cases are ignored
+    # when MICOLD_TEST_POSTGRES_URL is unset at build time (micold-daemon's build.rs); set here,
+    # they run, and MICOLD_REQUIRE_POSTGRES=1 fails one that finds no server. Each case creates and
+    # drops its own database.
     env:
       POSTGRES_USER: micold
       POSTGRES_PASSWORD: micold-ci

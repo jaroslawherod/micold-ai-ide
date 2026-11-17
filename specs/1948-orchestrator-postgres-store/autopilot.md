@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1948
-- **Worktree branch**: claude/project-thread-sabfza
+- **Worktree branch**: claude/project-thread-0phzsu
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M10 review A+B on the snapshot in *Handover*, then open the M10 PR from /tmp/pr-1948-m10.md
+- **Next step**: M11 review A (code-review high) and review B (conformance) on origin/main...HEAD, then the M11 PR, then a new close unit (re-run speckit-tdd-verify)
 
 ## Pull requests
 
@@ -27,6 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2006 | M7 | merged | 3a74d3004 |
 | #2008 | M8 | merged | 2243de02d |
 | #2010 | M9 | merged | 83926c52f |
+| #2011 | M10 | merged | 8005293fe |
 
 ## Milestones
 
@@ -41,7 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T039–T044 | full | [database] config and backend rule | #2006 | merged (3a74d3004) |
 | M8 | T045–T050 | full | Orchestrator starts on the chosen store | #2008 | merged (2243de02d) |
 | M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
-| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | | implemented, review pending |
+| M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | #2011 | merged (8005293fe) |
+| M11 | T061–T070 | full | TDD remediation (verification.md FAIL: F1–F12), tests and evidence only | | pending |
 
 ## Decisions
 
@@ -86,6 +88,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M10 full gate (scripts/gate.sh, PostgreSQL, debug=0): fmt, clippy, 13498 nextest passed; 1 failed only because the local test password `postgres` is a substring of `sqlx_postgres` (rerun with another password: store_ 129/129, 4 runs); scripts/tests all pass.
 - M10 round 1 (A CHANGES, B CLEAN): A-F1 MAJOR SQL conflict branch now sets an owned record's owner (CASE); A-F2 MAJOR suite case `an_owned_record_over_an_unowned_one_takes_its_owner` (upsert and save, all backends; import never writes over an existing row: rows without a matching marker refuse, so the CASE covers it with no import case); A-F3/B-F1 store_scan `*_reassign_moves_projects_and_sessions_of_one_tenant` + doc that the count is daemon rows; A-F4/B-F2 JSON save fails on a read error, falls back only on NotFound/parse error (+ core test); B-F3 quickstart §A gate count inline. All fixed; store_ 135/135 with PostgreSQL; full gate green (scripts/gate.sh exit 0, CARGO_INCREMENTAL=0 after wiping target-shared for disk).
 - M9 round 1 (opus A+B): MINOR-ONLY, 2 MINOR fixed: a non-NotFound read error now says `cannot read it`; the start test seeds a record and checks the started store serves it (corrupt-file start failure already covered).
+- M11 round 1 fixes (A-F1..F2, B-F1..F6): A-F1 the Google "same subject, other provider" assertion is its own identity case `an_identity_subject_is_scoped_by_provider`; A-F2 comment on why only the db dir needs `code_only`; B-F1 T069 swap-order red entry; B-F2 T063 CI count (job 133640258650: orchestrator 247 passed, 0 skipped); B-F3 T066 jscpd/similarity-rs equal on base and head; B-F4 T068 mutant 7 re-run fails sqlite+postgres cases; B-F5 serials/enrollments split into five cases; B-F6 rows 7/11 note. Orchestrator suite with PostgreSQL (:5433, max_connections=500): 259 passed, 0 ignored.
 
 ## Declined review findings
 
@@ -105,13 +108,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M10 (T055–T060) implemented, all six ticked; previous PR #2010 merged at 83926c52f. Review snapshot: base `83926c52f` (origin/main), head = the branch tip commit "#1948: M10 ownership columns and adoption" on claude/project-thread-sabfza. Round 1 done (fixes in the next commit); a round-2 re-review covers `9c32afd72...HEAD`, excluding the ledger. Focus: `OwnerId` serde (record.rs), `keeping_owners` + default `reassign_unowned` (core store.rs), SQL insert-only owner + `reassign_unowned` override (daemon db/registry.rs), suite/scan/import tests, quickstart §B record. Full gate result: *Review rounds*. PR body: /tmp/pr-1948-m10.md (label docs-not-needed). Local `store_slow` password-leak failure was the test URL's password `postgres` matching `sqlx_postgres` in the error text, not the code; with another password green 4/4.
+None.
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+- M11 (unit 2): T068–T070 done at cbca04d (T068 split cases, T069 test clock / store-level failure mapping / named-column inserts, T070 baseline 49 passed at 60277d73d). Gate (scripts/gate.sh, PG 16 at :5433): fmt, clippy, 13569/13570 tests green; the one failure is session_extras signing (ssh-keygen not installed in the cloud box), unrelated. The older-database case already runs 0002+0003, where 0003 reads 0002's table, so swapping them fails. Reviews A and B not run (no Agent tool in this unit). PR body: scratchpad pr-body.md.
+- Close: plan drift for M6–M10 recorded in drift-M6..M10.md (no unbuilt work). speckit-tdd-verify verdict FAIL at 40309293a (tdd/verification.md): cut into M11, since this close unit has no Agent tool for per-crate workers and the work is ~10 test tasks. converge skipped: review B CLEAN (or A+B combined CLEAN after fixes) for every milestone.
 
 - M2 and M4: `load` is ordered by `(tenant_id, id)`; the JSON and memory stores sort in `load`, the SQL ones with `ORDER BY`.
 - `sha1` in `micold-daemon` is used by M9's import digest (`sha1:<hex>` in `imports.digest`).
