@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | tasks | M1 has no observable user story (milestones rule 1) | superseded by #4: contract+core merged into the US2 milestone | agent | tasks review r1 F1 |
 | 4 | tasks | Milestones bundling two stories (rule 2) | keep combined, reasons in each milestone's Note (US4 halves and US5 have no code of their own) | agent | tasks review r1 F4 |
 | 5 | plan (M4) | Provisioned daemons on non-Linux clients | Linux only, #1897: no exception, FR-007 holds for every placement | user (plan r1 F1) | #1897 |
+| 6 | close | TDD verification FAIL: run Phase 9 (T035-T045) before closing? | close now, keep T035-T045 as follow-ups | user | decision card 2026-11-17 |
 
 ## Review rounds
 
