@@ -7353,6 +7353,39 @@ impl DaemonState {
             .is_some_and(|store| store.has_events(id))
     }
 
+    /// What a [`ClientMsg::ReadStructuredEvents`] of `session` in `project` is served from (#1732
+    /// R9): the session's event stream (`Some`), or none yet because it never ran and saved
+    /// nothing (`None`: an empty history). Takes no attachment, lock or view. **Blocking**: it may
+    /// read the saved history.
+    ///
+    /// # Errors
+    ///
+    /// [`StructuredReadRefusal::NotFound`] when `project` has no such session,
+    /// [`StructuredReadRefusal::TerminalSession`] when it is not a structured one.
+    pub fn structured_read(
+        &self,
+        project: &Path,
+        session: SessionId,
+    ) -> Result<
+        Option<Arc<crate::structured::EventStream>>,
+        micold_core::protocol::messages::StructuredReadRefusal,
+    > {
+        use micold_core::protocol::messages::StructuredReadRefusal as Refusal;
+        if !self
+            .lock()
+            .catalog
+            .sessions_for(project)
+            .iter()
+            .any(|s| s.id == session)
+        {
+            return Err(Refusal::NotFound);
+        }
+        if self.session_kind(session) != Some(SessionKind::Structured) {
+            return Err(Refusal::TerminalSession);
+        }
+        Ok(self.event_stream_loading(session, false))
+    }
+
     /// The sessions that have an event stream in this daemon run.
     pub(crate) fn event_stream_ids(&self) -> Vec<SessionId> {
         self.lock().event_streams.keys().copied().collect()

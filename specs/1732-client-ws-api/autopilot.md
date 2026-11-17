@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-mezck0
 - **Started**: 2026-11-17
-- **Phase**: tasks
-- **Next step**: tasks review NOT RUN (the tasks unit had no Agent tool): the orchestrator dispatches an opus reviewer (rubrics/tasks.md) on specs/1732-client-ws-api/tasks.md, fixes findings, then speckit-analyze if not run, closes checklists (requirements.md has 0 unchecked), runs the specs-only gate and opens the design PR (title and body per the orchestrator's prompt, Refs #1732, no Closes).
+- **Phase**: milestones (M1 in review)
+- **Next step**: M1 code done (T003-T004, protocol 84), gate green, pushed; reviews not run (no Agent tool): the orchestrator reviews the diff `origin/main..HEAD`, opens the PR from specs/1732-client-ws-api/m1-pr-body.md, then merges and starts M2.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -19,13 +19,14 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #2032 | Design PR (spec, plan, tasks), draft | open | - |
+| #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
+| M1 | Daemon ReadStructuredEvents (PR number set by the orchestrator) | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | - | pending |
+| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | - | in review |
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | - | pending |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | pending |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |

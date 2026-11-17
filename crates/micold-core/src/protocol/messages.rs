@@ -1098,6 +1098,16 @@ pub enum ClientMsg {
         /// Which rows.
         kind: ListKind,
     },
+    /// Read a structured session's saved history once, without attaching, locking or viewing
+    /// (#1732 R9), so a read never displaces a desktop window holding the project. Answered by
+    /// the history as `live: false` [`DaemonMsg::StructuredEvents`] messages, or by
+    /// [`DaemonMsg::StructuredEventsRefused`]. Nothing is pushed afterwards.
+    ReadStructuredEvents {
+        /// The project the session belongs to.
+        project: PathBuf,
+        /// The session.
+        session: SessionId,
+    },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1533,6 +1543,13 @@ pub enum DaemonMsg {
         events: Vec<SequencedEvent>,
         /// `false` for history, `true` for an event as the CLI wrote it.
         live: bool,
+    },
+    /// The answer to a [`ClientMsg::ReadStructuredEvents`] the daemon cannot serve (#1732 R9).
+    StructuredEventsRefused {
+        /// The session asked for.
+        session: SessionId,
+        /// Why.
+        reason: StructuredReadRefusal,
     },
     /// A terminal-only request addressed to a structured session's AI process, refused (feature
     /// 938, FR-019, contracts/wire.md). Sent to the requesting client only; the shell instances
@@ -2509,6 +2526,15 @@ pub enum OperationResult {
         /// Its pictures, in order.
         images: Vec<ImageAttachment>,
     },
+}
+
+/// Why a [`ClientMsg::ReadStructuredEvents`] was refused (#1732 R9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StructuredReadRefusal {
+    /// No such session in that project.
+    NotFound,
+    /// The session is a terminal session: it has no events.
+    TerminalSession,
 }
 
 /// The category of a failed mutating request (contracts/messages.md).
