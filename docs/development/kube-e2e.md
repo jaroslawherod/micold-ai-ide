@@ -83,6 +83,19 @@ let Some(cluster) = micold_e2e::env::cluster_or_skip("<suite>::<test>") else { r
 Use `cluster.exec(...)`, `cluster.port_forward(...)` and `cluster.kubectl(...)` from
 `micold_e2e::cluster`. Do not call `kubectl` directly.
 
+### Placeholder suites: `network` and `ui`
+
+`network` (blocked on #1732) and `ui` (blocked on #1954) exist as placeholders. The harness lists
+them as `suite <name>: skipped, blocked on #<issue>` and runs no cargo test for them; run directly,
+their one test prints the same skip reason. To make one real, in its own directory plus the
+harness list only:
+
+1. Remove its entry from `PLACEHOLDERS` in `scripts/e2e-kind.sh`.
+2. `network`: replace `crates/micold-e2e/tests/network/main.rs` with tests that start with the
+   gate above. `ui`: add the Playwright project in `e2e/ui/` (see its README) and have the suite
+   run it with the web URL from the harness.
+3. Set any chart values the suite needs (for `ui`, `web.enabled=true`) in `ci/e2e.yaml`.
+
 ## Debugging
 
 Keep the cluster with `MICOLD_E2E_KEEP=1 mise run e2e-kind`, then use the context `kind-micold-e2e`

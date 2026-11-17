@@ -32,3 +32,11 @@ path = "tests/restart/main.rs"
 [[test]]
 name = "refusal"
 path = "tests/refusal/main.rs"
+
+[[test]]
+name = "network"
+path = "tests/network/main.rs"
+
+[[test]]
+name = "ui"
+path = "tests/ui/main.rs"

@@ -139,6 +139,18 @@ run STUB_BREAK_CARGO_RC=0
 check "a seeded breakage no suite catches fails the run, naming it" \
   '[ "$rc" -ne 0 ] && grep -q "breakage command: NOT caught" <<<"$out" && grep -q "breakage opsPort: NOT caught" <<<"$out"'
 
+run MICOLD_E2E_SUITES=network
+check "a placeholder suite is listed as skipped naming its issue and runs no cargo test" \
+  '[ "$rc" -eq 0 ] && grep -q "suite network: skipped, blocked on #1732" <<<"$out" && ! grep -q "^cargo test" "$calls"'
+run MICOLD_E2E_SUITES=ui
+check "the ui placeholder names #1954" '[ "$rc" -eq 0 ] && grep -q "suite ui: skipped, blocked on #1954" <<<"$out"'
+run MICOLD_E2E_SUITES=ops,ui
+check "selecting a suite runs only it; a placeholder beside it is skipped" \
+  '[ "$(grep -c "^cargo test" "$calls")" -eq 1 ] && grep -q "^cargo test -p micold-e2e --test ops " "$calls" && grep -q "suite ui: skipped" <<<"$out"'
+
+check "every suite the harness lists is a cargo test target with a main.rs" \
+  'for s in $(sed -n "s/^KNOWN_SUITES=\"\(.*\)\"/\1/p" "$SCRIPT"); do [ -f "$ROOT/crates/micold-e2e/tests/$s/main.rs" ] && grep -q "path = \"tests/$s/main.rs\"" "$ROOT/crates/micold-e2e/Cargo.toml" || { echo "no target for $s"; exit 1; }; done'
+
 run MICOLD_E2E_SUITES=nosuch
 check "an unknown suite is refused before cluster work" '[ "$rc" -eq 2 ] && grep -q nosuch <<<"$out" && ! grep -q "^kind create" "$calls"'
 
