@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1981
-- **Worktree branch**: claude/project-thread-837fjj
+- **Worktree branch**: claude/project-thread-emvt5c
 - **Started**: 2026-11-15
 - **Phase**: milestones
 - **Next step**: M5 diff review (light tier: A code-review + B conformance) on the snapshot in Handover, then open the PR (body specs/1981-kube-e2e/pr-body-m5.md), wait for CI, merge. Then final: Phase done.
