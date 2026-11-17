@@ -19,7 +19,8 @@ use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
     BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, MergedBranchQuery,
-    OperationResult, RefusedRequest, SessionProcess, TerminalRef, WindowView,
+    OperationResult, RefusedRequest, SessionProcess, StructuredReadRefusal, TerminalRef,
+    WindowView,
 };
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
@@ -1118,7 +1119,17 @@ where
                         Ok(Err(reason)) => {
                             state.send(id, DaemonMsg::StructuredEventsRefused { session, reason })
                         }
-                        Err(e) => tracing::warn!(error = %e, "a structured read task failed"),
+                        Err(e) => {
+                            // Answer anyway, so the client is not left waiting on a read that died.
+                            tracing::warn!(error = %e, "a structured read task failed");
+                            state.send(
+                                id,
+                                DaemonMsg::StructuredEventsRefused {
+                                    session,
+                                    reason: StructuredReadRefusal::NotFound,
+                                },
+                            );
+                        }
                     }
                 });
             }

@@ -994,7 +994,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
 }
 
 #[test]
-fn the_protocol_version_is_81() {
+fn the_protocol_version_is_the_one_the_schema_hash_pins() {
     assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 84);
 }
 

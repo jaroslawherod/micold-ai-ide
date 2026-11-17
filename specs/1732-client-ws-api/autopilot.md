@@ -48,6 +48,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
 
+| diff review | 1 (opus, orchestrator) | M1 fbfa8360e..684310c01 | see commit | - | CHANGES, minor: F1 test name, F2 reply on read-task failure, F3 empty-history comment fixed; F4 declined (see Declined) |
 | spec review | 1 | spec.md | ff1592a91dce73ab8455582abb7ab45d7e31ad09 | ab6207b8a448c2329fff6fbbbcd821854aa4f518:ff1592a91dce73ab8455582abb7ab45d7e31ad09 | CHANGES: 2 MAJOR (F1 browser parity, F2 app-level heartbeat), 3 MINOR (F3 unreachable/snapshot, F4 FR-001 contract, F5 addresses/US3 check) — all fixed in spec.md; behaviour-bearing, round 2 re-review (sonnet) due |
 | spec review | 2 | spec.md | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | CLEAN (sonnet re-review); nit Key Entities ping->pong fixed |
 
@@ -61,6 +62,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | diff review round 1 (opus) | F4 double lock in the ReadStructuredEvents path | harmless: the second lock is uncontended and held briefly |
 
 ## Handover
 
