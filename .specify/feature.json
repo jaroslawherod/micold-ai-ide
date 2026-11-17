@@ -1,1 +1,3 @@
-{"feature_directory": "specs/1726-app-via-orchestrator"}
+{
+  "feature_directory": "specs/1732-client-ws-api"
+}
