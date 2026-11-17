@@ -196,11 +196,13 @@ mod key_scan {
 
     fn every_suite_case_then_every_method<B: Scanned>() {
         macro_rules! scan_after {
-            ($($case:ident),+ $(,)?) => {$(
+            // Each case's backend drops at the end of its block: kept to the end of the test, every
+            // PostgreSQL backend holds its pool's connections and the server runs out (#2035).
+            ($($case:ident),+ $(,)?) => {$({
                 let Some(mut backend) = B::make() else { return };
                 suite::$case(&mut backend);
                 assert_clean(&backend, stringify!($case));
-            )+};
+            })+};
         }
         scan_after!(
             upsert_inserts_then_updates,
