@@ -18,10 +18,12 @@ use micold_core::endpoint::Endpoint;
 use micold_core::orchestrator::{BindScope, Registry, RegistryStore, Snapshot};
 
 pub mod client;
+pub mod config;
 pub mod db;
 pub mod hub;
 pub mod link;
 pub mod list;
+pub mod ops;
 pub mod query;
 mod save;
 
@@ -125,48 +127,65 @@ impl Shared {
     }
 }
 
-/// The orchestrator's own endpoint: beside the daemon's, under other names, so both can run.
-fn endpoint() -> io::Result<Endpoint> {
-    micold_core::endpoint::orchestrator_endpoint()
-}
-
-/// Run the orchestrator on the user's endpoint until the process is stopped, on the store the
-/// configuration names (FR-009): `--config <path>` after `orchestrator`, else
-/// `<data_dir>/daemon.toml` when it exists. With no `[database]` table that is the SQLite file
-/// under the data directory.
-pub async fn run() -> io::Result<()> {
-    let endpoint = endpoint()?;
-    let args: Vec<OsString> = std::env::args_os().skip(2).collect();
-    let (database, data_dir) = configured(&args)?;
-    let store = open_store(database, data_dir, SystemClock.wall_secs()).await?;
-    serve(endpoint, Arc::new(SystemClock), store).await
-}
-
-/// The `[database]` table and the data directory of the configuration file `args` name.
-fn configured(args: &[OsString]) -> io::Result<(Option<DatabaseConfig>, PathBuf)> {
-    let args = crate::config_load::parse_args(args)
-        .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
-    let default = micold_core::paths::data_dir().map(|dir| dir.join("daemon.toml"));
-    let path = args.config.or(default.filter(|path| path.is_file()));
-    let config = match path {
-        Some(path) => Some(
-            crate::config_load::load_file(&path)
-                .map_err(io::Error::other)?
-                .config,
-        ),
+/// Run the orchestrator where `config` says until the process is stopped, on the store
+/// `database` names (FR-009); with no `[database]` table that is the SQLite file under the data
+/// directory.
+pub async fn run(
+    config: config::OrchestratorConfig,
+    database: Option<DatabaseConfig>,
+) -> io::Result<()> {
+    let ops = match config.ops_addr {
+        Some(addr) => Some(Ops::bind(addr).await?),
         None => None,
     };
-    let data_dir = config
-        .as_ref()
-        .and_then(|config| micold_core::daemon_config::resolved_view(config).data_dir)
-        .or_else(micold_core::paths::data_dir)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "no data directory to keep the orchestrator registry in",
-            )
-        })?;
-    Ok((config.and_then(|config| config.database), data_dir))
+    let opened = open_store(database, config.data_dir, SystemClock.wall_secs());
+    run_ops_first(config.endpoint, ops, opened).await
+}
+
+/// Start the ops listener, then wait for `opened` and serve: a probe sees 200 on `/healthz` and
+/// 503 on `/readyz` (rather than a hang or a refusal) while the store opens.
+async fn run_ops_first(
+    endpoint: Endpoint,
+    ops: Option<Ops>,
+    opened: impl std::future::Future<Output = io::Result<Arc<dyn RegistryStore>>>,
+) -> io::Result<()> {
+    let running = ops.map(Ops::start);
+    let store = opened.await?;
+    serve(endpoint, Arc::new(SystemClock), store, running).await
+}
+
+/// The configuration file's `[database]` table and data directory: the file `--config` names,
+/// else `<data_dir>/daemon.toml` when it exists, else none.
+fn configured(file: Option<PathBuf>) -> io::Result<(Option<DatabaseConfig>, Option<PathBuf>)> {
+    let default = || micold_core::paths::data_dir().map(|dir| dir.join("daemon.toml"));
+    let path = file.or_else(|| default().filter(|path| path.is_file()));
+    let Some(path) = path else {
+        return Ok((None, None));
+    };
+    let config = crate::config_load::load_file(&path)
+        .map_err(io::Error::other)?
+        .config;
+    let data_dir = micold_core::daemon_config::resolved_view(&config).data_dir;
+    Ok((config.database, data_dir))
+}
+
+/// The defaults when neither a flag nor a variable gives a value: the configuration file's data
+/// directory before the user's.
+struct FileDefaults {
+    data_dir: Option<PathBuf>,
+}
+
+impl config::Defaults for FileDefaults {
+    fn data_dir(&self) -> io::Result<PathBuf> {
+        match &self.data_dir {
+            Some(dir) => Ok(dir.clone()),
+            None => config::SystemDefaults.data_dir(),
+        }
+    }
+
+    fn endpoint(&self) -> io::Result<Endpoint> {
+        config::SystemDefaults.endpoint()
+    }
 }
 
 /// Open the store for `database` and `data_dir` on a blocking thread, then import an earlier
@@ -199,8 +218,19 @@ pub async fn run_configured(
     run_with(socket, clock, store).await
 }
 
-/// The `orchestrator` argument's whole run: a runtime, then [`run`]. Returns only on an error.
-pub fn main() -> io::Result<()> {
+/// The `orchestrator` argument's whole run: `args` are the arguments after `orchestrator`
+/// (`--data-dir`, `--socket`, each also settable by environment, and `--config`). Settings, a
+/// runtime, then [`run`]. Returns only on an error.
+pub fn main(args: &[OsString]) -> io::Result<()> {
+    let args = config::OrchestratorArgs::parse(args)?;
+    let (database, file_data_dir) = configured(args.config.clone())?;
+    let config = config::OrchestratorConfig::resolve(
+        args,
+        &|name| std::env::var_os(name),
+        &FileDefaults {
+            data_dir: file_data_dir,
+        },
+    )?;
     // Stderr only: the orchestrator keeps no log file. `try_init` so a second call is harmless.
     let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -209,7 +239,7 @@ pub fn main() -> io::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(run())
+        .block_on(run(config, database))
 }
 
 /// Run the orchestrator on `socket` with `clock` and `store` (tests pass their own).
@@ -218,11 +248,42 @@ pub async fn run_with(
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
-    let endpoint = Endpoint {
-        lock_path: socket.with_extension("lock"),
-        socket_path: socket,
-    };
-    serve(endpoint, clock, store).await
+    serve(config::endpoint_at(socket), clock, store, None).await
+}
+
+/// The ops listener and the readiness it reports, served while the orchestrator runs.
+struct Ops {
+    listener: tokio::net::TcpListener,
+    readiness: Arc<ops::Readiness>,
+}
+
+impl Ops {
+    async fn bind(addr: std::net::SocketAddr) -> io::Result<Self> {
+        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("cannot bind the ops listener on {addr}: {e}"),
+            )
+        })?;
+        Ok(Self {
+            listener,
+            readiness: Arc::default(),
+        })
+    }
+
+    /// Serve the listener on its own task, until the returned guard is dropped.
+    fn start(self) -> RunningOps {
+        RunningOps {
+            readiness: Arc::clone(&self.readiness),
+            _task: AbortOnDrop(tokio::spawn(ops::serve_ops(self.listener, self.readiness))),
+        }
+    }
+}
+
+/// A served ops listener: the readiness to report, and the task, aborted on drop.
+struct RunningOps {
+    readiness: Arc<ops::Readiness>,
+    _task: AbortOnDrop<io::Result<()>>,
 }
 
 /// The registry `store` holds, restored, and the saving thread that keeps it: what every link
@@ -281,7 +342,11 @@ async fn serve(
     endpoint: Endpoint,
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
+    ops: Option<RunningOps>,
 ) -> io::Result<()> {
+    // Held until this future ends, so the ops listener closes with the orchestrator.
+    let readiness = ops.as_ref().map(|ops| Arc::clone(&ops.readiness));
+    let _ops = ops;
     // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
     // Declared before `links`, so dropped after them: when this future ends, the link tasks are
     // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
@@ -295,6 +360,9 @@ async fn serve(
     .map_err(io::Error::other)?
     .map_err(io::Error::other)?;
     let (_saving, shared) = started(clock, store, Registry::restore(loaded))?;
+    if let Some(readiness) = &readiness {
+        readiness.set_registry_loaded();
+    }
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {
@@ -307,6 +375,9 @@ async fn serve(
             ))
         }
     };
+    if let Some(readiness) = &readiness {
+        readiness.set_link_bound();
+    }
     let mut links = tokio::task::JoinSet::new();
     loop {
         while links.try_join_next().is_some() {}
@@ -326,6 +397,15 @@ async fn serve(
                 tracing::warn!(error = %e, "orchestrator connection ended with an error");
             }
         });
+    }
+}
+
+/// A task aborted when this is dropped.
+struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
 
@@ -485,5 +565,94 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].health, Health::Online);
         assert_eq!(listed[0].last_seen, 1_000);
+    }
+
+    /// A store whose load waits for the gate, or fails when the gate closes.
+    struct SlowLoad(Mutex<mpsc::Receiver<()>>);
+
+    impl RegistryStore for SlowLoad {
+        fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
+            match self.0.lock().unwrap().recv() {
+                Ok(()) => Ok(Vec::new()),
+                Err(_) => Err(StoreError::Unavailable {
+                    target: "db:5432".to_owned(),
+                    reason: "store unreachable".to_owned(),
+                }),
+            }
+        }
+
+        fn save(&self, _records: &[DaemonRecord]) -> Result<(), StoreError> {
+            Ok(())
+        }
+    }
+
+    async fn ops_on_loopback() -> (Ops, std::net::SocketAddr) {
+        let ops = Ops::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+        let addr = ops.listener.local_addr().unwrap();
+        (ops, addr)
+    }
+
+    /// FR-006: not ready while the store loads, ready once the link listener is bound.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn serve_is_ready_only_after_load_and_bind() {
+        let dir = tempfile::tempdir().unwrap();
+        let (open, gate) = mpsc::channel();
+        let store = Arc::new(SlowLoad(Mutex::new(gate)));
+        let (ops, addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let task = tokio::spawn(serve(
+            endpoint,
+            Arc::new(SystemClock),
+            store,
+            Some(ops.start()),
+        ));
+        assert!(ops::tests::get(addr, "/healthz")
+            .await
+            .starts_with("HTTP/1.1 200 "));
+        assert!(ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 503 "));
+        open.send(()).unwrap();
+        let started = Instant::now();
+        while !ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 200 ")
+        {
+            assert!(started.elapsed() < Duration::from_secs(10), "never ready");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        task.abort();
+    }
+
+    /// Review A r1: probes answer while the store is still opening.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn probes_answer_while_the_store_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ops, addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let never = std::future::pending::<io::Result<Arc<dyn RegistryStore>>>();
+        let task = tokio::spawn(run_ops_first(endpoint, Some(ops), never));
+        assert!(ops::tests::get(addr, "/healthz")
+            .await
+            .starts_with("HTTP/1.1 200 "));
+        assert!(ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 503 "));
+        task.abort();
+    }
+
+    /// US3-4: a store that cannot load ends `serve` with its error.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_failing_store_ends_serve_with_the_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let (open, gate) = mpsc::channel::<()>();
+        drop(open);
+        let store = Arc::new(SlowLoad(Mutex::new(gate)));
+        let (ops, _addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let error = serve(endpoint, Arc::new(SystemClock), store, Some(ops.start()))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("store unreachable"), "{error}");
     }
 }

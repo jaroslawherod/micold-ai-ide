@@ -51,6 +51,7 @@ fn an_unreachable_host_fails_the_start_naming_host_and_cause_not_the_password() 
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn a_url_file_opens_postgres_with_its_whitespace_trimmed() {
     let Some(database_on_server) = PostgresDatabase::create() else {
         return;
@@ -70,6 +71,7 @@ fn a_url_file_opens_postgres_with_its_whitespace_trimmed() {
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn a_database_lost_after_start_fails_calls_and_the_next_call_after_it_returns_succeeds() {
     // Created and dropped outside the runtime: both run their own.
     let Some(database_on_server) = PostgresDatabase::create() else {
@@ -171,8 +173,7 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
     }
 
     // With the save thread stuck, another daemon links, is pinged and its answer is taken, well
-    // inside the 9 s liveness deadline.
-    let started = std::time::Instant::now();
+    // inside the 9 s liveness deadline on the test clock.
     let mut b = FakeDaemon::link(&orchestrator, &announcement("b")).await;
     let before = orchestrator.clock.wall();
     orchestrator.clock.advance(PING_INTERVAL);
@@ -184,11 +185,8 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
         b["health"] == "online" && b["last_seen"].as_u64() > Some(before)
     })
     .await;
-    assert!(
-        started.elapsed() < Duration::from_secs(9),
-        "{:?}",
-        started.elapsed()
-    );
+    let waited = orchestrator.clock.wall() - before;
+    assert!(waited < 9, "answered {waited} s after the ping went out");
     store.release();
 }
 
@@ -196,6 +194,7 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
 /// every connection; a daemon still links, and the failed save is reported on stderr as a change
 /// that could not be saved, without the password.
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn a_save_lost_with_the_database_is_reported_on_stderr_without_the_password() {
     // Created and dropped outside the runtime: both run their own.
     let Some(database_on_server) = PostgresDatabase::create() else {
@@ -207,8 +206,6 @@ fn a_save_lost_with_the_database_is_reported_on_stderr_without_the_password() {
 }
 
 async fn save_lost_on_stderr(database_on_server: &PostgresDatabase) {
-    use std::io::BufRead as _;
-
     let (_, upstream) = through_port(&database_on_server.url, 0);
     let proxy = FlakyProxy::start(upstream);
     let (url, _) = through_port(&database_on_server.url, proxy.port);
@@ -240,6 +237,23 @@ async fn save_lost_on_stderr(database_on_server: &PostgresDatabase) {
         .unwrap();
     let stderr = child.stderr.take().unwrap();
     let _child = KillOnDrop(child);
+    let logged = stderr_lines(stderr);
+    let socket = dir.path().join("run/micold/orchestrator.sock");
+    let orchestrator = Orchestrator::external(Arc::clone(&dir), socket).await;
+
+    proxy.drop_all();
+    let _link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
+    record_when(&orchestrator, "box", |r| r["health"] == "online").await;
+
+    let reported = stderr_until(&logged, "could not be saved");
+    for line in &reported {
+        assert!(!line.contains(&password), "{line}");
+    }
+}
+
+/// The lines a child writes to `stderr`, read on a thread of their own.
+pub(crate) fn stderr_lines(stderr: std::process::ChildStderr) -> std::sync::mpsc::Receiver<String> {
+    use std::io::BufRead as _;
     let (lines, logged) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         for line in std::io::BufReader::new(stderr)
@@ -249,31 +263,30 @@ async fn save_lost_on_stderr(database_on_server: &PostgresDatabase) {
             let _ = lines.send(line);
         }
     });
-    let socket = dir.path().join("run/micold/orchestrator.sock");
-    let orchestrator = Orchestrator::external(Arc::clone(&dir), socket).await;
+    logged
+}
 
-    proxy.drop_all();
-    let _link = FakeDaemon::link(&orchestrator, &announcement("box")).await;
-    record_when(&orchestrator, "box", |r| r["health"] == "online").await;
-
+/// The lines read from `logged` up to and including the first that holds `needle`; panics with
+/// the lines seen when none does within [`crate::support::WITHIN`].
+pub(crate) fn stderr_until(
+    logged: &std::sync::mpsc::Receiver<String>,
+    needle: &str,
+) -> Vec<String> {
     let mut seen = Vec::new();
-    let reported = loop {
+    loop {
         let line = logged
             .recv_timeout(crate::support::WITHIN)
-            .unwrap_or_else(|_| panic!("no save failure on stderr: {seen:?}"));
-        let found = line.contains("could not be saved");
+            .unwrap_or_else(|_| panic!("no `{needle}` on stderr: {seen:?}"));
+        let found = line.contains(needle);
         seen.push(line);
         if found {
-            break seen;
+            return seen;
         }
-    };
-    for line in &reported {
-        assert!(!line.contains(&password), "{line}");
     }
 }
 
 /// A child process killed when the test ends, pass or fail.
-struct KillOnDrop(std::process::Child);
+pub(crate) struct KillOnDrop(pub(crate) std::process::Child);
 
 impl Drop for KillOnDrop {
     fn drop(&mut self) {

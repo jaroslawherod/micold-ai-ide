@@ -46,4 +46,9 @@ module.exports = tseslint.config(
     languageOptions: { globals: { ...globals.node, ...globals.jest } },
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
+  {
+    // Playwright specs run in Node; their page callbacks run in the browser.
+    files: ["e2e/**/*.{ts,mjs}"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
 );

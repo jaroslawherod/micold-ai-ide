@@ -82,6 +82,15 @@ if [ "$split" = 1 ]; then
 	done
 fi
 
+# The chart step (#1981, FR-005): only where both tools exist, as CI's `kube-chart` job has them.
+if command -v helm >/dev/null 2>&1 && command -v kubeconform >/dev/null 2>&1; then
+	# The conformance test runs in the loop below, so not twice.
+	echo "== scripts/chart-check.sh"
+	CHART_CHECK_CONFORMANCE=0 scripts/chart-check.sh
+else
+	echo "== scripts/chart-check.sh: skipped, helm or kubeconform is not on PATH (scripts/install-kube-tools.sh)"
+fi
+
 for t in scripts/tests/*.test.sh; do
 	echo "== $t"
 	"$t"

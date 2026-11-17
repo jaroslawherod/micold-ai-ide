@@ -26,13 +26,18 @@ fn main() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     match micold_daemon::orchestrator::parse_mode(&args) {
         micold_daemon::orchestrator::Mode::Orchestrator => {
-            if let Err(e) = micold_daemon::orchestrator::main() {
+            if let Err(e) = micold_daemon::orchestrator::main(&args[1..]) {
                 eprintln!("micold-daemon: orchestrator: {e}");
                 std::process::exit(1);
             }
             return;
         }
         micold_daemon::orchestrator::Mode::Daemon => {}
+    }
+    // `e2e-link idle | register | list`: the kind e2e suites' test daemon (#1981). Same reasons as
+    // `orchestrator`: it hosts no session, so it takes no singleton, settings or log set-up.
+    if args.first().map(|a| a.as_os_str()) == Some(std::ffi::OsStr::new("e2e-link")) {
+        std::process::exit(micold_daemon::e2e_link::main(&args[1..]));
     }
     // `status-line <relay-file>`: Claude Code's status-line command for a session the app started
     // (feature 490, contract S2). Before the runtime, the log and the singleton: the relay is a

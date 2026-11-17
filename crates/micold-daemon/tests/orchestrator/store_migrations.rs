@@ -6,8 +6,12 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::sync::Arc;
 
-use micold_core::orchestrator::{RegistryStore as _, SchemaError, StoreError};
-use micold_daemon::orchestrator::db::{SqlRegistryStore, StoreHandle};
+use micold_core::orchestrator::{
+    AuthStore as _, RegistryStore as _, Role, SchemaError, StoreError, TenantId,
+};
+use micold_daemon::orchestrator::db::{SqlAuthStore, SqlRegistryStore, StoreHandle};
+
+use super::store_suite::new_user;
 
 fn scalar_text(handle: &StoreHandle, sql: &'static str) -> String {
     handle
@@ -63,7 +67,8 @@ fn a_second_open_changes_nothing() {
         handle
             .block_on(async {
                 sqlx::query(
-                    "INSERT INTO daemons VALUES ('default','a','host','a',81,'[]','online',1,'unowned')",
+                    "INSERT INTO daemons (tenant_id, id, kind, name, protocol_version, capabilities, health, last_seen, owner_user_id) \
+                     VALUES ('default','a','host','a',81,'[]','online',1,'unowned')",
                 )
                 .execute(handle.pool())
                 .await
@@ -183,7 +188,7 @@ fn a_file_that_is_not_a_database_is_unavailable_and_names_the_file() {
     match StoreHandle::open_sqlite(dir.path()) {
         Err(StoreError::Unavailable { target, reason }) => {
             assert!(target.ends_with("orchestrator.db"), "target: {target}");
-            assert!(!reason.is_empty());
+            assert!(reason.contains("file is not a database"), "{reason}");
             assert!(!reason.contains("sqlite://"), "no URL: {reason}");
         }
         other => panic!("got {:?}", other.map(|_| ())),
@@ -212,18 +217,19 @@ fn a_data_dir_that_is_a_regular_file_is_unavailable() {
 }
 
 #[test]
-fn map_error_refuses_a_violated_constraint_and_reports_anything_else_unavailable() {
+fn a_violated_constraint_is_refused_and_a_lost_table_is_unavailable_naming_the_target() {
     let dir = tempfile::tempdir().unwrap();
     let handle = StoreHandle::open_sqlite(dir.path()).unwrap();
-    let row = "INSERT INTO daemons VALUES ('default','a','host','a',81,'[]','online',1,'unowned')";
-    exec(&handle, row).unwrap();
-    let duplicate = exec(&handle, row).unwrap_err();
+    let auth = SqlAuthStore::new(Arc::clone(&handle), TenantId::default());
+    let user = new_user("u1", Role::Viewer);
+    auth.create_user(&user).unwrap();
     assert!(matches!(
-        handle.map_error(&duplicate),
-        StoreError::Refused { .. }
+        auth.create_user(&user),
+        Err(StoreError::Refused { .. })
     ));
-    match handle.map_error(&sqlx::Error::PoolTimedOut) {
-        StoreError::Unavailable { target, .. } => assert_eq!(target, handle.target()),
+    exec(&handle, "DROP TABLE users").unwrap();
+    match auth.users() {
+        Err(StoreError::Unavailable { target, .. }) => assert_eq!(target, handle.target()),
         other => panic!("got {other:?}"),
     }
 }
@@ -235,7 +241,8 @@ fn a_registry_over_a_dropped_table_is_unavailable_and_a_bad_row_is_corrupt() {
     let registry = SqlRegistryStore::new(Arc::clone(&handle));
     exec(
         &handle,
-        "INSERT INTO daemons VALUES ('default','a','no-such-kind','a',81,'[]','online',1,'unowned')",
+        "INSERT INTO daemons (tenant_id, id, kind, name, protocol_version, capabilities, health, last_seen, owner_user_id) \
+         VALUES ('default','a','no-such-kind','a',81,'[]','online',1,'unowned')",
     )
     .unwrap();
     match registry.load() {
@@ -289,7 +296,10 @@ fn an_unreachable_postgres_server_is_unavailable_naming_host_and_port_not_the_pa
                 unreachable!()
             };
             assert_eq!(target, "127.0.0.1:1");
-            assert!(!reason.is_empty());
+            assert_eq!(
+                reason,
+                "pool timed out while waiting for an open connection"
+            );
             let text = error.to_string();
             assert!(text.contains("127.0.0.1:1"), "{text}");
             assert!(!text.contains("s3cr3t-pw"), "password leaked: {text}");
@@ -314,14 +324,17 @@ fn a_missing_ca_file_is_unavailable() {
     let missing = Path::new("/nonexistent/micold-ca.pem");
     let outcome =
         StoreHandle::open_postgres("postgres://micold:pw@127.0.0.1:1/db", Some(missing), 2);
-    assert!(
-        matches!(outcome, Err(StoreError::Unavailable { .. })),
-        "got {:?}",
-        outcome.map(|_| ())
-    );
+    match outcome {
+        Err(StoreError::Unavailable { reason, .. }) => assert_eq!(
+            reason,
+            "database.ca_file /nonexistent/micold-ca.pem is not a file"
+        ),
+        other => panic!("got {:?}", other.map(|_| ())),
+    }
 }
 
 #[test]
+#[cfg_attr(not(micold_postgres), ignore = "needs MICOLD_TEST_POSTGRES_URL")]
 fn opening_postgres_applies_the_v1_schema_once() {
     let Some(db) = super::store_support::PostgresDatabase::create() else {
         return;
@@ -336,10 +349,13 @@ fn opening_postgres_applies_the_v1_schema_once() {
         scalar_text(&handle, "SELECT description FROM _sqlx_migrations"),
         "orchestrator schema"
     );
-    assert_eq!(
-        handle.target().rsplit_once(':').map(|(_, p)| p.is_empty()),
-        Some(false)
-    );
+    // The target is the server's `host:port`, as the test URL names it.
+    let authority = db
+        .url
+        .split_once('@')
+        .and_then(|(_, rest)| rest.split('/').next())
+        .unwrap();
+    assert_eq!(handle.target(), authority);
 }
 
 #[test]
@@ -664,7 +680,7 @@ fn a_migration_that_fails_half_way_leaves_the_previous_version() {
         match target.run_migrations(broken.path()) {
             Err(StoreError::Schema(SchemaError::Failed { version, reason })) => {
                 assert_eq!(version, 2, "{dialect}");
-                assert!(!reason.is_empty());
+                assert!(reason.contains("no_such_table"), "{dialect}: {reason}");
             }
             other => panic!("{dialect}: got {other:?}"),
         }

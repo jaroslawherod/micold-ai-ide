@@ -288,3 +288,30 @@ If the connection to the session service drops, the [status bar](./appearance-th
 app reconnects on its own. The cards keep
 showing the last session states they knew, which may be out of date, and they make no claim about
 pull requests until the connection is back.
+
+## In the web client
+
+The web client (in a browser, after you sign in) opens on its home page: a **sidebar** and the
+**Overview**, side by side when the window is at least 600 pixels wide.
+
+- **Sidebar.** Every daemon the orchestrator knows is listed with its status (**Online**,
+  **Offline** or **Needs update**), and under it each project, its worktrees and their sessions.
+  Rows keep the orchestrator's order: when a session changes state its row shows the new state,
+  and no row moves. Terminal sessions are listed like the others and marked **Terminal**. Long
+  names are cut to one line; a screen reader reads the full name. Each worktree row can be reached
+  with Tab and shows a focus ring.
+- **Overview.** One card per worktree, with its project, branch and every session's state. Cards
+  are at least 280 pixels wide, 16 pixels apart and at most five to a row, the same rule as the
+  desktop app's grid. A state change updates the card in place.
+- **Narrow windows.** Below 600 pixels the page becomes one column: the sidebar first, then the
+  Overview with one card per row. Nothing scrolls sideways, also on very narrow windows and at
+  200 percent zoom.
+- **States.** Each state has its own symbol and name, so it never depends on colour alone:
+  ◐ **Working**, ◆ **Waiting for you**, ○ **Idle**, ✕ **Error**, ■ **Stopped**. Working pulses
+  gently; with *reduce motion* turned on in your system settings it does not.
+- **Offline daemons.** When a daemon goes offline, or the connection to the orchestrator drops,
+  its rows stay with their last known state, dimmed and marked **Last known**, and the sidebar
+  says when that data was last updated (for example "updated 5 minutes ago").
+
+All text in the web client follows the language you pick, including the states, the time since
+the last update and the session counts.

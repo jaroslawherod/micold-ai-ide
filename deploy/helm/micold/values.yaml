@@ -1,0 +1,65 @@
+# Values for the micold chart. Contract: specs/1981-kube-e2e/contracts/chart-values.md. The names
+# under `image`, `state` and `database` are the ones specs/1722-rn-client-k8s/plan.md fixes, so
+# #1740 extends this chart; scripts/tests/chart-conformance.test.sh fails when one drifts.
+
+image:
+  # The orchestrator image: the `micold-daemon` binary on distroless cc, UID 65532
+  # (Dockerfile.orchestrator).
+  repository: ghcr.io/jaroslawherod/micold-orchestrator
+  # Empty means the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+state:
+  # Where the orchestrator keeps its registry. Only `file` is available: a JSON registry under the
+  # data directory. `sqlite` (#1948) and `postgres` (#1740) are reserved names and fail to render.
+  mode: file
+  persistence:
+    # true: a PersistentVolumeClaim at the data directory, so the registry survives a restart.
+    # false: an emptyDir, which loses it with the pod.
+    enabled: true
+    size: 1Gi
+    # Empty uses the cluster's default StorageClass.
+    storageClass: ""
+
+database:
+  # Reserved for #1948 and #1740: the Secret holding the database URL. Unused by `state.mode=file`.
+  existingSecret: ""
+
+ops:
+  # The orchestrator's ops listener: `--ops-addr=0.0.0.0:<port>`, a Service on that port and the
+  # startup, readiness (/readyz) and liveness (/healthz) probes. false renders none of them.
+  enabled: true
+  port: 9090
+
+web:
+  # The web UI. Off by default; when off the chart renders no web resource at all.
+  enabled: false
+  image:
+    repository: ghcr.io/jaroslawherod/micold-web
+    tag: ""
+    pullPolicy: IfNotPresent
+  # The port the web container listens on, and the Service's port in front of it.
+  containerPort: 8080
+  service:
+    port: 80
+
+# Requests and limits for the orchestrator container.
+resources: {}
+
+# Test support (#1981/#1985); set only by ci/*.yaml and the e2e harness, never in production.
+testDaemon:
+  # true: a second container in the orchestrator pod, the same image running
+  # `micold-daemon e2e-link idle`, sharing /run/micold so the suites can `kubectl exec` link
+  # verbs against the orchestrator's socket (ci/e2e.yaml).
+  enabled: false
+
+testing:
+  corruptRegistry:
+    # true: a digest-pinned busybox init container writes an invalid orchestrator/registry.json
+    # into the data volume, so the pod must refuse to start (ci/corrupt-registry.yaml).
+    enabled: false
+  # One deliberately wrong manifest for the harness's seeded-breakage matrix (SC-003), set with
+  # `--set testing.breakage=<v>`: none | command | user | volume | dataDir | opsPort.
+  breakage: none
+

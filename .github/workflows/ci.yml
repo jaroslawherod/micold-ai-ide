@@ -54,6 +54,8 @@ jobs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       packaging: ${{ steps.verdict.outputs.packaging }}
       daemon_runtime: ${{ steps.verdict.outputs.daemon_runtime }}
+      # #1981: a path declared `micold-kube` (chart, orchestrator image, kind harness) changed.
+      kube_paths: ${{ steps.verdict.outputs.kube_paths }}
       # #1735: the change touches the TypeScript web client or its pnpm workspace files.
       client: ${{ steps.verdict.outputs.client }}
       # #956: the `full-ci` label as a boolean.
@@ -124,6 +126,7 @@ jobs:
           DOCS_ONLY: ${{ steps.verdict.outputs.docs_only }}
           PACKAGING: ${{ steps.verdict.outputs.packaging }}
           DAEMON_RUNTIME: ${{ steps.verdict.outputs.daemon_runtime }}
+          KUBE_PATHS: ${{ steps.verdict.outputs.kube_paths }}
           CLIENT: ${{ steps.verdict.outputs.client }}
           REASON: ${{ steps.verdict.outputs.reason }}
         run: |
@@ -143,6 +146,7 @@ jobs:
             echo
             echo "Daemon-runtime paths touched: \`${DAEMON_RUNTIME:-unavailable}\`"
             echo
+            echo "Kube paths touched: \`${KUBE_PATHS:-unavailable}\`"
             echo "Web client paths touched: \`${CLIENT:-unavailable}\`"
             if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
               echo
@@ -191,8 +195,8 @@ jobs:
   # #1735: the TypeScript web client (apps/client, packages/protocol): lint, typecheck, Jest with
   # coverage, diff coverage of the changed lines (scripts/guardrails-scope.conf `[web]`), and the
   # static web export. Runs for a change that touches the `micold-client` set (`client` verdict of
-  # `classify`; the verdict errs towards running) on a pull request, and on every main and nightly run. The Playwright smoke
-  # test and the bundle check join it with M4 and M2. Node and pnpm versions come from mise.toml;
+  # `classify`; the verdict errs towards running) on a pull request, and on every main and nightly run. The bundle check joined it
+  # with M2; the Playwright specs run in `client-e2e` below. Node and pnpm versions come from mise.toml;
   # scripts/tests/client-pins.test.sh keeps this job's pins equal to them.
   client:
     name: web client
@@ -224,28 +228,25 @@ jobs:
           pnpm --filter @micold/protocol typecheck
       - name: Jest with coverage
         run: pnpm --filter @micold/client test --coverage
-      # Jest writes lcov paths relative to the package (`../../packages/protocol/...` for a sibling); normalise them to repository paths for diff-coverage.
+      # Jest runs from the repository root (apps/client/package.json), so its lcov paths are repository paths.
       - name: Check the changed lines
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.base_ref }}
         run: |
           git fetch --no-tags origin "$BASE:refs/remotes/origin/$BASE"
-          python3 - <<'PY'
-          import os
-          p = "apps/client/coverage/lcov.info"
-          out = []
-          for line in open(p):
-              if line.startswith("SF:"):
-                  f = line[3:].rstrip("\n")
-                  if not os.path.isabs(f):
-                      line = "SF:" + os.path.normpath(os.path.join("apps/client", f)) + "\n"
-              out.append(line)
-          open(p, "w").writelines(out)
-          PY
           scripts/diff-coverage.py --lang web --lcov apps/client/coverage/lcov.info --base "origin/$BASE" --summary client-diff-coverage.md
       - name: Web export
         run: pnpm --filter @micold/client web:export
+      - name: Bundle check (no mock in the production export)
+        run: node scripts/client/bundle-check.mjs apps/client/dist
+      # The check must see the mock where it is: a mock export has to fail it.
+      - name: Bundle check refuses a mock export
+        run: |
+          pnpm --filter @micold/client web:export:mock
+          status=0
+          node scripts/client/bundle-check.mjs apps/client/dist-mock || status=$?
+          test "$status" = 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
@@ -253,6 +254,51 @@ jobs:
           path: |
             apps/client/coverage/lcov.info
             client-diff-coverage.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # #1735 (FR-018, T055): the Playwright smoke, pseudo-locale and screenshot specs against the mock
+  # export, in Chromium, Firefox and WebKit (screenshots in Chromium only). A job of its own so the
+  # browser download does not count against the `client` job's ten minutes (SC-005); the browsers
+  # are cached under ~/.cache/ms-playwright, keyed on the lockfile, which pins Playwright's version.
+  # `--with-deps` still installs the system packages each run (apt, not cacheable here).
+  client-e2e:
+    name: web client e2e
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.client == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Playwright browsers
+        run: pnpm --filter @micold/client exec playwright install --with-deps chromium firefox webkit
+      - name: Mock web export
+        run: pnpm --filter @micold/client web:export:mock
+      - name: Playwright
+        run: pnpm --filter @micold/client e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: client-e2e
+          path: |
+            apps/client/e2e/screenshots-out/
+            apps/client/playwright-report/
+            apps/client/test-results/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -299,9 +345,10 @@ jobs:
         # #959: the Ubuntu leg is dropped on a push its pull request proved (its full test ran there).
         os: ${{ fromJSON(needs.classify.outputs.test_os || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
-    # #1948: the orchestrator's shared store suite runs on PostgreSQL too. The cases skip when
-    # MICOLD_TEST_POSTGRES_URL is unset; MICOLD_REQUIRE_POSTGRES=1 turns that skip into a failure
-    # here, so a missing service cannot pass silently. Each case creates and drops its own database.
+    # #1948: the orchestrator's shared store suite runs on PostgreSQL too. The cases are ignored
+    # when MICOLD_TEST_POSTGRES_URL is unset at build time (micold-daemon's build.rs); set here,
+    # they run, and MICOLD_REQUIRE_POSTGRES=1 fails one that finds no server. Each case creates and
+    # drops its own database.
     env:
       POSTGRES_USER: micold
       POSTGRES_PASSWORD: micold-ci
@@ -779,7 +826,7 @@ jobs:
   # pointed at the suite) loaded into it, and the `kube_real_*` tests of `micold-client`. The
   # client-side rules (kubeconfig candidates, separators, exec-plugin resolution) are pure core tests
   # that the `test` job runs.
-  # `kind` and `kubectl` are pinned by version and sha256, and the node image is one stable
+  # `kind` and `kubectl` are pinned by version and sha256 (scripts/install-kube-tools.sh), and the node image is one stable
   # Kubernetes version, so the job is the same on every run. It runs on every non-documentation
   # change (the docs-only skip of `ssh-remote`, without its path gate).
   kube-cluster:
@@ -793,25 +840,93 @@ jobs:
       && needs.classify.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      KIND_VERSION: v0.30.0
-      KIND_SHA256: 517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889
-      KUBECTL_VERSION: v1.34.0
-      KUBECTL_SHA256: cfda68cba5848bc3b6c6135ae2f20ba2c78de20059f68789c090166d6abc3e2c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Install kind and kubectl at pinned versions
+        # The pins live in scripts/install-kube-tools.sh (#1984, FR-009), shared with kube-e2e.
         run: |
           set -euo pipefail
-          curl -sSLfo kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
-          echo "${KIND_SHA256}  kind" | sha256sum --check
-          curl -sSLfo kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check
-          sudo install -m 0755 kind kubectl /usr/local/bin/
+          scripts/install-kube-tools.sh kind kubectl
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Run the real-cluster tests
         run: scripts/test-kube.sh
+
+  kube-chart:
+    name: helm chart and orchestrator image (linux)
+    # #1981 (FR-005): the chart's lint, schema and conformance checks, and the orchestrator image's
+    # build and smoke run, with no cluster. Pull requests run it only when a path declared
+    # `micold-kube` changed (or the `full-ci` label forces `kube_paths=true`); main pushes and the
+    # nightly schedule run it unless (#959) the push's pull request already proved it: proven and
+    # in the kube set means the PR ran this job. A skipped job satisfies `ci-complete`.
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (needs.classify.outputs.pr_proven != 'true' || needs.classify.outputs.kube_paths != 'true')
+      && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm and kubeconform at pinned versions
+        run: |
+          set -euo pipefail
+          scripts/install-kube-tools.sh helm kubeconform
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The pinned-tools script's own cases
+        run: scripts/tests/install-kube-tools.test.sh
+      - name: The chart check's own cases
+        run: scripts/tests/chart-check.test.sh
+      - name: Lint, validate and conformance-test the chart
+        # What `mise run chart-check` runs.
+        run: scripts/chart-check.sh
+      - name: Build the orchestrator image and run it as UID 65532
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: scripts/chart-check.sh --image
+
+  kube-e2e:
+    name: orchestrator end to end on kind (linux)
+    # #1981/#1984 (FR-008, FR-009, FR-014, SC-002): the orchestrator image built, loaded into a
+    # throwaway kind cluster, the chart installed with ci/e2e.yaml and the `micold-e2e` suites run
+    # against it by scripts/e2e-kind.sh, which deletes the cluster at exit. Gated like kube-chart.
+    # The image build uses the Dockerfile's BuildKit cache mounts only: a cold build is inside the
+    # budget, so no cross-run layer cache yet (revisit from measured times, SC-002).
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (needs.classify.outputs.pr_proven != 'true' || needs.classify.outputs.kube_paths != 'true')
+      && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install kind, kubectl and helm at pinned versions
+        run: |
+          set -euo pipefail
+          scripts/install-kube-tools.sh kind kubectl helm
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The harness's own cases
+        run: scripts/tests/e2e-kind.test.sh
+      - name: Run the kind end-to-end suites
+        env:
+          DOCKER_BUILDKIT: "1"
+          MICOLD_NO_BUILD_LOCK: "1"
+        run: scripts/e2e-kind.sh
+      - name: Upload the failure logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kube-e2e-logs
+          path: target/e2e-logs
+          if-no-files-found: ignore
 
   assertions:
     name: assertion freeze
@@ -959,7 +1074,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, client, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -977,6 +1092,7 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
           CLIENT: ${{ needs.client.result }}
+          CLIENTE2E: ${{ needs.client-e2e.result }}
           TEST: ${{ needs.test.result }}
           # A red `linux-daemons` skips `test` (it needs its artifact), and a skip reads as
           # satisfied, so it is gated by name too.
@@ -985,6 +1101,8 @@ jobs:
           CONTAINERDAEMON: ${{ needs.container-daemon.result }}
           SSHREMOTE: ${{ needs.ssh-remote.result }}
           KUBECLUSTER: ${{ needs.kube-cluster.result }}
+          KUBECHART: ${{ needs.kube-chart.result }}
+          KUBEE2E: ${{ needs.kube-e2e.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
           # #1931: the guardrails; whether each blocks is the workflow-level GUARDRAIL_* switch.
@@ -1007,12 +1125,15 @@ jobs:
           check classify "$CLASSIFY"
           check lint "$LINT"
           check client "$CLIENT"
+          check client-e2e "$CLIENTE2E"
           check test "$TEST"
           check linux-daemons "$LINUXDAEMONS"
           check sandbox "$SANDBOX"
           check container-daemon "$CONTAINERDAEMON"
           check ssh-remote "$SSHREMOTE"
           check kube-cluster "$KUBECLUSTER"
+          check kube-chart "$KUBECHART"
+          check kube-e2e "$KUBEE2E"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           guardrail diff-coverage "$DIFFCOVERAGE" "$GUARDRAIL_COVERAGE_BLOCK"
@@ -1025,12 +1146,15 @@ jobs:
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
             echo "| client | \`$CLIENT\` | yes |"
+            echo "| client-e2e | \`$CLIENTE2E\` | yes |"
             echo "| test | \`$TEST\` | yes |"
             echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| container-daemon | \`$CONTAINERDAEMON\` | yes |"
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
             echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
+            echo "| kube-chart | \`$KUBECHART\` | yes |"
+            echo "| kube-e2e | \`$KUBEE2E\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
             echo "| diff-coverage | \`$DIFFCOVERAGE\` | $GUARDRAIL_COVERAGE_BLOCK |"

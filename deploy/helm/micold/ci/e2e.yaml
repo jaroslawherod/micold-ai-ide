@@ -1,0 +1,10 @@
+# The values scripts/e2e-kind.sh installs on its kind cluster (#1981/#1984). The image is built
+# locally and `kind load`ed, so it is never pulled; the ops listener is on for the smoke suite.
+image:
+  tag: e2e
+  pullPolicy: Never
+ops:
+  enabled: true
+# The test daemon sidecar (FR-011): the suites exec `e2e-link` verbs into it.
+testDaemon:
+  enabled: true

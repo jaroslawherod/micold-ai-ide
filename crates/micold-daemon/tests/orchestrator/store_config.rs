@@ -126,7 +126,7 @@ async fn only_a_data_directory_starts_on_sqlite_and_keeps_the_registry_across_a_
     drop(link);
     // The save thread writes in the background: wait until the row is in the file.
     let started = std::time::Instant::now();
-    while !stored(&file) {
+    while stored(&file) == 0 {
         assert!(started.elapsed() < std::time::Duration::from_secs(10));
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
@@ -136,15 +136,16 @@ async fn only_a_data_directory_starts_on_sqlite_and_keeps_the_registry_across_a_
     assert_eq!(record["health"], "offline");
 }
 
-/// Whether the SQLite registry at `file` holds a row.
-fn stored(file: &Path) -> bool {
+/// The number of rows in the SQLite registry at `file`.
+fn stored(file: &Path) -> usize {
     let data_dir = file.parent().and_then(Path::parent).unwrap().to_path_buf();
     std::thread::spawn(move || {
         use micold_core::orchestrator::RegistryStore as _;
         let handle = micold_daemon::orchestrator::db::StoreHandle::open_sqlite(&data_dir).unwrap();
         micold_daemon::orchestrator::db::SqlRegistryStore::new(handle)
             .load()
-            .is_ok_and(|s| !s.is_empty())
+            .unwrap()
+            .len()
     })
     .join()
     .unwrap()
@@ -158,43 +159,106 @@ async fn the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one
     let json = dir.path().join("orchestrator").join("registry.json");
     std::fs::create_dir_all(json.parent().unwrap()).unwrap();
     std::fs::write(&json, "{}").unwrap();
-    let start = || {
-        micold_daemon::orchestrator::run_configured(
-            dir.path().join("orchestrator.sock"),
-            crate::support::TestClock::new(0)
-                as std::sync::Arc<dyn micold_daemon::orchestrator::Clock>,
-            None,
-            dir.path().to_path_buf(),
+    let error = start_fails(dir.path()).await;
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "orchestrator registry {} is unreadable: missing field `version` at line 1 column 2",
+            json.display()
         )
-    };
-    let error = tokio::time::timeout(std::time::Duration::from_secs(5), start())
-        .await
-        .expect("the start returns at once")
-        .unwrap_err();
-    assert!(
-        error.to_string().contains(&json.display().to_string()),
-        "{error}"
     );
     assert!(json.exists());
 
-    {
-        use micold_core::orchestrator::RegistryStore as _;
-        micold_core::orchestrator::store::JsonRegistryStore::in_data_dir(dir.path())
-            .save(&[micold_core::orchestrator::DaemonRecord::new(
-                micold_core::protocol::routing::WireDaemonId::new("seeded").unwrap(),
-                micold_core::daemon_config::Kind::Host,
-                "seeded",
-                1,
-                Default::default(),
-                Some("acme"),
-            )])
-            .unwrap();
-    }
-    let running = tokio::time::timeout(std::time::Duration::from_secs(2), start()).await;
-    assert!(running.is_err(), "the start returned: {running:?}");
+    seed_json(dir.path(), "seeded");
+    starts(dir.path()).await;
     assert!(!json.exists() && json.with_file_name("registry.json.imported").exists());
     // The started orchestrator's store serves the imported record.
-    assert!(stored(
-        &dir.path().join("orchestrator").join("orchestrator.db")
-    ));
+    assert_eq!(stored(&database_file(dir.path())), 1);
+}
+
+/// US5.2: a second start after an import imports nothing: the row count stays and
+/// `registry.json.imported` is left as it is.
+#[tokio::test]
+async fn a_second_start_imports_nothing_and_leaves_the_imported_file() {
+    let dir = tempfile::tempdir().unwrap();
+    seed_json(dir.path(), "seeded");
+    starts(dir.path()).await;
+    let imported = dir
+        .path()
+        .join("orchestrator")
+        .join("registry.json.imported");
+    let before = std::fs::read(&imported).unwrap();
+
+    starts(dir.path()).await;
+
+    assert_eq!(std::fs::read(&imported).unwrap(), before);
+    assert!(!imported.with_file_name("registry.json").exists());
+    assert_eq!(stored(&database_file(dir.path())), 1);
+}
+
+/// US5.4: an un-imported `registry.json` beside a database that already has rows fails the
+/// start naming the file and the row count, and the file is kept.
+#[tokio::test]
+async fn an_unimported_file_beside_rows_fails_the_start_naming_file_and_row_count() {
+    let dir = tempfile::tempdir().unwrap();
+    seed_json(dir.path(), "seeded");
+    starts(dir.path()).await;
+    seed_json(dir.path(), "later");
+    let json = dir.path().join("orchestrator").join("registry.json");
+
+    let error = start_fails(dir.path()).await.to_string();
+
+    assert!(
+        error.contains(&format!(
+            "cannot import {}: the database registry already has 1 row(s)",
+            json.display()
+        )),
+        "{error}"
+    );
+    assert!(json.exists());
+    assert_eq!(stored(&database_file(dir.path())), 1);
+}
+
+fn database_file(dir: &Path) -> std::path::PathBuf {
+    dir.join("orchestrator").join("orchestrator.db")
+}
+
+/// `run_configured` on `dir` with no `[database]` table (local mode).
+async fn start(dir: &Path) -> std::io::Result<()> {
+    micold_daemon::orchestrator::run_configured(
+        dir.join("orchestrator.sock"),
+        crate::support::TestClock::new(0) as std::sync::Arc<dyn micold_daemon::orchestrator::Clock>,
+        None,
+        dir.to_path_buf(),
+    )
+    .await
+}
+
+/// The start's error; it must return at once.
+async fn start_fails(dir: &Path) -> std::io::Error {
+    tokio::time::timeout(std::time::Duration::from_secs(5), start(dir))
+        .await
+        .expect("the start returns at once")
+        .unwrap_err()
+}
+
+/// A start that is still running after two seconds, then dropped.
+async fn starts(dir: &Path) {
+    let running = tokio::time::timeout(std::time::Duration::from_secs(2), start(dir)).await;
+    assert!(running.is_err(), "the start returned: {running:?}");
+}
+
+/// A `registry.json` holding one record, `id`, as an earlier version wrote it.
+fn seed_json(dir: &Path, id: &str) {
+    use micold_core::orchestrator::RegistryStore as _;
+    micold_core::orchestrator::store::JsonRegistryStore::in_data_dir(dir)
+        .save(&[micold_core::orchestrator::DaemonRecord::new(
+            micold_core::protocol::routing::WireDaemonId::new(id).unwrap(),
+            micold_core::daemon_config::Kind::Host,
+            id,
+            1,
+            Default::default(),
+            Some("acme"),
+        )])
+        .unwrap();
 }

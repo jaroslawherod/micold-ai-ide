@@ -1,0 +1,42 @@
+[package]
+name = "micold-e2e"
+description = "End-to-end suites for the orchestrator deployed on a kind cluster (#1981); run by scripts/e2e-kind.sh."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+# One cargo test target per suite directory under tests/ (FR-013): `--test ops` runs tests/ops.
+autotests = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[test]]
+name = "ops"
+path = "tests/ops/main.rs"
+
+[[test]]
+name = "link"
+path = "tests/link/main.rs"
+
+[[test]]
+name = "restart"
+path = "tests/restart/main.rs"
+
+[[test]]
+name = "refusal"
+path = "tests/refusal/main.rs"
+
+[[test]]
+name = "network"
+path = "tests/network/main.rs"
+
+[[test]]
+name = "ui"
+path = "tests/ui/main.rs"

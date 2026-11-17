@@ -432,3 +432,78 @@ guide tasks; M1 to M6 and M10 use the `docs-not-needed` label.
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite && scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_scan`; quickstart §A and §B
 - **Depends on**: M9
 - **Tier**: full
+
+---
+
+### M11 — TDD remediation (tests and evidence only)
+
+- **Tasks**: T061–T070
+- **Deliverable**: tdd/verification.md F1–F12 cleared: FR-008 scan restored, local-mode save-failure assertion back, PostgreSQL skips reported as ignored, red evidence for every TEST_AFTER row, start-level US5.2/US5.4 tests, shared fixtures, pinned assertions, split eager cases, baseline recorded. No production behaviour change.
+- **Satisfies**: verification.md F1–F12 (US1, US3, US4, US5)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator`; each task's own Verify
+- **Depends on**: M10
+- **Tier**: full
+
+## Phase 13: TDD remediation
+
+Source: [tdd/verification.md](tdd/verification.md), verdict **FAIL** at `40309293a`. The feature is
+not done until T061 to T064 (F1 to F4) are cleared. F1 and F2 are weakened existing tests; F3 and F4
+are the silent PostgreSQL skip and the missing red evidence. Fixes here are separate, explicit work:
+the audit changed no test or source.
+
+- [x] T061 [US4] F1 (HIGH): restore the FR-008 guard in `crates/micold-daemon/tests/orchestrator/no_outbound.rs:44-55,231-245`.
+  Blank `.connect_with(` and `AnyConnection::connect(` under `orchestrator/db/` only where the receiver
+  is a sqlx pool, options or connection type (not for any text match), or have `netns.rs` run the SQL
+  store and prove it dials only the configured database. Verify:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator no_outbound` passes, and the
+  same command fails when a `std::net::TcpStream::connect(` or a non-sqlx `.connect_with(` is added
+  to `db/mod.rs` (add it, observe, revert).
+- [x] T062 [US4] F2 (HIGH): put the removed assertion back for the default local mode. A failed save
+  in a process, or in `run_with` with captured stderr, must produce `a registry change could not be saved`
+  without PostgreSQL (`restart.rs:147`; `save.rs:91`). Verify:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator restart` passes with
+  `MICOLD_TEST_POSTGRES_URL` unset, and fails when the `eprintln!` at `save.rs:91` is deleted.
+- [x] T063 [US1] F3 (HIGH): make a skipped PostgreSQL case visible instead of `ok`. Replace the
+  `let Some(..) else { return }` exits (`store_suite.rs:246,583,676`, `store_migrations.rs:326`,
+  `store_scan.rs:43,199,226,233,248,271`, `store_slow.rs:55,75,201`, `store_import.rs:77`) with a
+  mechanism that reports them as skipped or ignored, and keep CI running them. Verify:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` without the URL reports the
+  PostgreSQL cases as ignored (0 `ok` with zero assertions), and with
+  `MICOLD_TEST_POSTGRES_URL=... MICOLD_REQUIRE_POSTGRES=1` it runs all of them (record the count from
+  the CI `test` job in `tdd/cycle-log.md`).
+- [x] T064 [US3] F4 (HIGH, process): add the missing M6 entry to `tdd/cycle-log.md` and give each
+  `TEST_AFTER` behavior in `verification.md` rows 4, 6, 7, 9, 11, 13, 15 to 19, 24 to 26 a recorded red
+  by deliberate mutant (one change, observe the named test fail, restore, re-run green). Priority
+  order: row 17 (add a `private_key` column to a migration; `sqlite_holds_no_key_material` must fail),
+  row 9 (drop an audit trigger; `a_raw_update_of_the_audit_log_fails` must fail), then rows 18, 19, 24
+  and 25 (config validation, start wiring, `reassign_unowned`, owner on insert), which the audit did
+  not sample. Verify: every row has a command and a failing test name in the log, and
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator && scripts/build-lock.sh
+  cargo test -p micold-core --lib orchestrator::` is green after each restore.
+- [x] T065 [US5] F5 (MED): add start-level tests in `crates/micold-daemon/tests/orchestrator/store_config.rs`
+  for US5.2 (a second `run_configured` start imports nothing and leaves `registry.json.imported`) and
+  US5.4 (an un-imported file beside a database that has rows fails the start naming the file and the
+  row count). Verify: `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator
+  store_config` passes, and fails when `import.rs:82` is mutated to `rows > 1000000`.
+- [x] T066 [P] F6 (MED): reuse the shared fixtures. `store_sql_errors.rs:14-68` and
+  `store_import.rs:18-34` import `T`, `uid`, `hash`, `new_user`, `refresh_token`, `invite`, `daemon`
+  and `keys` from `store_suite` and drop their copies. Verify:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_` passes and `mise run
+  duplication` does not grow.
+- [x] T067 [P] F7, F8 (MED): replace `!reason.is_empty()` and the `rsplit_once(':')` check
+  (`store_migrations.rs:186,292,340,667`) with the pinned value (the host and port, the failing
+  version), and restore the exact message in `store_config.rs:172-175`. Verify: the same targets pass,
+  and each fails when the named text or port is changed in `db/mod.rs`.
+- [x] T068 [P] F9 (MED): split the eager cases (`store_suite.rs:309,398,448,498`,
+  `store_sql_errors.rs:85,173`) so each rule has a test name (refresh-token reuse, expired token,
+  family revocation are separate cases). Verify:
+  `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator store_suite` passes with more
+  cases per backend, and mutant 7 of `verification.md` fails exactly one of them.
+- [x] T069 [P] F10, F11, F12 (LOW): in `store_slow.rs:175-191` assert on the test clock's ordering,
+  not wall time; make the M5 "older database" and chain cases run a two-migration `Migrator` so
+  ordering can fail (`store_migrations.rs`, M5 cases); stop calling `map_error` and positional `INSERT`
+  literals from tests (`store_migrations.rs:215-238`). Verify: the same targets pass, and swapping the
+  order of the two test migrations fails the older-database case.
+- [x] T070 Record a pre-feature baseline in `tdd/cycle-log.md` (the log's "Baseline" says no local run
+  before M1): run `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` at
+  `f5f8e812a~1` or note why it cannot be reproduced. Verify: the Baseline section holds a count.

@@ -36,6 +36,16 @@ export function chooseLocale(
 
 export type RelativeUnit = "second" | "minute" | "hour" | "day";
 
+/** The value and unit that read best for the time from `now` to `then` (negative: in the past). */
+export function relativeParts(then: number, now: number): { value: number; unit: RelativeUnit } {
+  const seconds = Math.round((then - now) / 1000);
+  const abs = Math.abs(seconds);
+  if (abs < 60) return { value: seconds, unit: "second" };
+  if (abs < 3600) return { value: Math.round(seconds / 60), unit: "minute" };
+  if (abs < 86_400) return { value: Math.round(seconds / 3600), unit: "hour" };
+  return { value: Math.round(seconds / 86_400), unit: "day" };
+}
+
 /** A relative time (`-2, "minute"`) in `locale`; plain English when `Intl.RelativeTimeFormat` is missing. */
 export function formatRelativeTime(locale: string, value: number, unit: RelativeUnit): string {
   try {

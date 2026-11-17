@@ -1,0 +1,17 @@
+{{- if .Values.ops.enabled }}
+{{- /* The orchestrator's ops listener (/healthz, /readyz); no /metrics yet (#1742). */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "micold.fullname" . }}-orchestrator
+  labels:
+    {{- include "micold.labels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+spec:
+  selector:
+    {{- include "micold.selectorLabels" (list . "orchestrator") | nindent 4 }}
+  ports:
+    - name: ops
+      port: {{ .Values.ops.port }}
+      targetPort: ops
+{{- end }}

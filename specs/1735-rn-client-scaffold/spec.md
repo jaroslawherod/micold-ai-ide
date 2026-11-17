@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft
+**Status**: Closed 2026-11-17 — shipped in PRs #2009, #2013, #2015, #2018, #2020
 
 **Input**: GitHub issue #1735 "feat: React Native (Expo) web client scaffold, Material 3 theme from the tokens, sign-in, sidebar and overview" (part of #1722, milestone M4a; covers FR-021R, FR-022, FR-034, FR-035, FR-037R of `specs/1722-rn-client-k8s/spec.md`). Added requirements from the coordinator: build against a **mocked** orchestrator API behind a TypeScript interface; internationalization from the start; use the tokens module of #1950. Labels: effort:high, flow:feature.
 

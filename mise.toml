@@ -75,9 +75,14 @@ pnpm --filter @micold/client web:export
 """
 
 [tasks.client-e2e]
-description = "Web client: Playwright smoke test in Chromium, Firefox and WebKit against the mock export (arrives with M4, T055)"
+description = "Web client: Playwright smoke, pseudo-locale and screenshot specs in Chromium, Firefox and WebKit against the mock export (#1735, T055)"
 dir = "{{config_root}}"
-run = "pnpm --filter @micold/client e2e"
+run = """
+pnpm install --frozen-lockfile
+pnpm --filter @micold/client web:export:mock
+pnpm --filter @micold/client exec playwright install chromium firefox webkit
+pnpm --filter @micold/client e2e
+"""
 
 [tasks.screenshot]
 description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"
@@ -234,6 +239,16 @@ run = """
 # task refuses instead. The cluster is deleted afterwards unless MICOLD_KUBE_TEST_KEEP=1.
 CARGO_WRAP={{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/test-kube.sh
 """
+
+[tasks.chart-check]
+description = "Lint and validate the Helm chart deploy/helm/micold (helm lint, kubeconform, conformance test; #1981): needs helm and kubeconform, which scripts/install-kube-tools.sh pins"
+dir = "{{config_root}}"
+run = "scripts/chart-check.sh"
+
+[tasks.e2e-kind]
+description = "Run the orchestrator end-to-end suites on a throwaway kind cluster (#1981): needs docker, kind, kubectl, helm; MICOLD_E2E_KEEP=1 keeps it, MICOLD_E2E_SUITES picks suites (docs/development/kube-e2e.md)"
+dir = "{{config_root}}"
+run = "scripts/e2e-kind.sh"
 
 [tasks.build]
 description = "Build the release GUI binary [build-locked]"
