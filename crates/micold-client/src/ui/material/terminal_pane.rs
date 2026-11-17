@@ -742,6 +742,8 @@ pub struct TerminalPane<'a> {
     link_context: LinkContext,
     /// Set when several panes are shown (feature 484): which one this is.
     pane: Option<PaneId>,
+    /// Plain `Ctrl+V` pastes (an AI session's primary pane; see `keymap::TermMode`).
+    ctrl_v_pastes: bool,
 }
 
 /// What a link resolves against when the caller names no context: this machine, unsandboxed.
@@ -775,7 +777,15 @@ impl<'a> TerminalPane<'a> {
             session: None,
             link_context: local_link_context(),
             pane: None,
+            ctrl_v_pastes: false,
         }
+    }
+
+    /// Make plain `Ctrl+V` paste, as `Ctrl+Shift+V` does: set for an AI session's primary process,
+    /// whose CLI would read a raw `^V` as "paste image". A shell keeps `^V` (quoted-insert).
+    pub fn ctrl_v_pastes(mut self, yes: bool) -> Self {
+        self.ctrl_v_pastes = yes;
+        self
     }
 
     /// Mark this one of several panes (feature 484): a press while it is unfocused focuses *it* and
@@ -849,6 +859,7 @@ impl<'a> TerminalPane<'a> {
         keymap::TermMode {
             app_cursor: m.contains(TermMode::APP_CURSOR),
             alt_screen: m.contains(TermMode::ALT_SCREEN),
+            ctrl_v_pastes: self.ctrl_v_pastes,
         }
     }
 

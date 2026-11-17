@@ -496,6 +496,7 @@ pub fn pane<'a>(
                 .display_offset(display_offset)
                 .focused(state.terminal_focused())
                 .session(active)
+                .ctrl_v_pastes(true)
                 .link_context(link_context)
                 .into(),
             None => container(
