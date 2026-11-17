@@ -130,6 +130,11 @@ regeneration command; it passes.
   (FR-030); the request is refused with a typed error naming the reason.
 - Two browser tabs connect at once: each gets its own subscription and its own sequence position.
 - An empty or missing `Origin` header (non-browser client): see Assumptions.
+- Browser parity: the WebSocket connection, heartbeat and reconnect behave the same in Chromium,
+  Firefox and WebKit; a WebKit/Safari background tab whose timers are throttled or whose socket is
+  closed by the browser resumes on return like any other drop; abnormal close codes (1001, 1006,
+  1011) all lead to reconnect-and-resume, a policy refusal (origin) to the unreachable state with
+  no tight retry loop.
 - The local stack command is run while one of its parts is already running on the same port: it
   reports the conflict and exits, rather than starting a second copy.
 
@@ -141,9 +146,9 @@ Requirement numbers are local to this spec; each names the parent requirement it
 
 **Network API (FR-017R, FR-030 of `specs/1722-rn-client-k8s/spec.md`)**
 
-- **FR-001**: The orchestrator MUST offer the client protocol as JSON messages over a WebSocket at
-  the path `/api/ws`, carried inside the routed envelope already used between orchestrator and
-  daemons (#1723).
+- **FR-001**: The orchestrator MUST offer the client protocol as JSON text messages over a
+  WebSocket at the path `/api/ws`, where each request carries a client-chosen id echoed in its
+  reply. How messages are framed internally (e.g. the routed envelope of #1723) is a plan decision.
 - **FR-002**: Through it a client MUST be able to: list daemons, list sessions across all daemons,
   read one session's structured content, and subscribe to changes of that list from a sequence
   number.
@@ -152,8 +157,11 @@ Requirement numbers are local to this spec; each names the parent requirement it
   or an explicit "resync needed" answer when those changes are no longer held.
 - **FR-004**: The orchestrator MUST refuse a WebSocket upgrade whose `Origin` is not in a
   configured allow-list, before any protocol message is exchanged, and log the refused origin.
-- **FR-005**: Both ends MUST send a ping every 20 seconds and treat a connection with no traffic
-  for two intervals as dead.
+- **FR-005**: The heartbeat MUST be an application-level JSON message (browsers cannot send or see
+  WebSocket protocol pings): the client sends a ping message every 20 seconds and the orchestrator
+  answers each with a pong message. The client treats a connection with no pong (or other server
+  message) for two intervals as dead and reconnects; the orchestrator treats a client with no
+  message for two intervals as dead and releases it.
 - **FR-006**: Binary terminal frames MUST NOT be sent on this API; a request that would need them
   MUST get a typed refusal.
 - **FR-007**: The orchestrator MUST route a client request to the daemon that owns the target
@@ -182,18 +190,25 @@ Requirement numbers are local to this spec; each names the parent requirement it
   the explicitly mock-only dev command.
 - **FR-014**: The web client MUST show connection state (connecting, connected, reconnecting,
   unreachable) and reconnect with backoff, resuming its subscription from its last sequence.
+- **FR-014a**: A session whose daemon is unreachable MUST stay in the list, marked with a
+  translated "unreachable" label, and return to normal when its daemon reconnects.
+- **FR-014b**: An opened session's structured content is a snapshot read when it is opened, with a
+  translated refresh action; live streaming of session content is out of scope.
 - **FR-015**: Every new user-visible string MUST be in the translation catalogs in English and
   Polish, and the existing catalog completeness checks MUST pass.
 - **FR-016**: The orchestrator address the web client connects to MUST be configurable at build or
-  start time, defaulting to the local stack's address.
+  start time, defaulting to the local stack's address. The plan fixes the local stack's default
+  orchestrator and web-client addresses (loopback ports) and documents them in quickstart.
 
 **Local stack**
 
 - **FR-017**: One `mise run` task MUST start, on one machine, the orchestrator, at least one daemon
   registered with it, and the web client served against it, allowing that client's origin, and
   stop all of them together on interrupt.
-- **FR-018**: The local stack MUST be verifiable end to end by an automated browser test that
-  starts it, sees a real session in the list, and opens it.
+- **FR-018**: The local stack MUST be verifiable end to end by an automated browser test, run in
+  Chromium, Firefox and WebKit, that starts it, sees a real session in the list, opens it, and
+  survives a forced reconnect. The same test proves the web client's local origin was allowed
+  without manual configuration (US3 scenario 3): it connects with no allow-list edited by hand.
 
 ### Key Entities
 
@@ -211,7 +226,7 @@ Requirement numbers are local to this spec; each names the parent requirement it
 ### Measurable Outcomes
 
 - **SC-001**: From a clean checkout with dependencies installed, one command brings up the stack
-  and the web client lists a real daemon session within 60 seconds.
+  and the web client lists a real daemon session within 60 seconds, in each of Chromium, Firefox and WebKit.
 - **SC-002**: In an automated test, 100 changes made across 10 forced reconnects arrive at the
   client exactly once each and in order (no gap, no duplicate).
 - **SC-003**: A connection with a foreign origin is refused in 100% of attempts in the test suite.

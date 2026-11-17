@@ -31,4 +31,5 @@
 
 ## Notes
 
+- FR-001/FR-005 name WebSocket, `/api/ws` and JSON ping messages: fixed by the issue and by browser limits.
 - FR-012 leaves the computed-vs-ported sidebar choice to the plan, as the issue says.
