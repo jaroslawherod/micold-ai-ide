@@ -21,16 +21,18 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 |---|---|---|---|
 | #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
 | #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
+| #2034 | M2 /api/ws listener | merged | a1c9514b3 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | #2033 | merged |
-| M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | - | in review (REVIEWS PENDING) |
+| M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | pending |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |
-| M5 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
+| M5 | (new, tasks to write) | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; no design exists yet (kind-run design thread paused) |
+| M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
 
@@ -75,7 +77,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Handover
 
-None.
+M2 merged as a1c9514b3 (PR #2034, squash). Next: M3 (schema + TS types) in a fresh thread via `/speckit-autopilot resume`. M5 (local kind stack) was added by jaro 2026-11-17 with no tasks yet: before M5, a tasks unit (or the M4 close) must add its spec FRs and tasks to spec.md/tasks.md and get them reviewed. Check latest registry versions before adding deps.
 
 ## Open escalation
 
