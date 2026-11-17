@@ -69,7 +69,6 @@ test("the keyboard reaches sign-in, the locale control and the sidebar with a vi
   // WebKit on macOS moves Tab focus to links and fields only (Option+Tab reaches every control); on
   // Linux, where CI runs, and with the explicit tabindex react-native-web sets, Tab reaches them.
   const tab = browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
-  await page.locator("body").focus();
   await page.goto("/");
   await expect(page.getByRole("button", { name: /GitHub/ })).toBeVisible();
   const focusTo = async (name: RegExp) => {

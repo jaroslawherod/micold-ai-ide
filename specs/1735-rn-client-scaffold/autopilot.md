@@ -76,6 +76,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A (opus) | 1 | M4 origin/main...HEAD | 44515efaa | - | CHANGES (F1-F2 major, F3-F6 minor), all fixed in the M4 fix commit: e2e in its own `client-e2e` job (20 min, in ci-complete) with actions/cache v6.1.0 on ~/.cache/ms-playwright; 100 ms assert Chromium only; screenshots to gitignored screenshots-out/; serve.mjs try/catch and index.html check; bundle-check scans .js/.css/.html word-bounded, near-miss case; --with-deps documented |
 | Review B (sonnet, conformance) | 1 | M4 origin/main...HEAD | 44515efaa | - | CHANGES (F1-F2 major, F3 minor), fixed in the M4 fix commit: Working glyph now `●`, screenshots re-recorded; iced comparison split to T060a (open follow-up); T055 text amended; WebKit keyboard test unskipped (Option+Tab only on macOS WebKit), documented |
 
+| Review A+B fix diff | 2 | M4 44515efaa..a300053 | a776d54 | - | CLEAN (sonnet re-review; F1 stray body focus removed, F2 client-e2e node pin unchecked and F3 WebKit Tab unverified left to follow-up/CI) |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
