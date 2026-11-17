@@ -434,6 +434,15 @@ jobs:
           echo "b3f68e625481fed9b16444174f3fa5ebcdbde4a1878803a35eabe2dcefcdc41a  $asset" | sha256sum -c -
           tar xzf "$asset" cargo-llvm-cov
           sudo install -m 0755 cargo-llvm-cov /usr/local/bin/
+      # The instrumented nextest run below writes one raw profile per test process (13k of them,
+      # tens of GB). A runner that fills up truncates one silently at process exit, and the merge
+      # then dies with "invalid instrumentation profile data (file header is corrupt)" after every
+      # test has passed (PR #2033). Drop the preinstalled toolchains this job never uses first.
+      - name: Free disk for the coverage profiles
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
       # Principle I: the render-free core compiles and passes with no iced/PTY (FR-040).
       - name: Test (render-free core, no GUI)
         run: cargo test -p micold-core --all-targets
