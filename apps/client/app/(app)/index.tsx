@@ -43,7 +43,8 @@ export default function Index() {
             {header}
             <View testID="home-body" style={{ flex: 1, flexDirection: "row" }}>
               <ScrollView style={{ width: SIDEBAR_WIDTH, flexGrow: 0 }}>{sidebar}</ScrollView>
-              <ScrollView style={{ flex: 1 }}>{overview(width - SIDEBAR_WIDTH - 2 * pad)}</ScrollView>
+              {/* Focusable so the keyboard can scroll it: the cards are not controls (axe scrollable-region-focusable). */}
+              <ScrollView focusable accessibilityLabel={t("overview.title")} style={{ flex: 1 }}>{overview(width - SIDEBAR_WIDTH - 2 * pad)}</ScrollView>
             </View>
           </>
         ) : (

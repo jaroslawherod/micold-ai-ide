@@ -89,14 +89,15 @@ Paths: `apps/client/` (app), `packages/protocol/` (`@micold/protocol`), `scripts
 
 ## Phase 7: Browser smoke, visual pass, hardening, docs (M4)
 
-- [ ] T054 [P] [US6] TEST FIRST `apps/client/e2e/smoke.spec.ts` (Playwright; Chromium, Firefox, WebKit): sign-in via mock, sidebar, Overview, order-stable change, locale switch and persistence, storage holds no token, keyboard path, 100 ms latency, axe check, no horizontal scroll at 300 px and 200 percent zoom, reduced-motion emulation (FR-018, FR-019, SC-002, SC-006)
-- [ ] T055 [US6] Add `apps/client/playwright.config.ts` (mock build, three browsers), the `client-e2e` task body and the Playwright step in the `client` job (browser cache); make T054 pass
-- [ ] T056 [P] [US5] Playwright pseudo-locale run: 40 percent growth with no clipped indicator (SC-004)
-- [ ] T057 [US3] Playwright screenshot spec: 1280, 800, 390 px in light and dark (6) in Chromium to `apps/client/e2e/screenshots/` (FR-021, SC-003)
-- [ ] T058 [P] [US6] TEST FIRST extend `scripts/tests/bundle-check.test.sh`: a planted terminal-emulator dependency in `pnpm-lock.yaml` or the export fails the check (FR-017, SC-007)
-- [ ] T059 [US6] Harden `scripts/client/bundle-check.mjs` for terminal emulator packages (makes T058 pass)
-- [ ] T060 [US3] Run the visual pass (skill `visual-pass`, quickstart Part B) against the iced app; record the result in `specs/1735-rn-client-scaffold/visual-pass/`
-- [ ] T061 [P] [US6] Write `docs/development/client.md` (layout, tasks, mock switch, protocol package stand-in, how #1732 swaps in) and link it from `docs/SUMMARY.md`
+- [x] T054 [P] [US6] TEST FIRST `apps/client/e2e/smoke.spec.ts` (Playwright; Chromium, Firefox, WebKit): sign-in via mock, sidebar, Overview, order-stable change, locale switch and persistence, storage holds no token, keyboard path, 100 ms latency, axe check, no horizontal scroll at 300 px and 200 percent zoom, reduced-motion emulation (FR-018, FR-019, SC-002, SC-006)
+- [x] T055 [US6] Add `apps/client/playwright.config.ts` (mock build, three browsers), the `client-e2e` task body and the `client-e2e` CI job (own timeout, `ci-complete` needs it, Playwright browser cache keyed on the lockfile); make T054 pass
+- [x] T056 [P] [US5] Playwright pseudo-locale run: 40 percent growth with no clipped indicator (SC-004)
+- [x] T057 [US3] Playwright screenshot spec: 1280, 800, 390 px in light and dark (6) in Chromium to `apps/client/e2e/screenshots/` (FR-021, SC-003)
+- [x] T058 [P] [US6] TEST FIRST extend `scripts/tests/bundle-check.test.sh`: a planted terminal-emulator dependency in `pnpm-lock.yaml` or the export fails the check (FR-017, SC-007)
+- [x] T059 [US6] Harden `scripts/client/bundle-check.mjs` for terminal emulator packages (makes T058 pass)
+- [x] T060 [US3] Run the visual pass (skill `visual-pass`, quickstart Part B) against the spec (FR-011, FR-021, SC-003); record the result in `specs/1735-rn-client-scaffold/visual-pass/`
+- [ ] T060a [US3] Follow-up, deferred: side-by-side comparison of the web client with the iced app's Overview and sidebar (needs a desktop session; the iced app is being sunset, 2026-11-15)
+- [x] T061 [P] [US6] Write `docs/development/client.md` (layout, tasks, mock switch, protocol package stand-in, how #1732 swaps in) and link it from `docs/SUMMARY.md`
 - [ ] T062 [US6] Confirm SC-005 (client job under 10 minutes) and SC-009 (diff coverage at least 80 percent) from the CI run; record in the PR
 
 ## Dependencies
