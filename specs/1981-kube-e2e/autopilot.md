@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #2017 | merged 7cd3811f7 |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #2019 | merged 7bcb978d5 |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #2021 | merged a59a74729 |
-| M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | built, awaiting review |
+| M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #2023 | merged 0b0c74a23 |
 
 ## Decisions
 
@@ -68,7 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T031-T032) built, scoped checks green (e2e-kind.test.sh 39 cases, clippy/test/fmt -p micold-e2e); full gate left to CI. Review snapshot: see the commit this ledger lands in (`git log -1`). Placeholders: PLACEHOLDERS in scripts/e2e-kind.sh skip network (#1732) and ui (#1954) without a cargo run. Next: orchestrator dispatches reviews A and B on origin/main...HEAD, then the PR.
+M5 merged as 0b0c74a23 (PR #2023, 2026-11-17). Review A r1 (sonnet): 4 MINOR, doc path fixed; left: placeholders-subset-of-known-suites assertion, MICOLD_E2E_WEB_URL is a planned contract. CI green first round.
+Next: close unit (`/speckit-autopilot resume` in a fresh thread). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
 
 ## Open escalation
 
