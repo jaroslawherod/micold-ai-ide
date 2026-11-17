@@ -142,9 +142,8 @@ Added 2026-11-17. Reuses #1981 (`deploy/helm/micold`, `scripts/e2e-kind.sh`,
 `scripts/install-kube-tools.sh`, `Dockerfile.orchestrator`, the `kube-e2e` CI job).
 
 - **Modes**: `scripts/local-stack.sh` dispatches on `MICOLD_LOCAL_MODE` (`kind` default, `process`
-  = M4 body moved to a function unchanged). Kind mode lives in `scripts/local-stack-kind.sh`,
-  sourcing the cluster helpers shared with `e2e-kind.sh` (extract them to
-  `scripts/lib/kind.sh`, no copy).
+  = M4 body moved to a function unchanged). Kind mode lives in `scripts/local-stack-kind.sh`
+  (the kind steps of `e2e-kind.sh` are inline one-liners, so nothing is extracted; R13).
 - **Cluster**: `deploy/kind/local.yaml` (one control-plane node, image pinned by digest). Cluster
   name `micold-local`, distinct from e2e's, so both can coexist. Reuse when it exists.
 - **Images**: `micold-orchestrator:local` from `Dockerfile.orchestrator` (the same binary is the
@@ -156,10 +155,12 @@ Added 2026-11-17. Reuses #1981 (`deploy/helm/micold`, `scripts/e2e-kind.sh`,
 - **Chart**: new `postgres.*` values (official image, StatefulSet + headless Service + PVC, Secret
   with a generated password via `lookup`-or-`randAlphaNum`), `state.mode` accepts `file` and `postgres`
   (store from #1948; the stale #1740 message in `_helpers.tpl` is replaced, FR-020) and is wired to
-  `database.secretName`; new `orchestrator.allowOrigins` list rendered as `--allow-origin` args; new `daemons.count` Deployment running `micold-daemon` with an
-  init container seeding the catalog (seed shared with process mode:
-  `scripts/lib/seed-catalog.sh`) and an `[orchestrator_link]` config pointing at the orchestrator
-  Service; `ci/local.yaml` values for kind mode, also used by chart-check.
+  `database.secretName`; new `orchestrator.allowOrigins` list rendered as `--allow-origin` args; new `daemons.count` sidecars `daemon-<i>` in the orchestrator pod
+  (the link is a local socket; R13), each with a `seed-<i>` init container (pinned `alpine/git`)
+  running the seed shared with process mode, `deploy/helm/micold/files/seed-catalog.sh` (in the
+  chart so `.Files.Get` can ship it), whose `[orchestrator_link] socket` is the shared
+  `/run/micold/orchestrator.sock`; `--api-addr=127.0.0.1:8730` on the pod's loopback (the API
+  refuses other addresses until TLS, #1733), reached by port-forward; `ci/local.yaml` values for kind mode, also used by chart-check.
 - **Access**: `kubectl port-forward` for both services to loopback; `orchestrator.allowOrigins` in
   `ci/local.yaml` holds `http://127.0.0.1:8731` and `http://localhost:8731`.
 - **Teardown**: `trap` kills port-forwards and runs `kind delete cluster` unless

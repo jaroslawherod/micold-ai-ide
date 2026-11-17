@@ -105,3 +105,25 @@ orchestrator, a daemon configured to dial it (`[orchestrator_link]`, #1725) on a
 two sessions) and `e2e/serve.mjs` for the export, then `wait`s; a `trap` stops all three on interrupt. The Playwright
 stack spec starts it via the same script and a fixture seed, so "a real session" needs no AI CLI. Rejected: creating
 sessions through a real AI CLI in CI (needs credentials); a mock daemon (not the real stack).
+
+## R13 — Local kind stack pins (M5, 2026-11-17)
+
+Checked from the M5 session; GitHub's API and release pages were not reachable through its proxy,
+so versions come from the Go module proxy (tags) and Docker Hub.
+
+| Tool / image | Latest seen | Pinned | Why |
+|---|---|---|---|
+| kind | v0.33.0 (proxy.golang.org, 2026-08-26) | v0.30.0 (unchanged) | the bump needs the release's SHA256, published only on GitHub; follow-up |
+| kindest/node | v1.37.0 (Docker Hub, 2026-08-26) | v1.34.0@sha256:ede5bb69… | the node image kind v0.30.0 ships for; bump with kind |
+| helm | v3.22.1 (v3 line), v4.3.2 | v3.19.0 (unchanged) | get.helm.sh unreachable for the checksum; v4 is a major change; follow-up |
+| kubectl | v1.37.2 (dl.k8s.io stable) | v1.34.0 (unchanged) | matches the node image's minor |
+| postgres | 18.7-alpine3.24 (Docker Hub) | 18.7-alpine3.24@sha256:fa1b61f5… | official image; Bitnami's chart images left the free catalogue in 2025 |
+| alpine/git (seed) | v2.54.1 | v2.54.1@sha256:f6629095… | sh and git for the seed init container |
+| node (web image) | 22-alpine | 22-alpine@sha256:12f54caf… | the repo's node major |
+
+Deviations found while implementing: the daemon's `[orchestrator_link]` is a local socket only, so
+seeded daemons are sidecars of the orchestrator pod (not a separate Deployment), sharing
+`/run/micold`. The client API refuses non-loopback addresses until TLS (#1733), so it binds the
+pod's loopback and is reached by `kubectl port-forward` (which connects inside the pod), not by a
+Service. The kind helpers of `e2e-kind.sh` are inline one-liners, so nothing was extracted to a
+shared library.

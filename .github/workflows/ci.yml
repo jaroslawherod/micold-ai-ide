@@ -895,6 +895,8 @@ jobs:
         run: scripts/tests/install-kube-tools.test.sh
       - name: The chart check's own cases
         run: scripts/tests/chart-check.test.sh
+      - name: The local kind stack's chart values (#1732 M5)
+        run: scripts/tests/chart-local.test.sh
       - name: Lint, validate and conformance-test the chart
         # What `mise run chart-check` runs.
         run: scripts/chart-check.sh
@@ -942,6 +944,45 @@ jobs:
           name: kube-e2e-logs
           path: target/e2e-logs
           if-no-files-found: ignore
+
+  local-stack-kind:
+    name: local stack on kind (linux)
+    # #1732 M5 (FR-019..FR-023, SC-008): `mise run local-stack`'s kind mode for real, which no cloud
+    # session can run. Up with KEEP, probe (session over /api/ws and the web root), delete the
+    # orchestrator pod and probe (state in Postgres), rerun in the background to exercise reuse and
+    # probe, TERM it; then a last run without KEEP whose TERM must delete the cluster. Gated like
+    # kube-e2e. Times: SC-008's CI bound, 15 min for the job, 120 s per probe.
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (needs.classify.outputs.pr_proven != 'true' || needs.classify.outputs.kube_paths != 'true')
+      && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install kind, kubectl and helm at pinned versions
+        run: |
+          set -euo pipefail
+          scripts/install-kube-tools.sh kind kubectl helm
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The scripts' own cases
+        run: |
+          scripts/tests/local-stack-kind.test.sh
+          scripts/tests/local-stack-probe.test.sh
+          scripts/tests/dockerfile-web.test.sh
+      - name: Up, probe, restart, reuse, teardown
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: scripts/local-stack-kind-live.sh
+      - name: Pod state on failure
+        if: failure()
+        run: |
+          kubectl --context kind-micold-local -n micold get pods -o wide || true
+          kubectl --context kind-micold-local -n micold describe pods || true
+          kubectl --context kind-micold-local -n micold logs --all-containers --prefix -l app.kubernetes.io/name=micold || true
 
   assertions:
     name: assertion freeze

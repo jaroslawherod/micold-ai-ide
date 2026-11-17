@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-de08zv
 - **Started**: 2026-11-17
-- **Phase**: milestones (M5 spec+tasks written, review pending)
-- **Next step**: review M5 amendment (spec, plan, tasks; snapshot in Review rounds), then implement T043–T052.
+- **Phase**: milestones (M5 implemented T043–T055, diff review pending)
+- **Next step**: M5 diff review (snapshot in Review rounds), then open the M5 PR (title/body in the session scratchpad) and watch `local-stack-kind`, the first live kind run; record its durations here.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -32,7 +32,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | #2038 | merged |
-| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 written | - | tasks written, review pending |
+| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 | - | implemented on claude/project-thread-de08zv, diff review pending |
 | M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
@@ -58,6 +58,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | M5 amendment review | 1 | spec.md, plan.md, tasks.md | 508a1ad305d6399c558739a5d25e8e9dfbfcf5e6 | 20e9ba559138a6384580a39f47cb10993f1a93b8:508a1ad305d6399c558739a5d25e8e9dfbfcf5e6 | CHANGES: 7 (5 MAJOR, 2 MINOR), all fixed in c6a8945310f0fe9bfb6f0e8038105825ba617a88; round 2 (sonnet) due on bd4e06335766c53cb100154977c0787a18720671:c6a8945310f0fe9bfb6f0e8038105825ba617a88 |
+| M5 amendment review | 2 (sonnet) | fix diff | see commit | - | PASSED with 3 text nits (ledger T-range, T046/T049 configured() input, T052 run order), fixed |
 |---|---|---|---|---|---|
 
 | diff review | 1 (opus, orchestrator) | M2 10f82e095..e7ad7f4 | see commit | - | CHANGES: 2 MAJOR (F1 handshake timeout + socket cap, F2 serialize feed passes) fixed; MINOR F3 stale snapshot after stop fixed, F5 single close fixed, F7 tests (non-UTF-8 Origin, Lagged fallback) added; F4, F6 declined/noted (see Declined); MAJOR fixes are behaviour-bearing, round 2 re-review (sonnet) due |
@@ -71,6 +72,16 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 | tasks review | 2 (sonnet) | fix diff | see commit | - | CHANGES: 2 text-only (stale M-numbers after renumbering, one filename); fixed, prose only, no round 3 |
 | tasks review | 1 (opus, orchestrator) | tasks.md | see commit | - | CHANGES: 5 MAJOR (T025 dep, shared main.rs, SC-006 client test, `mise run web` missing -> new client-web-mock task, M1 split into M1+M2, renumbered to 5), 3 MINOR; all fixed; behaviour-bearing, round 2 due |
 | plan review | 1 (opus, run by the orchestrator) | same | see commit | - | CHANGES: 2 HIGH, 3 MED, 3 LOW; all fixed (read_session via new daemon ReadStructuredEvents, early M1 test; poller restart and boundaries; origin port/null; FR-012 vectors cover grouping; i18n key groups; local-stack moved into M3; subscribed/offline notes); behaviour-bearing, round 2 re-review (sonnet) due |
+
+## Red runs
+
+| Task | Test | Failing run (before the code) |
+|---|---|---|
+| T044 | scripts/tests/local-stack-kind.test.sh | 14 FAIL: `local-stack.sh: line 93: mktemp: command not found` (no kind mode; process path ran) |
+| T045 | scripts/tests/chart-local.test.sh | ci/local.yaml missing; `state.mode=sqlite ... sqlite arrives with #1948 and postgres with #1740`; bogus refused by schema enum, not the message |
+| T046 | orchestrator::tests::a_given_data_dir_skips_the_users_daemon_toml | E0425 cannot find function `implicit_config` |
+| T053 | scripts/tests/dockerfile-web.test.sh | FAIL no Dockerfile.web |
+| T054 | scripts/tests/local-stack-probe.test.sh | 3 FAIL: scripts/local-stack-probe.sh: No such file or directory |
 
 ## Declined review findings
 

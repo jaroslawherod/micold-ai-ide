@@ -1,0 +1,38 @@
+{{- if eq .Values.state.mode "postgres" }}
+{{- /*
+FR-020 (#1732 M5): the orchestrator's daemon.toml (`--config`) for state.mode=postgres: [database]
+url_file names the URL in the database Secret. `kind = "kubernetes"` lets the Secret mount's
+0440 mode pass the owner-only check (V14).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "micold.fullname" . }}-orchestrator-config
+  labels:
+    {{- include "micold.labels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+data:
+  daemon.toml: |
+    schema = 1
+
+    [daemon]
+    kind = "kubernetes"
+    data_dir = "/var/lib/micold"
+
+    [database]
+    url_file = "/etc/micold/database/url"
+{{- end }}
+{{- if gt (int .Values.daemons.count) 0 }}
+---
+{{- /* FR-021: the seed script the daemon sidecars' init containers run (files/seed-catalog.sh). */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "micold.fullname" . }}-seed
+  labels:
+    {{- include "micold.labels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+data:
+  seed-catalog.sh: |
+    {{- .Files.Get "files/seed-catalog.sh" | nindent 4 }}
+{{- end }}

@@ -27,8 +27,37 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         {{- include "micold.podSecurityContext" . | nindent 8 }}
-      {{- if .Values.testing.corruptRegistry.enabled }}
+      {{- if or .Values.testing.corruptRegistry.enabled (gt (int .Values.daemons.count) 0) }}
       initContainers:
+      {{- end }}
+      {{- range $i, $_ := until (int .Values.daemons.count) }}
+        # FR-021: seed daemon-{{ $i }}'s catalog (files/seed-catalog.sh needs sh and git).
+        - name: seed-{{ $i }}
+          image: {{ $.Values.daemons.seedImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/seed/seed-catalog.sh", "/var/lib/micold-daemon"]
+          env:
+            - name: HOME
+              value: /tmp
+            - name: SEED_NAME
+              value: {{ printf "local-%d" $i | quote }}
+            - name: SEED_KIND
+              value: kubernetes
+            - name: SEED_LISTEN
+              value: {{ printf "/run/micold/daemon-%d.sock" $i | quote }}
+            - name: SEED_ORCHESTRATOR_SOCKET
+              value: /run/micold/orchestrator.sock
+          securityContext:
+            {{- include "micold.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: daemon-{{ $i }}
+              mountPath: /var/lib/micold-daemon
+            - name: seed
+              mountPath: /seed
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
+      {{- if .Values.testing.corruptRegistry.enabled }}
         # US3-4: plant an invalid registry so the orchestrator must refuse to start. Test-only.
         - name: corrupt-registry
           image: docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
@@ -60,6 +89,16 @@ spec:
             - --data-dir=/var/lib/micold
             {{- end }}
             - --socket=/run/micold/orchestrator.sock
+            {{- if eq .Values.state.mode "postgres" }}
+            - --config=/etc/micold/daemon.toml
+            {{- end }}
+            {{- if .Values.orchestrator.api.enabled }}
+            # The client API on the pod's loopback (no TLS until #1733): reached by port-forward.
+            - --api-addr=127.0.0.1:{{ .Values.orchestrator.api.port }}
+            {{- end }}
+            {{- range .Values.orchestrator.allowOrigins }}
+            - --allow-origin={{ . }}
+            {{- end }}
             {{- if .Values.ops.enabled }}
             {{- if eq .Values.testing.breakage "opsPort" }}
             - --ops-addr=0.0.0.0:{{ add .Values.ops.port 1 }}
@@ -104,6 +143,32 @@ spec:
               mountPath: /run/micold
             - name: tmp
               mountPath: /tmp
+            {{- if eq .Values.state.mode "postgres" }}
+            - name: config
+              mountPath: /etc/micold/daemon.toml
+              subPath: daemon.toml
+              readOnly: true
+            - name: database
+              mountPath: /etc/micold/database
+              readOnly: true
+            {{- end }}
+        {{- range $i, $_ := until (int .Values.daemons.count) }}
+        # FR-021 (#1732 M5): a seeded daemon dialling the orchestrator's socket on the shared
+        # /run/micold (the link is a local socket, so the daemons live in the orchestrator's pod).
+        - name: daemon-{{ $i }}
+          image: {{ include "micold.image" (list $ $.Values.image) | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["/micold-daemon", "--config", "/var/lib/micold-daemon/daemon.toml"]
+          securityContext:
+            {{- include "micold.containerSecurityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: daemon-{{ $i }}
+              mountPath: /var/lib/micold-daemon
+            - name: run
+              mountPath: /run/micold
+            - name: tmp
+              mountPath: /tmp
+        {{- end }}
         {{- if .Values.testDaemon.enabled }}
         # FR-011: the test daemon. The same image, so no second image to build; it only idles, and
         # the suites `kubectl exec` e2e-link verbs into it against the shared socket.
@@ -131,3 +196,24 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- if eq .Values.state.mode "postgres" }}
+        - name: config
+          configMap:
+            name: {{ include "micold.fullname" . }}-orchestrator-config
+        - name: database
+          secret:
+            secretName: {{ include "micold.databaseSecret" . }}
+            defaultMode: 0400
+            items:
+              - key: url
+                path: url
+        {{- end }}
+        {{- range $i, $_ := until (int .Values.daemons.count) }}
+        - name: daemon-{{ $i }}
+          emptyDir: {}
+        {{- end }}
+        {{- if gt (int .Values.daemons.count) 0 }}
+        - name: seed
+          configMap:
+            name: {{ include "micold.fullname" . }}-seed
+        {{- end }}

@@ -23,13 +23,8 @@
       "additionalProperties": false,
       "properties": {
         "mode": {
-          "description": "Only file renders; sqlite (#1948) and postgres (#1740) are reserved and fail with a message naming both issues.",
-          "type": "string",
-          "enum": [
-            "file",
-            "sqlite",
-            "postgres"
-          ]
+          "description": "file or postgres; anything else fails with a message naming both.",
+          "type": "string"
         },
         "persistence": {
           "type": "object",
@@ -62,7 +57,7 @@
       "additionalProperties": false,
       "properties": {
         "existingSecret": {
-          "description": "Reserved for #1948 and #1740; unused by state.mode=file.",
+          "description": "state.mode=postgres: a Secret with the database URL under `url`; empty uses postgres.enabled.",
           "type": "string"
         }
       }
@@ -155,6 +150,68 @@
             "dataDir",
             "opsPort"
           ]
+        }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        },
+        "storageClass": {
+          "type": "string"
+        }
+      }
+    },
+    "orchestrator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "api": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          }
+        },
+        "allowOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^https?://[^/]+$"
+          }
+        }
+      }
+    },
+    "daemons": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "seedImage": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }

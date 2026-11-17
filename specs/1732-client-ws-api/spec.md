@@ -252,8 +252,9 @@ Requirement numbers are local to this spec; each names the parent requirement it
   #1740 is stale. The chart MUST accept `state.mode` `file` and `postgres` and refuse every other
   value (`sqlite` is the store's local-only mode, not a chart mode) with exactly:
   `state.mode=<value> is not supported by this chart: use file or postgres`.
-- **FR-021**: The chart MUST be able to run at least one daemon as its own Deployment
-  (`daemons.count`, default 0) that links to the orchestrator over `[orchestrator_link]` and starts
+- **FR-021**: The chart MUST be able to run at least one daemon (`daemons.count`, default 0) as a
+  sidecar of the orchestrator pod (the `[orchestrator_link]` is a local socket, so it shares
+  `/run/micold`; research R13) that links to the orchestrator over `[orchestrator_link]` and starts
   on a seeded catalog (one project, one worktree, two sessions), the same seed as the process mode.
 - **FR-022**: The web client in kind mode MUST be an image `micold-web:local` built from
   `Dockerfile.web` (static Expo export, build arg `EXPO_PUBLIC_ORCHESTRATOR_URL`, default

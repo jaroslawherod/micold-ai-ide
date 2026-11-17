@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/local-stack.sh (#1732, FR-017, research R12) with a stub daemon and a stub web export:
+# scripts/local-stack.sh in process mode (#1732, FR-017, research R12) with a stub daemon and a stub web export:
 # it seeds a project with two sessions, starts the orchestrator with the API address and both
 # allowed origins, a daemon that dials it, and the web server; it refuses a second copy; Ctrl+C
 # stops everything. The real daemon and export are exercised by the quickstart's visual pass.
@@ -29,7 +29,7 @@ echo "<html>stack</html>" >"$tmp/web/index.html"
 port() { node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})'; }
 api="$(port)"
 web="$(port)"
-export STUB_LOG="$tmp/log" MICOLD_LOCAL_API_PORT="$api" MICOLD_LOCAL_WEB_PORT="$web" \
+export MICOLD_LOCAL_MODE=process STUB_LOG="$tmp/log" MICOLD_LOCAL_API_PORT="$api" MICOLD_LOCAL_WEB_PORT="$web" \
   MICOLD_LOCAL_DAEMON_BIN="$tmp/daemon" MICOLD_LOCAL_WEB_DIR="$tmp/web" MICOLD_LOCAL_DIR="$tmp/data"
 
 setsid scripts/local-stack.sh >"$tmp/out" 2>&1 &
