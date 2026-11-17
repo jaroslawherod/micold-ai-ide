@@ -37,7 +37,7 @@ Stories: US1 chart, US2 harness, US3 API e2e suite, US4 extensible suites.
 - [x] T019 [US2] Test first then implement `crates/micold-e2e` skeleton (workspace member in `Cargo.toml`): `env.rs` unit tests (skip unless `MICOLD_E2E=1`, reason printed, `MICOLD_E2E_REQUIRED=1` fails instead), `cluster.rs` (`kubectl port-forward`/`exec` wrappers), and `tests/ops/main.rs` (`mod smoke;`, a cargo test target per suite directory; `/healthz`, `/readyz` through port-forward). FR-010, US2-4.
 - [x] T020 [US2] CI job `kube-e2e` (30 min timeout, tools via T018, image build cache decided from measured time, `upload-artifact` of `target/e2e-logs` `if: failure()`), gated by `kube_paths`, added to `ci-complete`. FR-009, FR-014, SC-002.
 - [x] T021 [P] [US2] `docs/development/kube-e2e.md`: local run, skips, env vars, adding a suite, debugging with `kubectl debug`; confirm `scripts/check-user-guide-updated.sh` accepts a development-docs-only change (else add the `docs-not-needed` label). FR-018.
-- [ ] T022 [US2] Live verification: push and read the `kube-e2e` CI round(s) (budget two), fix harness issues from the uploaded logs until the smoke passes and the cluster is removed.
+- [x] T022 [US2] Live verification: push and read the `kube-e2e` CI round(s) (budget two), fix harness issues from the uploaded logs until the smoke passes and the cluster is removed.
 
 ## Phase 4: API e2e suite (M4)
 
