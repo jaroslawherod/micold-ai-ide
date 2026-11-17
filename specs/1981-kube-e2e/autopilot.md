@@ -53,7 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 8 fixed, 2 declined (appVersion tag; socket dir mode, documented) |
 | tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
 | M2 A+B (opus) | 1 | full | 5272ef54e | abb5d2e251df1baf302e677ce8074d310c49842a:5272ef54ed19168fc8a76e056116d3135072b743 | CHANGES: 1 MAJOR (ops served only inside serve, probes hang while the store opens), 3 MINOR (head size check, silent timeout, tests); all fixed |
-| M3 A+B | 1 | full | (M3 commit) | fa797890b48f66604a3b3de8e670619dd51ecc22:c33f47eb2c42cddf280eef7576f332cf2f3f5f13 | pending (orchestrator dispatches) |
+| M3 A+B | 1 | full | add5ae6 | fa797890b48f66604a3b3de8e670619dd51ecc22:c33f47eb2c42cddf280eef7576f332cf2f3f5f13 | CLEAN (A opus: 1 optional MINOR build-fail hint, left; note: rust-cache misses target-shared, SC-002 timing; B sonnet CLEAN) |
 | Review B | 1 | M1 | 49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | 7c47de4556526f50ff9beb7412373b4d950c17e4:49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | CLEAN (1 MINOR, no fix needed) |
 
 ## Declined review findings
