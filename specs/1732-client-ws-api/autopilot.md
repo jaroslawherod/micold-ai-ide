@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-xt3xhy
 - **Started**: 2026-11-17
-- **Phase**: milestones (M3 in review)
-- **Next step**: M3 code done (T020–T026), scoped gate green (fmt, workspace clippy, micold-core tests bar 2 root-only, shell suites; nextest missing, so full gate left to CI; no gate stamp recorded), pushed on claude/project-thread-xt3xhy; review round 1 fixed (scoped checks green); the orchestrator opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
+- **Phase**: milestones (M4 next)
+- **Next step**: M4 (T027–T037) milestone unit in a fresh thread.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -22,6 +22,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
 | #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
 | #2034 | M2 /api/ws listener | merged | a1c9514b3 |
+| #2037 | M3 schema + TS types | merged | a7d7a3c12 |
 
 ## Milestones
 
@@ -81,7 +82,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Handover
 
-M2 merged as a1c9514b3 (PR #2034, squash). Next: M3 (schema + TS types) in a fresh thread via `/speckit-autopilot resume`. M5 (local kind stack) was added by jaro 2026-11-17 with no tasks yet: before M5, a tasks unit (or the M4 close) must add its spec FRs and tasks to spec.md/tasks.md and get them reviewed. Check latest registry versions before adding deps.
+M3 merged as a7d7a3c12 (PR #2037, squash; round-1 review 4 minor findings fixed). Next: M4 (web client on real API + i18n en/pl + minimal local-stack) in a fresh thread via `/speckit-autopilot resume`, ledger on branch claude/project-thread-xt3xhy. M5 (local kind stack) still needs spec FRs + tasks written and reviewed before it runs. Check latest registry versions before adding deps.
 
 ## Open escalation
 
