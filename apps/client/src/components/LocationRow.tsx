@@ -3,31 +3,58 @@
 import React from "react";
 import { Pressable, View } from "react-native";
 import { Text, useTheme } from "react-native-paper";
-import type { RowKey } from "@micold/protocol";
+import type { RowKey, SessionId } from "@micold/protocol";
 import type { LocationRowModel, SessionRowModel } from "../features/sidebar/store";
 import { useT } from "../i18n/IntlProvider";
 import { useFocusRing } from "../platform/focusRing";
 import { spacing } from "../theme/tokens.generated";
 import { StateIndicator } from "./StateIndicator";
 
-function SessionRow({ row }: { row: SessionRowModel }) {
+function SessionRow({ row, onOpen }: { row: SessionRowModel; onOpen?: (id: SessionId) => void }) {
   const t = useT();
   const theme = useTheme();
+  const ring = useFocusRing(theme.colors.primary);
   const { session } = row;
-  return (
-    <View
-      testID="session-row"
-      accessible
-      accessibilityLabel={t("sidebar.session", { name: session.name, state: t(`state.${session.state}`) })}
-      style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingStart: spacing.lg }}>
+  const unreachable = session.reachable === false;
+  const values = { name: session.name, state: t(`state.${session.state}`) };
+  const content = (
+    <>
       <StateIndicator state={session.state} />
       <Text variant="bodySmall" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
         {session.name}
       </Text>
+      {unreachable ? (
+        <Text testID="session-unreachable" variant="labelSmall" style={{ color: theme.colors.error, flexShrink: 0 }}>
+          {t("session.unreachable")}
+        </Text>
+      ) : null}
       <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, flexShrink: 0 }}>
         {t(session.kind === "terminal" ? "kind.terminal" : "kind.structured")}
       </Text>
-    </View>
+    </>
+  );
+  const rowStyle = { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingStart: spacing.lg } as const;
+  const label = t(unreachable ? "sidebar.sessionUnreachable" : "sidebar.session", values);
+  if (!onOpen) {
+    return (
+      <View testID="session-row" accessible accessibilityLabel={label} style={rowStyle}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      testID="session-row"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      focusable
+      onFocus={ring.onFocus}
+      onBlur={ring.onBlur}
+      onPress={() => onOpen(session.id)}
+      style={[rowStyle, { paddingVertical: spacing.xs, borderRadius: 8 }, ring.style]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -36,9 +63,11 @@ export interface LocationRowProps {
   stale: boolean;
   selected: boolean;
   onSelect: (key: RowKey) => void;
+  /** Makes a session row a button that opens its content (FR-014b). */
+  onOpenSession?: (id: SessionId) => void;
 }
 
-function LocationRowView({ row, stale, selected, onSelect }: LocationRowProps) {
+function LocationRowView({ row, stale, selected, onSelect, onOpenSession }: LocationRowProps) {
   const t = useT();
   const theme = useTheme();
   const ring = useFocusRing(theme.colors.primary);
@@ -69,7 +98,7 @@ function LocationRowView({ row, stale, selected, onSelect }: LocationRowProps) {
           {t("sidebar.noSessions")}
         </Text>
       ) : (
-        row.sessions.map((s) => <SessionRow key={s.key} row={s} />)
+        row.sessions.map((s) => <SessionRow key={s.key} row={s} onOpen={onOpenSession} />)
       )}
     </View>
   );
@@ -81,6 +110,7 @@ export function sameRow(a: LocationRowProps, b: LocationRowProps): boolean {
     a.stale === b.stale &&
     a.selected === b.selected &&
     a.onSelect === b.onSelect &&
+    a.onOpenSession === b.onOpenSession &&
     a.row.location === b.row.location &&
     a.row.project === b.row.project &&
     a.row.sessions.length === b.row.sessions.length &&

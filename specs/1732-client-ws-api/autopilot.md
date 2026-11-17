@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1732
-- **Worktree branch**: claude/project-thread-xt3xhy
+- **Worktree branch**: claude/project-thread-7iamtv
 - **Started**: 2026-11-17
-- **Phase**: milestones (M3 in review)
-- **Next step**: M3 code done (T020–T026), scoped gate green (fmt, workspace clippy, micold-core tests bar 2 root-only, shell suites; nextest missing, so full gate left to CI; no gate stamp recorded), pushed on claude/project-thread-xt3xhy; review round 1 fixed (scoped checks green); the orchestrator opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
+- **Phase**: milestones (M4 in review)
+- **Next step**: M4 diff review (A, B) by the orchestrator, then PR; then M5.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -22,6 +22,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
 | #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
 | #2034 | M2 /api/ws listener | merged | a1c9514b3 |
+| #2037 | M3 schema + TS types | merged | a7d7a3c12 |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 |---|---|---|---|---|---|
 | M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | #2033 | merged |
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
-| M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | in review |
-| M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |
+| M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
+| M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | implemented, in review |
 | M5 | (new, tasks to write) | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; no design exists yet (kind-run design thread paused) |
 | M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
@@ -50,7 +51,10 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Review rounds
 
+| diff review | 1 (opus, orchestrator) | M4 1c83be7~1..1c83be7 | 1c83be7 | - | CHANGES: 1 MAJOR (F1 sidebar stopped applying changes after a resync: listener `since` never reset) fixed in handleSubscribed; MINOR F2 connected only on `subscribed` (attempt reset there too), F3 visible while reconnecting keeps the attempt and only shortens the timer, F4 retry on a stopped client returns early, F5 local-stack re-checks ports before starting and names the exited process, all fixed with tests; behaviour-bearing, round 2 re-review (sonnet) due |
 | diff review | 1 (opus, orchestrator) | M3 a1c9514b3..43fc62389 | see commit | - | CHANGES, 4 minor, all fixed: F1 --ts-only missing schema now DRIFT; F2 literal expected_keys for the grouping case; F3 expected_daemons in vectors, asserted in jest; F4 duplicate test replaced by upsert-after-gone-row. Test-only/script fixes, no round 2 needed |
+
+| diff review | 2 (sonnet, orchestrator) | M4 fix diff 1c83be7..361bc9e | 361bc9e | - | CLEAN; F1 test proven red without the fix |
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
@@ -81,7 +85,19 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Handover
 
-M2 merged as a1c9514b3 (PR #2034, squash). Next: M3 (schema + TS types) in a fresh thread via `/speckit-autopilot resume`. M5 (local kind stack) was added by jaro 2026-11-17 with no tasks yet: before M5, a tasks unit (or the M4 close) must add its spec FRs and tasks to spec.md/tasks.md and get them reviewed. Check latest registry versions before adding deps.
+None. M4 (T027–T037) is implemented and committed on this branch; the unit stopped at the review snapshot because it has no Agent tool. Next: the orchestrator runs review A (code-review high) and B (conformance), sends findings back, and opens the PR from `specs/1732-client-ws-api/m4-pr-body.md` (title in `m4-pr-title.txt`).
+
+M4 notes for the reviewers and for M5/M6:
+- No new dependency (nothing added to any `package.json` or `Cargo.toml`).
+- T031/T032: the real client does not reuse `ConnectionManager` as a class (its frame format is `{id, method}`/`{seq}`, the wire is `{id, type}` with `subscribe {since}`); the backoff is extracted to `connection/backoff.ts` and both use it, and `ConnectionManager` gained the `connecting` state. `real/wire.ts` was not created: `src/wire.ts` (M3) already brands ids at one seam.
+- `OrchestratorApi` gained `onSnapshot`, `readSession` and `retry`; `ConnectionState` gained `connecting`; `Transport.onClose` carries `code`/`fatal`, `Transport.onVisible` is optional.
+- The real API has no sign-in until #1733: `real/localAuth.ts` offers one local provider so the existing gate stays. FR-013 text unchanged.
+- T029 tests live in `apps/client/tests/{session,sidebar,components}` (Jest only matches `tests/`), not `features/*/__tests__`. The banner stays in `components/` (T034 says reuse).
+- T033: no `connection.connected` key (the banner is empty while connected). `error.*` keys are camelCase of each code plus `unavailable` and `unauthenticated` (the client's own codes).
+- T035: `client-start` (alias `web`, already on main) now runs the real client; `client-web-mock` is the mock one; `start:mock` script added.
+- T036: `scripts/local-stack.sh` already has the port check, overrides and trap that T040 lists; seed is `projects.json` with embedded sessions (no AI CLI; session content is empty until a daemon holds events). M6 T040 only needs to extend the test if more is wanted; T042 can fold into `docs/user-guide/web-client.md`.
+- Gate: `scripts/gate.sh` ran fmt and clippy (core, workspace) green, then stopped at `cargo nextest` (not installed in the container, as in M3). JS: `pnpm --filter @micold/client lint|typecheck|test` and `@micold/protocol typecheck` green (217 and 73 tests); `scripts/tests/*.test.sh` run by hand; web export and `scripts/client/bundle-check.mjs` green. Local gate: scoped only, full gate left to CI.
+- Not done: the real daemon+orchestrator stack was not started end to end in this container (quickstart Part B is M6 T041).
 
 ## Open escalation
 

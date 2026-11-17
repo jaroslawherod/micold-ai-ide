@@ -4,7 +4,7 @@
 import { createAuthSession, type Api, type AuthSession, type Unsubscribe } from "../api";
 import type { AuthProvider, Change, ConnectionState, Snapshot } from "../types";
 import { applyChanges } from "../order";
-import { buildFixture } from "./fixture";
+import { buildFixture, mockContent } from "./fixture";
 
 export const MOCK_SENTINEL = "__MICOLD_MOCK__";
 
@@ -65,6 +65,9 @@ export function createMockApi(): { api: Api; control: MockControl } {
         if (missed.length) onBatch(missed);
         return listen(feeds, onBatch);
       },
+      onSnapshot: () => () => undefined,
+      readSession: async (ref) => (snap.sessions.some((s) => s.id === ref.session) ? mockContent(ref.session) : []),
+      retry: () => setConnection({ kind: "connected" }),
       connection: { get: () => connection, subscribe: (cb) => listen(connListeners, cb) },
     },
     auth: {

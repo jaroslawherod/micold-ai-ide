@@ -36,23 +36,36 @@ export function createSnapshotStore(api: Api, now: () => number = Date.now): Sto
     start() {
       let stopped = false;
       let unsubscribeFeed = () => {};
-      const unsubscribeConnection = orchestrator.connection.subscribe((connection) => set({ connection }));
-      orchestrator.getSnapshot().then(
-        (first) => {
-          if (stopped) return;
-          set({ snapshot: first, failed: false, updatedAt: now() });
-          unsubscribeFeed = orchestrator.subscribe(first.seq, (batch) => {
-            const current = get().snapshot;
-            if (current) set({ snapshot: applyChanges(current, batch), updatedAt: now() });
-          });
-        },
-        () => {
-          if (!stopped) set({ failed: true });
-        },
-      );
+      // Load the first snapshot and follow the feed from it; again when the connection comes up
+      // while there is still nothing to show (the orchestrator was down at open, US1 scenario 4).
+      const load = () => {
+        orchestrator.getSnapshot().then(
+          (first) => {
+            if (stopped || get().snapshot) return;
+            set({ snapshot: first, failed: false, updatedAt: now() });
+            unsubscribeFeed = orchestrator.subscribe(first.seq, (batch) => {
+              const current = get().snapshot;
+              if (current) set({ snapshot: applyChanges(current, batch), updatedAt: now() });
+            });
+          },
+          () => {
+            if (!stopped) set({ failed: true });
+          },
+        );
+      };
+      const unsubscribeConnection = orchestrator.connection.subscribe((connection) => {
+        set({ connection });
+        if (connection.kind === "connected" && !get().snapshot) load();
+      });
+      // A snapshot the orchestrator sent in place of a resume it could not serve replaces ours.
+      const unsubscribeSnapshot = orchestrator.onSnapshot((next) => {
+        if (!stopped) set({ snapshot: next, failed: false, updatedAt: now() });
+      });
+      load();
       return () => {
         stopped = true;
         unsubscribeFeed();
+        unsubscribeSnapshot();
         unsubscribeConnection();
       };
     },

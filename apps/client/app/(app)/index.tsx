@@ -1,9 +1,11 @@
 // Home (US2, US3): the sidebar beside the Overview from 600 px, stacked above it below.
-import React from "react";
+import React, { useState } from "react";
 import { ScrollView, View } from "react-native";
-import { Text, useTheme } from "react-native-paper";
+import { Button, Text, useTheme } from "react-native-paper";
+import type { SessionId } from "@micold/protocol";
 import { LocalePicker } from "../../src/components/LocalePicker";
 import { Overview } from "../../src/features/overview/Overview";
+import { SessionContent } from "../../src/features/session/SessionContent";
 import { Sidebar } from "../../src/features/sidebar/Sidebar";
 import { SnapshotProvider } from "../../src/features/sidebar/SnapshotProvider";
 import { useT } from "../../src/i18n/IntlProvider";
@@ -16,6 +18,7 @@ export default function Index() {
   const theme = useTheme();
   const { width, wide } = useLayout();
   useTitle("app.title");
+  const [open, setOpen] = useState<SessionId | undefined>(undefined);
   const pad = spacing.lg;
   const header = (
     <View style={{ padding: pad, gap: spacing.sm, flexDirection: wide ? "row" : "column", alignItems: wide ? "center" : "stretch" }}>
@@ -27,12 +30,21 @@ export default function Index() {
   );
   const sidebar = (
     <View testID="sidebar-pane" style={wide ? { width: SIDEBAR_WIDTH, flexShrink: 0 } : { alignSelf: "stretch" }}>
-      <Sidebar />
+      <Sidebar onOpenSession={setOpen} />
     </View>
   );
   const overview = (estimatedWidth: number) => (
     <View testID="overview-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0, padding: pad }}>
-      <Overview wide={wide} estimatedWidth={estimatedWidth} />
+      {open ? (
+        <View style={{ gap: spacing.md }}>
+          <Button mode="text" compact onPress={() => setOpen(undefined)} accessibilityLabel={t("overview.title")} style={{ alignSelf: "flex-start" }}>
+            {t("overview.title")}
+          </Button>
+          <SessionContent sessionId={open} />
+        </View>
+      ) : (
+        <Overview wide={wide} estimatedWidth={estimatedWidth} />
+      )}
     </View>
   );
   return (

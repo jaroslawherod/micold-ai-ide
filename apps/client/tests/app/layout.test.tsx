@@ -46,8 +46,11 @@ describe("root layout and index", () => {
     expect(screen.getByTestId("slot")).toBeTruthy();
   });
 
-  it("explains, instead of crashing, when the build has no orchestrator client", async () => {
+  it("explains, instead of crashing, when the orchestrator client cannot be created", async () => {
     process.env.EXPO_PUBLIC_API_MODE = "real";
+    jest.spyOn(require("../../src/api/select"), "selectApi").mockImplementation(() => {
+      throw new Error("no client");
+    });
     await render(<RootLayout />);
     expect(screen.queryByTestId("slot")).toBeNull();
     expect(screen.getByRole("alert")).toHaveTextContent("The orchestrator connection is not available in this build.");

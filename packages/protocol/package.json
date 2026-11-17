@@ -16,6 +16,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./mock": "./src/mock/index.ts"
+    "./mock": "./src/mock/index.ts",
+    "./real": "./src/real/index.ts"
   }
 }

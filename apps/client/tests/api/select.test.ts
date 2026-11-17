@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { REAL_CLIENT_MISSING, selectApi } from "../../src/api/select";
+import { selectApi } from "../../src/api/select";
 
 const ORIGINAL = process.env.EXPO_PUBLIC_API_MODE;
 afterEach(() => {
@@ -23,11 +23,32 @@ describe("selectApi", () => {
     expect((globalThis as { __micoldMock?: unknown }).__micoldMock).toBeDefined();
   });
 
-  it("throws in real mode, never falling back to the mock", () => {
-    process.env.EXPO_PUBLIC_API_MODE = "real";
-    expect(() => selectApi()).toThrow(REAL_CLIENT_MISSING);
-    expect(REAL_CLIENT_MISSING).toBe("real client not built (#1732)");
-    expect((globalThis as { __micoldMock?: unknown }).__micoldMock).toBeUndefined();
+  it("selects the real client in real mode and connects to the configured address, never the mock", () => {
+    const urls: string[] = [];
+    class FakeSocket {
+      constructor(url: string) {
+        urls.push(url);
+      }
+      send() {}
+      close() {}
+    }
+    const original = globalThis.WebSocket;
+    globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
+    const url = process.env.EXPO_PUBLIC_ORCHESTRATOR_URL;
+    try {
+      process.env.EXPO_PUBLIC_API_MODE = "real";
+      delete process.env.EXPO_PUBLIC_ORCHESTRATOR_URL;
+      const api = selectApi();
+      expect(api.orchestrator.connection.get()).toEqual({ kind: "connecting" });
+      process.env.EXPO_PUBLIC_ORCHESTRATOR_URL = "ws://example.test:9/api/ws";
+      selectApi();
+      expect(urls).toEqual(["ws://127.0.0.1:8730/api/ws", "ws://example.test:9/api/ws"]);
+      expect((globalThis as { __micoldMock?: unknown }).__micoldMock).toBeUndefined();
+    } finally {
+      globalThis.WebSocket = original;
+      if (url === undefined) delete process.env.EXPO_PUBLIC_ORCHESTRATOR_URL;
+      else process.env.EXPO_PUBLIC_ORCHESTRATOR_URL = url;
+    }
   });
 
   it("is the only app module that names the mock or a socket", () => {

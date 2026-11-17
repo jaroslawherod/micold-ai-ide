@@ -4,6 +4,7 @@
 // `id`, `seq` or `method`; the real wire format belongs to #1732.
 import { ApiError, type ApiErrorCode, type Clock, type ConnectionOptions, type Handle, type Transport, type Unsubscribe } from "../api";
 import type { ConnectionState } from "../types";
+import { DEFAULT_MAX_ATTEMPTS, retryDelay } from "./backoff";
 
 export interface EventFrame {
   seq: number;
@@ -16,7 +17,6 @@ interface Pending {
   timer: Handle;
 }
 
-const DEFAULT_MAX_ATTEMPTS = 8;
 const ERROR_CODES: readonly ApiErrorCode[] = ["unauthenticated", "unavailable", "timeout"];
 
 /** An error code from the wire; anything not in the contract is `unavailable`. */
@@ -85,6 +85,7 @@ export class ConnectionManager {
   start(): void {
     this.stopped = false;
     this.opening = true;
+    if (!this.everOpened) this.setState({ kind: "connecting" });
     this.transport.open();
   }
 
@@ -134,12 +135,11 @@ export class ConnectionManager {
       return;
     }
     this.setState({ kind: "reconnecting", attempt: this.attempt });
-    const ceiling = Math.min(this.options.maxMs, this.options.baseMs * 2 ** (this.attempt - 1));
     this.retryTimer = this.clock.setTimeout(() => {
       this.retryTimer = undefined;
       this.opening = true;
       this.transport.open();
-    }, this.options.random() * ceiling);
+    }, retryDelay(this.attempt, this.options));
   }
 
   private handleFrame(raw: string): void {

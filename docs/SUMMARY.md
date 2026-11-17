@@ -15,6 +15,7 @@
 - [Icons](user-guide/icons.md)
 - [Worktrees & sessions](user-guide/worktrees-and-sessions.md)
 - [The worktree Overview](user-guide/overview.md)
+- [The web client and the local stack](user-guide/web-client.md)
 - [Running a prompt in parallel](user-guide/parallel-runs.md)
 - [Terminal panes](user-guide/terminal-panes.md)
 - [Giving a structured session a file](user-guide/structured-input.md)

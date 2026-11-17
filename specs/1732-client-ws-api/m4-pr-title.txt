@@ -1,0 +1,1 @@
+#1732: JSON-over-WebSocket client API with generated TypeScript types and JSON Schema, origin checks, resume (M4: web client on real API)

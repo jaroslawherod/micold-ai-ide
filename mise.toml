@@ -75,13 +75,26 @@ pnpm --filter @micold/client web:export
 """
 
 [tasks.client-start]
-description = "Web client: Expo dev server for the web against the in-memory mock API (#2025)"
+description = "Web client: Expo dev server for the web against a real orchestrator, at EXPO_PUBLIC_ORCHESTRATOR_URL (default ws://127.0.0.1:8730/api/ws; #1732)"
 alias = "web"
 dir = "{{config_root}}"
 run = """
 pnpm install --frozen-lockfile
 pnpm --filter @micold/client start
 """
+
+[tasks.client-web-mock]
+description = "Web client: Expo dev server for the web against the in-memory mock API only, no orchestrator (#2025, #1732)"
+dir = "{{config_root}}"
+run = """
+pnpm install --frozen-lockfile
+pnpm --filter @micold/client start:mock
+"""
+
+[tasks.local-stack]
+description = "Run the orchestrator, one seeded daemon and the web client on this machine; Ctrl+C stops all (#1732) [builds the daemon and the web export]"
+dir = "{{config_root}}"
+run = "scripts/local-stack.sh"
 
 [tasks.client-e2e]
 description = "Web client: Playwright smoke, pseudo-locale and screenshot specs in Chromium, Firefox and WebKit against the mock export (#1735, T055)"

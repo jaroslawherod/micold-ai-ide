@@ -9,6 +9,9 @@ function stubApi(): Api {
   const orchestrator: OrchestratorApi = {
     getSnapshot: async () => empty,
     subscribe: () => () => undefined,
+    onSnapshot: () => () => undefined,
+    readSession: async () => [],
+    retry: () => undefined,
     connection: { get: () => state, subscribe: () => () => undefined },
   };
   const auth: AuthService = {

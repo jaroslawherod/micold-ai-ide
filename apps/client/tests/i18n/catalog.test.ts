@@ -1,6 +1,7 @@
 import { TYPE, parse, type MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import en from "../../src/i18n/en.json";
 import pl from "../../src/i18n/pl.json";
+import { errorMessageId } from "../../src/features/session/errors";
 
 function argumentNames(elements: MessageFormatElement[], into = new Set<string>()): Set<string> {
   for (const el of elements) {
@@ -63,5 +64,44 @@ describe("message catalogs", () => {
 
   it("use area.id keys", () => {
     for (const id of Object.keys(en)) expect(id).toMatch(/^[a-z]+(\.[a-zA-Z]+)+$/);
+  });
+
+  // FR-015, SC-007: the strings #1732's web client added, each in both languages.
+  const NEW_KEYS = [
+    "connection.connecting",
+    "connection.reconnecting",
+    "connection.unreachable.title",
+    "connection.unreachable.body",
+    "connection.retry",
+    "sidebar.sessionUnreachable",
+    "session.unreachable",
+    "session.refresh",
+    "session.content.label",
+    "session.content.loading",
+    "session.content.empty",
+    "session.content.failed",
+    "session.content.truncated",
+    "session.role.user",
+    "session.role.assistant",
+    "session.role.system",
+    "session.entry.toolCall",
+    "session.entry.toolResult",
+    "session.entry.status",
+  ];
+
+  it("translate every string of the real connection and content views", () => {
+    for (const id of NEW_KEYS) {
+      expect((en as Record<string, string>)[id]).toBeTruthy();
+      expect((pl as Record<string, string>)[id]).toBeTruthy();
+      expect((pl as Record<string, string>)[id]).not.toBe((en as Record<string, string>)[id]);
+    }
+  });
+
+  it("have an error line for every error code, in both languages", () => {
+    for (const code of ["malformed", "unknown_type", "terminal_not_supported", "not_found", "daemon_unreachable", "timeout", "internal", "project_busy", "refused", "unavailable", "unauthenticated"] as const) {
+      const id = errorMessageId(code);
+      expect((en as Record<string, string>)[id]).toBeTruthy();
+      expect((pl as Record<string, string>)[id]).toBeTruthy();
+    }
   });
 });
