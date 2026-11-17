@@ -1,133 +1,124 @@
 ---
 feature: 1948-orchestrator-postgres-store
-verdict: FAIL
+verdict: PASS_WITH_GAPS
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against (no override, no preset)
-verified_at: cae46cf # HEAD audited (origin/main incl. M11 squash c5c184a03); re-verify of the FAIL at 40309293a
+verified_at: cc8816d9f # HEAD audited (M12 squash 97c75faea plus the ledger commit); re-verify of the FAIL at cae46cf
 behaviors: 27 # 25 graded + 2 NOT_APPLICABLE; no tdd/test-list.md exists, so a "behavior" is one cycle-log entry / task group
 proven: 11
 likely: 0
-test_after: 14 # unchanged: M11 added a mutant red after the fact to each, which the rubric does not count as test-first
+test_after: 14 # class unchanged (history cannot change); F4 accepted by the owner on the recorded mutant reds, see "F4"
 no_test: 0
-high_smells: 0 # catalogue HIGH smells; plus 1 HIGH survivor (N1) and the 14 TEST_AFTER rows
+high_smells: 0
 criteria_total: 17 # acceptance scenarios US1.1-US6.2
-criteria_covered: 17 # US5.2 and US5.4 now start-level; US4.4 still unit-level (spec accepts)
-mutation_score: unmeasured # cargo-mutants not installed; 8 deliberate mutants this run, 7 caught, 1 caught about half the runs (sample, not a score)
-mutants_survived: 1 # N1, intermittent
-suite: "daemon `--test orchestrator` without PostgreSQL 204 passed, 0 failed, 55 ignored, 19 s; with PostgreSQL 16 (MICOLD_REQUIRE_POSTGRES=1) 259 passed, 0 failed, 0 ignored, 24 s; core `--lib orchestrator::` 104 passed, `--lib daemon_config::` 140 passed"
+criteria_covered: 17 # US4.4 unit-level only (spec accepts until #1732)
+mutation_score: unmeasured # cargo-mutants not installed; 4 deliberate mutants this run, all caught (sample, not a score)
+mutants_survived: 0
+suite: "daemon `--test orchestrator` with PostgreSQL 16 (MICOLD_REQUIRE_POSTGRES=1): 271 passed, 0 failed, 0 ignored, 26 s on the first full run; 9 of the 10 full runs after it, under libtest parallelism, had 1 to 3 failures (N8), each passing alone. nextest absent."
 ---
 
-# TDD Verification: PostgreSQL store for the orchestrator (#1948), re-verify after M11
+# TDD Verification: PostgreSQL store for the orchestrator (#1948), re-verify after M12 (#2027, 97c75faea)
 
-**Verdict: FAIL.** 14 of 25 graded behaviors are still `TEST_AFTER` by the rubric (history cannot
-change; M11's mutant reds are corroboration, not test-first evidence), and the migration retry bound
-survives its mutant on about half the runs.
-
-What changed: 8 of the 12 earlier findings are resolved, including both weakened existing tests (F1,
-F2) and the silent PostgreSQL skip (F3). F4, F8, F9, F10 and F12 are only partly cleared (below). The
-suite is green on both backends, and I ran the PostgreSQL cases against a real server this time.
+**Verdict: PASS_WITH_GAPS.** N1 to N7 are all resolved and every mutant caught, but the 14 `TEST_AFTER`
+rows stay test-after by history: the verdict holds only because the owner accepted the recorded mutant
+reds as the resolution of F4. Read literally, the rubric fails any `TEST_AFTER`.
 
 Independence: files read cold in a session that did not write them. No fresh-context subagent is
 available to this agent, so the smell pass was done by hand; every cited line was opened.
 
-## F1 to F12 status
+## F4: accepted exception
+
+The 14 `TEST_AFTER` rows (4, 6, 7, 9, 11, 13, 15 to 19, 24 to 26) have no red at the time and the
+history shows source before test. The re-verify instruction was to accept the after-the-fact mutant
+reds recorded in `cycle-log.md` T064 and T068 as the resolution of F4. I applied that: F4 is closed, the
+rows keep the class `TEST_AFTER` in the table (this audit does not rewrite history), and the verdict is
+`PASS_WITH_GAPS` instead of `FAIL` on that basis only. The mutant reds are taken as written, not re-run
+(except as in "Mutation results"). Row 16's survivor (the retry bound) is now killed (N1).
+
+## N1 to N7 status
 
 | # | Was | Now | Evidence |
 | - | --- | --- | -------- |
-| F1 | HIGH, FR-008 scan blanks every `.connect_with(` in `db/` | **Resolved** | `no_outbound.rs:41-91` blanks only `.connect_with(` on an `AnyPoolOptions::new()` chain and the full path `sqlx::AnyConnection::connect(`; `:363-379` pins both sides. Mutant: `std::net::TcpStream::connect("1.1.1.1:1")` added to `db/mod.rs` fails `the_orchestrator_source_opens_no_outbound_connection` |
-| F2 | HIGH, process-level failed-save stderr assertion removed | **Resolved** | `restart.rs:169` `a_failed_local_save_is_reported_on_stderr`: real process on SQLite, a trigger aborts daemon inserts, waits for `a registry change could not be saved`. Mutant: that text changed at `save.rs:91` fails it, no PostgreSQL needed |
-| F3 | HIGH, PostgreSQL cases `return` and report `ok` | **Resolved** | `build.rs` sets `cfg(micold_postgres)`; every PostgreSQL case is `#[cfg_attr(not(micold_postgres), ignore = ...)]` (`store_suite.rs:230,747,870`, `store_import.rs:83`, `store_migrations.rs:337`, `store_scan.rs:42,357-390`, `store_slow.rs:54,74,197`). Without a URL: 55 reported `ignored`; with one: 259 ran, 0 ignored. `store_support.rs:149-161` fails a case that asks for a server it cannot find when built with the cfg or `MICOLD_REQUIRE_POSTGRES=1`. The leftover `let Some(..) else { return }` lines are unreachable in a CI build. CI run 43963469440 is claimed in the log, not inspected here |
-| F4 | HIGH (process), 14 TEST_AFTER, no M6 entry | **Not resolved by the rubric** | M6 entry added (`cycle-log.md` T064); rows 4, 6, 7, 9, 11, 13, 15 to 19, 24 to 26 each have a mutant, command and failing test name. The history still shows source before test and no red at the time, so the class stays `TEST_AFTER`. Row 16 recorded as surviving (see N1) |
-| F5 | MED, US5.2 and US5.4 only on `import_registry_json` | **Resolved** | `store_config.rs:182,202` call `run_configured`. Mutant `import.rs:82` `rows > 0` to `rows > 1000000` fails both PostgreSQL and SQLite `store_import` cases and the start-level case |
-| F6 | MED, hand-rolled fixtures | **Resolved** | `store_sql_errors.rs:14` and `store_import.rs:13` import `T, uid, hash, new_user, refresh_token, invite, daemon, keys` from `store_suite`. `jscpd`/`similarity-rs` equality is claimed in the log, not re-run |
-| F7 | MED, vacuous reason and port checks | **Resolved** | `store_migrations.rs:191,251,304,683` pin the reason text and `127.0.0.1:1`; mutant forcing the PostgreSQL target port to 5432 fails 4 tests. The remaining `!sqlite.is_empty()` (`:281`) guards a non-empty comparison, fine |
-| F8 | MED, substring-pinned refusals, loosened exact message | **Partly** | The corrupt-file start error is exact again (`store_config.rs:163-169`, but it embeds serde_json's text `missing field \`version\` at line 1 column 2`). The auth refusals are still substrings: N3 |
-| F9 | MED, eager cases | **Partly** | `store_suite.rs` cases are one rule each (e.g. `:316-342`, `:479-504`, `:566-614`, `:645-702`) and the lost-table and bad-row cases in `store_sql_errors.rs` are split. Two eager cases remain: N3 |
-| F10 | LOW, real-clock `elapsed < 9 s` | **Not resolved** | The wall-clock check became `waited < 9` on the test clock (`store_slow.rs:188-189`), but `waited` is exactly `PING_INTERVAL` (3 s) because the test advances the clock once: N2 |
-| F11 | LOW, one-migration ordering | **Resolved** | `store_migrations.rs:617-641` runs a three-migration chain and asserts `0003` saw two recorded rows; the cycle log records the swapped-SQL red |
-| F12 | LOW, `map_error` and positional inserts | **Mostly** | `store_migrations.rs` no longer calls `map_error` and inserts name their columns (`:70,244`). Positional `INSERT INTO ... VALUES` remain in `store_sql_errors.rs:182-188,231` |
+| N1 | HIGH, retry bound survives its mutant on about half the runs | **Resolved** | `migrate::run_forward_with(migrator, attempt)` (`db/migrate.rs:78-95`); `run_forward` is `run_forward_with(.., \|\| migrator.run(pool))` (`:68`). Three cases in `store_migrations.rs:720-767` drive an attempt that loses the race `migrations + extra` times: finishes at `migrations + 2` attempts, gives up after `migrations + 2`, and a non-race error is tried once. Both bounds are pinned. Mutants: `retries = 0` fails the two retry cases on 3 of 3 runs (the two-starters case on 1 of 3), `retries = len()` fails both, `retries = len() + 2` fails the give-up case |
+| N2 | MED, `waited < 9` asserts a value the test set | **Resolved** | the line and `waited` are gone (`store_slow.rs:175-189`); `record_when(b online, last_seen > before)` while the save is parked is the assertion and can fail if the heartbeat path blocks |
+| N3 | MED, two eager substring cases | **Resolved** | 10 one-refusal cases in `store_sql_errors.rs:297-420` (the log says 11; I count 4 bootstrap, 4 invite, 2 enrollment), each `assert_eq!` against `db::refusal` (`db/mod.rs:31-61`). Mutant `auth.rs:443` `BOOTSTRAP_MISMATCH` to `BOOTSTRAP_CONSUMED` fails `consuming_another_code_than_the_one_set_is_refused_as_a_mismatch`. See N9 for the residual |
+| N4 | MED, fixed 2 s then drop | **Resolved** | `starts` (`store_config.rs:245-262`) removes a stale socket, then selects the start against the socket appearing (20 ms poll, 60 s ceiling that only fails). `run` opens the store, importing, before `serve` binds (`orchestrator/mod.rs:141-154`), so the socket means the import is done. `store_config` passed in every full run here |
+| N5 | LOW, undocumented password requirement | **Resolved** | documented at `store_support.rs:145-148`; the case itself still panics on a passwordless URL (the behavior was documented, not removed) |
+| N6 | LOW, positional inserts | **Resolved** | all inserts in `store_sql_errors.rs:182-194,239-241` name their columns; no positional `INSERT INTO .. VALUES` left in the file |
+| N7 | LOW, serde wording pinned | **Resolved** | `store_config.rs:163-169` pins the file name prefix and a non-empty cause |
 
 ## Test-first evidence
 
-Same 27 rows and classes as the previous report (no `tdd/test-list.md`; behaviors are cycle-log
-entries mapped to tasks). `PROVEN` rows (2, 3, 5, 8, 10, 12, 14, 20, 21, 22, 23): red recorded and
-test and source land in one commit. `TEST_AFTER` rows (4, 6, 7, 9, 11, 13, 15 to 19, 24 to 26): no
-red at the time. M11 gives each a mutant red after the fact; 12 name a failing test (rows 4, 6, 7, 9,
-11, 13, 17, 18, 19, 24, 25, 26), row 15 is covered by the T069 swapped-migration red, and row 16
-survived its mutant. Rows 1 and
-27 are `NOT_APPLICABLE`.
+Same 27 rows and classes as the previous report. `PROVEN` rows (2, 3, 5, 8, 10, 12, 14, 20, 21, 22, 23):
+red recorded and test and source in one commit. `TEST_AFTER` rows: see F4. Rows 1 and 27 are
+`NOT_APPLICABLE`. M12 behaviors (T071 to T075) each have a cycle-log entry with a mutant red
+(T071 `retries = 0`, 5 of 5 per the log, 3 of 3 here); the retry cases land with the source change in
+one commit (`97c75faea`), so T071 is `PROVEN` by the same rule as the others.
 
-Log versus history: no entry contradicts the history. The M11 log's CI claim (run 43963469440,
-`micold-daemon::orchestrator` 247 passed, none skipped) is not corroborated here; this box ran 259
-with a local server because the tree has since grown.
+Log versus history: no contradiction. One small one: the log and commit say 11 refusal cases, the file
+holds 10.
 
-### Changes to tests that already existed (M11 range `a5ebdc7^..HEAD`)
+### Changes to tests that already existed (M12 range `97c75faea^..97c75faea`)
 
-Assertion-bearing lines per test file are equal or higher after M11 (`store_suite` 76 to 82, the
-others unchanged), and every removed assertion was either moved into a split case or replaced by a
-stricter one: `!reason.is_empty()` to pinned reasons (F7), `contains(path)` to the exact message
-(F8), real-clock `elapsed` to test clock (F10, but see N2). No test was ignored except through the
-`micold_postgres` cfg (reported, intended), no filter or name moved a test out of reach, and
-`scripts/guardrails-scope.conf` and `mise.toml` changes in the range belong to #1735, not this
-feature. `tasks.md`: T061 to T070 are all `[x]`, each backed by a cycle-log entry and a commit; no
-behavioral task is unticked.
+- `store_slow.rs:188-189`: `waited < 9` removed. It asserted a constant (see N2), so nothing real was
+  lost.
+- `store_config.rs:163-169`: exact error string loosened to prefix plus non-empty cause. Justified
+  (framework text, N7); the file-name part is still exact.
+- `store_config.rs:245-262`: fixed timeout replaced by a socket wait. Strictly stricter (a start that
+  returns early fails).
+- `store_sql_errors.rs`: `contains(..)` replaced by `assert_eq!` on exact reasons, split into cases.
+  Stricter.
+- No test ignored, renamed out of a filter, or excluded. `.config/nextest.toml` adds a cap of 8 threads
+  for the `orchestrator` binary (a limit on parallelism, not a skip). No coverage or mutation threshold
+  touched.
+- `tasks.md`: T071 to T075 are `[x]`, each with a cycle-log entry. No behavioral task unticked.
 
 ## Findings
 
 | # | Severity | Finding | Evidence |
 | - | -------- | ------- | -------- |
-| N1 | HIGH | The migration retry bound has no deterministic test. With `retries = migrator.migrations.len() + 1` replaced by `0`, `two_starters_on_one_database_apply_each_migration_once` failed on 2 of 4 runs here and survived on the other 2; the M11 log recorded it as surviving (row 16). A survivor inside a `DONE` behavior (M5 review A). | `db/migrate.rs:71`; `store_migrations.rs:699`; `cycle-log.md` T064 row 16 |
-| F4 | HIGH (process) | 14 behaviors are `TEST_AFTER`; the rubric fails any `TEST_AFTER`. Not fixable retroactively, only by accepting the mutant reds as the recorded exception or by a spec-level waiver. | table above |
-| N2 | MED | `assert!(waited < 9)` asserts a value the test set: the clock only moves by the `advance(PING_INTERVAL)` on the line before, so `waited` is always 3 and the claim "inside the 9 s liveness deadline" is not tested. The test's real assertion is that `record_when` sees `b` online while the save thread is parked, which does hold. Compare against `LIVENESS_DEADLINE` through the orchestrator's own timer, or drop the line. | `store_slow.rs:179-189` |
-| N3 | MED | Two eager, substring-coupled cases survive T068: `the_bootstrap_states_each_have_their_own_refusal` walks 5 refusals and `an_invite_and_an_enrollment_name_why_they_were_refused` walks 8, each pinned by `contains("no bootstrap")`, `"does not match"`, `"consumed"`, `"unknown"`, `"expired"`, `"user"`, `"already"`. A reworded reason fails with no rule named; the sentence `contains("user")` cannot tell a wrong cause. | `store_sql_errors.rs:287-331` |
-| N4 | MED | `starts` lets a start run for a fixed 2 s then drops it (`timeout(2 s, start)` expecting `Err`). On a slow box the import may still be mid-way when the future is dropped, so the following `stored(..)` count can read 0 rows. Sleepy test; wait on the renamed file or the row instead. | `store_config.rs:245-249`, used at `:173,185,192,205` |
-| N5 | LOW | `a_save_lost_with_the_database_is_reported_on_stderr_without_the_password` panics (`the test URL carries a password`) when the server is reached with a passwordless URL. It failed in my first run until the URL carried a dummy password; the requirement is not documented in `store_support.rs:145`. | `store_slow.rs:218` |
-| N6 | LOW | Positional `INSERT INTO users VALUES (...)` literals in the bad-row seed (the rest of F12). | `store_sql_errors.rs:182-188,231` |
-| N7 | LOW | The exact corrupt-file assertion embeds serde_json's wording (framework under test); a serde upgrade can break it. | `store_config.rs:163-169` |
+| N8 | MED | Under plain `cargo test` (the profile's suite command) the orchestrator binary is not reliably green on this box. At default parallelism 1 full run passed (271) and the next 4 failed with 1 to 3 PostgreSQL cases: `pool timed out while waiting for an open connection` (`store_support.rs:195`, `store_suite.rs:56,136`). At `--test-threads=8`, 5 of 6 runs failed, 4 on `restart::the_orchestrator_hosts_no_session_and_writes_only_its_registry` (`child_count()` read 1, expected 0) and 1 on the pool timeout. Each failing case passes alone. CI runs nextest with the M12 cap (`.config/nextest.toml`) and one process per test, which this box cannot run (no `cargo-nextest`), so whether CI is affected is not shown here. Cause not diagnosed: the child count is process-global and only tests that take `children_quiet()` are protected (`support.rs:420`); a test that spawns a child without the guard breaks it. | `restart.rs:84`; `store_support.rs:195`; `support.rs:420-442`; `.config/nextest.toml` |
+| N9 | LOW | The refusal cases assert against the constants the source uses, so a reworded reason changes source and test together and nothing pins the wording. Intended by N3's remediation and distinct reasons are still told apart (mutant above), but a wrong wording ships unnoticed. | `store_sql_errors.rs:297-420`; `db/mod.rs:31-61` |
+| N10 | LOW | The M12 log's "11 cases" does not match the 10 in the file. | `cycle-log.md` T073; `store_sql_errors.rs` |
 
-Other properties: tests are isolated (a tempdir or a database per case), the orchestrator target runs
-in 19 to 25 s, and the race cases assert an invariant. The two-starter case is race-dependent for the
-mutant above (N1), stable on unmutated code across 6 runs here.
+Other properties: tests are isolated (a tempdir or a database per case), the orchestrator target runs in
+20 to 30 s, race cases now assert an invariant on demand (N1). No HIGH smell found in the M12 files:
+no assertion-free, tautological, vacuous or conditional-assert test. The `attempts_after` helper stubs the
+migrator attempt, but the subject under test is the retry loop, not the migrator, so it is not a doubled
+subject; the real migrator path stays covered by `two_starters_...` and the migration cases.
 
 ## Mutation results
 
-Tool: none (`cargo-mutants` absent). Score **unmeasured**. 8 deliberate mutants this run, one at a
-time, each restored with `git checkout -- <file>` and verified (`git status` shows only the
-pre-existing `autopilot.md` edit; the final full run was 259 passed, 0 failed). PostgreSQL ran for all.
+Tool: none (`cargo-mutants` absent). Score **unmeasured**. 4 deliberate mutants this run on the M12
+source, one at a time, each restored with `git checkout -- <file>`; `git status` was clean after each and
+after the last, and the full orchestrator suite ran green (271 passed) on the restored tree.
 
 | # | Mutant | Behavior | Survived | Caught by |
 | - | ------ | -------- | -------- | --------- |
-| 1 | `save.rs:91` text `could not be saved` to `was lost` | F2, FR-016 | No | `restart::a_failed_local_save_is_reported_on_stderr`, `store_slow::a_save_lost_...`, `restart::the_orchestrator_hosts_no_session_...` |
-| 2 | `std::net::TcpStream::connect("1.1.1.1:1")` added in `db/mod.rs` | F1, FR-008 | No | `no_outbound::the_orchestrator_source_opens_no_outbound_connection` |
-| 3 | `db/import.rs:82` `rows > 0` to `rows > 1000000` | US5.4, FR-010 | No | 3 tests, both backends and the start-level case |
-| 4 | `db/migrate.rs:71` retry bound to `0` | M5 retry bound | **Yes, 2 of 4 runs** | `two_starters_...` only when the race is hit (N1) |
-| 5 | `db/mod.rs:94` PostgreSQL target port forced to 5432 | F7 | No | 4 tests |
-| 6 | `db/auth.rs:646` drop `AND redeemed_at IS NULL` (enrollment) | redeem once | No | 5 tests incl. `an_enrollment_is_redeemed_once_across_reopen` on both backends |
-| 7 | `db/auth.rs:347` drop `AND redeemed_at IS NULL` (invite) | redeem once | No | 6 tests incl. `an_invite_is_redeemed_once`, `of_many_callers_...` |
-| 8 | (restore check) full suite after the last restore | none | n/a | 259 passed |
+| 1 | `db/migrate.rs:83` `migrations.len() + 1` to `0` (3 runs) | N1 retry bound | No | `a_starter_that_loses_..._still_finishes`, `a_starter_that_keeps_losing_..._gives_up_...` on 3 of 3, plus `two_starters_...` on 1 of 3 |
+| 2 | same line to `migrations.len()` | N1 lower bound | No | both retry cases |
+| 3 | same line to `migrations.len() + 2` | N1 upper bound | No | `a_starter_that_keeps_losing_..._gives_up_...` |
+| 4 | `db/auth.rs:443` `BOOTSTRAP_MISMATCH` to `BOOTSTRAP_CONSUMED` | N3 refusal | No | `consuming_another_code_than_the_one_set_is_refused_as_a_mismatch` (a `postgres_holds_no_key_material` failure in that run was the N8 pool timeout, not the mutant) |
+| 5 | (restore check) full suite on the restored tree | none | n/a | 271 passed |
 
-Not sampled this run (carried from the previous report): `daemon_config` validation, the `[database]`
-view, `reassign_unowned`, `choose_store`, owner preservation; the M11 log's own 17 mutants are taken
-as written.
-
-Coverage: not run (`cargo-llvm-cov` absent).
+Not
+sampled: `daemon_config` validation, the `[database]` view, `reassign_unowned`, `choose_store`, owner
+preservation, the `starts` socket wait (N4), and the M11 log's 17 mutants, taken as written. Coverage not
+run (`cargo-llvm-cov` absent).
 
 ## Traceability
 
-Unchanged except where noted. Every criterion US1.1 to US6.2 reaches a test; every cycle-log test name
-was found in the tree except the two renamed or removed earlier. Start-level now: US5.2
-(`store_config::a_second_start_imports_nothing_and_leaves_the_imported_file`) and US5.4
-(`an_unimported_file_beside_rows_fails_the_start_naming_file_and_row_count`). US4.4 (network bind, no
-`[database]`) is a `choose_store` unit test (`backend.rs:95`), accepted by the spec until #1732.
-PostgreSQL rows (US1.1, FR-012, SC-004, FR-016 lost-database) executed here against a local server.
-Untested criteria: none. Tests tracing to nothing: none.
+Unchanged from the previous report: every criterion US1.1 to US6.2 reaches a test, US5.2 and US5.4 at
+start level (`store_config`), US4.4 as a `choose_store` unit test (`backend.rs:95`, accepted by the spec
+until #1732). The 10 refusal cases trace to FR-016 and the auth store contract. PostgreSQL rows executed
+here against a local PostgreSQL 16 server. Untested criteria: none. Tests tracing to nothing: none.
 
 ## What was not audited
 
-- The CI run that executes the PostgreSQL cases (run 43963469440) and the `ci.yml` service container
-  beyond reading `ci.yml:303-320`; I ran the cases on a local PostgreSQL 16 instead.
-- Mutation testing proper (no `cargo-mutants`); the 17 mutants in the M11 log were not re-run, only
-  7 of my own plus a handful of repeats.
-- Coverage; the full workspace suite (`mise run gate`); `mise run duplication` equality claims (F6).
-- #1725 and other features' tests in the range; the client crate and docs.
+- CI: the run that executes the PostgreSQL cases under nextest, and whether N8 shows there. This box has
+  no `gh`, `mise` or `cargo-nextest`; I ran PostgreSQL 16 locally (`postgres` role password set to a dummy
+  value for the run).
+- Mutation testing proper (no `cargo-mutants`), coverage, the full workspace suite (`mise run gate`) and
+  `mise run duplication`; the 14 `TEST_AFTER` mutant reds and the M11 17 mutants as written.
+- The other crates, the client, docs, and other features' tests in the range (#1735, #1981).
 - Performance, load, and a real slow database.
-- Red-phase claims in the cycle log, including the M11 reds, taken as written except where re-run above.
+- Red-phase claims in the cycle log, taken as written except the N1 mutant re-run above.

@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Closed 2026-11-17 — shipped in PRs #1967, #1970, #1980, #1992, #1997, #2001, #2003, #2006, #2008, #2010, #2011, #2014, #2027
 
 **Input**: Issue #1948 "feat: PostgreSQL store for the orchestrator (sqlx, migrations, store traits;
 SQLite for local mode)", part of #1722, milestone M3, depends on #1724 (`RegistryStore` trait).

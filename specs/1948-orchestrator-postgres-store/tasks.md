@@ -533,3 +533,17 @@ source.
 - [x] T075 [P] N5, N6, N7 (LOW): document the password requirement at `store_support.rs:145` (or build
   the URL with one), name the columns in `store_sql_errors.rs:182-188,231`, and drop serde's wording
   from `store_config.rs:163-169`. Verify: `... --test orchestrator store_` passes.
+
+## Phase 15: TDD remediation (re-verify at `cc8816d9f`)
+
+Source: [tdd/verification.md](tdd/verification.md), verdict **PASS_WITH_GAPS**. No blocking finding:
+F4 is accepted on the recorded mutant reds and N1 to N7 are cleared. The audit changed no test or source.
+
+- [ ] T076 (deferred to a follow-up issue: libtest-only flake; CI runs nextest with the `.config/nextest.toml` cap and is green) N8 (MED): make the orchestrator binary green under plain `cargo test`. Find the test that
+  spawns a child without `children_quiet()` (`support.rs:420`) or take the guard in
+  `restart.rs:75`'s peers, and cap PostgreSQL case concurrency for libtest as `.config/nextest.toml` does
+  for nextest (a semaphore in `store_support.rs`, or a smaller per-case pool). Verify: 5 consecutive runs of
+  `MICOLD_TEST_POSTGRES_URL=... scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator` pass.
+- [x] T077 [P] N10 (LOW): correct the case count in `tdd/cycle-log.md` T073 (10 cases, not 11), or add the
+  missing eleventh refusal case. Verify: `grep -c "is_refused_" crates/micold-daemon/tests/orchestrator/store_sql_errors.rs`
+  matches the log.
