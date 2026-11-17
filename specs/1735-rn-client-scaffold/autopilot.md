@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-kk2qlw
 - **Started**: 2026-11-16
-- **Phase**: done
-- **Next step**: handoff
+- **Phase**: close PR #2022 open; T060a, T062, T065-T069 are follow-ups
+- **Next step**: merge #2022 on green `ci complete`, then handoff
 
 ## Pull requests
 

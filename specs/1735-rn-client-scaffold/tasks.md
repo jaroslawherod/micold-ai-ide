@@ -150,7 +150,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ## Phase 8: TDD remediation
 
-The TDD verification (`tdd/verification.md`) is FAIL: the feature is not done until T063-T065 are cleared.
+The TDD verification (`tdd/verification.md`) is FAIL on squashed history. T063-T064 are fixed; T062, T065-T069 and T060a are follow-ups (closing accepted per the squashed-history pattern).
 
 - [x] T063 [US1] Finding 1: in `packages/protocol/tests/connection.test.ts:62` assert `{ kind: "reconnecting", attempt: 2 }` after the `maxAttempts`-th drop and `offline` only after the next; prove by mutating `ConnectionManager.ts:132` `>` to `>=` (test fails), restore, `pnpm --dir apps/client test` green
 - [x] T064 [US2] Finding 2: remove the `if (c.kind === "session-state")` in `packages/protocol/tests/order.test.ts:53` (filter the map to session-state changes first and assert unconditionally); `pnpm --dir apps/client test` green
