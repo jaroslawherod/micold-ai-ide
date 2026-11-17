@@ -22,6 +22,7 @@ lives beside the Rust workspace as a pnpm workspace (`package.json`, `pnpm-works
 
 | Task | Does |
 |---|---|
+| `mise run client-start` (alias `mise run web`) | install, then the Expo dev server for the web against the mock API; open the URL it prints |
 | `mise run client-test` | install, lint, typecheck, Jest with coverage |
 | `mise run client-web` | the production web export into `apps/client/dist` |
 | `mise run client-e2e` | the mock export into `apps/client/dist-mock`, then Playwright in Chromium, Firefox and WebKit |
