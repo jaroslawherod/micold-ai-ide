@@ -15,7 +15,7 @@
 - Review B (conformance): run by the orchestrator.
 
 ## Local gate
-GATE_LINE
+Local gate: scoped only, full gate left to CI. fmt and workspace clippy green (scripts/gate.sh stopped at nextest: not installed in the container); `cargo test -p micold-core --test main` 2445 passed, 2 failed (the two root-only permission tests in gate.sh `root_only`; the container runs as root); every `scripts/tests/*.test.sh` green; `scripts/api-types.sh --check` green.
 
 Refs #1732
 https://claude.ai/code/session_01NCdYvPnNa4tmPz4FzNinb7

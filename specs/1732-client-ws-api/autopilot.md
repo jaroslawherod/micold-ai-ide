@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xt3xhy
 - **Started**: 2026-11-17
 - **Phase**: milestones (M3 in review)
-- **Next step**: M3 code done (T020–T026), gate run, pushed on claude/project-thread-xt3xhy; reviews not run (no Agent tool): the orchestrator reviews `a1c9514b3..HEAD`, opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
+- **Next step**: M3 code done (T020–T026), scoped gate green (fmt, workspace clippy, micold-core tests bar 2 root-only, shell suites; nextest missing, so full gate left to CI; no gate stamp recorded), pushed on claude/project-thread-xt3xhy; reviews not run (no Agent tool): the orchestrator reviews `a1c9514b3..HEAD`, opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -49,6 +49,8 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 - M3 (base a1c9514b3, PR #2034 merged): schema root = anyOf(ClientRequest, ServerMessage), draft-07 `definitions`, feed types named too. json-schema-to-typescript 16.0.0 (latest). Wire stays snake_case; `packages/protocol/src/wire.ts` maps it onto the client's camelCase types (client `Session` gained optional `reachable`). Drift: Rust tests `client_api_schema`/`client_api_vectors` check schema and vectors in every cargo test; `scripts/api-types.sh --check` in gate.sh (when json2ts installed) and `--check --ts-only` + `scripts/tests/api-types.test.sh` in CI's web client job (the Rust lint job has no node, so the shell test skips there).
 
 ## Review rounds
+
+| diff review | 1 | M3 a1c9514b3..HEAD | - | - | NOT RUN by the milestone unit (no Agent tool): orchestrator to run |
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
