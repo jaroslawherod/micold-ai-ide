@@ -19,6 +19,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #2032 | Design PR (spec, plan, tasks), draft | open | - |
 
 ## Milestones
 
