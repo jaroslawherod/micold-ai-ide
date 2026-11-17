@@ -147,3 +147,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run client-e2e`; `node scripts/client/bundle-check.mjs apps/client/dist`; `specs/1735-rn-client-scaffold/visual-pass/`
 - **Depends on**: M3
 - **Tier**: full
+
+## Phase 8: TDD remediation
+
+The TDD verification (`tdd/verification.md`) is FAIL: the feature is not done until T063-T065 are cleared.
+
+- [x] T063 [US1] Finding 1: in `packages/protocol/tests/connection.test.ts:62` assert `{ kind: "reconnecting", attempt: 2 }` after the `maxAttempts`-th drop and `offline` only after the next; prove by mutating `ConnectionManager.ts:132` `>` to `>=` (test fails), restore, `pnpm --dir apps/client test` green
+- [x] T064 [US2] Finding 2: remove the `if (c.kind === "session-state")` in `packages/protocol/tests/order.test.ts:53` (filter the map to session-state changes first and assert unconditionally); `pnpm --dir apps/client test` green
+- [ ] T065 [US6] Finding 3: add `## M4` to `tdd/cycle-log.md` with a recorded red for T054, T056, T058 (and a bundle-check red for T058 via `scripts/tests/bundle-check.test.sh` against the pre-hardening script), and record that T045 landed green and was shown to bite; `grep -c "T058" specs/1735-rn-client-scaffold/tdd/cycle-log.md` is 1 or more
+- [ ] T066 [US2] Finding 4: replace the wall-clock assertion in `apps/client/tests/sidebar/latency.test.tsx:85` with a render-count or fake-timer check, leaving the 100 ms bound to the Playwright spec; `pnpm --dir apps/client test` green
+- [ ] T067 [US1] Finding 5: drop the source-grep test at `apps/client/tests/auth/sessionStore.test.ts:44`, relying on the behavioral test at line 12
+- [ ] T068 [US6] Finding 7: run `/speckit-tdd-setup` for the pnpm/Jest stack (command, exemplar, helpers `apps/client/tests/support/renderWithApi.tsx`, `packages/protocol/tests/fakes.ts`) and `/speckit-tdd-plan` to create `tdd/test-list.md`; re-run `/speckit-tdd-verify`
+- [ ] T069 [US4] Finding 6: rename or complete the test at `apps/client/tests/app/layout.test.tsx:56` so its name matches what it asserts
+
