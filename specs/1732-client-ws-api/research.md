@@ -113,13 +113,13 @@ so versions come from the Go module proxy (tags) and Docker Hub.
 
 | Tool / image | Latest seen | Pinned | Why |
 |---|---|---|---|
-| kind | v0.33.0 (proxy.golang.org, 2026-08-26) | v0.30.0 (unchanged) | the bump needs the release's SHA256, published only on GitHub; follow-up |
-| kindest/node | v1.37.0 (Docker Hub, 2026-08-26) | v1.34.0@sha256:ede5bb69… | the node image kind v0.30.0 ships for; bump with kind |
-| helm | v3.22.1 (v3 line), v4.3.2 | v3.19.0 (unchanged) | get.helm.sh unreachable for the checksum; v4 is a major change; follow-up |
-| kubectl | v1.37.2 (dl.k8s.io stable) | v1.34.0 (unchanged) | matches the node image's minor |
+| kind | v0.33.0 (proxy.golang.org, 2026-08-26) | v0.33.0, sha256 aee61515… | bumped in the diff-review fix round; sha256 from the release's checksum file, supplied by the coordinator |
+| kindest/node | v1.37.0 (Docker Hub, 2026-08-26, the day kind v0.33.0 shipped) | v1.37.0@sha256:1aac8018… | the image paired with kind v0.33.0: GitHub's release notes were unreachable here, so pairing is by date and minor; the first live run confirms it |
+| kubectl | v1.37.2 (dl.k8s.io stable) | v1.37.2, sha256 c0448752… | matches the node image's minor; kubeconform validates against 1.37.0 too |
+| helm | v3.22.1 (v3 line), v4.3.2 | v3.19.0 (unchanged) | neither get.helm.sh nor GitHub's API answered here, so no sha256 for v3.22.1. Verifying against the upstream `.sha256sum` at install time was considered and declined: it comes from the same host as the tarball, so it checks transfer, not origin, and the pin test requires a full sha256 per tool. Follow-up: bump from a machine that reaches get.helm.sh |
 | postgres | 18.7-alpine3.24 (Docker Hub) | 18.7-alpine3.24@sha256:fa1b61f5… | official image; Bitnami's chart images left the free catalogue in 2025 |
 | alpine/git (seed) | v2.54.1 | v2.54.1@sha256:f6629095… | sh and git for the seed init container |
-| node (web image) | 22-alpine | 22-alpine@sha256:12f54caf… | the repo's node major |
+| node (web image) | 24-alpine | 24-alpine@sha256:116b800c… (Docker Hub index digest) | the node major CI's other jobs use (setup-node "24") |
 
 Deviations found while implementing: the daemon's `[orchestrator_link]` is a local socket only, so
 seeded daemons are sidecars of the orchestrator pod (not a separate Deployment), sharing

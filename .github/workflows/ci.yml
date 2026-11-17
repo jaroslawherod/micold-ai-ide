@@ -968,8 +968,12 @@ jobs:
           set -euo pipefail
           scripts/install-kube-tools.sh kind kubectl helm
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
       - name: The scripts' own cases
         run: |
+          scripts/tests/chart-local.test.sh
           scripts/tests/local-stack-kind.test.sh
           scripts/tests/local-stack-probe.test.sh
           scripts/tests/dockerfile-web.test.sh

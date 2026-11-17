@@ -9,7 +9,7 @@
 # Needs `helm` and `kubeconform` on PATH (scripts/install-kube-tools.sh pins both). kubeconform
 # fetches its Kubernetes schemas from the network. CHART overrides the chart directory,
 # KUBECONFORM_K8S_VERSION the Kubernetes version validated against (default the kubectl pin's
-# 1.34.0), CHART_CHECK_CONFORMANCE=0 skips the conformance test (the script's own shell test does,
+# 1.37.0), CHART_CHECK_CONFORMANCE=0 skips the conformance test (the script's own shell test does,
 # on fixture charts). `mise run chart-check` runs this; scripts/gate.sh runs it when both tools
 # exist; CI runs it in the `kube-chart` job.
 
@@ -66,7 +66,7 @@ fi
 [ "$#" -eq 0 ] || { echo "usage: $0 [--image]" >&2; exit 2; }
 
 CHART="${CHART:-$ROOT/deploy/helm/micold}"
-K8S_VERSION="${KUBECONFORM_K8S_VERSION:-1.34.0}"
+K8S_VERSION="${KUBECONFORM_K8S_VERSION:-1.37.0}"
 for tool in helm kubeconform; do
   command -v "$tool" >/dev/null 2>&1 || {
     echo "chart-check: $tool is not on PATH (scripts/install-kube-tools.sh $tool)" >&2
