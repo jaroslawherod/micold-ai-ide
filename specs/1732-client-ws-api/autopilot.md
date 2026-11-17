@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-mezck0
 - **Started**: 2026-11-17
-- **Phase**: plan
-- **Next step**: plan review round 2 (sonnet, fix diff) then tasks unit. (superseded: round 1, opus, rubrics/plan.md) NOT RUN: the plan unit had no Agent tool; the orchestrator dispatches it with snapshot 1ed86d9ea:a2b09676c then, if CLEAN, the tasks unit.
+- **Phase**: tasks
+- **Next step**: tasks review NOT RUN (the tasks unit had no Agent tool): the orchestrator dispatches an opus reviewer (rubrics/tasks.md) on specs/1732-client-ws-api/tasks.md, fixes findings, then speckit-analyze if not run, closes checklists (requirements.md has 0 unchecked), runs the specs-only gate and opens the design PR (title and body per the orchestrator's prompt, Refs #1732, no Closes).
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -24,6 +24,12 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T019 | full | /api/ws listener: list, read_session (new daemon ReadStructuredEvents), subscribe+resume, heartbeat, origin refusal | - | pending |
+| M2 | T020–T026 | full | generated schema+TS, drift gate in gate/CI, FR-012 vectors | - | pending |
+| M3 | T027–T037 | full | web client on the real API, i18n en+pl, minimal local-stack | - | pending |
+| M4 | T038–T042 | full | 3-browser Playwright on the stack, CI job, docs, visual pass, port-conflict polish | - | pending |
+
+M1 has 19 tasks (over the ~10 guideline): kept whole because the plan fixed it and the daemon read request, types, listener and tests are one wire surface with no observable split; M1 is Setup+Foundational+server stories.
 
 ## Decisions
 
@@ -43,6 +49,8 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | spec review | 2 | spec.md | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | CLEAN (sonnet re-review); nit Key Entities ping->pong fixed |
 
 | plan review | 1 | plan.md, research.md, data-model.md, contracts/, quickstart.md | a2b09676c | 1ed86d9eaafae9191caee6e33c48dc05f136a0a6:a2b09676c384b84c5601274c6aaafd1a91208141 | NOT RUN by the plan unit |
+| plan review | 2 (sonnet, fix diff) | same | a4609c73c | - | CLEAN (recorded by the tasks unit from the orchestrator's report) |
+| tasks review | 1 | tasks.md | - | - | NOT RUN: no Agent tool in the tasks unit; orchestrator runs it |
 | plan review | 1 (opus, run by the orchestrator) | same | see commit | - | CHANGES: 2 HIGH, 3 MED, 3 LOW; all fixed (read_session via new daemon ReadStructuredEvents, early M1 test; poller restart and boundaries; origin port/null; FR-012 vectors cover grouping; i18n key groups; local-stack moved into M3; subscribed/offline notes); behaviour-bearing, round 2 re-review (sonnet) due |
 
 ## Declined review findings
