@@ -53,6 +53,7 @@ export interface AuthProvider {
 }
 
 export type ConnectionState =
+  | { kind: "connecting" }
   | { kind: "connected" }
   | { kind: "reconnecting"; attempt: number }
   | { kind: "offline" };

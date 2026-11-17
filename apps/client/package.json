@@ -4,7 +4,8 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "EXPO_PUBLIC_API_MODE=mock expo start --web",
+    "start": "EXPO_PUBLIC_API_MODE=real expo start --web",
+    "start:mock": "EXPO_PUBLIC_API_MODE=mock expo start --web",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "cd ../.. && jest --config apps/client/jest.config.js",

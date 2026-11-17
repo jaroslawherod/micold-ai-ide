@@ -3,7 +3,7 @@
 import React, { useCallback, useState } from "react";
 import { View } from "react-native";
 import { Text, useTheme } from "react-native-paper";
-import { assertNever, type DaemonStatus, type RowKey } from "@micold/protocol";
+import { assertNever, type DaemonStatus, type RowKey, type SessionId } from "@micold/protocol";
 import { LocationRow } from "../../components/LocationRow";
 import { useT, useTranslator } from "../../i18n/IntlProvider";
 import type { MessageId } from "../../i18n/catalog";
@@ -37,7 +37,17 @@ export function Notice({ id, alert = false }: { id: MessageId; alert?: boolean }
   );
 }
 
-function DaemonSection({ group, selected, onSelect }: { group: DaemonGroup; selected?: RowKey; onSelect: (k: RowKey) => void }) {
+function DaemonSection({
+  group,
+  selected,
+  onSelect,
+  onOpenSession,
+}: {
+  group: DaemonGroup;
+  selected?: RowKey;
+  onSelect: (k: RowKey) => void;
+  onOpenSession?: (id: SessionId) => void;
+}) {
   const { t, formatSince } = useTranslator();
   const theme = useTheme();
   const connection = useSnapshot((s) => s.connection);
@@ -66,7 +76,7 @@ function DaemonSection({ group, selected, onSelect }: { group: DaemonGroup; sele
             {project.project.name}
           </Text>
           {project.locations.map((row) => (
-            <LocationRow key={row.key} row={row} stale={stale} selected={row.key === selected} onSelect={onSelect} />
+            <LocationRow key={row.key} row={row} stale={stale} selected={row.key === selected} onSelect={onSelect} onOpenSession={onOpenSession} />
           ))}
         </View>
       ))}
@@ -74,7 +84,7 @@ function DaemonSection({ group, selected, onSelect }: { group: DaemonGroup; sele
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onOpenSession }: { onOpenSession?: (id: SessionId) => void } = {}) {
   const t = useT();
   const snapshot = useSnapshot((s) => s.snapshot);
   const failed = useSnapshot((s) => s.failed);
@@ -86,7 +96,7 @@ export function Sidebar() {
   else if (snapshot.daemons.length === 0) body = <Notice id="sidebar.empty" />;
   else
     body = sidebarTree(snapshot).map((group) => (
-      <DaemonSection key={group.key} group={group} selected={selected} onSelect={setSelected} />
+      <DaemonSection key={group.key} group={group} selected={selected} onSelect={setSelected} onOpenSession={onOpenSession} />
     ));
   return (
     <View testID="sidebar" accessibilityLabel={t("sidebar.label")} role="navigation" style={{ gap: spacing.md, padding: spacing.md }}>

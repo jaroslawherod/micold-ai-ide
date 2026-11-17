@@ -1,9 +1,9 @@
-// The one place the mock is named (FR-004, FR-005). Expo inlines `EXPO_PUBLIC_API_MODE` at build
-// time, so in a production export (`real`) the condition is a constant, Metro folds the branch away
-// and `@micold/protocol/mock` never reaches the bundle (the bundle check proves it).
+// The one place the mock and the socket are named (FR-004, FR-005, FR-013). Expo inlines
+// `EXPO_PUBLIC_API_MODE` at build time: only `mock` selects the in-memory mock, which a production
+// export (`real`, the default) folds away so `@micold/protocol/mock` never reaches the bundle (the
+// bundle check proves it). The orchestrator address is `EXPO_PUBLIC_ORCHESTRATOR_URL` (FR-016).
 import type { Api } from "@micold/protocol";
-
-export const REAL_CLIENT_MISSING = "real client not built (#1732)";
+import { createRealApi } from "@micold/protocol/real";
 
 export function selectApi(): Api {
   if (process.env.EXPO_PUBLIC_API_MODE === "mock") {
@@ -14,5 +14,5 @@ export function selectApi(): Api {
     (globalThis as { __micoldMock?: unknown }).__micoldMock = control;
     return api;
   }
-  throw new Error(REAL_CLIENT_MISSING);
+  return createRealApi(process.env.EXPO_PUBLIC_ORCHESTRATOR_URL || undefined);
 }

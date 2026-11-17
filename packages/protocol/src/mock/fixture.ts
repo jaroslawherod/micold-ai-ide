@@ -1,4 +1,5 @@
 // The mock's fixture (SC-001 data): 2 daemons, 6 projects, 30 worktrees, 60 sessions.
+import type { ContentEntry } from "../generated/client-api";
 import { daemonId, locationId, projectId, sessionId, type Snapshot, type SessionState } from "../types";
 
 const STATES: SessionState[] = ["working", "waiting", "idle", "error", "stopped"];
@@ -28,4 +29,12 @@ export function buildFixture(): Snapshot {
     }
   }
   return snap;
+}
+
+/** A short canned conversation for any session of the mock (FR-014b). */
+export function mockContent(id: string): ContentEntry[] {
+  return [
+    { seq: 1, role: "user", kind: "text", text: `Hello from ${id}` },
+    { seq: 2, role: "assistant", kind: "text", text: "Hello. What shall we do?" },
+  ];
 }

@@ -22,7 +22,9 @@ lives beside the Rust workspace as a pnpm workspace (`package.json`, `pnpm-works
 
 | Task | Does |
 |---|---|
-| `mise run client-start` (alias `mise run web`) | install, then the Expo dev server for the web against the mock API; open the URL it prints |
+| `mise run client-start` (alias `mise run web`) | install, then the Expo dev server for the web against a real orchestrator (`EXPO_PUBLIC_ORCHESTRATOR_URL`, default `ws://127.0.0.1:8730/api/ws`); open the URL it prints |
+| `mise run client-web-mock` | the same dev server against the in-memory mock, no orchestrator |
+| `mise run local-stack` | the orchestrator, a seeded daemon and the web export together, [user guide](../user-guide/web-client.md); `Ctrl+C` stops all |
 | `mise run client-test` | install, lint, typecheck, Jest with coverage |
 | `mise run client-web` | the production web export into `apps/client/dist` |
 | `mise run client-e2e` | the mock export into `apps/client/dist-mock`, then Playwright in Chromium, Firefox and WebKit |
@@ -50,10 +52,10 @@ Tab in all three browsers.
 
 ## The mock switch
 
-`EXPO_PUBLIC_API_MODE` is inlined at build time. `mock` (`pnpm start`, `web:export:mock`) loads
+`EXPO_PUBLIC_API_MODE` is inlined at build time. `mock` (`pnpm start:mock`, `web:export:mock`) loads
 `@micold/protocol/mock`, an in-memory orchestrator and auth service with a fixed fixture, and exposes
 its control as `globalThis.__micoldMock` for Playwright (push a change, refuse a sign-in, drop the
-connection). Any other value leaves the mock out of the bundle; the bundle check proves it by the
+connection). Any other value (the default) selects the real client over `/api/ws` and leaves the mock out of the bundle; the bundle check proves it by the
 `__MICOLD_MOCK__` sentinel. The pseudo-locale is offered only in mock and dev builds.
 
 ## The protocol package stand-in
@@ -62,11 +64,12 @@ connection). Any other value leaves the mock out of the bundle; the bundle check
 (`specs/1735-rn-client-scaffold/contracts/`), and the app reaches the API only through the `Api`
 interface from `useApi()`.
 
-## How #1732 swaps in
+## The real client (#1732)
 
-When the real orchestrator client (#1732) and the generated protocol types (#1733) land:
-
-1. Replace the hand-written types in `packages/protocol/src/types.ts` with the generated ones.
-2. Implement `Api` over the real transport in `@micold/protocol` and return it from the non-mock
-   branch of `apps/client/src/api/select.ts`; today that branch throws and `ApiProvider` shows why.
-3. Keep the mock for dev, Jest and Playwright; the bundle check keeps it out of the production export.
+`@micold/protocol/real` implements `OrchestratorApi` over `/api/ws`: `BrowserTransport` (the one
+browser-specific seam: close codes, `visibilitychange`), `RealOrchestratorApi` (subscribe, resume from
+`{epoch, seq}`, ping every 20 s, backoff of 500 ms to 15 s with full jitter, `offline` after 8
+attempts) and a local auth stand-in, since the API has no sign-in until #1733. `select.ts` returns it
+in every build but `EXPO_PUBLIC_API_MODE=mock`; the types are generated from the Rust ones
+(`mise run api-types`). The mock stays for Jest and Playwright; the bundle check keeps it out of the
+production export.

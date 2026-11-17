@@ -6,7 +6,8 @@ export class FakeTransport implements Transport {
   opens = 0;
   closes = 0;
   private openCb = () => undefined as void;
-  private closeCb: (info: { clean: boolean }) => void = () => undefined;
+  private closeCb: (info: { clean: boolean; code?: number; fatal?: boolean }) => void = () => undefined;
+  private visibleCb: () => void = () => undefined;
   private messageCb: (frame: string) => void = () => undefined;
   open() {
     this.opens += 1;
@@ -20,7 +21,7 @@ export class FakeTransport implements Transport {
   onOpen(cb: () => void) {
     this.openCb = cb;
   }
-  onClose(cb: (info: { clean: boolean }) => void) {
+  onClose(cb: (info: { clean: boolean; code?: number; fatal?: boolean }) => void) {
     this.closeCb = cb;
   }
   onMessage(cb: (frame: string) => void) {
@@ -30,8 +31,14 @@ export class FakeTransport implements Transport {
   accept() {
     this.openCb();
   }
-  drop(clean = false) {
-    this.closeCb({ clean });
+  drop(clean = false, extra: { code?: number; fatal?: boolean } = {}) {
+    this.closeCb({ clean, ...extra });
+  }
+  onVisible(cb: () => void) {
+    this.visibleCb = cb;
+  }
+  becomeVisible() {
+    this.visibleCb();
   }
   deliver(frame: Record<string, unknown>) {
     this.messageCb(JSON.stringify(frame));

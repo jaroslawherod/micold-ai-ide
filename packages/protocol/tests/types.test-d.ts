@@ -15,6 +15,8 @@ takesSession("s1");
 
 export function describe(state: ConnectionState): string {
   switch (state.kind) {
+    case "connecting":
+      return "connecting";
     case "connected":
       return "connected";
     case "reconnecting":
