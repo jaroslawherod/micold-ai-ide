@@ -67,9 +67,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 built and pushed (T023-T029 ticked; T030 live `kube-e2e` rounds not run). CI is the gate (cloud: no kind/kubectl/docker, no kubeconform; helm v3.19.0 built from source ran chart-conformance 80/80, e2e-kind stub test 33/33, `e2e_link` 8/8, clippy clean on micold-daemon and micold-e2e). Review snapshot: base 7bcb978d5 .. head = the pushed branch head (`git log -1` on claude/project-thread-xzo0po). PR body: specs/1981-kube-e2e/pr-body-m4.md; PR not opened.
-Notes for reviewers/live round: suite order is ops, restart, link (restart expects an empty registry); refusal and the five-breakage matrix run after, in the same cluster; `kube-e2e` has `timeout-minutes: 30`, the matrix may need a bump; `breakage=user` is caught by `ops::security`, `volume` by `restart`, the others by the ops port-forward; the busybox init-container digest was read from Docker Hub (index of 1.37.0). Offline after a dropped link takes ~10 s (liveness deadline), so link tests allow 60 s.
-Next: reviews A and B (orchestrator), PR, T030.
+M4 merged as a59a74729 (PR #2021, 2026-11-17). Diff review A (opus) CLEAN r1, 3 MINOR fixed. Live `orchestrator end to end on kind (linux)` passed first round (T030 done). `sandbox against a real runtime` failed once on an unrelated DNS test (sandbox_real_no_outbound_still_resolves_names), green on re-run.
+Next: M5 (T031-T032). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
 
 ## Open escalation
 
