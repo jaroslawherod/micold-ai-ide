@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-mxfy6x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 (#1983) PR open; orchestrator waits on CI and merges.
+- **Next step**: M3 (#1984), tasks T016–T022.
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
-| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | implemented, in review |
+| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #2017 | merged 7cd3811f7 |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | pending |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
 | M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
@@ -64,7 +64,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 merged as 7cd3811f7 (PR #2017, 2026-11-17). Review A+B r1 (opus): 1 MAJOR (probes hung while the store opened) + 3 MINOR, all fixed; r2 (sonnet) CLEAN. CI found `no_outbound` flagging the ops tests' loopback `TcpStream::connect(addr)`; allowed as a self-probe (OPS_FILE/OPS_LINE). One `build + test` rerun: llvm-cov corrupt profraw, all tests had passed. Full local gate doesn't fit the cloud disk; CI was the gate.
+Next: M3 (#1984), tasks T016–T022 (kind harness, mise task, CI job kube-e2e). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
 
 ## Open escalation
 
