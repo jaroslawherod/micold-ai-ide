@@ -110,9 +110,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M11 merged (#2014, c5c184a03). Second tdd-verify FAILED (tdd/verification.md); T071–T075 appended. jaro chose (2026-11-17, decision card) to cut them into M12. Next: M12 milestone unit (T071–T075) in a fresh thread, then a new close unit re-running tdd-verify; that verify should accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows (F4).
-
-M12 built (T071–T075). Gate (scripts/gate.sh, PG 16 at :5433, cargo-nextest installed): fmt, clippy, 13648/13649 nextest green (only `session_extras` signing, ssh-keygen missing, unrelated); scripts/tests all pass. Reviews A and B not run (no Agent tool in this unit): the orchestrator runs them on the PR diff. Next: review, merge, then the close unit.
+M12 merged (#2027, 97c75fae, squash). T071-T075 done; agent review A+B combined: LOW only (2 fixed: comment wrap, `#[doc(hidden)]` on `run_forward_with`; store_config prefix check left as is per N7). CI also needed `.config/nextest.toml` (cap orchestrator binary at 8 threads, PG "too many clients") — it was the merge of main (#2016) that turned CI green, the cap may be unnecessary. Next: a new close unit in a fresh thread re-running speckit-tdd-verify; accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows (F4), then close epic #1948.
 
 ## Open escalation
 
