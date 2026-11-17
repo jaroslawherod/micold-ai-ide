@@ -10,6 +10,7 @@ use std::ffi::OsString;
 use std::io;
 use std::path::PathBuf;
 
+use micold_core::client_api::origin::OriginAllowList;
 use micold_core::endpoint::Endpoint;
 
 /// The variable that sets the data directory when `--data-dir` is absent.
@@ -18,6 +19,11 @@ pub const DATA_DIR_ENV: &str = "MICOLD_ORCHESTRATOR_DATA_DIR";
 pub const SOCKET_ENV: &str = "MICOLD_ORCHESTRATOR_SOCKET";
 /// The variable that sets the ops listener's address when `--ops-addr` is absent.
 pub const OPS_ADDR_ENV: &str = "MICOLD_ORCHESTRATOR_OPS_ADDR";
+/// The variable that sets the client API listener's address when `--api-addr` is absent (#1732).
+pub const API_ADDR_ENV: &str = "MICOLD_ORCHESTRATOR_API_ADDR";
+/// The variable that sets the allowed web origins, comma separated, when no `--allow-origin` is
+/// given (#1732).
+pub const ALLOW_ORIGINS_ENV: &str = "MICOLD_ORCHESTRATOR_ALLOW_ORIGINS";
 
 /// Where the orchestrator runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +34,11 @@ pub struct OrchestratorConfig {
     pub endpoint: Endpoint,
     /// Where the ops listener (`/healthz`, `/readyz`) binds; none by default.
     pub ops_addr: Option<std::net::SocketAddr>,
+    /// Where the client API (`/api/ws`, #1732) listens; off by default, loopback only until TLS
+    /// (#1733).
+    pub api_addr: Option<std::net::SocketAddr>,
+    /// The web origins allowed to open `/api/ws` (FR-004).
+    pub allow_origins: OriginAllowList,
 }
 
 /// The values used when neither a flag nor a variable gives one.
@@ -84,6 +95,10 @@ pub struct OrchestratorArgs {
     pub config: Option<PathBuf>,
     /// `--ops-addr`, unparsed.
     pub ops_addr: Option<OsString>,
+    /// `--api-addr`, unparsed.
+    pub api_addr: Option<OsString>,
+    /// Every `--allow-origin`, in order.
+    pub allow_origins: Vec<String>,
 }
 
 impl OrchestratorArgs {
@@ -103,9 +118,17 @@ impl OrchestratorArgs {
                 }
                 _ => (text, None),
             };
-            if !matches!(name, "--data-dir" | "--socket" | "--config" | "--ops-addr") {
+            if !matches!(
+                name,
+                "--data-dir"
+                    | "--socket"
+                    | "--config"
+                    | "--ops-addr"
+                    | "--api-addr"
+                    | "--allow-origin"
+            ) {
                 return Err(invalid(format!(
-                    "unknown orchestrator argument {name:?} (expected --data-dir, --socket, --config or --ops-addr)"
+                    "unknown orchestrator argument {name:?} (expected --data-dir, --socket, --config, --ops-addr, --api-addr or --allow-origin)"
                 )));
             }
             let value = match inline {
@@ -124,6 +147,8 @@ impl OrchestratorArgs {
                 "--data-dir" => out.data_dir = Some(PathBuf::from(value)),
                 "--socket" => out.socket = Some(PathBuf::from(value)),
                 "--config" => out.config = Some(PathBuf::from(value)),
+                "--api-addr" => out.api_addr = Some(value),
+                "--allow-origin" => out.allow_origins.push(value.to_string_lossy().into_owned()),
                 _ => out.ops_addr = Some(value),
             }
         }
@@ -162,18 +187,52 @@ impl OrchestratorConfig {
             Some(socket) => endpoint_at(socket),
             None => defaults.endpoint()?,
         };
-        let ops_addr = match args.ops_addr {
-            Some(value) => Some(socket_addr(&value, "--ops-addr")?),
-            None => match env(OPS_ADDR_ENV).filter(|value| !value.is_empty()) {
-                Some(value) => Some(socket_addr(&value, OPS_ADDR_ENV)?),
-                None => None,
-            },
+        let ops_addr = addr_of(args.ops_addr, "--ops-addr", env, OPS_ADDR_ENV)?;
+        let api_addr = addr_of(args.api_addr, "--api-addr", env, API_ADDR_ENV)?;
+        if let Some(addr) = api_addr.filter(|addr| !addr.ip().is_loopback()) {
+            return Err(invalid(format!(
+                "the client API address {addr} is not loopback: it is served without TLS until #1733, so only a loopback address is accepted"
+            )));
+        }
+        let origins = if args.allow_origins.is_empty() {
+            env(ALLOW_ORIGINS_ENV)
+                .map(|value| {
+                    value
+                        .to_string_lossy()
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|o| !o.is_empty())
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            args.allow_origins
         };
+        let allow_origins = OriginAllowList::new(&origins).map_err(invalid)?;
         Ok(Self {
             data_dir,
             endpoint,
             ops_addr,
+            api_addr,
+            allow_origins,
         })
+    }
+}
+
+/// The address the flag gives, else the variable `name`, else none.
+fn addr_of(
+    flag: Option<OsString>,
+    flag_name: &str,
+    env: &dyn Fn(&str) -> Option<OsString>,
+    name: &str,
+) -> io::Result<Option<std::net::SocketAddr>> {
+    match flag {
+        Some(value) => Ok(Some(socket_addr(&value, flag_name)?)),
+        None => match env(name).filter(|value| !value.is_empty()) {
+            Some(value) => Ok(Some(socket_addr(&value, name)?)),
+            None => Ok(None),
+        },
     }
 }
 
@@ -433,6 +492,55 @@ mod tests {
     }
 
     /// FR-019: `--ops-addr` over its variable; none by default; a bad value names its source.
+    #[test]
+    fn the_api_listener_is_off_unless_an_address_is_given() {
+        assert_eq!(resolve(&[], &[]).unwrap().api_addr, None);
+        let flag = resolve(
+            &["--api-addr", "127.0.0.1:8730"],
+            &[(API_ADDR_ENV, "127.0.0.1:1")],
+        );
+        assert_eq!(
+            flag.unwrap().api_addr,
+            Some("127.0.0.1:8730".parse().unwrap())
+        );
+        let env = resolve(&[], &[(API_ADDR_ENV, "[::1]:8730")]);
+        assert_eq!(env.unwrap().api_addr, Some("[::1]:8730".parse().unwrap()));
+    }
+
+    #[test]
+    fn a_non_loopback_api_address_is_refused_until_tls() {
+        let error = resolve(&["--api-addr=0.0.0.0:8730"], &[]).unwrap_err();
+        assert!(error.to_string().contains("#1733"), "{error}");
+    }
+
+    #[test]
+    fn allowed_origins_repeat_as_flags_or_come_comma_separated_from_env() {
+        let flags = resolve(
+            &[
+                "--allow-origin",
+                "http://127.0.0.1:8731",
+                "--allow-origin=http://localhost:8731",
+            ],
+            &[(ALLOW_ORIGINS_ENV, "http://other:1")],
+        )
+        .unwrap()
+        .allow_origins;
+        assert!(flags.allows(Some("http://localhost:8731"), false));
+        assert!(
+            !flags.allows(Some("http://other:1"), false),
+            "a flag wins over the variable"
+        );
+        let env = resolve(&[], &[(ALLOW_ORIGINS_ENV, "http://a:1, http://b:2")])
+            .unwrap()
+            .allow_origins;
+        assert!(env.allows(Some("http://a:1"), false) && env.allows(Some("http://b:2"), false));
+    }
+
+    #[test]
+    fn a_malformed_allowed_origin_is_refused() {
+        assert!(resolve(&["--allow-origin", "*"], &[]).is_err());
+    }
+
     #[test]
     fn ops_addr_is_flag_then_env_then_none() {
         let both = ["--data-dir", "/d", "--socket", "/s"];

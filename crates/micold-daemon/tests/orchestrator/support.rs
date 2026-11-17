@@ -134,6 +134,16 @@ impl Orchestrator {
         Self::listening(dir, socket, clock, Some(task)).await
     }
 
+    /// An orchestrator `task` runs on `socket` in `dir` with `clock`, once it listens.
+    pub async fn spawned(
+        dir: Arc<tempfile::TempDir>,
+        socket: PathBuf,
+        clock: Arc<TestClock>,
+        task: JoinHandle<std::io::Result<()>>,
+    ) -> Self {
+        Self::listening(dir, socket, clock, Some(task)).await
+    }
+
     /// An orchestrator another process runs on `socket`, once it listens.
     pub async fn external(dir: Arc<tempfile::TempDir>, socket: PathBuf) -> Self {
         Self::listening(dir, socket, TestClock::new(0), None).await

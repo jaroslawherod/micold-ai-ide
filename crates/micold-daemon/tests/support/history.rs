@@ -159,7 +159,12 @@ pub fn ai_session() -> Session {
 }
 
 /// A service whose catalog holds `sessions` in `project`, with nothing on disk.
-pub fn service(project: &Path, mut sessions: Vec<Session>) -> Arc<DaemonState> {
+pub fn service(project: &Path, sessions: Vec<Session>) -> Arc<DaemonState> {
+    Arc::new(DaemonState::new(catalog(project, sessions)))
+}
+
+/// The catalog of [`service`].
+pub fn catalog(project: &Path, mut sessions: Vec<Session>) -> Catalog {
     // A fixture session is not running: `Session::start_new` says `Starting`, which counts as live
     // beside its siblings (feature 776, FR-013).
     for session in &mut sessions {
@@ -176,11 +181,10 @@ pub fn service(project: &Path, mut sessions: Vec<Session>) -> Arc<DaemonState> {
         worktree_names: BTreeMap::new(),
         ..Default::default()
     };
-    let catalog = Catalog::load(
+    Catalog::load(
         Box::new(FakeProjectStore::loaded(workspace)),
         Box::new(FakeSettingsStore::new()),
-    );
-    Arc::new(DaemonState::new(catalog))
+    )
 }
 
 /// [`service`] that keeps its saved histories in `history`, as a service started on the host does

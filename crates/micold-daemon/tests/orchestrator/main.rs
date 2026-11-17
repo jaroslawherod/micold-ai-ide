@@ -11,8 +11,12 @@ mod mcp;
 #[path = "../support/structured.rs"]
 mod structured;
 
+// The real linked daemon of the `orchestrator_route` suite, for the client API tests.
+#[path = "../support/linked_daemon.rs"]
+mod linked_daemon;
 mod store_support;
 mod support;
+mod ws_support;
 
 mod dispatch;
 mod heartbeat;
@@ -32,3 +36,10 @@ mod store_slow;
 mod store_sql_errors;
 mod store_suite;
 mod version_mismatch;
+mod ws_admission;
+mod ws_listener;
+mod ws_liveness;
+mod ws_origin;
+mod ws_protocol;
+mod ws_read_session;
+mod ws_resume;

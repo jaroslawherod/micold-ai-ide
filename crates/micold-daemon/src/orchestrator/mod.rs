@@ -20,12 +20,15 @@ use micold_core::orchestrator::{BindScope, Registry, RegistryStore, Snapshot};
 pub mod client;
 pub mod config;
 pub mod db;
+pub mod directory;
+pub mod feed;
 pub mod hub;
 pub mod link;
 pub mod list;
 pub mod ops;
 pub mod query;
 mod save;
+pub mod ws;
 
 use save::{SaveQueue, SaveWorker};
 
@@ -76,6 +79,8 @@ pub struct Shared {
     clock: Arc<dyn Clock>,
     saves: Arc<SaveQueue>,
     hub: hub::Hub,
+    /// Poked when the registry changes, so the client API's feed polls at once (research R8).
+    changed: tokio::sync::Notify,
 }
 
 impl Shared {
@@ -85,6 +90,7 @@ impl Shared {
             clock,
             saves,
             hub: hub::Hub::default(),
+            changed: tokio::sync::Notify::new(),
         }
     }
 
@@ -95,6 +101,7 @@ impl Shared {
     pub(crate) fn save(&self, snapshot: Option<Snapshot>) {
         if let Some(snapshot) = snapshot {
             self.saves.offer(snapshot);
+            self.changed.notify_one();
         }
     }
 
@@ -118,6 +125,11 @@ impl Shared {
         &self.hub
     }
 
+    /// Resolves once the registry changed since the last call returned.
+    pub(crate) async fn changed(&self) {
+        self.changed.notified().await;
+    }
+
     pub(crate) fn now(&self) -> Instant {
         self.clock.now()
     }
@@ -138,8 +150,42 @@ pub async fn run(
         Some(addr) => Some(Ops::bind(addr).await?),
         None => None,
     };
+    let api = match config.api_addr {
+        Some(addr) => Some(ApiListener::bind(addr, config.allow_origins).await?),
+        None => None,
+    };
     let opened = open_store(database, config.data_dir, SystemClock.wall_secs());
-    run_ops_first(config.endpoint, ops, opened).await
+    run_ops_first(config.endpoint, ops, api, opened).await
+}
+
+/// The client API's listener (#1732), bound, and who may use it.
+pub struct ApiListener {
+    /// The bound listener.
+    pub listener: tokio::net::TcpListener,
+    /// The origins allowed to open `/api/ws`.
+    pub allow: micold_core::client_api::origin::OriginAllowList,
+    /// Its timings.
+    pub options: ws::ApiOptions,
+}
+
+impl ApiListener {
+    /// Bind `addr` for the origins `allow` names, with the default timings.
+    pub async fn bind(
+        addr: std::net::SocketAddr,
+        allow: micold_core::client_api::origin::OriginAllowList,
+    ) -> io::Result<Self> {
+        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("cannot bind the client API listener on {addr}: {e}"),
+            )
+        })?;
+        Ok(Self {
+            listener,
+            allow,
+            options: ws::ApiOptions::default(),
+        })
+    }
 }
 
 /// Start the ops listener, then wait for `opened` and serve: a probe sees 200 on `/healthz` and
@@ -147,11 +193,12 @@ pub async fn run(
 async fn run_ops_first(
     endpoint: Endpoint,
     ops: Option<Ops>,
+    api: Option<ApiListener>,
     opened: impl std::future::Future<Output = io::Result<Arc<dyn RegistryStore>>>,
 ) -> io::Result<()> {
     let running = ops.map(Ops::start);
     let store = opened.await?;
-    serve(endpoint, Arc::new(SystemClock), store, running).await
+    serve(endpoint, Arc::new(SystemClock), store, running, api).await
 }
 
 /// The configuration file's `[database]` table and data directory: the file `--config` names,
@@ -248,7 +295,17 @@ pub async fn run_with(
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
-    serve(config::endpoint_at(socket), clock, store, None).await
+    serve(config::endpoint_at(socket), clock, store, None, None).await
+}
+
+/// [`run_with`], serving the client API on `api` too (tests bind their own).
+pub async fn run_with_api(
+    socket: PathBuf,
+    clock: Arc<dyn Clock>,
+    store: Arc<dyn RegistryStore>,
+    api: ApiListener,
+) -> io::Result<()> {
+    serve(config::endpoint_at(socket), clock, store, None, Some(api)).await
 }
 
 /// The ops listener and the readiness it reports, served while the orchestrator runs.
@@ -343,6 +400,7 @@ async fn serve(
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
     ops: Option<RunningOps>,
+    api: Option<ApiListener>,
 ) -> io::Result<()> {
     // Held until this future ends, so the ops listener closes with the orchestrator.
     let readiness = ops.as_ref().map(|ops| Arc::clone(&ops.readiness));
@@ -360,6 +418,16 @@ async fn serve(
     .map_err(io::Error::other)?
     .map_err(io::Error::other)?;
     let (_saving, shared) = started(clock, store, Registry::restore(loaded))?;
+    // Served until this future ends.
+    let _api = api.map(|api| {
+        let directory = Arc::new(directory::InProcess::new(Arc::clone(&shared)));
+        AbortOnDrop(tokio::spawn(ws::serve(
+            api.listener,
+            api.allow,
+            directory,
+            api.options,
+        )))
+    });
     if let Some(readiness) = &readiness {
         readiness.set_registry_loaded();
     }
@@ -605,6 +673,7 @@ mod tests {
             Arc::new(SystemClock),
             store,
             Some(ops.start()),
+            None,
         ));
         assert!(ops::tests::get(addr, "/healthz")
             .await
@@ -631,7 +700,7 @@ mod tests {
         let (ops, addr) = ops_on_loopback().await;
         let endpoint = config::endpoint_at(dir.path().join("o.sock"));
         let never = std::future::pending::<io::Result<Arc<dyn RegistryStore>>>();
-        let task = tokio::spawn(run_ops_first(endpoint, Some(ops), never));
+        let task = tokio::spawn(run_ops_first(endpoint, Some(ops), None, never));
         assert!(ops::tests::get(addr, "/healthz")
             .await
             .starts_with("HTTP/1.1 200 "));
@@ -650,9 +719,15 @@ mod tests {
         let store = Arc::new(SlowLoad(Mutex::new(gate)));
         let (ops, _addr) = ops_on_loopback().await;
         let endpoint = config::endpoint_at(dir.path().join("o.sock"));
-        let error = serve(endpoint, Arc::new(SystemClock), store, Some(ops.start()))
-            .await
-            .unwrap_err();
+        let error = serve(
+            endpoint,
+            Arc::new(SystemClock),
+            store,
+            Some(ops.start()),
+            None,
+        )
+        .await
+        .unwrap_err();
         assert!(error.to_string().contains("store unreachable"), "{error}");
     }
 }
