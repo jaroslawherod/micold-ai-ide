@@ -143,7 +143,9 @@ impl FullBackend for SqliteBackend {
 }
 
 /// The server the PostgreSQL cases use: `MICOLD_TEST_POSTGRES_URL`, a URL whose user may create and
-/// drop databases. The cases that need it are `#[ignore]`d unless it was set at build time (the
+/// drop databases and carries a password (`postgres://user:password@host/db`): the stderr case
+/// checks the password never reaches the log and panics on a URL without one. The cases that need
+/// it are `#[ignore]`d unless it was set at build time (the
 /// crate's `build.rs` sets `micold_postgres`); unset at run time, a case that still asks gets
 /// `None`, and under `MICOLD_REQUIRE_POSTGRES=1` (CI) or a `micold_postgres` build it fails instead.
 pub fn postgres_server() -> Option<String> {

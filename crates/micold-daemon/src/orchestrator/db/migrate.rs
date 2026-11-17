@@ -66,11 +66,23 @@ pub async fn check_not_newer(
 /// can lose the race with `table … already exists` or a busy database: it retries, re-reading
 /// `_sqlx_migrations`, until the other starter's work is recorded and the run finds nothing to do.
 pub async fn run_forward(migrator: &'static Migrator, pool: &AnyPool) -> Result<(), StoreError> {
+    run_forward_with(migrator, || migrator.run(pool)).await
+}
+
+/// [`run_forward`] over any `attempt` that runs the migrator once. A test passes an attempt that
+/// loses the race on demand, so the retry bound is exercised on every run, not only when two real
+/// starters collide.
+#[doc(hidden)]
+pub async fn run_forward_with<F, Fut>(migrator: &Migrator, mut attempt: F) -> Result<(), StoreError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<(), MigrateError>>,
+{
     // Each lost race means another starter applied (or is applying) at least one migration, so
     // one retry per migration, and one more, is enough for every starter to finish.
     let mut retries = migrator.migrations.len() + 1;
     loop {
-        match migrator.run(pool).await {
+        match attempt().await {
             Ok(()) => return Ok(()),
             Err(MigrateError::Execute(error) | MigrateError::ExecuteMigration(error, _))
                 if retries > 0 && lost_the_race(&error) =>

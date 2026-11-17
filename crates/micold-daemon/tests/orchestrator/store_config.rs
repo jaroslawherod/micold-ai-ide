@@ -160,12 +160,12 @@ async fn the_start_imports_an_unimported_registry_json_and_refuses_a_corrupt_one
     std::fs::create_dir_all(json.parent().unwrap()).unwrap();
     std::fs::write(&json, "{}").unwrap();
     let error = start_fails(dir.path()).await;
-    assert_eq!(
-        error.to_string(),
-        format!(
-            "orchestrator registry {} is unreadable: missing field `version` at line 1 column 2",
-            json.display()
-        )
+    // The parser's own wording after the colon is not ours to pin.
+    let error = error.to_string();
+    let prefix = format!("orchestrator registry {} is unreadable: ", json.display());
+    assert!(
+        error.starts_with(&prefix) && error.len() > prefix.len(),
+        "{error}"
     );
     assert!(json.exists());
 
@@ -242,10 +242,24 @@ async fn start_fails(dir: &Path) -> std::io::Error {
         .unwrap_err()
 }
 
-/// A start that is still running after two seconds, then dropped.
+/// A start that reaches serving: it opens the store (importing `registry.json`) before it binds
+/// its socket, so wait for the socket, then drop the start. A start that returns first fails.
 async fn starts(dir: &Path) {
-    let running = tokio::time::timeout(std::time::Duration::from_secs(2), start(dir)).await;
-    assert!(running.is_err(), "the start returned: {running:?}");
+    let socket = dir.join("orchestrator.sock");
+    // A socket left by an earlier start of this directory would answer for this one.
+    let _ = std::fs::remove_file(&socket);
+    let serving = async {
+        while !socket.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    };
+    tokio::select! {
+        returned = start(dir) => panic!("the start returned: {returned:?}"),
+        () = serving => {}
+        () = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+            panic!("the start did not reach serving within 60 s")
+        }
+    }
 }
 
 /// A `registry.json` holding one record, `id`, as an earlier version wrote it.

@@ -1,0 +1,9 @@
+# The orchestrator store suites share one PostgreSQL server in CI (default max_connections = 100).
+# Each case opens its own pool (up to 4 connections) plus an admin connection, so running every
+# case at once exhausts the server ("too many clients already"). Cap them.
+[test-groups]
+postgres = { max-threads = 8 }
+
+[[profile.default.overrides]]
+filter = "package(micold-daemon) & binary(orchestrator)"
+test-group = "postgres"

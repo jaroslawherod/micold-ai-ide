@@ -16,6 +16,7 @@ use micold_core::protocol::routing::WireDaemonId;
 use sqlx::any::AnyRow;
 use sqlx::{AnyConnection, Row as _};
 
+use super::refusal;
 use super::{to_i64, to_u64, StoreHandle};
 
 /// Why a body stopped short of a result: a precondition the caller broke, or a row that does not
@@ -150,10 +151,10 @@ async fn why_not_redeemable<T>(
     .fetch_optional(conn)
     .await?;
     match row {
-        None => refuse(format!("the {what} is unknown")),
+        None => refuse(refusal::token_unknown(what)),
         Some(row) => match opt_time(&row, "redeemed_at") {
-            Ok(Some(_)) => refuse(format!("the {what} was already redeemed")),
-            Ok(None) => refuse(format!("the {what} has expired")),
+            Ok(Some(_)) => refuse(refusal::token_redeemed(what)),
+            Ok(None) => refuse(refusal::token_expired(what)),
             Err(fail) => Ok(Err(fail)),
         },
     }
@@ -232,7 +233,7 @@ impl AuthStore for SqlAuthStore {
                 .execute(self.db.pool())
                 .await?;
             if done.rows_affected() == 0 {
-                return refuse(format!("user {id} is unknown"));
+                return refuse(refusal::user_unknown(id));
             }
             Ok(Ok(()))
         })
@@ -251,7 +252,7 @@ impl AuthStore for SqlAuthStore {
             .execute(&mut *tx)
             .await?;
             if done.rows_affected() == 0 {
-                return refuse(format!("user {id} is unknown"));
+                return refuse(refusal::user_unknown(id));
             }
             sqlx::query(
                 "UPDATE refresh_tokens SET revoked_at = $1 \
@@ -340,7 +341,7 @@ impl AuthStore for SqlAuthStore {
             let mut tx = self.db.begin_write().await?;
             // The redeeming user must exist, like every other user a method names.
             if !user_exists(&mut tx, self.t(), by).await? {
-                return refuse(format!("user {by} is unknown"));
+                return refuse(refusal::user_unknown(by));
             }
             let done = sqlx::query(
                 "UPDATE invites SET redeemed_by = $1, redeemed_at = $2 \
@@ -391,7 +392,7 @@ impl AuthStore for SqlAuthStore {
             .execute(self.db.pool())
             .await?;
             if done.rows_affected() == 0 {
-                return refuse("the bootstrap code was already consumed");
+                return refuse(refusal::BOOTSTRAP_ALREADY_CONSUMED);
             }
             Ok(Ok(()))
         })
@@ -435,11 +436,11 @@ impl AuthStore for SqlAuthStore {
                     .fetch_optional(&mut *tx)
                     .await?;
                 return match row {
-                    None => refuse("no bootstrap code is set"),
+                    None => refuse(refusal::BOOTSTRAP_NOT_SET),
                     Some(row) if matches!(opt_time(&row, "consumed_at"), Ok(Some(_))) => {
-                        refuse("the bootstrap code was consumed")
+                        refuse(refusal::BOOTSTRAP_CONSUMED)
                     }
-                    Some(_) => refuse("the bootstrap code does not match"),
+                    Some(_) => refuse(refusal::BOOTSTRAP_MISMATCH),
                 };
             }
             tx.commit().await?;

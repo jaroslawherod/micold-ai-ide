@@ -717,6 +717,55 @@ fn two_starters_on_one_database_apply_each_migration_once() {
     }
 }
 
+/// Run a migrator of every shipped SQLite migration through `run_forward_with` with an attempt
+/// that loses the race (`error`) `migrations + extra` times before it succeeds: the attempts made,
+/// the migration count and whether the run succeeded.
+async fn attempts_after(extra: usize, error: fn() -> sqlx::Error) -> (usize, usize, bool) {
+    let dir = migration_dir("sqlite", usize::MAX, &[]);
+    let migrator = sqlx::migrate::Migrator::new(dir.path()).await.unwrap();
+    let migrations = migrator.migrations.len();
+    let losses = migrations + extra;
+    let attempts = std::cell::Cell::new(0_usize);
+    let result = migrate::run_forward_with(&migrator, || {
+        attempts.set(attempts.get() + 1);
+        let lost = attempts.get() <= losses;
+        async move {
+            if lost {
+                Err(sqlx::migrate::MigrateError::Execute(error()))
+            } else {
+                Ok(())
+            }
+        }
+    })
+    .await;
+    (attempts.get(), migrations, result.is_ok())
+}
+
+fn lost_race() -> sqlx::Error {
+    sqlx::Error::Protocol("table users already exists".into())
+}
+
+/// One retry per migration and one more: losing that many times still finishes, on the attempt
+/// after them.
+#[tokio::test]
+async fn a_starter_that_loses_the_race_once_per_migration_and_once_more_still_finishes() {
+    let (attempts, migrations, ok) = attempts_after(1, lost_race).await;
+    assert_eq!((attempts, ok), (migrations + 2, true));
+}
+
+#[tokio::test]
+async fn a_starter_that_keeps_losing_the_race_gives_up_after_one_retry_per_migration_and_one() {
+    let (attempts, migrations, ok) = attempts_after(2, lost_race).await;
+    assert_eq!((attempts, ok), (migrations + 2, false));
+}
+
+#[tokio::test]
+async fn an_error_that_is_not_a_lost_race_is_not_retried() {
+    let other = || sqlx::Error::Protocol("syntax error near FROM".into());
+    let (attempts, _, ok) = attempts_after(5, other).await;
+    assert_eq!((attempts, ok), (1, false));
+}
+
 /// FR-013: a database built at each shipped version N, seeded with `vNNNN.sql`, upgrades to the
 /// newest with its data intact.
 #[test]
