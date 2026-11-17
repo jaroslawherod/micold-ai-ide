@@ -31,6 +31,7 @@ export function LocalePicker() {
             accessibilityRole="radio"
             accessibilityLabel={label}
             accessibilityState={{ checked }}
+            aria-checked={checked}
             onPress={() => setLocale(code)}
             testID={`locale-${code}`}
             style={[

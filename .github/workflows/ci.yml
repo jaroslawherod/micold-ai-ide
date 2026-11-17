@@ -247,6 +247,22 @@ jobs:
           status=0
           node scripts/client/bundle-check.mjs apps/client/dist-mock || status=$?
           test "$status" = 1
+      # FR-018, T055: the Playwright smoke, pseudo-locale and screenshot specs against the mock export
+      # built just above, in Chromium, Firefox and WebKit (screenshots in Chromium only).
+      - name: Playwright browsers
+        run: pnpm --filter @micold/client exec playwright install --with-deps chromium firefox webkit
+      - name: Playwright
+        run: pnpm --filter @micold/client e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: client-e2e
+          path: |
+            apps/client/e2e/screenshots/
+            apps/client/playwright-report/
+            apps/client/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:

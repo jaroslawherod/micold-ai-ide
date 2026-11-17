@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "cd ../.. && jest --config apps/client/jest.config.js",
     "web:export": "EXPO_PUBLIC_API_MODE=real expo export --platform web",
-    "e2e": "echo 'client-e2e: Playwright arrives with M4 (T055)' >&2 && exit 1",
+    "e2e": "playwright test",
     "web:export:mock": "EXPO_PUBLIC_API_MODE=mock expo export --platform web --output-dir dist-mock"
   },
   "dependencies": {
@@ -32,7 +32,9 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.6",

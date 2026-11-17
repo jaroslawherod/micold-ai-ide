@@ -75,9 +75,14 @@ pnpm --filter @micold/client web:export
 """
 
 [tasks.client-e2e]
-description = "Web client: Playwright smoke test in Chromium, Firefox and WebKit against the mock export (arrives with M4, T055)"
+description = "Web client: Playwright smoke, pseudo-locale and screenshot specs in Chromium, Firefox and WebKit against the mock export (#1735, T055)"
 dir = "{{config_root}}"
-run = "pnpm --filter @micold/client e2e"
+run = """
+pnpm install --frozen-lockfile
+pnpm --filter @micold/client web:export:mock
+pnpm --filter @micold/client exec playwright install chromium firefox webkit
+pnpm --filter @micold/client e2e
+"""
 
 [tasks.screenshot]
 description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"

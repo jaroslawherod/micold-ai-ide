@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1735
-- **Worktree branch**: claude/project-thread-bazfe4
+- **Worktree branch**: claude/project-thread-9il8pd
 - **Started**: 2026-11-16
-- **Phase**: M3 merged (#2018)
-- **Next step**: a fresh thread runs `/speckit-autopilot resume` for M4 (T054–T062)
+- **Phase**: M4 implemented, review ready
+- **Next step**: orchestrator runs Review A and B on M4 (origin/main...HEAD), then PR; T062 (SC-005, SC-009) is confirmed from that PR's CI run
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | #2013 | merged |
 | M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | #2015 | merged |
 | M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | implemented |
-| M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | pending |
+| M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | implemented (T054–T061), T062 waits on CI |
 
 ## Decisions
 
@@ -81,13 +81,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 merged as #2018 (dfd448cec); round-2 re-review CLEAN. CI build+test failed once on a corrupt llvm-cov profraw (all tests passed), green on one rerun. Start M4 in a fresh thread from this branch's ledger. Optional: `groupBy` in `rowKeys` is O(n²) per group (fine at current scale).
+M4 (prev #2018, dfd448cec7c5e1f317fc8092407381dc2ed11859) implemented on claude/project-thread-9il8pd: T054–T061 done, T062 open until the PR's CI run. Playwright ran locally only in Chromium via installed Chrome (17/17); Firefox/WebKit downloads are blocked in the cloud, so CI is their first run. Fixed for axe: LocalePicker `aria-checked`, focusable Overview ScrollView. Visual pass recorded with F1 open (Working glyph sliver) and the iced comparison outstanding. Next: reviews, then PR.
 
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
+
+- M4: CI installs the Playwright browsers each run with no cache (no pinned `actions/cache` SHA reachable from the cloud session); add one if SC-005 gets tight.
+- M4 visual pass: side-by-side with the iced app not done (no desktop/cargo build in the cloud); F1 Working glyph `◐` renders as a sliver in the container Chrome.
 
 - M1 spike gaps (spike.md): FlatList never unmounts rendered rows (#1736 evaluates FlashList); select-all over a virtualized transcript needs a copy action (#1736); the diff is an unvirtualized ScrollView (diff view issue, M6 of #1722); only Chromium measured.
 - T020 wording is for the web client only; the desktop `appearance-theming.md` sections are untouched.
