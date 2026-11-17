@@ -39,20 +39,40 @@ the setting.
 {{- end -}}
 {{- end -}}
 
-{{/* The pod security context every component uses (US1-1). Not a value: it cannot be weakened. */}}
+{{/* Whether the data volume is a PVC: persistence on, and not the seeded `volume` breakage. */}}
+{{- define "micold.persistent" -}}
+{{- if and .Values.state.persistence.enabled (ne .Values.testing.breakage "volume") -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+The pod security context every component uses (US1-1). Not a value: it cannot be weakened, except
+by the test-only seeded breakage `testing.breakage=user` (root), which the e2e suite must catch.
+*/}}
 {{- define "micold.podSecurityContext" -}}
+{{- if eq .Values.testing.breakage "user" -}}
+runAsNonRoot: false
+runAsUser: 0
+runAsGroup: 0
+{{- else -}}
 runAsNonRoot: true
 runAsUser: 65532
 runAsGroup: 65532
+{{- end }}
 fsGroup: 65532
 seccompProfile:
   type: RuntimeDefault
 {{- end -}}
 
 {{- define "micold.containerSecurityContext" -}}
+{{- if eq .Values.testing.breakage "user" -}}
+runAsNonRoot: false
+runAsUser: 0
+runAsGroup: 0
+{{- else -}}
 runAsNonRoot: true
 runAsUser: 65532
 runAsGroup: 65532
+{{- end }}
 allowPrivilegeEscalation: false
 readOnlyRootFilesystem: true
 capabilities:

@@ -46,3 +46,20 @@ web:
 
 # Requests and limits for the orchestrator container.
 resources: {}
+
+# Test support (#1981/#1985); set only by ci/*.yaml and the e2e harness, never in production.
+testDaemon:
+  # true: a second container in the orchestrator pod, the same image running
+  # `micold-daemon e2e-link idle`, sharing /run/micold so the suites can `kubectl exec` link
+  # verbs against the orchestrator's socket (ci/e2e.yaml).
+  enabled: false
+
+testing:
+  corruptRegistry:
+    # true: a digest-pinned busybox init container writes an invalid orchestrator/registry.json
+    # into the data volume, so the pod must refuse to start (ci/corrupt-registry.yaml).
+    enabled: false
+  # One deliberately wrong manifest for the harness's seeded-breakage matrix (SC-003), set with
+  # `--set testing.breakage=<v>`: none | command | user | volume | dataDir | opsPort.
+  breakage: none
+

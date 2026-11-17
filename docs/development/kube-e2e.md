@@ -21,11 +21,27 @@ The script:
    loads it into the cluster with `kind load docker-image`;
 3. installs the chart `deploy/helm/micold` with `ci/e2e.yaml` and `--wait`, into namespace
    `micold-e2e`;
-4. runs `cargo test -p micold-e2e --test <suite>` for each suite, with `MICOLD_E2E=1` and
-   `MICOLD_E2E_REQUIRED=1`;
-5. on failure, writes pods, `describe`, events and container logs to
+4. runs `cargo test -p micold-e2e --test <suite>` once per suite, in the order `ops`, `restart`,
+   `link` (`restart` expects an empty registry, so it goes before the suites that register
+   daemons), with `MICOLD_E2E=1` and `MICOLD_E2E_REQUIRED=1`;
+5. runs `refusal` last: it reinstalls the chart with `ci/corrupt-registry.yaml` (an init container
+   plants an invalid `orchestrator/registry.json`) and expects the pod never Ready and its log to
+   name the file;
+6. runs the seeded-breakage matrix (SC-003): for each of `command`, `user`, `volume`, `dataDir`
+   and `opsPort` it uninstalls the release (which deletes its PVC, so the corrupt registry
+   cannot leak), installs it with `--set testing.breakage=<v>` and runs `ops`, `restart` and
+   `link` until one fails. A breakage no suite catches fails the run;
+7. on failure, writes pods, `describe`, events and container logs to
    `target/e2e-logs/<cluster>/` (CI uploads that directory as the `kube-e2e-logs` artifact);
-6. deletes the cluster.
+8. deletes the cluster.
+
+The `link` and `restart` suites reach the orchestrator's link socket through the chart's test
+daemon (`testDaemon.enabled`, set by `ci/e2e.yaml`): a second container, same image, running
+`micold-daemon e2e-link idle`. The suites `kubectl exec` `e2e-link register --name N [--hold]` and
+`e2e-link list` into it; no other path to the socket exists.
+
+A failing step does not stop the later ones, so one CI round reports every failure; the exit status
+is the first failure's.
 
 The exit status is the suites' exit status. If the install never becomes Ready, the script prints
 the pods, the `describe` output and the last log lines. On `ImagePullBackOff` it also names the
@@ -46,6 +62,7 @@ image the node could not pull.
 | `MICOLD_E2E_CLUSTER` | `micold-e2e` | kind cluster name; a distinct name runs beside another cluster |
 | `MICOLD_E2E_NAMESPACE` | `micold-e2e` | namespace of the release, passed to the tests |
 | `MICOLD_E2E_SUITES` | every directory under `crates/micold-e2e/tests` | comma list, e.g. `ops,link` |
+| `MICOLD_E2E_MATRIX` | `1` with the default selection, else `0` | `1` runs the seeded-breakage matrix for a chosen selection, `0` skips it |
 | `MICOLD_E2E_KEEP` | unset | `1` keeps the cluster for debugging |
 | `MICOLD_E2E_LOG_DIR` | `target/e2e-logs/<cluster>` | where failure logs go |
 

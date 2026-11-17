@@ -230,6 +230,88 @@ else
   ok "an unknown value name is refused by the schema"
 fi
 
+# --- test daemon, corrupt registry, seeded breakages (FR-011, US3-4, SC-003; #1985) -----------------
+
+# count <file> <grep -E pattern>: how many lines match.
+count() { grep -cE -- "$2" "$1" || true; }
+
+# expect_count <description> <file> <pattern> <n>
+expect_count() {
+  local got
+  got="$(count "$2" "$3")"
+  if [ "$got" = "$4" ]; then ok "$1"; else fail "$1 (want $4 lines matching /$3/, got $got)"; fi
+}
+
+if render e2e -f "$CHART/ci/e2e.yaml"; then
+  e="$work/e2e.yaml"
+  check "testDaemon.enabled adds the test-daemon container" "$e" '^ +- name: test-daemon$'
+  check "test-daemon runs /micold-daemon e2e-link idle" "$e" \
+    '^ +command: \["/micold-daemon", "e2e-link", "idle"\]$'
+  expect_count "test-daemon uses the orchestrator's image" "$e" \
+    '^ +image: "ghcr\.io/jaroslawherod/micold-orchestrator:e2e"$' 2
+  expect_count "test-daemon shares the /run/micold volume" "$e" '^ +mountPath: /run/micold$' 2
+  expect_count "both containers have a read-only root filesystem" "$e" \
+    '^ +readOnlyRootFilesystem: true$' 2
+  expect_count "both containers run as 65532" "$e" '^ +runAsUser: 65532$' 3
+  refute "no init container without testing.corruptRegistry" "$e" '^ +initContainers:$'
+else
+  fail "ci/e2e.yaml renders: $(cat "$work/e2e.err")"
+fi
+refute "the default (production) values have no test daemon" "$work/default.yaml" 'test-daemon|e2e-link'
+refute "the default values have no init container" "$work/default.yaml" 'initContainers:|busybox'
+
+if render corrupt -f "$CHART/ci/e2e.yaml" -f "$CHART/ci/corrupt-registry.yaml"; then
+  c="$work/corrupt.yaml"
+  check "corruptRegistry adds an init container" "$c" '^ +initContainers:$'
+  check "the init container image is busybox pinned by digest" "$c" \
+    '^ +image: docker\.io/library/busybox:[0-9.]+@sha256:[0-9a-f]{64}$'
+  check "the init container writes orchestrator/registry.json" "$c" \
+    'orchestrator/registry\.json'
+  check "the init container mounts the data volume" "$c" '^ +mountPath: /var/lib/micold$'
+else
+  fail "ci/corrupt-registry.yaml renders: $(cat "$work/corrupt.err")"
+fi
+
+for breakage in command user volume dataDir opsPort; do
+  render "break-$breakage" --set "testing.breakage=$breakage" || {
+    fail "testing.breakage=$breakage renders: $(cat "$work/break-$breakage.err")"
+    continue
+  }
+done
+b="$work/break-command.yaml"
+[ -s "$b" ] && check "breakage=command runs a missing binary" "$b" '^ +command: \["/nonexistent-micold-daemon"\]$'
+b="$work/break-user.yaml"
+[ -s "$b" ] && {
+  check "breakage=user runs as root" "$b" '^ +runAsUser: 0$'
+  refute "breakage=user has no runAsUser 65532" "$b" '^ +runAsUser: 65532$'
+}
+b="$work/break-volume.yaml"
+[ -s "$b" ] && {
+  expect_kinds "breakage=volume renders no PVC" "$b" "Deployment Service"
+  got="$(volume_source "$b" data)"
+  if [ "$got" = emptyDir ]; then ok "breakage=volume makes the data volume an emptyDir"; else fail "breakage=volume makes the data volume an emptyDir (got '$got')"; fi
+}
+b="$work/break-dataDir.yaml"
+[ -s "$b" ] && {
+  check "breakage=dataDir points --data-dir off the mount" "$b" '^ +- --data-dir=/nonexistent/micold$'
+  got="$(mount_of "$b" data)"
+  if [ "$got" = /var/lib/micold ]; then ok "breakage=dataDir leaves the mount in place"; else fail "breakage=dataDir leaves the mount in place (got '$got')"; fi
+}
+b="$work/break-opsPort.yaml"
+[ -s "$b" ] && {
+  check "breakage=opsPort listens on another port than the probes" "$b" '^ +- --ops-addr=0\.0\.0\.0:9091$'
+  check "breakage=opsPort leaves the container port at 9090" "$b" '^ +containerPort: 9090$'
+}
+if render breakbogus --set testing.breakage=bogus; then
+  fail "an unknown testing.breakage must be refused"
+else
+  check "an unknown testing.breakage is refused by name" "$work/breakbogus.err" 'breakage'
+fi
+for breakage in none; do
+  render "break-$breakage" --set "testing.breakage=$breakage" &&
+    if cmp -s "$work/break-$breakage.yaml" "$work/default.yaml"; then ok "testing.breakage=none renders the default"; else fail "testing.breakage=none renders the default"; fi
+done
+
 echo
 if [ "$failures" -ne 0 ]; then
   echo "chart-conformance: $failures of $cases check(s) failed"

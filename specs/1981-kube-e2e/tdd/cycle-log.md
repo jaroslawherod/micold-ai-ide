@@ -85,3 +85,17 @@ Append only. Newest last.
   while web is off; classify cases for CHANGELOG.md and a member manifest.
 - green: `chart-conformance: all 42 checks passed`, `chart-check: all 4 cases passed`,
   `classify-change: all 92 cases passed`, `install-kube-tools: all 7 cases passed`.
+
+## M4 (#1985, T023-T029)
+
+- T025/T027/T029 (chart): `chart-conformance.test.sh` cases written for `testDaemon`, `corruptRegistry`
+  and the five `testing.breakage` values first; chart edits followed; helm v3.19.0 (built from source
+  here) shows `chart-conformance: all 80 checks passed`. No separate red run was recorded.
+- T028/T029 (harness): `e2e-kind.test.sh` cases (suite order, refusal reinstall, matrix of five, PVC
+  deletion, "not caught" fails the run) written before the `e2e-kind.sh` change; the first run failed
+  three cases against the new suites missing from `crates/micold-e2e/tests`, then `all 33 cases passed`.
+- T023: unit tests and `e2e_link.rs` written together (no separate red run); one red along the way:
+  `register_without_hold` polled 4 s but a dropped link lists offline after the 9 s liveness
+  deadline, so the poll was widened. `e2e_link`: 8 passed.
+- T024: `listing` and `pod_named` unit tests (`micold-e2e`: 12 passed); the suites skip locally (no
+  cluster). The red run against a chart without the sidecar is the live CI round (T030).

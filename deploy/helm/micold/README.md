@@ -53,6 +53,10 @@ registry is `orchestrator/registry.json` inside it), `--socket=/run/micold/orche
 | `web.containerPort` / `web.service.port` | `8080` / `80` | |
 | `resources` | `{}` | the orchestrator container's requests and limits |
 
+| `testDaemon.enabled` | `false` | test only (`ci/e2e.yaml`): a second container, same image, running `micold-daemon e2e-link idle` on the shared `/run/micold` volume |
+| `testing.corruptRegistry.enabled` | `false` | test only (`ci/corrupt-registry.yaml`): a digest-pinned busybox init container writes an invalid `orchestrator/registry.json` |
+| `testing.breakage` | `none` | test only: `command`, `user`, `volume`, `dataDir` or `opsPort` renders one deliberately wrong manifest for the e2e seeded-breakage matrix |
+
 `values.schema.json` refuses any other key.
 
 ## Checking it

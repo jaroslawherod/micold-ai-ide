@@ -5,14 +5,23 @@
 # anywhere else it prints a skip line and exits 0.
 #
 # Flow: delete-then-create the cluster, build Dockerfile.orchestrator, `kind load` it, install the
-# chart with ci/e2e.yaml and --wait, then `cargo test -p micold-e2e --test <suite>...` with
-# MICOLD_E2E=1 MICOLD_E2E_REQUIRED=1. On failure the pods, describe output, events and container
-# logs go to the log dir; the cluster is deleted at exit unless MICOLD_E2E_KEEP=1.
+# chart with ci/e2e.yaml and --wait, then one `cargo test -p micold-e2e --test <suite>` per suite
+# with MICOLD_E2E=1 MICOLD_E2E_REQUIRED=1, in KNOWN_SUITES order (restart before link: it expects an
+# empty registry). Two steps follow in the same cluster (#1985):
+#   refusal  after the other suites: `helm upgrade` with ci/corrupt-registry.yaml (no --wait: the pod
+#            must never be Ready), then `--test refusal`.
+#   matrix   SC-003, with the default selection or MICOLD_E2E_MATRIX=1: for each seeded breakage
+#            (command user volume dataDir opsPort) uninstall the release (this deletes its PVC, so a
+#            corrupt registry.json cannot leak), install it with `--set testing.breakage=<v>` and
+#            run ops, restart and link until one fails. A breakage no suite catches fails the run.
+# On failure the pods, describe output, events and container logs go to the log dir; the cluster
+# is deleted at exit unless MICOLD_E2E_KEEP=1.
 # Environment: specs/1981-kube-e2e/contracts/harness-env.md, docs/development/kube-e2e.md.
 #
 #   MICOLD_E2E_CLUSTER    kind cluster name (micold-e2e)
 #   MICOLD_E2E_NAMESPACE  namespace of the release (micold-e2e)
 #   MICOLD_E2E_SUITES     comma list of suites (every directory under crates/micold-e2e/tests)
+#   MICOLD_E2E_MATRIX     1 runs the seeded-breakage matrix with a chosen selection, 0 skips it
 #   MICOLD_E2E_KEEP=1     keep the cluster afterwards
 #   MICOLD_E2E_LOG_DIR    failure logs (target/e2e-logs/<cluster>)
 # Exit status is the suites'.
@@ -21,7 +30,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHART="$ROOT/deploy/helm/micold"
-KNOWN_SUITES="ops link restart refusal network ui"
+KNOWN_SUITES="ops restart link refusal network ui"
+BREAKAGES="command user volume dataDir opsPort"
 IMAGE_REPO=ghcr.io/jaroslawherod/micold-orchestrator
 IMAGE_TAG=e2e
 IMAGE="$IMAGE_REPO:$IMAGE_TAG"
@@ -42,21 +52,27 @@ ns="${MICOLD_E2E_NAMESPACE:-micold-e2e}"
 log_dir="${MICOLD_E2E_LOG_DIR:-$ROOT/target/e2e-logs/$cluster}"
 
 if [ -n "${MICOLD_E2E_SUITES:-}" ]; then
-  IFS=, read -r -a suites <<<"$MICOLD_E2E_SUITES"
+  IFS=, read -r -a chosen <<<"$MICOLD_E2E_SUITES"
+  matrix="${MICOLD_E2E_MATRIX:-0}"
 else
-  suites=()
+  chosen=()
   for d in "$ROOT"/crates/micold-e2e/tests/*/; do
-    [ -f "$d/main.rs" ] && suites+=("$(basename "$d")")
+    [ -f "$d/main.rs" ] && chosen+=("$(basename "$d")")
   done
+  matrix="${MICOLD_E2E_MATRIX:-1}"
 fi
-test_args=()
-for s in "${suites[@]}"; do
+for s in "${chosen[@]}"; do
   case " $KNOWN_SUITES " in
-    *" $s "*) test_args+=(--test "$s") ;;
+    *" $s "*) ;;
     *) say "unknown suite '$s' (known: $KNOWN_SUITES)" >&2; exit 2 ;;
   esac
 done
-[ "${#test_args[@]}" -gt 0 ] || { say "no suite to run" >&2; exit 2; }
+# Run in KNOWN_SUITES order whatever the order given.
+suites=()
+for k in $KNOWN_SUITES; do
+  case " ${chosen[*]} " in *" $k "*) suites+=("$k") ;; esac
+done
+[ "${#suites[@]}" -gt 0 ] || { say "no suite to run" >&2; exit 2; }
 
 collect_logs() {
   mkdir -p "$log_dir"
@@ -89,9 +105,25 @@ say "building $IMAGE"
 "$ROOT/scripts/build-lock.sh" docker build -f "$ROOT/Dockerfile.orchestrator" -t "$IMAGE" "$ROOT"
 kind load docker-image "$IMAGE" --name "$cluster"
 
+# install_chart <wait|nowait> <timeout> [helm args...]: the e2e values, then the extra arguments.
+install_chart() {
+  local mode="$1" timeout="$2"
+  shift 2
+  local wait_args=()
+  [ "$mode" = wait ] && wait_args=(--wait)
+  helm upgrade --install micold "$CHART" -n "$ns" --create-namespace --kube-context "kind-$cluster" \
+    -f "$CHART/ci/e2e.yaml" --set image.tag="$IMAGE_TAG" "$@" ${wait_args[@]+"${wait_args[@]}"} --timeout "$timeout"
+}
+
+# run_suite <suite>: the suite's test target against the current release.
+run_suite() {
+  say "suite $1"
+  MICOLD_E2E=1 MICOLD_E2E_REQUIRED=1 MICOLD_E2E_NAMESPACE="$ns" MICOLD_E2E_CONTEXT="kind-$cluster" \
+    "$ROOT/scripts/build-lock.sh" cargo test -p micold-e2e --test "$1" -- --test-threads=1
+}
+
 say "installing the chart into namespace $ns"
-if ! helm upgrade --install micold "$CHART" -n "$ns" --create-namespace --kube-context "kind-$cluster" \
-  -f "$CHART/ci/e2e.yaml" --set image.tag="$IMAGE_TAG" --wait --timeout 180s; then
+if ! install_chart wait 180s; then
   say "the release did not become ready; pods:" >&2
   pods="$(kubectl --context "kind-$cluster" -n "$ns" get pods -o wide 2>&1 || true)"
   echo "$pods" >&2
@@ -106,6 +138,42 @@ fi
 
 say "running suites: ${suites[*]}"
 rc=0
-MICOLD_E2E=1 MICOLD_E2E_REQUIRED=1 MICOLD_E2E_NAMESPACE="$ns" MICOLD_E2E_CONTEXT="kind-$cluster" \
-  "$ROOT/scripts/build-lock.sh" cargo test -p micold-e2e "${test_args[@]}" -- --test-threads=1 || rc=$?
+# note_rc <status>: the first failure is the run's exit status; the later steps still run, so one
+# CI round reports everything.
+note_rc() { [ "$rc" -ne 0 ] || rc=$1; }
+
+for s in "${suites[@]}"; do
+  [ "$s" = refusal ] && continue
+  run_suite "$s" || note_rc $?
+done
+
+case " ${suites[*]} " in
+  *" refusal "*)
+    say "reinstalling with ci/corrupt-registry.yaml: the pod must never become Ready"
+    install_chart nowait 60s -f "$CHART/ci/corrupt-registry.yaml" || note_rc $?
+    run_suite refusal || note_rc $?
+    ;;
+esac
+
+if [ "$matrix" = 1 ]; then
+  say "seeded-breakage matrix: $BREAKAGES"
+  for breakage in $BREAKAGES; do
+    # Uninstall removes the release's PVC; deleting every claim left in the namespace as well keeps
+    # a corrupt registry.json from reaching the next run.
+    helm uninstall micold -n "$ns" --kube-context "kind-$cluster" --wait >/dev/null 2>&1 || true
+    kubectl --context "kind-$cluster" -n "$ns" delete pvc --all --wait=true >/dev/null 2>&1 || true
+    say "breakage $breakage: install; the suites must fail"
+    install_chart wait 60s --set "testing.breakage=$breakage" || say "breakage $breakage: not Ready (expected for most)"
+    caught=0
+    for s in ops restart link; do
+      run_suite "$s" || { caught=1; break; }
+    done
+    if [ "$caught" = 1 ]; then
+      say "breakage $breakage: caught"
+    else
+      say "breakage $breakage: NOT caught: ops, restart and link all passed against a deliberately wrong chart" >&2
+      note_rc 1
+    fi
+  done
+fi
 exit "$rc"
