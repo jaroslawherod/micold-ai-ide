@@ -130,10 +130,11 @@ main() {
   say "orchestrator ws://127.0.0.1:$API_PORT/api/ws"
   say "web client    http://127.0.0.1:$WEB_PORT  (Ctrl+C stops all)"
   # One process going away ends the stack: a half stack is worse than none.
-  wait -n || true
-  local i
+  # `-p` names the process wait -n reaped; a kill -0 probe would see an unreaped zombie as alive.
+  local gone="" i
+  wait -n -p gone || true
   for i in "${!pids[@]}"; do
-    kill -0 "${pids[$i]}" 2>/dev/null || say "the ${names[$i]} (pid ${pids[$i]}) exited" >&2
+    [ "${pids[$i]}" = "$gone" ] && say "the ${names[$i]} (pid $gone) exited" >&2
   done
   say "a process exited; stopping the others"
 }
