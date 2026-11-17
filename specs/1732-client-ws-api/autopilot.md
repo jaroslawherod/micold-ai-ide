@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-mezck0
 - **Started**: 2026-11-17
-- **Phase**: tasks
-- **Next step**: tasks review NOT RUN (the tasks unit had no Agent tool): the orchestrator dispatches an opus reviewer (rubrics/tasks.md) on specs/1732-client-ws-api/tasks.md, fixes findings, then speckit-analyze if not run, closes checklists (requirements.md has 0 unchecked), runs the specs-only gate and opens the design PR (title and body per the orchestrator's prompt, Refs #1732, no Closes).
+- **Phase**: milestones (M1 in review)
+- **Next step**: M1 code done (T003-T004, protocol 84), gate green, pushed; reviews not run (no Agent tool): the orchestrator reviews the diff `origin/main..HEAD`, opens the PR from specs/1732-client-ws-api/m1-pr-body.md, then merges and starts M2.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -19,13 +19,14 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #2032 | Design PR (spec, plan, tasks), draft | open | - |
+| #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
+| M1 | Daemon ReadStructuredEvents (PR number set by the orchestrator) | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | - | pending |
+| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | - | in review |
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | - | pending |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | pending |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |
@@ -47,6 +48,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|
 
+| diff review | 1 (opus, orchestrator) | M1 fbfa8360e..684310c01 | see commit | - | CHANGES, minor: F1 test name, F2 reply on read-task failure, F3 empty-history comment fixed; F4 declined (see Declined) |
 | spec review | 1 | spec.md | ff1592a91dce73ab8455582abb7ab45d7e31ad09 | ab6207b8a448c2329fff6fbbbcd821854aa4f518:ff1592a91dce73ab8455582abb7ab45d7e31ad09 | CHANGES: 2 MAJOR (F1 browser parity, F2 app-level heartbeat), 3 MINOR (F3 unreachable/snapshot, F4 FR-001 contract, F5 addresses/US3 check) — all fixed in spec.md; behaviour-bearing, round 2 re-review (sonnet) due |
 | spec review | 2 | spec.md | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | CLEAN (sonnet re-review); nit Key Entities ping->pong fixed |
 
@@ -60,6 +62,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | diff review round 1 (opus) | F4 double lock in the ReadStructuredEvents path | harmless: the second lock is uncontended and held briefly |
 
 ## Handover
 

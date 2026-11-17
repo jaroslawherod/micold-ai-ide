@@ -994,8 +994,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
 }
 
 #[test]
-fn the_protocol_version_is_81() {
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 83);
+fn the_protocol_version_is_the_one_the_schema_hash_pins() {
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 84);
 }
 
 /// #943 T006: the daemon's command, model and kind notes and the new CLI events ride a
@@ -3175,6 +3175,27 @@ fn a_project_row_carries_its_daemon_and_identity_and_its_ref_survives_both_wires
     assert_eq!(decoded.qualified(), expected);
     json_roundtrip(&decoded.qualified());
     postcard_roundtrip(&decoded.qualified());
+}
+
+// #1732: the read-only content request and its refusals round-trip on both wires.
+#[test]
+fn the_structured_read_messages_round_trip_on_both_wires() {
+    use micold_core::protocol::messages::StructuredReadRefusal;
+    let session = SessionId::new();
+    let request = ClientMsg::ReadStructuredEvents {
+        project: PathBuf::from("/p"),
+        session,
+    };
+    json_roundtrip(&request);
+    postcard_roundtrip(&request);
+    for reason in [
+        StructuredReadRefusal::NotFound,
+        StructuredReadRefusal::TerminalSession,
+    ] {
+        let refused = DaemonMsg::StructuredEventsRefused { session, reason };
+        json_roundtrip(&refused);
+        postcard_roundtrip(&refused);
+    }
 }
 
 // #1726: the client-routing messages round-trip on both wires.

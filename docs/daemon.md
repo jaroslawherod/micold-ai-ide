@@ -439,7 +439,16 @@ this section is the summary.
   on a plain connection, or the reverse, is a codec error (`WrongRouting`).
 - **Protocol number.** Version 78 added the qualified rows and the envelope; project identity moved
   it to 80 (79 retired the git credential grants). A daemon and a client on different versions
-  refuse each other and the refusal names both.
+  refuse each other and the refusal names both. Version 84 (#1732) added the read-only content
+  request below.
+- **Reading a session's content (protocol 84).** `ClientMsg::ReadStructuredEvents { project,
+  session }` asks for a structured session's history once. It takes no attachment, lock or view,
+  so it works while a desktop holds the project and never displaces it (`Attach` would be refused
+  `ProjectBusy`). The daemon answers with the history as `live: false` `StructuredEvents` messages
+  (the first carries `omitted`; an empty history is one empty message) and pushes nothing
+  afterwards, or with `StructuredEventsRefused { session, reason }`: `NotFound` (no such session in
+  that project) or `TerminalSession` (not a structured session). Orchestrator and daemons upgrade
+  together; the handshake reports a mismatch as `NeedsUpdate`.
 - **"Same project".** `ProjectSnapshot.identity` is how daemons declare they serve one project, so
   the orchestrator never reads a daemon's filesystem. The daemon derives it: the `micold.projectId`
   git config value if set (`override:<value>`), else the normalised `origin` remote (first remote if

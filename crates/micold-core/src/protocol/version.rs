@@ -280,7 +280,9 @@
 /// shifts the postcard layout `WorktreeSnapshot` carries.
 /// And 82 → 83 for #1726's client routing: `ClientMsg::OrchList`, `DaemonMsg::{OrchListed, StreamEnded,
 /// OutcomeUnknown}` and the routed header's opaque form (`protocol/routing.rs`).
-pub const PROTOCOL_VERSION: u32 = 83;
+/// And 83 → 84 for #1732's read-only content request: `ClientMsg::ReadStructuredEvents`,
+/// `DaemonMsg::StructuredEventsRefused` and `StructuredReadRefusal`.
+pub const PROTOCOL_VERSION: u32 = 84;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

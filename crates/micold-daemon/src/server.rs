@@ -19,7 +19,8 @@ use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
     BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, MergedBranchQuery,
-    OperationResult, RefusedRequest, SessionProcess, TerminalRef, WindowView,
+    OperationResult, RefusedRequest, SessionProcess, StructuredReadRefusal, TerminalRef,
+    WindowView,
 };
 use micold_core::setup::SetupStart;
 use micold_core::terminal::LaunchMode;
@@ -1081,6 +1082,57 @@ where
                 session,
                 activation,
             } => state.reveal_session(id, project, session, activation),
+            // #1732 R9: a one-shot read of a structured session's history. It needs no
+            // attachment and takes none, so a desktop holding the project is never displaced; the
+            // saved history is read off the connection loop.
+            ClientMsg::ReadStructuredEvents { project, session } => {
+                let state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let read = {
+                        let state = Arc::clone(&state);
+                        tokio::task::spawn_blocking(move || {
+                            state.structured_read(&project, session)
+                        })
+                        .await
+                    };
+                    match read {
+                        Ok(Ok(stream)) => {
+                            let (omitted, history) = stream.map_or((0, Vec::new()), |s| {
+                                let (omitted, history, _live) = s.subscribe();
+                                (omitted, history)
+                            });
+                            for (i, events) in crate::structured::history_messages(session, history)
+                                .into_iter()
+                                .enumerate()
+                            {
+                                state.send(
+                                    id,
+                                    DaemonMsg::StructuredEvents {
+                                        session,
+                                        omitted: if i == 0 { omitted } else { 0 },
+                                        events,
+                                        live: false,
+                                    },
+                                );
+                            }
+                        }
+                        Ok(Err(reason)) => {
+                            state.send(id, DaemonMsg::StructuredEventsRefused { session, reason })
+                        }
+                        Err(e) => {
+                            // Answer anyway, so the client is not left waiting on a read that died.
+                            tracing::warn!(error = %e, "a structured read task failed");
+                            state.send(
+                                id,
+                                DaemonMsg::StructuredEventsRefused {
+                                    session,
+                                    reason: StructuredReadRefusal::NotFound,
+                                },
+                            );
+                        }
+                    }
+                });
+            }
             ClientMsg::Attach { project, force } => {
                 match state.attach(id, project.clone(), force) {
                     Ok(_sessions) => {

@@ -1379,7 +1379,8 @@ pub fn on_wire(session: SessionId, event: SequencedEvent) -> SequencedEvent {
 
 /// `session`'s history cut into the events of consecutive messages, each under
 /// [`MESSAGE_LIMIT`], in order; a stand-in for an oversized event in a message of its own (R6).
-/// An empty history is one empty message, so a viewer is always sent where its log starts.
+/// An empty history is one empty message, so a viewer is always sent where its log starts. `ReadStructuredEvents` and docs/daemon.md rely
+/// on this: a session with no history is still answered with one (empty) message.
 pub fn history_messages(
     session: SessionId,
     history: Vec<SequencedEvent>,

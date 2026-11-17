@@ -514,7 +514,16 @@ jobs:
           # it only fails under coverage.
           TIMED='package(micold-daemon) & (binary(=history_timing) | (binary(=history_stop_request) & test(=ten_busy_sessions_are_all_saved_within_the_bound)))'
           nextest_rc=0
-          cargo llvm-cov nextest --workspace --no-fail-fast -E "not ($TIMED)" --lcov --output-path lcov.info || nextest_rc=$?
+          # One raw profile of one test binary (module signature 17540017307748215547 on PR #2033, both
+          # runs) is written with a corrupt header, and llvm-profdata then refuses the whole merge
+          # ("no profile can be merged") after every test passed. So run without the report, drop any
+          # profile llvm-profdata cannot read (one test's counters, named below), then report.
+          cargo llvm-cov nextest --no-report --workspace --no-fail-fast -E "not ($TIMED)" || nextest_rc=$?
+          PROFDATA="$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata"
+          while IFS= read -r -d '' f; do
+            "$PROFDATA" merge -sparse "$f" -o /dev/null > /dev/null 2>&1 || { echo "::warning::dropping unreadable profile $f"; rm -f "$f"; }
+          done < <(find target/llvm-cov-target -name '*.profraw' -print0)
+          cargo llvm-cov report --lcov --output-path lcov.info || nextest_rc=$?
           timed_rc=0
           cargo nextest run -p micold-daemon --test history_timing --test history_stop_request --no-fail-fast -E "$TIMED" || timed_rc=$?
           doc_rc=0; cargo test --doc --workspace || doc_rc=$?
