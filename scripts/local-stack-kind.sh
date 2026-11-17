@@ -63,8 +63,14 @@ docker build -f "$ROOT/Dockerfile.web" --build-arg "EXPO_PUBLIC_ORCHESTRATOR_URL
 kind load docker-image --name "$CLUSTER" micold-orchestrator:local
 kind load docker-image --name "$CLUSTER" micold-web:local
 
-helm upgrade --install "$RELEASE" "$CHART" --kube-context "$CONTEXT" --namespace "$NS" --create-namespace \
-  -f "$CHART/ci/local.yaml" --wait --timeout 10m
+if ! helm upgrade --install "$RELEASE" "$CHART" --kube-context "$CONTEXT" --namespace "$NS" --create-namespace \
+  -f "$CHART/ci/local.yaml" --wait --timeout 10m; then
+  # Say why before the trap tears anything down: pods, their events and the last logs.
+  kubectl --context "$CONTEXT" -n "$NS" get pods -o wide || true
+  kubectl --context "$CONTEXT" -n "$NS" describe pods | tail -n 80 || true
+  kubectl --context "$CONTEXT" -n "$NS" logs --all-containers --prefix --tail 40 -l app.kubernetes.io/instance="$RELEASE" || true
+  exit 1
+fi
 if [ "$reuse" = 1 ]; then
   # Same tags as before: only a restart makes the pods run the images just loaded.
   kubectl --context "$CONTEXT" -n "$NS" rollout restart deployment

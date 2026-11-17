@@ -81,8 +81,10 @@ spec:
                 secretKeyRef:
                   name: {{ $name }}
                   key: password
+            # Postgres 18 images keep data under /var/lib/postgresql/18/docker and refuse to start
+            # with a volume at the pre-18 /var/lib/postgresql/data: mount the parent instead.
             - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
+              value: /var/lib/postgresql/18/docker
           ports:
             - name: postgres
               containerPort: 5432
@@ -97,7 +99,7 @@ spec:
                 - ALL
           volumeMounts:
             - name: data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql
             - name: run
               mountPath: /var/run/postgresql
       volumes:
