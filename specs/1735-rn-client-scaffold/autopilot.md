@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1735
 - **Worktree branch**: claude/project-thread-bazfe4
 - **Started**: 2026-11-16
-- **Phase**: M3 round-1 findings fixed, awaiting round-2 review of the fix diff
-- **Next step**: orchestrator runs the round-2 re-review on b3028a1a9..acc4180b1, then opens the M3 PR (body in `pr-M3.md`)
+- **Phase**: M3 merged (#2018)
+- **Next step**: a fresh thread runs `/speckit-autopilot resume` for M4 (T054–T062)
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
 | #2015 | M2 | merged | b863fd3393735e9d0ae6a4ac38299e31f30a5855 |
 | (M3) | M3: body in `pr-M3.md` | not opened | - |
+| #2018 | M3 | merged | dfd448cec7c5e1f317fc8092407381dc2ed11859 |
 | #2013 | M1 workspace, CI, theme, i18n, spike | merged | 18aadedf61d2a5c3d512447f30e3a9f33eb12262 |
 
 ## Milestones
@@ -80,7 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 merged as #2018 (dfd448cec); round-2 re-review CLEAN. CI build+test failed once on a corrupt llvm-cov profraw (all tests passed), green on one rerun. Start M4 in a fresh thread from this branch's ledger. Optional: `groupBy` in `rowKeys` is O(n²) per group (fine at current scale).
 
 ## Open escalation
 
