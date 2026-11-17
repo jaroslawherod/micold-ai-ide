@@ -49,10 +49,9 @@ psql "CREATE TABLE IF NOT EXISTS local_stack_marker (v text); INSERT INTO local_
 daemons_before="$(psql "SELECT count(*) FROM daemons")"
 [ "$daemons_before" -ge 1 ] || { say "no daemon registered in Postgres"; exit 1; }
 kubectl --context "$CTX" -n micold delete pod -l app.kubernetes.io/component=orchestrator --wait=true
-# The stack's API port-forward dies with the pod, and one forward exiting ends the stack: assert it.
-for _ in $(seq 1 60); do kill -0 "$stack" 2>/dev/null || break; sleep 1; done
-if kill -0 "$stack" 2>/dev/null; then say "the stack outlived its API port-forward"; exit 1; fi
-wait "$stack" 2>/dev/null || true
+# The stack's API forward points at the deleted pod. kubectl only notices on the next connection
+# (and may then log and carry on), so stop the stack here rather than wait for it to end itself.
+down
 kind get clusters | grep -qx micold-local || { say "KEEP did not keep the cluster"; exit 1; }
 kubectl --context "$CTX" -n micold delete pod micold-postgres-0 --wait=true
 kubectl --context "$CTX" -n micold rollout status statefulset/micold-postgres --timeout 5m

@@ -951,7 +951,7 @@ jobs:
     # session can run. Up with KEEP, probe (session over /api/ws and the web root), delete the
     # orchestrator pod and probe (state in Postgres), rerun in the background to exercise reuse and
     # probe, TERM it; then a last run without KEEP whose TERM must delete the cluster. Gated like
-    # kube-e2e. Times: SC-008's CI bound, 15 min for the job, 120 s per probe.
+    # kube-e2e. Times: SC-008's CI bound, 35 min for the job (three ups), 120 s per probe.
     needs: classify
     if: >-
       ${{ !cancelled()
@@ -960,7 +960,7 @@ jobs:
       && (needs.classify.outputs.pr_proven != 'true' || needs.classify.outputs.kube_paths != 'true')
       && (github.event_name != 'pull_request' || needs.classify.outputs.kube_paths == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install kind, kubectl and helm at pinned versions
