@@ -50,6 +50,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 |---|---|---|---|---|---|
 
 | diff review | 1 (opus, orchestrator) | M2 10f82e095..e7ad7f4 | see commit | - | CHANGES: 2 MAJOR (F1 handshake timeout + socket cap, F2 serialize feed passes) fixed; MINOR F3 stale snapshot after stop fixed, F5 single close fixed, F7 tests (non-UTF-8 Origin, Lagged fallback) added; F4, F6 declined/noted (see Declined); MAJOR fixes are behaviour-bearing, round 2 re-review (sonnet) due |
+| diff review | 2 (sonnet, orchestrator) | M2 fix diff e7ad7f4..c77b398b6 | c77b398b6 | - | CLEAN; low notes: close() untimed while permit held, timing-based lagged test |
 | diff review | 1 (opus, orchestrator) | M1 fbfa8360e..684310c01 | see commit | - | CHANGES, minor: F1 test name, F2 reply on read-task failure, F3 empty-history comment fixed; F4 declined (see Declined) |
 | spec review | 1 | spec.md | ff1592a91dce73ab8455582abb7ab45d7e31ad09 | ab6207b8a448c2329fff6fbbbcd821854aa4f518:ff1592a91dce73ab8455582abb7ab45d7e31ad09 | CHANGES: 2 MAJOR (F1 browser parity, F2 app-level heartbeat), 3 MINOR (F3 unreachable/snapshot, F4 FR-001 contract, F5 addresses/US3 check) — all fixed in spec.md; behaviour-bearing, round 2 re-review (sonnet) due |
 | spec review | 2 | spec.md | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | 5bd79793e23caf69bef8e78804b1ad82fe5c90e4 | CLEAN (sonnet re-review); nit Key Entities ping->pong fixed |
