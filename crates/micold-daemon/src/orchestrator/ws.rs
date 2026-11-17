@@ -106,6 +106,8 @@ async fn upgrade(
     peer: SocketAddr,
     allow: &OriginAllowList,
 ) -> Option<WebSocketStream<TcpStream>> {
+    // The signature is tungstenite's: its `ErrorResponse` is the plain HTTP refusal.
+    #[allow(clippy::result_large_err)]
     let check = |request: &Request, response: Response| {
         if request.uri().path() != PATH {
             return Err(refusal(StatusCode::NOT_FOUND, "not found"));
@@ -181,11 +183,11 @@ impl Connection {
                     deadline = Instant::now() + self.idle;
                     let reply = match frame {
                         Message::Text(text) => self.request(text.as_str(), &mut feeding).await,
-                        Message::Binary(_) => Err(ServerMessage::error(
+                        Message::Binary(_) => Err(Box::new(ServerMessage::error(
                             None,
                             ErrorCode::Malformed,
                             "binary frames are not part of this API",
-                        )),
+                        ))),
                         Message::Close(_) => return End::Gone,
                         _ => continue,
                     };
@@ -201,7 +203,7 @@ impl Connection {
                                 ServerBody::Error { code: ErrorCode::Malformed, .. }
                             );
                             malformed = if is_malformed { malformed + 1 } else { 0 };
-                            vec![error]
+                            vec![*error]
                         }
                     };
                     for reply in replies {
@@ -273,7 +275,7 @@ impl Connection {
         &self,
         text: &str,
         feeding: &mut Option<Feeding>,
-    ) -> Result<Result<Vec<ServerMessage>, ()>, ServerMessage> {
+    ) -> Result<Result<Vec<ServerMessage>, ()>, Box<ServerMessage>> {
         let request = parse(text)?;
         let id = request.id;
         // Every kind reads today; #1734 authorizes a change here.
@@ -311,7 +313,11 @@ impl Connection {
                 match read.await {
                     Err(_) => return Ok(Err(())),
                     Ok(Err(error)) => {
-                        return Err(ServerMessage::error(Some(id), error.code, error.message))
+                        return Err(Box::new(ServerMessage::error(
+                            Some(id),
+                            error.code,
+                            error.message,
+                        )))
                     }
                     Ok(Ok((session, entries))) => ServerBody::SessionContent { session, entries },
                 }
@@ -381,15 +387,20 @@ impl Connection {
 }
 
 /// `text` as a request, or the typed error naming what is wrong with it (FR-008).
-fn parse(text: &str) -> Result<ClientRequest, ServerMessage> {
-    let value: serde_json::Value = serde_json::from_str(text)
-        .map_err(|e| ServerMessage::error(None, ErrorCode::Malformed, format!("not JSON: {e}")))?;
+fn parse(text: &str) -> Result<ClientRequest, Box<ServerMessage>> {
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| {
+        Box::new(ServerMessage::error(
+            None,
+            ErrorCode::Malformed,
+            format!("not JSON: {e}"),
+        ))
+    })?;
     let Some(object) = value.as_object() else {
-        return Err(ServerMessage::error(
+        return Err(Box::new(ServerMessage::error(
             None,
             ErrorCode::Malformed,
             "not a JSON object",
-        ));
+        )));
     };
     let id = object.get("id").and_then(serde_json::Value::as_u64);
     let Some(kind) = object
@@ -397,25 +408,25 @@ fn parse(text: &str) -> Result<ClientRequest, ServerMessage> {
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned)
     else {
-        return Err(ServerMessage::error(
+        return Err(Box::new(ServerMessage::error(
             id,
             ErrorCode::Malformed,
             "no request type",
-        ));
+        )));
     };
     if !KINDS.contains(&kind.as_str()) {
-        return Err(ServerMessage::error(
+        return Err(Box::new(ServerMessage::error(
             id,
             ErrorCode::UnknownType,
             format!("no request type '{kind}'"),
-        ));
+        )));
     }
     serde_json::from_value(value).map_err(|e| {
-        ServerMessage::error(
+        Box::new(ServerMessage::error(
             id,
             ErrorCode::Malformed,
             format!("a malformed '{kind}': {e}"),
-        )
+        ))
     })
 }
 
@@ -432,7 +443,7 @@ mod tests {
     use super::*;
 
     fn error_code(text: &str) -> (Option<u64>, ErrorCode) {
-        match parse(text).expect_err("an error") {
+        match *parse(text).expect_err("an error") {
             ServerMessage {
                 id,
                 body: ServerBody::Error { code, .. },
