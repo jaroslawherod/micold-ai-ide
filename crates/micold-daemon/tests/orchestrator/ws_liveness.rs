@@ -1,5 +1,6 @@
 //! #1732 US2, FR-005, FR-008: the application-level heartbeat; a silent client is released; five
-//! malformed frames in a row close with 1008, an internal failure with 1011.
+//! malformed frames in a row close with 1008, an internal failure with 1011. Not named
+//! `ws_heartbeat`: `netns.rs` selects the `heartbeat::` tests by name.
 
 use std::sync::Arc;
 use std::time::Duration;
