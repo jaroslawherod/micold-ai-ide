@@ -1146,6 +1146,7 @@ fn app_with_a_failed_sandbox() -> App {
         startup: None,
         extras: Default::default(),
         wire_id: None,
+        github_repos: Vec::new(),
     });
     app
 }

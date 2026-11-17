@@ -188,6 +188,123 @@ mod container {
         }
     }
 
+    /// A stored token named `name` whose file holds `text`, owner-only like the PAT store writes it.
+    fn stored_token(
+        dir: &Path,
+        name: &str,
+        text: &str,
+        repos: &[&str],
+    ) -> micold_client::daemon_config_render::GithubTokenSetting {
+        let file = dir.join(name);
+        std::fs::write(&file, text).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        micold_client::daemon_config_render::GithubTokenSetting {
+            name: name.into(),
+            token_file: file,
+            repos: repos
+                .iter()
+                .map(|r| micold_core::daemon_config::RepoPattern::parse(r).unwrap())
+                .collect(),
+            host: None,
+        }
+    }
+
+    /// BUG: a container host got no `[[github.tokens]]` and no token file, so the container's `gh`
+    /// shim found no token. The selected tokens are copied into the secrets folder (owner-only),
+    /// named at `/run/micold/secrets/github-token-<name>`, and a copy no longer selected is removed.
+    #[test]
+    fn the_selected_github_tokens_are_delivered_rendered_and_pruned() {
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let src = dir.path().join("pats");
+        std::fs::create_dir_all(&src).unwrap();
+        let mut forge = stored_token(&src, "Forge", "github_pat_FAKE_forge\n", &["acme/app"]);
+        forge.host = Some("http://172.18.0.1:8123".into());
+        let any = stored_token(&src, "any", "github_pat_FAKE_any", &[]);
+        let deliver = |tokens: &[_]| {
+            deliver_container(
+                "box",
+                &profile(false),
+                Path::new("/home/jaro"),
+                &delivery,
+                None,
+                None,
+                &Default::default(),
+                None,
+                tokens,
+            )
+            .unwrap()
+        };
+
+        assert!(deliver(&[forge.clone(), any.clone()]));
+        let copy = delivery.secrets.join("github-token-forge");
+        assert_eq!(
+            std::fs::read_to_string(&copy).unwrap(),
+            "github_pat_FAKE_forge\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(delivery.secrets.join("github-token-any")).unwrap(),
+            "github_pat_FAKE_any"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&copy).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        let (config, errors) = micold_core::daemon_config::diagnose(&text, "daemon.toml");
+        assert!(errors.is_empty(), "{errors:?}\n{text}");
+        assert!(config.is_some());
+        assert!(
+            text.contains("token_file = \"/run/micold/secrets/github-token-forge\""),
+            "{text}"
+        );
+        assert!(text.contains("repos = [\"acme/app\"]"), "{text}");
+        assert!(text.contains("host = \"http://172.18.0.1:8123\""), "{text}");
+        assert!(!text.contains(src.to_str().unwrap()), "{text}");
+        assert!(!text.contains("FAKE"), "{text}");
+
+        // Unchanged: no write. One token fewer: its copy goes and its entry with it.
+        assert!(!deliver(&[forge.clone(), any]));
+        assert!(deliver(&[forge]));
+        assert!(!delivery.secrets.join("github-token-any").exists());
+        assert!(copy.exists());
+        let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
+        assert!(!text.contains("github-token-any"), "{text}");
+        assert!(deliver(&[]));
+        assert!(!copy.exists());
+    }
+
+    /// A token the container cannot take (readable by others) stops the delivery naming it.
+    #[cfg(unix)]
+    #[test]
+    fn a_github_token_readable_by_others_is_refused_naming_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let delivery = DeliveryMount::beside(&dir.path().join("state"));
+        let token = stored_token(dir.path(), "loose", "github_pat_FAKE_loose", &[]);
+        std::fs::set_permissions(&token.token_file, std::fs::Permissions::from_mode(0o644))
+            .unwrap();
+        let err = deliver_container(
+            "box",
+            &profile(false),
+            Path::new("/home/jaro"),
+            &delivery,
+            None,
+            None,
+            &Default::default(),
+            None,
+            &[token],
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("loose"), "{err}");
+    }
+
     /// #1726: a container daemon announces its own orchestrator id, not `local`, so the client
     /// can route to it through the orchestrator.
     #[test]
@@ -204,6 +321,7 @@ mod container {
             None,
             &Default::default(),
             Some(&id),
+            &[],
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -226,7 +344,8 @@ mod container {
             None,
             None,
             &Default::default(),
-            None
+            None,
+            &[]
         )
         .unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -273,6 +392,7 @@ mod container {
             None,
             &micold_core::daemons::SessionExtras::default(),
             None,
+            &[],
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -324,7 +444,8 @@ mod container {
             None,
             None,
             &Default::default(),
-            None
+            None,
+            &[]
         )
         .unwrap());
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -337,7 +458,8 @@ mod container {
             None,
             None,
             &Default::default(),
-            None
+            None,
+            &[]
         )
         .unwrap());
         assert!(deliver_container(
@@ -348,7 +470,8 @@ mod container {
             None,
             None,
             &Default::default(),
-            None
+            None,
+            &[]
         )
         .unwrap());
     }
@@ -387,6 +510,7 @@ mod container {
             Some(&startup),
             &Default::default(),
             None,
+            &[],
         )
         .unwrap();
 
@@ -431,6 +555,7 @@ mod container {
             Some(&startup),
             &Default::default(),
             None,
+            &[],
         )
         .unwrap();
 
@@ -443,6 +568,7 @@ mod container {
             None,
             &Default::default(),
             None,
+            &[],
         )
         .unwrap();
 
@@ -468,6 +594,7 @@ mod container {
             None,
             &Default::default(),
             None,
+            &[],
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -486,6 +613,7 @@ mod container {
             None,
             &Default::default(),
             None,
+            &[],
         )
         .unwrap();
         let text = std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap();
@@ -526,6 +654,7 @@ mod container {
                 None,
                 extras,
                 None,
+                &[],
             )
             .unwrap();
             std::fs::read_to_string(delivery.config.join("daemon.toml")).unwrap()
@@ -595,6 +724,7 @@ mod container {
             None,
             &extras,
             None,
+            &[],
         )
         .unwrap();
         for (name, body) in [("session-file-0", "FIRST"), ("session-file-1", "SECOND")] {
@@ -632,6 +762,7 @@ mod container {
             Some(&startup),
             &Default::default(),
             None,
+            &[],
         )
         .unwrap_err();
         assert!(err.to_string().contains("gone.sh"), "{err}");

@@ -390,6 +390,10 @@ fn boot() -> (App, Task<Message>) {
                 &core.settings.daemons,
                 core.settings.legacy_default_daemon,
             ),
+            github_repos: crate::shell::sandbox::BootPlan::github_repos_of(
+                &core.settings.daemons,
+                core.settings.legacy_default_daemon,
+            ),
         }
     });
 

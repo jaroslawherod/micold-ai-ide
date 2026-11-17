@@ -488,6 +488,9 @@ pub struct ContainerBringUp {
     pub extras: micold_core::daemons::SessionExtras,
     /// The id the daemon announces to the orchestrator (#1726, R6), written into its configuration.
     pub wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
+    /// The repositories of the daemon's saved projects, which pick the stored GitHub tokens the
+    /// container receives; identity, so saving a project re-delivers them.
+    pub github_repos: Vec<micold_core::github::GithubRepo>,
 }
 
 impl std::hash::Hash for ContainerBringUp {
@@ -506,6 +509,7 @@ impl std::hash::Hash for ContainerBringUp {
             .unwrap_or_default()
             .hash(state);
         self.wire_id.hash(state);
+        self.github_repos.hash(state);
     }
 }
 
@@ -677,6 +681,7 @@ pub fn actor_specs_answered(
                                         .map(|(settings, _)| settings.extras)
                                         .unwrap_or_default(),
                                     wire_id: entry.file.wire_id.clone(),
+                                    github_repos: ProjectsDial::of(&entry.file.projects).0,
                                 }
                             })
                         })
@@ -2291,18 +2296,12 @@ fn pod_github_tokens(
     settings: &KubeSettings,
     projects: &[micold_core::github::GithubRepo],
 ) -> Result<crate::daemon_config_delivery::PodGithubTokens, KubeAttemptError> {
-    use crate::daemon_config_delivery::{select_tokens, PodGithubTokens};
+    use crate::daemon_config_delivery::{stored_tokens_for, PodGithubTokens};
     let store = match (&source.pat_root, settings.github_tokens) {
         (Some(root), true) => micold_core::scoped_credential::pat_store::PatStore::new(root),
         _ => return Ok(PodGithubTokens::default()),
     };
-    let mut selected = select_tokens(
-        daemon_config_render::GithubTokenSetting::from_store(&store),
-        projects,
-    );
-    for token in &mut selected {
-        token.host.clone_from(&source.host);
-    }
+    let selected = stored_tokens_for(&store, projects, source.host.as_deref());
     PodGithubTokens::read(selected).map_err(|e| KubeAttemptError::Failed(e.to_string()))
 }
 

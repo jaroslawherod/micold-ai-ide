@@ -221,6 +221,7 @@ impl App {
         plan.port = port;
         plan.startup = BootPlan::startup_of(registry, legacy);
         plan.wire_id = BootPlan::wire_id_of(registry, legacy);
+        plan.github_repos = BootPlan::github_repos_of(registry, legacy);
         let entry = BootPlan::sandbox_daemon(registry, legacy).and_then(|id| registry.get(id));
         if let Some(DaemonRuntime::Container(c)) = entry.map(|e| &e.runtime) {
             plan.profile = c.profile.clone();
