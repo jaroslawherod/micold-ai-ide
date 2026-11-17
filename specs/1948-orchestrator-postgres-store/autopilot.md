@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-0phzsu
 - **Started**: 2026-11-15
 - **Phase**: close
-- **Next step**: orchestrator decision on the second tdd-verify FAIL (cae46cf): cut T071–T075 into M12, or accept mutant reds for the TEST_AFTER rows (F4)
+- **Next step**: M12 (T071–T075), then a new close unit (re-run speckit-tdd-verify)
 
 ## Pull requests
 
@@ -109,7 +109,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M11 merged (#2014, c5c184a03). Second tdd-verify FAILED (tdd/verification.md); T071–T075 appended. jaro chose (2026-11-17, decision card) to cut them into M12. Next: M12 milestone unit (T071–T075) in a fresh thread, then a new close unit re-running tdd-verify; that verify should accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows (F4).
 
 ## Open escalation
 
