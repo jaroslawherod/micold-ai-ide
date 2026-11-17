@@ -59,6 +59,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 | Review | Round | Scope | Head | Snapshot | Verdict |
 | M5 amendment review | 1 | spec.md, plan.md, tasks.md | 508a1ad305d6399c558739a5d25e8e9dfbfcf5e6 | 20e9ba559138a6384580a39f47cb10993f1a93b8:508a1ad305d6399c558739a5d25e8e9dfbfcf5e6 | CHANGES: 7 (5 MAJOR, 2 MINOR), all fixed in c6a8945310f0fe9bfb6f0e8038105825ba617a88; round 2 (sonnet) due on bd4e06335766c53cb100154977c0787a18720671:c6a8945310f0fe9bfb6f0e8038105825ba617a88 |
 | M5 amendment review | 2 (sonnet) | fix diff | see commit | - | PASSED with 3 text nits (ledger T-range, T046/T049 configured() input, T052 run order), fixed |
+| diff review | 1 (pending) | M5 1ba83dcdd5b9b9e32815c5cbedc4004932d2dd09..b62f39a30829d27512a5c135834a3ef5d8a0b467 | b62f39a30829d27512a5c135834a3ef5d8a0b467 | 1ba83dcdd5b9b9e32815c5cbedc4004932d2dd09:b62f39a30829d27512a5c135834a3ef5d8a0b467 | pending |
 |---|---|---|---|---|---|
 
 | diff review | 1 (opus, orchestrator) | M2 10f82e095..e7ad7f4 | see commit | - | CHANGES: 2 MAJOR (F1 handshake timeout + socket cap, F2 serialize feed passes) fixed; MINOR F3 stale snapshot after stop fixed, F5 single close fixed, F7 tests (non-UTF-8 Origin, Lagged fallback) added; F4, F6 declined/noted (see Declined); MAJOR fixes are behaviour-bearing, round 2 re-review (sonnet) due |
