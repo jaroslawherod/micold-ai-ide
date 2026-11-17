@@ -3,6 +3,7 @@
 // bundle-check.mjs) fails on the sentinel below.
 import { createAuthSession, type Api, type AuthSession, type Unsubscribe } from "../api";
 import type { AuthProvider, Change, ConnectionState, Snapshot } from "../types";
+import { applyChanges } from "../order";
 import { buildFixture } from "./fixture";
 
 export const MOCK_SENTINEL = "__MICOLD_MOCK__";
@@ -28,46 +29,10 @@ const DEFAULT_PROVIDERS: AuthProvider[] = [
 
 let tokenCounter = 0;
 
-function listFor(snap: Snapshot, type: string): { id: string }[] {
-  switch (type) {
-    case "daemon":
-      return snap.daemons;
-    case "project":
-      return snap.projects;
-    case "location":
-      return snap.locations;
-    default:
-      return snap.sessions;
-  }
-}
-
-function apply(snap: Snapshot, change: Change): void {
-  snap.seq = change.seq;
-  if (change.kind === "session-state") {
-    const s = snap.sessions.find((x) => x.id === change.sessionId);
-    if (s) s.state = change.state;
-  } else if (change.kind === "daemon-status") {
-    const d = snap.daemons.find((x) => x.id === change.daemonId);
-    if (d) d.status = change.status;
-  } else if (change.kind === "upsert") {
-    const list = listFor(snap, change.entity.type);
-    const at = list.findIndex((x) => x.id === change.entity.value.id);
-    if (at >= 0) list[at] = change.entity.value;
-    else {
-      const after = list.findIndex((x) => x.id === change.afterKey);
-      list.splice(after >= 0 ? after + 1 : list.length, 0, change.entity.value);
-    }
-  } else {
-    const list = listFor(snap, change.entity.type);
-    const at = list.findIndex((x) => x.id === change.entity.id);
-    if (at >= 0) list.splice(at, 1);
-  }
-}
-
 export function createMockApi(): { api: Api; control: MockControl } {
   // Used at runtime, so no minifier can drop the string the bundle check looks for.
   (globalThis as Record<string, unknown>)[MOCK_SENTINEL] = true;
-  const snap = buildFixture();
+  let snap = buildFixture();
   const log: Change[] = [];
   const feeds = new Set<(b: Change[]) => void>();
   const connListeners = new Set<(s: ConnectionState) => void>();
@@ -87,10 +52,8 @@ export function createMockApi(): { api: Api; control: MockControl } {
   };
   const pushBatch = (inputs: ChangeInput[]) => {
     const batch = inputs.map((c, i) => ({ ...c, seq: snap.seq + 1 + i }) as Change);
-    for (const c of batch) {
-      apply(snap, c);
-      log.push(c);
-    }
+    snap = applyChanges(snap, batch);
+    log.push(...batch);
     for (const cb of feeds) cb(batch);
   };
 
@@ -141,3 +104,4 @@ export function createMockApi(): { api: Api; control: MockControl } {
   };
   return { api, control };
 }
+export { buildFixture } from "./fixture";

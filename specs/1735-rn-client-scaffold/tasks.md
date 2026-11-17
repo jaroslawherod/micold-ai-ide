@@ -70,20 +70,20 @@ Paths: `apps/client/` (app), `packages/protocol/` (`@micold/protocol`), `scripts
 
 ## Phase 6: US2 Sidebar and US3 Overview (M3)
 
-- [ ] T040 [US3] Read `crates/micold-client/src/ui/overview.rs` and record card width, gap and column rule in `research.md` R13 (before layout code)
-- [ ] T041 [P] [US2] TEST FIRST `packages/protocol/tests/order.test.ts` and `apps/client/tests/sidebar/order.test.ts`: key identity and index equality after 100 scripted changes and after batched changes; batch result independent of arrival order for distinct keys (property test) (FR-011, SC-001, US2 scenarios 2, 5)
-- [ ] T042 [US2] Implement the snapshot store (`zustand`, `orderIndex`, no sorting in the client) in `src/features/sidebar/store.ts` and row keys per data-model.md
-- [ ] T043 [P] [US2] TEST FIRST component tests: `StateIndicator` differs by glyph and text not colour alone and changes without animation under `prefers-reduced-motion`; `LocationRow`; long names truncate with full text available and the indicator does not move; empty states; terminal sessions listed without an emulator (US2 scenarios 1, 4, 6; FR-011; Edge Cases)
-- [ ] T044 [US2] Implement `src/components/StateIndicator.tsx` (honours reduced motion), `LocationRow.tsx` and `src/features/sidebar/Sidebar.tsx` grouped by daemon and project, keyboard reachable with visible focus (FR-010, FR-019)
-- [ ] T045 [P] [US2] TEST FIRST offline/stale tests: an offline daemon or non-connected state keeps rows listed, marked stale, with last known data (FR-013, US2 scenario 3)
-- [ ] T046 [US2] Implement stale marking in the store and `Sidebar` plus catalog strings (en, pl)
-- [ ] T047 [P] [US3] TEST FIRST layout tests: wide arrangement at 600 px and above, one column at 599 px and below, widths below 320 px and a 200 percent zoom equivalent and resize while open stay reachable with no horizontal scroll, card state changes do not move the card (FR-012, SC-003, US3 scenarios 1-3; Edge Cases, Viewport)
-- [ ] T048 [US3] Extend `src/theme/layout.ts` with `useLayout()` (breakpoint 600), add `src/components/OverviewCard.tsx`, `src/features/overview/` and `app/index.tsx` with the sidebar beside it (makes T047 pass)
-- [ ] T049 [P] [US2] TEST FIRST latency test: a state change from the mock feed reaches the rendered indicator within 100 ms (SC-002)
-- [ ] T050 [US2] Make T049 pass (adjust subscription and render path only if it fails); no new feature code if already green
-- [ ] T051 [P] [US5] Extend the i18n tests: every string on sidebar, Overview and sign-in is from the catalog and Polish plurals render for counts (SC-004); lint passes with no literal
-- [ ] T052 [US3] Add dates and relative times through the intl wrapper in `src/platform/` (US5 scenario 4)
-- [ ] T053 [P] [US3] Update `docs/user-guide/overview.md` (web client Overview and sidebar: stacking below 600 px, state glyphs)
+- [x] T040 [US3] Read `crates/micold-client/src/ui/overview.rs` and record card width, gap and column rule in `research.md` R13 (before layout code)
+- [x] T041 [P] [US2] TEST FIRST `packages/protocol/tests/order.test.ts` and `apps/client/tests/sidebar/order.test.ts`: key identity and index equality after 100 scripted changes and after batched changes; batch result independent of arrival order for distinct keys (property test) (FR-011, SC-001, US2 scenarios 2, 5)
+- [x] T042 [US2] Implement the snapshot store (`zustand`, `orderIndex`, no sorting in the client) in `src/features/sidebar/store.ts` and row keys per data-model.md
+- [x] T043 [P] [US2] TEST FIRST component tests: `StateIndicator` differs by glyph and text not colour alone and changes without animation under `prefers-reduced-motion`; `LocationRow`; long names truncate with full text available and the indicator does not move; empty states; terminal sessions listed without an emulator (US2 scenarios 1, 4, 6; FR-011; Edge Cases)
+- [x] T044 [US2] Implement `src/components/StateIndicator.tsx` (honours reduced motion), `LocationRow.tsx` and `src/features/sidebar/Sidebar.tsx` grouped by daemon and project, keyboard reachable with visible focus (FR-010, FR-019)
+- [x] T045 [P] [US2] TEST FIRST offline/stale tests: an offline daemon or non-connected state keeps rows listed, marked stale, with last known data (FR-013, US2 scenario 3)
+- [x] T046 [US2] Implement stale marking in the store and `Sidebar` plus catalog strings (en, pl)
+- [x] T047 [P] [US3] TEST FIRST layout tests: wide arrangement at 600 px and above, one column at 599 px and below, widths below 320 px and a 200 percent zoom equivalent and resize while open stay reachable with no horizontal scroll, card state changes do not move the card (FR-012, SC-003, US3 scenarios 1-3; Edge Cases, Viewport)
+- [x] T048 [US3] Extend `src/theme/layout.ts` with `useLayout()` (breakpoint 600), add `src/components/OverviewCard.tsx`, `src/features/overview/` and `app/index.tsx` with the sidebar beside it (makes T047 pass)
+- [x] T049 [P] [US2] TEST FIRST latency test: a state change from the mock feed reaches the rendered indicator within 100 ms (SC-002)
+- [x] T050 [US2] Make T049 pass (adjust subscription and render path only if it fails); no new feature code if already green
+- [x] T051 [P] [US5] Extend the i18n tests: every string on sidebar, Overview and sign-in is from the catalog and Polish plurals render for counts (SC-004); lint passes with no literal
+- [x] T052 [US3] Add dates and relative times through the intl wrapper in `src/platform/` (US5 scenario 4)
+- [x] T053 [P] [US3] Update `docs/user-guide/overview.md` (web client Overview and sidebar: stacking below 600 px, state glyphs)
 
 **M3 checkpoint**: signed in, the sidebar and Overview show the fixture in stable order, update live, stack on narrow widths.
 

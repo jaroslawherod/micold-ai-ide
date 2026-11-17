@@ -12,6 +12,11 @@ Commands: `scripts/tests/classify-change.test.sh`; `pnpm --filter @micold/client
 | T016/T017 | `tests/i18n/*.test.ts` | modules `i18n/*` missing; catalogs absent | catalogs en/pl, `pseudoLocalize`, `createTranslator`, locale store; ESM packages added to `transformIgnorePatterns` |
 | T018/T019 | `tests/components/LocalePicker.test.tsx` | `Cannot find module`; then Paper `SegmentedButtons` forced role `button` (no `radio`) | custom radio group on `Pressable` |
 | T021/T022 | `tests/app/spike.test.tsx`, `spikeFixtures`, `spikeScreen` | modules missing; first route draft read the env at import (untestable), moved the check into render | route renders the spike only when `EXPO_PUBLIC_API_MODE === "mock"` |
+| M3 round-1 A F1 | `packages/protocol/tests/order.test.ts` | stale replay (seq 3 and 5 after seq 5) overwrote state | `applyChanges` drops `seq <= snap.seq` |
+| M3 round-1 A F2 | `order.test.ts` (both) | location upserted after a d2 row keyed after d2; orphan keyed `undefined/...` | `rowKeys` groups daemon, project, location; `orderIndex` flattens `sidebarTree` (client test green once `rowKeys` was fixed) |
+| M3 round-1 A F3, F6 / B F1 | `components.test.tsx` | no "No sessions" text; session rows not accessible | empty-sessions note; `sidebar.session` "{name}, {state}" in en and pl |
+| M3 round-1 A F4 | `guard.test.ts` | `/SIGN-IN`, `/sign-in/`, `/sign%2Din` returned `null` (router 404s) | non-canonical sign-in redirects to `/sign-in` |
+| M3 round-1 A F5 | `overview/layout.test.tsx` | 1000 px grid gave 322.67 px cards | `Math.floor` on card width |
 
 Refactor while green: `chooseLocale` takes an injectable `languages` source so the locale store test needs no `navigator` spy.
 
@@ -29,3 +34,20 @@ Refactor while green: `chooseLocale` takes an injectable `languages` source so t
 | T038/T039 | `scripts/tests/bundle-check.test.sh` | `scripts/client/bundle-check.mjs` missing | sentinel scan, exit 0/1/2; CI checks the real export and that a mock export fails |
 
 Refactor while green: `renderWithApi` test helper shared by the sign-in and banner tests.
+
+## M3
+
+| Tasks | Test | Red (why it failed) | Green |
+|---|---|---|---|
+| T040 | - | - | R13 numbers measured from `card_grid.rs` (280 min, 16 gap, 5 max, iced column rule) and recorded in research.md |
+| T041/T042 | `packages/protocol/tests/order.test.ts`, `apps/client/tests/sidebar/order.test.ts` | `applyChanges`/`rowKeys` not functions; client module `features/sidebar/store` missing | pure `applyChanges` in the protocol package (the mock now uses it), `rowKeys`, zustand snapshot store, `orderIndex`, `sidebarTree` |
+| T043/T044 | `apps/client/tests/sidebar/components.test.tsx` | components missing; then unawaited async `unmount`/`fireEvent` of Testing Library 14 broke later renders | `StateIndicator` (glyph + text, pulse off under reduced motion), `LocationRow` with focus ring, `Sidebar` with loading, failed and empty states |
+| T045/T046 | `apps/client/tests/sidebar/stale.test.tsx` | green on arrival (stale marking landed with the store and Sidebar); shown to bite in round-1 fixes: with `isStale` stubbed to `false` all 3 stale tests and the store stale test fail (4 failed) | rows of an offline daemon or a dropped connection stay, labelled "last known", with the update time |
+| T047/T048 | `apps/client/tests/overview/layout.test.tsx` | `gridColumns`, `Overview`, `OverviewCard` missing; then a pulsing indicator kept `act` from settling in the index test | `gridColumns`, wide row at 600 px, stacked column at 599 px, measured grid width |
+| T049/T050 | `apps/client/tests/sidebar/latency.test.tsx` | 112 ms: one change re-rendered all 90 rows | `LocationRow` memoised on entity identity (`applyChanges` keeps unchanged references): 13-24 ms |
+| T051 | `apps/client/tests/i18n/screens.test.tsx` | pseudo-locale refused by `setLocale` outside mock builds (test set state directly) | 0 untransformed strings on sidebar, Overview and sign-in; Polish plurals on cards |
+| T052 | `apps/client/tests/platform/relative.test.ts` | `relativeParts`, `formatSince` missing | unit choice in `platform/intl.ts`, `formatSince` on the translator |
+| T053 | - | - | user guide: "In the web client" in `docs/user-guide/overview.md` |
+| M2 minors | `connection.test.ts`, `guard.test.ts` | stop during open blocked `retryNow`; `error: null` rejected; `/Sign-In` and `/sign%2Din` not treated as sign-in | `stop()` resets `opening`; `error != null`; `isSignInPath` (case, escapes, trailing slash) |
+
+Refactor while green: `renderWithApi` returns `rerender`; the mock's own `apply` removed for `applyChanges`.

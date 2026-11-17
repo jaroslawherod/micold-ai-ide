@@ -1,5 +1,6 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { AccessibilityInfo } from "react-native";
+import { act, render, screen } from "@testing-library/react-native";
 
 jest.mock("expo-router", () => {
   const { View } = require("react-native");
@@ -15,8 +16,7 @@ import RootLayout from "../../app/_layout";
 import Index from "../../app/(app)/index";
 import ProtectedLayout from "../../app/(app)/_layout";
 import { IntlProvider } from "../../src/i18n/IntlProvider";
-import { PaperProvider } from "react-native-paper";
-import { buildTheme } from "../../src/theme/buildTheme";
+import { renderWithApi } from "../support/renderWithApi";
 
 describe("root layout and index", () => {
   const mode = process.env.EXPO_PUBLIC_API_MODE;
@@ -54,13 +54,10 @@ describe("root layout and index", () => {
   });
 
   it("shows the title, the tagline and the language picker from the catalog", async () => {
-    await render(
-      <PaperProvider theme={buildTheme("dark")}>
-        <IntlProvider>
-          <Index />
-        </IntlProvider>
-      </PaperProvider>,
-    );
+    // A pulsing indicator never settles `act`; reduced motion keeps the test to one frame.
+    jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockResolvedValue(true);
+    await renderWithApi(<Index />).view;
+    await act(async () => {});
     expect(screen.getByRole("header", { name: "Micold" })).toBeTruthy();
     expect(screen.getByRole("radiogroup")).toBeTruthy();
   });

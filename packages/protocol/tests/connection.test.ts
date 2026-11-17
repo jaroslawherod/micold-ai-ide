@@ -177,6 +177,23 @@ describe("ConnectionManager", () => {
     expect(manager.get()).toEqual({ kind: "offline" });
   });
 
+  it("stop during an open lets retryNow open again", () => {
+    const { transport, manager } = setup();
+    manager.start();
+    manager.stop();
+    manager.retryNow();
+    expect(transport.opens).toBe(2);
+  });
+
+  it("treats a null error as success", async () => {
+    const { transport, manager } = setup();
+    manager.start();
+    transport.accept();
+    const p = manager.request("x");
+    transport.deliver({ id: transport.sent[0]!.id, error: null, result: "ok" });
+    await expect(p).resolves.toBe("ok");
+  });
+
   it("unsubscribe stops state callbacks", () => {
     const { transport, manager } = setup();
     const seen: ConnectionState[] = [];

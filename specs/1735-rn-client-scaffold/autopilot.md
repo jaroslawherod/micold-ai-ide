@@ -8,16 +8,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1735
-- **Worktree branch**: claude/project-thread-9m447v
+- **Worktree branch**: claude/project-thread-bazfe4
 - **Started**: 2026-11-16
-- **Phase**: M2 review round 1 fixed (3f48434a4), pushed; PR body at /tmp/claude-pr-1735-m2.md
-- **Next step**: orchestrator opens the M2 PR and re-reviews the fix diff 19e4e86b3..3f48434a4 (round 2, sonnet)
+- **Phase**: M3 round-1 findings fixed, awaiting round-2 review of the fix diff
+- **Next step**: orchestrator runs the round-2 re-review on b3028a1a9..acc4180b1, then opens the M3 PR (body in `pr-M3.md`)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
+| #2015 | M2 | merged | b863fd3393735e9d0ae6a4ac38299e31f30a5855 |
+| (M3) | M3: body in `pr-M3.md` | not opened | - |
 | #2013 | M1 workspace, CI, theme, i18n, spike | merged | 18aadedf61d2a5c3d512447f30e3a9f33eb12262 |
 
 ## Milestones
@@ -25,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | #2013 | merged |
-| M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | - | pending |
-| M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | pending |
+| M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | #2015 | merged |
+| M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | implemented |
 | M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | pending |
 
 ## Decisions
@@ -44,6 +46,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M2: without a real client (`real` mode) `ApiProvider` renders the catalog message `api.unavailable` instead of crashing; the error text "real client not built (#1732)" stays the thrown error.
 - M2: the route guard is `AuthGate` in the `(app)` group layout (`app/(app)/_layout.tsx`), returning `Redirect` before any protected route renders (review A F2); `app/index.tsx` moved into the group. Sign-in and the spike stay outside. `returnTo` is honoured only for a same-origin path that is not sign-in.
 - M2: catalog area ids must be lowercase (M1 catalog test), so the sign-in messages are `signin.*`.
+- M3: `applyChanges`/`rowKeys` live in `@micold/protocol` (pure, reference-preserving); the mock and the client store share them. `buildFixture` is exported from `@micold/protocol/mock` for tests.
+- M3: SC-002 is met by memoising `LocationRow` on entity identity, not by a new subscription path.
+- M3: "Sidebar session tree is deferred" read as no expand/collapse tree and no session selection; sessions are listed flat under their worktree (FR-010, US2 scenario 6). Worktree rows are selectable (local state) for focus and selection only; no route opens yet.
+- M3: folded in M2 round-2 minors: `ConnectionManager.stop()` resets `opening`; `error: null` is success; `isSignInPath` ignores case, percent-escapes and a trailing slash.
+- M3 (cloud): no mise, gh or Rust gate; JS checks run by hand, CI is the gate.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -61,7 +68,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A+B fix diff | 2 | M1 | 9b64585a458f441d7632f65b0f6a7c3532f1d467 | - | CLEAN (merged in #2013) |
 | Review A (opus, code-review high) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1-F3 major, F4-F7 minor), all fixed in the M2 fix commit |
 | Review B (sonnet, conformance) | 1 | M2 origin/main...HEAD | 19e4e86b3429e7b1e9122e499ac96909cdb57f2f | f49871e05eb829d67e1c0f7b77394b75d79d4ae4:19e4e86b3429e7b1e9122e499ac96909cdb57f2f | CHANGES (F1 major, F2-F5 minor), all fixed in the M2 fix commit (F5 documented in drift-M2.md) |
-| Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | pending (orchestrator re-reviews) |
+| Review A+B fix diff | 2 | M2 19e4e86b3..3f48434a4 | 3f48434a464c4534f048e3f5feea21b84711c7a1 | - | CLEAN (merged in #2015) |
+| Review A (opus, code-review high) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CHANGES (F1-F2 major, F3-F6 minor), all fixed in acc4180b1 |
+| Review B (sonnet, conformance) | 1 | M3 origin/main...HEAD | 18bf049c9e354945271b7fd277996bc089233a33 | b863fd3393735e9d0ae6a4ac38299e31f30a5855:18bf049c9e354945271b7fd277996bc089233a33 | CLEAN with minors F1-F3: F1 with A F6, F2 research R13 reworded, F3 stale tests shown to fail with `isStale` stubbed (cycle-log) |
+| Review A+B fix diff | 2 | M3 b3028a1a9..acc4180b1 | acc4180b108d139c82e52966ce36e7ee221c86d1 | b3028a1a9:acc4180b108d139c82e52966ce36e7ee221c86d1 | CLEAN (sonnet re-review; minor groupBy O(n²) noted, not blocking) |
 
 ## Declined review findings
 
