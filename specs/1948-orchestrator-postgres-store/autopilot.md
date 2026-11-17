@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1948
 - **Worktree branch**: claude/project-thread-0phzsu
 - **Started**: 2026-11-15
-- **Phase**: close
-- **Next step**: M12 PR review and merge, then a new close unit (re-run speckit-tdd-verify; accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows, F4)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -29,6 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #2010 | M9 | merged | 83926c52f |
 | #2011 | M10 | merged | 8005293fe |
 | #2014 | M11 | merged | c5c184a03 |
+| #2027 | M12 | merged | 97c75faea |
+| #2031 | Close | open | |
 
 ## Milestones
 
@@ -110,9 +112,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M11 merged (#2014, c5c184a03). Second tdd-verify FAILED (tdd/verification.md); T071–T075 appended. jaro chose (2026-11-17, decision card) to cut them into M12. Next: M12 milestone unit (T071–T075) in a fresh thread, then a new close unit re-running tdd-verify; that verify should accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows (F4).
-
-M12 built (T071–T075). Gate (scripts/gate.sh, PG 16 at :5433, cargo-nextest installed): fmt, clippy, 13648/13649 nextest green (only `session_extras` signing, ssh-keygen missing, unrelated); scripts/tests all pass. Reviews A and B not run (no Agent tool in this unit): the orchestrator runs them on the PR diff. Next: review, merge, then the close unit.
+None.
 
 ## Open escalation
 
@@ -134,3 +134,4 @@ None.
 - Constitution conflict: it still says local-only storage and three OSes; jaro's Linux-only decision (#1897, 2026-11-14) and #1949 supersede. The spec keeps Linux-only and cites #1897.
 - kube_real tests cannot run in cloud (no kind).
 - Close (after M11): speckit-tdd-verify re-run at cae46cf: FAIL. Resolved F1-F3, F5-F7, F11; partly F8, F9, F12; not F4 (14/25 TEST_AFTER, history) or F10. New N1 (HIGH, migrate.rs:71 retry bound, mutant survives ~half), N2-N4 (MED), N5-N7 (LOW). verification.md overwritten, tasks.md Phase 14 T071-T075 appended. Not cut into a milestone: returned to orchestrator.
+- Close (after M12): speckit-tdd-verify at cc8816d9f PASS_WITH_GAPS (F4 accepted on recorded mutant reds; N1-N7 resolved). T077 (N10) fixed. T076 (N8, orchestrator binary flaky under plain libtest `cargo test`, green under CI nextest) deferred to a follow-up issue. Fresh-context diff review not run (no Agent tool in this unit; diff is specs-only).

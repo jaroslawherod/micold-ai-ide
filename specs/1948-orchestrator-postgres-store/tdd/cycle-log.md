@@ -367,7 +367,7 @@ timeout, PostgreSQL on the advisory lock), so the retry is not reached. Recorded
   runs failed the two retry cases (the two-starters case failed on 3 of 5). Restored: green.
 - T072 (N2): the tautological `waited < 9` is dropped; `record_when` (b online, `last_seen` after the
   ping while the save is parked) is the assertion, and fails when the heartbeat path blocks.
-- T073 (N3): the two eager cases are 11 cases of one refusal each, pinned by `db::refusal` constants
+- T073 (N3): the two eager cases are 10 cases of one refusal each, pinned by `db::refusal` constants
   and functions the store exports (exact, not substring).
 - T074 (N4): `starts` waits for the orchestrator socket (bound after the store opens and imports)
   instead of a fixed 2 s. `store_config`: 5 of 5 passes, and 5 of 5 with four busy loops running.
