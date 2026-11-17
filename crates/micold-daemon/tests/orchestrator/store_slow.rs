@@ -172,9 +172,9 @@ async fn a_save_parked_in_a_store_call_leaves_other_daemons_heartbeats_answered(
             .unwrap();
     }
 
-    // With the save thread stuck, another daemon links, is pinged and its answer is taken: `record_when`
-    // fails unless `b` is online with a `last_seen` after the ping, so a heartbeat path blocked on the
-    // parked save fails here.
+    // With the save thread stuck, another daemon links, is pinged and its answer is taken:
+    // `record_when` fails unless `b` is online with a `last_seen` after the ping, so a heartbeat
+    // path blocked on the parked save fails here.
     let mut b = FakeDaemon::link(&orchestrator, &announcement("b")).await;
     let before = orchestrator.clock.wall();
     orchestrator.clock.advance(PING_INTERVAL);

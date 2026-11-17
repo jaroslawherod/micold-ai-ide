@@ -72,6 +72,7 @@ pub async fn run_forward(migrator: &'static Migrator, pool: &AnyPool) -> Result<
 /// [`run_forward`] over any `attempt` that runs the migrator once. A test passes an attempt that
 /// loses the race on demand, so the retry bound is exercised on every run, not only when two real
 /// starters collide.
+#[doc(hidden)]
 pub async fn run_forward_with<F, Fut>(migrator: &Migrator, mut attempt: F) -> Result<(), StoreError>
 where
     F: FnMut() -> Fut,
