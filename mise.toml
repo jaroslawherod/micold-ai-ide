@@ -236,6 +236,11 @@ description = "Lint and validate the Helm chart deploy/helm/micold (helm lint, k
 dir = "{{config_root}}"
 run = "scripts/chart-check.sh"
 
+[tasks.e2e-kind]
+description = "Run the orchestrator end-to-end suites on a throwaway kind cluster (#1981): needs docker, kind, kubectl, helm; MICOLD_E2E_KEEP=1 keeps it, MICOLD_E2E_SUITES picks suites (docs/development/kube-e2e.md)"
+dir = "{{config_root}}"
+run = "scripts/e2e-kind.sh"
+
 [tasks.build]
 description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"

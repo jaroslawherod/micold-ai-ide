@@ -192,6 +192,7 @@ scripts/chart-check.sh                micold-kube
 scripts/tests/chart-conformance.test.sh micold-kube
 scripts/tests/chart-check.test.sh     micold-kube
 scripts/tests/install-kube-tools.test.sh micold-kube
+scripts/tests/e2e-kind.test.sh         micold-kube
 # What the orchestrator image is built from, so a change that breaks its build or its command line
 # runs the image smoke before it reaches main.
 crates/micold-core/**                 micold-kube

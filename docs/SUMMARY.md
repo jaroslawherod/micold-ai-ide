@@ -45,6 +45,7 @@
 - [The CI pipeline](development/ci-pipeline.md)
 - [Diff guardrails: coverage and mutants](development/diff-guardrails.md)
 - [The shared target directory and build lock](development/shared-build.md)
+- [End-to-end tests on kind](development/kube-e2e.md)
 - [The duplication budget](development/duplication.md)
 - [Duplication triage](development/duplication-triage.md)
 - [The documentation site](development/docs-site.md)
