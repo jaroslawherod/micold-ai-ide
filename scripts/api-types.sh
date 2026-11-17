@@ -79,6 +79,9 @@ fi
 if [ -f "$schema" ]; then
 	to_ts "$schema" "$tmp/client-api.ts"
 	same "$tmp/client-api.ts" "$ts" || rc=1
+else
+	echo "DRIFT: $schema is missing. Regenerate it: $regen"
+	rc=1
 fi
 [ "$rc" = 0 ] && echo "ok    $schema and $ts are current"
 exit "$rc"

@@ -2,7 +2,7 @@
 // and this package's reducer agree on every shared vector.
 import { applyChanges, changeFromWire, rowKeys, snapshotFromWire } from "../src";
 import vectors from "./vectors/sidebar-order.json";
-import type { Change as WireChange, SessionState, Snapshot as WireSnapshot } from "../src/generated/client-api";
+import type { Change as WireChange, DaemonStatus as WireDaemonStatus, SessionState, Snapshot as WireSnapshot } from "../src/generated/client-api";
 
 interface Vector {
   name: string;
@@ -10,6 +10,7 @@ interface Vector {
   changes: WireChange[];
   expected_keys: string[];
   expected_sessions: Record<string, { state: SessionState; reachable: boolean }>;
+  expected_daemons: Record<string, WireDaemonStatus>;
 }
 
 const { cases } = vectors as unknown as { cases: Vector[] };
@@ -26,6 +27,11 @@ describe("sidebar-order vectors", () => {
     expect(rowKeys(after)).toEqual(c.expected_keys);
     const sessions = Object.fromEntries(after.sessions.map((s) => [s.id, { state: s.state, reachable: s.reachable }]));
     expect(sessions).toEqual(c.expected_sessions);
+    const daemons = Object.fromEntries(after.daemons.map((d) => [d.id, d.status]));
+    const expected = Object.fromEntries(
+      Object.entries(c.expected_daemons).map(([id, s]) => [id, s === "needs_update" ? "needs-update" : s]),
+    );
+    expect(daemons).toEqual(expected);
   });
 
   it("applying the same changes one at a time gives the same order", () => {

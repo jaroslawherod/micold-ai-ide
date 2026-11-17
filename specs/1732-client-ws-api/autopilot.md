@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xt3xhy
 - **Started**: 2026-11-17
 - **Phase**: milestones (M3 in review)
-- **Next step**: M3 code done (T020–T026), scoped gate green (fmt, workspace clippy, micold-core tests bar 2 root-only, shell suites; nextest missing, so full gate left to CI; no gate stamp recorded), pushed on claude/project-thread-xt3xhy; reviews not run (no Agent tool): the orchestrator reviews `a1c9514b3..HEAD`, opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
+- **Next step**: M3 code done (T020–T026), scoped gate green (fmt, workspace clippy, micold-core tests bar 2 root-only, shell suites; nextest missing, so full gate left to CI; no gate stamp recorded), pushed on claude/project-thread-xt3xhy; review round 1 fixed (scoped checks green); the orchestrator opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -50,7 +50,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Review rounds
 
-| diff review | 1 | M3 a1c9514b3..HEAD | - | - | NOT RUN by the milestone unit (no Agent tool): orchestrator to run |
+| diff review | 1 (opus, orchestrator) | M3 a1c9514b3..43fc62389 | see commit | - | CHANGES, 4 minor, all fixed: F1 --ts-only missing schema now DRIFT; F2 literal expected_keys for the grouping case; F3 expected_daemons in vectors, asserted in jest; F4 duplicate test replaced by upsert-after-gone-row. Test-only/script fixes, no round 2 needed |
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
 |---|---|---|---|---|---|

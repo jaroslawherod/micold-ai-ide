@@ -138,12 +138,18 @@ fn case(name: &str, start: Snapshot, steps: &[Snapshot]) -> Value {
             )
         })
         .collect();
+    let daemons: serde_json::Map<String, Value> = at
+        .daemons
+        .iter()
+        .map(|d| (d.id.clone(), json!(d.status)))
+        .collect();
     json!({
         "name": name,
         "snapshot": start,
         "changes": changes,
         "expected_keys": row_keys(&at),
         "expected_sessions": sessions,
+        "expected_daemons": daemons,
     })
 }
 
@@ -225,10 +231,46 @@ fn the_checked_in_vectors_equal_the_generated_ones() {
 }
 
 #[test]
-fn removing_and_upserting_a_key_restores_the_order() {
+fn the_grouping_case_expects_the_hand_written_order() {
+    let all = vectors();
+    let grouping = all["cases"]
+        .as_array()
+        .expect("cases")
+        .iter()
+        .find(|c| c["name"] == "grouping and nesting with new rows")
+        .expect("grouping case");
+    let expected = json!([
+        "d1/d1:p1/d1:p1#",
+        "d1/d1:p1/d1:p1#/s1",
+        "d1/d1:p1/d1:p1#/s2",
+        "d1/d1:p1/d1:p1#wt-c",
+        "d1/d1:p1/d1:p1#wt-c/s7",
+        "d1/d1:p1/d1:p1#wt-a",
+        "d1/d1:p1/d1:p1#wt-a/s3",
+        "d1/d1:p3/d1:p3#",
+        "d1/d1:p2/d1:p2#",
+        "d1/d1:p2/d1:p2#/s4",
+        "d1/d1:p2/d1:p2#/s8",
+        "d2/d2:p1/d2:p1#",
+        "d2/d2:p1/d2:p1#/s5",
+        "d2/d2:p1/d2:p1#wt-b",
+        "d2/d2:p1/d2:p1#wt-b/s6",
+    ]);
+    assert_eq!(grouping["expected_keys"], expected);
+}
+
+#[test]
+fn an_upsert_after_a_gone_row_lands_last() {
+    use micold_core::client_api::messages::{ChangeKind, Entity};
     let start = base();
-    let mut removed = start.clone();
-    removed.sessions.remove(1);
-    let back = apply(&removed, &diff(&removed, &start));
-    assert_eq!(row_keys(&back), row_keys(&start));
+    let new = session("s9", "d1:p1#", SessionState::Idle);
+    let after = apply(
+        &start,
+        &[ChangeKind::Upsert {
+            entity: Entity::Session(new.clone()),
+            after_key: Some("gone".into()),
+        }],
+    );
+    assert_eq!(after.sessions.last(), Some(&new));
+    assert_eq!(after.sessions.len(), start.sessions.len() + 1);
 }

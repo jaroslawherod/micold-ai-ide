@@ -84,6 +84,10 @@
           "seq": 6
         }
       ],
+      "expected_daemons": {
+        "d1": "online",
+        "d2": "online"
+      },
       "expected_keys": [
         "d1/d1:p1/d1:p1#",
         "d1/d1:p1/d1:p1#/s1",
@@ -326,6 +330,10 @@
           "seq": 5
         }
       ],
+      "expected_daemons": {
+        "d1": "offline",
+        "d2": "online"
+      },
       "expected_keys": [
         "d1/d1:p1/d1:p1#",
         "d1/d1:p1/d1:p1#/s1",
@@ -622,6 +630,10 @@
           "seq": 10
         }
       ],
+      "expected_daemons": {
+        "d1": "online",
+        "d2": "online"
+      },
       "expected_keys": [
         "d1/d1:p1/d1:p1#",
         "d1/d1:p1/d1:p1#/s1",
@@ -810,6 +822,10 @@
           "seq": 2
         }
       ],
+      "expected_daemons": {
+        "d1": "online",
+        "d2": "online"
+      },
       "expected_keys": [
         "d1/d1:p1/d1:p1#",
         "d1/d1:p1/d1:p1#/s1",
