@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-837fjj
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M3 review A (code-review high) + B (conformance) on snapshot fa797890b:c33f47eb2 (tree before the M3 commit; review the pushed head), then full gate, PR, T022 live kube-e2e CI round.
+- **Next step**: M4 diff review A (code-review high) + B (conformance) on the snapshot in Handover, then PR (body specs/1981-kube-e2e/pr-body-m4.md), `kube-e2e` live round (T030, budget two). Done earlier: M3 review A (code-review high) + B (conformance) on snapshot fa797890b:c33f47eb2 (tree before the M3 commit; review the pushed head), then full gate, PR, T022 live kube-e2e CI round.
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
 | M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #2017 | merged 7cd3811f7 |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #2019 | merged 7bcb978d5 |
-| M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
+| M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | built T023-T029, T030 (live CI) open |
 | M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
 
 ## Decisions
@@ -66,8 +66,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 merged as 7bcb978d5 (PR #2019, 2026-11-17). Reviews A (opus) and B (sonnet) CLEAN r1. Live `orchestrator end to end on kind (linux)` passed on the first CI round (T022). Optional notes: rust-cache misses target-shared in kube-e2e (cold build, check vs SC-002); e2e-kind.sh could say "image build failed".
-Next: M4 (#1985), tasks T023-T030 (API e2e suite). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
+M4 built and pushed (T023-T029 ticked; T030 live `kube-e2e` rounds not run). CI is the gate (cloud: no kind/kubectl/docker, no kubeconform; helm v3.19.0 built from source ran chart-conformance 80/80, e2e-kind stub test 33/33, `e2e_link` 8/8, clippy clean on micold-daemon and micold-e2e). Review snapshot: base 7bcb978d5 .. head = the pushed branch head (`git log -1` on claude/project-thread-xzo0po). PR body: specs/1981-kube-e2e/pr-body-m4.md; PR not opened.
+Notes for reviewers/live round: suite order is ops, restart, link (restart expects an empty registry); refusal and the five-breakage matrix run after, in the same cluster; `kube-e2e` has `timeout-minutes: 30`, the matrix may need a bump; `breakage=user` is caught by `ops::security`, `volume` by `restart`, the others by the ops port-forward; the busybox init-container digest was read from Docker Hub (index of 1.37.0). Offline after a dropped link takes ~10 s (liveness deadline), so link tests allow 60 s.
+Next: reviews A and B (orchestrator), PR, T030.
 
 ## Open escalation
 
