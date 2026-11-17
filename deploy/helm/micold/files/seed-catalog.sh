@@ -7,7 +7,8 @@
 #   seed-catalog.sh <dir>
 #   SEED_NAME                 the daemon's name and id (local)
 #   SEED_KIND                 [daemon] kind (host)
-#   SEED_LISTEN               [listen] socket: "auto" or a path (auto)
+#   SEED_LISTEN               [listen] socket: "auto", a path, or "none" for no [listen] (auto);
+#                             a kubernetes daemon has no socket to serve, its link dials out
 #   SEED_ORCHESTRATOR_SOCKET  [orchestrator_link] socket; unset derives it from the daemon's endpoint
 
 set -eu
@@ -32,6 +33,9 @@ cat >"$dir/daemon/projects.json" <<JSON
 {"id":"6f1c2a54-0000-4000-8000-000000000002","worktree_dir":"feature","title":"Add dark mode","kind":"Structured"}]}]}
 JSON
 link_socket=""
+listen="[listen]
+socket = \"${SEED_LISTEN:-auto}\""
+[ "${SEED_LISTEN:-auto}" != none ] || listen=""
 [ -z "${SEED_ORCHESTRATOR_SOCKET:-}" ] || link_socket="socket = \"$SEED_ORCHESTRATOR_SOCKET\""
 cat >"$dir/daemon.toml" <<TOML
 schema = 1
@@ -42,8 +46,7 @@ id = "$name"
 kind = "${SEED_KIND:-host}"
 data_dir = "$dir/daemon"
 
-[listen]
-socket = "${SEED_LISTEN:-auto}"
+$listen
 
 [orchestrator_link]
 enabled = true

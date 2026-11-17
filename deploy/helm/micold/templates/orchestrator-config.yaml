@@ -16,6 +16,7 @@ data:
     schema = 1
 
     [daemon]
+    name = "orchestrator"
     kind = "kubernetes"
     data_dir = "/var/lib/micold"
 

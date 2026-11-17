@@ -44,7 +44,7 @@ spec:
             - name: SEED_KIND
               value: kubernetes
             - name: SEED_LISTEN
-              value: {{ printf "/run/micold/daemon-%d.sock" $i | quote }}
+              value: none
             - name: SEED_ORCHESTRATOR_SOCKET
               value: /run/micold/orchestrator.sock
           securityContext:
