@@ -8,15 +8,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1981
-- **Worktree branch**: claude/project-thread-mxfy6x
+- **Worktree branch**: claude/project-thread-837fjj
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M2 (#1983) PR open; orchestrator waits on CI and merges.
+- **Next step**: M3 review A (code-review high) + B (conformance) on snapshot fa797890b:c33f47eb2 (tree before the M3 commit; review the pushed head), then full gate, PR, T022 live kube-e2e CI round.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #2017 | M2 | merged | 7cd3811f7 |
 | #1991 | M1 | merged | a6fc96478a60ddf1960e98ff83ebce27ddc7fb09 |
 | #1987 | Design | merged | 6c2819edede47166c5034a37335c7c62c775fa4d |
 
@@ -25,8 +26,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
-| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | implemented, in review |
-| M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | pending |
+| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #2017 | merged 7cd3811f7 |
+| M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | T016–T021 done; review pending; T022 needs CI |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
 | M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
 
@@ -52,6 +53,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 8 fixed, 2 declined (appVersion tag; socket dir mode, documented) |
 | tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
 | M2 A+B (opus) | 1 | full | 5272ef54e | abb5d2e251df1baf302e677ce8074d310c49842a:5272ef54ed19168fc8a76e056116d3135072b743 | CHANGES: 1 MAJOR (ops served only inside serve, probes hang while the store opens), 3 MINOR (head size check, silent timeout, tests); all fixed |
+| M3 A+B | 1 | full | add5ae6 | fa797890b48f66604a3b3de8e670619dd51ecc22:c33f47eb2c42cddf280eef7576f332cf2f3f5f13 | CLEAN (A opus: 1 optional MINOR build-fail hint, left; note: rust-cache misses target-shared, SC-002 timing; B sonnet CLEAN) |
 | Review B | 1 | M1 | 49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | 7c47de4556526f50ff9beb7412373b4d950c17e4:49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | CLEAN (1 MINOR, no fix needed) |
 
 ## Declined review findings
@@ -78,6 +80,7 @@ None.
 
 ## Plan notes
 
+- M3 (2026-11-17): T016–T021 done. `install-kube-tools.sh` handles bare-binary downloads (kind, kubectl); kube-cluster uses it. `e2e-kind.sh` tag `micold-orchestrator:e2e`, `ci/e2e.yaml` pullPolicy Never. `micold-e2e` crate std-only (no deps), suites `[[test]]` per dir; `cluster_or_skip` gate. kube-e2e job gated like kube-chart, no cross-run docker cache yet (decide from first measured run, SC-002). Local: e2e-kind.test.sh 21/21, install-kube-tools 10/10, ci_gate test, clippy -p micold-e2e clean; 2 micold-core settings tests fail as root in cloud (unrelated). Full gate not run locally (disk/cloud); CI is the gate. No kind in cloud: T022 is the first live run.
 - M2 (2026-11-16): T010-T015 done. `ops.rs` hand-written HTTP; `Ops` bound in `run` before the store opens, so probes see 503 not refused. Diff coverage 93.9% (cargo-llvm-cov, lib tests). Chart: `ops.enabled`/`ops.port`, `templates/service.yaml` (`<release>-orchestrator`), probes; conformance 56/56 with helm built from source (get.helm.sh blocked in cloud).
 
 - Clarify unit skipped by the orchestrator (no markers left in the spec). Milestones reordered: M2 ops before M3 harness (smoke needs the readiness probe); spec table updated. Plan written, plan review pending (reviewer round 1 not run: unit has no Agent tool).

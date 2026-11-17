@@ -5,6 +5,7 @@ members = [
     "crates/micold-daemon",
     "crates/micold-material",
     "crates/micold-client",
+    "crates/micold-e2e",
 ]
 
 # Shared package metadata — the single source of truth for version/edition/MSRV across

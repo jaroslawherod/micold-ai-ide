@@ -2935,6 +2935,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "micold-e2e"
+version = "0.18.0"
+
+[[package]]
 name = "micold-material"
 version = "0.18.0"
 dependencies = [

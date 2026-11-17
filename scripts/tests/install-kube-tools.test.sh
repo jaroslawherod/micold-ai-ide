@@ -40,9 +40,15 @@ out="$(KUBE_TOOLS_DEST="$work/dest" "$SCRIPT" nosuchtool 2>&1)"
 rc=$?
 if [ "$rc" -eq 2 ] && grep -q 'nosuchtool' <<<"$out"; then ok "unknown tool is a usage error naming it"; else fail "unknown tool is a usage error naming it (exit $rc: $out)"; fi
 
+# kind and kubectl download as the bare binary: a mismatching one installs nothing either.
+printf '#!/bin/sh\necho fake kind\n' >"$work/kind"
+out="$(KUBE_TOOLS_DEST="$work/dest" KUBE_TOOLS_URL_KIND="file://$work/kind" "$SCRIPT" kind 2>&1)"
+rc=$?
+if [ "$rc" -ne 0 ] && [ ! -e "$work/dest/kind" ] && grep -q 'kind' <<<"$out"; then ok "bare-binary mismatch exits non-zero, installs nothing"; else fail "bare-binary mismatch exits non-zero, installs nothing (exit $rc: $out)"; fi
+
 out="$("$SCRIPT" --print-pins 2>&1)"
 rc=$?
-for tool in helm kubeconform; do
+for tool in helm kubeconform kind kubectl; do
   line="$(grep "^$tool " <<<"$out")"
   if [ "$rc" -eq 0 ] && grep -qE "^$tool v[0-9]+\.[0-9]+\.[0-9]+ [0-9a-f]{64} https://" <<<"$line"; then
     ok "$tool has a version, a full sha256 and an https URL"
