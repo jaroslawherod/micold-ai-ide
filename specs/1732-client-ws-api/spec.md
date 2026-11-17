@@ -128,7 +128,7 @@ fallback for machines without docker or kind.
 **Acceptance Scenarios**:
 
 1. **Given** docker and the pinned kind, kubectl and helm, **When** I run `mise run local-stack`,
-   **Then** a kind cluster named `micold-local` comes up, the chart is installed with Postgres
+   **Then** a kind cluster named `micold-local` comes up (or is reused, FR-023), the chart is installed with Postgres
    state, a seeded daemon links to the orchestrator, and the web client on
    `http://127.0.0.1:8731` lists the seeded session within 180 s.
 2. **Given** the stack is up, **When** I press Ctrl-C, **Then** the port-forwards stop and the
@@ -247,15 +247,22 @@ Requirement numbers are local to this spec; each names the parent requirement it
   stack MUST remain selectable with `MICOLD_LOCAL_MODE=process`.
 - **FR-020**: In kind mode the orchestrator MUST keep its state in a Postgres running in the
   cluster (official `postgres` image, a StatefulSet with a PVC, credentials in a generated Secret),
-  rendered by the chart when `postgres.enabled=true`; the chart MUST accept `state.mode=postgres`
-  (the #1948 store has merged) and keep refusing modes it cannot run.
+  rendered by the chart when `postgres.enabled=true`. The PostgreSQL store was delivered by #1948
+  (`crates/micold-daemon/src/orchestrator/db/`, PRs #2010, #2011, #2027); the chart's message naming
+  #1740 is stale. The chart MUST accept `state.mode` `file` and `postgres` and refuse every other
+  value (`sqlite` is the store's local-only mode, not a chart mode) with exactly:
+  `state.mode=<value> is not supported by this chart: use file or postgres`.
 - **FR-021**: The chart MUST be able to run at least one daemon as its own Deployment
   (`daemons.count`, default 0) that links to the orchestrator over `[orchestrator_link]` and starts
   on a seeded catalog (one project, one worktree, two sessions), the same seed as the process mode.
-- **FR-022**: The web client in kind mode MUST be built with the forwarded API address and its
-  origin allowed by the orchestrator's `--allow-origin` values from the chart, with no hand edits.
+- **FR-022**: The web client in kind mode MUST be an image `micold-web:local` built from
+  `Dockerfile.web` (static Expo export, build arg `EXPO_PUBLIC_ORCHESTRATOR_URL`, default
+  `ws://127.0.0.1:8730/api/ws`, served on port 8731), and its origins allowed by a chart value
+  `orchestrator.allowOrigins` (list, rendered as one `--allow-origin` arg each), with no hand edits.
 - **FR-023**: Interrupt MUST stop the port-forwards and delete the cluster unless
-  `MICOLD_LOCAL_KEEP=1`; a missing tool MUST be named with the process-mode hint and a non-zero exit
+  `MICOLD_LOCAL_KEEP=1`. A rerun that finds cluster `micold-local` MUST skip `kind create cluster`
+  and still build both images, `kind load` them and `helm upgrade --install`, then restart the
+  Deployments so the new images run; a missing tool MUST be named with the process-mode hint and a non-zero exit
   before anything is created.
 - **FR-024**: A container MUST NOT read the user's `<data_dir>/daemon.toml` from `$HOME` when
   `--data-dir` or its env is set (fold-in of the #1981 follow-up).
@@ -288,7 +295,10 @@ Requirement numbers are local to this spec; each names the parent requirement it
 - **SC-005**: 100% of client message kinds are classified; a new unclassified kind fails a test.
 - **SC-006**: A change on a daemon appears in an open web client within 2 seconds.
 - **SC-007**: Every new user-visible string has an English and a Polish translation.
-- **SC-008**: In kind mode the seeded session is listed in the web client within 180 s of `mise run local-stack` on a warm docker cache, and survives an orchestrator pod restart.
+- **SC-008**: In kind mode the seeded session is listed in the web client within 180 s of `mise run local-stack` on a warm cache (the `kindest/node` and `postgres` images
+  already pulled, and the cargo target and pnpm store already built, so only changed sources rebuild),
+  and survives an orchestrator pod restart. In CI (cold cache) the bound is 15 min for the whole
+  job and 120 s from `helm upgrade` returning to the session being listed.
 
 ## Assumptions
 

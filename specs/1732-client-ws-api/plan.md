@@ -148,15 +148,19 @@ Added 2026-11-17. Reuses #1981 (`deploy/helm/micold`, `scripts/e2e-kind.sh`,
 - **Cluster**: `deploy/kind/local.yaml` (one control-plane node, image pinned by digest). Cluster
   name `micold-local`, distinct from e2e's, so both can coexist. Reuse when it exists.
 - **Images**: `micold-orchestrator:local` from `Dockerfile.orchestrator` (the same binary is the
-  daemon), `micold-web:local` from the static export built with
-  `EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:8730/api/ws`; `kind load docker-image`.
+  daemon); `micold-web:local` from new `Dockerfile.web` (node stage runs the Expo static export
+  with build arg `EXPO_PUBLIC_ORCHESTRATOR_URL`, default `ws://127.0.0.1:8730/api/ws`; runtime
+  stage serves it on 8731 with an unprivileged static server); `kind load docker-image`. A rerun
+  with the cluster present skips `kind create`, rebuilds, loads, `helm upgrade --install`s and
+  `kubectl rollout restart`s (FR-023).
 - **Chart**: new `postgres.*` values (official image, StatefulSet + headless Service + PVC, Secret
-  with a generated password via `lookup`-or-`randAlphaNum`), `state.mode=postgres` allowed and
-  wired to `database.secretName`; new `daemons.count` Deployment running `micold-daemon` with an
+  with a generated password via `lookup`-or-`randAlphaNum`), `state.mode` accepts `file` and `postgres`
+  (store from #1948; the stale #1740 message in `_helpers.tpl` is replaced, FR-020) and is wired to
+  `database.secretName`; new `orchestrator.allowOrigins` list rendered as `--allow-origin` args; new `daemons.count` Deployment running `micold-daemon` with an
   init container seeding the catalog (seed shared with process mode:
   `scripts/lib/seed-catalog.sh`) and an `[orchestrator_link]` config pointing at the orchestrator
   Service; `ci/local.yaml` values for kind mode, also used by chart-check.
-- **Access**: `kubectl port-forward` for both services to loopback; the allow-origin list in
+- **Access**: `kubectl port-forward` for both services to loopback; `orchestrator.allowOrigins` in
   `ci/local.yaml` holds `http://127.0.0.1:8731` and `http://localhost:8731`.
 - **Teardown**: `trap` kills port-forwards and runs `kind delete cluster` unless
   `MICOLD_LOCAL_KEEP=1`.
@@ -169,6 +173,9 @@ Added 2026-11-17. Reuses #1981 (`deploy/helm/micold`, `scripts/e2e-kind.sh`,
   bumped in T043 against the kind release notes; the node image must match the kind release.
   Postgres: the official image, not the Bitnami chart (Bitnami images left the free catalogue in
   2025) and no operator, to keep the chart self-contained.
+- **Live probe**: `scripts/local-stack-probe.sh` asserts the seeded session over `/api/ws` and that
+  `http://127.0.0.1:8731/` serves the export's `index.html`; browser coverage of kind mode is out
+  of scope (M6's Playwright runs on process mode). Its stub-mode test lands before T050.
 - **No cluster in cloud**: all script behaviour is tested with stub binaries on `PATH` recording
   their argv (pattern of `scripts/tests/e2e-kind.test.sh`); manifests by `helm template` +
   kubeconform in `chart-check.sh`. The live run is `mise run local-stack` on a docker host and a

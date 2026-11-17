@@ -32,7 +32,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | #2038 | merged |
-| M5 | T043–T052 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 written | - | tasks written, review pending |
+| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 written | - | tasks written, review pending |
 | M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
