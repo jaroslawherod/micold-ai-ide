@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1732
-- **Worktree branch**: claude/project-thread-fcckol
+- **Worktree branch**: claude/project-thread-xt3xhy
 - **Started**: 2026-11-17
-- **Phase**: milestones (M2 in review)
-- **Next step**: M2 code done (T001-T002, T005-T019), committed and pushed on claude/project-thread-fcckol; reviews not run (no Agent tool): the orchestrator reviews `origin/main..HEAD`, opens the PR from specs/1732-client-ws-api/m2-pr-body.md, then merges and starts M3.
+- **Phase**: milestones (M3 in review)
+- **Next step**: M3 code done (T020–T026), gate run, pushed on claude/project-thread-xt3xhy; reviews not run (no Agent tool): the orchestrator reviews `a1c9514b3..HEAD`, opens the PR from specs/1732-client-ws-api/m3-pr-body.md, then merges and starts M4.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -21,16 +21,18 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 |---|---|---|---|
 | #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
 | #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
+| #2034 | M2 /api/ws listener | merged | a1c9514b3 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | #2033 | merged |
-| M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | - | in review (REVIEWS PENDING) |
-| M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | pending |
+| M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
+| M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | in review |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |
-| M5 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
+| M5 | (new, tasks to write) | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; no design exists yet (kind-run design thread paused) |
+| M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
 
@@ -43,6 +45,8 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+
+- M3 (base a1c9514b3, PR #2034 merged): schema root = anyOf(ClientRequest, ServerMessage), draft-07 `definitions`, feed types named too. json-schema-to-typescript 16.0.0 (latest). Wire stays snake_case; `packages/protocol/src/wire.ts` maps it onto the client's camelCase types (client `Session` gained optional `reachable`). Drift: Rust tests `client_api_schema`/`client_api_vectors` check schema and vectors in every cargo test; `scripts/api-types.sh --check` in gate.sh (when json2ts installed) and `--check --ts-only` + `scripts/tests/api-types.test.sh` in CI's web client job (the Rust lint job has no node, so the shell test skips there).
 
 ## Review rounds
 
@@ -75,7 +79,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Handover
 
-None.
+M2 merged as a1c9514b3 (PR #2034, squash). Next: M3 (schema + TS types) in a fresh thread via `/speckit-autopilot resume`. M5 (local kind stack) was added by jaro 2026-11-17 with no tasks yet: before M5, a tasks unit (or the M4 close) must add its spec FRs and tasks to spec.md/tasks.md and get them reviewed. Check latest registry versions before adding deps.
 
 ## Open escalation
 

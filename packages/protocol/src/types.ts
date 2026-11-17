@@ -43,6 +43,8 @@ export interface Session {
   name: string;
   kind: SessionKind;
   state: SessionState;
+  /** False while its daemon is offline (FR-014a); absent means reachable. */
+  reachable?: boolean;
 }
 export interface AuthProvider {
   id: string;

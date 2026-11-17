@@ -50,6 +50,7 @@
 - [Duplication triage](development/duplication-triage.md)
 - [The documentation site](development/docs-site.md)
 - [The client theme tokens](development/client-theme.md)
+- [The client API types and drift check](development/api-types.md)
 - [The web client](development/client.md)
 - [Screenshots for the manual visual passes](development/screenshots.md)
 - [Autopilot token usage](development/autopilot-tokens.md)

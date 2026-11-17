@@ -1,0 +1,1046 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "anyOf": [
+    {
+      "$ref": "#/definitions/ClientRequest"
+    },
+    {
+      "$ref": "#/definitions/ServerMessage"
+    }
+  ],
+  "definitions": {
+    "Change": {
+      "description": "One change of the feed.",
+      "oneOf": [
+        {
+          "description": "A session's state changed, nothing else.",
+          "properties": {
+            "kind": {
+              "const": "session_state",
+              "type": "string"
+            },
+            "session_id": {
+              "description": "The session.",
+              "type": "string"
+            },
+            "state": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/SessionState"
+                }
+              ],
+              "description": "Its new state."
+            }
+          },
+          "required": [
+            "kind",
+            "session_id",
+            "state"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A daemon's status changed, nothing else.",
+          "properties": {
+            "daemon_id": {
+              "description": "The daemon.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "daemon_status",
+              "type": "string"
+            },
+            "status": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/DaemonStatus"
+                }
+              ],
+              "description": "Its new status."
+            }
+          },
+          "required": [
+            "kind",
+            "daemon_id",
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A row is new (placed after `after_key`, or last when absent) or replaced in place.",
+          "properties": {
+            "after_key": {
+              "description": "The id of the row it follows in its list.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entity": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Entity"
+                }
+              ],
+              "description": "The row."
+            },
+            "kind": {
+              "const": "upsert",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "entity"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A row is gone.",
+          "properties": {
+            "entity": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/EntityRef"
+                }
+              ],
+              "description": "Which."
+            },
+            "kind": {
+              "const": "remove",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "entity"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "seq": {
+          "description": "Strictly increasing within an epoch (FR-003).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seq"
+      ],
+      "type": "object"
+    },
+    "ClientRequest": {
+      "description": "A request from a client.",
+      "oneOf": [
+        {
+          "description": "The application-level heartbeat (FR-005); answered `pong`.",
+          "properties": {
+            "type": {
+              "const": "ping",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Every daemon the orchestrator knows; answered `daemons`.",
+          "properties": {
+            "type": {
+              "const": "list_daemons",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Every session across all daemons; answered `sessions`.",
+          "properties": {
+            "type": {
+              "const": "list_sessions",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "One structured session's content; answered `session_content`.",
+          "properties": {
+            "daemon": {
+              "description": "The daemon's id.",
+              "type": "string"
+            },
+            "project": {
+              "description": "The project's id, as a snapshot names it.",
+              "type": "string"
+            },
+            "session": {
+              "description": "The session's id.",
+              "type": "string"
+            },
+            "type": {
+              "const": "read_session",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "daemon",
+            "project",
+            "session"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The change feed, from `since` when given (resume), else from a fresh snapshot.",
+          "properties": {
+            "since": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Position"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The last position the client saw."
+            },
+            "type": {
+              "const": "subscribe",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "id": {
+          "description": "Chosen by the client, echoed in the reply.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "ContentEntry": {
+      "description": "One entry of a structured session's content. No terminal bytes (FR-006).",
+      "properties": {
+        "kind": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/EntryKind"
+            }
+          ],
+          "description": "What."
+        },
+        "role": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Role"
+            }
+          ],
+          "description": "Who."
+        },
+        "seq": {
+          "description": "Its position, from 1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "description": "The text, at most [`MAX_ENTRY_TEXT`] bytes.",
+          "type": "string"
+        },
+        "truncated": {
+          "default": false,
+          "description": "Whether `text` was cut.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "seq",
+        "role",
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "Daemon": {
+      "description": "A daemon.",
+      "properties": {
+        "id": {
+          "description": "Its id.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "status": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/DaemonStatus"
+            }
+          ],
+          "description": "Its link's state."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status"
+      ],
+      "type": "object"
+    },
+    "DaemonStatus": {
+      "description": "A daemon's link state.",
+      "oneOf": [
+        {
+          "const": "online",
+          "description": "Linked.",
+          "type": "string"
+        },
+        {
+          "const": "offline",
+          "description": "Not linked.",
+          "type": "string"
+        },
+        {
+          "const": "needs_update",
+          "description": "Linked, on another protocol version.",
+          "type": "string"
+        }
+      ]
+    },
+    "Entity": {
+      "description": "A row of one of the snapshot's lists.",
+      "oneOf": [
+        {
+          "description": "A daemon.",
+          "properties": {
+            "type": {
+              "const": "daemon",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/definitions/Daemon"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A project.",
+          "properties": {
+            "type": {
+              "const": "project",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/definitions/Project"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A location.",
+          "properties": {
+            "type": {
+              "const": "location",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/definitions/Location"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A session.",
+          "properties": {
+            "type": {
+              "const": "session",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/definitions/Session"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EntityRef": {
+      "description": "The identity of a row of one of the snapshot's lists.",
+      "oneOf": [
+        {
+          "description": "A daemon.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "daemon",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A project.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "project",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A location.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "location",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A session.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "session",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EntryKind": {
+      "description": "What a [`ContentEntry`] holds.",
+      "oneOf": [
+        {
+          "const": "text",
+          "description": "Prose.",
+          "type": "string"
+        },
+        {
+          "const": "tool_call",
+          "description": "A tool the model called.",
+          "type": "string"
+        },
+        {
+          "const": "tool_result",
+          "description": "What a tool returned.",
+          "type": "string"
+        },
+        {
+          "const": "status",
+          "description": "A turn's outcome or a notice.",
+          "type": "string"
+        }
+      ]
+    },
+    "ErrorCode": {
+      "description": "A typed error (data-model.md *ErrorCode*).",
+      "oneOf": [
+        {
+          "const": "malformed",
+          "description": "Not a JSON request object, or a binary frame.",
+          "type": "string"
+        },
+        {
+          "const": "unknown_type",
+          "description": "A `type` this API does not have.",
+          "type": "string"
+        },
+        {
+          "const": "terminal_not_supported",
+          "description": "The session is a terminal one; its bytes are not offered here (FR-006).",
+          "type": "string"
+        },
+        {
+          "const": "not_found",
+          "description": "No such daemon, project or session.",
+          "type": "string"
+        },
+        {
+          "const": "daemon_unreachable",
+          "description": "The owning daemon is not linked.",
+          "type": "string"
+        },
+        {
+          "const": "timeout",
+          "description": "The owning daemon did not answer in time.",
+          "type": "string"
+        },
+        {
+          "const": "internal",
+          "description": "The orchestrator failed.",
+          "type": "string"
+        },
+        {
+          "const": "project_busy",
+          "description": "The daemon answered that a desktop holds the project.",
+          "type": "string"
+        },
+        {
+          "const": "refused",
+          "description": "Any other daemon refusal; the message names it.",
+          "type": "string"
+        }
+      ]
+    },
+    "Location": {
+      "description": "A place sessions run in: the project root or a worktree.",
+      "properties": {
+        "branch": {
+          "description": "Its branch, empty when unknown.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Its id, unique across daemons.",
+          "type": "string"
+        },
+        "is_default": {
+          "description": "Whether this is the project root.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Its display name.",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Its project.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "name",
+        "branch",
+        "is_default"
+      ],
+      "type": "object"
+    },
+    "Position": {
+      "description": "A position in the change feed: the orchestrator's epoch and a sequence number in it.",
+      "properties": {
+        "epoch": {
+          "description": "The feed's epoch (random per orchestrator process).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seq": {
+          "description": "The last sequence number seen.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "epoch",
+        "seq"
+      ],
+      "type": "object"
+    },
+    "Project": {
+      "description": "A project on a daemon.",
+      "properties": {
+        "daemon_id": {
+          "description": "The daemon holding it.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Its id, unique across daemons.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Its display name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "daemon_id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ResyncReason": {
+      "description": "Why a resume cannot be served.",
+      "oneOf": [
+        {
+          "const": "epoch_changed",
+          "description": "The orchestrator restarted since.",
+          "type": "string"
+        },
+        {
+          "const": "too_old",
+          "description": "The changes after the position were dropped from the log.",
+          "type": "string"
+        },
+        {
+          "const": "ahead",
+          "description": "The position is beyond anything this orchestrator sent.",
+          "type": "string"
+        }
+      ]
+    },
+    "Role": {
+      "description": "Who wrote a [`ContentEntry`].",
+      "oneOf": [
+        {
+          "const": "user",
+          "description": "The user.",
+          "type": "string"
+        },
+        {
+          "const": "assistant",
+          "description": "The model.",
+          "type": "string"
+        },
+        {
+          "const": "system",
+          "description": "The session itself.",
+          "type": "string"
+        }
+      ]
+    },
+    "ServerMessage": {
+      "description": "A message from the orchestrator: a reply (its request's `id`) or unsolicited (no `id`).",
+      "oneOf": [
+        {
+          "description": "The answer to `ping`.",
+          "properties": {
+            "type": {
+              "const": "pong",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The answer to `list_daemons`.",
+          "properties": {
+            "rows": {
+              "description": "In the orchestrator's order.",
+              "items": {
+                "$ref": "#/definitions/Daemon"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "daemons",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "rows"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The answer to `list_sessions`.",
+          "properties": {
+            "rows": {
+              "description": "In the orchestrator's order.",
+              "items": {
+                "$ref": "#/definitions/Session"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "sessions",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "rows"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The answer to `read_session`.",
+          "properties": {
+            "entries": {
+              "description": "Its content, oldest first.",
+              "items": {
+                "$ref": "#/definitions/ContentEntry"
+              },
+              "type": "array"
+            },
+            "session": {
+              "description": "The session read.",
+              "type": "string"
+            },
+            "type": {
+              "const": "session_content",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "entries"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The answer to `subscribe`: changes after `seq` follow, each once and in order.",
+          "properties": {
+            "epoch": {
+              "description": "The feed's epoch.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "seq": {
+              "description": "The position the changes follow.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "snapshot": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Snapshot"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Present when the client asked with no `since`."
+            },
+            "type": {
+              "const": "subscribed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "epoch",
+            "seq"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Changes, unsolicited, in `seq` order.",
+          "properties": {
+            "changes": {
+              "description": "The changes.",
+              "items": {
+                "$ref": "#/definitions/Change"
+              },
+              "type": "array"
+            },
+            "epoch": {
+              "description": "The feed's epoch.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "changes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "epoch",
+            "changes"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The changes the client asked from are no longer held: subscribe again with no `since`.",
+          "properties": {
+            "epoch": {
+              "description": "The feed's epoch.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ResyncReason"
+                }
+              ],
+              "description": "Why."
+            },
+            "seq": {
+              "description": "The feed's last sequence number.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "resync_needed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "epoch",
+            "seq",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A typed error; the connection stays open (FR-008).",
+          "properties": {
+            "code": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ErrorCode"
+                }
+              ],
+              "description": "What went wrong, for the client to map to its own copy."
+            },
+            "message": {
+              "description": "For logs; never shown to a user.",
+              "type": "string"
+            },
+            "type": {
+              "const": "error",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "code",
+            "message"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "id": {
+          "description": "The request this answers; absent on `changes`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Session": {
+      "description": "A session.",
+      "properties": {
+        "id": {
+          "description": "Its id.",
+          "type": "string"
+        },
+        "kind": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/SessionKind"
+            }
+          ],
+          "description": "Structured or terminal."
+        },
+        "location_id": {
+          "description": "Its location.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Its label.",
+          "type": "string"
+        },
+        "reachable": {
+          "description": "False while its daemon is offline (FR-014a).",
+          "type": "boolean"
+        },
+        "state": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/SessionState"
+            }
+          ],
+          "description": "What it is doing."
+        }
+      },
+      "required": [
+        "id",
+        "location_id",
+        "name",
+        "kind",
+        "state",
+        "reachable"
+      ],
+      "type": "object"
+    },
+    "SessionKind": {
+      "description": "How a session runs.",
+      "oneOf": [
+        {
+          "const": "structured",
+          "description": "Over pipes; its content can be read.",
+          "type": "string"
+        },
+        {
+          "const": "terminal",
+          "description": "In a pseudo-terminal; not offered on this API.",
+          "type": "string"
+        }
+      ]
+    },
+    "SessionState": {
+      "description": "What a session is doing.",
+      "oneOf": [
+        {
+          "const": "working",
+          "description": "Running a turn.",
+          "type": "string"
+        },
+        {
+          "const": "waiting",
+          "description": "Waiting for the user.",
+          "type": "string"
+        },
+        {
+          "const": "idle",
+          "description": "Running, quiet.",
+          "type": "string"
+        },
+        {
+          "const": "error",
+          "description": "Failed.",
+          "type": "string"
+        },
+        {
+          "const": "stopped",
+          "description": "Not running.",
+          "type": "string"
+        }
+      ]
+    },
+    "Snapshot": {
+      "description": "Everything the client shows, in the orchestrator's stable order (FR-012).",
+      "properties": {
+        "daemons": {
+          "description": "Daemons.",
+          "items": {
+            "$ref": "#/definitions/Daemon"
+          },
+          "type": "array"
+        },
+        "epoch": {
+          "description": "The feed's epoch.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "locations": {
+          "description": "Locations (the project root and its worktrees).",
+          "items": {
+            "$ref": "#/definitions/Location"
+          },
+          "type": "array"
+        },
+        "projects": {
+          "description": "Projects.",
+          "items": {
+            "$ref": "#/definitions/Project"
+          },
+          "type": "array"
+        },
+        "seq": {
+          "description": "The last change this snapshot includes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessions": {
+          "description": "Sessions.",
+          "items": {
+            "$ref": "#/definitions/Session"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "epoch",
+        "seq",
+        "daemons",
+        "projects",
+        "locations",
+        "sessions"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "A text frame of the orchestrator's /api/ws client API (specs/1732-client-ws-api/contracts/ws-protocol.md).",
+  "title": "ClientApi"
+}

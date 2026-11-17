@@ -226,6 +226,12 @@ jobs:
         run: |
           pnpm --filter @micold/client typecheck
           pnpm --filter @micold/protocol typecheck
+      # #1732 FR-010: the generated client API TypeScript matches the checked-in schema (the schema
+      # itself is checked against the Rust types by micold-core's client_api_schema test).
+      - name: Client API types drift
+        run: |
+          scripts/api-types.sh --check --ts-only
+          scripts/tests/api-types.test.sh
       - name: Jest with coverage
         run: pnpm --filter @micold/client test --coverage
       # Jest runs from the repository root (apps/client/package.json), so its lcov paths are repository paths.

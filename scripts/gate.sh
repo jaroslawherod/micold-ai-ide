@@ -91,6 +91,15 @@ else
 	echo "== scripts/chart-check.sh: skipped, helm or kubeconform is not on PATH (scripts/install-kube-tools.sh)"
 fi
 
+# The client API drift check (#1732, FR-010): the checked-in schema and TypeScript match the Rust
+# types. It needs json2ts from `pnpm install`; CI's web client job runs its TypeScript half.
+if [ -x packages/protocol/node_modules/.bin/json2ts ]; then
+	echo "== scripts/api-types.sh --check"
+	scripts/api-types.sh --check
+else
+	echo "== scripts/api-types.sh --check: skipped, run pnpm install (CI's web client job runs it)"
+fi
+
 for t in scripts/tests/*.test.sh; do
 	echo "== $t"
 	"$t"

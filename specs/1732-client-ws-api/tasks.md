@@ -51,13 +51,13 @@ Format: `- [ ] T### [P?] [US?] description with file path`. [P] = different file
 **Goal**: client and server cannot silently disagree.
 **Independent test**: edit a type without regenerating; `scripts/api-types.sh --check` fails and names the command.
 
-- [ ] T020 [P] [US4] Failing core test `crates/micold-core/tests/client_api_schema.rs`: the checked-in `packages/protocol/schema/client-api.schema.json` equals the freshly generated schema (FR-009, FR-010, SC-004).
-- [ ] T021 [US4] `crates/micold-core/src/bin/micold-api-schema.rs` (pattern: `micold-tokens-ts.rs`, ~40 lines) writes the schema; generate and check in `packages/protocol/schema/client-api.schema.json`.
-- [ ] T022 [US4] `scripts/api-types.sh`: runs the schema bin then `json-schema-to-typescript` (add as a dev dependency of `packages/protocol`) into `packages/protocol/src/generated/client-api.ts`; `--check` regenerates to a temp dir, diffs, and prints the regenerate command; a `scripts/tests/api-types.test.sh` covers pass and fail (SC-004). Check in the generated TS.
-- [ ] T023 [US4] Call `scripts/api-types.sh --check` from `scripts/gate.sh`, `mise.toml` (task `api-types`, gate) and the CI workflow (`.github/workflows/`); grep how `micold-tokens-ts` drift is gated and mirror it.
-- [ ] T024 [P] [US4] FR-012 vectors: Rust test writes `packages/protocol/tests/vectors/sidebar-order.json` (snapshot, changes, expected key order; check mode fails on drift) covering grouping and nesting (daemon, project, worktrees, sessions under each), a daemon going offline (rows keep position, sessions `reachable: false`), remove-then-upsert of one key returning to its `after_key` place (R10).
-- [ ] T025 [US4] (after T024, reads its vectors file) Jest `packages/protocol/tests/order-vectors.test.ts`: apply the vectors with `applyChanges` in `packages/protocol/src/order.ts` and assert the same order; extend `order.ts` (`applyChanges`, `resync` replace) as needed (write the test first, FR-012).
-- [ ] T026 [P] [US4] `docs/` developer note on `scripts/api-types.sh` and the drift check.
+- [x] T020 [P] [US4] Failing core test `crates/micold-core/tests/client_api_schema.rs`: the checked-in `packages/protocol/schema/client-api.schema.json` equals the freshly generated schema (FR-009, FR-010, SC-004).
+- [x] T021 [US4] `crates/micold-core/src/bin/micold-api-schema.rs` (pattern: `micold-tokens-ts.rs`, ~40 lines) writes the schema; generate and check in `packages/protocol/schema/client-api.schema.json`.
+- [x] T022 [US4] `scripts/api-types.sh`: runs the schema bin then `json-schema-to-typescript` (add as a dev dependency of `packages/protocol`) into `packages/protocol/src/generated/client-api.ts`; `--check` regenerates to a temp dir, diffs, and prints the regenerate command; a `scripts/tests/api-types.test.sh` covers pass and fail (SC-004). Check in the generated TS.
+- [x] T023 [US4] Call `scripts/api-types.sh --check` from `scripts/gate.sh`, `mise.toml` (task `api-types`, gate) and the CI workflow (`.github/workflows/`); grep how `micold-tokens-ts` drift is gated and mirror it.
+- [x] T024 [P] [US4] FR-012 vectors: Rust test writes `packages/protocol/tests/vectors/sidebar-order.json` (snapshot, changes, expected key order; check mode fails on drift) covering grouping and nesting (daemon, project, worktrees, sessions under each), a daemon going offline (rows keep position, sessions `reachable: false`), remove-then-upsert of one key returning to its `after_key` place (R10).
+- [x] T025 [US4] (after T024, reads its vectors file) Jest `packages/protocol/tests/order-vectors.test.ts`: apply the vectors with `applyChanges` in `packages/protocol/src/order.ts` and assert the same order; extend `order.ts` (`applyChanges`, `resync` replace) as needed (write the test first, FR-012).
+- [x] T026 [P] [US4] `docs/` developer note on `scripts/api-types.sh` and the drift check.
 
 **Checkpoint (M3)**: drift check green in gate and CI; vectors agree.
 

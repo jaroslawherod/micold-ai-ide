@@ -1,0 +1,976 @@
+{
+  "cases": [
+    {
+      "changes": [
+        {
+          "after_key": "d1:p1",
+          "entity": {
+            "type": "project",
+            "value": {
+              "daemon_id": "d1",
+              "id": "d1:p3",
+              "name": "d1:p3 repo"
+            }
+          },
+          "kind": "upsert",
+          "seq": 1
+        },
+        {
+          "after_key": "d1:p1#",
+          "entity": {
+            "type": "location",
+            "value": {
+              "branch": "feature-d1:p1#wt-c",
+              "id": "d1:p1#wt-c",
+              "is_default": false,
+              "name": "d1:p1#wt-c",
+              "project_id": "d1:p1"
+            }
+          },
+          "kind": "upsert",
+          "seq": 2
+        },
+        {
+          "after_key": "d1:p1#wt-a",
+          "entity": {
+            "type": "location",
+            "value": {
+              "branch": "main",
+              "id": "d1:p3#",
+              "is_default": true,
+              "name": "d1:p3#",
+              "project_id": "d1:p3"
+            }
+          },
+          "kind": "upsert",
+          "seq": 3
+        },
+        {
+          "kind": "session_state",
+          "seq": 4,
+          "session_id": "s1",
+          "state": "waiting"
+        },
+        {
+          "after_key": "s2",
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s7",
+              "kind": "structured",
+              "location_id": "d1:p1#wt-c",
+              "name": "s7 chat",
+              "reachable": true,
+              "state": "working"
+            }
+          },
+          "kind": "upsert",
+          "seq": 5
+        },
+        {
+          "after_key": "s4",
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s8",
+              "kind": "structured",
+              "location_id": "d1:p2#",
+              "name": "s8 chat",
+              "reachable": true,
+              "state": "waiting"
+            }
+          },
+          "kind": "upsert",
+          "seq": 6
+        }
+      ],
+      "expected_keys": [
+        "d1/d1:p1/d1:p1#",
+        "d1/d1:p1/d1:p1#/s1",
+        "d1/d1:p1/d1:p1#/s2",
+        "d1/d1:p1/d1:p1#wt-c",
+        "d1/d1:p1/d1:p1#wt-c/s7",
+        "d1/d1:p1/d1:p1#wt-a",
+        "d1/d1:p1/d1:p1#wt-a/s3",
+        "d1/d1:p3/d1:p3#",
+        "d1/d1:p2/d1:p2#",
+        "d1/d1:p2/d1:p2#/s4",
+        "d1/d1:p2/d1:p2#/s8",
+        "d2/d2:p1/d2:p1#",
+        "d2/d2:p1/d2:p1#/s5",
+        "d2/d2:p1/d2:p1#wt-b",
+        "d2/d2:p1/d2:p1#wt-b/s6"
+      ],
+      "expected_sessions": {
+        "s1": {
+          "reachable": true,
+          "state": "waiting"
+        },
+        "s2": {
+          "reachable": true,
+          "state": "idle"
+        },
+        "s3": {
+          "reachable": true,
+          "state": "waiting"
+        },
+        "s4": {
+          "reachable": true,
+          "state": "stopped"
+        },
+        "s5": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s6": {
+          "reachable": true,
+          "state": "error"
+        },
+        "s7": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s8": {
+          "reachable": true,
+          "state": "waiting"
+        }
+      },
+      "name": "grouping and nesting with new rows",
+      "snapshot": {
+        "daemons": [
+          {
+            "id": "d1",
+            "name": "d1 host",
+            "status": "online"
+          },
+          {
+            "id": "d2",
+            "name": "d2 host",
+            "status": "online"
+          }
+        ],
+        "epoch": 7,
+        "locations": [
+          {
+            "branch": "main",
+            "id": "d1:p1#",
+            "is_default": true,
+            "name": "d1:p1#",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "feature-d1:p1#wt-a",
+            "id": "d1:p1#wt-a",
+            "is_default": false,
+            "name": "d1:p1#wt-a",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "main",
+            "id": "d1:p2#",
+            "is_default": true,
+            "name": "d1:p2#",
+            "project_id": "d1:p2"
+          },
+          {
+            "branch": "main",
+            "id": "d2:p1#",
+            "is_default": true,
+            "name": "d2:p1#",
+            "project_id": "d2:p1"
+          },
+          {
+            "branch": "feature-d2:p1#wt-b",
+            "id": "d2:p1#wt-b",
+            "is_default": false,
+            "name": "d2:p1#wt-b",
+            "project_id": "d2:p1"
+          }
+        ],
+        "projects": [
+          {
+            "daemon_id": "d1",
+            "id": "d1:p1",
+            "name": "d1:p1 repo"
+          },
+          {
+            "daemon_id": "d1",
+            "id": "d1:p2",
+            "name": "d1:p2 repo"
+          },
+          {
+            "daemon_id": "d2",
+            "id": "d2:p1",
+            "name": "d2:p1 repo"
+          }
+        ],
+        "seq": 0,
+        "sessions": [
+          {
+            "id": "s1",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s1 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s2",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s2 chat",
+            "reachable": true,
+            "state": "idle"
+          },
+          {
+            "id": "s3",
+            "kind": "structured",
+            "location_id": "d1:p1#wt-a",
+            "name": "s3 chat",
+            "reachable": true,
+            "state": "waiting"
+          },
+          {
+            "id": "s4",
+            "kind": "structured",
+            "location_id": "d1:p2#",
+            "name": "s4 chat",
+            "reachable": true,
+            "state": "stopped"
+          },
+          {
+            "id": "s5",
+            "kind": "structured",
+            "location_id": "d2:p1#",
+            "name": "s5 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s6",
+            "kind": "structured",
+            "location_id": "d2:p1#wt-b",
+            "name": "s6 chat",
+            "reachable": true,
+            "state": "error"
+          }
+        ]
+      }
+    },
+    {
+      "changes": [
+        {
+          "daemon_id": "d1",
+          "kind": "daemon_status",
+          "seq": 1,
+          "status": "offline"
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s1",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s1 chat",
+              "reachable": false,
+              "state": "working"
+            }
+          },
+          "kind": "upsert",
+          "seq": 2
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s2",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s2 chat",
+              "reachable": false,
+              "state": "idle"
+            }
+          },
+          "kind": "upsert",
+          "seq": 3
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s3",
+              "kind": "structured",
+              "location_id": "d1:p1#wt-a",
+              "name": "s3 chat",
+              "reachable": false,
+              "state": "waiting"
+            }
+          },
+          "kind": "upsert",
+          "seq": 4
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s4",
+              "kind": "structured",
+              "location_id": "d1:p2#",
+              "name": "s4 chat",
+              "reachable": false,
+              "state": "stopped"
+            }
+          },
+          "kind": "upsert",
+          "seq": 5
+        }
+      ],
+      "expected_keys": [
+        "d1/d1:p1/d1:p1#",
+        "d1/d1:p1/d1:p1#/s1",
+        "d1/d1:p1/d1:p1#/s2",
+        "d1/d1:p1/d1:p1#wt-a",
+        "d1/d1:p1/d1:p1#wt-a/s3",
+        "d1/d1:p2/d1:p2#",
+        "d1/d1:p2/d1:p2#/s4",
+        "d2/d2:p1/d2:p1#",
+        "d2/d2:p1/d2:p1#/s5",
+        "d2/d2:p1/d2:p1#wt-b",
+        "d2/d2:p1/d2:p1#wt-b/s6"
+      ],
+      "expected_sessions": {
+        "s1": {
+          "reachable": false,
+          "state": "working"
+        },
+        "s2": {
+          "reachable": false,
+          "state": "idle"
+        },
+        "s3": {
+          "reachable": false,
+          "state": "waiting"
+        },
+        "s4": {
+          "reachable": false,
+          "state": "stopped"
+        },
+        "s5": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s6": {
+          "reachable": true,
+          "state": "error"
+        }
+      },
+      "name": "a daemon goes offline",
+      "snapshot": {
+        "daemons": [
+          {
+            "id": "d1",
+            "name": "d1 host",
+            "status": "online"
+          },
+          {
+            "id": "d2",
+            "name": "d2 host",
+            "status": "online"
+          }
+        ],
+        "epoch": 7,
+        "locations": [
+          {
+            "branch": "main",
+            "id": "d1:p1#",
+            "is_default": true,
+            "name": "d1:p1#",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "feature-d1:p1#wt-a",
+            "id": "d1:p1#wt-a",
+            "is_default": false,
+            "name": "d1:p1#wt-a",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "main",
+            "id": "d1:p2#",
+            "is_default": true,
+            "name": "d1:p2#",
+            "project_id": "d1:p2"
+          },
+          {
+            "branch": "main",
+            "id": "d2:p1#",
+            "is_default": true,
+            "name": "d2:p1#",
+            "project_id": "d2:p1"
+          },
+          {
+            "branch": "feature-d2:p1#wt-b",
+            "id": "d2:p1#wt-b",
+            "is_default": false,
+            "name": "d2:p1#wt-b",
+            "project_id": "d2:p1"
+          }
+        ],
+        "projects": [
+          {
+            "daemon_id": "d1",
+            "id": "d1:p1",
+            "name": "d1:p1 repo"
+          },
+          {
+            "daemon_id": "d1",
+            "id": "d1:p2",
+            "name": "d1:p2 repo"
+          },
+          {
+            "daemon_id": "d2",
+            "id": "d2:p1",
+            "name": "d2:p1 repo"
+          }
+        ],
+        "seq": 0,
+        "sessions": [
+          {
+            "id": "s1",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s1 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s2",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s2 chat",
+            "reachable": true,
+            "state": "idle"
+          },
+          {
+            "id": "s3",
+            "kind": "structured",
+            "location_id": "d1:p1#wt-a",
+            "name": "s3 chat",
+            "reachable": true,
+            "state": "waiting"
+          },
+          {
+            "id": "s4",
+            "kind": "structured",
+            "location_id": "d1:p2#",
+            "name": "s4 chat",
+            "reachable": true,
+            "state": "stopped"
+          },
+          {
+            "id": "s5",
+            "kind": "structured",
+            "location_id": "d2:p1#",
+            "name": "s5 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s6",
+            "kind": "structured",
+            "location_id": "d2:p1#wt-b",
+            "name": "s6 chat",
+            "reachable": true,
+            "state": "error"
+          }
+        ]
+      }
+    },
+    {
+      "changes": [
+        {
+          "daemon_id": "d1",
+          "kind": "daemon_status",
+          "seq": 1,
+          "status": "offline"
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s1",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s1 chat",
+              "reachable": false,
+              "state": "working"
+            }
+          },
+          "kind": "upsert",
+          "seq": 2
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s2",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s2 chat",
+              "reachable": false,
+              "state": "idle"
+            }
+          },
+          "kind": "upsert",
+          "seq": 3
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s3",
+              "kind": "structured",
+              "location_id": "d1:p1#wt-a",
+              "name": "s3 chat",
+              "reachable": false,
+              "state": "waiting"
+            }
+          },
+          "kind": "upsert",
+          "seq": 4
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s4",
+              "kind": "structured",
+              "location_id": "d1:p2#",
+              "name": "s4 chat",
+              "reachable": false,
+              "state": "stopped"
+            }
+          },
+          "kind": "upsert",
+          "seq": 5
+        },
+        {
+          "daemon_id": "d1",
+          "kind": "daemon_status",
+          "seq": 6,
+          "status": "online"
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s1",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s1 chat",
+              "reachable": true,
+              "state": "working"
+            }
+          },
+          "kind": "upsert",
+          "seq": 7
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s2",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s2 chat",
+              "reachable": true,
+              "state": "idle"
+            }
+          },
+          "kind": "upsert",
+          "seq": 8
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s3",
+              "kind": "structured",
+              "location_id": "d1:p1#wt-a",
+              "name": "s3 chat",
+              "reachable": true,
+              "state": "waiting"
+            }
+          },
+          "kind": "upsert",
+          "seq": 9
+        },
+        {
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s4",
+              "kind": "structured",
+              "location_id": "d1:p2#",
+              "name": "s4 chat",
+              "reachable": true,
+              "state": "stopped"
+            }
+          },
+          "kind": "upsert",
+          "seq": 10
+        }
+      ],
+      "expected_keys": [
+        "d1/d1:p1/d1:p1#",
+        "d1/d1:p1/d1:p1#/s1",
+        "d1/d1:p1/d1:p1#/s2",
+        "d1/d1:p1/d1:p1#wt-a",
+        "d1/d1:p1/d1:p1#wt-a/s3",
+        "d1/d1:p2/d1:p2#",
+        "d1/d1:p2/d1:p2#/s4",
+        "d2/d2:p1/d2:p1#",
+        "d2/d2:p1/d2:p1#/s5",
+        "d2/d2:p1/d2:p1#wt-b",
+        "d2/d2:p1/d2:p1#wt-b/s6"
+      ],
+      "expected_sessions": {
+        "s1": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s2": {
+          "reachable": true,
+          "state": "idle"
+        },
+        "s3": {
+          "reachable": true,
+          "state": "waiting"
+        },
+        "s4": {
+          "reachable": true,
+          "state": "stopped"
+        },
+        "s5": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s6": {
+          "reachable": true,
+          "state": "error"
+        }
+      },
+      "name": "a daemon goes offline and comes back",
+      "snapshot": {
+        "daemons": [
+          {
+            "id": "d1",
+            "name": "d1 host",
+            "status": "online"
+          },
+          {
+            "id": "d2",
+            "name": "d2 host",
+            "status": "online"
+          }
+        ],
+        "epoch": 7,
+        "locations": [
+          {
+            "branch": "main",
+            "id": "d1:p1#",
+            "is_default": true,
+            "name": "d1:p1#",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "feature-d1:p1#wt-a",
+            "id": "d1:p1#wt-a",
+            "is_default": false,
+            "name": "d1:p1#wt-a",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "main",
+            "id": "d1:p2#",
+            "is_default": true,
+            "name": "d1:p2#",
+            "project_id": "d1:p2"
+          },
+          {
+            "branch": "main",
+            "id": "d2:p1#",
+            "is_default": true,
+            "name": "d2:p1#",
+            "project_id": "d2:p1"
+          },
+          {
+            "branch": "feature-d2:p1#wt-b",
+            "id": "d2:p1#wt-b",
+            "is_default": false,
+            "name": "d2:p1#wt-b",
+            "project_id": "d2:p1"
+          }
+        ],
+        "projects": [
+          {
+            "daemon_id": "d1",
+            "id": "d1:p1",
+            "name": "d1:p1 repo"
+          },
+          {
+            "daemon_id": "d1",
+            "id": "d1:p2",
+            "name": "d1:p2 repo"
+          },
+          {
+            "daemon_id": "d2",
+            "id": "d2:p1",
+            "name": "d2:p1 repo"
+          }
+        ],
+        "seq": 0,
+        "sessions": [
+          {
+            "id": "s1",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s1 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s2",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s2 chat",
+            "reachable": true,
+            "state": "idle"
+          },
+          {
+            "id": "s3",
+            "kind": "structured",
+            "location_id": "d1:p1#wt-a",
+            "name": "s3 chat",
+            "reachable": true,
+            "state": "waiting"
+          },
+          {
+            "id": "s4",
+            "kind": "structured",
+            "location_id": "d1:p2#",
+            "name": "s4 chat",
+            "reachable": true,
+            "state": "stopped"
+          },
+          {
+            "id": "s5",
+            "kind": "structured",
+            "location_id": "d2:p1#",
+            "name": "s5 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s6",
+            "kind": "structured",
+            "location_id": "d2:p1#wt-b",
+            "name": "s6 chat",
+            "reachable": true,
+            "state": "error"
+          }
+        ]
+      }
+    },
+    {
+      "changes": [
+        {
+          "entity": {
+            "id": "s2",
+            "type": "session"
+          },
+          "kind": "remove",
+          "seq": 1
+        },
+        {
+          "after_key": "s1",
+          "entity": {
+            "type": "session",
+            "value": {
+              "id": "s2",
+              "kind": "structured",
+              "location_id": "d1:p1#",
+              "name": "s2 chat",
+              "reachable": true,
+              "state": "idle"
+            }
+          },
+          "kind": "upsert",
+          "seq": 2
+        }
+      ],
+      "expected_keys": [
+        "d1/d1:p1/d1:p1#",
+        "d1/d1:p1/d1:p1#/s1",
+        "d1/d1:p1/d1:p1#/s2",
+        "d1/d1:p1/d1:p1#wt-a",
+        "d1/d1:p1/d1:p1#wt-a/s3",
+        "d1/d1:p2/d1:p2#",
+        "d1/d1:p2/d1:p2#/s4",
+        "d2/d2:p1/d2:p1#",
+        "d2/d2:p1/d2:p1#/s5",
+        "d2/d2:p1/d2:p1#wt-b",
+        "d2/d2:p1/d2:p1#wt-b/s6"
+      ],
+      "expected_sessions": {
+        "s1": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s2": {
+          "reachable": true,
+          "state": "idle"
+        },
+        "s3": {
+          "reachable": true,
+          "state": "waiting"
+        },
+        "s4": {
+          "reachable": true,
+          "state": "stopped"
+        },
+        "s5": {
+          "reachable": true,
+          "state": "working"
+        },
+        "s6": {
+          "reachable": true,
+          "state": "error"
+        }
+      },
+      "name": "remove then upsert one key",
+      "snapshot": {
+        "daemons": [
+          {
+            "id": "d1",
+            "name": "d1 host",
+            "status": "online"
+          },
+          {
+            "id": "d2",
+            "name": "d2 host",
+            "status": "online"
+          }
+        ],
+        "epoch": 7,
+        "locations": [
+          {
+            "branch": "main",
+            "id": "d1:p1#",
+            "is_default": true,
+            "name": "d1:p1#",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "feature-d1:p1#wt-a",
+            "id": "d1:p1#wt-a",
+            "is_default": false,
+            "name": "d1:p1#wt-a",
+            "project_id": "d1:p1"
+          },
+          {
+            "branch": "main",
+            "id": "d1:p2#",
+            "is_default": true,
+            "name": "d1:p2#",
+            "project_id": "d1:p2"
+          },
+          {
+            "branch": "main",
+            "id": "d2:p1#",
+            "is_default": true,
+            "name": "d2:p1#",
+            "project_id": "d2:p1"
+          },
+          {
+            "branch": "feature-d2:p1#wt-b",
+            "id": "d2:p1#wt-b",
+            "is_default": false,
+            "name": "d2:p1#wt-b",
+            "project_id": "d2:p1"
+          }
+        ],
+        "projects": [
+          {
+            "daemon_id": "d1",
+            "id": "d1:p1",
+            "name": "d1:p1 repo"
+          },
+          {
+            "daemon_id": "d1",
+            "id": "d1:p2",
+            "name": "d1:p2 repo"
+          },
+          {
+            "daemon_id": "d2",
+            "id": "d2:p1",
+            "name": "d2:p1 repo"
+          }
+        ],
+        "seq": 0,
+        "sessions": [
+          {
+            "id": "s1",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s1 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s2",
+            "kind": "structured",
+            "location_id": "d1:p1#",
+            "name": "s2 chat",
+            "reachable": true,
+            "state": "idle"
+          },
+          {
+            "id": "s3",
+            "kind": "structured",
+            "location_id": "d1:p1#wt-a",
+            "name": "s3 chat",
+            "reachable": true,
+            "state": "waiting"
+          },
+          {
+            "id": "s4",
+            "kind": "structured",
+            "location_id": "d1:p2#",
+            "name": "s4 chat",
+            "reachable": true,
+            "state": "stopped"
+          },
+          {
+            "id": "s5",
+            "kind": "structured",
+            "location_id": "d2:p1#",
+            "name": "s5 chat",
+            "reachable": true,
+            "state": "working"
+          },
+          {
+            "id": "s6",
+            "kind": "structured",
+            "location_id": "d2:p1#wt-b",
+            "name": "s6 chat",
+            "reachable": true,
+            "state": "error"
+          }
+        ]
+      }
+    }
+  ],
+  "description": "FR-012 sidebar-order vectors, written by crates/micold-core/tests/client_api_vectors.rs (MICOLD_WRITE_VECTORS=1 or scripts/api-types.sh). Apply `changes` to `snapshot` in order; the row keys must equal `expected_keys` and each session's state and reachability `expected_sessions`."
+}

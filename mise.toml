@@ -143,6 +143,11 @@ for t in scripts/tests/*.test.sh; do
 done
 """
 
+[tasks.api-types]
+description = "Regenerate the client API's JSON Schema, TypeScript types and FR-012 vectors from the Rust types (#1732); `-- --check` fails when stale [build-locked]"
+dir = "{{config_root}}"
+run = "scripts/api-types.sh"
+
 # CI's `lint` job and the Linux leg of `test`, in CI's order. The gate run by habit was clippy +
 # test, which a branch can pass for ever while CI stops at `cargo fmt --check` -- the first step of
 # `lint`, which `ci complete` gates every other job on. The shell suites need no build, so they run
