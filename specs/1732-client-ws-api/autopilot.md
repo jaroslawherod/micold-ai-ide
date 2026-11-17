@@ -26,7 +26,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | - | in review |
+| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | #2033 | in review |
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | - | pending |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | pending |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |
@@ -66,7 +66,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Handover
 
-None.
+M1 merged as 10f82e095 (PR #2033, squash). Next: M2 (/api/ws listener) in a fresh thread via `/speckit-autopilot resume`. CI note: an intermittent corrupt `_1.profraw` (signature 17540017307748215547) broke llvm-cov merge twice; PR #2033 added a ci.yml step dropping unreadable profiles with a warning; root cause unknown.
 
 ## Open escalation
 
