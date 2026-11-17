@@ -43,9 +43,10 @@ describe("RealOrchestratorApi", () => {
     expect(api.connection.get()).toEqual({ kind: "connecting" });
     expect(transport.opens).toBe(1);
     transport.accept();
-    expect(api.connection.get()).toEqual({ kind: "connected" });
+    expect(api.connection.get()).toEqual({ kind: "connecting" }); // connected only once subscribed
     expect(transport.sent).toEqual([{ id: 1, type: "subscribe" }]);
     transport.deliver({ id: 1, type: "subscribed", epoch: 7, seq: 10, snapshot: wireSnapshot(10) });
+    expect(api.connection.get()).toEqual({ kind: "connected" });
     const s = await snapshot;
     expect(s.seq).toBe(10);
     expect(s.sessions.map((x) => x.id)).toEqual(["s1", "s2"]);
@@ -196,5 +197,61 @@ describe("RealOrchestratorApi", () => {
     clock.advance(10_000);
     await expect(slow).rejects.toEqual(new ApiError("timeout"));
     expect(transport.sent.some((f) => f.type === "read_session")).toBe(true);
+  });
+
+  it("keeps feeding listeners after a resync to a lower seq in a new epoch", async () => {
+    const { api, transport, clock, connect } = setup();
+    await connect(50);
+    const seen: number[] = [];
+    api.subscribe(50, (b) => seen.push(...b.map((c) => c.seq)));
+    transport.drop();
+    clock.advance(500);
+    transport.accept();
+    transport.deliver({ id: 2, type: "resync_needed", epoch: 91, seq: 4, reason: "epoch_changed" });
+    transport.deliver({ id: 3, type: "subscribed", epoch: 91, seq: 4, snapshot: wireSnapshot(4, 91) });
+    transport.deliver({ type: "changes", epoch: 91, changes: [{ seq: 5, kind: "session_state", session_id: "s1", state: "working" }] });
+    expect(seen).toEqual([5]);
+  });
+
+  it("is not connected, and keeps the backoff, until the subscribe is answered (F2)", async () => {
+    const { api, transport, clock, connect } = setup();
+    await connect();
+    transport.drop();
+    clock.advance(500);
+    transport.accept();
+    expect(api.connection.get()).toEqual({ kind: "reconnecting", attempt: 1 });
+    transport.drop(); // opened, never subscribed: the next attempt is the second
+    expect(api.connection.get()).toEqual({ kind: "reconnecting", attempt: 2 });
+    clock.advance(1000);
+    transport.accept();
+    transport.deliver({ id: 3, type: "subscribed", epoch: 7, seq: 10 });
+    expect(api.connection.get()).toEqual({ kind: "connected" });
+    transport.drop();
+    expect(api.connection.get()).toEqual({ kind: "reconnecting", attempt: 1 });
+  });
+
+  it("when visible while reconnecting, opens at once and keeps the attempt (F3)", async () => {
+    const { api, transport, clock, connect } = setup();
+    await connect();
+    transport.drop();
+    transport.drop(); // attempt 2
+    expect(api.connection.get()).toEqual({ kind: "reconnecting", attempt: 2 });
+    const opens = transport.opens;
+    transport.becomeVisible();
+    expect(transport.opens).toBe(opens + 1);
+    expect(clock.pending()).toEqual([]);
+    expect(api.connection.get()).toEqual({ kind: "reconnecting", attempt: 2 });
+    transport.drop();
+    expect(api.connection.get()).toEqual({ kind: "reconnecting", attempt: 3 });
+  });
+
+  it("retry does nothing on a stopped client (F4)", async () => {
+    const { api, transport, connect } = setup();
+    await connect();
+    api.stop();
+    const opens = transport.opens;
+    api.retry();
+    expect(transport.opens).toBe(opens);
+    expect(api.connection.get()).toEqual({ kind: "offline" });
   });
 });

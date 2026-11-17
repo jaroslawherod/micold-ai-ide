@@ -76,6 +76,7 @@ TOML
 dir="${MICOLD_LOCAL_DIR:-}"
 own_dir=0
 pids=()
+names=()
 
 stop() {
   trap - INT TERM EXIT
@@ -111,20 +112,29 @@ main() {
 
   seed "$dir"
   export XDG_RUNTIME_DIR="$dir/run"
+  # The build and the seed took a while: another stack may have taken the ports since the first check.
+  check_ports || exit 1
 
   "$daemon" orchestrator --data-dir "$dir/orchestrator" --api-addr "127.0.0.1:$API_PORT" \
     --allow-origin "http://127.0.0.1:$WEB_PORT" --allow-origin "http://localhost:$WEB_PORT" &
   pids+=("$!")
+  names+=("orchestrator")
   # The daemon dials the orchestrator's socket and keeps dialling until it is there.
   "$daemon" --config "$dir/daemon.toml" &
   pids+=("$!")
+  names+=("daemon")
   node "$ROOT/apps/client/e2e/serve.mjs" "$web_dir" "$WEB_PORT" &
   pids+=("$!")
+  names+=("web server")
 
   say "orchestrator ws://127.0.0.1:$API_PORT/api/ws"
   say "web client    http://127.0.0.1:$WEB_PORT  (Ctrl+C stops all)"
   # One process going away ends the stack: a half stack is worse than none.
   wait -n || true
+  local i
+  for i in "${!pids[@]}"; do
+    kill -0 "${pids[$i]}" 2>/dev/null || say "the ${names[$i]} (pid ${pids[$i]}) exited" >&2
+  done
   say "a process exited; stopping the others"
 }
 

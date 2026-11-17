@@ -58,6 +58,13 @@ if MICOLD_LOCAL_DIR="$tmp/second" scripts/local-stack.sh >"$tmp/second.out" 2>&1
   fail "a second copy started"
 elif grep -q "port $web is already in use" "$tmp/second.out"; then pass "a second copy reports the port conflict and exits"; else fail "second copy: $(cat "$tmp/second.out")"; fi
 
+printf '#!/usr/bin/env bash\nexit 3\n' >"$tmp/dies"
+chmod +x "$tmp/dies"
+if MICOLD_LOCAL_DIR="$tmp/third" MICOLD_LOCAL_API_PORT="$(port)" MICOLD_LOCAL_WEB_PORT="$(port)" MICOLD_LOCAL_DAEMON_BIN="$tmp/dies" \
+  timeout 20 scripts/local-stack.sh >"$tmp/third.out" 2>&1 && grep -q "the orchestrator (pid [0-9]*) exited" "$tmp/third.out"; then
+  pass "an exiting process is named and ends the stack"
+else fail "exit not named: $(cat "$tmp/third.out")"; fi
+
 kill -INT "-$stack" 2>/dev/null || kill -INT "$stack"
 for _ in $(seq 1 50); do kill -0 "$stack" 2>/dev/null || break; sleep 0.1; done
 if kill -0 "$stack" 2>/dev/null; then fail "the stack did not stop on interrupt"; else pass "the stack stops on interrupt"; fi

@@ -106,7 +106,7 @@ export class RealOrchestratorApi implements OrchestratorApi {
 
   /** The user's retry from `offline`. */
   retry(): void {
-    if (this.state.kind !== "offline") return;
+    if (!this.started || this.state.kind !== "offline") return;
     this.attempt = 0;
     this.setState({ kind: "connecting" });
     this.transport.open();
@@ -121,9 +121,7 @@ export class RealOrchestratorApi implements OrchestratorApi {
   }
 
   private handleOpen(): void {
-    this.attempt = 0;
     this.lastRx = this.clock.now();
-    this.setState({ kind: "connected" });
     const since = this.epoch === null ? undefined : { epoch: this.epoch, seq: this.lastSeq };
     this.send(since ? { type: "subscribe", since } : { type: "subscribe" });
     this.schedulePing();
@@ -151,8 +149,16 @@ export class RealOrchestratorApi implements OrchestratorApi {
   /** Back in the foreground: a connection whose last word is older than a ping interval is suspect (R6). */
   private handleVisible(): void {
     if (!this.started) return;
+    if (this.state.kind === "reconnecting") {
+      // Waiting out a backoff: shorten the wait, keep the attempt count (the backoff stays honest).
+      if (this.retryTimer === undefined) return;
+      this.clock.clear(this.retryTimer);
+      this.retryTimer = undefined;
+      this.transport.open();
+      return;
+    }
     const stale = this.state.kind === "connected" && this.clock.now() - this.lastRx >= this.options.pingMs;
-    if (!stale && this.state.kind !== "reconnecting") return;
+    if (!stale) return;
     this.cancelTimers();
     this.failAll(false);
     this.transport.close();
@@ -205,11 +211,15 @@ export class RealOrchestratorApi implements OrchestratorApi {
   }
 
   private handleSubscribed(message: Extract<Wire.ServerMessage, { type: "subscribed" }>): void {
+    this.attempt = 0;
     this.epoch = message.epoch;
+    if (this.state.kind !== "connected") this.setState({ kind: "connected" });
     if (!message.snapshot) return;
     const replaced = this.snapshot !== null;
     this.snapshot = snapshotFromWire(message.snapshot);
     this.lastSeq = message.snapshot.seq;
+    // A new snapshot may start a new epoch whose seq restarts lower: listeners follow from it.
+    for (const entry of this.batchListeners) entry.since = this.lastSeq;
     for (const w of this.waiters.splice(0)) w.resolve(this.snapshot);
     if (replaced) for (const cb of this.snapshotListeners) cb(this.snapshot);
   }
