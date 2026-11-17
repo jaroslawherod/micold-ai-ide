@@ -85,6 +85,26 @@ Format: `- [ ] T### [P?] [US?] description with file path`. [P] = different file
 
 **Checkpoint (M4)**: `mise run local-stack` shows real daemons and sessions; jest green.
 
+## Phase 5b: User Story 5 - local kind stack (Priority P2, M5)
+
+Added 2026-11-17. Tests first; nothing here needs a cluster except T052.
+
+### Tests first
+
+- [ ] T043 [US5] Re-check and bump pins in `scripts/install-kube-tools.sh` (kind, helm, kubectl) and pin the matching `kindest/node` digest in new `deploy/kind/local.yaml`, `postgres:18.7-alpine3.24` in values; record the versions and sources in research.md; extend `scripts/tests/install-kube-tools.test.sh` if its pin table changes.
+- [ ] T044 [P] [US5] Failing `scripts/tests/local-stack-kind.test.sh` with stub `docker`, `kind`, `kubectl`, `helm` on `PATH` logging argv: default mode is kind; `MICOLD_LOCAL_MODE=process` runs the M4 path; a missing tool is named with the process hint, exit non-zero, nothing created; cluster `micold-local` created from `deploy/kind/local.yaml` or reused; both images built and `kind load`ed; `helm upgrade --install` with `ci/local.yaml`; rollout wait; port-forwards on 8730/8731; on TERM forwards killed and `kind delete cluster` run, skipped with `MICOLD_LOCAL_KEEP=1` (FR-019, 023, 025).
+- [ ] T045 [P] [US5] Failing chart checks in `scripts/tests/chart-check.test.sh` for `ci/local.yaml`: Postgres StatefulSet, headless Service, PVC and Secret rendered when `postgres.enabled`; orchestrator env takes the URL from the Secret with `state.mode=postgres`; a `daemons.count: 1` Deployment with the seed init container and an `[orchestrator_link]` to the orchestrator Service; `--allow-origin` for both 8731 origins; kubeconform clean; `state.mode=sqlite` still refused (FR-020, 021, 022).
+- [ ] T046 [P] [US5] Failing daemon test: with `--data-dir` (or its env) set, `orchestrator::configured` does not read `<user data dir>/daemon.toml` (FR-024).
+
+### Implementation
+
+- [ ] T047 [US5] Chart: `postgres.*` values, schema and templates; `state.mode=postgres` allowed and wired to `database.secretName`; update `contracts/chart-values.md` of #1981 and the chart README (makes T045's Postgres half pass).
+- [ ] T048 [US5] Chart: `daemons.*` Deployment and config; extract the M4 seed to `scripts/lib/seed-catalog.sh` used by both process mode and the init container; `ci/local.yaml` (makes T045 pass).
+- [ ] T049 [US5] Fix the daemon.toml lookup (makes T046 pass).
+- [ ] T050 [US5] `scripts/lib/kind.sh` extracted from `scripts/e2e-kind.sh` (e2e-kind.test.sh stays green); `scripts/local-stack-kind.sh`; `scripts/local-stack.sh` mode dispatch, M4 body unchanged as process mode; web image built with the forwarded URL; `mise.toml` `local-stack` description updated (makes T044 pass).
+- [ ] T051 [P] [US5] Docs: user guide local-stack page (kind default, process fallback, `MICOLD_LOCAL_KEEP`, tool install via `install-kube-tools.sh`) and `docs/development/kube-e2e.md` cross-link.
+- [ ] T052 [US5] CI job `local-stack-kind` beside `kube-e2e` (same gating and tool install): runs kind mode, asserts the seeded session over `/api/ws` from a small node or websocat probe within 180 s, deletes the orchestrator pod and asserts it again (SC-008); record the first live run's duration in the ledger.
+
 ## Phase 6: End to end, docs, polish (Priority P1/P2)
 
 - [ ] T038 [P] Failing Playwright `apps/client/e2e/stack.spec.ts` against the real stack in Chromium, Firefox and WebKit: starts `scripts/local-stack.sh` via the same script and a fixture seed (no AI CLI), sees the seeded session listed within 60 s (SC-001), opens it, content shown, a session created, renamed or ended on the daemon appears in the open page within 2 s with no reload (US1.3, SC-006), forced reconnect (kill and restart the orchestrator) then list returns, connects with no hand-edited allow-list (US3.3, FR-018).
@@ -95,12 +115,13 @@ Format: `- [ ] T### [P?] [US?] description with file path`. [P] = different file
 
 ## Dependencies and order
 
-Phase 1 -> Phase 2 (T003/T004 first) -> Phase 3 (tests T012-T015 before T016-T018) -> Phase 4 (independent of Phase 3 except the types it generates) -> Phase 5 (needs Phases 3 and 4) -> Phase 6.
+Phase 1 -> Phase 2 (T003/T004 first) -> Phase 3 (tests T012-T015 before T016-T018) -> Phase 4 (independent of Phase 3 except the types it generates) -> Phase 5 (needs Phases 3 and 4) -> Phase 5b (M5) -> Phase 6.
+Phase 5b: T043 first; T044-T046 together; T047 -> T048; T049 any time after T046; T050 after T044 and T048; T052 last.
 Parallel: T005-T009 and T011 after T001; T012-T015 together; T020, T024, T026 (T025 after T024); T027-T030; T038 with T040.
 
 ## Implementation Strategy
 
-MVP is the working web client (M4) on top of the server (M2) and generated types (M3); M5 proves it across three browsers and polishes the stack. Each milestone ends gate-green and merges alone. TDD: every code task above is preceded by its failing test.
+MVP is the working web client (M4) on top of the server (M2) and generated types (M3); M5 moves the stack into a local kind cluster; M6 proves it across three browsers and polishes the stack. Each milestone ends gate-green and merges alone. TDD: every code task above is preceded by its failing test.
 
 ## Milestones
 
@@ -142,11 +163,20 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M2, M3
 - **Tier**: full
 
-### M5 — Three-browser end-to-end run, docs and stack polish
+### M5 — Local kind stack
+
+- **Tasks**: T043–T052
+- **Deliverable**: `mise run local-stack` starts a kind cluster `micold-local` running orchestrator on Postgres, a seeded daemon and the web client, port-forwarded to the M4 addresses; `MICOLD_LOCAL_MODE=process` keeps the M4 stack; all checks but the live run pass without a cluster.
+- **Satisfies**: US5 scenarios 1–5; FR-019–025; SC-008
+- **Verify**: `scripts/tests/local-stack-kind.test.sh`, `scripts/tests/chart-check.test.sh`, the daemon test of T046; live: CI job `local-stack-kind`
+- **Depends on**: M4
+- **Tier**: full
+
+### M6 — Three-browser end-to-end run, docs and stack polish
 
 - **Tasks**: T038–T042
 - **Deliverable**: a Playwright run on the real stack in Chromium, Firefox and WebKit (live change within 2 s, forced reconnect, local origin allowed) runs in CI; the stack reports port conflicts; user docs and the quickstart visual pass are recorded.
 - **Satisfies**: US1–3 end to end; FR-016–018; SC-001, SC-002, SC-006
 - **Verify**: `mise run client-e2e-stack`; quickstart Part B
-- **Depends on**: M4
+- **Depends on**: M5
 - **Tier**: full

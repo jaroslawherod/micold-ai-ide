@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1732
-- **Worktree branch**: claude/project-thread-7iamtv
+- **Worktree branch**: claude/project-thread-de08zv
 - **Started**: 2026-11-17
-- **Phase**: milestones (M5 next: FRs and tasks to write)
-- **Next step**: M5 local kind stack: write spec FRs + tasks, review them, then implement (fresh thread).
+- **Phase**: milestones (M5 spec+tasks written, review pending)
+- **Next step**: review M5 amendment (spec, plan, tasks; snapshot in Review rounds), then implement T043–T052.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -32,7 +32,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | #2038 | merged |
-| M5 | (new, tasks to write) | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; no design exists yet (kind-run design thread paused) |
+| M5 | T043–T052 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 written | - | tasks written, review pending |
 | M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
