@@ -11,3 +11,4 @@ pub mod diff;
 pub mod log;
 pub mod messages;
 pub mod origin;
+pub mod schema;

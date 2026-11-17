@@ -28,6 +28,8 @@ mod branch_candidates;
 mod branch_conflict;
 mod ci_gate_covers_every_job;
 mod cli_reason;
+mod client_api_schema;
+mod client_api_vectors;
 mod client_routing_contract;
 mod codex_provider;
 mod command_palette;
