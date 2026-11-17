@@ -90,6 +90,14 @@ fn blank_database_connects(code: &str) -> String {
     out
 }
 
+/// The ops listener's unit tests (#1983) dial the orchestrator's *own* `/healthz` listener on
+/// loopback, a self-probe like `singleton::acquire`, never a daemon. Only that call, in this file,
+/// is blanked before the scan.
+const OPS_FILE: &str = "crates/micold-daemon/src/orchestrator/ops.rs";
+
+/// The ops tests' client call in [`OPS_FILE`].
+const OPS_LINE: &str = "TcpStream::connect(addr)";
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -285,6 +293,9 @@ fn the_orchestrator_source_opens_no_outbound_connection() {
         // code text, and `violations` strips comments and literals for every file anyway.
         if file.starts_with(root.join(DATABASE_DIR)) {
             source = blank_database_connects(&code_only(&source));
+        }
+        if file.ends_with(OPS_FILE) {
+            source = source.replace(OPS_LINE, &" ".repeat(OPS_LINE.len()));
         }
         for (line, word) in violations(&source) {
             report.push(format!("{}:{line}: `{word}`", file.display()));

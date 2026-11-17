@@ -23,6 +23,7 @@ pub mod db;
 pub mod hub;
 pub mod link;
 pub mod list;
+pub mod ops;
 pub mod query;
 mod save;
 
@@ -133,8 +134,24 @@ pub async fn run(
     config: config::OrchestratorConfig,
     database: Option<DatabaseConfig>,
 ) -> io::Result<()> {
-    let store = open_store(database, config.data_dir, SystemClock.wall_secs()).await?;
-    serve(config.endpoint, Arc::new(SystemClock), store).await
+    let ops = match config.ops_addr {
+        Some(addr) => Some(Ops::bind(addr).await?),
+        None => None,
+    };
+    let opened = open_store(database, config.data_dir, SystemClock.wall_secs());
+    run_ops_first(config.endpoint, ops, opened).await
+}
+
+/// Start the ops listener, then wait for `opened` and serve: a probe sees 200 on `/healthz` and
+/// 503 on `/readyz` (rather than a hang or a refusal) while the store opens.
+async fn run_ops_first(
+    endpoint: Endpoint,
+    ops: Option<Ops>,
+    opened: impl std::future::Future<Output = io::Result<Arc<dyn RegistryStore>>>,
+) -> io::Result<()> {
+    let running = ops.map(Ops::start);
+    let store = opened.await?;
+    serve(endpoint, Arc::new(SystemClock), store, running).await
 }
 
 /// The configuration file's `[database]` table and data directory: the file `--config` names,
@@ -231,7 +248,42 @@ pub async fn run_with(
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
 ) -> io::Result<()> {
-    serve(config::endpoint_at(socket), clock, store).await
+    serve(config::endpoint_at(socket), clock, store, None).await
+}
+
+/// The ops listener and the readiness it reports, served while the orchestrator runs.
+struct Ops {
+    listener: tokio::net::TcpListener,
+    readiness: Arc<ops::Readiness>,
+}
+
+impl Ops {
+    async fn bind(addr: std::net::SocketAddr) -> io::Result<Self> {
+        let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("cannot bind the ops listener on {addr}: {e}"),
+            )
+        })?;
+        Ok(Self {
+            listener,
+            readiness: Arc::default(),
+        })
+    }
+
+    /// Serve the listener on its own task, until the returned guard is dropped.
+    fn start(self) -> RunningOps {
+        RunningOps {
+            readiness: Arc::clone(&self.readiness),
+            _task: AbortOnDrop(tokio::spawn(ops::serve_ops(self.listener, self.readiness))),
+        }
+    }
+}
+
+/// A served ops listener: the readiness to report, and the task, aborted on drop.
+struct RunningOps {
+    readiness: Arc<ops::Readiness>,
+    _task: AbortOnDrop<io::Result<()>>,
 }
 
 /// The registry `store` holds, restored, and the saving thread that keeps it: what every link
@@ -290,7 +342,11 @@ async fn serve(
     endpoint: Endpoint,
     clock: Arc<dyn Clock>,
     store: Arc<dyn RegistryStore>,
+    ops: Option<RunningOps>,
 ) -> io::Result<()> {
+    // Held until this future ends, so the ops listener closes with the orchestrator.
+    let readiness = ops.as_ref().map(|ops| Arc::clone(&ops.readiness));
+    let _ops = ops;
     // Before binding: a corrupt registry fails the start, naming the file, which stays as it is.
     // Declared before `links`, so dropped after them: when this future ends, the link tasks are
     // aborted first, then the saving thread writes what is still waiting and is joined. Nothing
@@ -304,6 +360,9 @@ async fn serve(
     .map_err(io::Error::other)?
     .map_err(io::Error::other)?;
     let (_saving, shared) = started(clock, store, Registry::restore(loaded))?;
+    if let Some(readiness) = &readiness {
+        readiness.set_registry_loaded();
+    }
     let bound = match crate::singleton::acquire(&endpoint).await? {
         crate::singleton::Acquisition::Bound(bound) => bound,
         crate::singleton::Acquisition::AlreadyRunning => {
@@ -316,6 +375,9 @@ async fn serve(
             ))
         }
     };
+    if let Some(readiness) = &readiness {
+        readiness.set_link_bound();
+    }
     let mut links = tokio::task::JoinSet::new();
     loop {
         while links.try_join_next().is_some() {}
@@ -335,6 +397,15 @@ async fn serve(
                 tracing::warn!(error = %e, "orchestrator connection ended with an error");
             }
         });
+    }
+}
+
+/// A task aborted when this is dropped.
+struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
 
@@ -494,5 +565,94 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].health, Health::Online);
         assert_eq!(listed[0].last_seen, 1_000);
+    }
+
+    /// A store whose load waits for the gate, or fails when the gate closes.
+    struct SlowLoad(Mutex<mpsc::Receiver<()>>);
+
+    impl RegistryStore for SlowLoad {
+        fn load(&self) -> Result<Vec<DaemonRecord>, StoreError> {
+            match self.0.lock().unwrap().recv() {
+                Ok(()) => Ok(Vec::new()),
+                Err(_) => Err(StoreError::Unavailable {
+                    target: "db:5432".to_owned(),
+                    reason: "store unreachable".to_owned(),
+                }),
+            }
+        }
+
+        fn save(&self, _records: &[DaemonRecord]) -> Result<(), StoreError> {
+            Ok(())
+        }
+    }
+
+    async fn ops_on_loopback() -> (Ops, std::net::SocketAddr) {
+        let ops = Ops::bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+        let addr = ops.listener.local_addr().unwrap();
+        (ops, addr)
+    }
+
+    /// FR-006: not ready while the store loads, ready once the link listener is bound.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn serve_is_ready_only_after_load_and_bind() {
+        let dir = tempfile::tempdir().unwrap();
+        let (open, gate) = mpsc::channel();
+        let store = Arc::new(SlowLoad(Mutex::new(gate)));
+        let (ops, addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let task = tokio::spawn(serve(
+            endpoint,
+            Arc::new(SystemClock),
+            store,
+            Some(ops.start()),
+        ));
+        assert!(ops::tests::get(addr, "/healthz")
+            .await
+            .starts_with("HTTP/1.1 200 "));
+        assert!(ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 503 "));
+        open.send(()).unwrap();
+        let started = Instant::now();
+        while !ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 200 ")
+        {
+            assert!(started.elapsed() < Duration::from_secs(10), "never ready");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        task.abort();
+    }
+
+    /// Review A r1: probes answer while the store is still opening.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn probes_answer_while_the_store_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ops, addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let never = std::future::pending::<io::Result<Arc<dyn RegistryStore>>>();
+        let task = tokio::spawn(run_ops_first(endpoint, Some(ops), never));
+        assert!(ops::tests::get(addr, "/healthz")
+            .await
+            .starts_with("HTTP/1.1 200 "));
+        assert!(ops::tests::get(addr, "/readyz")
+            .await
+            .starts_with("HTTP/1.1 503 "));
+        task.abort();
+    }
+
+    /// US3-4: a store that cannot load ends `serve` with its error.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_failing_store_ends_serve_with_the_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let (open, gate) = mpsc::channel::<()>();
+        drop(open);
+        let store = Arc::new(SlowLoad(Mutex::new(gate)));
+        let (ops, _addr) = ops_on_loopback().await;
+        let endpoint = config::endpoint_at(dir.path().join("o.sock"));
+        let error = serve(endpoint, Arc::new(SystemClock), store, Some(ops.start()))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("store unreachable"), "{error}");
     }
 }

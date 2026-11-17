@@ -8,23 +8,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: default
 - **Supervised**: no <!-- `yes` when the run started with AUTOPILOT_SUPERVISED set: an escalation is recorded and the turn ends, no interactive question -->
 - **Issue**: #1981
-- **Worktree branch**: claude/project-thread-ltu9ny
+- **Worktree branch**: claude/project-thread-mxfy6x
 - **Started**: 2026-11-15
 - **Phase**: milestones
-- **Next step**: M1 (#1982): full local gate not run (about 5 GB of free disk); orchestrator dispatches review B, opens the PR from specs/1981-kube-e2e/pr-M1.md, waits on CI (kube-chart runs live for the first time: helm/kubeconform pins and the image build are proven only there).
+- **Next step**: M2 (#1983) PR open; orchestrator waits on CI and merges.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1991 | M1 | merged | a6fc96478a60ddf1960e98ff83ebce27ddc7fb09 |
 | #1987 | Design | merged | 6c2819edede47166c5034a37335c7c62c775fa4d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | review A CLEAN (r3), review B CLEAN; CI pending |
-| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | pending |
+| M1 (#1982) | T001–T009 | full | Image + chart + data-dir/socket flags | #1991 | merged a6fc96478 |
+| M2 (#1983) | T010–T015 | full | Ops /healthz /readyz, probes, --ops-addr (before harness, see plan) | #… | implemented, in review |
 | M3 (#1984) | T016–T022 | full | kind harness, mise task, CI job kube-e2e | #… | pending |
 | M4 (#1985) | T023–T030 | full | API e2e suite (ops, link, restart, seeded breakages) | #… | pending |
 | M5 (#1986) | T031–T032 | light | network/ui placeholder slots; real tests after #1732/#1954 | #… | pending |
@@ -50,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 3 | scoped | (fix commit) | cbba162d5b20441d5f920eec269f7ec432a34a65:12c6d39d415b4c76ddbb1a7a0c81cec4b4601bed | CLEAN: 5 MINOR; 2 fixed (norepo pattern tolerant of older helm; ci/default.yaml must be `{}`), 3 left (fail-safe kube_paths on an unclassifiable proven push; created-not-started smoke container; schema reformat) |
 | M1 A (code-review high) | 1 | full | 50a73bfd4 | b35b38afe6f6464849753a5f314e2f2e0fe5be34:50a73bfd479d489c2da3343d57dfc183857d97ae | CHANGES: 2 MAJOR (kube set misses image inputs; misses job's own files), 8 MINOR; 8 fixed, 2 declined (appVersion tag; socket dir mode, documented) |
 | tasks | 3 | scoped | afc1ab21c041d57654e68c85da428d2bb04adb9e | d6036c4e0ce6be2d465dfaf07f3eee75f4dc983a | CLEAN |
+| M2 A+B (opus) | 1 | full | 5272ef54e | abb5d2e251df1baf302e677ce8074d310c49842a:5272ef54ed19168fc8a76e056116d3135072b743 | CHANGES: 1 MAJOR (ops served only inside serve, probes hang while the store opens), 3 MINOR (head size check, silent timeout, tests); all fixed |
 | Review B | 1 | M1 | 49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | 7c47de4556526f50ff9beb7412373b4d950c17e4:49dcf2b3b4c6d7bf015c741fa78e6f67e1a9c18e | CLEAN (1 MINOR, no fix needed) |
 
 ## Declined review findings
@@ -62,8 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+None.
 
 ## Open escalation
 
@@ -71,9 +72,13 @@ None.
 
 ## Follow-ups not done
 
+- Implicit `<data_dir>/daemon.toml` lookup in `orchestrator::configured` uses the user's data dir even when `--data-dir`/env is set (main's behaviour; merge review MINOR). Consider skipping it when a data dir is given, so a container never reads `$HOME`.
+- Chart `state.mode` refuses `sqlite`/`postgres` naming #1948/#1740; #1948's store has merged since, so revisit which modes the chart can render (M2+ or #1740).
 - #1740: publish `micold-orchestrator` (and `micold-web`) images from the release workflow and keep `deploy/helm/micold/Chart.yaml` `appVersion` in step with releases (M1 review A, declined there).
 
 ## Plan notes
+
+- M2 (2026-11-16): T010-T015 done. `ops.rs` hand-written HTTP; `Ops` bound in `run` before the store opens, so probes see 503 not refused. Diff coverage 93.9% (cargo-llvm-cov, lib tests). Chart: `ops.enabled`/`ops.port`, `templates/service.yaml` (`<release>-orchestrator`), probes; conformance 56/56 with helm built from source (get.helm.sh blocked in cloud).
 
 - Clarify unit skipped by the orchestrator (no markers left in the spec). Milestones reordered: M2 ops before M3 harness (smoke needs the readiness probe); spec table updated. Plan written, plan review pending (reviewer round 1 not run: unit has no Agent tool).
 - Tasks cut (T001-T030, M1-M5). Plan deviation: install-kube-tools.sh is created in M1 with helm and kubeconform pins (kube-chart job needs them); M3 adds kind and kubectl. No user-guide tasks (no end-user surface). Tasks review pending; gate and PR pending.

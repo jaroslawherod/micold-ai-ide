@@ -22,12 +22,12 @@ Stories: US1 chart, US2 harness, US3 API e2e suite, US4 extensible suites.
 
 ## Phase 2: Ops endpoints (M2)
 
-- [ ] T010 [US1] Test first: integration tests for `serve_ops` in `crates/micold-daemon/src/orchestrator/ops.rs` over a real `TcpListener` on port 0: `/healthz` 200 immediately, `/readyz` 503 until both `Readiness` flags set then 200, other path 404, other method 405, `Connection: close` (contracts/ops-http.md). FR-006, FR-015.
-- [ ] T011 [US1] Implement `ops.rs` (`Readiness`, `serve_ops`, hand-written HTTP/1.1, no new dependency).
-- [ ] T012 [US1] Test first: `ops_addr` resolution (flag `--ops-addr`, env `MICOLD_ORCHESTRATOR_OPS_ADDR`, default `None`, invalid address error names the source) in `config.rs`; then implement. FR-019.
-- [ ] T013 [US1] Test first: `serve` with `Some(addr)` is not-ready while the store loads, ready after the link listener binds; a failing store makes `serve` return the error (non-zero exit). Then wire `serve` in `mod.rs` to set `registry_loaded` and `link_bound`. FR-006, US3-4.
-- [ ] T014 [US1] Test first: extend `chart-conformance.test.sh` with Service (port 9090), `--ops-addr=0.0.0.0:9090` arg, startup/readiness/liveness probes gated by `ops.enabled`; then add `templates/service.yaml`, probes in `deployment.yaml`, values and schema, README. FR-007.
-- [ ] T015 [US1] Run `scripts/diff-coverage.py` on the ops and config code; add tests until at least 80%. FR-015, SC-006.
+- [x] T010 [US1] Test first: integration tests for `serve_ops` in `crates/micold-daemon/src/orchestrator/ops.rs` over a real `TcpListener` on port 0: `/healthz` 200 immediately, `/readyz` 503 until both `Readiness` flags set then 200, other path 404, other method 405, `Connection: close` (contracts/ops-http.md). FR-006, FR-015.
+- [x] T011 [US1] Implement `ops.rs` (`Readiness`, `serve_ops`, hand-written HTTP/1.1, no new dependency).
+- [x] T012 [US1] Test first: `ops_addr` resolution (flag `--ops-addr`, env `MICOLD_ORCHESTRATOR_OPS_ADDR`, default `None`, invalid address error names the source) in `config.rs`; then implement. FR-019.
+- [x] T013 [US1] Test first: `serve` with `Some(addr)` is not-ready while the store loads, ready after the link listener binds; a failing store makes `serve` return the error (non-zero exit). Then wire `serve` in `mod.rs` to set `registry_loaded` and `link_bound`. FR-006, US3-4.
+- [x] T014 [US1] Test first: extend `chart-conformance.test.sh` with Service (port 9090), `--ops-addr=0.0.0.0:9090` arg, startup/readiness/liveness probes gated by `ops.enabled`; then add `templates/service.yaml`, probes in `deployment.yaml`, values and schema, README. FR-007.
+- [x] T015 [US1] Run `scripts/diff-coverage.py` on the ops and config code; add tests until at least 80%. FR-015, SC-006.
 
 ## Phase 3: kind harness (M3)
 

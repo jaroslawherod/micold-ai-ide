@@ -16,6 +16,8 @@ use micold_core::endpoint::Endpoint;
 pub const DATA_DIR_ENV: &str = "MICOLD_ORCHESTRATOR_DATA_DIR";
 /// The variable that sets the socket when `--socket` is absent.
 pub const SOCKET_ENV: &str = "MICOLD_ORCHESTRATOR_SOCKET";
+/// The variable that sets the ops listener's address when `--ops-addr` is absent.
+pub const OPS_ADDR_ENV: &str = "MICOLD_ORCHESTRATOR_OPS_ADDR";
 
 /// Where the orchestrator runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +26,8 @@ pub struct OrchestratorConfig {
     pub data_dir: PathBuf,
     /// The socket it binds and the lock beside it.
     pub endpoint: Endpoint,
+    /// Where the ops listener (`/healthz`, `/readyz`) binds; none by default.
+    pub ops_addr: Option<std::net::SocketAddr>,
 }
 
 /// The values used when neither a flag nor a variable gives one.
@@ -78,6 +82,8 @@ pub struct OrchestratorArgs {
     pub socket: Option<PathBuf>,
     /// `--config`: the configuration file holding the `[database]` table (#1948).
     pub config: Option<PathBuf>,
+    /// `--ops-addr`, unparsed.
+    pub ops_addr: Option<OsString>,
 }
 
 impl OrchestratorArgs {
@@ -97,16 +103,11 @@ impl OrchestratorArgs {
                 }
                 _ => (text, None),
             };
-            let slot = match name {
-                "--data-dir" => &mut out.data_dir,
-                "--socket" => &mut out.socket,
-                "--config" => &mut out.config,
-                _ => {
-                    return Err(invalid(format!(
-                        "unknown orchestrator argument {name:?} (expected --data-dir, --socket or --config)"
-                    )));
-                }
-            };
+            if !matches!(name, "--data-dir" | "--socket" | "--config" | "--ops-addr") {
+                return Err(invalid(format!(
+                    "unknown orchestrator argument {name:?} (expected --data-dir, --socket, --config or --ops-addr)"
+                )));
+            }
             let value = match inline {
                 Some(value) => value,
                 // `--data-dir --socket=/x` is a missing value, not a directory named `--socket=/x`.
@@ -119,7 +120,12 @@ impl OrchestratorArgs {
             if value.is_empty() {
                 return Err(invalid(format!("{name} needs a non-empty value")));
             }
-            *slot = Some(PathBuf::from(value));
+            match name {
+                "--data-dir" => out.data_dir = Some(PathBuf::from(value)),
+                "--socket" => out.socket = Some(PathBuf::from(value)),
+                "--config" => out.config = Some(PathBuf::from(value)),
+                _ => out.ops_addr = Some(value),
+            }
         }
         Ok(out)
     }
@@ -156,8 +162,31 @@ impl OrchestratorConfig {
             Some(socket) => endpoint_at(socket),
             None => defaults.endpoint()?,
         };
-        Ok(Self { data_dir, endpoint })
+        let ops_addr = match args.ops_addr {
+            Some(value) => Some(socket_addr(&value, "--ops-addr")?),
+            None => match env(OPS_ADDR_ENV).filter(|value| !value.is_empty()) {
+                Some(value) => Some(socket_addr(&value, OPS_ADDR_ENV)?),
+                None => None,
+            },
+        };
+        Ok(Self {
+            data_dir,
+            endpoint,
+            ops_addr,
+        })
     }
+}
+
+/// `value` as an address, or an error naming `source`.
+fn socket_addr(value: &OsString, source: &str) -> io::Result<std::net::SocketAddr> {
+    value
+        .to_str()
+        .and_then(|text| text.parse().ok())
+        .ok_or_else(|| {
+            invalid(format!(
+                "{source} {value:?} is not an address like 0.0.0.0:9090"
+            ))
+        })
 }
 
 #[cfg(test)]
@@ -401,5 +430,43 @@ mod tests {
             io::ErrorKind::NotFound,
             "the default's own error is passed on"
         );
+    }
+
+    /// FR-019: `--ops-addr` over its variable; none by default; a bad value names its source.
+    #[test]
+    fn ops_addr_is_flag_then_env_then_none() {
+        let both = ["--data-dir", "/d", "--socket", "/s"];
+        assert_eq!(resolve(&both, &[]).unwrap().ops_addr, None);
+        assert_eq!(
+            resolve(&both, &[(OPS_ADDR_ENV, "")]).unwrap().ops_addr,
+            None
+        );
+        let env = [(OPS_ADDR_ENV, "127.0.0.1:1")];
+        assert_eq!(
+            resolve(&both, &env).unwrap().ops_addr,
+            Some("127.0.0.1:1".parse().unwrap())
+        );
+        let flagged = [
+            "--data-dir",
+            "/d",
+            "--socket",
+            "/s",
+            "--ops-addr=0.0.0.0:9090",
+        ];
+        assert_eq!(
+            resolve(&flagged, &env).unwrap().ops_addr,
+            Some("0.0.0.0:9090".parse().unwrap())
+        );
+        let bad_flag = resolve(
+            &["--data-dir", "/d", "--socket", "/s", "--ops-addr", "x"],
+            &[],
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(bad_flag.contains("--ops-addr"), "{bad_flag}");
+        let bad_env = resolve(&both, &[(OPS_ADDR_ENV, "nope")])
+            .unwrap_err()
+            .to_string();
+        assert!(bad_env.contains(OPS_ADDR_ENV), "{bad_env}");
     }
 }

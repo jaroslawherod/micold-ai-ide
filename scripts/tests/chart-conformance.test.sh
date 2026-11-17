@@ -84,8 +84,8 @@ volume_source() {
 if render default; then
   ok "default values render"
   d="$work/default.yaml"
-  expect_kinds "default renders a Deployment and a PersistentVolumeClaim only" "$d" \
-    "Deployment PersistentVolumeClaim"
+  expect_kinds "default renders a Deployment, a PersistentVolumeClaim and the ops Service" "$d" \
+    "Deployment PersistentVolumeClaim Service"
   check "one replica" "$d" '^  replicas: 1$'
   check "strategy Recreate" "$d" '^    type: Recreate$'
   check "image is the 1722 plan's orchestrator image" "$d" \
@@ -130,14 +130,44 @@ else
   fail "image values render: $(cat "$work/image.err")"
 fi
 
+# --- ops listener and probes (FR-007, #1983) ------------------------------------------------------
+
+if render ops; then
+  o="$work/ops.yaml"
+  check "--ops-addr on the ops port" "$o" '^ +- --ops-addr=0\.0\.0\.0:9090$'
+  check "ops container port 9090" "$o" '^ +containerPort: 9090$'
+  check "ops Service on port 9090" "$o" '^ +port: 9090$'
+  check "ops Service is named for the orchestrator" "$o" '^  name: micold-orchestrator$'
+  for probe in startupProbe readinessProbe livenessProbe; do
+    check "$probe present" "$o" "^ +$probe:$"
+  done
+  check "readiness probe on /readyz" "$o" '^ +path: /readyz$'
+  check "liveness probe on /healthz" "$o" '^ +path: /healthz$'
+else
+  fail "ops values render: $(cat "$work/ops.err")"
+fi
+if render opsport --set ops.port=9191; then
+  check "ops.port moves --ops-addr" "$work/opsport.yaml" '^ +- --ops-addr=0\.0\.0\.0:9191$'
+else
+  fail "ops.port renders: $(cat "$work/opsport.err")"
+fi
+if render opsoff --set ops.enabled=false; then
+  refute "no --ops-addr with ops.enabled=false" "$work/opsoff.yaml" 'ops-addr'
+  refute "no probes with ops.enabled=false" "$work/opsoff.yaml" 'Probe:'
+  expect_kinds "no Service with ops.enabled=false" "$work/opsoff.yaml" "Deployment PersistentVolumeClaim"
+else
+  fail "ops.enabled=false renders: $(cat "$work/opsoff.err")"
+fi
+
 # --- web (FR-004) --------------------------------------------------------------------------------
 
 if render web -f "$CHART/ci/web-enabled.yaml"; then
   w="$work/web.yaml"
   expect_kinds "web.enabled adds a web Deployment and Service" "$w" \
-    "Deployment Deployment PersistentVolumeClaim Service"
+    "Deployment Deployment PersistentVolumeClaim Service Service"
   check "web image from web.image" "$w" '^ +image: "ghcr\.io/jaroslawherod/micold-web:dev"$'
-  got="$(awk '/^kind: Service$/ { svc = 1 } svc && /^  selector:$/ { sel = 1; next }
+  got="$(awk '/^kind: / { svc = ($0 == "kind: Service") } svc && /^  name: micold-web$/ { web = 1 }
+    web && /^  selector:$/ { sel = 1; next }
     sel && /^    / { print; next } sel { exit }' "$w" | grep -c 'app\.kubernetes\.io/component: web$')"
   if [ "$got" = 1 ]; then ok "web Service selects the web pods"; else fail "web Service selects the web pods (selector has no web component)"; fi
 else
@@ -153,7 +183,7 @@ fi
 # --- persistence off (US1-3) ---------------------------------------------------------------------
 
 if render nopvc -f "$CHART/ci/no-persistence.yaml"; then
-  expect_kinds "no PVC when state.persistence.enabled=false" "$work/nopvc.yaml" "Deployment"
+  expect_kinds "no PVC when state.persistence.enabled=false" "$work/nopvc.yaml" "Deployment Service"
   got="$(volume_source "$work/nopvc.yaml" data)"
   if [ "$got" = emptyDir ]; then ok "data volume is an emptyDir without persistence"; else fail "data volume is an emptyDir without persistence (got '$got')"; fi
   got="$(mount_of "$work/nopvc.yaml" data)"
