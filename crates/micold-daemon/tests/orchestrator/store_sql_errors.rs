@@ -9,7 +9,7 @@ use micold_core::orchestrator::{
     StoreError, TenantId,
 };
 use micold_core::protocol::routing::WireDaemonId;
-use micold_daemon::orchestrator::db::{SqlAuditStore, SqlAuthStore, StoreHandle};
+use micold_daemon::orchestrator::db::{refusal, SqlAuditStore, SqlAuthStore, StoreHandle};
 
 use super::store_suite::{hash, invite, new_user, refresh_token, uid, T};
 
@@ -179,13 +179,20 @@ fn with_bad_rows() -> (tempfile::TempDir, Arc<StoreHandle>, SqlAuthStore) {
                 .execute(&mut *conn)
                 .await?;
             for sql in [
-                "INSERT INTO users VALUES ('default', 'badrole', 'n', 'god', 1, NULL)",
-                "INSERT INTO users VALUES ('default', '', 'blank id', 'viewer', 1, NULL)",
-                "INSERT INTO users VALUES ('default', 'ok', 'n', 'viewer', 1, NULL)",
-                "INSERT INTO identities VALUES ('default', 'github', 'bad', 'badrole', NULL, 0)",
-                "INSERT INTO identities VALUES ('default', 'github', 'blank', '', NULL, 0)",
-                "INSERT INTO bootstrap VALUES ('default', 'nothex', 1, NULL)",
-                "INSERT INTO cert_revocations VALUES ('default', 'zz', 1, 'r')",
+                "INSERT INTO users (tenant_id, id, display_name, role, created_at) \
+                 VALUES ('default', 'badrole', 'n', 'god', 1)",
+                "INSERT INTO users (tenant_id, id, display_name, role, created_at) \
+                 VALUES ('default', '', 'blank id', 'viewer', 1)",
+                "INSERT INTO users (tenant_id, id, display_name, role, created_at) \
+                 VALUES ('default', 'ok', 'n', 'viewer', 1)",
+                "INSERT INTO identities (tenant_id, provider, subject, user_id, email_verified) \
+                 VALUES ('default', 'github', 'bad', 'badrole', 0)",
+                "INSERT INTO identities (tenant_id, provider, subject, user_id, email_verified) \
+                 VALUES ('default', 'github', 'blank', '', 0)",
+                "INSERT INTO bootstrap (tenant_id, code_hash, created_at) \
+                 VALUES ('default', 'nothex', 1)",
+                "INSERT INTO cert_revocations (tenant_id, serial, revoked_at, reason) \
+                 VALUES ('default', 'zz', 1, 'r')",
             ] {
                 sqlx::query(sql).execute(&mut *conn).await?;
             }
@@ -228,10 +235,14 @@ fn a_refresh_row_that_does_not_read_back_is_corrupt() {
     let planted = hash("planted");
     handle
         .block_on(async {
-            sqlx::query("INSERT INTO refresh_tokens VALUES ('default', $1, '', 'f', 1, 2, NULL)")
-                .bind(planted.as_str().to_owned())
-                .execute(handle.pool())
-                .await
+            sqlx::query(
+                "INSERT INTO refresh_tokens \
+                 (tenant_id, token_hash, user_id, family, issued_at, expires_at) \
+                 VALUES ('default', $1, '', 'f', 1, 2)",
+            )
+            .bind(planted.as_str().to_owned())
+            .execute(handle.pool())
+            .await
         })
         .unwrap()
         .unwrap();
@@ -283,52 +294,132 @@ fn a_remove_of_an_unknown_user_revokes_nobody_elses_tokens() {
     assert_eq!(auth.refresh(&hash("a")).unwrap().unwrap().revoked_at, None);
 }
 
-#[test]
-fn the_bootstrap_states_each_have_their_own_refusal() {
-    let (_dir, _handle, auth) = open();
-    let reason = |result: Result<(), StoreError>| match result {
+/// The reason of a `Refused` result; anything else fails the case.
+fn refused<R: std::fmt::Debug>(result: Result<R, StoreError>) -> String {
+    match result {
         Err(StoreError::Refused { reason }) => reason,
         other => panic!("expected Refused, got {other:?}"),
-    };
-    assert!(reason(auth.consume_bootstrap(&hash("c"), T)).contains("no bootstrap"));
-    auth.set_bootstrap(&hash("c"), T).unwrap();
-    auth.set_bootstrap(&hash("d"), T + 1).unwrap();
-    assert_eq!(auth.bootstrap().unwrap().unwrap().code_hash, hash("d"));
-    assert!(reason(auth.consume_bootstrap(&hash("c"), T)).contains("does not match"));
-    auth.consume_bootstrap(&hash("d"), T + 2).unwrap();
-    assert!(reason(auth.consume_bootstrap(&hash("d"), T + 3)).contains("consumed"));
-    assert!(reason(auth.set_bootstrap(&hash("e"), T + 4)).contains("consumed"));
+    }
 }
 
 #[test]
-fn an_invite_and_an_enrollment_name_why_they_were_refused() {
+fn consuming_a_bootstrap_code_that_was_never_set_is_refused_as_not_set() {
     let (_dir, _handle, auth) = open();
-    let reason = |result: Result<(), StoreError>| match result {
-        Err(StoreError::Refused { reason }) => reason,
-        other => panic!("expected Refused, got {other:?}"),
-    };
+    assert_eq!(
+        refused(auth.consume_bootstrap(&hash("c"), T)),
+        refusal::BOOTSTRAP_NOT_SET
+    );
+}
+
+#[test]
+fn consuming_another_code_than_the_one_set_is_refused_as_a_mismatch() {
+    let (_dir, _handle, auth) = open();
+    auth.set_bootstrap(&hash("c"), T).unwrap();
+    auth.set_bootstrap(&hash("d"), T + 1).unwrap();
+    assert_eq!(auth.bootstrap().unwrap().unwrap().code_hash, hash("d"));
+    assert_eq!(
+        refused(auth.consume_bootstrap(&hash("c"), T)),
+        refusal::BOOTSTRAP_MISMATCH
+    );
+}
+
+#[test]
+fn consuming_a_consumed_bootstrap_code_again_is_refused_as_consumed() {
+    let (_dir, _handle, auth) = open();
+    auth.set_bootstrap(&hash("d"), T).unwrap();
+    auth.consume_bootstrap(&hash("d"), T + 2).unwrap();
+    assert_eq!(
+        refused(auth.consume_bootstrap(&hash("d"), T + 3)),
+        refusal::BOOTSTRAP_CONSUMED
+    );
+}
+
+#[test]
+fn setting_a_bootstrap_code_after_one_was_consumed_is_refused() {
+    let (_dir, _handle, auth) = open();
+    auth.set_bootstrap(&hash("d"), T).unwrap();
+    auth.consume_bootstrap(&hash("d"), T + 2).unwrap();
+    assert_eq!(
+        refused(auth.set_bootstrap(&hash("e"), T + 4)),
+        refusal::BOOTSTRAP_ALREADY_CONSUMED
+    );
+}
+
+/// A store with user `u1` and the invite `tok` (expiring at `T + 100`).
+fn with_invite() -> (tempfile::TempDir, SqlAuthStore) {
+    let (dir, _handle, auth) = open();
     auth.create_user(&new_user("u1", Role::Viewer)).unwrap();
     auth.create_invite(&invite("i", "tok", T + 100)).unwrap();
-    assert!(reason(auth.redeem_invite(&hash("nope"), &uid("u1"), T).map(drop)).contains("unknown"));
-    assert!(reason(
-        auth.redeem_invite(&hash("tok"), &uid("u1"), T + 100)
-            .map(drop)
-    )
-    .contains("expired"));
-    assert!(reason(auth.redeem_invite(&hash("tok"), &uid("ghost"), T).map(drop)).contains("user"));
+    (dir, auth)
+}
+
+#[test]
+fn redeeming_an_invite_nobody_issued_is_refused_as_unknown() {
+    let (_dir, auth) = with_invite();
+    assert_eq!(
+        refused(auth.redeem_invite(&hash("nope"), &uid("u1"), T)),
+        refusal::token_unknown("invite")
+    );
+}
+
+#[test]
+fn redeeming_an_invite_at_its_expiry_is_refused_as_expired() {
+    let (_dir, auth) = with_invite();
+    assert_eq!(
+        refused(auth.redeem_invite(&hash("tok"), &uid("u1"), T + 100)),
+        refusal::token_expired("invite")
+    );
+}
+
+#[test]
+fn redeeming_an_invite_for_a_user_the_store_lacks_is_refused_naming_the_user() {
+    let (_dir, auth) = with_invite();
+    assert_eq!(
+        refused(auth.redeem_invite(&hash("tok"), &uid("ghost"), T)),
+        refusal::user_unknown(uid("ghost"))
+    );
+}
+
+#[test]
+fn redeeming_an_invite_twice_is_refused_as_already_redeemed() {
+    let (_dir, auth) = with_invite();
     auth.redeem_invite(&hash("tok"), &uid("u1"), T).unwrap();
-    assert!(reason(auth.redeem_invite(&hash("tok"), &uid("u1"), T).map(drop)).contains("already"));
-    let daemon = WireDaemonId::new("box").unwrap();
-    let enrollment = NewEnrollment {
+    assert_eq!(
+        refused(auth.redeem_invite(&hash("tok"), &uid("u1"), T)),
+        refusal::token_redeemed("invite")
+    );
+}
+
+/// A store holding the enrollment `e` (created at `T`, expiring at `T + 5`).
+fn with_enrollment() -> (tempfile::TempDir, WireDaemonId, SqlAuthStore) {
+    let (dir, auth) = with_invite();
+    auth.create_enrollment(&NewEnrollment {
         token_hash: hash("e"),
         created_by: Some(uid("u1")),
         created_at: T,
         expires_at: T + 5,
-    };
-    auth.create_enrollment(&enrollment).unwrap();
-    assert!(reason(auth.redeem_enrollment(&hash("e"), &daemon, T + 5)).contains("expired"));
+    })
+    .unwrap();
+    (dir, WireDaemonId::new("box").unwrap(), auth)
+}
+
+#[test]
+fn redeeming_an_enrollment_at_its_expiry_is_refused_as_expired() {
+    let (_dir, daemon, auth) = with_enrollment();
+    assert_eq!(
+        refused(auth.redeem_enrollment(&hash("e"), &daemon, T + 5)),
+        refusal::token_expired("enrollment")
+    );
+}
+
+#[test]
+fn redeeming_an_enrollment_twice_is_refused_as_already_redeemed() {
+    let (_dir, daemon, auth) = with_enrollment();
     auth.redeem_enrollment(&hash("e"), &daemon, T + 4).unwrap();
-    assert!(reason(auth.redeem_enrollment(&hash("e"), &daemon, T + 4)).contains("already"));
+    assert_eq!(
+        refused(auth.redeem_enrollment(&hash("e"), &daemon, T + 4)),
+        refusal::token_redeemed("enrollment")
+    );
 }
 
 #[test]

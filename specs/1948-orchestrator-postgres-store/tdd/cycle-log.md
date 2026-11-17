@@ -357,3 +357,20 @@ timeout, PostgreSQL on the advisory lock), so the retry is not reached. Recorded
   `store_migrations::an_older_database_applies_the_missing_migrations_in_order`.
 - restored with `git checkout -- crates/micold-daemon/tests/orchestrator/store_migrations.rs`: green
   (the full orchestrator run above, 259 passed).
+
+### M12 remediation (T071–T075, verification.md N1–N7)
+
+- T071 (N1): `migrate::run_forward_with` takes the migrator attempt as a closure; three cases drive it
+  with an attempt that loses the race on demand (finishes after `migrations + 1` losses, gives up
+  after `migrations + 2`, does not retry a non-race error). red: `retries` set to `0` in
+  `db/migrate.rs`, command `cargo test -p micold-daemon --test orchestrator store_migrations`, 5 of 5
+  runs failed the two retry cases (the two-starters case failed on 3 of 5). Restored: green.
+- T072 (N2): the tautological `waited < 9` is dropped; `record_when` (b online, `last_seen` after the
+  ping while the save is parked) is the assertion, and fails when the heartbeat path blocks.
+- T073 (N3): the two eager cases are 11 cases of one refusal each, pinned by `db::refusal` constants
+  and functions the store exports (exact, not substring).
+- T074 (N4): `starts` waits for the orchestrator socket (bound after the store opens and imports)
+  instead of a fixed 2 s. `store_config`: 5 of 5 passes, and 5 of 5 with four busy loops running.
+- T075 (N5–N7): the password requirement is documented on `postgres_server`; the bad-row inserts
+  name their columns; the corrupt-file case pins the file name and a non-empty cause, not serde's text.
+- Orchestrator `store_` with PostgreSQL (:5433): 220 passed, 0 failed, 0 ignored.

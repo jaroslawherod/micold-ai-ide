@@ -28,6 +28,38 @@ pub mod import;
 pub mod migrate;
 mod registry;
 
+/// The reasons `AuthStore` refusals carry (`StoreError::Refused`), so a test pins one by name and a
+/// rewording changes it in one place.
+pub mod refusal {
+    use std::fmt::Display;
+
+    /// `set_bootstrap` over a code already consumed.
+    pub const BOOTSTRAP_ALREADY_CONSUMED: &str = "the bootstrap code was already consumed";
+    /// `consume_bootstrap` with no code set.
+    pub const BOOTSTRAP_NOT_SET: &str = "no bootstrap code is set";
+    /// `consume_bootstrap` after the code was consumed.
+    pub const BOOTSTRAP_CONSUMED: &str = "the bootstrap code was consumed";
+    /// `consume_bootstrap` with another code than the one set.
+    pub const BOOTSTRAP_MISMATCH: &str = "the bootstrap code does not match";
+
+    /// A method named a user the store does not hold.
+    pub fn user_unknown(id: impl Display) -> String {
+        format!("user {id} is unknown")
+    }
+    /// A one-shot token (`what`: "invite", "enrollment") the store does not hold.
+    pub fn token_unknown(what: &str) -> String {
+        format!("the {what} is unknown")
+    }
+    /// A one-shot token already redeemed.
+    pub fn token_redeemed(what: &str) -> String {
+        format!("the {what} was already redeemed")
+    }
+    /// A one-shot token past its expiry.
+    pub fn token_expired(what: &str) -> String {
+        format!("the {what} has expired")
+    }
+}
+
 pub use audit::SqlAuditStore;
 pub use auth::SqlAuthStore;
 pub use registry::SqlRegistryStore;

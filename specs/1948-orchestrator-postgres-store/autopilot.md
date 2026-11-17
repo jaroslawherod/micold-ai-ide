@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-0phzsu
 - **Started**: 2026-11-15
 - **Phase**: close
-- **Next step**: M12 (T071–T075), then a new close unit (re-run speckit-tdd-verify)
+- **Next step**: M12 PR review and merge, then a new close unit (re-run speckit-tdd-verify; accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows, F4)
 
 ## Pull requests
 
@@ -45,6 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M9 | T051–T054 | full | Import registry.json once | #2010 | merged (83926c52f) |
 | M10 | T055–T060 | full | Ownership columns and adoption; quickstart recorded | #2011 | merged (8005293fe) |
 | M11 | T061–T070 | full | TDD remediation (verification.md FAIL: F1–F12), tests and evidence only | #2014 | merged (c5c184a03) |
+| M12 | T071–T075 | full | TDD remediation 2 (verification.md N1–N7): deterministic retry-bound test, sleepless and exact tests | (pending) | built, awaiting review |
 
 ## Decisions
 
@@ -110,6 +111,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Handover
 
 M11 merged (#2014, c5c184a03). Second tdd-verify FAILED (tdd/verification.md); T071–T075 appended. jaro chose (2026-11-17, decision card) to cut them into M12. Next: M12 milestone unit (T071–T075) in a fresh thread, then a new close unit re-running tdd-verify; that verify should accept the recorded after-the-fact mutant reds for the 14 TEST_AFTER rows (F4).
+
+M12 built (T071–T075). Gate (scripts/gate.sh, PG 16 at :5433, cargo-nextest installed): fmt, clippy, 13648/13649 nextest green (only `session_extras` signing, ssh-keygen missing, unrelated); scripts/tests all pass. Reviews A and B not run (no Agent tool in this unit): the orchestrator runs them on the PR diff. Next: review, merge, then the close unit.
 
 ## Open escalation
 
