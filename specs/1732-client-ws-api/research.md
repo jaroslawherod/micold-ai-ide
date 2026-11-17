@@ -34,7 +34,11 @@ subscribe) is `Read`; `Change` exists for #1734 and no kind uses it yet.
 A `ChangeLog` ring keeps the last 1024 changes with strictly increasing `seq` (u64). Every snapshot and subscribe
 reply carries `epoch` (random u64 per orchestrator process). Resume with another epoch, or `since < oldest_seq - 1`,
 answers `resync_needed`; the client then reloads a snapshot (FR-003, US2.2). A restart therefore resyncs rather than
-mis-resuming. Rejected: a time window (needs a clock in tests, unbounded under bursts); persisting the log in the store
+mis-resuming. Restart of the poller (last subscriber leaves, a new one arrives): the feed keeps its last snapshot and log across a stop and
+diffs against that snapshot on restart, so the changes made while stopped are appended in order and a resume across the gap
+stays exact; the epoch changes only with the process. Boundaries: `since(epoch, 0)` on an empty log is an empty batch if
+`next_seq == 1`, else `ResyncNeeded`; `n + 1 == oldest` is servable (nothing missing), `n + 1 < oldest` is not.
+Rejected: a time window (needs a clock in tests, unbounded under bursts); persisting the log in the store
 (a write per change for a case the spec already answers with resync). 1024 covers minutes of normal activity: a poll
 emits only differences.
 
@@ -42,7 +46,8 @@ emits only differences.
 Reuse its exponential backoff with full jitter: base 500 ms, ceiling 15 s, state `unreachable` (its `offline`) after
 8 attempts with a retry action; a policy close (1008, origin refusal) goes straight to `unreachable` with no retry
 loop; 1001/1006/1011 and a missed pong reconnect and resume. A new `connecting` state is added for the first open.
-Visibility: on `visibilitychange` to visible, the manager checks pong age and reconnects at once if stale (Safari
+Origin matching compares scheme, host and port (default ports 80/443 normalised); `Origin: null` and any malformed value are
+refused (R11). Visibility: on `visibilitychange` to visible, the manager checks pong age and reconnects at once if stale (Safari
 throttling). Rejected: fixed interval (tight loop on a down server); unbounded attempts (never tells the user).
 
 ## R7 Heartbeat
@@ -57,22 +62,32 @@ least one subscriber exists: every 1 s it gathers daemons, projects, worktrees a
 register or loss pokes it for an immediate pass. Worst case for SC-006 is the 1 s tick plus the gather; typical well
 under 2 s. Rejected: per-socket polling (N times the daemon load); push events from daemons (wire change).
 
-## R9 `LinkDirectory`
-A trait in `orchestrator/directory.rs`: `list(kind)`, `read_session(daemon, session)`. `InProcess` wraps `Arc<Shared>`
-and reuses `list::gather` and the conversation helper of `list.rs`. `ws.rs` and `feed.rs` depend only on the trait, so
-FR-046 later replaces one impl. Content read: open a conversation as `list::ask` does, `Hello`, `Attach` the project,
-`WindowView` naming the session, take the first non-live `StructuredEvents`, end the conversation, project events to
-`ContentEntry` (role, kind, text). A terminal session answers `terminal_not_supported`. Risk: the attach side effects
-(takeover refusal when another window holds the project); M2 starts with a failing integration test and, if the
-daemon refuses an orchestrator attach, escalates rather than force.
+## R9 `LinkDirectory` and the content read (a daemon wire change)
+A trait in `orchestrator/directory.rs`: `list(kind)`, `read_session(daemon, project, session)`. `InProcess` wraps
+`Arc<Shared>` and reuses `list::gather` and the conversation helper of `list.rs`. `ws.rs` and `feed.rs` depend only on
+the trait, so FR-046 later replaces one impl.
+Content read: `Attach` is not usable. The daemon refuses it with `ProjectBusy` while a desktop holds the project
+(`state.rs:3099-3116`) and, once granted, would block that desktop. Decision (option a): a new read-only daemon request
+`ClientMsg::ReadStructuredEvents { project, session }`, answered with the session's non-live history
+(`DaemonMsg::StructuredEvents`, `live: false`) or a refusal (`NotFound`, `TerminalSession`); it takes no attachment, no
+lock and no view. This is a recorded wire change: `SCHEMA_HASH` changes, so `PROTOCOL_VERSION` is bumped and the
+orchestrator and daemons upgrade together (the existing handshake refuses a mismatch and reports `NeedsUpdate`). The
+orchestrator opens a conversation as `list::ask` does, sends `Hello` then the request, projects events to `ContentEntry`,
+ends the conversation. A terminal session answers `terminal_not_supported`; a daemon refusal maps to `not_found`.
+Rejected: (b) attach-then-detach (ProjectBusy, blocks the desktop); (c) reading the daemon's event files directly (the
+orchestrator has no filesystem access to remote daemons).
+**This is the first task of M1**: a failing daemon integration test (`tests/orchestrator/ws_read_session.rs` plus a daemon
+test for the new request) lands before the API types freeze, so a refusal or an unexpected cost surfaces first.
 
 ## R10 FR-012: the orchestrator sends the order computed
 The #1735 contract already says the client never sorts and `merge_lists` defines the stable order in Rust, so
 re-implementing it in TypeScript would create the second copy this FR fears. The snapshot arrays are in that order and
 a change carries `after_key`. Parity is proven by shared vectors: a Rust test produces
 `packages/protocol/tests/vectors/sidebar-order.json` (snapshot plus changes plus expected key order, check mode fails
-on drift) and a jest test applies the changes with the client's reducer and asserts the same order. Rejected: porting
-the sort (two implementations, vectors needed anyway).
+on drift) and a jest test applies the changes with the client's reducer and asserts the same order. The vectors cover grouping and nesting (daemon, project, location, session, with a project holding several worktrees and a
+session under each), a daemon going offline (its rows keep their position, sessions marked unreachable), and remove then
+upsert of the same key (it returns to its `after_key` place, not the old one). The client reducer under test is
+`packages/protocol/src/order.ts` (`applyChanges`). Rejected: porting the sort (two implementations, vectors needed anyway).
 
 ## R11 Local defaults
 API `127.0.0.1:8730`, web client `127.0.0.1:8731` (8091 is the existing Playwright mock server; neither number appears
@@ -80,7 +95,8 @@ in the repo). Overrides `MICOLD_LOCAL_API_PORT`, `MICOLD_LOCAL_WEB_PORT`. The st
 `--allow-origin http://127.0.0.1:8731 --allow-origin http://localhost:8731`. The client's address comes from
 `EXPO_PUBLIC_ORCHESTRATOR_URL` at export time, default `ws://127.0.0.1:8730/api/ws` (FR-016). In production the listener
 is off; an operator sets `--api-addr` and `--allow-origin` (env `MICOLD_ORCHESTRATOR_API_ADDR`,
-`MICOLD_ORCHESTRATOR_ALLOW_ORIGINS`, comma separated). A non-loopback `--api-addr` is refused until TLS (#1733).
+`MICOLD_ORCHESTRATOR_ALLOW_ORIGINS`, comma separated). Allow-list entries are exact origins including the port
+(`http://127.0.0.1:8731` does not allow `http://127.0.0.1:9999`); `Origin: null` is always refused. A non-loopback `--api-addr` is refused until TLS (#1733).
 
 ## R12 Local stack and its test data
 `scripts/local-stack.sh` (mise task `local-stack`): checks both ports free first (bash `/dev/tcp`; reports the

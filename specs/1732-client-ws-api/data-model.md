@@ -11,7 +11,8 @@ All wire types are Rust structs in `micold_core::client_api`, `serde` + `schemar
   `changes { epoch, changes }` (unsolicited, `id` absent), `resync_needed { epoch, seq, reason }`,
   `error { code, message }`.
 - **ErrorCode**: `malformed`, `unknown_type`, `terminal_not_supported`, `not_found`, `daemon_unreachable`,
-  `timeout`, `internal`.
+  `timeout`, `internal`, `project_busy` (kept for a daemon that still answers it; the new read request does not),
+  `refused` (any other daemon refusal; the message names it).
 
 ## Entities (match the #1735 web model; plain string ids on the wire)
 - **Snapshot** `{ epoch, seq, daemons, projects, locations, sessions }`, arrays in the orchestrator's stable order.
@@ -27,7 +28,8 @@ All wire types are Rust structs in `micold_core::client_api`, `serde` + `schemar
 `{ epoch: u64, next_seq: u64, ring: VecDeque<Change> (cap 1024) }`.
 - `append(changes) -> seq range`; seq strictly increasing from 1 per epoch.
 - `since(epoch, n) -> Changes(Vec) | ResyncNeeded`: `ResyncNeeded` when `epoch` differs or `n + 1 < oldest`;
-  `n == last` returns an empty batch; `n > last` is `ResyncNeeded` (client ahead of this orchestrator).
+  `n == last` returns an empty batch; `n > last` is `ResyncNeeded` (client ahead of this orchestrator); `since(epoch, 0)` on an empty log is an empty batch only
+  when `next_seq == 1`; `n + 1 == oldest` is servable, `n + 1 < oldest` is not. The poller keeps snapshot and log across a stop.
 - Subscribe with `since: None` returns a fresh `Snapshot` at the current seq.
 
 ## Diff (core, pure)
@@ -39,9 +41,17 @@ All wire types are Rust structs in `micold_core::client_api`, `serde` + `schemar
 `{ last_message_at, subscribed: bool, cursor: Seq }`. Dropped at 40 s silence. Two tabs are two connections.
 
 ## OriginAllowList
-`{ origins: Vec<String> }`, exact, case-insensitive scheme and host match against the `Origin` header; no wildcard.
+`{ origins: Vec<String> }`, compared as scheme + host + port (case-insensitive scheme and host, default ports 80/443
+normalised); no wildcard; `Origin: null` and malformed values are refused.
 Absent `Origin` is accepted only when the peer address is loopback.
 
 ## Web client state
-`ConnectionState = connecting | connected | reconnecting{attempt} | offline` (`offline` shows the "unreachable"
-copy); `lastSeq`, `epoch`, stored in memory only. On `resync_needed` the store replaces its snapshot.
+`ConnectionState = connecting | connected | reconnecting{attempt} | offline` (the internal `offline` kind is the spec's
+"unreachable" state and shows that copy); `lastSeq`, `epoch`, stored in memory only. On `resync_needed` the store replaces its snapshot.
+
+## New i18n keys (en + pl, `apps/client/src/i18n`)
+Groups: `connection.*` (connecting, connected, reconnecting with attempt, unreachable title and body, retry);
+`session.unreachable` label; `session.refresh`, `session.content.empty`, `session.content.failed`, `session.content.truncated`;
+`error.*` one per ErrorCode (`malformed`, `unknown_type`, `terminal_not_supported`, `not_found`, `daemon_unreachable`,
+`timeout`, `internal`, `project_busy`, `refused`). The client maps `code` to a key; the server `message` is for logs and is
+never shown.

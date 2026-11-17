@@ -1,10 +1,10 @@
 # Contract: `/api/ws` (#1732)
 
-Text frames, one JSON object each. Binary frames from a client get `error {code: "malformed"}`; the server never
+Text frames, one JSON object each. `ErrorCode` also has `project_busy` and `refused` (data-model). Binary frames from a client get `error {code: "malformed"}`; the server never
 sends binary (FR-006).
 
 ## Upgrade
-`GET /api/ws` with `Origin`. Foreign origin: `403`, no upgrade, logged `refused origin <origin>` at WARN. No `Origin`:
+`GET /api/ws` with `Origin`. Foreign origin: `403`, no upgrade, logged `refused origin <origin>` at WARN. `Origin` is matched on scheme, host and port; `Origin: null` is refused. No `Origin`:
 accepted for a loopback peer only. Other paths: `404`.
 
 ## Requests and replies
@@ -18,7 +18,7 @@ accepted for a loopback peer only. Other paths: `404`.
 {"type":"changes","epoch":77,"changes":[{"seq":121,"kind":"session_state","session_id":"s1","state":"idle"}]}
 {"id":3,"type":"resync_needed","epoch":91,"seq":4,"reason":"epoch_changed"}
 ```
-A reply echoes the request `id`. `subscribe` without `since` replies `subscribed` with a `snapshot`. After `resync_needed`
+A reply echoes the request `id`. `subscribe` without `since` replies `subscribed` with a `snapshot`. On a resume (`since` given) and an accepted position, `subscribed` has no `snapshot`; the changes follow. After `resync_needed`
 the client sends `subscribe` with no `since`. Missed changes arrive in order, each `seq` once, before any newer one.
 
 ## Heartbeat

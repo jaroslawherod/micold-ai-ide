@@ -12,7 +12,7 @@ application-level ping/pong, an `Origin` allow-list checked in the upgrade callb
 feed with resume. The message types are new, dedicated Rust types in `micold-core` (`client_api`), not the
 daemon protocol's `ClientMsg` (binary-hash-bearing, byte arrays, many daemon-only variants). The orchestrator
 answers them from what it already has: `list::gather` (#1726) for daemons, projects, worktrees and sessions,
-and a one-shot conversation on the owning daemon's link for session content, behind a `LinkDirectory` trait
+and a one-shot conversation on the owning daemon's link for session content (a new read-only daemon request, R9), behind a `LinkDirectory` trait
 implemented in-process (FR-007). A single poller diffs successive snapshots into sequenced changes held in a
 bounded ring (resume); the ordering is the orchestrator's existing stable order, sent computed (FR-012).
 `schemars` derives a checked-in JSON Schema from the API types; `json-schema-to-typescript` turns it into the
@@ -20,7 +20,7 @@ checked-in TypeScript types that replace the #1735 stand-in. In the web client a
 implements the existing `OrchestratorApi` over a browser `WebSocket` Transport and the existing
 `ConnectionManager`; the mock stays for tests and the mock-only dev command. `mise run local-stack` starts the
 orchestrator, one daemon on a seeded data directory and the web client; Playwright in Chromium, Firefox and
-WebKit drives it. No iced code changes.
+WebKit drives it. No iced code changes. One daemon wire change: `ClientMsg::ReadStructuredEvents` (R9), with a `PROTOCOL_VERSION` bump.
 
 ## Technical Context
 
@@ -127,23 +127,24 @@ docs/                                             # user guide + config referenc
 
 | ID | Deliverable | Stories / FRs |
 |---|---|---|
-| M1 | Orchestrator `/api/ws`: types, origin, heartbeat, list/read/subscribe, feed + resume, LinkDirectory, classification; integration tests | US2 (server), US3; FR-001..008, 011 |
-| M2 | Schema and TS generation, drift check in gate and CI, session content projection, FR-012 vectors | US4; FR-009, 010, 012, 014b (server half) |
-| M3 | Web client on the real API: transport, connection states, backoff, unreachable rows, content view, i18n en+pl, mock kept | US1, US2 (client); FR-013..016 |
-| M4 | `mise run local-stack`, three-browser Playwright run, CI job, user docs, quickstart Part B pass | US1..3 end to end; FR-016..018, SC-001, 002, 006 |
+| M1 | First: daemon `ReadStructuredEvents` request (wire change, version bump) with its failing test. Then orchestrator `/api/ws`: types, origin, heartbeat, list, `read_session`, subscribe, feed + resume, LinkDirectory, classification; integration tests | US2 (server), US3; FR-001..008, 011, 014b (server) |
+| M2 | Schema and TS generation, drift check in gate and CI, FR-012 vectors | US4; FR-009, 010, 012 |
+| M3 | Web client on the real API (needs M2 only for the generated types): transport, connection states, backoff, unreachable rows, content view, i18n en+pl, and a minimal `mise run local-stack` so M3 is usable; normal build uses the real API, mock stays for tests and `mise run web` | US1, US2 (client); FR-013..017 |
+| M4 | Three-browser Playwright run on the stack, CI job, user docs, quickstart Part B pass, port-conflict and polish of the stack | US1..3 end to end; FR-016..018, SC-001, 002, 006 |
 
-Each milestone ends with a gate-green PR; M3 and M4 depend on M1 and M2 merged.
+Each milestone ends with a gate-green PR; M3 depends on M1; on M2 only for the generated types; M4 on M3.
 
 ## Test strategy
 
 | Requirement | Layer |
 |---|---|
-| diff, ring retention, epoch, classify, origin match, schema current (FR-003, 004, 009, 011) | core unit |
-| upgrade refused for foreign origin before any message; accepted; no-Origin on loopback (FR-004, SC-003) | daemon integration, real listener |
+| diff, ring retention and boundaries (`since(epoch,0)` empty log, `n+1==oldest`), epoch, poller stop/restart, classify, origin match incl. port and `null`, schema current (FR-003, 004, 009, 011) | core unit |
+| upgrade refused for foreign origin and for right host with wrong port before any message (SC-003); accepted; no-Origin on loopback (FR-004, SC-003) | daemon integration, real listener |
 | ping/pong, dead-client release, typed errors, binary refusal, resume exact-once (FR-001..003, 005, 006, 008) | daemon integration |
 | generated files match (FR-010, SC-004) | `scripts/api-types.sh --check` in the gate script and CI; core test for the schema half |
 | client reconnect, backoff, resume, close-code policy (FR-014) | jest with fake Transport and Clock |
-| order parity (FR-012) | Rust writes vectors, jest applies them; both fail on drift |
+| order parity incl. grouping, offline, remove-then-upsert (FR-012) | Rust writes vectors, jest applies them with `order.ts`; both fail on drift |
+| `ReadStructuredEvents` no attach, refuses terminal, works while a desktop holds the project (FR-002, 014b) | daemon integration |
 | i18n completeness (FR-015) | existing catalog tests plus new keys |
 | stack end to end, three browsers, forced reconnect, local origin allowed (FR-018, US3.3) | Playwright |
 | look of connection states, unreachable marker, content view | quickstart Part B visual pass |
