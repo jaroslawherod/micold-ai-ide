@@ -13,7 +13,7 @@
 ## Agent review
 - Diff review (opus, round 1): 1 MAJOR + 4 MINOR, all fixed with tests (sidebar kept applying changes after a resync to a lower seq; connected only once subscribed; visible-while-reconnecting keeps the attempt; retry on a stopped client; local-stack re-checks ports and names the exited process). Round 2 (sonnet) on the fix diff: pending.
 - Review A (code-review, high): run by the orchestrator.
-- Review B (conformance, sonnet): run by the orchestrator.
+- Review: round 1 opus CHANGES (1 major, 4 minor, all fixed), round 2 sonnet CLEAN.
 
 ## Local gate
 Local gate: scoped only, full gate left to CI. `scripts/gate.sh` fmt and clippy (core, workspace) green, then stopped at `cargo nextest` (not installed in the container); no Rust file changed in this PR. `pnpm --filter @micold/client lint typecheck test` (217 tests) and `@micold/protocol typecheck` and its 73 tests green; web export and bundle check green (no mock in the export); `scripts/tests/*.test.sh` green. Not run here: the real daemon end to end and the visual pass (quickstart Part B, M6).
