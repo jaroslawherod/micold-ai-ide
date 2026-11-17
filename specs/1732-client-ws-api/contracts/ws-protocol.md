@@ -30,5 +30,5 @@ and the client reconnects.
 (FR-008). `read_session` on a terminal session: `terminal_not_supported` ("terminal output is not offered on this API").
 
 ## Close codes
-Server closes 1008 on policy (not after upgrade: origin is a 403), 1011 on internal failure; clients treat 1001, 1006,
+Server closes 1008 after 5 consecutive malformed frames (origin is a 403, never a close), 1011 on internal failure; clients treat 1001, 1006,
 1011 as reconnect-and-resume and 1008 as unreachable.

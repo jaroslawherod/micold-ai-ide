@@ -127,12 +127,13 @@ docs/                                             # user guide + config referenc
 
 | ID | Deliverable | Stories / FRs |
 |---|---|---|
-| M1 | First: daemon `ReadStructuredEvents` request (wire change, version bump) with its failing test. Then orchestrator `/api/ws`: types, origin, heartbeat, list, `read_session`, subscribe, feed + resume, LinkDirectory, classification; integration tests | US2 (server), US3; FR-001..008, 011, 014b (server) |
-| M2 | Schema and TS generation, drift check in gate and CI, FR-012 vectors | US4; FR-009, 010, 012 |
-| M3 | Web client on the real API (needs M2 only for the generated types): transport, connection states, backoff, unreachable rows, content view, i18n en+pl, and a minimal `mise run local-stack` so M3 is usable; normal build uses the real API, mock stays for tests and `mise run web` | US1, US2 (client); FR-013..017 |
-| M4 | Three-browser Playwright run on the stack, CI job, user docs, quickstart Part B pass, port-conflict and polish of the stack | US1..3 end to end; FR-016..018, SC-001, 002, 006 |
+| M1 | Daemon `ReadStructuredEvents` request (wire change, version bump) with its failing test | FR-002, 014b (server); R9 |
+| M2 | Orchestrator `/api/ws`: types, origin, heartbeat, list, `read_session`, subscribe, feed + resume, LinkDirectory, classification; integration tests | US2 (server), US3; FR-001..008, 011 |
+| M3 | Schema and TS generation, drift check in gate and CI, FR-012 vectors | US4; FR-009, 010, 012 |
+| M4 | Web client on the real API: transport, connection states, backoff, unreachable rows, content view, i18n en+pl, minimal `mise run local-stack`; normal build uses the real API, mock stays for tests and a new mock-only `mise run client-web-mock` | US1, US2 (client); FR-013..017 |
+| M5 | Three-browser Playwright run on the stack, CI job, user docs, quickstart Part B pass, stack polish | US1..3 end to end; FR-016..018, SC-001, 002, 006 |
 
-Each milestone ends with a gate-green PR; M3 depends on M1; on M2 only for the generated types; M4 on M3.
+Each milestone ends with a gate-green PR; M2 depends on M1; M3 on M2 (wire types); M4 on M2 and M3; M5 on M4.
 
 ## Test strategy
 
