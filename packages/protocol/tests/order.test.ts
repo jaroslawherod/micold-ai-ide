@@ -48,10 +48,10 @@ describe("applyChanges", () => {
     const changes = stateChanges(100, rng(11));
     const snap = applyChanges(buildFixture(), changes);
     expect(rowKeys(snap)).toEqual(rowKeys(buildFixture()));
-    const last = new Map(changes.map((c) => [c.kind === "session-state" ? c.sessionId : "", c]));
-    for (const [id, c] of last) {
-      if (c.kind === "session-state") expect(snap.sessions.find((s) => s.id === id)?.state).toBe(c.state);
-    }
+    const states = changes.flatMap((c) => (c.kind === "session-state" ? [c] : []));
+    expect(states.length).toBeGreaterThan(0);
+    const last = new Map(states.map((c) => [c.sessionId, c.state]));
+    for (const [id, state] of last) expect(snap.sessions.find((s) => s.id === id)?.state).toBe(state);
   });
 
   it("gives the same result for distinct keys whatever their order within a batch", () => {

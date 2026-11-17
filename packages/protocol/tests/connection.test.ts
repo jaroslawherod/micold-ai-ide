@@ -65,6 +65,7 @@ describe("ConnectionManager", () => {
     transport.drop();
     clock.advance(0);
     transport.drop();
+    expect(manager.get()).toEqual({ kind: "reconnecting", attempt: 2 });
     clock.advance(0);
     transport.drop();
     expect(manager.get()).toEqual({ kind: "offline" });

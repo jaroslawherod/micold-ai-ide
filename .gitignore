@@ -57,3 +57,4 @@ apps/client/dist-mock/
 apps/client/coverage/
 apps/client/test-results/
 apps/client/playwright-report/
+apps/client/e2e/screenshots-out/

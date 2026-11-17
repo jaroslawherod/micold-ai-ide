@@ -89,14 +89,15 @@ Paths: `apps/client/` (app), `packages/protocol/` (`@micold/protocol`), `scripts
 
 ## Phase 7: Browser smoke, visual pass, hardening, docs (M4)
 
-- [ ] T054 [P] [US6] TEST FIRST `apps/client/e2e/smoke.spec.ts` (Playwright; Chromium, Firefox, WebKit): sign-in via mock, sidebar, Overview, order-stable change, locale switch and persistence, storage holds no token, keyboard path, 100 ms latency, axe check, no horizontal scroll at 300 px and 200 percent zoom, reduced-motion emulation (FR-018, FR-019, SC-002, SC-006)
-- [ ] T055 [US6] Add `apps/client/playwright.config.ts` (mock build, three browsers), the `client-e2e` task body and the Playwright step in the `client` job (browser cache); make T054 pass
-- [ ] T056 [P] [US5] Playwright pseudo-locale run: 40 percent growth with no clipped indicator (SC-004)
-- [ ] T057 [US3] Playwright screenshot spec: 1280, 800, 390 px in light and dark (6) in Chromium to `apps/client/e2e/screenshots/` (FR-021, SC-003)
-- [ ] T058 [P] [US6] TEST FIRST extend `scripts/tests/bundle-check.test.sh`: a planted terminal-emulator dependency in `pnpm-lock.yaml` or the export fails the check (FR-017, SC-007)
-- [ ] T059 [US6] Harden `scripts/client/bundle-check.mjs` for terminal emulator packages (makes T058 pass)
-- [ ] T060 [US3] Run the visual pass (skill `visual-pass`, quickstart Part B) against the iced app; record the result in `specs/1735-rn-client-scaffold/visual-pass/`
-- [ ] T061 [P] [US6] Write `docs/development/client.md` (layout, tasks, mock switch, protocol package stand-in, how #1732 swaps in) and link it from `docs/SUMMARY.md`
+- [x] T054 [P] [US6] TEST FIRST `apps/client/e2e/smoke.spec.ts` (Playwright; Chromium, Firefox, WebKit): sign-in via mock, sidebar, Overview, order-stable change, locale switch and persistence, storage holds no token, keyboard path, 100 ms latency, axe check, no horizontal scroll at 300 px and 200 percent zoom, reduced-motion emulation (FR-018, FR-019, SC-002, SC-006)
+- [x] T055 [US6] Add `apps/client/playwright.config.ts` (mock build, three browsers), the `client-e2e` task body and the `client-e2e` CI job (own timeout, `ci-complete` needs it, Playwright browser cache keyed on the lockfile); make T054 pass
+- [x] T056 [P] [US5] Playwright pseudo-locale run: 40 percent growth with no clipped indicator (SC-004)
+- [x] T057 [US3] Playwright screenshot spec: 1280, 800, 390 px in light and dark (6) in Chromium to `apps/client/e2e/screenshots/` (FR-021, SC-003)
+- [x] T058 [P] [US6] TEST FIRST extend `scripts/tests/bundle-check.test.sh`: a planted terminal-emulator dependency in `pnpm-lock.yaml` or the export fails the check (FR-017, SC-007)
+- [x] T059 [US6] Harden `scripts/client/bundle-check.mjs` for terminal emulator packages (makes T058 pass)
+- [x] T060 [US3] Run the visual pass (skill `visual-pass`, quickstart Part B) against the spec (FR-011, FR-021, SC-003); record the result in `specs/1735-rn-client-scaffold/visual-pass/`
+- [ ] T060a [US3] Follow-up, deferred: side-by-side comparison of the web client with the iced app's Overview and sidebar (needs a desktop session; the iced app is being sunset, 2026-11-15)
+- [x] T061 [P] [US6] Write `docs/development/client.md` (layout, tasks, mock switch, protocol package stand-in, how #1732 swaps in) and link it from `docs/SUMMARY.md`
 - [ ] T062 [US6] Confirm SC-005 (client job under 10 minutes) and SC-009 (diff coverage at least 80 percent) from the CI run; record in the PR
 
 ## Dependencies
@@ -146,3 +147,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run client-e2e`; `node scripts/client/bundle-check.mjs apps/client/dist`; `specs/1735-rn-client-scaffold/visual-pass/`
 - **Depends on**: M3
 - **Tier**: full
+
+## Phase 8: TDD remediation
+
+The TDD verification (`tdd/verification.md`) is FAIL on squashed history. T063-T064 are fixed; T062, T065-T069 and T060a are follow-ups (closing accepted per the squashed-history pattern).
+
+- [x] T063 [US1] Finding 1: in `packages/protocol/tests/connection.test.ts:62` assert `{ kind: "reconnecting", attempt: 2 }` after the `maxAttempts`-th drop and `offline` only after the next; prove by mutating `ConnectionManager.ts:132` `>` to `>=` (test fails), restore, `pnpm --dir apps/client test` green
+- [x] T064 [US2] Finding 2: remove the `if (c.kind === "session-state")` in `packages/protocol/tests/order.test.ts:53` (filter the map to session-state changes first and assert unconditionally); `pnpm --dir apps/client test` green
+- [ ] T065 [US6] Finding 3: add `## M4` to `tdd/cycle-log.md` with a recorded red for T054, T056, T058 (and a bundle-check red for T058 via `scripts/tests/bundle-check.test.sh` against the pre-hardening script), and record that T045 landed green and was shown to bite; `grep -c "T058" specs/1735-rn-client-scaffold/tdd/cycle-log.md` is 1 or more
+- [ ] T066 [US2] Finding 4: replace the wall-clock assertion in `apps/client/tests/sidebar/latency.test.tsx:85` with a render-count or fake-timer check, leaving the 100 ms bound to the Playwright spec; `pnpm --dir apps/client test` green
+- [ ] T067 [US1] Finding 5: drop the source-grep test at `apps/client/tests/auth/sessionStore.test.ts:44`, relying on the behavioral test at line 12
+- [ ] T068 [US6] Finding 7: run `/speckit-tdd-setup` for the pnpm/Jest stack (command, exemplar, helpers `apps/client/tests/support/renderWithApi.tsx`, `packages/protocol/tests/fakes.ts`) and `/speckit-tdd-plan` to create `tdd/test-list.md`; re-run `/speckit-tdd-verify`
+- [ ] T069 [US4] Finding 6: rename or complete the test at `apps/client/tests/app/layout.test.tsx:56` so its name matches what it asserts
+
