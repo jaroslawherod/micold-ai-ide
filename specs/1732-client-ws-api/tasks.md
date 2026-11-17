@@ -44,7 +44,7 @@ Format: `- [ ] T### [P?] [US?] description with file path`. [P] = different file
 - [ ] T018 Failing test first in `ws_listener.rs`: `--api-addr` enables the listener, its absence binds nothing. Then wire the listener into the orchestrator startup (`crates/micold-daemon/src/orchestrator/mod.rs` or the entry point, grep for the existing http hook startup) behind `--api-addr`; keep the hand-rolled `http.rs` for the two loopback hooks.
 - [ ] T019 [P] `docs/` config reference for `--api-addr`, `--allow-origin`, `MICOLD_ORCHESTRATOR_*` (Constitution VII; the user-guide gate fires on `feat`).
 
-**Checkpoint (M1)**: `ws_*` integration tests pass against a real listener.
+**Checkpoint (M2)**: `ws_*` integration tests pass against a real listener.
 
 ## Phase 4: User Story 4 - generated schema and types, drift gate (Priority P2)
 
@@ -59,11 +59,11 @@ Format: `- [ ] T### [P?] [US?] description with file path`. [P] = different file
 - [ ] T025 [US4] (after T024, reads its vectors file) Jest `packages/protocol/tests/order-vectors.test.ts`: apply the vectors with `applyChanges` in `packages/protocol/src/order.ts` and assert the same order; extend `order.ts` (`applyChanges`, `resync` replace) as needed (write the test first, FR-012).
 - [ ] T026 [P] [US4] `docs/` developer note on `scripts/api-types.sh` and the drift check.
 
-**Checkpoint (M2)**: drift check green in gate and CI; vectors agree.
+**Checkpoint (M3)**: drift check green in gate and CI; vectors agree.
 
 ## Phase 5: User Story 1 (client) and User Story 2 (client) - web client on the real API (Priority P1)
 
-**Goal**: the web client lists real daemons and sessions and survives drops. Needs M1 (server) and M2 (generated types).
+**Goal**: the web client lists real daemons and sessions and survives drops. Needs M2 (server) and M3 (generated types).
 **Independent test**: `mise run local-stack`, open `http://127.0.0.1:8731`; `mise run client-test` for the jest layer.
 
 ### Tests first
@@ -80,10 +80,10 @@ Format: `- [ ] T### [P?] [US?] description with file path`. [P] = different file
 - [ ] T033 [P] [US1] `apps/client/src/i18n/{en,pl}.json`: groups `connection.*` (connecting, connected, reconnecting with attempt, unreachable title and body, retry), `session.unreachable`, `session.refresh`, `session.content.{empty,failed,truncated}`, `error.*` one per ErrorCode; the client maps `code` to a key and never shows the server `message`.
 - [ ] T034 [US1] `apps/client/src/features/{session,connection}/`: content view (snapshot read on open, translated refresh, reuse shared primitives and `ConnectionBanner`, anything new in the shared component folder with typed props, Constitution VIII), unreachable marker on session rows.
 - [ ] T035 [US1] Select `RealOrchestratorApi` in normal builds; keep the mock for tests and a new explicit mock-only `mise run client-web-mock` dev task (no `web` task exists on main; `client-web` is the static export), selected by `EXPO_PUBLIC_API_MODE=mock` in `apps/client` and `mise.toml` (FR-013).
-- [ ] T036 [US1] `scripts/local-stack.sh` and `mise.toml` task `local-stack` (minimal, so M3 is usable): private data dir, web export with the URL, orchestrator (`--api-addr 127.0.0.1:8730 --allow-origin http://127.0.0.1:8731 --allow-origin http://localhost:8731`), a daemon dialling it (`[orchestrator_link]`, #1725) on a seeded catalog (a project, a worktree, two sessions), `e2e/serve.mjs` for the export, `wait` with a `trap` stopping all three (FR-017, R11, R12); `scripts/tests/local-stack.test.sh`.
+- [ ] T036 [US1] `scripts/local-stack.sh` and `mise.toml` task `local-stack` (minimal, so M4 is usable): private data dir, web export with the URL, orchestrator (`--api-addr 127.0.0.1:8730 --allow-origin http://127.0.0.1:8731 --allow-origin http://localhost:8731`), a daemon dialling it (`[orchestrator_link]`, #1725) on a seeded catalog (a project, a worktree, two sessions), `e2e/serve.mjs` for the export, `wait` with a `trap` stopping all three (FR-017, R11, R12); `scripts/tests/local-stack.test.sh`.
 - [ ] T037 [P] [US1] User guide page for the web client and local stack in `docs/` (Constitution VII; the user-guide gate needs it in this `feat` PR).
 
-**Checkpoint (M3)**: `mise run local-stack` shows real daemons and sessions; jest green.
+**Checkpoint (M4)**: `mise run local-stack` shows real daemons and sessions; jest green.
 
 ## Phase 6: End to end, docs, polish (Priority P1/P2)
 
@@ -100,13 +100,13 @@ Parallel: T005-T009 and T011 after T001; T012-T015 together; T020, T024, T026 (T
 
 ## Implementation Strategy
 
-MVP is the working web client (M3) on top of the server (M1) and generated types (M2); M4 proves it across three browsers and polishes the stack. Each milestone ends gate-green and merges alone. TDD: every code task above is preceded by its failing test.
+MVP is the working web client (M4) on top of the server (M2) and generated types (M3); M5 proves it across three browsers and polishes the stack. Each milestone ends gate-green and merges alone. TDD: every code task above is preceded by its failing test.
 
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
-### M1 — Daemon read-only structured-events request 🎯 MVP
+### M1 — Daemon read-only structured-events request
 
 - **Tasks**: T003–T004
 - **Deliverable**: a daemon answers `ClientMsg::ReadStructuredEvents` with a session's non-live history without attaching or locking, even while a desktop holds the project; `PROTOCOL_VERSION` is bumped and documented.
@@ -133,7 +133,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M2 (the wire types of T005 live in M2's `client_api`)
 - **Tier**: full
 
-### M4 — Web client on the real API
+### M4 — Web client on the real API 🎯 MVP
 
 - **Tasks**: T027–T037
 - **Deliverable**: `mise run local-stack` starts orchestrator, a seeded daemon and the web client; the client lists real daemons and sessions, shows connection states, reconnects with backoff and resume, marks unreachable sessions, opens session content, in English and Polish.

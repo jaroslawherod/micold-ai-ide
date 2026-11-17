@@ -76,7 +76,7 @@ orchestrator opens a conversation as `list::ask` does, sends `Hello` then the re
 ends the conversation. A terminal session answers `terminal_not_supported`; a daemon refusal maps to `not_found`.
 Rejected: (b) attach-then-detach (ProjectBusy, blocks the desktop); (c) reading the daemon's event files directly (the
 orchestrator has no filesystem access to remote daemons).
-**This is the first task of M1**: a failing daemon integration test (`tests/orchestrator/ws_read_session.rs` plus a daemon
+**This is the first task of M1**: a failing daemon integration test (`tests/orchestrator/read_structured_events.rs` plus a daemon
 test for the new request) lands before the API types freeze, so a refusal or an unexpected cost surfaces first.
 
 ## R10 FR-012: the orchestrator sends the order computed

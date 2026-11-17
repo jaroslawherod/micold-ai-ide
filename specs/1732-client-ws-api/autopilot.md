@@ -51,6 +51,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 | plan review | 1 | plan.md, research.md, data-model.md, contracts/, quickstart.md | a2b09676c | 1ed86d9eaafae9191caee6e33c48dc05f136a0a6:a2b09676c384b84c5601274c6aaafd1a91208141 | NOT RUN by the plan unit |
 | plan review | 2 (sonnet, fix diff) | same | a4609c73c | - | CLEAN (recorded by the tasks unit from the orchestrator's report) |
+| tasks review | 2 (sonnet) | fix diff | see commit | - | CHANGES: 2 text-only (stale M-numbers after renumbering, one filename); fixed, prose only, no round 3 |
 | tasks review | 1 (opus, orchestrator) | tasks.md | see commit | - | CHANGES: 5 MAJOR (T025 dep, shared main.rs, SC-006 client test, `mise run web` missing -> new client-web-mock task, M1 split into M1+M2, renumbered to 5), 3 MINOR; all fixed; behaviour-bearing, round 2 due |
 | plan review | 1 (opus, run by the orchestrator) | same | see commit | - | CHANGES: 2 HIGH, 3 MED, 3 LOW; all fixed (read_session via new daemon ReadStructuredEvents, early M1 test; poller restart and boundaries; origin port/null; FR-012 vectors cover grouping; i18n key groups; local-stack moved into M3; subscribed/offline notes); behaviour-bearing, round 2 re-review (sonnet) due |
 
