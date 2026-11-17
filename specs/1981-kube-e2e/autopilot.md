@@ -68,7 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T031-T032) built, scoped checks green (e2e-kind.test.sh 39 cases, clippy/test/fmt -p micold-e2e); full gate left to CI. Review snapshot: see the commit this ledger lands in (`git log -1`). Placeholders: PLACEHOLDERS in scripts/e2e-kind.sh skip network (#1732) and ui (#1954) without a cargo run. Next: orchestrator dispatches reviews A and B on origin/main...HEAD, then the PR.
+M5 merged as 0b0c74a23 (PR #2023, 2026-11-17). Review A r1 (sonnet): 4 MINOR, doc path fixed; left: placeholders-subset-of-known-suites assertion, MICOLD_E2E_WEB_URL is a planned contract. CI green first round.
+Next: close unit (`/speckit-autopilot resume` in a fresh thread). Units have no Agent tool in cloud: the orchestrator dispatches reviews.
 
 ## Open escalation
 
