@@ -19,7 +19,7 @@ The script:
 1. deletes any cluster with the same name, then creates `micold-e2e`;
 2. builds `Dockerfile.orchestrator` as `ghcr.io/jaroslawherod/micold-orchestrator:e2e` and
    loads it into the cluster with `kind load docker-image`;
-3. installs the chart `deploy/helm/micold` with `ci/e2e.yaml` and `--wait`, into namespace
+3. installs the chart `deploy/helm/micold` with `deploy/helm/micold/ci/e2e.yaml` and `--wait`, into namespace
    `micold-e2e`;
 4. runs `cargo test -p micold-e2e --test <suite>` once per suite, in the order `ops`, `restart`,
    `link` (`restart` expects an empty registry, so it goes before the suites that register
@@ -36,7 +36,7 @@ The script:
 8. deletes the cluster.
 
 The `link` and `restart` suites reach the orchestrator's link socket through the chart's test
-daemon (`testDaemon.enabled`, set by `ci/e2e.yaml`): a second container, same image, running
+daemon (`testDaemon.enabled`, set by `deploy/helm/micold/ci/e2e.yaml`): a second container, same image, running
 `micold-daemon e2e-link idle`. The suites `kubectl exec` `e2e-link register --name N [--hold]` and
 `e2e-link list` into it; no other path to the socket exists.
 
@@ -82,6 +82,19 @@ let Some(cluster) = micold_e2e::env::cluster_or_skip("<suite>::<test>") else { r
 
 Use `cluster.exec(...)`, `cluster.port_forward(...)` and `cluster.kubectl(...)` from
 `micold_e2e::cluster`. Do not call `kubectl` directly.
+
+### Placeholder suites: `network` and `ui`
+
+`network` (blocked on #1732) and `ui` (blocked on #1954) exist as placeholders. The harness lists
+them as `suite <name>: skipped, blocked on #<issue>` and runs no cargo test for them; run directly,
+their one test prints the same skip reason. To make one real, in its own directory plus the
+harness list only:
+
+1. Remove its entry from `PLACEHOLDERS` in `scripts/e2e-kind.sh`.
+2. `network`: replace `crates/micold-e2e/tests/network/main.rs` with tests that start with the
+   gate above. `ui`: add the Playwright project in `e2e/ui/` (see its README) and have the suite
+   run it with the web URL from the harness.
+3. Set any chart values the suite needs (for `ui`, `web.enabled=true`) in `deploy/helm/micold/ci/e2e.yaml`.
 
 ## Debugging
 

@@ -31,6 +31,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHART="$ROOT/deploy/helm/micold"
 KNOWN_SUITES="ops restart link refusal network ui"
+# Placeholder suites: name:blocking issue. Listed as skipped, no cargo test run (FR-013).
+PLACEHOLDERS="network:#1732 ui:#1954"
 BREAKAGES="command user volume dataDir opsPort"
 IMAGE_REPO=ghcr.io/jaroslawherod/micold-orchestrator
 IMAGE_TAG=e2e
@@ -117,6 +119,9 @@ install_chart() {
 
 # run_suite <suite>: the suite's test target against the current release.
 run_suite() {
+  for p in $PLACEHOLDERS; do
+    [ "${p%%:*}" = "$1" ] && { say "suite $1: skipped, blocked on ${p#*:}"; return 0; }
+  done
   say "suite $1"
   MICOLD_E2E=1 MICOLD_E2E_REQUIRED=1 MICOLD_E2E_NAMESPACE="$ns" MICOLD_E2E_CONTEXT="kind-$cluster" \
     "$ROOT/scripts/build-lock.sh" cargo test -p micold-e2e --test "$1" -- --test-threads=1

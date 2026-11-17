@@ -52,8 +52,8 @@ Stories: US1 chart, US2 harness, US3 API e2e suite, US4 extensible suites.
 
 ## Phase 5: Network API and UI slots (M5)
 
-- [ ] T031 [P] [US4] Placeholder suites `crates/micold-e2e/tests/network/main.rs` and `tests/ui/main.rs`: tests that skip printing "blocked on #1732" / "blocked on #1954"; `e2e/ui/README.md` for the future Playwright suite with base URL from the harness. FR-013.
-- [ ] T032 [US4] Test first: shell test that a new suite name in `MICOLD_E2E_SUITES` selects only it, every listed suite is a cargo test target (`tests/<suite>/main.rs`), and a placeholder is listed as skipped (extend `e2e-kind.test.sh`); adjust the harness suite list; add "adding a suite" steps for network and ui to `docs/development/kube-e2e.md`. SC-005.
+- [x] T031 [P] [US4] Placeholder suites `crates/micold-e2e/tests/network/main.rs` and `tests/ui/main.rs`: tests that skip printing "blocked on #1732" / "blocked on #1954"; `e2e/ui/README.md` for the future Playwright suite with base URL from the harness. FR-013.
+- [x] T032 [US4] Test first: shell test that a new suite name in `MICOLD_E2E_SUITES` selects only it, every listed suite is a cargo test target (`tests/<suite>/main.rs`), and a placeholder is listed as skipped (extend `e2e-kind.test.sh`); adjust the harness suite list; add "adding a suite" steps for network and ui to `docs/development/kube-e2e.md`. SC-005.
 
 ## Dependencies
 
