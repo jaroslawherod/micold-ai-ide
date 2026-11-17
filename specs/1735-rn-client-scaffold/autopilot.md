@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1735
-- **Worktree branch**: claude/project-thread-9il8pd
+- **Worktree branch**: claude/project-thread-kk2qlw
 - **Started**: 2026-11-16
-- **Phase**: M4 implemented, review ready
-- **Next step**: orchestrator runs Review A and B on M4 (origin/main...HEAD), then PR; T062 (SC-005, SC-009) is confirmed from that PR's CI run
+- **Phase**: close PR #2022 open; T060a, T062, T065-T069 are follow-ups
+- **Next step**: merge #2022 on green `ci complete`, then handoff
 
 ## Pull requests
 
@@ -19,9 +19,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #2009 | Design: spec, plan, tasks | merged | f6cdbed6c06b5cefb34b4b5cac8a64b0af6f44ff |
 | #2015 | M2 | merged | b863fd3393735e9d0ae6a4ac38299e31f30a5855 |
-| (M3) | M3: body in `pr-M3.md` | not opened | - |
+| #2020 | M4 | merged | 630fe595eff4a02f0eed3f1b813debff1b84fac0 |
 | #2018 | M3 | merged | dfd448cec7c5e1f317fc8092407381dc2ed11859 |
 | #2013 | M1 workspace, CI, theme, i18n, spike | merged | 18aadedf61d2a5c3d512447f30e3a9f33eb12262 |
+| close PR | Close: spec closed, TDD audit, T063-T064 | open | - |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | #2013 | merged |
 | M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | #2015 | merged |
-| M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | implemented |
-| M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | implemented (T054–T061), T062 waits on CI |
+| M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | #2018 | merged |
+| M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | #2020 | merged |
 
 ## Decisions
 
@@ -85,7 +86,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 (prev #2018, dfd448cec7c5e1f317fc8092407381dc2ed11859) implemented on claude/project-thread-9il8pd: T054–T061 done, T062 open until the PR's CI run. Playwright ran locally only in Chromium via installed Chrome (17/17); Firefox/WebKit downloads are blocked in the cloud, so CI is their first run. Fixed for axe: LocalePicker `aria-checked`, focusable Overview ScrollView. Visual pass recorded with F1 open (Working glyph sliver) and the iced comparison outstanding. Round-1 review fixes applied; next: round-2 review of the fix diff, then PR (body in pr-M4.md).
+None.
 
 ## Open escalation
 
@@ -99,3 +100,6 @@ None.
 - T020 wording is for the web client only; the desktop `appearance-theming.md` sections are untouched.
 - M2 local gate (also on 3f48434a4): `scripts/gate.sh` passed fmt and clippy, then stopped at `cargo nextest` (not installed in the cloud container; installing it was refused). No Rust changed; every `scripts/tests/*.test.sh` passes by hand, Jest 127/127, diff coverage 99.3%, lint and typechecks clean. The full gate is left to CI.
 - #1732 and #1733 not built: the mock must be swapped for the real client and generated types (constitution V) in a follow-up once they land.
+- Close: speckit-tdd-verify FAIL (tdd/verification.md) mainly because squashed history cannot prove test-first and there is no tdd/test-list.md. T063 (maxAttempts boundary mutant, now killed) and T064 (conditional assertion) fixed in the close PR; T065-T069 left open as follow-ups (M4 cycle-log reds, wall-clock latency test, source-grep test, tdd-setup/test-list for the pnpm stack, layout test name). Closing on jaro's accepted pattern.
+- T062 (SC-005, SC-009 from CI) open; client-e2e node pin not covered by client-pins.test.sh.
+- Close (cloud): no fresh-context review subagent available; diff is two test hardenings plus docs. Rust gate left to CI (no Rust changed).
