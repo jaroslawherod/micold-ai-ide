@@ -1,0 +1,5 @@
+# Layered over ci/e2e.yaml by the harness's refusal step (US3-4): an init container plants an
+# invalid orchestrator/registry.json, so the orchestrator must refuse to start and never be Ready.
+testing:
+  corruptRegistry:
+    enabled: true

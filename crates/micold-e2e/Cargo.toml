@@ -13,6 +13,22 @@ autotests = false
 [lib]
 path = "src/lib.rs"
 
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
 [[test]]
 name = "ops"
 path = "tests/ops/main.rs"
+
+[[test]]
+name = "link"
+path = "tests/link/main.rs"
+
+[[test]]
+name = "restart"
+path = "tests/restart/main.rs"
+
+[[test]]
+name = "refusal"
+path = "tests/refusal/main.rs"

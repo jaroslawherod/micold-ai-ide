@@ -15,6 +15,8 @@ pub mod config_check;
 pub mod config_load;
 pub mod config_watch;
 pub mod credential_config;
+/// The kind e2e suites' test daemon: `e2e-link idle | register | list` (#1981).
+pub mod e2e_link;
 /// Tailing a provider's own append-only event log for busy/idle evidence (feature 026, T064).
 pub mod event_log;
 pub mod framer;

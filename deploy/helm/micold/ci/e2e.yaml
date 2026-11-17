@@ -5,3 +5,6 @@ image:
   pullPolicy: Never
 ops:
   enabled: true
+# The test daemon sidecar (FR-011): the suites exec `e2e-link` verbs into it.
+testDaemon:
+  enabled: true

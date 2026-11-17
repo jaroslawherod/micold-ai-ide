@@ -27,17 +27,45 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         {{- include "micold.podSecurityContext" . | nindent 8 }}
+      {{- if .Values.testing.corruptRegistry.enabled }}
+      initContainers:
+        # US3-4: plant an invalid registry so the orchestrator must refuse to start. Test-only.
+        - name: corrupt-registry
+          image: docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - mkdir -p /var/lib/micold/orchestrator && echo 'this is not json' > /var/lib/micold/orchestrator/registry.json
+          securityContext:
+            {{- include "micold.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/micold
+      {{- end }}
       containers:
         - name: orchestrator
           image: {{ include "micold.image" (list . .Values.image) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if eq .Values.testing.breakage "command" }}
+          command: ["/nonexistent-micold-daemon"]
+          {{- else }}
           command: ["/micold-daemon"]
+          {{- end }}
           args:
             - orchestrator
+            {{- if eq .Values.testing.breakage "dataDir" }}
+            - --data-dir=/nonexistent/micold
+            {{- else }}
             - --data-dir=/var/lib/micold
+            {{- end }}
             - --socket=/run/micold/orchestrator.sock
             {{- if .Values.ops.enabled }}
+            {{- if eq .Values.testing.breakage "opsPort" }}
+            - --ops-addr=0.0.0.0:{{ add .Values.ops.port 1 }}
+            {{- else }}
             - --ops-addr=0.0.0.0:{{ .Values.ops.port }}
+            {{- end }}
             {{- end }}
           {{- if .Values.ops.enabled }}
           ports:
@@ -76,9 +104,24 @@ spec:
               mountPath: /run/micold
             - name: tmp
               mountPath: /tmp
+        {{- if .Values.testDaemon.enabled }}
+        # FR-011: the test daemon. The same image, so no second image to build; it only idles, and
+        # the suites `kubectl exec` e2e-link verbs into it against the shared socket.
+        - name: test-daemon
+          image: {{ include "micold.image" (list . .Values.image) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/micold-daemon", "e2e-link", "idle"]
+          securityContext:
+            {{- include "micold.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: run
+              mountPath: /run/micold
+            - name: tmp
+              mountPath: /tmp
+        {{- end }}
       volumes:
         - name: data
-          {{- if .Values.state.persistence.enabled }}
+          {{- if include "micold.persistent" . }}
           persistentVolumeClaim:
             claimName: {{ include "micold.fullname" . }}-data
           {{- else }}

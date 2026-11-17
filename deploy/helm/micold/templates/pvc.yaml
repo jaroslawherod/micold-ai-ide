@@ -1,4 +1,4 @@
-{{- if .Values.state.persistence.enabled }}
+{{- if include "micold.persistent" . }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
