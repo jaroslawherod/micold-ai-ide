@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use micold_daemon::catalog::Catalog;
+use micold_daemon::orchestrator::directory::LinkDirectory;
 use serde_json::{json, Value};
 
 use crate::ws_support::{fast, serve, Api, Scripted, Ws, ALLOWED};
@@ -203,4 +204,60 @@ async fn a_daemon_linking_appears_within_two_seconds() {
         changes.iter().any(|c| c["entity"]["value"]["id"] == "late"),
         "{changes:?}"
     );
+}
+
+/// [`Scripted`], with a read that takes 600 ms, so the connection stops reading the feed.
+struct SlowRead(Arc<Scripted>);
+
+impl LinkDirectory for SlowRead {
+    fn list(
+        &self,
+    ) -> futures_util::future::BoxFuture<'_, micold_core::client_api::messages::Snapshot> {
+        self.0.list()
+    }
+
+    fn read_session<'a>(
+        &'a self,
+        _: &'a str,
+        _: &'a str,
+        _: &'a str,
+    ) -> futures_util::future::BoxFuture<
+        'a,
+        Result<
+            Vec<micold_core::client_api::messages::ContentEntry>,
+            micold_daemon::orchestrator::directory::ApiError,
+        >,
+    > {
+        use futures_util::FutureExt;
+        async {
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            Ok(Vec::new())
+        }
+        .boxed()
+    }
+
+    fn changed(&self) -> futures_util::future::BoxFuture<'_, ()> {
+        self.0.changed()
+    }
+}
+
+#[tokio::test]
+async fn a_subscriber_that_falls_behind_reads_the_missed_changes_from_the_log() {
+    let scripted = Arc::new(Scripted::default());
+    let options = micold_daemon::orchestrator::ws::ApiOptions {
+        backlog: 1,
+        ..fast()
+    };
+    let addr = serve(Arc::new(SlowRead(scripted.clone())), options).await;
+    let mut ws = Ws::connect(addr, Some(ALLOWED)).await.unwrap();
+    let seq = ws.ask(subscribe(1, None)).await["seq"].as_u64().unwrap();
+    ws.send(json!({"id":2,"type":"read_session","daemon":"d","project":"p","session":"s"}))
+        .await;
+    for n in 0..4 {
+        scripted.add_daemon(&format!("d{n}"));
+        tokio::time::sleep(Duration::from_millis(120)).await;
+    }
+    let got = read_n(&mut ws, 4).await;
+    let expected: Vec<(u64, String)> = (0..4).map(|n| (seq + 1 + n, format!("d{n}"))).collect();
+    assert_eq!(got, expected);
 }

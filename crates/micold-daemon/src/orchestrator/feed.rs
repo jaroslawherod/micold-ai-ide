@@ -19,13 +19,16 @@ use super::directory::LinkDirectory;
 pub const POLL: Duration = Duration::from_secs(1);
 
 /// The batches a subscriber may fall behind before it reads the log instead.
-const BACKLOG: usize = 256;
+pub const BACKLOG: usize = 256;
 
 /// The feed.
 pub struct Feed {
     directory: Arc<dyn LinkDirectory>,
     poll: Duration,
     inner: Mutex<Inner>,
+    /// Held for a whole pass, so passes finish in the order they list and an older list never
+    /// replaces a newer snapshot.
+    passing: tokio::sync::Mutex<()>,
     batches: broadcast::Sender<Vec<Change>>,
 }
 
@@ -70,8 +73,9 @@ fn random_epoch() -> u64 {
 }
 
 impl Feed {
-    /// A feed over `directory`, polling every `poll` while subscribed.
-    pub fn new(directory: Arc<dyn LinkDirectory>, poll: Duration) -> Arc<Self> {
+    /// A feed over `directory`, polling every `poll` while subscribed; a subscriber may fall
+    /// `backlog` batches behind before it reads the log.
+    pub fn new(directory: Arc<dyn LinkDirectory>, poll: Duration, backlog: usize) -> Arc<Self> {
         Arc::new(Self {
             directory,
             poll,
@@ -81,7 +85,8 @@ impl Feed {
                 subscribers: 0,
                 polling: false,
             }),
-            batches: broadcast::channel(BACKLOG).0,
+            passing: tokio::sync::Mutex::new(()),
+            batches: broadcast::channel(backlog.max(1)).0,
         })
     }
 
@@ -109,7 +114,12 @@ impl Feed {
 
     /// Subscribe from `since`, or from a fresh snapshot.
     pub async fn subscribe(self: &Arc<Self>, since: Option<Position>) -> Subscribed {
-        if since.is_none() && self.lock().snapshot.is_none() {
+        // A stopped poller's snapshot may be stale: list first.
+        let stale = {
+            let inner = self.lock();
+            inner.snapshot.is_none() || !inner.polling
+        };
+        if since.is_none() && stale {
             self.pass().await;
         }
         let mut inner = self.lock();
@@ -148,6 +158,7 @@ impl Feed {
 
     /// List once, and append and broadcast what changed since the last list.
     async fn pass(&self) {
+        let _passing = self.passing.lock().await;
         let new = self.directory.list().await;
         let mut inner = self.lock();
         if let Some(old) = &inner.snapshot {
@@ -176,5 +187,70 @@ impl Feed {
                 () = self.directory.changed() => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use futures_util::future::{BoxFuture, FutureExt};
+    use micold_core::client_api::messages::{ContentEntry, Daemon, DaemonStatus};
+
+    use super::super::directory::ApiError;
+    use super::*;
+
+    /// Lists `old` slowly the first time and `new` at once after.
+    #[derive(Default)]
+    struct SlowFirst(AtomicUsize);
+
+    fn snapshot(id: &str) -> Snapshot {
+        Snapshot {
+            daemons: vec![Daemon {
+                id: id.to_owned(),
+                name: id.to_owned(),
+                status: DaemonStatus::Online,
+            }],
+            ..Snapshot::default()
+        }
+    }
+
+    impl LinkDirectory for SlowFirst {
+        fn list(&self) -> BoxFuture<'_, Snapshot> {
+            let first = self.0.fetch_add(1, Ordering::SeqCst) == 0;
+            async move {
+                if first {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    snapshot("old")
+                } else {
+                    snapshot("new")
+                }
+            }
+            .boxed()
+        }
+
+        fn read_session<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+            _: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<ContentEntry>, ApiError>> {
+            async { Ok(Vec::new()) }.boxed()
+        }
+
+        fn changed(&self) -> BoxFuture<'_, ()> {
+            std::future::pending().boxed()
+        }
+    }
+
+    #[tokio::test]
+    async fn concurrent_passes_never_replace_a_newer_list_with_an_older_one() {
+        let feed = Feed::new(Arc::new(SlowFirst::default()), POLL, BACKLOG);
+        tokio::join!(feed.pass(), async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            feed.pass().await;
+        });
+        let snapshot = feed.lock().snapshot.clone().unwrap();
+        assert_eq!(snapshot.daemons[0].id, "new");
     }
 }

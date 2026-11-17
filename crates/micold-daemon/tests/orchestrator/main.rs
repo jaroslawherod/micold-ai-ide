@@ -36,6 +36,7 @@ mod store_slow;
 mod store_sql_errors;
 mod store_suite;
 mod version_mismatch;
+mod ws_admission;
 mod ws_listener;
 mod ws_liveness;
 mod ws_origin;

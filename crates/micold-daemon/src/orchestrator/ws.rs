@@ -31,7 +31,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
 use super::directory::LinkDirectory;
-use super::feed::{Feed, Subscribed, Subscription, POLL};
+use super::feed::{Feed, Subscribed, Subscription, BACKLOG, POLL};
 
 /// The only path served.
 pub const PATH: &str = "/api/ws";
@@ -39,6 +39,10 @@ pub const PATH: &str = "/api/ws";
 pub const IDLE: Duration = Duration::from_secs(40);
 /// Malformed frames in a row that close the connection with 1008.
 pub const MALFORMED_LIMIT: u32 = 5;
+/// How long a connection may take to finish its upgrade before it is dropped.
+pub const HANDSHAKE: Duration = Duration::from_secs(10);
+/// Sockets served at once, upgrading or open; a connection beyond them is dropped at accept.
+pub const MAX_SOCKETS: usize = 256;
 
 /// The listener's timings; tests shorten them.
 #[derive(Debug, Clone, Copy)]
@@ -47,6 +51,12 @@ pub struct ApiOptions {
     pub idle: Duration,
     /// How often the feed lists while subscribed.
     pub poll: Duration,
+    /// How long an upgrade may take.
+    pub handshake: Duration,
+    /// Sockets served at once.
+    pub max_sockets: usize,
+    /// Batches a subscriber may fall behind before it reads the feed's log instead.
+    pub backlog: usize,
 }
 
 impl Default for ApiOptions {
@@ -54,6 +64,9 @@ impl Default for ApiOptions {
         Self {
             idle: IDLE,
             poll: POLL,
+            handshake: HANDSHAKE,
+            max_sockets: MAX_SOCKETS,
+            backlog: BACKLOG,
         }
     }
 }
@@ -67,7 +80,8 @@ pub async fn serve(
     options: ApiOptions,
 ) -> io::Result<()> {
     let allow = Arc::new(allow);
-    let feed = Feed::new(Arc::clone(&directory), options.poll);
+    let feed = Feed::new(Arc::clone(&directory), options.poll, options.backlog);
+    let slots = Arc::new(tokio::sync::Semaphore::new(options.max_sockets));
     let mut sockets = tokio::task::JoinSet::new();
     loop {
         while sockets.try_join_next().is_some() {}
@@ -79,15 +93,23 @@ pub async fn serve(
                 continue;
             }
         };
+        let Ok(slot) = Arc::clone(&slots).try_acquire_owned() else {
+            tracing::warn!(peer = %peer, "client API at its socket limit; connection dropped");
+            continue;
+        };
         let connection = Connection {
             directory: Arc::clone(&directory),
             feed: Arc::clone(&feed),
             idle: options.idle,
         };
         let allow = Arc::clone(&allow);
+        let handshake = options.handshake;
         sockets.spawn(async move {
-            if let Some(socket) = upgrade(stream, peer, &allow).await {
-                connection.run(socket).await;
+            let _slot = slot;
+            match tokio::time::timeout(handshake, upgrade(stream, peer, &allow)).await {
+                Ok(Some(socket)) => connection.run(socket).await,
+                Ok(None) => {}
+                Err(_) => tracing::debug!(peer = %peer, "client API upgrade timed out"),
             }
         });
     }
@@ -161,8 +183,7 @@ impl Connection {
                 code,
                 reason: reason.into(),
             };
-            let _ = socket.send(Message::Close(Some(frame))).await;
-            let _ = socket.close(None).await;
+            let _ = socket.close(Some(frame)).await;
         }
     }
 
