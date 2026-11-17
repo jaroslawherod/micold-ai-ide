@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T023 | full | themed app, client-test/client-web, CI job, i18n core, spike recorded | #2013 | merged |
 | M2 | T024–T039 | full | protocol package, mock, reconnect, sign-in, mock-free prod export | #2015 | merged |
 | M3 | T040–T053 | full | sidebar and Overview in stable order, stale marking, user guide | - | implemented |
-| M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | - | implemented (T054–T061), T062 waits on CI |
+| M4 | T054–T062 | full | Playwright 3 browsers, screenshots, visual pass, bundle hardening, docs | #2020 | merged |
 
 ## Decisions
 
