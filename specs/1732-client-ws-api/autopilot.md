@@ -20,13 +20,13 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #2032 | Design PR (spec, plan, tasks) | merged | fbfa8360e |
-| M1 | Daemon ReadStructuredEvents (PR number set by the orchestrator) | open | - |
+| #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | #2033 | in review |
+| M1 | T003–T004 | full | daemon ReadStructuredEvents (wire change) | #2033 | merged |
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | - | pending |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | - | pending |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | - | pending |
