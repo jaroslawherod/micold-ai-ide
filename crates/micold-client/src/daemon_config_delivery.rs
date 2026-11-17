@@ -208,6 +208,11 @@ pub fn deliver_host(settings: &DaemonSettings, data_dir: &Path) -> io::Result<bo
 /// `git_config` is the sanitized git configuration ([`micold_core::scoped_credential::shared_copy`]):
 /// it goes into `delivery.secrets` and the file names it as `[git] config_file` at
 /// `/run/micold/secrets/gitconfig` (#1530); `None` removes a copy left by an earlier start.
+///
+/// `github_tokens` are the stored tokens the container's daemon receives ([`stored_tokens_for`]):
+/// each file is copied into `delivery.secrets` as `github-token-<name>` (owner-only; a copy no
+/// longer selected is removed) and rendered as `[[github.tokens]]` naming it at
+/// `/run/micold/secrets/` (the container's `gh` shim reads it). A token that cannot be read fails.
 #[allow(clippy::too_many_arguments)]
 pub fn deliver_container(
     name: &str,
@@ -218,13 +223,20 @@ pub fn deliver_container(
     startup: Option<&StartupTable>,
     extras: &SessionExtras,
     wire_id: Option<&micold_core::protocol::routing::WireDaemonId>,
+    github_tokens: &[GithubTokenSetting],
 ) -> io::Result<bool> {
     use micold_core::daemon_config::{IdleStopSetting, Listen, SocketSpec};
     use micold_core::sandbox::argv::CONTAINER_SSH_DIR;
     use micold_core::sandbox::{CONTAINER_CONFIG_DIR, CONTAINER_SECRETS_DIR};
     use micold_core::ssh::argv::CONTAINER_DATA_DIR;
     let staged = stage_extras(extras, CONTAINER_SECRETS_DIR, true)?;
+    let tokens = PodGithubTokens::read_at(
+        github_tokens.to_vec(),
+        CONTAINER_SECRETS_DIR,
+        "the container",
+    )?;
     let settings = DaemonSettings {
+        github_tokens: tokens.entries,
         data_dir: Some(CONTAINER_DATA_DIR.into()),
         home: Some(home.to_path_buf()),
         image: Some(profile.image.reference().to_string()),
@@ -270,6 +282,10 @@ pub fn deliver_container(
         None => remove_if_present(&git_config_copy)?,
     };
     wrote |= sync_extras(&delivery.secrets, &staged.files)?;
+    for (key, token) in &tokens.files {
+        wrote |= write_if_changed(&delivery.secrets.join(key), token.expose().as_bytes())?;
+    }
+    wrote |= prune_github_tokens(&delivery.secrets, &tokens.files)?;
     match &files {
         Some(files) => {
             wrote |= write_if_changed(&script, &files.script)?;
@@ -429,7 +445,20 @@ impl PodGithubTokens {
     /// [`POD_FILE_LIMIT`] or, on Unix, can be read by another user stops the start naming the
     /// token, so the pod never starts with a token silently missing (#1533's stance).
     pub fn read(selected: Vec<GithubTokenSetting>) -> io::Result<Self> {
-        use micold_core::kube::manifest::STARTUP_ENV_MOUNT;
+        Self::read_at(
+            selected,
+            micold_core::kube::manifest::STARTUP_ENV_MOUNT,
+            "the pod",
+        )
+    }
+
+    /// [`Self::read`] for a delivery that mounts the files at `mount` in `target` (the pod, the
+    /// container): each entry names its file there.
+    pub fn read_at(
+        selected: Vec<GithubTokenSetting>,
+        mount: &str,
+        target: &str,
+    ) -> io::Result<Self> {
         let mut read = Self {
             entries: Vec::with_capacity(selected.len()),
             files: Vec::with_capacity(selected.len()),
@@ -439,7 +468,7 @@ impl PodGithubTokens {
                 io::Error::new(
                     e.kind(),
                     format!(
-                        "cannot deliver the GitHub token \"{}\" to the pod: {e}",
+                        "cannot deliver the GitHub token \"{}\" to {target}: {e}",
                         entry.name
                     ),
                 )
@@ -453,13 +482,40 @@ impl PodGithubTokens {
             let value = read_token_file(&entry.token_file).map_err(refused)?;
             let key = format!("{GITHUB_TOKEN_PREFIX}{}", entry.name.to_ascii_lowercase());
             read.entries.push(GithubTokenSetting {
-                token_file: PathBuf::from(format!("{STARTUP_ENV_MOUNT}/{key}")),
+                token_file: PathBuf::from(format!("{mount}/{key}")),
                 ..entry
             });
             read.files.push((key, value));
         }
         Ok(read)
     }
+}
+
+/// The tokens of `store` a daemon with `repositories` receives ([`select_tokens`]), each naming
+/// `host` (`None` is the daemon's default, `github.com`). Pods and container hosts share it.
+pub fn stored_tokens_for(
+    store: &micold_core::scoped_credential::pat_store::PatStore,
+    repositories: &[GithubRepo],
+    host: Option<&str>,
+) -> Vec<GithubTokenSetting> {
+    let mut selected = select_tokens(GithubTokenSetting::from_store(store), repositories);
+    for token in &mut selected {
+        token.host = host.map(str::to_string);
+    }
+    selected
+}
+
+/// Removes the delivered token copies in `dir` that `files` no longer name; whether it removed one.
+fn prune_github_tokens(dir: &Path, files: &[(String, SecretToken)]) -> io::Result<bool> {
+    let mut changed = false;
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(GITHUB_TOKEN_PREFIX) && !files.iter().any(|(kept, _)| *kept == name) {
+            changed |= remove_if_present(&entry.path())?;
+        }
+    }
+    Ok(changed)
 }
 
 /// A token file's text, or why it cannot go to a pod (never quoting the content).

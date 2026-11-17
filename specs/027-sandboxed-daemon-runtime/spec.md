@@ -550,6 +550,14 @@ without the user having chosen that for the occasion.
   is enforcing: the application MUST mark the paths it gives the sandbox as shareable with
   containers, only when the host enforces, and MUST NOT achieve it by turning off the container's
   confinement (contracts C-9). On any other host the arguments MUST NOT change. *(BUG-1296)*
+- **FR-004i**: A container host MUST receive the stored GitHub tokens that apply to its saved
+  projects, as a pod does (feature 1760): those whose filter names one of its projects'
+  repositories, and those with no filter, in Settings order, and none when no project has a GitHub
+  remote. Each is delivered as an owner-only file in the container's secrets folder and named by a
+  `[[github.tokens]]` entry in its `daemon.toml`, so the container's `gh` shim and git credential
+  helper find it; a copy no longer selected is removed at the next start. No setting switches this
+  off. A token that cannot be read stops the start, naming the token and never quoting it.
+  *(BUG-009)*
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
 - **FR-006**: Files a session creates under a shared project directory MUST appear on the host owned
@@ -804,6 +812,11 @@ case added. FR-004 grants the sandbox its projects and state, and on an SELinux-
 bind mounts were unreadable to it: sshd could not read its host key and the container exited at
 once, reported only as "container state improper". FR-004h says how the access holds there without
 disabling confinement; FR-034a puts the container's own log in the failure. See `bugs/BUG-1296.md`.
+
+**Bugfix**: 2026-11-17 — BUG-009. FR-004i added. The Settings page says stored GitHub tokens let a
+sandboxed session push, but a container host's `daemon.toml` carried no `[[github.tokens]]` and no
+token file reached its secrets folder, so `gh` inside the container found no token and fell back to a
+stale `hosts.yml`. FR-004i delivers the matching tokens, as pods already do. See `bugs/BUG-009.md`.
 
 **Bugfix**: 2026-10-23 — BUG-1285 (GitHub #1285). FR-017a and US4 scenario 4a added. FR-017 asked
 for a disabled position and the design expressed it in Docker's terms for both runtimes: Podman's

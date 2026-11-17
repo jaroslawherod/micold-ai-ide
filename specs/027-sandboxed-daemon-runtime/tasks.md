@@ -1833,6 +1833,37 @@ hid the gap and T247 removes it. See `bugs/BUG-1296.md`.
 
 ---
 
+## Phase 32: Bugfix BUG-009 — a container host received no GitHub token, so `gh` in the sandbox could not authenticate
+
+**Goal**: A container host's secrets folder holds the stored GitHub tokens that match its projects'
+repositories (and the unfiltered ones), and its `daemon.toml` names them, so `gh` and `git` in the
+sandbox use them (FR-004i). Pod and container share one selection and one reader.
+
+### Tests for BUG-009 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T249 [BUG-009] [U63] *(test)* `crates/micold-client/tests/daemon_config_delivery_host.rs`
+      (`mod container`). `deliver_container` with selected tokens copies each file to
+      `secrets/github-token-<name>` (mode `0600`), renders `[[github.tokens]]` with
+      `token_file = "/run/micold/secrets/github-token-<name>"`, its `repos` and `host`, with no
+      token text and no host path in `daemon.toml`; an unchanged call writes nothing; a token
+      dropped from the set loses its copy and entry. A token file readable by others fails naming
+      the token (U64). Red on `origin/main`: `deliver_container` takes no tokens.
+
+### Implementation for BUG-009
+
+- [x] T250 [BUG-009] [U63] `crates/micold-client/src/daemon_config_delivery.rs`: `deliver_container`
+      takes the selected tokens, reads them with `PodGithubTokens::read_at` (the pod's reader, with
+      the mount and target named) and writes/prunes the copies; `stored_tokens_for` is the one
+      selection shared with `pod_github_tokens` in `daemon.rs`.
+- [x] T251 [BUG-009] [U63] `crates/micold-client/src/shell/sandbox.rs`, `daemon.rs`, `shell/startup.rs`,
+      `shell/routing.rs`: the container bring-up carries the daemon's saved projects' repositories
+      (`ContainerBringUp.github_repos`, `BootPlan.github_repos`; identity, so saving a project
+      re-delivers) and `start_attempt` selects from this device's PAT store.
+- [x] T252 [BUG-009] `docs/user-guide/sandboxed-daemon.md`: a container receives the matching tokens
+      and no token is delivered without a project that names a repository it reaches.
+
+**Checkpoint**: `daemon_config_delivery_host` container tests pass; `cargo check --workspace`.
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

@@ -152,6 +152,8 @@ Added 2026-10-23. Traces are FR-004h, FR-034a, US1 scenario 12 and contracts C-3
 | U60 | The SELinux probe reads `1` as enforcing and `0`, an absent file and other content as not | FR-004h, RC-5 | example | TODO | `sandbox::parse::tests` (T243) |
 | U61 | A container that exited as it started: the not-ready reason carries the tail of its log | FR-034a, US1 sc. 12 | example | TODO | `provision::login::tests` (T244), red on `origin/main` |
 | U62 | The handshake test's container is created from `argv::create` (on an enforcing host it passes only with U59's options) | FR-004h, US1 sc. 12 | example | TODO | `sandbox_real_handshake` (T247) |
+| U63 | `deliver_container` copies each selected GitHub token to `secrets/github-token-<name>` (0600), renders `[[github.tokens]]` naming `/run/micold/secrets/...`, prunes dropped ones, writes nothing when unchanged | FR-004i | example | DONE | `daemon_config_delivery_host::container` (T249), red on `origin/main` |
+| U64 | A token file readable by others stops the container delivery naming the token | FR-004i | example | DONE | `daemon_config_delivery_host::container` (T249) |
 
 ## Invariants and edge cases still to place
 

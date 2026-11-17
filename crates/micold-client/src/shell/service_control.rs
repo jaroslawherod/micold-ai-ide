@@ -211,6 +211,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         });
 
         let _ = on_restart_service_requested(&mut app);
@@ -343,6 +344,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         });
         assert_eq!(
             app.sandbox_daemon(),
@@ -380,6 +382,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         });
         let mut registry = app.core.settings.daemons.clone();
         registry

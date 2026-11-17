@@ -470,7 +470,12 @@ one-time notice saying so, with a **Dismiss** button; the next save drops the ol
 A sandbox container made before this change is replaced on its next start, even a running one,
 which ends any session still running in it: it may still mount your agent or credential store.
 
-Tokens are not special to sandboxes: a host or SSH daemon chooses the token for a repository the same
+A sandbox receives your stored GitHub tokens when it starts: those that name a repository of one of
+its saved projects, and those with no repository filter. Each goes into the sandbox as an owner-only
+file and its configuration file names it, so `gh` and `git` inside use it; there is no switch for
+this. A sandbox whose projects have no GitHub remote receives none. A token you add, change or
+delete reaches the sandbox at its next start. Tokens are not special to sandboxes: a host or SSH
+daemon chooses the token for a repository the same
 way, from its configuration file (see [GitHub tokens](settings.md#github-tokens)). What differs is
 the fallback: a sandbox clears every helper it inherited, while a host or SSH daemon hands a
 repository no token applies to over to the helpers you already had.

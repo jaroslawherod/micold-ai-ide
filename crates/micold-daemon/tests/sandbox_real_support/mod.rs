@@ -640,6 +640,7 @@ fn start_sandbox_on(
         STARTUP.lock().unwrap_or_else(|e| e.into_inner()).as_ref(),
         &Default::default(),
         None,
+        &[],
     )
     .expect("deliver the daemon's configuration");
     let config_mount = bind_mount(

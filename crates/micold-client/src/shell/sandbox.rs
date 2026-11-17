@@ -319,6 +319,7 @@ pub fn start<R: CommandRunner>(
         None,
         &SessionExtras::default(),
         None,
+        &[],
         runner,
         &CancelToken::new(),
         &mut AttemptLedger::new(),
@@ -339,6 +340,7 @@ pub fn start_attempt<R: CommandRunner>(
     startup: Option<&StartupTable>,
     extras: &SessionExtras,
     wire_id: Option<&micold_core::protocol::routing::WireDaemonId>,
+    github_repos: &[micold_core::github::GithubRepo],
     runner: R,
     cancel: &CancelToken,
     ledger: &mut AttemptLedger,
@@ -387,6 +389,13 @@ pub fn start_attempt<R: CommandRunner>(
     // container mounts them read-only (#1527, FR-005): one file for the daemon the entrypoint starts
     // and the one the SSH bridge starts. A container without it has no configuration to read.
     if let Some(delivery) = &mounts.delivery {
+        // The stored GitHub tokens that match the daemon's projects' repositories, so the
+        // container's `gh` shim has a token to find (unfiltered ones too, as for pods).
+        let github_tokens = micold_core::scoped_credential::pat_store::PatStore::on_device()
+            .map(|store| {
+                micold_client::daemon_config_delivery::stored_tokens_for(&store, github_repos, None)
+            })
+            .unwrap_or_default();
         if let Err(e) = micold_client::daemon_config_delivery::deliver_container(
             container_name,
             profile,
@@ -396,6 +405,7 @@ pub fn start_attempt<R: CommandRunner>(
             startup,
             extras,
             wire_id,
+            &github_tokens,
         ) {
             return Err(preparation_failed(format!(
                 "could not write the daemon's configuration to {}: {e}",
@@ -738,6 +748,9 @@ pub struct BootPlan {
     pub extras: SessionExtras,
     /// The id its daemon announces to the orchestrator (#1726, R6).
     pub wire_id: Option<micold_core::protocol::routing::WireDaemonId>,
+    /// The repositories of the daemon's saved projects, which pick the stored GitHub tokens the
+    /// container receives.
+    pub github_repos: Vec<micold_core::github::GithubRepo>,
 }
 
 impl BootPlan {
@@ -785,6 +798,18 @@ impl BootPlan {
             .and_then(|id| registry.get(id))
             .and_then(DaemonSettings::from_entry)
             .map(|(settings, _)| settings.extras)
+            .unwrap_or_default()
+    }
+
+    /// The repositories the saved projects of the daemon [`Self::identity_of`] names have remotes
+    /// for, which pick the stored GitHub tokens its container receives.
+    pub fn github_repos_of(
+        registry: &micold_core::daemons::DaemonRegistry,
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    ) -> Vec<micold_core::github::GithubRepo> {
+        Self::sandbox_daemon(registry, legacy_default)
+            .and_then(|id| registry.get(id))
+            .map(|entry| micold_client::daemon::ProjectsDial::of(&entry.file.projects).0)
             .unwrap_or_default()
     }
 
@@ -881,6 +906,7 @@ impl micold_client::daemon::ContainerStarter for DaemonContainers {
             setup.startup.as_ref(),
             &setup.extras,
             setup.wire_id.as_ref(),
+            &setup.github_repos,
             &runner,
             cancel,
             &mut ledger,
@@ -1052,6 +1078,7 @@ impl BringUp {
                 plan.startup.as_ref(),
                 &plan.extras,
                 plan.wire_id.as_ref(),
+                &plan.github_repos,
                 &runner,
                 &cancelled,
                 &mut ledger,
@@ -1515,6 +1542,7 @@ mod tests {
             None,
             &SessionExtras::default(),
             None,
+            &[],
         )
         .unwrap();
         let copy = std::fs::read_to_string(
@@ -1586,6 +1614,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         };
 
         let messages: Vec<Message> = BringUp::now(plan)
@@ -1696,6 +1725,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         };
         let runtime = CancelledDuring::scripted(
             a_runtime_that_creates_the_sandbox_then(Ok(
@@ -1752,6 +1782,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         };
         let mut running = None;
         let _task = BringUp::now(plan).run(&mut running);
@@ -1774,6 +1805,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         };
         let runtime = CancelledDuring::new(cancel_on);
         let (runtime_log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
@@ -2619,6 +2651,7 @@ mod tests {
             startup: None,
             extras: Default::default(),
             wire_id: None,
+            github_repos: Vec::new(),
         }
     }
 
