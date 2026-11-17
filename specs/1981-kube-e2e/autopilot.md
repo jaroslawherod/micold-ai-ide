@@ -72,6 +72,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 Close unit 1 (2026-11-17): plan drift run for M1-M5; drift-M2..M5.md recorded (no unbuilt work, MISSING entries are spec-relative paths/invoked tools). Converge needed (no CLEAN review B for M4, M5). Next: tdd-verify + converge results, then step 3 of tasks/close.md.
 
+Close unit 2 (2026-11-17): previous PR #2023 merged as 0b0c74a23. T034 (placeholders `#[ignore]`) and T035 (ops self-probe blanked only in the test module, plus a case) done; spec Closed; close PR opened.
+
 ## Open escalation
 
 None.
@@ -82,6 +84,8 @@ None.
 - Chart `state.mode` refuses `sqlite`/`postgres` naming #1948/#1740; #1948's store has merged since, so revisit which modes the chart can render (M2+ or #1740).
 - #1740: publish `micold-orchestrator` (and `micold-web`) images from the release workflow and keep `deploy/helm/micold/Chart.yaml` `appVersion` in step with releases (M1 review A, declined there).
 
+- T022, T030, T033: live `kube-e2e` rounds not yet seen green. On main for 0b0c74a23 (run 44010225993) the job "orchestrator end to end on kind" was skipped (push proven by its PR); trigger it on this PR or a later chart change and record durations (SC-002) and link/restart reds. T024/T026 ticks stand unverified until then.
+- T036-T039 (tdd/verification.md, non-blocking): cycle-log backfill for M2/M3/M5, `runAsGroup` assertions, ops test messages and 404/405/400 split, refusal-suite wait helper and per-setting security asserts.
 - Placeholder suites `network` and `ui` (M5) wait for #1732 and #1954: replace them with real tests there.
 
 ## Plan notes

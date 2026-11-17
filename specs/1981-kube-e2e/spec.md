@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Closed 2026-11-17
 
 **Input**: Issue #1981 (epic). jaro: "I would like in parallel to start a work to test setup in k8s cluster (use kind in CI and also for local setup), prepare a helm chart that will deploy orchestrator and web ui (when will be developed) and start to run e2e tests against it. First cover only rest api or what ever api it will expose. It should also cover UI tests when it will be available." Then: "prepare an epic with plan and github issues with milestones", "then start implementation".
 
