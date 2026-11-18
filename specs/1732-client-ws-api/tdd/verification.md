@@ -84,6 +84,8 @@ No skip, `.only`, `#[ignore]`, `it.todo`, config exclusion or lowered threshold 
 
 ## Findings
 
+> Close PR update: F2 fixed by `ws_protocol::a_dropped_daemons_sessions_stay_listed_as_unreachable_until_it_relinks` (drop, rows kept unreachable with their location, re-link, reachable again; proven red with `directory.rs` `reachable: false` flipped). The daemon's `list_daemons` status still reads `online` after the drop (ledger follow-up). Other findings unchanged.
+
 Ordered by severity. IDs are the remediation items.
 
 | # | Sev | Crate / area | Test file | Finding | Evidence |

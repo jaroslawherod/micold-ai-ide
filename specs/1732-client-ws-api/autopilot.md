@@ -64,6 +64,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 | diff review | 2 (sonnet, orchestrator) | M4 fix diff 1c83be7..361bc9e | 361bc9e | - | CLEAN; F1 test proven red without the fix |
 
 | Review | Round | Scope | Head | Snapshot | Verdict |
+| close diff review | 1 (code-review medium, forked) | origin/main..fa1cd23f0 | fa1cd23f0 | - | 10 findings: test gained re-link and location checks and `within`; verification.md, spec Status, drift-M2, stale ledger line fixed; plan-drift.sh paren escaping not ours (follow-up); `list_daemons` online after drop = existing follow-up |
 | M5 amendment review | 1 | spec.md, plan.md, tasks.md | 508a1ad305d6399c558739a5d25e8e9dfbfcf5e6 | 20e9ba559138a6384580a39f47cb10993f1a93b8:508a1ad305d6399c558739a5d25e8e9dfbfcf5e6 | CHANGES: 7 (5 MAJOR, 2 MINOR), all fixed in c6a8945310f0fe9bfb6f0e8038105825ba617a88; round 2 (sonnet) due on bd4e06335766c53cb100154977c0787a18720671:c6a8945310f0fe9bfb6f0e8038105825ba617a88 |
 | M5 amendment review | 2 (sonnet) | fix diff | see commit | - | PASSED with 3 text nits (ledger T-range, T046/T049 configured() input, T052 run order), fixed |
 | diff review | 1 (orchestrator) | M5 1ba83dcdd5b9b9e32815c5cbedc4004932d2dd09..b62f39a30829d27512a5c135834a3ef5d8a0b467 | b62f39a30829d27512a5c135834a3ef5d8a0b467 | 1ba83dcdd5b9b9e32815c5cbedc4004932d2dd09:b62f39a30829d27512a5c135834a3ef5d8a0b467 | CHANGES: F1 BLOCKER, F2-F4 MAJOR, F5-F6 MINOR; all fixed except helm pin (declined, R13); round 2 due |
@@ -103,6 +104,8 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Follow-ups
 
+- scripts/autopilot/plan-drift.sh `recorded()` does not escape `(`/`)`; drift-M4.md works around it.
+
 - SC-006 / US1.3: no real-daemon test that a session created, renamed or ended shows within 2 s (T038 deviation; tdd/verification.md F3).
 - tdd/verification.md F1 (no recorded reds, squashed history: waiver, the run kept no cycle log), F4 (kind live job never run here; chart-local skipped without helm), F5 (sidebar-order vectors not compared with the Rust order), F6 (listener default idle untested), F7-F15 minor smells: open.
 
@@ -114,10 +117,9 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 None.
 
-Close unit (2026-11-18): previous PR #2040 merged as 8a2eaba41. tdd-verify FAIL (F1-F15, see tdd/verification.md); F2 fixed with `ws_protocol::a_dropped_daemons_sessions_stay_listed_as_unreachable` (proven red with directory.rs reachable flipped); converge: converged (verification gaps only, no unbuilt behaviour); plan drift recorded in drift-M1..M6.md. Earlier: M6 unit (2026-11-18): previous PR #2039 merged as 1db9333f1. T038–T042 done; Chromium stack e2e passes locally (system Chrome); Firefox/WebKit not runnable here (Playwright CDN blocked by the proxy), CI job `client-e2e-stack` runs all three. Visual pass found and fixed the unbound Retry in ConnectionBanner. M5 follow-ups: header comment fixed; NODE_IMAGE -> kindest/node:v1.37.0@sha256:a1ed56cf… (kind v0.33.0 default); helm v3.22.1 NOT bumped: get.helm.sh is blocked (403) and GitHub release assets carry no sha256sum, so no checksum was reachable; still open.
+Close unit (2026-11-18): previous PR #2040 merged as 8a2eaba41. tdd-verify FAIL (F1-F15, see tdd/verification.md); F2 fixed with `ws_protocol::a_dropped_daemons_sessions_stay_listed_as_unreachable_until_it_relinks` (proven red with directory.rs reachable flipped); converge: no new tasks; remaining gaps are verification gaps plus the SC-006/US1.3 real-daemon test, kept as a follow-up by the orchestrator's scope; plan drift recorded in drift-M1..M6.md. Earlier: M6 unit (2026-11-18): previous PR #2039 merged as 1db9333f1. T038–T042 done; Chromium stack e2e passes locally (system Chrome); Firefox/WebKit not runnable here (Playwright CDN blocked by the proxy), CI job `client-e2e-stack` runs all three. Visual pass found and fixed the unbound Retry in ConnectionBanner. M5 follow-ups: header comment fixed; NODE_IMAGE -> kindest/node:v1.37.0@sha256:a1ed56cf… (kind v0.33.0 default); helm v3.22.1 NOT bumped: get.helm.sh is blocked (403) and GitHub release assets carry no sha256sum, so no checksum was reachable; still open.
 
 ## Open escalation
 
 None.
 
-M6 merged as 8a2eaba41 (PR #2040, squash). Diff review r1 opus CHANGES (CI daemon path, SC-006 gap, Retry flake, NODE_IMAGE) fixed/recorded; r2 sonnet CLEAN. Next: close unit.

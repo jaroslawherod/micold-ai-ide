@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-17
 
-**Status**: Closed 2026-11-18 — shipped in PRs #2032, #2033, #2034, #2037, #2038, #2039, #2040 and the close PR
+**Status**: Closed 2026-11-18 — shipped in PRs #2032, #2033, #2034, #2037, #2038, #2039, #2040 and the close PR. Open: US1.3/SC-006 has no real-daemon test (T038 deviation); T052 kind live job never run here (US5.1, US5.5); TDD verification FAIL for want of recorded reds (tdd/verification.md)
 
 **Input**: Issue #1732 "JSON-over-WebSocket client API with generated TypeScript types and JSON
 Schema, origin checks, resume" (part of #1722; covers FR-017R, FR-030 of
