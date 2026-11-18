@@ -54,10 +54,14 @@ test("a stopped and restarted orchestrator reaches the open page with no reload"
   await expect(page.getByTestId("connection-banner")).toBeVisible({ timeout: 15_000 });
 
   stack = await startStack(stack.dir);
+  // Either the client reconnects by itself, or its retries are spent and it offers Retry.
+  const banner = page.getByTestId("connection-banner");
   const retry = page.getByRole("button", { name: "Retry" });
+  await expect.poll(async () => (await banner.count()) === 0 || (await retry.isVisible()), { timeout: 60_000 }).toBe(true);
   if (await retry.isVisible()) await retry.click();
   await expect(page.getByTestId("connection-banner")).toHaveCount(0, { timeout: 60_000 });
-  // Within 2 s of the connection being back, the list is there (SC-006).
+  // Within 2 s of the connection being back, the list is there. This is not SC-006's daemon-side
+  // create/rename/end within 2 s: see the header and T038's note in tasks.md.
   await expect(seeded(page)).toBeVisible({ timeout: 2_000 });
   expect(await page.evaluate(() => (globalThis as { __noReload?: boolean }).__noReload)).toBe(true);
 });

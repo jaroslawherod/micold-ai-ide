@@ -18,7 +18,8 @@ export interface Stack {
 function need(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not set: run \`mise run client-e2e-stack\``);
-  return v;
+  // CI and mise may pass a path relative to the repository; Playwright runs in apps/client.
+  return resolve(ROOT, v);
 }
 
 /** Whether something accepts a TCP connection on 127.0.0.1:<port>. */

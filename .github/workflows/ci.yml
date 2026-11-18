@@ -349,7 +349,9 @@ jobs:
         run: scripts/tests/local-stack.test.sh
       - name: Playwright on the real stack
         run: |
-          MICOLD_LOCAL_DAEMON_BIN="$(scripts/build-lock.sh --print-target-dir)/debug/micold-daemon" \
+          target="$(scripts/build-lock.sh --print-target-dir)"
+          case "$target" in /*) ;; *) target="$PWD/$target" ;; esac
+          MICOLD_LOCAL_DAEMON_BIN="$target/debug/micold-daemon" \
             MICOLD_LOCAL_WEB_DIR="$PWD/apps/client/dist" pnpm --filter @micold/client e2e:stack
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
