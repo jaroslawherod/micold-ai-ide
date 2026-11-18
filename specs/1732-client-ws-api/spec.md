@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-17
 
-**Status**: Draft
+**Status**: Closed 2026-11-18 — shipped in PRs #2032, #2033, #2034, #2037, #2038, #2039, #2040 and the close PR
 
 **Input**: Issue #1732 "JSON-over-WebSocket client API with generated TypeScript types and JSON
 Schema, origin checks, resume" (part of #1722; covers FR-017R, FR-030 of

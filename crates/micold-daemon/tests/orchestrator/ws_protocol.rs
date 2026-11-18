@@ -40,6 +40,39 @@ async fn list_sessions_holds_every_daemons_sessions() {
     assert_eq!(rows[0]["reachable"], true);
 }
 
+/// FR-014a: a daemon whose link drops keeps its sessions in the list, marked unreachable.
+#[tokio::test]
+async fn a_dropped_daemons_sessions_stay_listed_as_unreachable() {
+    let api = Api::start().await;
+    let project = tempfile::tempdir().unwrap();
+    let session = crate::history::ai_session();
+    let id = session.id.to_string();
+    let d = api
+        .daemon("d1", crate::history::catalog(project.path(), vec![session]))
+        .await;
+    let mut ws = api.client().await;
+    let reply = ws.ask(json!({"id":20,"type":"list_sessions"})).await;
+    assert_eq!(reply["rows"][0]["reachable"], true, "{reply}");
+
+    d.drop_link();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    let rows = loop {
+        let reply = ws.ask(json!({"id":21,"type":"list_sessions"})).await;
+        let rows = reply["rows"].as_array().cloned().unwrap_or_default();
+        if rows.iter().any(|r| r["reachable"] == false) {
+            break rows;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "never unreachable: {reply}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    };
+    assert_eq!(rows.len(), 1, "the row is kept, not removed: {rows:?}");
+    assert_eq!(rows[0]["id"], id);
+    assert_eq!(rows[0]["reachable"], false);
+}
+
 #[tokio::test]
 async fn an_unknown_type_is_a_typed_error_and_the_connection_stays() {
     let api = Api::start().await;
