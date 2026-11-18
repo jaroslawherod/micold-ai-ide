@@ -159,24 +159,12 @@ jobs:
           git checkout FETCH_HEAD -- docs
           echo "docs/ is now $DOCS_REF ($(git rev-parse --short FETCH_HEAD))"
 
-      # --- 2. what the capture and the site need --------------------------------------------------
-      #
-      # The same list `site/README.md` names, and the reason publication runs on Linux only: the
-      # screenshots are of a real window on a real display, which here is Xvfb rendering through
-      # Mesa's lavapipe because a runner has no GPU.
-      #
-      # `libxkbcommon-x11-0` is the odd one out: every other X11 entry here is a link-time dependency
-      # of the build, but this one is dlopened by name at startup. Without it the client panics
-      # before it opens a window, so all twelve scenes fail and the run reports twelve declared
-      # assets that were never produced -- a failure that names the pictures, not the library.
-      - name: Install the capture and site dependencies
+      # --- 2. what the site's checks need ---------------------------------------------------------
+      - name: Install the site dependencies
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y \
-            xvfb mesa-vulkan-drivers xdotool imagemagick ffmpeg \
-            libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev \
-            libxcursor-dev libxrandr-dev libxi-dev
+          sudo apt-get install -y imagemagick ffmpeg
 
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -201,20 +189,7 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      # --- 3. the application the screenshots are of ----------------------------------------------
-      #
-      # The capture builds and pins this pair itself (`scene_pin_binaries`), copying both out of the
-      # target directory in one invocation so a client and a daemon from different builds can never
-      # be pinned together. Building here first is not a duplicate of that: it puts a compilation
-      # failure in a step named for it, before an hour of capture, rather than inside a scene's log.
-      - name: Build the client and the daemon
-        run: |
-          set -euo pipefail
-          cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon
-          test -x target/release/micold-ai-ide
-          test -x target/release/micold-daemon
-
-      # --- 3b. the checks' own cases --------------------------------------------------------------
+      # --- 3. the checks' own cases --------------------------------------------------------------
       #
       # This is where the shell suites are actually run, not `ci.yml`'s lint job. Three of them --
       # the clip encoder, the link checks and the rendered-page checks -- need ffmpeg, ImageMagick,
@@ -244,7 +219,7 @@ jobs:
       # drift from the one developers run:
       #
       #   5  emit `site/theme/css/tokens.css` from the design tokens
-      #   6  capture every asset `site/media.toml` declares, and fail if any was not produced
+      #   6  (media capture retired with the desktop application, #1959)
       #   7  encode the clips and their posters
       #   8  stage `docs/` -> `src/`, substituting the version and expanding the media directives
       #   9  render with mdBook
@@ -268,19 +243,6 @@ jobs:
           VERSION: ${{ steps.refs.outputs.version }}
         run: site/build.sh --version "$VERSION" --tag "$RELEASE_TAG"
 
-      # A capture runs on a display nobody is watching, and its failures are about pixels: a control
-      # drawn somewhere other than where the scene reaches for it, a list of a different length, a
-      # window that opened on nothing. The scene library photographs the display it died on; this
-      # keeps that photograph, so the next attempt starts from a picture rather than from a guess.
-      - name: Keep the failing capture's frames
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: capture-failure
-          path: site/build/failed
-          if-no-files-found: ignore
-          retention-days: 7
-
       # --- 13. the deploy -------------------------------------------------------------------------
       #
       # Everything above has to have passed to get here, which is the whole of FR-018: a failed check
@@ -289,8 +251,7 @@ jobs:
       # Uploaded unconditionally, deployed conditionally (below). A dispatch from a branch is how a
       # change to the pipeline gets tried before it is merged, and the artifact is the whole built
       # site: download it, unpack it, serve it, and the review is of the real thing rather than of a
-      # diff. That is the only way to see a publication before it is one -- the capture needs a
-      # display, ffmpeg and a release build, so nothing short of a run produces it.
+      # diff. That is the only way to see a publication before it is one.
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site/book

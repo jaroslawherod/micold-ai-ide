@@ -150,7 +150,7 @@ recreated on the next start, without asking to keep it.
 
 ### GitHub tokens in the pod
 
-A pod receives none of your [GitHub tokens](settings.md#github-tokens) unless you turn on the
+A pod receives none of your GitHub tokens unless you turn on the
 daemon's **GitHub tokens** opt-in, which is off for every daemon. A delivered token is stored in a
 Kubernetes Secret: **anyone who can read Secrets in the namespace, and anyone who can read the
 cluster's etcd, can read the token.** Turn it on only for a namespace you trust with it.
@@ -159,7 +159,7 @@ To turn it on, open the daemon in **Settings → Daemons**, expand **Credentials
 tokens (stored in a Kubernetes Secret: anyone who can read Secrets in the namespace, and etcd, can
 read them)**; untick it to turn it off. It is saved with the daemon's other settings and applies at
 the daemon's next start. (The same switch is `"github_tokens": true` in the daemon's `runtime`
-object in `settings.json`; see [Where settings are stored](settings.md#where-settings-are-stored).)
+object in `settings.json`; see Where settings are stored.)
 
 With it on, each start sends the pod only the tokens that can be for its projects: a token whose
 **Repositories** filter names the repository (`owner/repo` or `owner/*`) of one of the daemon's

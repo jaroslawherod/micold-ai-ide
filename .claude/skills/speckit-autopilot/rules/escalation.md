@@ -26,7 +26,6 @@ category 5 or 6, labelled `blocked by work outside my flow`. Do not fix it.
   with a green local gate: `wait-merge.sh` merges past it and records the skipped check
   ([../tasks/merge.md](../tasks/merge.md)). A red CI on a diff that touches `crates/` or other product
   code still goes by category 5.
-- visual verification (use the `visual-pass` skill)
 - equivalent implementations, naming, file layout, test count
 - a clarify question the repo answers
 

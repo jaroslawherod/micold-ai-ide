@@ -286,7 +286,7 @@ again.
 If the AI CLI is one a session would not find in the target directory, `create_session` fails and
 leaves no session behind. The reply gives the same reason and action a person is shown, for example
 that "Source a script before each session" is off, or that the startup script was not found. See
-[When a CLI isn't installed](./worktrees-and-sessions.md#when-a-cli-isnt-installed).
+When a CLI isn't installed.
 
 ### One session per worktree is a soft limit
 
@@ -354,7 +354,7 @@ the request fails and says to trust the project in that CLI first.
 
 **You decide whether assistants may do this.** Settings → Environment has **Let agents read and
 type into other sessions**
-([Settings](settings.md#let-agents-read-and-type-into-other-sessions)):
+(Settings):
 
 | Value | Reading | Typing |
 |---|---|---|
@@ -392,7 +392,7 @@ option above, the folder-trust check and the one submission apply in the same wa
 ## Reporting on review comments
 
 When you send a review from the Review tab
-([Sending a review](reviewing-changes.md#sending-a-review)), each comment in the message carries a
+(Sending a review), each comment in the message carries a
 reference such as `C-1a2b3c4d`. The session answers a comment with `report_review_comment`:
 
 | Argument | What it is |
@@ -403,7 +403,7 @@ reference such as `C-1a2b3c4d`. The session answers a comment with `report_revie
 
 The comment's card then shows **Applied** or **Answered** and the reply, in every window open on the
 project and after a restart
-([Statuses and replies](reviewing-changes.md#statuses-and-replies)). A later report on the same
+(Statuses and replies). A later report on the same
 comment replaces the outcome and the reply.
 
 A session reports only on its own entry's comments: a session in a worktree on that worktree's
@@ -474,7 +474,7 @@ A session that is not connected works exactly as before. The session service wri
 its log saying why, for example `no tool server: Pi has no MCP support`.
 
 To stop connecting sessions, turn off **Let AI sessions manage worktrees and sessions** under
-Settings → Environment ([Settings](settings.md#let-ai-sessions-manage-worktrees-and-sessions)). It
+Settings → Environment (Settings). It
 applies to sessions started afterwards; running sessions keep their connection, and each new session
 logs `no tool server: disabled in settings`.
 

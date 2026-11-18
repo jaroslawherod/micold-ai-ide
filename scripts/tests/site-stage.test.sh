@@ -185,10 +185,10 @@ echo "== the download links on the install page (FR-004a) =="
 cat > "$fixture/docs/user-guide/deep.md" <<'MD'
 # Deep page
 
-[the package](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_amd64.deb)
+[the package](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-daemon_{{MICOLD_VERSION}}-1_amd64.deb)
 MD
 
-if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_amd64.deb micold-client_9.9.9-1_arm64.deb" \
+if MICOLD_RELEASE_ASSETS="micold-daemon_9.9.9-1_amd64.deb micold-daemon_9.9.9-1_arm64.deb" \
    "$STAGE" --docs "$fixture/docs" --media-manifest "$fixture/media.toml" \
    --out "$fixture/out" --version 9.9.9 --tag v9.9.9 > "$fixture/assets.log" 2>&1; then
   pass "a link naming an asset the release carries stages"
@@ -196,14 +196,14 @@ else
   fail "a link naming an asset the release carries stages" "$(tail -3 "$fixture/assets.log")"
 fi
 
-if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_arm64.deb" \
+if MICOLD_RELEASE_ASSETS="micold-daemon_9.9.9-1_arm64.deb" \
    "$STAGE" --docs "$fixture/docs" --media-manifest "$fixture/media.toml" \
    --out "$fixture/out" --version 9.9.9 --tag v9.9.9 > "$fixture/missing-asset.log" 2>&1; then
   fail "a link naming an asset the release does not carry fails the stage" "stage.sh exited 0"
 else
   pass "a link naming an asset the release does not carry fails the stage"
 fi
-if grep -qF "micold-client_9.9.9-1_amd64.deb" "$fixture/missing-asset.log"; then
+if grep -qF "micold-daemon_9.9.9-1_amd64.deb" "$fixture/missing-asset.log"; then
   pass "the failure names the file"
 else
   fail "the failure names the file" "$(tail -3 "$fixture/missing-asset.log")"
@@ -215,9 +215,9 @@ fi
 cat > "$fixture/docs/user-guide/deep.md" <<'MD'
 # Deep page
 
-[the package](https://github.com/jaroslawherod/micold-ai-ide/releases/download/v1.0.0/micold-client_9.9.9-1_amd64.deb)
+[the package](https://github.com/jaroslawherod/micold-ai-ide/releases/download/v1.0.0/micold-daemon_9.9.9-1_amd64.deb)
 MD
-if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_amd64.deb" \
+if MICOLD_RELEASE_ASSETS="micold-daemon_9.9.9-1_amd64.deb" \
    "$STAGE" --docs "$fixture/docs" --media-manifest "$fixture/media.toml" \
    --out "$fixture/out" --version 9.9.9 --tag v9.9.9 > "$fixture/wrong-tag.log" 2>&1; then
   fail "a link into another release's downloads fails the stage" "stage.sh exited 0"

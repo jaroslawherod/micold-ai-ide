@@ -56,7 +56,7 @@ for the new model, which costs more than it saves.
 - **Re-review rounds** (round 2+ of a spec, plan, tasks or diff review) and **conformance checks**:
   `model: "sonnet"`. First-round artifact reviews pass `model: "opus"` explicitly.
 - **Forked skills** already set `context: fork` + `model: sonnet` in their frontmatter:
-  `visual-pass`, `speckit-analyze`, `speckit-bugfix-verify`, `speckit-tdd-verify`. They see only
+  `speckit-analyze`, `speckit-bugfix-verify`, `speckit-tdd-verify`. They see only
   their arguments, so pass paths and what to check. A spec-kit upgrade regenerates the `speckit-*`
   files; re-add those three lines afterwards.
 - **Stay on the session model** for writing specs and plans, debugging, architecture, and
@@ -73,9 +73,8 @@ whose use is not obvious from that:
   workspace, `-D warnings`), `cargo test --workspace`, then `scripts/tests/*.test.sh`. Run this, not
   `mise run test`, before pushing — CI stops at fmt before any test runs.
 - `mise run check` — `cargo check --workspace`: no linking, so it is the fast loop while editing.
-  `mise run test`/`mise run gate` link one executable per top-level `tests/*.rs` file (591 of
-  them); a single `cargo test -p micold-client` run has written ~39 GB and driven I/O pressure to
-  50%. Iterate with `mise run check` or a single targeted test (`scripts/build-lock.sh cargo test
+  `mise run test`/`mise run gate` link the test executables of every crate; a
+  whole-workspace test run is heavy on disk and I/O. Iterate with `mise run check` or a single targeted test (`scripts/build-lock.sh cargo test
   -p <crate> <test_name>`, or `mise run test-core` for the core crate); reserve a `--workspace` test
   run for `mise run gate` before you push. See `docs/development/shared-build.md`.
 - `mise run test-core` — test only the render-free core (`cargo test -p micold-core

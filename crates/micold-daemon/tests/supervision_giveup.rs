@@ -9,8 +9,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use micold_client::app::State;
-use micold_client::catalog_sync::reconcile_catalog;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{ActivitySignal, WireLifecycle};
 use micold_core::session::{
@@ -110,10 +108,9 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         "give-up records the full retry budget"
     );
     // The give-up has to say *why*, and the reason is the only place it can (010 BUG-017). This is
-    // not decoration: the client announces a failure exactly when the wire reason is non-empty
-    // (`catalog_sync::announce_start_failures`, feature 026 T088), so an empty one here means a
-    // crash loop that happened while nobody was watching is never announced at all — it settles
-    // into a `failed` word in the status bar and nothing else.
+    // not decoration: a client announces a failure exactly when the wire reason is non-empty, so
+    // an empty one here means a crash loop that happened while nobody was watching is never
+    // announced at all.
     assert!(
         !reason.trim().is_empty(),
         "a give-up with no reason tells the user only that it failed"
@@ -128,6 +125,23 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         reason.contains(&MAX_RESTART_ATTEMPTS.to_string()),
         "and how many times it tried; got {reason:?}"
     );
+    // The snapshot a connecting client receives carries the same reason.
+    let welcomed = state
+        .welcome_payload()
+        .0
+        .projects
+        .iter()
+        .flat_map(|p| &p.sessions)
+        .find(|s| s.id == id)
+        .map(|s| s.lifecycle.clone());
+    assert_eq!(
+        welcomed,
+        Some(WireLifecycle::Failed {
+            reason: reason.clone(),
+            attempts
+        }),
+        "welcome_payload must carry the give-up reason"
+    );
     assert!(
         state.live_session(id).is_none(),
         "a session that gave up has its process dropped (no restart pending)"
@@ -135,7 +149,7 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     // And the row says it is over (`010` BUG-018). The give-up drops the live entry, and the FSM
     // went with it, so before this the badge fell back to `Unknown` — the same nothing a live
     // session whose hooks never fired draws. The reason is the tick's own word for the outcome, not
-    // the sentence above: that one belongs to `Failed`, which the client reads separately.
+    // the sentence above: that one belongs to `Failed`.
     let activity = state
         .catalog_snapshot()
         .projects
@@ -149,25 +163,6 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
             reason: "crash loop".to_string()
         }),
         "a session that gave up reads Ended"
-    );
-
-    // And the join: the snapshot the daemon would really publish, fed to the real client. This is
-    // the half neither side can fail on its own — `announce_start_failures` reads the wire reason,
-    // so a give-up the daemon words correctly and the wire flattens reaches the user as nothing.
-    let mut core = State::default();
-    reconcile_catalog(
-        &mut core,
-        micold_core::daemons::DaemonId(1),
-        &state.welcome_payload().0,
-        false,
-    );
-    assert_eq!(
-        core.notifications
-            .queue
-            .visible()
-            .map(|n| n.message.clone()),
-        Some(reason.clone()),
-        "the give-up the daemon recorded is what the user is told"
     );
 
     #[cfg(unix)]

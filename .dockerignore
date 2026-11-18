@@ -5,7 +5,6 @@
 target
 target-shared
 **/node_modules
-.visual-pass
 docs
 site
 specs

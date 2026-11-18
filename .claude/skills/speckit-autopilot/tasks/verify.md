@@ -15,9 +15,8 @@ When: [implement.md](implement.md) is done and every task in the range is ticked
 2. **Review B and the visual pass, together.** B: dispatch it in the background per
    [review.md](review.md) with [../rubrics/conformance.md](../rubrics/conformance.md), once per
    milestone. Run it again only after fixing a BLOCKER or MAJOR of B's own; fixes for A or the
-   visual pass do not re-run it. Visual pass: the `visual-pass` skill through an
-   `autopilot-worker`, with the worktree path, the quickstart section or change to check, and
-   what counts as a pass.
+   visual pass do not re-run it. Visual pass: the web client's Playwright
+   screenshots (`mise run client-e2e`); there is no `visual-pass` skill any more.
    - **B or the visual pass found something real:** fix, run the scoped gate, and go on.
 3. **Full gate, once**, on the final tree ([gate.md](gate.md)). Red: fix, and run it again.
 4. Update the ledger, commit, push and open the PR: [pr.md](pr.md). When this PR is the run's last

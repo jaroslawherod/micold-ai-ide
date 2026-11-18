@@ -23,7 +23,6 @@ shapes:
 | `build + test (ubuntu-latest)` | runs | **skipped** |
 | `assertion freeze (advisory)` | runs; skipped on a proven main push | **skipped** |
 | `sandbox against a real runtime (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
-| `container daemon end to end (docker, linux)`, `(podman, linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `remote daemon over a real sshd (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `web client` | runs on main pushes and nightly; on a pull request only with [web client paths](#path-gated-jobs) | **skipped** |
 | `docs check` | runs | **runs** |
@@ -54,25 +53,8 @@ during a long install that leaves no container or daemon, and two concurrent sta
 container and one daemon. The 489 suite below runs on the shared provisioning. Locally:
 `mise run image && mise run test-sandbox`; neither runs by default.
 
-`container daemon end to end` (#1281) is a matrix of two legs, **docker** and **rootless podman**,
-on the Linux runner. The job above starts its containers with the harness's own `create` argv, so a
-mount option podman rejects in the application's argv (#1279) passed it and reached users. This job
-creates the container the way Settings does — `DaemonContainers::bring_up`, so the credential
-tmpfs, the worktree bind and the uid/gid mapping (`--user` on docker, `--userns=keep-id` on podman)
-are the application's — from `micold-basic:dev` built from the branch, and drives the app's own
-connection actor (`micold_client::daemon::actor`): the daemon is provisioned over SSH with the
-stand-in AI CLI of the daemon suites (installed from a tarball in the shared project, no network),
-a session starts, the stand-in answers a prompt, the session stops and the container is removed. A
-refused option ends the start with the runtime's own output, which is the test's failure message.
-The tests are the `sandbox_real_*` tests of `micold-client` (`src/shell/sandbox_real.rs`, the BUG-868
-bring-up test included), run with `--bin micold-ai-ide` so no other test target is built.
-
-A skip there is a failure: the tests skip on a host without the runtime or the image, and the job
-sets `MICOLD_REAL_RUNTIME_REQUIRED=1`, which turns that skip into a panic. The last step also
-checks that both tests passed and that the end-to-end test printed its closing timing line (`<runtime>:
-connected after …s, done after …s`), so a filter that matches nothing cannot pass either. Locally:
-`mise run image && mise run test-sandbox`, with `MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman`
-for podman.
+The `container daemon end to end` job (#1281) drove the desktop client's container bring-up; it was
+retired with the desktop app (#1959).
 
 `remote daemon over a real sshd` (feature 489) installs `openssh-server` and runs the `ssh_real_*`
 tests (`mise run test-ssh` locally): a rootless `sshd` on loopback that logs in as the runner's own
@@ -168,16 +150,13 @@ The other, `daemon_runtime`, is true when **any** touched path is declared `mico
 (#954): `crates/micold-core/**`, `crates/micold-daemon/**`, the workspace `Cargo.toml` and
 `Cargo.lock`, the toolchain pins (`rust-toolchain.toml`, `.cargo/config.toml`),
 `packaging/sandbox/**` and `packaging/basic/**` (the two images the sandbox job builds),
-`scripts/basic-image-hash.sh`, the icon `micold-core`'s `build.rs` reads, and **`ci.yml` itself**.
-It gates `sandbox against a real runtime` (15–20 minutes), `container daemon end to end` (both
-legs) and `remote daemon over a real sshd` (about 5 minutes) with the same rule as above: always on
+`scripts/basic-image-hash.sh`, and **`ci.yml` itself**.
+It gates `sandbox against a real runtime` (15–20 minutes), and `remote daemon over a real sshd` (about 5 minutes) with the same rule as above: always on
 `main` pushes and the nightly, on a pull request only when `daemon_runtime` is true, which `full-ci`
 forces. One attribute serves all three jobs: they test the same crates, the sandbox jobs only add
 the image directories, and the sshd job is never the critical path, so a second attribute would
 save a few minutes on the rarest change (`packaging/**` alone) at the price of a second output to
-keep in step. Of `micold-client` only the three files the end-to-end job drives are in the set
-(`src/daemon.rs`, `src/shell/sandbox.rs`, `src/shell/sandbox_real.rs`); the rest of it is built by
-the `test` job. A UI-only change skips the jobs; a daemon change runs them. Every failure path lands
+keep in step. Every failure path lands
 on `daemon_runtime=true`.
 
 A third, `client` (#1735), is true when **any** touched path is declared `micold-client`:
@@ -192,27 +171,6 @@ To gate another job the same way: declare an attribute in `.gitattributes`, emit
 from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it in
 `scripts/tests/classify-change.test.sh`, expose it as a `classify` output, and put it in the
 job's `if:`.
-
-## The Kubernetes real-cluster job
-
-`kubernetes daemon on a real cluster` (`kube-cluster`, feature 686, FR-021) runs the `kube_real_*`
-tests of `micold-client` against a throwaway `kind` cluster, through `scripts/test-kube.sh` (the
-same script as `mise run test-kube`). It skips with the docs-only rule of the other jobs and runs on
-every other change, whatever path: it is not gated by `daemon_runtime`, because the code under test
-spans `micold-core`, `micold-client` and `packaging/`.
-
-- **Linux only**, like the rest of the pipeline: kind needs a Linux container runtime.
-- **Pinned.** `kind` and `kubectl` are downloaded at a fixed version and checked against a sha256
-  (`KIND_SHA256`, `KUBECTL_SHA256` in the job's `env`); the node image is one stable Kubernetes
-  version (`NODE_IMAGE` in `crates/micold-client/tests/kube_real_support/mod.rs`). Bump the three
-  together, and take the checksums from the release's own `.sha256` files.
-- **No registry, no sign-in, no provider network.** The pod's SSH image is built in the job from
-  `packaging/basic` plus `packaging/kube/test.Containerfile` and loaded with `kind load
-  docker-image`. The stand-in AI CLI comes from a package source the test process serves on the
-  `kind` docker network's gateway (172.30.0.1), and the git remote is a `git daemon` there.
-- **Skips, not failures.** Without docker, kind or kubectl each test prints `SKIP <name>: <reason>`
-  and passes; the job installs them, so a skip in CI means the install step is broken.
-- Part of `ci complete`; add `full-ci` to run it on a docs-only change.
 
 ## Red on main is reported
 
@@ -321,9 +279,8 @@ the feature works. `scripts/check-user-guide-updated.sh` is the other half.
 It blocks a pull request when **all** of these hold:
 
 1. Its title is a conventional-commit **feature** — `feat:`, `feat(scope):`, either with a `!`.
-2. It touches a path declared `micold-user-facing` in `.gitattributes` — the client's screens
-   (`crates/micold-client/src/ui/**`) and the behaviours they trigger
-   (`crates/micold-client/src/features/**`).
+2. It touches a path declared `micold-user-facing` in `.gitattributes`. No path is declared since
+   the desktop app was retired (#1959), so the gate does not fire until the web client's screens are.
 3. It touches no page declared `micold-user-guide` — that is, nothing under `docs/user-guide/`.
 
 A developer doc does not satisfy it. The reader Principle VII protects is the person using the
@@ -344,7 +301,7 @@ reads the same prefixes to decide version numbers.
 
 The component library underneath the screens (`ui/material/**`, `ui/cdk/**`) is deliberately
 excluded: Principle VII is satisfied for it by
-[the component library guide](component-library.md), and a ripple timing or a token tweak changes
+the component library guide, and a ripple timing or a token tweak changes
 pixels without changing anything the user guide says.
 
 ### Getting past it

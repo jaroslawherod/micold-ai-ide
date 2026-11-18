@@ -43,16 +43,8 @@ ffmpeg = "8"
 # but stay in the foreground for as long as you use the app, and holding the
 # build lock for that whole time would block every other worktree.
 
-[tasks.run]
-description = "Run the GUI client (feature 010: spawns/attaches the session daemon)"
-run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-client"
-
-[tasks.showcase]
-description = "Run the component showcase (feature 020): every shared component on one page"
-run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-client --bin micold-showcase"
-
 [tasks.daemon]
-description = "Run the session daemon directly (normally auto-spawned by the client)"
+description = "Run the session daemon directly"
 run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-daemon"
 
 [tasks.client-test]
@@ -125,10 +117,6 @@ pnpm --filter @micold/client exec playwright install chromium firefox webkit
 pnpm --filter @micold/client e2e:stack
 """
 
-[tasks.screenshot]
-description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"
-run = "scripts/screenshot-session.py"
-
 [tasks.autopilot-tokens]
 description = "Report token usage per autopilot unit from this worktree's Claude Code sessions"
 run = "scripts/autopilot-tokens.py --worktree"
@@ -137,16 +125,12 @@ run = "scripts/autopilot-tokens.py --worktree"
 description = "Estimate the tokens each autopilot role loads; pass a git ref to see the delta against it"
 run = "scripts/autopilot/measure-skill.sh"
 
-[tasks.fixture]
-description = "Build the 20-worktree reference scene for the frame-time measurement (018 §B8)"
-run = "scripts/reference-scene.sh"
-
 [tasks.check]
 description = "Check the whole workspace without linking (fast edit loop) [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo check --workspace"
 
 [tasks.test]
-description = "Test the whole workspace (core + client + daemon) with nextest, matching CI [build-locked]"
+description = "Test the whole workspace (core + daemon) with nextest, matching CI [build-locked]"
 # nextest does not run doctests (issue #1649); `cargo test --doc` runs them on its own so none are
 # silently skipped. See the `github:nextest-rs/nextest` tool comment above and scripts/gate.sh.
 run = """
@@ -157,7 +141,7 @@ run = """
 """
 
 [tasks.test-core]
-description = "Test the render-free core only (fast, no GUI / no iced) [build-locked]"
+description = "Test the render-free core only (fast) [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-targets"
 
 [tasks.bench-routing]
@@ -254,14 +238,6 @@ command -v "$runtime" >/dev/null 2>&1 || { echo "test-sandbox: $runtime is not i
   -p micold-core -p micold-daemon \
   --features micold-core/sandbox-real-runtime,micold-daemon/sandbox-real-runtime \
   sandbox_real_ --no-fail-fast -- --test-threads=1
-
-# The client's test build does not compile in release (its widget tests use iced's `()` renderer,
-# which iced only provides with debug assertions), and its test measures no time: debug profile.
-# Its end-to-end test (#1281) copies the debug `micold-daemon` it finds beside its `deps/`.
-{{config_root}}/scripts/build-lock.sh cargo build -p micold-daemon
-{{config_root}}/scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide \
-  --features sandbox-real-runtime \
-  sandbox_real_ --no-fail-fast -- --test-threads=1
 """
 
 [tasks.test-ssh]
@@ -276,16 +252,6 @@ run = """
   ssh_real_ --no-fail-fast -- --test-threads=1
 """
 
-[tasks.test-kube]
-description = "Run the real-cluster Kubernetes daemon tests on a throwaway kind cluster (feature 686): needs docker, kind and kubectl [build-locked]"
-run = """
-# `kube_real_` is matched against **test names**; one test at a time, because each starts its own
-# daemon in the one cluster `micold-kube-test`. The tests are off by default (cargo feature
-# `kube-real-runtime`) and skip with a printed reason when docker, kind or kubectl is absent; this
-# task refuses instead. The cluster is deleted afterwards unless MICOLD_KUBE_TEST_KEEP=1.
-CARGO_WRAP={{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/test-kube.sh
-"""
-
 [tasks.chart-check]
 description = "Lint and validate the Helm chart deploy/helm/micold (helm lint, kubeconform, conformance test; #1981): needs helm and kubeconform, which scripts/install-kube-tools.sh pins"
 dir = "{{config_root}}"
@@ -296,15 +262,10 @@ description = "Run the orchestrator end-to-end suites on a throwaway kind cluste
 dir = "{{config_root}}"
 run = "scripts/e2e-kind.sh"
 
-[tasks.build]
-description = "Build the release GUI binary [build-locked]"
-run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"
-
 [tasks.image]
 description = "Build the :dev basic image (sshd and session tools, no daemon) from packaging/basic (feature 806) [build-locked]"
 run = """
-# The container daemon's image is the basic image (feature 806): the client copies its own daemon
-# build in over SSH, so there is no daemon to build or stage here and no glibc check to run.
+# The container daemon's image is the basic image (feature 806): the daemon is copied in over SSH, so there is no daemon to build or stage here and no glibc check to run.
 # `sandbox_real_*` in `mise run test-sandbox` start from this tag.
 set -e
 
@@ -352,41 +313,17 @@ args="${SWEEP_ARGS:-"--time 7"}"
 {{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/sweep-targets.sh $args
 """
 
-# The static Linux daemons `deb` and `rpm` carry for remote hosts (feature 806 FR-009). Their asset
-# paths are the workspace's own `target/remote-daemon`, not the shared target dir. zig comes from
+# The static Linux daemons for remote hosts (feature 806 FR-009), built into the workspace's own
+# `target/remote-daemon`, not the shared target dir. zig comes from
 # mise, so a clean checkout needs no system zig.
 [tasks.remote-daemons]
-description = "Cross-build the static Linux daemons the deb and rpm packages carry into target/remote-daemon [build-locked]"
+description = "Cross-build the static Linux daemons for remote hosts and containers into target/remote-daemon [build-locked]"
 dir = "{{config_root}}"
 tools = { zig = "0.14" }
 run = """
 command -v cargo-zigbuild >/dev/null 2>&1 || cargo install cargo-zigbuild --locked
 rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 scripts/remote-daemon-bundle.sh --out target/remote-daemon
-"""
-
-[tasks.deb]
-description = "Build the Debian .deb package for the host arch (installs cargo-deb if missing) [build-locked]"
-depends = ["remote-daemons"]
-run = """
-command -v cargo-deb >/dev/null 2>&1 || cargo install cargo-deb --locked
-{{config_root}}/scripts/build-lock.sh cargo deb -p micold-client
-echo 'Built:'
-ls -1 "$({{config_root}}/scripts/build-lock.sh --print-target-dir)"/debian/*.deb
-"""
-
-# The RPM counterpart of `deb` (Fedora, RHEL, openSUSE): same payload, built by cargo-generate-rpm
-# from `[package.metadata.generate-rpm]`. It packages an existing release build, so build first.
-[tasks.rpm]
-description = "Build the RPM package for the host arch (installs cargo-generate-rpm if missing) [build-locked]"
-depends = ["remote-daemons"]
-run = """
-command -v cargo-generate-rpm >/dev/null 2>&1 || cargo install cargo-generate-rpm --locked
-target="$({{config_root}}/scripts/build-lock.sh --print-target-dir)"
-{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client -p micold-daemon
-{{config_root}}/scripts/build-lock.sh cargo generate-rpm -p crates/micold-client --target-dir "$target"
-echo 'Built:'
-ls -1 "$target"/generate-rpm/*.rpm
 """
 
 [tasks.site-build]

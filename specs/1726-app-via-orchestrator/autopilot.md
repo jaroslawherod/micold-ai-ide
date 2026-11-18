@@ -82,6 +82,16 @@ None.
 
 None.
 
+## Dropped (#1959)
+
+jaro (2026-11-18): drop desktop app support and do not continue the desktop-via-orchestrator epic.
+The desktop app is removed in #1959, so every follow-up below that remains open is **dropped, not
+pending**: the M4 gate note and the M3 review B F1 (SSH, container and Kubernetes actors connecting
+directly) concern the removed client's actors; the M2 review follow-ups (`list.rs:111`,
+`client.rs:188`) are orchestrator-side and stay as plain notes; the close follow-ups, including
+`speckit-tdd-verify`'s FAIL remediation (tasks.md Phase 9, T035-T045) and the untested-by-decision
+M4 items (drift-M4.md), are dropped, and the spec's open TDD remediation no longer blocks closing it.
+
 ## Follow-ups not done
 
 - M4 gate (cloud): `scripts/gate.sh` fmt and clippy pass; `cargo nextest` is not installed here, and a `cargo test --workspace` fallback filled the disk (link failures), so the workspace test run is CI's. Targeted runs passed: `orchestrator_provisioned`, `daemon_config_delivery_host`, `orchestrator_single_connection`. The `ssh_real_link` routed case passed locally with sshd. Warning: `scripts/tests/autopilot.test.sh` (or a sibling) checked out `main` in this worktree and left stray files; restored by hand.

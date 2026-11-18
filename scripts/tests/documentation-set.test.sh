@@ -79,16 +79,10 @@ expect specs/006-real-terminal-emulator/contracts/settings-schema.md         uns
 expect specs/027-sandboxed-daemon-runtime/contracts/sandbox-settings-schema.md unset
 expect specs/027-sandboxed-daemon-runtime/contracts/container-runtime.md       set
 
-# The same shape again, outside `docs/` and `specs/`:
-# `crates/micold-core/tests/tests_never_write_the_real_data_directory.rs` holds the visual-pass
-# skill's launch recipe to isolating the data directory, so dropping a variable from it must run the
-# suite. The other skills stay documentation -- the exception is one file, not `.claude/skills/`.
-expect .claude/skills/visual-pass/SKILL.md         unset
-
 echo
 echo "== code (everything not declared) =="
 expect crates/micold-core/src/lib.rs              unspecified
-expect crates/micold-client/tests/showcase_glue.rs unspecified
+expect crates/micold-daemon/src/lib.rs           unspecified
 expect .github/workflows/ci.yml                   unspecified
 expect Cargo.toml                                 unspecified
 expect Cargo.lock                                 unspecified

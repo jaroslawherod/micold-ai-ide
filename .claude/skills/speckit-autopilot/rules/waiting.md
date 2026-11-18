@@ -13,7 +13,7 @@ context, which costs as much as 12 calls. The orchestrator's lasts 60 minutes (2
   `HOLD`. It prints `DONE <line>` when the log matches (default: a line starting `<NAME>_EXIT=`).
 - To hold for a subagent, name a file nothing writes; its result reaches you when a hold returns.
 - On `STOP`, wait once in the background instead, and do not call `hold.sh` again.
-- A forked skill that runs over 5 minutes (`visual-pass`, `speckit-tdd-verify`) blocks your turn:
+- A forked skill that runs over 5 minutes (`speckit-tdd-verify`) blocks your turn:
   have an `autopilot-worker` run it and return its result, and hold.
 - Run work that needs no build (a review, a subagent) while the gate builds, and wait for what
   runs together in one wait, not one after another.

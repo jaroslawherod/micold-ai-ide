@@ -29,18 +29,18 @@ private to skip the wait restores that pile-up.
 
 `scripts/build-lock.sh` also takes a lock in the shared git dir and names the holder while you
 wait. `MICOLD_NO_BUILD_LOCK=1` skips it for a one-off run; cargo's own lock still applies. The
-interactive tasks (`run`, `showcase`, `daemon`) skip it by design, since they stay in the foreground
-for as long as the app is open.
+interactive tasks (such as `daemon`) skip it by design, since they stay in the foreground for as
+long as the process is open.
 
 Target dirs grow without bound; `mise run sweep` reclaims them. Run it on a schedule with a size
 bound, e.g. `SWEEP_ARGS='--maxsize 60GB' mise run sweep` from cron or a systemd timer.
 
 ## Linking is the expensive part, not compiling
 
-Before the consolidation below, the workspace had 591 top-level `tests/*.rs` files (client 262, core 229, daemon 99, material 1),
+Before the consolidation below, the workspace had 591 top-level `tests/*.rs` files (client 262, core 229, daemon 99, material 1; the client and material crates were removed in #1959),
 each its own executable: `cargo test --workspace` (or any `-p <crate>` run without a narrower
 filter) links every one of them, even when only one test changed. Measured 2026-11-01: a single
-`cargo test -p micold-client` wrote ~39 GB in 14 minutes and pushed `/proc/pressure/io`'s `full`
+`cargo test -p micold-client` (since removed) wrote ~39 GB in 14 minutes and pushed `/proc/pressure/io`'s `full`
 average to 50%. `cargo check --workspace` does not link at all, and `cargo test -p <crate>
 <test_name>` builds only the one binary whose tests match. Use `cargo check` (`mise run check`, or
 `scripts/build-lock.sh cargo check --workspace` ad hoc) while iterating, and narrow a test run to
@@ -60,8 +60,7 @@ isolation is still a safer runner for any further consolidation.
 ## Few test executables
 
 Every top-level `crates/*/tests/*.rs` used to be its own test target, linked as its own executable:
-591 of them, 54 GB of test binaries for one `cargo test --workspace`. `micold-core`, `micold-client`
-and `micold-daemon` now set `autotests = false`; each has a `tests/main.rs` that declares the ordinary
+591 of them, 54 GB of test binaries for one `cargo test --workspace`. `micold-core` and `micold-daemon` (and, before #1959 removed it, `micold-client`) set `autotests = false`; each has a `tests/main.rs` that declares the ordinary
 test files as modules. (#1631 left 201 test executables, 14.7 GiB; #1650 moved 39 more files that touch no
 process-global state into those `main` executables.)
 

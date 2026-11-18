@@ -1,5 +1,9 @@
 # The documentation site: how a publication works
 
+> **Retired in #1959:** the media capture (step 2 below, `site/capture/`) photographed the desktop
+> application, which no longer exists. `site/media.toml` declares nothing and `--no-media` is a no-op;
+> the sections that describe the capture, its display and its scenes are history until they are rewritten.
+
 <https://jaroslawherod.github.io/micold-ai-ide/> is this `docs/` directory, rendered. It is
 published by a workflow, from a release tag, with every screenshot on it captured from the
 application built at that tag — so the site a reader lands on shows the version they can download,

@@ -42,8 +42,9 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
 - **Changed how sessions run in a container** (the sandbox code or the image's build files)? Also
   `mise run image`, then `mise run test-sandbox`. No container runtime installed: say so in the
   PR body; CI's sandbox job runs it.
-- **Changed how something looks?** (In the chore flow that is not a chore: return `NEXT:`.) Run the `visual-pass` skill through an `autopilot-worker`. Save
-  its evidence in the spec directory, when the flow has one.
+- **Changed how something looks?** (In the chore flow that is not a chore: return `NEXT:`.) The
+  `visual-pass` skill drove the retired desktop GUI and is gone; check it in the web client's
+  Playwright screenshots (`mise run client-e2e`).
 
 - **While writing code or a test, not running the gate**: use `mise run check` (no linking) or a
   targeted `scripts/build-lock.sh cargo test -p <crate> <test_name>`, never `cargo test

@@ -4,17 +4,10 @@
 [![Release](https://img.shields.io/github/v/release/jaroslawherod/micold-ai-ide)](https://github.com/jaroslawherod/micold-ai-ide/releases/latest)
 [![License](https://img.shields.io/github/license/jaroslawherod/micold-ai-ide)](LICENSE)
 
-**Run several AI coding agents side by side, each in its own git worktree, in one native desktop app.**
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://jaroslawherod.github.io/micold-ai-ide/media/main-window-dark.png">
-    <img alt="Micold AI IDE: a worktree sidebar on the left and the active project's details on the right" src="https://jaroslawherod.github.io/micold-ai-ide/media/main-window-light.png" width="860">
-  </picture>
-</p>
+**Run several AI coding agents side by side, each in its own git worktree, from the web client.**
 
 Micold gives every line of work its own branch, worktree and real terminal, and keeps the agent
-session running in the background — close the window, or crash it, and the sessions are still there
+session running in the background — close the browser, or crash it, and the sessions are still there
 when you come back.
 
 - **Any agent, your choice per session** — [Claude Code](https://www.anthropic.com/claude-code),
@@ -27,11 +20,10 @@ when you come back.
   attaches.
 - **Sandboxable** — run the session service in a container so agents see only the projects and
   credentials you allow.
-- **Native and local-first** — Rust and [iced](https://iced.rs), no Electron, no account;
-  all state stays on your machine and the app is fully functional offline.
+- **Local-first** — a Rust daemon and orchestrator with a web client, no account;
+  all state stays on your machine and local mode works offline.
 
-**Documentation: <https://jaroslawherod.github.io/micold-ai-ide/>** — the user guide with
-screenshots of the running application, published from this repository on every release.
+**Documentation: <https://jaroslawherod.github.io/micold-ai-ide/>** — the user guide, published from this repository on every release.
 
 ## Features
 
@@ -43,9 +35,8 @@ screenshots of the running application, published from this repository on every 
   CLI it runs, and they can run side by side in the same project.
 - A real terminal emulator: full ANSI color + text styling, live keyboard and mouse input,
   focus-gated key routing, resize, scrollback, and copy/paste.
-- Light/dark theming that follows your OS preference; configurable terminal scrollback.
 - Sessions run in a background **session service**, so they survive closing — or crashing — the
-  window, and reattach instantly when it comes back.
+  client, and reattach instantly when it comes back.
 - That service can run **in a container** instead of directly on your computer: it then sees only
   the projects you registered and the credentials you allowed, under limits you set. See
   [Running the session service in a container](docs/user-guide/sandboxed-daemon.md).
@@ -53,38 +44,27 @@ screenshots of the running application, published from this repository on every 
 ## Download
 
 Linux is the only supported platform: macOS and Windows support was dropped in
-[#1897](https://github.com/jaroslawherod/micold-ai-ide/issues/1897). Prebuilt packages for every
-release are on the [releases page](https://github.com/jaroslawherod/micold-ai-ide/releases/latest):
-
-| Platform | Package |
-|---|---|
-| Debian, Ubuntu | `.deb` (amd64, arm64) — `sudo apt install ./micold-client_*.deb` |
-| Fedora, RHEL, openSUSE | `.rpm` (x86_64, aarch64) |
-
-Then run `micold-ai-ide` and open a git project; you also need at least one agent CLI
-(for example `claude`) on your `PATH`. Step-by-step guides:
+[#1897](https://github.com/jaroslawherod/micold-ai-ide/issues/1897). The desktop application and its
+`.deb` and `.rpm` packages were retired in #1959; the web client is the client, and the daemon and
+orchestrator are built from source or run from their container images. See
 [installing](https://jaroslawherod.github.io/micold-ai-ide/install.html).
 
 ## Build from source
 
 ```sh
-mise run run        # run the GUI client (it spawns or attaches the session daemon itself)
+mise run daemon     # run the session daemon
 mise run test       # test the whole workspace, as CI does
 mise run test-core  # test only the render-free core — no GUI, much faster
 ```
 
-The workspace is three crates: `micold-core` (render-free logic and the wire protocol),
-`micold-client` (the iced GUI) and `micold-daemon` (the session service). `mise.toml` holds the
+The workspace is `micold-core` (render-free logic and the wire protocol), `micold-daemon` (the
+session service and the orchestrator) and `micold-e2e`; the web client is `apps/client`. `mise.toml` holds the
 canonical commands; a first run in a fresh clone needs `mise trust` once.
-
-Linux build/runtime needs the usual GUI dev libraries (X11/Wayland/xkbcommon); see
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the exact package list.
 
 ## Documentation
 
 The published site is <https://jaroslawherod.github.io/micold-ai-ide/>: the same documentation
-this repository carries, at the latest release, with the screenshots captured from that release's
-own build.
+this repository carries, at the latest release, at the latest release.
 
 The sources are here, and are what a pull request edits — the site is built from them, never the
 other way round: [`docs/README.md`](docs/README.md), including

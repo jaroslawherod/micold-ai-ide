@@ -3,12 +3,10 @@ name: release
 # Release automation:
 #  1. release-please watches `main` and opens/maintains a release PR from Conventional Commits,
 #     bumping the Cargo version + Cargo.lock and updating CHANGELOG.md (embedded in the app).
-#  2. When that PR is merged, release-please creates a DRAFT GitHub release and its tag; the `deb` job
-#     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft, the `rpm` job
-#     does the same for an .rpm (drafts
+#  2. When that PR is merged, release-please creates a DRAFT GitHub release and its tag (drafts
 #     are mutable, so this works even with immutable releases enabled); the
-#     `image` jobs build and push the sandbox image for the deb architectures; the `publish` job
-#     then flips the draft to published, freezing it immutably with the assets attached.
+#     `image` jobs build and push the sandbox image for amd64 and arm64; the `publish` job
+#     then flips the draft to published, freezing it immutably.
 #
 # Why the image is part of the *release* and not of CI (FR-024): the client ships a compiled-in
 # default of `ghcr.io/jaroslawherod/micold-daemon:<its own version>`, so the reference a user's
@@ -69,9 +67,7 @@ env:
   # Opt out of the shared target directory that .cargo/config.toml sets. That directory exists to
   # stop several local agent worktrees from each keeping a ~30 GB target/ and thrashing one NVMe;
   # a runner has a single checkout, no worktrees, and a disk it throws away, so it gains nothing
-  # and loses two things: cargo-deb wrote to target-shared/debian/ while the upload step globbed
-  # target/debian/ (v0.5.0 failed exactly here), and Swatinem/rust-cache caches ./target, so every
-  # run became a cold build. CARGO_TARGET_DIR takes precedence over `build.target-dir` in config.
+  # and loses the cache: Swatinem/rust-cache caches ./target, so every run became a cold build. CARGO_TARGET_DIR takes precedence over `build.target-dir` in config.
   CARGO_TARGET_DIR: target
 
 jobs:
@@ -92,138 +88,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  # Feature 806 (FR-009): the two static Linux daemons every package carries, built once here on
-  # Linux and kept as an artifact. Its consumers were the macOS and Windows packaging jobs, removed
-  # with #1897; it stays until the Linux packages decide whether to carry them.
-  linux-daemons:
-    name: static Linux daemons (musl)
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: ./.github/actions/install-zigbuild
-      - name: Build the Linux daemons
-        run: |
-          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
-          scripts/remote-daemon-bundle.sh --out target/remote-daemon
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: linux-daemons
-          path: target/remote-daemon/micold-daemon-linux-*
-          retention-days: 7
-
-  deb:
-    name: deb (${{ matrix.arch }})
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
-    runs-on: ${{ matrix.runner }}
-    # Only needs to upload assets to the release created by release-please.
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Install iced + packaging system dependencies
-        run: |
-          # Drop the vendor apt repositories the runner image preconfigures (Microsoft's
-          # `azure-cli` and `prod`, Google Chrome) before updating. Every package installed below
-          # comes from the Ubuntu archive; none has ever come from those. But `apt-get update`
-          # exits 100 if *any* configured repository fails, so an outage in software this project
-          # does not use fails the job -- as one did on 2026-08-27, when packages.microsoft.com
-          # answered 403 for both of its repositories and the only consequence was a red build
-          # that a re-run cleared.
-          #
-          # Emptying `sources.list.d` except for `ubuntu.sources` leaves the archive itself alone on
-          # both runner generations: jammy keeps it in `/etc/apt/sources.list`, noble in
-          # `sources.list.d/ubuntu.sources`. Deleting by exception rather than by `*.list` matters
-          # because the vendor repositories are defined as `.list` on one image generation and as
-          # deb822 `.sources` on the other. If a future image moved the archive somewhere this does
-          # remove, the install below would fail immediately on a missing package rather than
-          # silently install the wrong thing.
-          sudo find /etc/apt/sources.list.d -mindepth 1 -not -name ubuntu.sources -delete
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libx11-dev \
-            libxcursor-dev libxrandr-dev libxi-dev
-      - uses: ./.github/actions/install-zigbuild
-      - name: Build the Linux daemons for remote hosts and containers
-        run: |
-          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
-          scripts/remote-daemon-bundle.sh --out target/remote-daemon
-      - name: Install cargo-deb
-        run: cargo install cargo-deb --locked
-      # Native build → cargo-deb derives the Debian arch (amd64 / arm64) automatically.
-      - name: Build .deb
-        run: cargo deb
-      # release-please creates the release as a DRAFT (mutable), so assets can be attached even
-      # with immutable releases enabled; the `publish` job flips it to published afterward.
-      - name: Upload .deb to the draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG_NAME" target/debian/*.deb --clobber
-
-  # The RPM counterpart of `deb`, for Fedora, RHEL and openSUSE: same two architectures, same
-  # payload, built natively. cargo-generate-rpm only packs files, so the runner needs no RPM
-  # tooling; it does need the release binaries built first, which `cargo deb` does for itself.
-  # `--target-dir` is explicit because the package's source paths (`target/release/...`) are
-  # rewritten to it, and the output lands in `<target-dir>/generate-rpm/`.
-  rpm:
-    name: rpm (${{ matrix.arch }})
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-          - arch: aarch64
-            runner: ubuntu-22.04-arm
-    runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Install iced system dependencies
-        run: |
-          # Same repository pruning as the `deb` job, for the same reason.
-          sudo find /etc/apt/sources.list.d -mindepth 1 -not -name ubuntu.sources -delete
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libx11-dev \
-            libxcursor-dev libxrandr-dev libxi-dev
-      - uses: ./.github/actions/install-zigbuild
-      - name: Build the Linux daemons for remote hosts and containers
-        run: |
-          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
-          scripts/remote-daemon-bundle.sh --out target/remote-daemon
-      - name: Install cargo-generate-rpm
-        run: cargo install cargo-generate-rpm --locked
-      - name: Build .rpm
-        run: |
-          cargo build --release -p micold-client -p micold-daemon
-          cargo generate-rpm -p crates/micold-client --target-dir target
-      - name: Upload .rpm to the draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG_NAME" target/generate-rpm/*.rpm --clobber
 
   image:
     name: image (${{ matrix.arch }})
@@ -285,8 +149,7 @@ jobs:
       # Containerfile copies a host-built binary in, so the base's glibc has to be no *older* than
       # the toolchain's. ubuntu-22.04 links against 2.35 and trixie provides 2.41, which is the
       # safe side of that inequality -- the smoke test below is what proves it rather than assumes
-      # it. Only the daemon is built here; the client's iced/X11 system dependencies are not
-      # needed and are deliberately not installed.
+      # it. Only the daemon is built here.
       - name: Build the daemon for this architecture
         run: cargo build --release -p micold-daemon
 
@@ -383,7 +246,7 @@ jobs:
     # so a platform missing from this list is a platform whose download is missing permanently.
     # `crates/micold-core/tests/release_publishes_complete_sets.rs` reads the workflow and holds
     # this list equal to the set of jobs that run `gh release upload`.
-    needs: [release-please, deb, rpm, image-manifest]
+    needs: [release-please, image-manifest]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     # Only needs to flip the draft release to published (contents), which freezes it immutably
