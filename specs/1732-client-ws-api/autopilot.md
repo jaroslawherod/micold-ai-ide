@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1732
-- **Worktree branch**: claude/project-thread-j62svx
+- **Worktree branch**: claude/project-thread-d2fj5m
 - **Started**: 2026-11-17
 - **Phase**: close (M6 merged)
 - **Next step**: Close unit (fresh thread): tdd-verify, close PR. Follow-ups: helm v3.22.1 bump (no checksum from cloud), SC-006 browser test gap (T038 deviation), daemon header "Online" while sessions Unreachable.
