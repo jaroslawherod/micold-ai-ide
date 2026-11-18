@@ -31,7 +31,7 @@ done
 # PATH with the stubs and the base tools only, so a real kind on the host is never reached.
 base="$tmp/base"
 mkdir "$base"
-for t in bash env sleep cat grep mkdir rm kill dirname git setsid printf pkill timeout; do
+for t in bash env sleep cat grep mkdir mktemp rm kill dirname git setsid printf pkill timeout; do
   p="$(command -v "$t")" && ln -s "$p" "$base/$t"
 done
 
@@ -59,7 +59,7 @@ l="$tmp/fresh"
 has "$l" "kind create cluster --name micold-local --config $ROOT/deploy/kind/local.yaml" && pass "default mode is kind and creates micold-local" || fail "no kind create: $(cat "$l" "$l.out")"
 has "$l" "docker build -f $ROOT/Dockerfile.orchestrator -t micold-orchestrator:local $ROOT" && pass "orchestrator image built" || fail "orchestrator image not built"
 has "$l" "docker build -f $ROOT/Dockerfile.web --build-arg EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:8730/api/ws -t micold-web:local $ROOT" && pass "web image built with the forwarded URL" || fail "web image not built"
-has "$l" "kind load docker-image --name micold-local micold-orchestrator:local" && has "$l" "kind load docker-image --name micold-local micold-web:local" && pass "both images loaded" || fail "images not loaded"
+has "$l" "docker save -o " && [ "$(grep -c '^kind load image-archive --name micold-local ' "$l")" = 2 ] && pass "both images loaded" || fail "images not loaded"
 has "$l" "helm upgrade --install micold $ROOT/deploy/helm/micold --kube-context kind-micold-local --namespace micold --create-namespace -f $ROOT/deploy/helm/micold/ci/local.yaml --wait --timeout 10m" && pass "chart installed with ci/local.yaml" || fail "helm: $(grep helm "$l")"
 has "$l" "kubectl --context kind-micold-local -n micold port-forward deployment/micold-orchestrator 8730:8730" && pass "API forwarded to 8730" || fail "no API forward"
 has "$l" "kubectl --context kind-micold-local -n micold port-forward service/micold-web 8731:8731" && pass "web forwarded to 8731" || fail "no web forward"
@@ -70,7 +70,7 @@ has "$l" "kind delete cluster --name micold-local" && pass "TERM deletes the clu
 run_stack "$tmp/reuse" STUB_CLUSTERS=micold-local MICOLD_LOCAL_KEEP=1
 l="$tmp/reuse"
 has "$l" "kind create cluster" && fail "reuse created a cluster" || pass "reuse skips kind create"
-[ "$(grep -c '^docker build' "$l")" = 2 ] && [ "$(grep -c '^kind load docker-image' "$l")" = 2 ] && pass "reuse rebuilds and reloads both images" || fail "reuse build/load: $(cat "$l")"
+[ "$(grep -c '^docker build' "$l")" = 2 ] && [ "$(grep -c '^kind load image-archive' "$l")" = 2 ] && pass "reuse rebuilds and reloads both images" || fail "reuse build/load: $(cat "$l")"
 has "$l" "helm upgrade --install micold" && pass "reuse upgrades the release" || fail "reuse no helm upgrade"
 has "$l" "kubectl --context kind-micold-local -n micold rollout restart deployment" && pass "reuse restarts the deployments" || fail "reuse no restart"
 has "$l" "kind delete cluster" && fail "KEEP still deleted the cluster" || pass "KEEP keeps the cluster"

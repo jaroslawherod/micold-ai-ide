@@ -7,7 +7,7 @@ CI's `kube-e2e` job runs the same script on every change to a `micold-kube` path
 
 ## Run it locally
 
-You need docker, kind, kubectl, helm and cargo on `PATH`. `scripts/install-kube-tools.sh kind
+You need docker (or podman: `MICOLD_CONTAINER_RUNTIME=podman`, picked automatically when docker is absent), kind, kubectl, helm and cargo on `PATH`. `scripts/install-kube-tools.sh kind
 kubectl helm` installs the pinned versions into `~/.local/bin`.
 
 ```sh
@@ -18,7 +18,7 @@ The script:
 
 1. deletes any cluster with the same name, then creates `micold-e2e`;
 2. builds `Dockerfile.orchestrator` as `ghcr.io/jaroslawherod/micold-orchestrator:e2e` and
-   loads it into the cluster with `kind load docker-image`;
+   loads it into the cluster (`<runtime> save` and `kind load image-archive`);
 3. installs the chart `deploy/helm/micold` with `deploy/helm/micold/ci/e2e.yaml` and `--wait`, into namespace
    `micold-e2e`;
 4. runs `cargo test -p micold-e2e --test <suite>` once per suite, in the order `ops`, `restart`,

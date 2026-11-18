@@ -84,12 +84,12 @@ pnpm --filter @micold/client start:mock
 """
 
 [tasks.local-stack]
-description = "Run the orchestrator (Postgres state), one seeded daemon and the web client in a kind cluster micold-local, forwarded to 127.0.0.1:8730/8731; Ctrl+C deletes it unless MICOLD_LOCAL_KEEP=1. MICOLD_LOCAL_MODE=process runs them as local processes instead (#1732) [needs docker; mise fetches kind, kubectl, helm]"
+description = "Run the orchestrator (Postgres state), one seeded daemon and the web client in a kind cluster micold-local, forwarded to 127.0.0.1:8730/8731; Ctrl+C deletes it unless MICOLD_LOCAL_KEEP=1. MICOLD_LOCAL_MODE=process runs them as local processes instead (#1732) [needs docker or podman (MICOLD_CONTAINER_RUNTIME picks); mise fetches kind, kubectl, helm]"
 dir = "{{config_root}}"
 run = "scripts/local-stack.sh"
 # kind mode's tools, task-scoped so `mise run local-stack` on a fresh checkout fetches them and no
 # other task or CI job downloads them. Same pins as scripts/install-kube-tools.sh (CI's installer);
-# scripts/tests/local-stack-tools.test.sh fails when the two drift. docker stays a prerequisite: the
+# scripts/tests/local-stack-tools.test.sh fails when the two drift. a container runtime (docker, or podman) stays a prerequisite: the
 # CLI is useless without a daemon, which mise cannot provide.
 tools = { kind = "0.33.0", kubectl = "1.37.2", helm = "4.3.2" }
 
@@ -258,7 +258,7 @@ dir = "{{config_root}}"
 run = "scripts/chart-check.sh"
 
 [tasks.e2e-kind]
-description = "Run the orchestrator end-to-end suites on a throwaway kind cluster (#1981): needs docker, kind, kubectl, helm; MICOLD_E2E_KEEP=1 keeps it, MICOLD_E2E_SUITES picks suites (docs/development/kube-e2e.md)"
+description = "Run the orchestrator end-to-end suites on a throwaway kind cluster (#1981): needs docker or podman, kind, kubectl, helm; MICOLD_E2E_KEEP=1 keeps it, MICOLD_E2E_SUITES picks suites (docs/development/kube-e2e.md)"
 dir = "{{config_root}}"
 run = "scripts/e2e-kind.sh"
 

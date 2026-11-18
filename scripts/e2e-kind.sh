@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the orchestrator end-to-end suites on a throwaway kind cluster (#1981/#1984, FR-008, FR-013,
-# FR-014). `mise run e2e-kind` and CI's `kube-e2e` job run this. Needs docker, kind, kubectl, helm
-# and cargo on PATH (scripts/install-kube-tools.sh pins kind, kubectl and helm). Linux amd64 only:
+# FR-014). `mise run e2e-kind` and CI's `kube-e2e` job run this. Needs docker or podman
+# (MICOLD_CONTAINER_RUNTIME picks; scripts/container-runtime.sh), kind, kubectl, helm and cargo on PATH (scripts/install-kube-tools.sh pins kind, kubectl and helm). Linux amd64 only:
 # anywhere else it prints a skip line and exits 0.
 #
 # Flow: delete-then-create the cluster, build Dockerfile.orchestrator, `kind load` it, install the
@@ -45,8 +45,11 @@ if [ "$(uname -s)-$(uname -m)" != Linux-x86_64 ]; then
   exit 0
 fi
 
-for tool in docker kind kubectl helm cargo; do
-  command -v "$tool" >/dev/null 2>&1 || { say "$tool is not installed (needed: docker kind kubectl helm cargo)" >&2; exit 1; }
+# shellcheck source=container-runtime.sh
+. "$ROOT/scripts/container-runtime.sh"
+detect_container_runtime || { say "needed: docker or podman, kind, kubectl, helm, cargo" >&2; exit 1; }
+for tool in kind kubectl helm cargo; do
+  command -v "$tool" >/dev/null 2>&1 || { say "$tool is not installed (needed: docker or podman, kind, kubectl, helm, cargo)" >&2; exit 1; }
 done
 
 cluster="${MICOLD_E2E_CLUSTER:-micold-e2e}"
@@ -104,8 +107,8 @@ say "creating kind cluster $cluster"
 kind create cluster --name "$cluster" --wait 120s
 
 say "building $IMAGE"
-"$ROOT/scripts/build-lock.sh" docker build -f "$ROOT/Dockerfile.orchestrator" -t "$IMAGE" "$ROOT"
-kind load docker-image "$IMAGE" --name "$cluster"
+"$ROOT/scripts/build-lock.sh" "$CONTAINER_RT" build -f "$ROOT/Dockerfile.orchestrator" -t "$IMAGE" "$ROOT"
+kind_load_image "$cluster" "$IMAGE"
 
 # install_chart <wait|nowait> <timeout> [helm args...]: the e2e values, then the extra arguments.
 install_chart() {
@@ -133,7 +136,7 @@ if ! install_chart wait 180s; then
   pods="$(kubectl --context "kind-$cluster" -n "$ns" get pods -o wide 2>&1 || true)"
   echo "$pods" >&2
   if grep -qE 'ImagePullBackOff|ErrImagePull|ErrImageNeverPull' <<<"$pods"; then
-    say "ImagePullBackOff: the node could not pull $IMAGE; it should have come from 'kind load docker-image $IMAGE --name $cluster'" >&2
+    say "ImagePullBackOff: the node could not pull $IMAGE; it should have been loaded with 'kind load image-archive' (scripts/container-runtime.sh)" >&2
   fi
   kubectl --context "kind-$cluster" -n "$ns" describe pods >&2 || true
   kubectl --context "kind-$cluster" -n "$ns" logs --all-containers --prefix --tail=50 \
