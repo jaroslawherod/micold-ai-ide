@@ -110,11 +110,11 @@ Added 2026-11-17. Tests first; nothing here needs a cluster except T052.
 
 ## Phase 6: End to end, docs, polish (Priority P1/P2)
 
-- [ ] T038 [P] Failing Playwright `apps/client/e2e/stack.spec.ts` against the real stack in Chromium, Firefox and WebKit: starts `scripts/local-stack.sh` via the same script and a fixture seed (no AI CLI), sees the seeded session listed within 60 s (SC-001), opens it, content shown, a session created, renamed or ended on the daemon appears in the open page within 2 s with no reload (US1.3, SC-006), forced reconnect (kill and restart the orchestrator) then list returns, connects with no hand-edited allow-list (US3.3, FR-018).
-- [ ] T039 `mise.toml` task `client-e2e-stack` and a CI job running it in three browsers (grep the existing Playwright CI job and mirror it).
-- [ ] T040 `scripts/local-stack.sh` polish: both ports checked free first via bash `/dev/tcp`, reports the holder and exits (no second copy), `MICOLD_LOCAL_API_PORT`/`MICOLD_LOCAL_WEB_PORT` overrides, trap stops all processes (R12); extend `scripts/tests/local-stack.test.sh`.
-- [ ] T041 Quickstart Part B visual pass via the `visual-pass` skill; save evidence under `specs/1732-client-ws-api/visual-pass/` (connection states, unreachable marker, content view, Polish).
-- [ ] T042 [P] Update the user guide and config reference for ports, overrides and the port-conflict behaviour in `docs/`.
+- [x] T038 [P] Failing Playwright `apps/client/e2e/stack.spec.ts` against the real stack in Chromium, Firefox and WebKit: starts `scripts/local-stack.sh` via the same script and a fixture seed (no AI CLI), sees the seeded session listed within 60 s (SC-001), opens it, content shown, a session created, renamed or ended on the daemon appears in the open page within 2 s with no reload (US1.3, SC-006), forced reconnect (kill and restart the orchestrator) then list returns, connects with no hand-edited allow-list (US3.3, FR-018).
+- [x] T039 `mise.toml` task `client-e2e-stack` and a CI job running it in three browsers (grep the existing Playwright CI job and mirror it).
+- [x] T040 `scripts/local-stack.sh` polish: both ports checked free first via bash `/dev/tcp`, reports the holder and exits (no second copy), `MICOLD_LOCAL_API_PORT`/`MICOLD_LOCAL_WEB_PORT` overrides, trap stops all processes (R12); extend `scripts/tests/local-stack.test.sh`.
+- [x] T041 Quickstart Part B visual pass via the `visual-pass` skill; save evidence under `specs/1732-client-ws-api/visual-pass/` (connection states, unreachable marker, content view, Polish).
+- [x] T042 [P] Update the user guide and config reference for ports, overrides and the port-conflict behaviour in `docs/`.
 
 ## Dependencies and order
 

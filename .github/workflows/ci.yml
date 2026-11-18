@@ -308,6 +308,59 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # #1732 (T039, SC-001, SC-006, US3.3): the web client against the real stack, `mise run
+  # client-e2e-stack` step by step: scripts/local-stack.sh in process mode (the orchestrator, one
+  # seeded daemon, the real web export) and Playwright in Chromium, Firefox and WebKit. Gated like
+  # client-e2e; the daemon build is what it adds.
+  client-e2e-stack:
+    name: web client e2e on the real stack
+    needs: classify
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.client == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Playwright browsers
+        run: pnpm --filter @micold/client exec playwright install --with-deps chromium firefox webkit
+      - name: Web export for ws://127.0.0.1:8730/api/ws
+        env:
+          EXPO_PUBLIC_ORCHESTRATOR_URL: ws://127.0.0.1:8730/api/ws
+        run: pnpm --filter @micold/client web:export
+      - name: Build the daemon
+        run: cargo build -p micold-daemon
+      - name: The local-stack script's own cases
+        run: scripts/tests/local-stack.test.sh
+      - name: Playwright on the real stack
+        run: |
+          MICOLD_LOCAL_DAEMON_BIN="$(scripts/build-lock.sh --print-target-dir)/debug/micold-daemon" \
+            MICOLD_LOCAL_WEB_DIR="$PWD/apps/client/dist" pnpm --filter @micold/client e2e:stack
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: client-e2e-stack
+          path: |
+            apps/client/playwright-report-stack/
+            apps/client/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Feature 806 (FR-009): the two static Linux daemons every package carries, built once here on
   # Linux and handed to the jobs that need them as an artifact.
   linux-daemons:
@@ -1134,7 +1187,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, client, client-e2e, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, local-stack-kind, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, client-e2e, client-e2e-stack, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, local-stack-kind, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -1153,6 +1206,7 @@ jobs:
           LINT: ${{ needs.lint.result }}
           CLIENT: ${{ needs.client.result }}
           CLIENTE2E: ${{ needs.client-e2e.result }}
+          CLIENTE2ESTACK: ${{ needs.client-e2e-stack.result }}
           TEST: ${{ needs.test.result }}
           # A red `linux-daemons` skips `test` (it needs its artifact), and a skip reads as
           # satisfied, so it is gated by name too.
@@ -1187,6 +1241,7 @@ jobs:
           check lint "$LINT"
           check client "$CLIENT"
           check client-e2e "$CLIENTE2E"
+          check client-e2e-stack "$CLIENTE2ESTACK"
           check test "$TEST"
           check linux-daemons "$LINUXDAEMONS"
           check sandbox "$SANDBOX"
@@ -1209,6 +1264,7 @@ jobs:
             echo "| lint | \`$LINT\` | yes |"
             echo "| client | \`$CLIENT\` | yes |"
             echo "| client-e2e | \`$CLIENTE2E\` | yes |"
+            echo "| client-e2e-stack | \`$CLIENTE2ESTACK\` | yes |"
             echo "| test | \`$TEST\` | yes |"
             echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"

@@ -34,6 +34,23 @@ describe("ConnectionBanner", () => {
     expect(screen.queryByTestId("connection-banner")).toBeNull();
   });
 
+  it("calls Retry on the API object itself, as the class-based real API needs (#1732 visual pass)", async () => {
+    const { api } = createMockApi();
+    const offline = { kind: "offline" } as const;
+    class Orchestrator {
+      retried = 0;
+      connection = { get: () => offline, subscribe: () => () => undefined };
+      retry(): void {
+        this.retried += 1;
+      }
+    }
+    const orchestrator = new Orchestrator();
+    const withClass = { ...api, orchestrator: Object.assign(Object.create(api.orchestrator), orchestrator, { retry: Orchestrator.prototype.retry }) };
+    await renderWithApi(<ConnectionBanner />, { api: withClass, control: undefined as never }).view;
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(withClass.orchestrator.retried).toBe(1);
+  });
+
   it("shows a translated connecting state", async () => {
     const { api } = createMockApi();
     const states = { kind: "connecting" } as const;

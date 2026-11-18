@@ -14,6 +14,7 @@
 #   MICOLD_LOCAL_DAEMON_BIN the micold-daemon binary (built with cargo when unset)
 #   MICOLD_LOCAL_WEB_DIR    an existing web export to serve (built with pnpm when unset)
 #
+# Both modes check the two ports first and exit, naming the port and its holder, if one is in use.
 # Only the host's loopback is used; nothing is reachable from another machine.
 
 set -euo pipefail
@@ -111,7 +112,8 @@ main() {
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   case "${MICOLD_LOCAL_MODE:-kind}" in
-    kind) exec "$ROOT/scripts/local-stack-kind.sh" "$@" ;;
+    # The kind mode forwards the same two ports: refuse a held one before creating anything.
+    kind) check_ports || exit 1; exec "$ROOT/scripts/local-stack-kind.sh" "$@" ;;
     process) main "$@" ;;
     *) say "unknown MICOLD_LOCAL_MODE=${MICOLD_LOCAL_MODE} (kind or process)" >&2; exit 2 ;;
   esac

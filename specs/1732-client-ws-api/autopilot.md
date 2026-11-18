@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-j62svx
 - **Started**: 2026-11-17
-- **Phase**: milestones (M6 next)
-- **Next step**: M6 (T038–T042): 3-browser Playwright, CI, docs, polish (fresh thread).
+- **Phase**: milestones (M6 in review)
+- **Next step**: M6 diff review (round 1), then PR, CI, merge.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -35,12 +35,13 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | #2038 | merged |
 | M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 | #2039 | merged |
-| M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
+| M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | in review |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
 
 ## Decisions
 
+- M6 T038: the live-change scenario (US1.3/SC-006) in Playwright is the stack stopping and coming back in the open page with no reload; nothing outside the daemon protocol can create, rename or end a session, and those pushes are covered by tests/orchestrator/ws_*.rs. The kind mode now also checks both ports before anything (T040).
 - Plan (R1-R12 in research.md): tokio-tungstenite (in lock via kube) with upgrade-callback origin check; new `client_api` types, not ClientMsg; schemars + json-schema-to-typescript, `scripts/api-types.sh [--check]`; resume = ring of 1024 changes + epoch, else resync_needed; backoff = existing ConnectionManager (500 ms base, 15 s cap, full jitter, offline after 8); heartbeat 20 s / dead at 40 s; change feed = one 1 s poller diffing `gather`; FR-012 = orchestrator sends computed order, parity via shared vectors; ports API 127.0.0.1:8730, web 8731; local stack = scripts/local-stack.sh on a seeded catalog.
 - Milestones (5): M1 daemon ReadStructuredEvents (wire change); M2 orchestrator /api/ws; M3 schema/TS generation + drift gate + vectors; M4 web client on real API + i18n + minimal local-stack; M5 3-browser Playwright, CI, docs.
 - Content read uses a new read-only daemon request, not Attach (ProjectBusy); wire change with version bump.
@@ -97,11 +98,13 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Follow-ups
 
+- helm v3.19.0 -> v3.22.1 in scripts/install-kube-tools.sh: needs the checksum from get.helm.sh (unreachable from cloud).
+- Web client: a stopped daemon's header still reads "Online" while its sessions show Unreachable (visual-pass/04); not fixed in M6.
 - CI llvm-cov merge intermittently hits a corrupt `_1.profraw` (signature 17540017307748215547); M1 added a ci.yml step dropping unreadable profiles; root cause unknown, to investigate.
 
 ## Handover
 
-M5 merged as 1db9333f1 (PR #2039, squash). Spec 2 review rounds, diff 2 rounds + sonnet review of CI-fix commits (CLEAN). First live kind runs took 5 CI rounds: Postgres 18 PGDATA layout, orchestrator config missing [daemon] name, kubernetes sidecar must not have [listen] socket, probe request lacked id, kubectl port-forward does not exit on pod delete. Follow-ups: helm v3.19.0 -> v3.22.1 (no checksum reachable from cloud); stale header comment scripts/local-stack-kind-live.sh:5-6; kube_real_support NODE_IMAGE still v1.34.0. Next: M6 T038-T042.
+None. M6 unit (2026-11-18): previous PR #2039 merged as 1db9333f1. T038–T042 done; Chromium stack e2e passes locally (system Chrome); Firefox/WebKit not runnable here (Playwright CDN blocked by the proxy), CI job `client-e2e-stack` runs all three. Visual pass found and fixed the unbound Retry in ConnectionBanner. M5 follow-ups: header comment fixed; NODE_IMAGE -> kindest/node:v1.37.0@sha256:a1ed56cf… (kind v0.33.0 default); helm v3.22.1 NOT bumped: get.helm.sh is blocked (403) and GitHub release assets carry no sha256sum, so no checksum was reachable; still open.
 
 ## Open escalation
 

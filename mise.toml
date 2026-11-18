@@ -106,6 +106,20 @@ pnpm --filter @micold/client exec playwright install chromium firefox webkit
 pnpm --filter @micold/client e2e
 """
 
+[tasks.client-e2e-stack]
+description = "Web client: Playwright in Chromium, Firefox and WebKit against the real stack (scripts/local-stack.sh, process mode: orchestrator, seeded daemon, web export) on 127.0.0.1:8730/8731 (#1732, T039)"
+dir = "{{config_root}}"
+run = """
+set -euo pipefail
+pnpm install --frozen-lockfile
+EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:8730/api/ws pnpm --filter @micold/client web:export
+scripts/build-lock.sh cargo build -p micold-daemon
+export MICOLD_LOCAL_DAEMON_BIN="$(scripts/build-lock.sh --print-target-dir)/debug/micold-daemon"
+export MICOLD_LOCAL_WEB_DIR="$PWD/apps/client/dist"
+pnpm --filter @micold/client exec playwright install chromium firefox webkit
+pnpm --filter @micold/client e2e:stack
+"""
+
 [tasks.screenshot]
 description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"
 run = "scripts/screenshot-session.py"

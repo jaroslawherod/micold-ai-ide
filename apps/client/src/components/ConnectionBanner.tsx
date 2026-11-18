@@ -12,7 +12,8 @@ import { spacing } from "../theme/tokens.generated";
 export function ConnectionBanner() {
   const t = useT();
   const theme = useTheme();
-  const { connection, retry } = useApi().orchestrator;
+  const orchestrator = useApi().orchestrator;
+  const { connection } = orchestrator;
   const state: ConnectionState = useSyncExternalStore(connection.subscribe, connection.get, connection.get);
   let text: string;
   let detail: string | null = null;
@@ -50,7 +51,7 @@ export function ConnectionBanner() {
         {detail ? <Text variant="bodySmall" style={{ color: theme.colors.onErrorContainer }}>{detail}</Text> : null}
       </View>
       {state.kind === "offline" ? (
-        <Button mode="outlined" compact onPress={retry} accessibilityLabel={t("connection.retry")}>
+        <Button mode="outlined" compact onPress={() => orchestrator.retry()} accessibilityLabel={t("connection.retry")}>
           {t("connection.retry")}
         </Button>
       ) : null}

@@ -28,6 +28,7 @@ lives beside the Rust workspace as a pnpm workspace (`package.json`, `pnpm-works
 | `mise run client-test` | install, lint, typecheck, Jest with coverage |
 | `mise run client-web` | the production web export into `apps/client/dist` |
 | `mise run client-e2e` | the mock export into `apps/client/dist-mock`, then Playwright in Chromium, Firefox and WebKit |
+| `mise run client-e2e-stack` | the real export and the daemon, then Playwright in the three browsers against `scripts/local-stack.sh` in process mode on `127.0.0.1:8730`/`8731` (`apps/client/e2e/stack/`); it stops and restarts the stack to check the reconnect |
 
 `mise run client-e2e` installs the browsers without their system libraries. On a fresh Linux
 machine, run `pnpm --filter @micold/client exec playwright install --with-deps chromium firefox
