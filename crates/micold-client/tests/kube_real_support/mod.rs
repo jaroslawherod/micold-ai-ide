@@ -33,7 +33,8 @@ use micold_core::provision::{EventSink, ProvisionEvent};
 use micold_core::ssh::SystemSsh;
 
 pub const CLUSTER: &str = "micold-kube-test";
-/// The kind node image, pinned: one stable Kubernetes version keeps the job fast (K12).
+/// The kind node image, pinned: one stable Kubernetes version keeps the job fast (K12). It is the
+/// default image of the kind the jobs install (v0.33.0, scripts/install-kube-tools.sh), by digest.
 pub const NODE_IMAGE: &str =
     "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5";
 /// The pod SSH image the suite loads into the cluster.
