@@ -111,3 +111,13 @@ kubectl --context kind-micold-e2e -n micold-e2e debug -it deploy/micold-orchestr
 Reach the ops port with `kubectl port-forward svc/micold-orchestrator 9090` and
 `curl localhost:9090/readyz`. When you are done, delete the cluster with
 `kind delete cluster --name micold-e2e`.
+
+## The local stack on kind
+
+`mise run local-stack` (#1732 M5) uses the same chart on its own kind cluster `micold-local`
+(`deploy/kind/local.yaml`, values `deploy/helm/micold/ci/local.yaml`): the orchestrator on Postgres,
+a seeded daemon sidecar and the web client (`Dockerfile.web`). Its script tests run with stub
+binaries and need no cluster (`scripts/tests/local-stack-kind.test.sh`,
+`scripts/tests/chart-local.test.sh`, `scripts/tests/local-stack-probe.test.sh`); the live run is
+the `local-stack-kind` CI job (`scripts/local-stack-kind-live.sh`). User guide:
+[the web client and the local stack](../user-guide/web-client.md).

@@ -42,11 +42,15 @@ registry is `orchestrator/registry.json` inside it), `--socket=/run/micold/orche
 | `image.repository` | `ghcr.io/jaroslawherod/micold-orchestrator` | |
 | `image.tag` | the chart's `appVersion` | CI and the kind harness use `dev` |
 | `image.pullPolicy` | `IfNotPresent` | |
-| `state.mode` | `file` | the only mode; `sqlite` (#1948) and `postgres` (#1740) fail to render |
+| `state.mode` | `file` | `file` or `postgres` (needs `postgres.enabled` or `database.existingSecret`); anything else fails to render |
 | `state.persistence.enabled` | `true` | `false` loses the registry with the pod |
 | `state.persistence.size` | `1Gi` | |
 | `state.persistence.storageClass` | `""` | empty uses the cluster default |
-| `database.existingSecret` | `""` | reserved for #1948 / #1740 |
+| `database.existingSecret` | `""` | `state.mode=postgres`: a Secret holding the database URL under `url` |
+| `postgres.enabled` / `image` / `size` / `storageClass` | `false` / pinned `postgres:18.7-alpine3.24` / `1Gi` / `""` | a single-instance Postgres for `state.mode=postgres` |
+| `orchestrator.api.enabled` / `port` | `false` / `8730` | the client API on the pod's loopback, reached with `kubectl port-forward` |
+| `orchestrator.allowOrigins` | `[]` | web origins allowed to open `/api/ws` |
+| `daemons.count` / `seedImage` | `0` / pinned `alpine/git` | seeded daemons as sidecars of the orchestrator pod (`ci/local.yaml`, `mise run local-stack`) |
 | `ops.enabled` / `ops.port` | `true` / `9090` | the ops listener, its Service and the probes |
 | `web.enabled` | `false` | renders nothing when false |
 | `web.image.repository` / `tag` / `pullPolicy` | `ghcr.io/jaroslawherod/micold-web` / `appVersion` / `IfNotPresent` | |

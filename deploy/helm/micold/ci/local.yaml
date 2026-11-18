@@ -1,0 +1,30 @@
+# The values scripts/local-stack-kind.sh installs on the kind cluster micold-local (#1732 M5,
+# FR-019..FR-022). Both images are built locally and `kind load`ed, so never pulled.
+image:
+  repository: micold-orchestrator
+  tag: local
+  pullPolicy: Never
+state:
+  mode: postgres
+  persistence:
+    enabled: true
+    size: 1Gi
+postgres:
+  enabled: true
+orchestrator:
+  api:
+    enabled: true
+  allowOrigins:
+    - http://127.0.0.1:8731
+    - http://localhost:8731
+daemons:
+  count: 1
+web:
+  enabled: true
+  image:
+    repository: micold-web
+    tag: local
+    pullPolicy: Never
+  containerPort: 8731
+  service:
+    port: 8731

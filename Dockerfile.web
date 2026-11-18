@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+# The web client image (#1732 M5, FR-022): the static Expo export of apps/client, built for the
+# orchestrator address in the EXPO_PUBLIC_ORCHESTRATOR_URL build arg, served on 8731 by
+# apps/client/e2e/serve.mjs as UID 65532. scripts/local-stack-kind.sh builds it as micold-web:local:
+#
+#   docker build -f Dockerfile.web --build-arg EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:8730/api/ws -t micold-web:local .
+#
+# Both stages are node 24 on Alpine, digest-pinned; bump them together.
+
+FROM docker.io/library/node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS builder
+ARG EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:8730/api/ws
+WORKDIR /src
+RUN corepack enable
+COPY . .
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile \
+    && EXPO_PUBLIC_ORCHESTRATOR_URL="$EXPO_PUBLIC_ORCHESTRATOR_URL" pnpm --filter @micold/client web:export
+
+FROM docker.io/library/node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
+COPY --from=builder /src/apps/client/dist /srv/web
+COPY apps/client/e2e/serve.mjs /srv/serve.mjs
+ENV SERVE_HOST=0.0.0.0
+USER 65532:65532
+EXPOSE 8731
+ENTRYPOINT ["node", "/srv/serve.mjs", "/srv/web", "8731"]

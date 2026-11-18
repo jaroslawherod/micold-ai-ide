@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Run the whole stack on this machine (#1732, FR-017, research R11/R12): the orchestrator with its
+# Run the whole stack locally (#1732). Two modes, by MICOLD_LOCAL_MODE:
+#   kind     (default, M5, FR-019) a kind cluster running it all: scripts/local-stack-kind.sh
+#   process  (M4, FR-017) the processes below, directly on this machine
+#
+# Process mode (research R11/R12): the orchestrator with its
 # client API, one daemon that dials it and serves a seeded project (a worktree and two sessions), and
 # the web client's export served against it, allowing that client's origin. Ctrl+C stops all three.
 #
@@ -35,42 +39,8 @@ check_ports() {
   return "$bad"
 }
 
-# seed <dir>: a git project with a worktree, and a daemon.toml and projects.json that serve it with
-# two structured sessions, one in the project root and one in the worktree. No AI CLI is involved.
-seed() {
-  local dir="$1" repo="$1/seed/demo" g
-  g=(git -C "$repo" -c user.name=micold-local -c user.email=local@micold.invalid)
-  mkdir -p "$repo" "$dir/daemon" "$dir/orchestrator" "$dir/run"
-  chmod 700 "$dir/run"
-  "${g[@]}" init -q -b main
-  echo "# demo" >"$repo/README.md"
-  "${g[@]}" add README.md
-  "${g[@]}" commit -q -m "demo"
-  "${g[@]}" worktree add -q -b feature "$repo/.claude/worktrees/feature"
-  cat >"$dir/daemon/projects.json" <<JSON
-{"schema_version":1,"projects":[{"path":"$repo","display_name":"demo","is_git_repo":true,"sessions":[
-{"id":"6f1c2a54-0000-4000-8000-000000000001","title":"Fix the login bug","kind":"Structured"},
-{"id":"6f1c2a54-0000-4000-8000-000000000002","worktree_dir":"feature","title":"Add dark mode","kind":"Structured"}]}]}
-JSON
-  cat >"$dir/daemon.toml" <<TOML
-schema = 1
-
-[daemon]
-name = "local"
-id = "local"
-kind = "host"
-data_dir = "$dir/daemon"
-
-[listen]
-socket = "auto"
-
-[orchestrator_link]
-enabled = true
-
-[[projects]]
-path = "$repo"
-TOML
-}
+# seed <dir>: the seeded catalog, shared with the chart's seed init container (kind mode).
+seed() { sh "$ROOT/deploy/helm/micold/files/seed-catalog.sh" "$1"; }
 
 # Globals, not locals: the EXIT trap runs `stop` after `main` has returned.
 dir="${MICOLD_LOCAL_DIR:-}"
@@ -139,4 +109,10 @@ main() {
   say "a process exited; stopping the others"
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  case "${MICOLD_LOCAL_MODE:-kind}" in
+    kind) exec "$ROOT/scripts/local-stack-kind.sh" "$@" ;;
+    process) main "$@" ;;
+    *) say "unknown MICOLD_LOCAL_MODE=${MICOLD_LOCAL_MODE} (kind or process)" >&2; exit 2 ;;
+  esac
+fi

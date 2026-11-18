@@ -118,6 +118,34 @@ regeneration command; it passes.
 
 ---
 
+### User Story 5 - Run the whole stack in a local kind cluster (Priority: P2)
+
+Added 2026-11-17 (M5, jaro): `mise run local-stack` starts a kind cluster and runs the full setup
+inside it (orchestrator, Postgres, at least one seeded daemon, web client), a step toward a real
+cluster deploy, replacing the desktop app managing the orchestrator. The M4 process mode stays as a
+fallback for machines without docker or kind.
+
+**Acceptance Scenarios**:
+
+1. **Given** docker and the pinned kind, kubectl and helm, **When** I run `mise run local-stack`,
+   **Then** a kind cluster named `micold-local` comes up (or is reused, FR-023), the chart is installed with Postgres
+   state, a seeded daemon links to the orchestrator, and the web client on
+   `http://127.0.0.1:8731` lists the seeded session within 180 s.
+2. **Given** the stack is up, **When** I press Ctrl-C, **Then** the port-forwards stop and the
+   cluster is deleted unless `MICOLD_LOCAL_KEEP=1`, in which case a rerun reuses it.
+3. **Given** no docker or no kind, **When** I run `mise run local-stack`, **Then** it says which
+   tool is missing and that `MICOLD_LOCAL_MODE=process` runs the M4 process stack, and exits
+   non-zero; with `MICOLD_LOCAL_MODE=process` the M4 stack starts as before.
+4. **Given** the chart with the local values file, **When** it is rendered without a cluster,
+   **Then** it renders a Postgres StatefulSet and Service, the orchestrator with
+   `state.mode=postgres` and its URL from a Secret, a daemon Deployment with a seeded catalog, and
+   the web Deployment pointed at the forwarded API address; it validates against the pinned
+   Kubernetes schema.
+5. **Given** the orchestrator pod restarts, **When** it comes back, **Then** the daemons and the
+   seeded session are still listed (state survives in Postgres).
+
+---
+
 ### Edge Cases
 
 - A message arrives that the client or server does not recognise (version skew): it is answered
@@ -210,6 +238,40 @@ Requirement numbers are local to this spec; each names the parent requirement it
   survives a forced reconnect. The same test proves the web client's local origin was allowed
   without manual configuration (US3 scenario 3): it connects with no allow-list edited by hand.
 
+**Local kind stack (M5, User Story 5)**
+
+- **FR-019**: `mise run local-stack` MUST default to a kind mode: create (or reuse) a kind cluster
+  `micold-local` from a checked-in kind config, build and `kind load` the local images, install the
+  chart from `deploy/helm/micold` with a checked-in local values file, wait for rollout, and
+  port-forward the API to `127.0.0.1:8730` and the web client to `127.0.0.1:8731`. The M4 process
+  stack MUST remain selectable with `MICOLD_LOCAL_MODE=process`.
+- **FR-020**: In kind mode the orchestrator MUST keep its state in a Postgres running in the
+  cluster (official `postgres` image, a StatefulSet with a PVC, credentials in a generated Secret),
+  rendered by the chart when `postgres.enabled=true`. The PostgreSQL store was delivered by #1948
+  (`crates/micold-daemon/src/orchestrator/db/`, PRs #2010, #2011, #2027); the chart's message naming
+  #1740 is stale. The chart MUST accept `state.mode` `file` and `postgres` and refuse every other
+  value (`sqlite` is the store's local-only mode, not a chart mode) with exactly:
+  `state.mode=<value> is not supported by this chart: use file or postgres`.
+- **FR-021**: The chart MUST be able to run at least one daemon (`daemons.count`, default 0) as a
+  sidecar of the orchestrator pod (the `[orchestrator_link]` is a local socket, so it shares
+  `/run/micold`; research R13) that links to the orchestrator over `[orchestrator_link]` and starts
+  on a seeded catalog (one project, one worktree, two sessions), the same seed as the process mode.
+- **FR-022**: The web client in kind mode MUST be an image `micold-web:local` built from
+  `Dockerfile.web` (static Expo export, build arg `EXPO_PUBLIC_ORCHESTRATOR_URL`, default
+  `ws://127.0.0.1:8730/api/ws`, served on port 8731), and its origins allowed by a chart value
+  `orchestrator.allowOrigins` (list, rendered as one `--allow-origin` arg each), with no hand edits.
+- **FR-023**: Interrupt MUST stop the port-forwards and delete the cluster unless
+  `MICOLD_LOCAL_KEEP=1`. A rerun that finds cluster `micold-local` MUST skip `kind create cluster`
+  and still build both images, `kind load` them and `helm upgrade --install`, then restart the
+  Deployments so the new images run; a missing tool MUST be named with the process-mode hint and a non-zero exit
+  before anything is created.
+- **FR-024**: A container MUST NOT read the user's `<data_dir>/daemon.toml` from `$HOME` when
+  `--data-dir` or its env is set (fold-in of the #1981 follow-up).
+- **FR-025**: Everything except the live cluster run MUST be checked without a cluster: shell tests
+  of the script's mode selection, tool checks, commands issued and teardown (stubbed `kind`,
+  `kubectl`, `helm`, `docker`), and `helm template` plus kubeconform checks of the local values.
+  The live run is a documented local step and a CI job on the kind runner.
+
 ### Key Entities
 
 - **Client message**: a request from a client (list daemons, list sessions, read session,
@@ -234,6 +296,10 @@ Requirement numbers are local to this spec; each names the parent requirement it
 - **SC-005**: 100% of client message kinds are classified; a new unclassified kind fails a test.
 - **SC-006**: A change on a daemon appears in an open web client within 2 seconds.
 - **SC-007**: Every new user-visible string has an English and a Polish translation.
+- **SC-008**: In kind mode the seeded session is listed in the web client within 180 s of `mise run local-stack` on a warm cache (the `kindest/node` and `postgres` images
+  already pulled, and the cargo target and pnpm store already built, so only changed sources rebuild),
+  and survives an orchestrator pod restart. In CI (cold cache) the bound is 15 min for the whole
+  job and 120 s from `helm upgrade` returning to the session being listed.
 
 ## Assumptions
 

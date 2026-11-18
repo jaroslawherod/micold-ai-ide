@@ -193,6 +193,17 @@ scripts/tests/chart-conformance.test.sh micold-kube
 scripts/tests/chart-check.test.sh     micold-kube
 scripts/tests/install-kube-tools.test.sh micold-kube
 scripts/tests/e2e-kind.test.sh         micold-kube
+# The local kind stack (#1732 M5): its cluster, web image, scripts and their tests.
+deploy/kind/**                        micold-kube
+/Dockerfile.web                       micold-kube
+scripts/local-stack.sh                micold-kube
+scripts/local-stack-kind.sh           micold-kube
+scripts/local-stack-probe.sh          micold-kube
+scripts/local-stack-kind-live.sh      micold-kube
+scripts/tests/chart-local.test.sh     micold-kube
+scripts/tests/local-stack-kind.test.sh micold-kube
+scripts/tests/local-stack-probe.test.sh micold-kube
+scripts/tests/dockerfile-web.test.sh  micold-kube
 # What the orchestrator image is built from, so a change that breaks its build or its command line
 # runs the image smoke before it reaches main.
 crates/micold-core/**                 micold-kube

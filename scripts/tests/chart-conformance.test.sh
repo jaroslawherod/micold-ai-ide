@@ -194,16 +194,12 @@ fi
 
 # --- state modes (FR-003, FR-016) ----------------------------------------------------------------
 
-for mode in postgres sqlite; do
-  if render "mode-$mode" --set "state.mode=$mode"; then
-    fail "state.mode=$mode must fail to render"
-  else
-    e="$work/mode-$mode.err"
-    check "state.mode=$mode says it is not available yet" "$e" "state\.mode=$mode is not available yet"
-    check "state.mode=$mode names #1948" "$e" '#1948'
-    check "state.mode=$mode names #1740" "$e" '#1740'
-  fi
-done
+# FR-020 of #1732: file and postgres render (chart-local.test.sh covers postgres); sqlite does not.
+if render mode-sqlite --set state.mode=sqlite; then
+  fail "state.mode=sqlite must fail to render"
+else
+  check "state.mode=sqlite is refused naming the chart's modes" "$work/mode-sqlite.err" "state\.mode=sqlite is not supported by this chart: use file or postgres"
+fi
 
 # The 1722 plan's value names: a renamed key is refused by the schema (additionalProperties), so
 # setting the planned names must keep rendering.

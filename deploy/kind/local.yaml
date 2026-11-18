@@ -1,0 +1,8 @@
+# The kind cluster of `mise run local-stack` (#1732 M5, FR-019): one control-plane node. The node
+# image is the one kind v0.33.0 (scripts/install-kube-tools.sh) ships for, pinned by digest; bump
+# both together. Nothing is published on the host: scripts/local-stack-kind.sh port-forwards.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
