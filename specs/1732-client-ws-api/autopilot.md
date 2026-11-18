@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-j62svx
 - **Started**: 2026-11-17
-- **Phase**: milestones (M6 in review)
-- **Next step**: M6 diff review (round 1), then PR, CI, merge.
+- **Phase**: close (M6 merged)
+- **Next step**: Close unit (fresh thread): tdd-verify, close PR. Follow-ups: helm v3.22.1 bump (no checksum from cloud), SC-006 browser test gap (T038 deviation), daemon header "Online" while sessions Unreachable.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -25,6 +25,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | #2037 | M3 schema + TS types | merged | a7d7a3c12 |
 | #2038 | M4 web client on real API | merged | 5ebc01334 |
 | #2039 | M5 local kind stack | merged | 1db9333f1 |
+| #2040 | M6 3-browser e2e, CI, docs | merged | 8a2eaba41 |
 
 ## Milestones
 
@@ -112,3 +113,5 @@ None. M6 unit (2026-11-18): previous PR #2039 merged as 1db9333f1. T038–T042 d
 ## Open escalation
 
 None.
+
+M6 merged as 8a2eaba41 (PR #2040, squash). Diff review r1 opus CHANGES (CI daemon path, SC-006 gap, Retry flake, NODE_IMAGE) fixed/recorded; r2 sonnet CLEAN. Next: close unit.
