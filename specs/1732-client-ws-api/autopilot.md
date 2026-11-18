@@ -8,7 +8,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1732
-- **Worktree branch**: claude/project-thread-de08zv
+- **Worktree branch**: claude/project-thread-j62svx
 - **Started**: 2026-11-17
 - **Phase**: milestones (M6 next)
 - **Next step**: M6 (T038–T042): 3-browser Playwright, CI, docs, polish (fresh thread).
