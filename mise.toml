@@ -98,9 +98,8 @@ run = "scripts/local-stack.sh"
 # kind mode's tools, task-scoped so `mise run local-stack` on a fresh checkout fetches them and no
 # other task or CI job downloads them. Same pins as scripts/install-kube-tools.sh (CI's installer);
 # scripts/tests/local-stack-tools.test.sh fails when the two drift. docker stays a prerequisite: the
-# CLI is useless without a daemon, which mise cannot provide. helm stays 3.19.0: no checksum for a
-# newer release was reachable when this was pinned.
-tools = { kind = "0.33.0", kubectl = "1.37.2", helm = "3.19.0" }
+# CLI is useless without a daemon, which mise cannot provide.
+tools = { kind = "0.33.0", kubectl = "1.37.2", helm = "4.3.2" }
 
 [tasks.client-e2e]
 description = "Web client: Playwright smoke, pseudo-locale and screenshot specs in Chromium, Firefox and WebKit against the mock export (#1735, T055)"
