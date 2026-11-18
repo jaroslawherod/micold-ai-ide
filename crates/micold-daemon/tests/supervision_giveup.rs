@@ -125,6 +125,23 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         reason.contains(&MAX_RESTART_ATTEMPTS.to_string()),
         "and how many times it tried; got {reason:?}"
     );
+    // The snapshot a connecting client receives carries the same reason.
+    let welcomed = state
+        .welcome_payload()
+        .0
+        .projects
+        .iter()
+        .flat_map(|p| &p.sessions)
+        .find(|s| s.id == id)
+        .map(|s| s.lifecycle.clone());
+    assert_eq!(
+        welcomed,
+        Some(WireLifecycle::Failed {
+            reason: reason.clone(),
+            attempts
+        }),
+        "welcome_payload must carry the give-up reason"
+    );
     assert!(
         state.live_session(id).is_none(),
         "a session that gave up has its process dropped (no restart pending)"

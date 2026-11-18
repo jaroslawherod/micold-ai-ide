@@ -251,7 +251,7 @@ dr_case "ci.yml itself"                  true  .github/workflows/ci.yml
 dr_case "client shell source"            false crates/micold-client/src/shell/daemons.rs
 dr_case "client UI source"               false crates/micold-client/src/ui/a.rs
 dr_case "client feature source"          false crates/micold-client/src/features/a.rs
-dr_case "client Cargo.toml"              false crates/micold-client/Cargo.toml
+dr_case "client Cargo.toml"              false crates/micold-e2e/Cargo.toml
 dr_case "documentation only"             false docs/page.md
 dr_case "release.yml"                    false .github/workflows/release.yml
 
@@ -299,7 +299,7 @@ kube_case "core source (image input)"    true  crates/micold-core/src/a.rs
 kube_case "Cargo.lock (image input)"     true  Cargo.lock
 kube_case ".dockerignore"                true  .dockerignore
 kube_case "CHANGELOG.md (compiled in)"   true  CHANGELOG.md
-kube_case "member manifest"              true  crates/micold-client/Cargo.toml
+kube_case "member manifest"              true  crates/micold-e2e/Cargo.toml
 kube_case "ci.yml itself"                true  .github/workflows/ci.yml
 kube_case "client UI source"             false crates/micold-client/src/ui/a.rs
 kube_case "other deploy file"            false deploy/README.md

@@ -668,6 +668,10 @@ jobs:
       # `basic-image.yml` publishes it on merge. This is `mise run image` without `mise`.
       - name: Build the :dev basic image
         run: docker build -f packaging/basic/Containerfile -t micold-basic:dev packaging/basic
+      # #1439 quickstart B3: the sandbox page's own-image example builds as written, `FROM` the
+      # image just built, and `pkg-config --libs libpq` prints `-lpq` in it.
+      - name: Build the user guide's own-image example
+        run: scripts/check-guide-own-image.sh docker micold-basic:dev
       # The digest the application pins must still be pullable: a pin that points nowhere makes
       # every first start fail (feature 806, FR-003).
       - name: Check the pinned basic image exists
