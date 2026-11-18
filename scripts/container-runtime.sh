@@ -27,10 +27,16 @@ detect_container_runtime() {
 }
 
 kind_load_image() {
-  local cluster="$1" image="$2" tar rc
+  local cluster="$1" image="$2" ref="$2" tar rc=0
+  # Podman stores a bare name as localhost/<name>, which the node's containerd would not match to
+  # the chart's <name> (docker.io/library/<name>) under pullPolicy: Never: save it under that ref.
+  if [ "$CONTAINER_RT" = podman ] && [ "${image#*/}" = "$image" ]; then
+    ref="docker.io/library/$image"
+    podman tag "$image" "$ref" || return 1
+  fi
   tar="$(mktemp "${TMPDIR:-/tmp}/micold-image-XXXXXX.tar")" || return 1
-  "$CONTAINER_RT" save -o "$tar" "$image" && kind load image-archive --name "$cluster" "$tar"
-  rc=$?
+  # `|| rc=$?` keeps a failure from exiting a `set -e` caller before the tar is removed.
+  { "$CONTAINER_RT" save -o "$tar" "$ref" && kind load image-archive --name "$cluster" "$tar"; } || rc=$?
   rm -f "$tar"
   return $rc
 }

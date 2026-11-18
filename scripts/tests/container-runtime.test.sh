@@ -41,9 +41,17 @@ case "$out" in *"docker is not installed"*) pass "an uninstalled override is ref
 : >"$tmp/log"
 env -i PATH="$tmp/podman:$tmp/base" STUB_LOG="$tmp/log" TMPDIR="$tmp" bash -c \
   ". '$ROOT/scripts/container-runtime.sh' && detect_container_runtime && kind_load_image c img:1"
-if grep -q "^podman save -o $tmp/micold-image-.*\.tar img:1" "$tmp/log" \
+if grep -q "^podman tag img:1 docker.io/library/img:1" "$tmp/log" \
+  && grep -q "^podman save -o $tmp/micold-image-.*\.tar docker.io/library/img:1" "$tmp/log" \
   && grep -q "^kind load image-archive --name c $tmp/micold-image-.*\.tar" "$tmp/log" \
   && ! ls "$tmp"/micold-image-* >/dev/null 2>&1; then pass "image saved with the runtime, loaded from the archive, tar removed"
 else fail "load: $(cat "$tmp/log")"; fi
+
+# A failing kind load under set -e still removes the tar.
+printf '#!/usr/bin/env bash\nexit 1\n' >"$tmp/kindfail"; mkdir "$tmp/kf"; cp "$tmp/kindfail" "$tmp/kf/kind"; chmod +x "$tmp/kf/kind"
+env -i PATH="$tmp/kf:$tmp/podman:$tmp/base" STUB_LOG="$tmp/log" TMPDIR="$tmp" bash -c \
+  "set -euo pipefail; . '$ROOT/scripts/container-runtime.sh'; detect_container_runtime; kind_load_image c img:1" && rc=0 || rc=$?
+if [ "$rc" -ne 0 ] && ! ls "$tmp"/micold-image-* >/dev/null 2>&1; then pass "failed load removes the tar"
+else fail "failed load: rc=$rc, $(ls "$tmp")"; fi
 
 exit "$failures"
