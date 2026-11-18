@@ -68,10 +68,11 @@ done
   echo "media-references: $manifest is not a file" >&2
   exit 2
 }
-[ -d "$scenes" ] || {
+# No scenes directory is fine while the manifest declares no media (the capture was retired, #1959).
+if [ ! -d "$scenes" ] && grep -q '^\[media\.' "$manifest"; then
   echo "media-references: $scenes is not a directory" >&2
   exit 2
-}
+fi
 
 problems=0
 report() {
@@ -108,10 +109,8 @@ while IFS= read -r line || [ -n "$line" ]; do
   fi
 done <"$manifest"
 
-if [ "${#order[@]}" -eq 0 ]; then
-  echo "media-references: $manifest declares nothing -- an empty manifest is not the same as a checked one" >&2
-  exit 2
-fi
+# An empty manifest is legitimate since the capture was retired (#1959); a directive naming an id
+# is still reported below, because nothing declares it.
 
 # --- every directive names a declared id ------------------------------------------------------------
 

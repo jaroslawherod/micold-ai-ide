@@ -134,7 +134,7 @@ check_one() {
     bad=1
     report "marked human-only with no reason after the marker:"
     printf '%s\n' "$unexplained" | sed 's/^/        /'
-    report "'Needs a GUI' is not a reason -- the visual-pass skill drives the real binary headlessly."
+    report "'Needs a GUI' is not a reason -- drive the web client headlessly with Playwright (mise run client-e2e)."
     report "A reason names something no instrument here can read."
   fi
 

@@ -204,10 +204,8 @@ fn the_scan_actually_reads_the_release_workflow() {
         ids.iter().any(|id| id == "release-please") && ids.iter().any(|id| id == PUBLISH_ID),
         "parsed {ids:?} from release.yml — the scan is broken, not the workflow"
     );
-    assert!(
-        !artifact_jobs(&source).is_empty(),
-        "release.yml appears to attach no artifacts at all; parsed jobs: {ids:?}"
-    );
+    // No job attaches an artifact since the desktop packages were retired (#1959); `unwaited`
+    // below then has nothing to hold, and starts holding the moment a job runs `gh release upload`.
 }
 
 #[test]

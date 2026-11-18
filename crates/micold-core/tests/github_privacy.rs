@@ -215,13 +215,7 @@ const LOG_MACROS: &[&str] = &["trace!", "debug!", "info!", "warn!", "error!", "e
 const FORBIDDEN: &[&str] = &["issue", "reporter", "description"];
 
 /// Files and directories whose logging calls are checked, relative to `crates/`.
-const SCANNED: &[&str] = &[
-    "micold-core/src/github.rs",
-    "micold-client/src/shell/issues.rs",
-    "micold-client/src/features/worktree_form.rs",
-    "micold-client/src/main.rs",
-    "micold-client/src/ui",
-];
+const SCANNED: &[&str] = &["micold-core/src/github.rs"];
 
 /// Logging calls allowed to contain a forbidden word, with the reason. Empty today.
 const ALLOWED: &[(&str, &str)] = &[];
@@ -336,8 +330,8 @@ fn no_logging_call_names_issue_data() {
         rust_files(&path, &mut files);
     }
     assert!(
-        files.len() > SCANNED.len(),
-        "the `ui` directory contributes its files: {} found",
+        files.len() == SCANNED.len(),
+        "each scanned file is found once: {} found",
         files.len()
     );
 

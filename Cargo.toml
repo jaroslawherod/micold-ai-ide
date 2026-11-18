@@ -3,8 +3,6 @@ resolver = "2"
 members = [
     "crates/micold-core",
     "crates/micold-daemon",
-    "crates/micold-material",
-    "crates/micold-client",
     "crates/micold-e2e",
 ]
 
@@ -24,25 +22,9 @@ rust-version = "1.97"
 # Shared dependency versions. Crates opt in with `dep = { workspace = true }`, so a version
 # is declared in exactly one place.
 [workspace.dependencies]
-# Feature 533 (research R2): the Jira Cloud request, in `micold-client` only (never the daemon or
-# core). rustls on the `ring` backend (no C/NASM toolchain), the OS certificate store, JSON off.
+# Feature 533 (research R2): the Jira Cloud request. rustls on the `ring` backend (no C/NASM toolchain), the OS certificate store, JSON off.
 ureq = { version = "3.4", default-features = false, features = ["rustls", "platform-verifier"] }
 base64 = "0.23"
-# Feature 039 (research R4): the Linux desktop notification, `org.freedesktop.Notifications.Notify`
-# over the session bus. Already in `Cargo.lock` (through `mundy`), whose default features are these two,
-# so it adds no crate; the client's blocking call needs `blocking-api`.
-zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
-# Feature 039 (research R7): keyboard focus from a notification click on Wayland, by
-# `xdg_activation_v1` over the application's own connection. All three are in `Cargo.lock` already
-# (through winit), with these features on, so they add no crate. The client names `client_system`
-# for `Backend::from_foreign_display` and `staging` for the `xdg_activation_v1` bindings.
-wayland-client = "0.31"
-wayland-backend = { version = "0.3", features = ["client_system"] }
-wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-# Feature 686 (research K0): the Kubernetes API client, in `micold-client` only (never the daemon or
-# core). rustls on the `ring` backend (no OpenSSL, no C toolchain); `ws` for the port-forward tunnel.
-kube = { version = "4.2", default-features = false, features = ["client", "config", "rustls-tls", "ring", "ws"] }
-k8s-openapi = { version = "0.28", features = ["v1_32"] }
 
 # --- render-free core deps (never iced / never PTY) ---
 serde = { version = "1.0.229", features = ["derive"] }
@@ -85,10 +67,6 @@ tokio = { version = "1.53", features = [
     "fs",
 ] }
 tokio-util = { version = "0.7.19", features = ["codec"] }
-# The native multi-file picker of the structured composer's "Add attachment" button (feature 1464,
-# research R1): async `AsyncFileDialog`; on Linux the XDG portal (no GTK system library), on
-# macOS and Windows the native dialog. Default features: `xdg-portal` + `wayland`.
-rfd = "0.17.2"
 interprocess = { version = "2.4.2", features = ["tokio"] }
 bytes = "1"
 # Cross-platform filesystem change notification, for tailing a Copilot session's `events.jsonl`
@@ -97,20 +75,6 @@ notify = "8.2.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 futures-util = { version = "0.3", features = ["sink"] }
-# --- client (iced) deps ---
-# Feature 482 (R10): `highlighter` colours the Changes view's diff (iced_highlighter -> two-face,
-# syntect with the pure-Rust fancy-regex engine; MIT and MIT/Apache-2.0).
-# Feature 941 (research R8): `image-without-codecs` draws a dropped picture's preview in the
-# composer's attachment chip; the `image` dependency below names the four codecs a drop accepts
-# (PNG, JPEG, GIF, WebP). iced's own `image` feature turns on `image/default`, whose AVIF encoder
-# (rav1e) and a dozen other formats nothing here reads would join the build.
-iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy", "highlighter", "image-without-codecs"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
-# Feature 940 (research R4): the grammar set iced_highlighter already builds with, named directly
-# only so `ui::syntax::knows` can ask whether a token has a grammar other than plain text. Same
-# version and features as iced_highlighter's, so it adds no crate to the build.
-two-face = { version = "0.5.2", default-features = false, features = ["syntect-default-fancy"] }
-dark-light = "3.0"
 # --- terminal stack (client today; migrates into micold-daemon at T030) ---
 portable-pty = "0.9"
 alacritty_terminal = "0.26"
@@ -118,27 +82,8 @@ alacritty_terminal = "0.26"
 toml = "1.1.6"
 # --- shared dev deps ---
 tempfile = "3.27.0"
-ttf-parser = "0.25.1"
-# Feature 487: read an image off the system clipboard (iced exposes text only), and write it as PNG.
-# `wayland-data-control` lets it read the clipboard on Wayland compositors without a focused surface.
-arboard = { version = "3", default-features = false, features = ["image-data", "wayland-data-control"] }
-# Feature 613 (research R7): the kind icons rasterised for the OS notification. Already in the build
-# through `iced_tiny_skia`; `png-format` adds the `png` encoder.
-tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd", "png-format"] }
-# Feature 019 only, and dev-only. Reading back *drawn* text needs the concrete CPU renderer:
-# `iced::Renderer` is `fallback::Renderer<wgpu, tiny_skia>`, so naming its variants needs
-# `iced_renderer` and calling `layers()` needs `iced_tiny_skia`. These are iced's internal crates
-# and their semver does not track the `iced` facade — pinned to the exact version `iced` uses.
-iced_renderer = "=0.14.0"
-iced_tiny_skia = "=0.14.1"
-# Features 027 (BUG-005) and 031, and dev-only. A `Task` is opaque through the `iced` facade;
-# `iced_runtime::task::into_stream` is what lets a test run the work an update returned. Pinned
-# like the two above.
-iced_runtime = "=0.14.0"
 # Internal crate, referenced by path so client & daemon share the one core.
 micold-core = { path = "crates/micold-core" }
-# Feature 1262: the generic Material building blocks the client composes.
-micold-material = { path = "crates/micold-material" }
 
 [workspace.lints.clippy]
 all = "warn"

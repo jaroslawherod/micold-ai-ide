@@ -195,7 +195,7 @@ manages from the form.
 These are the only `[[ai.cli]]` keys this app ever writes for you — everything else about an AI
 CLI that this app remembers is kept in **this app's own `settings.json`**, never in a daemon's
 `daemon.toml`: which CLI a new session runs when you don't choose one
-([Settings → Default AI CLI](settings.md#default-ai-cli)), and which CLI *you* are signed in as,
+(Settings → Default AI CLI), and which CLI *you* are signed in as,
 used only to deliver a sign-in to a daemon's `sign_in_file` or `token_file` in the first place.
 `daemon.toml`'s own `ai.default` and `[[ai.cli]]` answer a different question — what a *daemon*
 offers and how it is configured on that daemon alone — and are set from this group, independently

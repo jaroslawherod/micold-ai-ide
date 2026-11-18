@@ -1,11 +1,10 @@
 //! T115 substitute (SC-020, FR-028a, BUG-006) — a **client process restart** against a surviving
-//! daemon, over a real socket, with the real client-side stamper.
+//! daemon, over a real socket, with a client-side stamper (a stand-in for the web client's).
 //!
 //! This is the automated stand-in for the one check SC-020 asks for and no unit test can reach:
 //! that a freshly started client can drive a session it did not create. The pieces were already
 //! covered separately — `micold-core`'s `input_ordering` proves the classifier, `session_start`
-//! proves the daemon publishes its high-water mark, and `micold-client`'s own tests prove the
-//! stamper seeds absent-only — but nothing joined them across a real process boundary. That gap is
+//! proves the daemon publishes its high-water mark, and the stamper below seeds absent-only — but nothing joined them across a real process boundary. That gap is
 //! exactly where BUG-006 lived: every individual piece was correct, and the two ends still
 //! disagreed.
 //!
@@ -29,8 +28,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use futures_util::SinkExt;
-use micold_client::input::SessionInputStamper;
 use micold_core::connect::{connect_or_spawn, Connected, DaemonConnection, Welcome};
+use micold_core::input::InputSeq;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg};
@@ -41,6 +40,39 @@ use micold_core::spawn::DAEMON_BIN_ENV;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use uuid::Uuid;
+
+/// The client end of the input contract: one monotonic serial stream per session, seeded absent-only
+/// from the daemon's published `SessionSummary::input_serial` (FR-028a, BUG-006). A web client does
+/// the same; this stands in for it so the daemon's end is driven by a real stamper.
+#[derive(Debug, Default)]
+struct SessionInputStamper {
+    seqs: std::collections::HashMap<SessionId, InputSeq>,
+}
+
+impl SessionInputStamper {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adopt the daemon's serial for every session this stamper has no counter for yet.
+    fn seed_from_catalog(&mut self, catalog: &CatalogSnapshot) {
+        for session in catalog.projects.iter().flat_map(|p| &p.sessions) {
+            self.seqs
+                .entry(session.id)
+                .or_insert_with(|| InputSeq::resume_from(session.input_serial));
+        }
+    }
+
+    fn stamp(&mut self, session: SessionId, bytes: Vec<u8>) -> ClientMsg {
+        let serial = self.seqs.entry(session).or_default().stamp();
+        ClientMsg::SessionInput {
+            process: None,
+            session,
+            serial,
+            bytes,
+        }
+    }
+}
 
 /// The daemon binary Cargo built for this test run — a real, separate process.
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");

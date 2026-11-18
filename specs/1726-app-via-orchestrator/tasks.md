@@ -124,6 +124,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ## Phase 9: TDD remediation
 
+> **DROPPED (#1959, jaro 2026-11-18):** T035-T045 are not done and will not be: the desktop client these tests
+> exercise is removed and the epic is not continued. Their boxes stay unticked on purpose.
+
 From `tdd/verification.md` (verdict FAIL at `5811fa2`). The feature is not done until T035-T038 (findings 1 and 2) are cleared. Mutation was skipped in that audit; T035-T037 also give the missing test-strength evidence.
 
 - [ ] T035 [HIGH, finding 1] M1 (T002-T013): for each task, revert its implementation hunk in a scratch worktree, run its test, capture the failing output, restore, and add a row (red command and output, green) to `tdd/cycle-log.md` under a new `## M1` heading; done when every task id T002-T013 has a red row. Prove it with `grep -c '^| T0' specs/1726-app-via-orchestrator/tdd/cycle-log.md` and `scripts/build-lock.sh cargo test -p micold-daemon --test orchestrator_route`

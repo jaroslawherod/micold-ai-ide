@@ -437,7 +437,7 @@ jobs:
           components: llvm-tools-preview # cargo-llvm-cov, below
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         id: rust-cache
-      - name: Install iced system dependencies (Linux)
+      - name: Install test system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           # Drop the vendor apt repositories the runner image preconfigures (Microsoft's
@@ -457,9 +457,7 @@ jobs:
           # silently install the wrong thing.
           sudo find /etc/apt/sources.list.d -mindepth 1 -not -name ubuntu.sources -delete
           sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libx11-dev \
-            libxcursor-dev libxrandr-dev libxi-dev strace
+          sudo apt-get install -y strace
           # The orchestrator's FR-008 proof (crates/micold-daemon/tests/orchestrator/netns.rs) runs
           # under `unshare -rn` and `strace`, and fails in CI rather than skipping. ubuntu-24.04
           # restricts unprivileged user namespaces through AppArmor; lift that (absent on 22.04).
@@ -495,68 +493,13 @@ jobs:
           echo "b3f68e625481fed9b16444174f3fa5ebcdbde4a1878803a35eabe2dcefcdc41a  $asset" | sha256sum -c -
           tar xzf "$asset" cargo-llvm-cov
           sudo install -m 0755 cargo-llvm-cov /usr/local/bin/
-      # Principle I: the render-free core compiles and passes with no iced/PTY (FR-040).
+      # Principle I: the render-free core compiles and passes with no PTY (FR-040).
       - name: Test (render-free core, no GUI)
         run: cargo test -p micold-core --all-targets
-      # Ensure the full workspace (client GUI binary + daemon) compiles.
+      # Ensure the full workspace compiles.
       - name: Build (workspace)
         run: cargo build --workspace
-      # Feature 020's gates, the 017 gates it widened, BUG-001's, feature 021's architecture guards,
-      # and feature 027's two client-side §A gates. These read source text, one `const` slice and a
-      # reducer — they open no window — and this step is the authoritative list of them.
-      #
-      # This list is enumerated, so it drifts silently: a §A gate added to the quickstart's table and
-      # not added here still runs in the full-workspace step below.
-      # `micold-core/tests/quickstart_a_runs_everywhere.rs` compares the two.
-      - name: Test (component library, showcase, and architecture gates, all platforms)
-        shell: bash
-        run: |
-          cargo test -p micold-client \
-            --test showcase_completeness \
-            --test showcase_determinism \
-            --test showcase_captions \
-            --test packaging_excludes_showcase \
-            --test material_boundary \
-            --test idle_requests_no_frames \
-            --test animated_layout_relayouts \
-            --test feature_registration_cost \
-            --test service_capability_fakes \
-            --test popover_displacement \
-            --test features_session \
-            --test features_settings \
-            --test features_sidebar \
-            --test anatomy_call_sites
-          # Modules of the merged `main` test target (#1650): the filters keep this run to them.
-          cargo test -p micold-client --test main -- \
-            showcase_isolation:: \
-            showcase_state:: \
-            showcase_glue:: \
-            material_builder_api:: \
-            feature_write_isolation:: \
-            root_is_routing_only:: \
-            root_vocabulary_is_cross_cutting:: \
-            root_state_is_shared:: \
-            logical_state_ownership:: \
-            features_are_render_free:: \
-            no_concrete_implementations:: \
-            overlay_registration:: \
-            surface_registration_cost:: \
-            outcome_termination:: \
-            attention_notify:: \
-            attention_view_report:: \
-            unread_rows:: \
-            switcher_unread:: \
-            attention_reveal:: \
-            features_attention:: \
-            features_connection:: \
-            features_help:: \
-            features_notifications:: \
-            features_project:: \
-            features_window:: \
-            features_worktree:: \
-            features_worktree_form:: \
-            notification_icon::
-      # Run the client + daemon test suites where the iced system deps are present. Issue #1649:
+      # Run the core + daemon test suites. Issue #1649:
       # nextest does not run doctests at all, so `cargo test --doc` still runs them on its own --
       # dropping it would silently stop testing every `/// ```rust` example.
       - name: Test (full workspace)
@@ -603,7 +546,6 @@ jobs:
           cargo test --release -p micold-core --test typeahead_budget
           cargo test --release -p micold-core --test main -- jira_site_release::
           cargo test --release -p micold-core --lib review::anchor::tests::two_hundred_comments_locate_inside_the_budget
-          cargo test --release -p micold-client --test transcript_open_budget
 
   # #1931: do the tests run the lines this pull request changed? Reads the lcov file the `test` job
   # wrote and checks the changed executable lines in scope (scripts/guardrails-scope.conf) against
@@ -770,81 +712,6 @@ jobs:
       - name: Test (real runtime, daemon)
         run: cargo test --release -p micold-daemon --features sandbox-real-runtime --test 'sandbox_real_*' sandbox_real_ --no-fail-fast -- --test-threads=1
 
-  # #1281. The container daemon a user adds in Settings, end to end against a real runtime, on
-  # docker **and** on rootless podman. The job above starts its containers with the harness's own
-  # `create` argv, so a mount option podman rejects in the application's argv (#1279) passed it and
-  # reached users. This job creates the container the way Settings does (`DaemonContainers`, the
-  # credential tmpfs, the worktree bind and the uid/gid mapping included) from `micold-basic:dev`
-  # built from the branch, and drives the app's own connection actor: the daemon is provisioned
-  # over SSH with a stand-in AI CLI, a session starts, the stand-in answers, the session stops and
-  # the container is removed. A rejected option ends the start with the runtime's own output, which
-  # the test prints as its failure.
-  #
-  # `MICOLD_REAL_RUNTIME_REQUIRED` turns the tests' skip (no runtime, no image) into a failure, and
-  # the last step checks that both tests passed and that the end-to-end one reached its end, so a
-  # broken harness or a filter that matches nothing cannot pass with nothing run. Same gate as the
-  # job above. `micold-ai-ide` is the binary the tests are compiled into (`src/shell/sandbox_real.rs`);
-  # `--bin` keeps cargo from building the crate's other test targets.
-  container-daemon:
-    name: container daemon end to end (${{ matrix.runtime }}, linux)
-    # Waits on `lint` (#957), see the `test` job.
-    needs: [classify, lint]
-    if: >-
-      ${{ !cancelled()
-      && needs.classify.result == 'success'
-      && needs.lint.result != 'failure'
-      && needs.classify.outputs.docs_only != 'true'
-      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        runtime: [docker, podman]
-    env:
-      MICOLD_TEST_RUNTIME: ${{ matrix.runtime }}
-      MICOLD_REAL_RUNTIME_REQUIRED: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          key: ${{ matrix.runtime }}
-      # podman runs as the runner user, rootless: the setup a user without root has, and the one
-      # #1279 broke. A rootful podman here would prove something else.
-      - name: Runtime version
-        run: |
-          set -e
-          if [ "$MICOLD_TEST_RUNTIME" = podman ]; then
-            podman version --format '{{.Client.Version}}'
-            rootless="$(podman info --format '{{.Host.Security.Rootless}}')"
-            echo "rootless: $rootless"
-            [ "$rootless" = true ] || { echo "::error::podman is not rootless" >&2; exit 1; }
-          else
-            docker version --format '{{.Server.Version}}'
-          fi
-      - name: Build the :dev basic image
-        run: '"$MICOLD_TEST_RUNTIME" build -f packaging/basic/Containerfile -t micold-basic:dev packaging/basic'
-      # #1439 quickstart B3: the sandbox page's own-image example builds as written on this
-      # runtime, `FROM` the image just built, and `pkg-config --libs libpq` prints `-lpq` in it.
-      - name: Build the user guide's own-image example
-        run: scripts/check-guide-own-image.sh "$MICOLD_TEST_RUNTIME" micold-basic:dev
-      # The build the provisioning copies into the container; the test finds it beside its own
-      # `deps/` directory.
-      - name: Build the daemon
-        run: cargo build -p micold-daemon
-      - name: Test (container daemon end to end)
-        run: |
-          set -o pipefail
-          log="$RUNNER_TEMP/container-daemon.log"
-          cargo test -p micold-client --bin micold-ai-ide --features sandbox-real-runtime sandbox_real_ \
-            --no-fail-fast -- --test-threads=1 --nocapture 2>&1 | tee "$log"
-          passed="$(sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' "$log" | tail -1)"
-          echo "passed: ${passed:-0}"
-          [ "${passed:-0}" -ge 2 ] || { echo "::error::expected both container-daemon tests to pass, ${passed:-0} did" >&2; exit 1; }
-          grep -E "$MICOLD_TEST_RUNTIME: connected after" "$log" \
-            || { echo "::error::the end-to-end test did not reach its end" >&2; exit 1; }
-
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
   # specification, which only works while the assertions are frozen.
@@ -890,38 +757,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y openssh-server
       - name: Run the real-sshd tests
         run: cargo test -p micold-daemon --features ssh-real-runtime ssh_real_ --no-fail-fast -- --test-threads=1
-
-  # Feature 686 (FR-021, research K12/K13). The Kubernetes daemon runtime is proven against a real
-  # cluster: a throwaway `kind` cluster, the SSH image (the basic image plus a package source
-  # pointed at the suite) loaded into it, and the `kube_real_*` tests of `micold-client`. The
-  # client-side rules (kubeconfig candidates, separators, exec-plugin resolution) are pure core tests
-  # that the `test` job runs.
-  # `kind` and `kubectl` are pinned by version and sha256 (scripts/install-kube-tools.sh), and the node image is one stable
-  # Kubernetes version, so the job is the same on every run. It runs on every non-documentation
-  # change (the docs-only skip of `ssh-remote`, without its path gate).
-  kube-cluster:
-    name: kubernetes daemon on a real cluster (linux)
-    # Waits on `lint` (#957), see the `test` job.
-    needs: [classify, lint]
-    if: >-
-      ${{ !cancelled()
-      && needs.classify.result == 'success'
-      && needs.lint.result != 'failure'
-      && needs.classify.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Install kind and kubectl at pinned versions
-        # The pins live in scripts/install-kube-tools.sh (#1984, FR-009), shared with kube-e2e.
-        run: |
-          set -euo pipefail
-          scripts/install-kube-tools.sh kind kubectl
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Run the real-cluster tests
-        run: scripts/test-kube.sh
 
   kube-chart:
     name: helm chart and orchestrator image (linux)
@@ -1080,21 +915,11 @@ jobs:
           fetch-depth: 0 # the user-guide gate below compares against the merge base
       - name: Required user-guide docs exist
         run: |
-          test -f docs/user-guide/help-about.md
-          test -f docs/user-guide/project-selection.md
-          test -f docs/user-guide/appearance-theming.md
-          test -f docs/user-guide/settings.md
           test -f docs/user-guide/sandboxed-daemon.md
           test -f docs/user-guide/remote-daemons.md
-          test -f docs/user-guide/worktrees-and-sessions.md
-          test -f docs/user-guide/icons.md
-      # Principle VII for a developer-facing capability: feature 020's showcase is documented for
-      # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
+          test -f docs/user-guide/web-client.md
       - name: Required developer docs exist
         run: |
-          test -f docs/development/architecture.md
-          test -f docs/development/component-library.md
-          test -f docs/development/component-showcase.md
           # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
           # user guide. This check runs on documentation-only changes too -- which is the point.
           test -f docs/development/ci-pipeline.md
@@ -1189,7 +1014,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, client, client-e2e, client-e2e-stack, test, linux-daemons, sandbox-runtime, container-daemon, ssh-remote, kube-cluster, kube-chart, kube-e2e, local-stack-kind, assertions, docs, diff-coverage, mutants]
+    needs: [classify, lint, client, client-e2e, client-e2e-stack, test, linux-daemons, sandbox-runtime, ssh-remote, kube-chart, kube-e2e, local-stack-kind, assertions, docs, diff-coverage, mutants]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -1214,9 +1039,7 @@ jobs:
           # satisfied, so it is gated by name too.
           LINUXDAEMONS: ${{ needs.linux-daemons.result }}
           SANDBOX: ${{ needs.sandbox-runtime.result }}
-          CONTAINERDAEMON: ${{ needs.container-daemon.result }}
           SSHREMOTE: ${{ needs.ssh-remote.result }}
-          KUBECLUSTER: ${{ needs.kube-cluster.result }}
           KUBECHART: ${{ needs.kube-chart.result }}
           KUBEE2E: ${{ needs.kube-e2e.result }}
           LOCALSTACKKIND: ${{ needs.local-stack-kind.result }}
@@ -1247,9 +1070,7 @@ jobs:
           check test "$TEST"
           check linux-daemons "$LINUXDAEMONS"
           check sandbox "$SANDBOX"
-          check container-daemon "$CONTAINERDAEMON"
           check ssh-remote "$SSHREMOTE"
-          check kube-cluster "$KUBECLUSTER"
           check kube-chart "$KUBECHART"
           check kube-e2e "$KUBEE2E"
           check local-stack-kind "$LOCALSTACKKIND"
@@ -1270,9 +1091,7 @@ jobs:
             echo "| test | \`$TEST\` | yes |"
             echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
-            echo "| container-daemon | \`$CONTAINERDAEMON\` | yes |"
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
-            echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
             echo "| kube-chart | \`$KUBECHART\` | yes |"
             echo "| kube-e2e | \`$KUBEE2E\` | yes |"
             echo "| local-stack-kind | \`$LOCALSTACKKIND\` | yes |"

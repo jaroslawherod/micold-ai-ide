@@ -5,8 +5,6 @@
 /target/
 # Shared across the main checkout and every worktree (see scripts/build-lock.sh)
 /target-shared/
-# visual-pass working files: pinned binaries, evidence (.claude/skills/visual-pass/SKILL.md)
-/.visual-pass/
 **/*.rs.bk
 *.pdb
 

@@ -53,16 +53,6 @@ specs/**      micold-docs
 # own runtime state (`worktrees/`, local settings), which is untracked and not prose.
 .claude/skills/** micold-docs
 
-# Read by a test, so a test input rather than documentation: the visual-pass skill is the one recipe
-# in the repository that launches the real client and the real daemon, and
-# `crates/micold-core/tests/tests_never_write_the_real_data_directory.rs` holds its launch block to
-# setting `XDG_DATA_HOME` and `XDG_RUNTIME_DIR`. Without them a pass writes the developer's own
-# `~/.local/share/micold-ai-ide`, which is how a test fixture's settings draft once reached a real
-# settings file (029 T069). If this stayed documentation, dropping a variable from the recipe would
-# skip the whole pipeline -- so the one edit the gate exists to catch would be the one edit it never
-# sees. Must stay after `.claude/skills/**`, which sets the attribute.
-/.claude/skills/visual-pass/SKILL.md -micold-docs
-
 # Compiled into the binary, so a build input rather than documentation: micold-core's
 # `metadata.rs` does `include_str!("../../../CHANGELOG.md")` so the app can show a "what's new"
 # view with no filesystem or network access (Constitution Principle IV). Changing it changes the
@@ -113,12 +103,6 @@ specs/**      micold-docs
 # (feature 1276, FR-004). Must stay after `docs/**`, which sets the attribute.
 /docs/user-guide/reviewing-changes.md -micold-docs
 
-# Read by a test, so a test input rather than documentation: `crates/micold-client/tests/
-# settings_sections.rs` names this page in its list of the places still allowed to use the
-# "Session service" title. (It used to be carved out for the macOS logout claim, removed in #1897.)
-# Must stay after `docs/**`, which sets the attribute.
-/docs/daemon.md -micold-docs
-
 # The packaging set (#952).
 #
 # `micold-packaging` marks paths that can change the shipped packages or how they are built. No
@@ -144,16 +128,13 @@ scripts/build-lock.sh                 micold-packaging
 #
 # `micold-daemon-runtime` marks paths that can change what the real-runtime jobs of ci.yml build
 # or test: `sandbox against a real runtime` (the `sandbox_real_*` targets of micold-core and
-# micold-daemon, against the :dev sandbox and basic images), `container daemon end to end` (the
-# client's `sandbox_real_*` tests on docker and podman, #1281) and `remote daemon over a real sshd`
+# micold-daemon, against the :dev sandbox and basic images), and `remote daemon over a real sshd`
 # (the `ssh_real_*` targets of micold-daemon). One attribute serves all three: their code paths are
 # the same crates, the sandbox jobs only add the image directories, and the sshd job (about five
 # minutes) is never the critical path, so a second attribute would buy a minute-scale saving at
 # the price of a second output to keep in step. Pull requests run the jobs only when a change
 # touches the set -- or carries `full-ci` -- and main pushes and the nightly always run them. A path
-# is outside the set until declared; the failure direction is "run it". Of the client's sources only
-# the container bring-up and connection the end-to-end job drives are in it (below); the rest is
-# built by the `test` job. Read by scripts/classify-change.sh (`daemon_runtime=` output), pinned by
+# is outside the set until declared; the failure direction is "run it". Read by scripts/classify-change.sh (`daemon_runtime=` output), pinned by
 # scripts/tests/classify-change.test.sh.
 crates/micold-core/**                 micold-daemon-runtime
 crates/micold-daemon/**               micold-daemon-runtime
@@ -165,13 +146,6 @@ crates/micold-daemon/**               micold-daemon-runtime
 packaging/sandbox/**                  micold-daemon-runtime
 packaging/basic/**                    micold-daemon-runtime
 scripts/basic-image-hash.sh           micold-daemon-runtime
-# The container bring-up Settings uses, the connection actor that drives it, and their end-to-end
-# test (#1281).
-crates/micold-client/src/daemon.rs             micold-daemon-runtime
-crates/micold-client/src/shell/sandbox.rs      micold-daemon-runtime
-crates/micold-client/src/shell/sandbox_real.rs micold-daemon-runtime
-# The fake GitHub API the runtime-gated scoped-token test in micold-daemon includes (#1542).
-crates/micold-client/tests/support/fake_github.rs micold-daemon-runtime
 # The workflow itself: an edit to a job's steps is proven by the PR that makes it.
 /.github/workflows/ci.yml             micold-daemon-runtime
 
@@ -231,32 +205,9 @@ packages/protocol/**                  micold-client
 /pnpm-workspace.yaml                  micold-client
 /package.json                         micold-client
 
-# What a user can see, and what documents it (Constitution Principle VII).
-#
-# `micold-user-facing` marks the paths whose change a reader of the user guide could notice;
-# `micold-user-guide` marks the prose that documents them. One consumer reads both, through the
-# same `git check-attr` matcher:
-#   - scripts/check-user-guide-updated.sh  (did this change touch a screen without the guide)
-#
-# Pinned by scripts/tests/check-user-guide-updated.test.sh. `set` means yes; both `unset` and
-# `unspecified` mean no, so a path is not user-facing until declared otherwise -- the same default
-# the documentation set above uses, and for the same reason: the rule must fire on the paths
-# somebody thought about, not on everything that happens to be new.
-#
-# The scope is deliberately the client's screens and the behaviours they trigger, not every path a
-# user could eventually feel. A gate that demanded a user-guide edit for a refactor would be
-# labelled away within a week and stop protecting anything; one that fires on the sidebar, the
-# settings pages and the session and worktree flows is one nobody argues with. Widen it when a
-# change slips through, not in anticipation.
-
-crates/micold-client/src/ui/**       micold-user-facing
-crates/micold-client/src/features/** micold-user-facing
-
-# The component library underneath those screens is developer-facing: Principle VII is satisfied
-# for it by docs/development/component-library.md, which feature 020 established (its FR-024).
-# A ripple timing or a token tweak changes pixels without changing anything the guide says. Must
-# stay after `ui/**`, which sets the attribute -- the last matching line wins.
-crates/micold-client/src/ui/material/** -micold-user-facing
-crates/micold-client/src/ui/cdk/**      -micold-user-facing
-
+# What documents a user-facing change (Constitution Principle VII). `micold-user-guide` marks the
+# prose; `micold-user-facing` marks the paths whose change a reader of it could notice, read with
+# it by scripts/check-user-guide-updated.sh and pinned by scripts/tests/check-user-guide-updated.test.sh.
+# No path is declared `micold-user-facing` since the desktop app was retired (#1959), so the gate does
+# not fire until the web client's screens are declared.
 docs/user-guide/** micold-user-guide

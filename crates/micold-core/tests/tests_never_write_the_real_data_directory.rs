@@ -65,11 +65,7 @@ const ISOLATORS: &[(&str, &str)] = &[
 ///
 /// `(file relative to the repository root, why it is not a call)`. A stale entry fails too: a list
 /// that can rot is a list that stops meaning anything.
-const ALLOWED: &[(&str, &str)] = &[(
-    "crates/micold-client/tests/showcase_isolation.rs",
-    "A Rust snippet inside a string literal, fed to that test's own source scanner as the example \
-     of a forbidden construction. It is text the test greps, not code it runs.",
-)];
+const ALLOWED: &[(&str, &str)] = &[];
 
 /// This file, which is exempt from its own scan.
 ///
@@ -87,8 +83,8 @@ fn workspace_root() -> PathBuf {
 /// Every file that holds tests, in a stable order, so an offender list reads the same twice.
 fn test_sources() -> Vec<PathBuf> {
     let root = workspace_root();
-    let mut sources = vec![root.join("crates/micold-client/src/main_tests.rs")];
-    for crate_name in ["micold-client", "micold-core", "micold-daemon"] {
+    let mut sources = Vec::new();
+    for crate_name in ["micold-core", "micold-daemon"] {
         collect_rust_files(
             &root.join("crates").join(crate_name).join("tests"),
             &mut sources,
@@ -217,53 +213,4 @@ fn same_file(a: &Path, b: &Path) -> bool {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,
     }
-}
-
-/// The visual-pass skill launches the real client and the real daemon, so its recipe writes the data
-/// directory in exactly the way a test does — and unlike a test, nothing else stops it. Its own
-/// cleanup step identifies the processes it may stop by their `XDG_RUNTIME_DIR`, so a launch that
-/// omits the isolation is both a write into the developer's configuration and a process nobody can
-/// recognise as theirs afterwards.
-///
-/// The absolute-path check is part of what is pinned, not decoration. `directories` discards an
-/// empty or relative `XDG_DATA_HOME` and falls back to `$HOME/.local/share` without a word, so a
-/// recipe that sets the variable to a placeholder is indistinguishable from one that never set it.
-#[test]
-fn the_visual_pass_launch_recipe_isolates_the_data_directory() {
-    let path = workspace_root().join(".claude/skills/visual-pass/SKILL.md");
-    let skill =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-
-    let launch = skill
-        .split("### 4. Launch")
-        .nth(1)
-        .unwrap_or_else(|| panic!("{} has no `### 4. Launch` section", path.display()))
-        .split("```")
-        .nth(1)
-        .unwrap_or_else(|| panic!("{}'s launch section has no code block", path.display()));
-
-    for required in [
-        "XDG_DATA_HOME=",
-        "XDG_RUNTIME_DIR=",
-        "must be absolute",
-        "chmod 700",
-    ] {
-        assert!(
-            launch.contains(required),
-            "the visual-pass launch recipe in {} is missing `{required}`, so a pass that follows it \
-             can run the real client and daemon against the developer's own \
-             `~/.local/share/micold-ai-ide`:\n{launch}",
-            path.display()
-        );
-    }
-
-    assert!(
-        !launch.contains("=<"),
-        "the visual-pass launch recipe in {} assigns an angle-bracket placeholder. Pasted as \
-         written, `x=<a path>` is not an assignment at all — it is an empty assignment plus two \
-         redirections — so the variable ends up empty and `directories` falls back to the real data \
-         directory without a word. Spell the paths out instead. (`<binary>` elsewhere in the block \
-         is fine: a missing binary fails loudly.)\n{launch}",
-        path.display()
-    );
 }

@@ -64,21 +64,21 @@ project-specific:
   `libxcursor-dev`, `libxrandr-dev`, `libxi-dev`, `libxkbcommon-dev`, `libwayland-dev`).
 
 A project that declares its toolchain in a `mise.toml` gets it by setting the project's **Setup
-command** ([Settings › Project](settings.md#project)) to
+command** (Settings › Project) to
 
 ```sh
 mise trust && mise install
 ```
 
 Each new worktree on the daemon then runs it before you build (see
-[Setup in a new worktree](worktrees-and-sessions.md#setup-in-a-new-worktree)). Everything it
+Setup in a new worktree). Everything it
 installs — Rust with its components, Node, uv, Go and the rest — lands in the sandbox's home, not in
 the image, and needs no root. It stays there when the container restarts, and every worktree on that
 daemon shares it: a second worktree of the same project finds the toolchain already installed and
 sets up in seconds. A project with no `mise.toml` can keep the same command; it installs nothing and
 succeeds. On a container or Kubernetes daemon one setup runs at a time, so two new worktrees never
 install into the home at once; the later one waits for the earlier
-([Running setup again, and stopping it](worktrees-and-sessions.md#running-setup-again-and-stopping-it)).
+(Running setup again, and stopping it).
 
 The basic image does not carry any project's language toolchain (that is what `mise install` is
 for), nor system libraries beyond the ones above: a crate that links PostgreSQL's `libpq`, OpenSSL
@@ -115,7 +115,7 @@ another daemon because its own is down.
 |---|---|
 | A worktree with no daemon | `no daemon` |
 | A worktree whose daemon is not connected | `daemon <name> unavailable` |
-| A daemon the app cannot talk to (version) | `daemon <name> version mismatch: client <c>, daemon <d>`, with how to fix it: for an older container daemon, **Replace** when no session runs on it, otherwise **Stop** then **Start** (see [A container daemon of another version](settings.md#a-container-daemon-of-another-version)) |
+| A daemon the app cannot talk to (version) | `daemon <name> version mismatch: client <c>, daemon <d>`, with how to fix it: for an older container daemon, **Replace** when no session runs on it, otherwise **Stop** then **Start** (see A container daemon of another version) |
 | A session whose daemon dropped | `lost to daemon <name>` (it is not marked finished) |
 | No Docker or Podman installed | `container runtime not found` |
 | Windows, mapped paths | `paths are mapped` |
@@ -125,8 +125,8 @@ another daemon because its own is down.
 - Each daemon has its own tool server, so the AI in a session only sees the worktrees of its own
   daemon; see [Tools for the AI in your sessions](agent-tools.md#one-tool-server-per-daemon).
 
-Add, edit, start, stop and remove daemons in **Settings, Daemons** ([the
-section](settings.md#daemons)). Names, container names and ports must be unique, and there can be
+Add, edit, start, stop and remove daemons in **Settings, Daemons** (the
+section). Names, container names and ports must be unique, and there can be
 only one host daemon; the form refuses a duplicate and names the field. A container daemon's
 container name may be left empty: it defaults to the daemon's name, made a valid container name, and
 is stored when you save. A container name needs at least 2 characters, so a daemon with a
@@ -366,8 +366,8 @@ the CLI only when the environment a session starts in was applied: environment-i
 the startup script succeeded. Otherwise it gives the environment-include reason (the switch is off,
 the script path is empty, or the script was not found, failed or timed out) and the setting to
 change, because a script that was not applied may be what puts the CLI on the `PATH`. See
-[Settings → Default AI CLI](settings.md#default-ai-cli). A session that already runs it fails to start and says to choose an image that provides
-it — see [When a CLI isn't installed](worktrees-and-sessions.md#when-a-cli-isnt-installed).
+Settings → Default AI CLI. A session that already runs it fails to start and says to choose an image that provides
+it — see When a CLI isn't installed.
 
 ### The AI's tools work the same way
 
@@ -476,13 +476,13 @@ file and its configuration file names it, so `gh` and `git` inside use it; there
 this. A sandbox whose projects have no GitHub remote receives none. A token you add, change or
 delete reaches the sandbox at its next start. Tokens are not special to sandboxes: a host or SSH
 daemon chooses the token for a repository the same
-way, from its configuration file (see [GitHub tokens](settings.md#github-tokens)). What differs is
+way, from its configuration file (see GitHub tokens). What differs is
 the fallback: a sandbox clears every helper it inherited, while a host or SSH daemon hands a
 repository no token applies to over to the helpers you already had.
 
 **Until you paste a GitHub token that reaches its repository, a sandbox cannot push.** Paste one
-token for as many repositories as it reaches in [Settings → GitHub → GitHub
-tokens](settings.md#github-tokens). A sandbox then pushes and pulls its project's repository
+token for as many repositories as it reaches in Settings → GitHub → GitHub
+tokens. A sandbox then pushes and pulls its project's repository
 with that **fine-grained token, limited to the repositories you chose**, over HTTPS; a remote that uses
 SSH goes over HTTPS inside the sandbox, with no SSH key. The application never renews the token: paste a new one before it expires. A token that leaks from a
 sandbox stays valid until it expires or you delete it on GitHub. A session that tries to push
@@ -553,8 +553,8 @@ look like a fully isolated one.
 
 ### Saved terminal history is shared with your computer
 
-The terminal history the session service saves ([Settings → Terminal → Save terminal
-history](settings.md)) is written to the same folder whether the service runs on your computer or in
+The terminal history the session service saves (Settings → Terminal → Save terminal
+history) is written to the same folder whether the service runs on your computer or in
 the sandbox: the `terminal-history` folder in the application's local data directory. A history
 saved by a service on your computer is restored by one in the sandbox, and the other way round, and
 it survives the sandbox being recreated. Only you can read the files, in the sandbox as on your
@@ -683,8 +683,8 @@ outside, the machine waking without it — it brings the sandbox up again itself
   over once the service has answered, so a sandbox that recovers gets all three again next time.
 - **Each attempt shows its stage**, the same as a first start: checking the runtime, getting the
   image (with its download progress), starting. The stage and the download's percentage appear in
-  the sandbox item of the [status bar](./appearance-theming.md#status-bar) along the bottom edge, with a busy mark; point at the item for
-  the runtime's own last line. Nothing is drawn as a row under the [title bar](./appearance-theming.md#title-bar), so the window does not
+  the sandbox item of the status bar along the bottom edge, with a busy mark; point at the item for
+  the runtime's own last line. Nothing is drawn as a row under the title bar, so the window does not
   move while the sandbox comes up. While one is under way there is no
   "could not connect" banner — a sandbox that is coming up is not a lost connection.
 - **Why the last attempt failed stays on screen** as *Trying again: …* in the sandbox item's tooltip, with the stage of the next.

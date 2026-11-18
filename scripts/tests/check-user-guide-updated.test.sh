@@ -27,7 +27,22 @@ set -uo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 CHECK="$ROOT/scripts/check-user-guide-updated.sh"
-ATTRS="$ROOT/.gitattributes"
+# The declaration under test. The desktop screens that `.gitattributes` used to declare
+# `micold-user-facing` were retired with the iced app (#1959), so no path is declared today and the
+# gate is inert on the real tree; the fixture below keeps the gate's own rules exercised, with the
+# retired paths as sample names, until the web client's screens are declared.
+SCRATCH="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH"' EXIT
+ATTRS="$SCRATCH/gitattributes"
+cat >"$ATTRS" <<'EOF_ATTRS'
+crates/micold-client/src/ui/**       micold-user-facing
+crates/micold-client/src/features/** micold-user-facing
+crates/micold-client/src/ui/material/** -micold-user-facing
+crates/micold-client/src/ui/cdk/**      -micold-user-facing
+docs/user-guide/** micold-user-guide
+EOF_ATTRS
+DECL="$SCRATCH/decl"
+mkdir -p "$DECL" && git -C "$DECL" init -q && cp "$ATTRS" "$DECL/.gitattributes"
 
 failures=0
 cases=0
@@ -95,7 +110,7 @@ echo "== the declaration =="
 expect_attr() {
   local attr="$1" path="$2" want="$3" got
   cases=$((cases + 1))
-  got="$(cd "$ROOT" && git check-attr "$attr" -- "$path" | sed "s/.*: $attr: //")"
+  got="$(cd "$DECL" && git check-attr "$attr" -- "$path" | sed "s/.*: $attr: //")"
   if [ "$got" != "$want" ]; then
     printf 'FAIL  %-52s %s want=%-12s got=%s\n' "$path" "$attr" "$want" "$got"
     failures=$((failures + 1))

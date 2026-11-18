@@ -4,7 +4,7 @@
 # One script, five steps, in this order and no other:
 #
 #   1. emit   the theme's variables from the application's design tokens
-#   2. capture the screenshots and clips the manifest declares
+#   2. (retired: the media capture, with the desktop application it photographed)
 #   3. stage  a copy of `docs/` with the version substituted and media directives expanded
 #   4. render the staged copy with mdBook
 #   5. check  the built site, before anything is deployed
@@ -68,24 +68,11 @@ if [ "$render" -eq 1 ]; then
 
   # --- 2. the media ------------------------------------------------------------------------------
   #
-  # Captured from the application built from this same checkout. --no-media skips it for local
-  # iteration on prose or theme; every published build captures, because a screenshot that was not
-  # produced by the release it ships with is a screenshot of a different program (FR-011).
+  # The screenshots and clips were captured from the desktop application, which is retired (#1959),
+  # so there is nothing to capture: `site/media.toml` declares no media and the pages carry none.
+  # `--no-media` is accepted and does nothing.
 
-  if [ "$capture" -eq 1 ]; then
-    step "media: capturing every entry in site/media.toml"
-    [ -x "$site/capture/capture.sh" ] ||
-      die "site/capture/capture.sh is not there yet -- pass --no-media to build without it"
-    # `site/build/src/media` survives a re-stage, on purpose -- it is where the capture writes and
-    # the stage reads. That is also how a picture from a previous run could be published as if it
-    # were this one's, so the moment this run started capturing is recorded and step 5 requires
-    # every published file to be newer than it.
-    mkdir -p "$staging"
-    : >"$staging/.capture-stamp"
-    "$site/capture/capture.sh" --out "$staging/src/media"
-  else
-    step "media: skipped (--no-media) -- pages will show figures with no file behind them"
-  fi
+  step "media: none declared"
 
   # --- 3. staging --------------------------------------------------------------------------------
 

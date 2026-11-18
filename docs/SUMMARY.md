@@ -8,21 +8,8 @@
 
 # User guide
 
-- [Installing on Fedora, RHEL and openSUSE](user-guide/install-rpm.md)
-- [Help & About](user-guide/help-about.md)
-- [Opening a project](user-guide/project-selection.md)
-- [Appearance & theming](user-guide/appearance-theming.md)
-- [Icons](user-guide/icons.md)
-- [Worktrees & sessions](user-guide/worktrees-and-sessions.md)
-- [The worktree Overview](user-guide/overview.md)
 - [The web client and the local stack](user-guide/web-client.md)
-- [Running a prompt in parallel](user-guide/parallel-runs.md)
-- [Terminal panes](user-guide/terminal-panes.md)
-- [Giving a structured session a file](user-guide/structured-input.md)
-- [Reading a structured session's transcript](user-guide/structured-transcript.md)
-- [Reviewing a worktree's changes](user-guide/reviewing-changes.md)
 - [Tools for the AI in your sessions](user-guide/agent-tools.md)
-- [Settings](user-guide/settings.md)
 - [The daemon configuration file](user-guide/daemon-configuration.md)
 - [Running the session service in a container](user-guide/sandboxed-daemon.md)
 - [Running the session service on another computer over SSH](user-guide/remote-daemons.md)
@@ -39,10 +26,6 @@
 
 # Developing Micold AI IDE
 
-- [Client architecture](development/architecture.md)
-- [The component library](development/component-library.md)
-- [The layout snapshot](development/layout-snapshot.md)
-- [The component showcase](development/component-showcase.md)
 - [The CI pipeline](development/ci-pipeline.md)
 - [Diff guardrails: coverage and mutants](development/diff-guardrails.md)
 - [The shared target directory and build lock](development/shared-build.md)
@@ -53,8 +36,5 @@
 - [The client theme tokens](development/client-theme.md)
 - [The client API types and drift check](development/api-types.md)
 - [The web client](development/client.md)
-- [Screenshots for the manual visual passes](development/screenshots.md)
 - [Autopilot token usage](development/autopilot-tokens.md)
 - [Autopilot evals](development/autopilot-evals.md)
-- [Overview card redesign](development/overview-redesign.md)
-- [Review UI redesign](development/review-redesign.md)

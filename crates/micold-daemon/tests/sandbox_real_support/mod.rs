@@ -12,6 +12,9 @@
 
 #![allow(dead_code)]
 
+mod daemon_config_delivery;
+mod daemon_config_render;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -469,7 +472,7 @@ pub fn start_no_outbound_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
 
 /// The start script the next sandbox is delivered, as the application delivers it (#1533). Set by
 /// the one test file that probes it, before it starts its sandboxes.
-static STARTUP: std::sync::Mutex<Option<micold_client::daemon_config_render::StartupTable>> =
+static STARTUP: std::sync::Mutex<Option<daemon_config_render::StartupTable>> =
     std::sync::Mutex::new(None);
 
 /// Delivers `script` (a file in `dir`) as the start script of the sandboxes started from now on.
@@ -477,11 +480,10 @@ pub fn deliver_start_script(dir: &Path, script: &str) {
     use micold_core::daemons::{StartupScript, StartupSettings};
     let path = dir.join("start.sh");
     std::fs::write(&path, script).unwrap();
-    *STARTUP.lock().unwrap_or_else(|e| e.into_inner()) =
-        Some(micold_client::daemon_config_render::StartupTable {
-            settings: StartupSettings::new(StartupScript::File(path.clone())),
-            script_file: path,
-        });
+    *STARTUP.lock().unwrap_or_else(|e| e.into_inner()) = Some(daemon_config_render::StartupTable {
+        settings: StartupSettings::new(StartupScript::File(path.clone())),
+        script_file: path,
+    });
 }
 
 /// Runs the runtime CLI with the original XDG variables, so a probe sees the runtime the rest of
@@ -631,7 +633,7 @@ fn start_sandbox_on(
         ..micold_core::sandbox::SandboxProfile::default()
     };
     let delivery = micold_core::sandbox::DeliveryMount::beside(&state);
-    micold_client::daemon_config_delivery::deliver_container(
+    daemon_config_delivery::deliver_container(
         spec.container,
         &profile,
         Path::new(spec.home),

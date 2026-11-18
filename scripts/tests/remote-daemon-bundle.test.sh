@@ -39,29 +39,13 @@ else
   expect_has "names the missing tool" "$msg" "cargo-zigbuild is required"
 fi
 
-# --- the packages ---------------------------------------------------------------------------------
-cargo_toml="$(cat "$ROOT/crates/micold-client/Cargo.toml")"
-for f in "$X86" "$ARM"; do
-  expect_has "the deb assets carry $f" "$cargo_toml" "target/remote-daemon/$f\", \"usr/lib/micold-ai-ide/remote/\""
-  expect_has "the rpm assets carry $f" "$cargo_toml" "target/remote-daemon/$f\", dest = \"/usr/lib/micold-ai-ide/remote/$f\""
-done
-
-# `mise run deb|rpm` package an existing build and read the daemons from the workspace's own
-# target/remote-daemon (the asset paths above), so each must build them there first (issue 1001).
+# --- the tasks and jobs that run it ------------------------------------------------------------
+# The deb and rpm packages that carried these daemons were retired with the desktop app (#1959).
 mise_toml="$(cat "$ROOT/mise.toml")"
 body="$(awk '$0 == "[tasks.remote-daemons]" {on=1; next} on && /^\[/ {exit} on' <<<"$mise_toml")"
 expect_has "the remote-daemons task runs the bundle script into target/remote-daemon" "$body" "remote-daemon-bundle.sh --out target/remote-daemon"
-for task in deb rpm; do
-  body="$(awk -v t="[tasks.$task]" '$0 == t {on=1; next} on && /^\[/ {exit} on' <<<"$mise_toml")"
-  expect_has "the $task task builds the remote daemons first" "$body" 'depends = ["remote-daemons"]'
-done
 
-release="$(cat "$ROOT/.github/workflows/release.yml")"
 ci="$(cat "$ROOT/.github/workflows/ci.yml")"
-for job in deb rpm linux-daemons; do
-  body="$(awk -v j="  $job:" '$0 == j {on=1; next} on && /^  [a-z-]+:$/ {exit} on' <<<"$release")"
-  expect_has "the $job job in release.yml builds the Linux daemons" "$body" "remote-daemon-bundle.sh"
-done
 body="$(awk '$0 == "  linux-daemons:" {on=1; next} on && /^  [a-z-]+:$/ {exit} on' <<<"$ci")"
 expect_has "ci.yml builds the Linux daemons once" "$body" "remote-daemon-bundle.sh"
 

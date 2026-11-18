@@ -852,7 +852,7 @@ This section is the *model*. For turning the container placement on, what it can
 which runtimes work, and what to do when it will not start, see
 [Running the session service in a container](user-guide/sandboxed-daemon.md); the switch itself
 lives in Settings → Daemons, described in
-[Settings](user-guide/settings.md#container-daemons).
+Settings.
 
 | Placement | What it is | Reached over |
 |---|---|---|
