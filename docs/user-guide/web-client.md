@@ -30,6 +30,17 @@ Press `Ctrl+C` to stop: the cluster is deleted. To keep it, and the orchestrator
 restarts the pods on them. To remove a kept cluster, run `kind delete cluster --name micold-local`.
 To use other ports on this computer, set `MICOLD_LOCAL_API_PORT` and `MICOLD_LOCAL_WEB_PORT`.
 
+Before anything starts, both ports are checked. If one is already in use, for example by a stack
+that is still running, the command names the port and, where it can tell, the process holding it,
+and exits without starting a second copy. Stop the other stack or choose other ports:
+
+```sh
+MICOLD_LOCAL_API_PORT=9730 MICOLD_LOCAL_WEB_PORT=9731 mise run local-stack
+```
+
+The web client is built for the API port you choose, and the orchestrator allows the web client's
+origin on the web port you choose, so nothing needs editing by hand.
+
 If a tool is missing, the command names it and exits without creating anything.
 
 ## Without Kubernetes: local processes

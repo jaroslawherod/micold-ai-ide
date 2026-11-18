@@ -2,9 +2,10 @@
 # The live check of the kind-mode local stack (#1732 M5, T052, SC-008, US5 scenarios 1, 2, 5), run
 # by CI's `local-stack-kind` job on a docker host (kind cannot run in a cloud session):
 #   1. `local-stack.sh` with MICOLD_LOCAL_KEEP=1 in the background; probe (120 s after helm returns)
-#   2. write a marker row in Postgres; delete the orchestrator pod (its port-forward dies, so the
-#      stack must exit; the cluster is kept), then the Postgres pod; the marker and the registered
-#      daemons must survive; probe through fresh forwards on 18730/18731
+#   2. write a marker row in Postgres; delete the orchestrator pod and TERM the stack (its forward
+#      points at the deleted pod and kubectl may not exit by itself); the cluster must be kept; delete
+#      the Postgres pod; the marker and the registered daemons must survive; probe through fresh
+#      forwards on 18730/18731
 #   3. rerun in the background, still KEEP, to exercise reuse; probe; TERM
 #   4. a last run without KEEP; probe; TERM; the cluster must be gone
 # Prints each phase's duration, for the ledger.

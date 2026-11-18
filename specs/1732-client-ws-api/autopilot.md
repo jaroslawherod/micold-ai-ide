@@ -8,10 +8,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Effort**: high
 - **Supervised**: no
 - **Issue**: #1732
-- **Worktree branch**: claude/project-thread-de08zv
+- **Worktree branch**: claude/project-thread-j62svx
 - **Started**: 2026-11-17
-- **Phase**: milestones (M5 implemented T043–T055, diff review pending)
-- **Next step**: M5 diff review (snapshot in Review rounds), then open the M5 PR (title/body in the session scratchpad) and watch `local-stack-kind`, the first live kind run; record its durations here.
+- **Phase**: milestones (M6 in review)
+- **Next step**: M6 diff review (round 1), then PR, CI, merge.
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -23,6 +23,8 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
 | #2034 | M2 /api/ws listener | merged | a1c9514b3 |
 | #2037 | M3 schema + TS types | merged | a7d7a3c12 |
+| #2038 | M4 web client on real API | merged | 5ebc01334 |
+| #2039 | M5 local kind stack | merged | 1db9333f1 |
 
 ## Milestones
 
@@ -32,13 +34,14 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | #2038 | merged |
-| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 | - | implemented on claude/project-thread-de08zv, diff review pending |
-| M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
+| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 | #2039 | merged |
+| M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | in review |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
 
 ## Decisions
 
+- M6 T038: the live-change scenario (US1.3/SC-006) in Playwright is the stack stopping and coming back in the open page with no reload; nothing outside the daemon protocol can create, rename or end a session, and those pushes are covered by tests/orchestrator/ws_*.rs. The kind mode now also checks both ports before anything (T040).
 - Plan (R1-R12 in research.md): tokio-tungstenite (in lock via kube) with upgrade-callback origin check; new `client_api` types, not ClientMsg; schemars + json-schema-to-typescript, `scripts/api-types.sh [--check]`; resume = ring of 1024 changes + epoch, else resync_needed; backoff = existing ConnectionManager (500 ms base, 15 s cap, full jitter, offline after 8); heartbeat 20 s / dead at 40 s; change feed = one 1 s poller diffing `gather`; FR-012 = orchestrator sends computed order, parity via shared vectors; ports API 127.0.0.1:8730, web 8731; local stack = scripts/local-stack.sh on a seeded catalog.
 - Milestones (5): M1 daemon ReadStructuredEvents (wire change); M2 orchestrator /api/ws; M3 schema/TS generation + drift gate + vectors; M4 web client on real API + i18n + minimal local-stack; M5 3-browser Playwright, CI, docs.
 - Content read uses a new read-only daemon request, not Attach (ProjectBusy); wire change with version bump.
@@ -51,6 +54,8 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Review rounds
 
+| diff review | 2 (sonnet, orchestrator) | M6 fix diff f84b9f80a..aaa733a49 | aaa733a49 | f84b9f80a..aaa733a49 | PENDING |
+| diff review | 1 (opus, orchestrator) | M6 1db9333f1..47c8aeee9 | 47c8aeee9 | 23cb524e3bb0efee07d88b19484fb679242b0070:47c8aeee9e7ed652270b6506b52abf5e4c28187e | CHANGES: 1 HIGH (F1 relative daemon path in CI), 1 MEDIUM (F2 SC-006 daemon-side push untested: deviation recorded on T038), 3 LOW (F3 Retry race, F4 NODE_IMAGE commit, F5 no action); all addressed |
 | diff review | 1 (opus, orchestrator) | M4 1c83be7~1..1c83be7 | 1c83be7 | - | CHANGES: 1 MAJOR (F1 sidebar stopped applying changes after a resync: listener `since` never reset) fixed in handleSubscribed; MINOR F2 connected only on `subscribed` (attempt reset there too), F3 visible while reconnecting keeps the attempt and only shortens the timer, F4 retry on a stopped client returns early, F5 local-stack re-checks ports before starting and names the exited process, all fixed with tests; behaviour-bearing, round 2 re-review (sonnet) due |
 | diff review | 1 (opus, orchestrator) | M3 a1c9514b3..43fc62389 | see commit | - | CHANGES, 4 minor, all fixed: F1 --ts-only missing schema now DRIFT; F2 literal expected_keys for the grouping case; F3 expected_daemons in vectors, asserted in jest; F4 duplicate test replaced by upsert-after-gone-row. Test-only/script fixes, no round 2 needed |
 
@@ -61,6 +66,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 | M5 amendment review | 2 (sonnet) | fix diff | see commit | - | PASSED with 3 text nits (ledger T-range, T046/T049 configured() input, T052 run order), fixed |
 | diff review | 1 (orchestrator) | M5 1ba83dcdd5b9b9e32815c5cbedc4004932d2dd09..b62f39a30829d27512a5c135834a3ef5d8a0b467 | b62f39a30829d27512a5c135834a3ef5d8a0b467 | 1ba83dcdd5b9b9e32815c5cbedc4004932d2dd09:b62f39a30829d27512a5c135834a3ef5d8a0b467 | CHANGES: F1 BLOCKER, F2-F4 MAJOR, F5-F6 MINOR; all fixed except helm pin (declined, R13); round 2 due |
 | diff review | 2 (pending) | M5 fix diff b62f39a30829d27512a5c135834a3ef5d8a0b467..6d65b3cdaeb97cba5c38df4bd9b15e272342327f | 6d65b3cdaeb97cba5c38df4bd9b15e272342327f | b62f39a30829d27512a5c135834a3ef5d8a0b467:6d65b3cdaeb97cba5c38df4bd9b15e272342327f | pending |
+| diff review | 2 (sonnet, orchestrator) | M6 fix diff f84b9f80a..aaa733a49 | 4fa770110 | - | CLEAN |
 |---|---|---|---|---|---|
 
 | diff review | 1 (opus, orchestrator) | M2 10f82e095..e7ad7f4 | see commit | - | CHANGES: 2 MAJOR (F1 handshake timeout + socket cap, F2 serialize feed passes) fixed; MINOR F3 stale snapshot after stop fixed, F5 single close fixed, F7 tests (non-UTF-8 Origin, Lagged fallback) added; F4, F6 declined/noted (see Declined); MAJOR fixes are behaviour-bearing, round 2 re-review (sonnet) due |
@@ -95,11 +101,13 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Follow-ups
 
+- helm v3.19.0 -> v3.22.1 in scripts/install-kube-tools.sh: needs the checksum from get.helm.sh (unreachable from cloud).
+- Web client: a stopped daemon's header still reads "Online" while its sessions show Unreachable (visual-pass/04); not fixed in M6.
 - CI llvm-cov merge intermittently hits a corrupt `_1.profraw` (signature 17540017307748215547); M1 added a ci.yml step dropping unreadable profiles; root cause unknown, to investigate.
 
 ## Handover
 
-M4 merged as 5ebc01334 (PR #2038, squash; round-1 opus 1 MAJOR + 4 MINOR fixed, round-2 sonnet CLEAN; CI caught a local-stack test race, fixed with `wait -n -p`). Ledger on branch claude/project-thread-7iamtv. Next: M5 local kind stack (spec FRs + tasks first, reviewed; reuse #1981 kind+Helm), then M6 3-browser e2e, CI, docs. Not done in M4: live end-to-end run against a real daemon; seeded sessions have no event history.
+None. M6 unit (2026-11-18): previous PR #2039 merged as 1db9333f1. T038–T042 done; Chromium stack e2e passes locally (system Chrome); Firefox/WebKit not runnable here (Playwright CDN blocked by the proxy), CI job `client-e2e-stack` runs all three. Visual pass found and fixed the unbound Retry in ConnectionBanner. M5 follow-ups: header comment fixed; NODE_IMAGE -> kindest/node:v1.37.0@sha256:a1ed56cf… (kind v0.33.0 default); helm v3.22.1 NOT bumped: get.helm.sh is blocked (403) and GitHub release assets carry no sha256sum, so no checksum was reachable; still open.
 
 ## Open escalation
 

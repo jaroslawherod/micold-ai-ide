@@ -58,6 +58,12 @@ if MICOLD_LOCAL_DIR="$tmp/second" scripts/local-stack.sh >"$tmp/second.out" 2>&1
   fail "a second copy started"
 elif grep -q "port $web is already in use" "$tmp/second.out"; then pass "a second copy reports the port conflict and exits"; else fail "second copy: $(cat "$tmp/second.out")"; fi
 
+if MICOLD_LOCAL_MODE=kind MICOLD_LOCAL_DIR="$tmp/kind" scripts/local-stack.sh >"$tmp/kind.out" 2>&1; then
+  fail "kind mode started on a held port"
+elif grep -q "port $web is already in use" "$tmp/kind.out" && ! grep -q "is not installed" "$tmp/kind.out"; then
+  pass "kind mode reports the port conflict before anything else"
+else fail "kind mode on a held port: $(cat "$tmp/kind.out")"; fi
+
 printf '#!/usr/bin/env bash\nexit 3\n' >"$tmp/dies"
 chmod +x "$tmp/dies"
 if MICOLD_LOCAL_DIR="$tmp/third" MICOLD_LOCAL_API_PORT="$(port)" MICOLD_LOCAL_WEB_PORT="$(port)" MICOLD_LOCAL_DAEMON_BIN="$tmp/dies" \

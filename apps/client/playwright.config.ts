@@ -9,6 +9,8 @@ const channel = process.env.PW_CHROMIUM_CHANNEL;
 
 export default defineConfig({
   testDir: "e2e",
+  // e2e/stack/ needs the real stack: playwright.stack.config.ts (#1732).
+  testIgnore: /e2e\/stack\//,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
@@ -20,7 +22,7 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"], ...(channel ? { channel } : {}) } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] }, testIgnore: /screenshots\.spec/ },
-    { name: "webkit", use: { ...devices["Desktop Safari"] }, testIgnore: /screenshots\.spec/ },
+    { name: "firefox", use: { ...devices["Desktop Firefox"] }, testIgnore: [/screenshots\.spec/, /e2e\/stack\//] },
+    { name: "webkit", use: { ...devices["Desktop Safari"] }, testIgnore: [/screenshots\.spec/, /e2e\/stack\//] },
   ],
 });
