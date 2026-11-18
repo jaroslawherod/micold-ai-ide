@@ -201,11 +201,28 @@ async fn run_ops_first(
     serve(endpoint, Arc::new(SystemClock), store, running, api).await
 }
 
+/// The implicit configuration file: the user's `<data_dir>/daemon.toml`, unless a data directory
+/// is given by `--data-dir` (`flag`) or its variable (`env`, empty meaning unset), so that a
+/// container given its paths never reads `$HOME` (FR-024 of #1732).
+fn implicit_config(
+    flag: Option<&std::ffi::OsStr>,
+    env: Option<&std::ffi::OsStr>,
+    user_data_dir: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let given = flag.is_some() || env.is_some_and(|value| !value.is_empty());
+    if given {
+        return None;
+    }
+    user_data_dir.map(|dir| dir.join("daemon.toml"))
+}
+
 /// The configuration file's `[database]` table and data directory: the file `--config` names,
-/// else `<data_dir>/daemon.toml` when it exists, else none.
-fn configured(file: Option<PathBuf>) -> io::Result<(Option<DatabaseConfig>, Option<PathBuf>)> {
-    let default = || micold_core::paths::data_dir().map(|dir| dir.join("daemon.toml"));
-    let path = file.or_else(|| default().filter(|path| path.is_file()));
+/// else `default` (see [`implicit_config`]) when it exists, else none.
+fn configured(
+    file: Option<PathBuf>,
+    default: Option<PathBuf>,
+) -> io::Result<(Option<DatabaseConfig>, Option<PathBuf>)> {
+    let path = file.or_else(|| default.filter(|path| path.is_file()));
     let Some(path) = path else {
         return Ok((None, None));
     };
@@ -270,7 +287,13 @@ pub async fn run_configured(
 /// runtime, then [`run`]. Returns only on an error.
 pub fn main(args: &[OsString]) -> io::Result<()> {
     let args = config::OrchestratorArgs::parse(args)?;
-    let (database, file_data_dir) = configured(args.config.clone())?;
+    let env_data_dir = std::env::var_os(config::DATA_DIR_ENV);
+    let default = implicit_config(
+        args.data_dir.as_deref().map(std::path::Path::as_os_str),
+        env_data_dir.as_deref(),
+        micold_core::paths::data_dir(),
+    );
+    let (database, file_data_dir) = configured(args.config.clone(), default)?;
     let config = config::OrchestratorConfig::resolve(
         args,
         &|name| std::env::var_os(name),
@@ -491,6 +514,30 @@ mod tests {
     use micold_core::protocol::version::PROTOCOL_VERSION;
 
     use super::*;
+
+    /// FR-024 (#1732 M5): with a data directory given by `--data-dir` or its variable, the user's
+    /// `<data_dir>/daemon.toml` is never looked up, so a container never reads `$HOME`.
+    #[test]
+    fn a_given_data_dir_skips_the_users_daemon_toml() {
+        let user = Some(PathBuf::from("/home/u/.local/share/micold"));
+        let flag = OsString::from("/var/lib/micold");
+        assert_eq!(
+            implicit_config(Some(flag.as_os_str()), None, user.clone()),
+            None
+        );
+        assert_eq!(
+            implicit_config(None, Some(flag.as_os_str()), user.clone()),
+            None
+        );
+        assert_eq!(
+            implicit_config(None, None, user),
+            Some(PathBuf::from("/home/u/.local/share/micold/daemon.toml"))
+        );
+        assert_eq!(
+            implicit_config(None, Some(OsString::new().as_os_str()), None),
+            None
+        );
+    }
 
     /// A store whose every save waits for the gate to open (or close), then records the
     /// `last_seen` of the snapshot it wrote: a slow disk under the orchestrator's control.

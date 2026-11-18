@@ -2,6 +2,7 @@
 // Static server for the mock web export (#1735, T055): serves `dist-mock/`, resolving a route
 // `/x` to `x.html` (expo-router's static output) and an unknown one to `index.html`, so a reload
 // on any route works as it would behind the real host. Usage: node e2e/serve.mjs <dir> <port>.
+// SERVE_HOST sets the listen address (127.0.0.1); Dockerfile.web sets 0.0.0.0 for the pod.
 import { createServer } from "node:http";
 import { statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
@@ -26,7 +27,7 @@ createServer(async (req, res) => {
     res.writeHead(400, { "content-type": "text/plain" });
     res.end(`bad request: ${err instanceof Error ? err.message : String(err)}`);
   }
-}).listen(Number(port), "127.0.0.1");
+}).listen(Number(port), process.env.SERVE_HOST ?? "127.0.0.1");
 
 async function respond(req, res) {
   const path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname)).replace(/^(\.\.[/\\])+/, "");

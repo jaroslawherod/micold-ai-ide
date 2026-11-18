@@ -11,8 +11,9 @@ image:
   pullPolicy: IfNotPresent
 
 state:
-  # Where the orchestrator keeps its registry. Only `file` is available: a JSON registry under the
-  # data directory. `sqlite` (#1948) and `postgres` (#1740) are reserved names and fail to render.
+  # Where the orchestrator keeps its registry: `file`, a JSON registry under the data directory, or
+  # `postgres`, the #1948 store (needs `postgres.enabled` or `database.existingSecret`). Any other
+  # value, `sqlite` included, fails to render.
   mode: file
   persistence:
     # true: a PersistentVolumeClaim at the data directory, so the registry survives a restart.
@@ -23,8 +24,30 @@ state:
     storageClass: ""
 
 database:
-  # Reserved for #1948 and #1740: the Secret holding the database URL. Unused by `state.mode=file`.
+  # state.mode=postgres: a Secret whose `url` key holds the database URL. Empty uses the chart's
+  # own Postgres (postgres.enabled). Unused by `state.mode=file`.
   existingSecret: ""
+
+postgres:
+  # true: a single-instance Postgres StatefulSet for state.mode=postgres (#1732 M5, local kind stack).
+  enabled: false
+  image: docker.io/library/postgres:18.7-alpine3.24@sha256:fa1b61f5a4844f4d4b73c9b15716cfc75fe70c931f2d32723630f3b900056366
+  size: 1Gi
+  storageClass: ""
+
+orchestrator:
+  api:
+    # true: the client API (/api/ws, #1732) on the pod's loopback, reached by `kubectl port-forward`.
+    enabled: false
+    port: 8730
+  # Origins allowed to open /api/ws: one `--allow-origin` each.
+  allowOrigins: []
+
+daemons:
+  # Seeded daemons run as sidecars of the orchestrator pod, dialling its socket (#1732 M5, FR-021).
+  count: 0
+  # sh and git for files/seed-catalog.sh.
+  seedImage: docker.io/alpine/git:v2.54.1@sha256:f662909590ca05cad0928f1ff3957043b3cfd9e880af05a6318206e5a0a00f14
 
 ops:
   # The orchestrator's ops listener: `--ops-addr=0.0.0.0:<port>`, a Service on that port and the

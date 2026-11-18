@@ -3,28 +3,45 @@
 The web client shows your daemons and their sessions in a browser, from a real orchestrator, in
 English or Polish. Use it to watch sessions and read what they said; it does not run sessions.
 
-## Start everything on this computer
+## Start everything in a local Kubernetes cluster
 
 ```sh
 mise run local-stack
 ```
 
-This starts, on this computer only:
+This needs `docker`, `kind`, `kubectl` and `helm` (`scripts/install-kube-tools.sh kind kubectl helm`
+installs the last three at the versions the project uses). It creates a kind cluster named
+`micold-local` and runs in it:
 
-| What | Address |
+| What | Address on this computer |
 |---|---|
-| The orchestrator's client API | `ws://127.0.0.1:8730/api/ws` |
+| The orchestrator's client API, keeping its state in Postgres | `ws://127.0.0.1:8730/api/ws` |
 | The web client | `http://127.0.0.1:8731` |
-| One daemon, linked to the orchestrator | no address; it dials the orchestrator |
+| One daemon, linked to the orchestrator | no address; it dials the orchestrator inside the cluster |
+| Postgres | none; only the orchestrator uses it |
 
-The daemon serves a small demo project with a second worktree and two sessions, kept in a private
-temporary directory that is removed when the stack stops. Open `http://127.0.0.1:8731` in a browser,
-choose **Sign in with Local orchestrator**, and the daemon, its project, the worktrees and both
-sessions are listed. Press `Ctrl+C` in the terminal to stop the orchestrator, the daemon and the web
-server together.
+The first run builds the orchestrator and web client images, which takes several minutes; later
+runs reuse the build cache. The daemon serves a small demo project with a second worktree and two
+sessions. Open `http://127.0.0.1:8731`, choose **Sign in with Local orchestrator**, and the daemon,
+its project, the worktrees and both sessions are listed.
 
-If another copy of the stack is running, the command names the port in use and exits. To use other
-ports, set `MICOLD_LOCAL_API_PORT` and `MICOLD_LOCAL_WEB_PORT` before the command.
+Press `Ctrl+C` to stop: the cluster is deleted. To keep it, and the orchestrator's state, set
+`MICOLD_LOCAL_KEEP=1`; running the command again then reuses the cluster, rebuilds the images and
+restarts the pods on them. To remove a kept cluster, run `kind delete cluster --name micold-local`.
+To use other ports on this computer, set `MICOLD_LOCAL_API_PORT` and `MICOLD_LOCAL_WEB_PORT`.
+
+If a tool is missing, the command names it and exits without creating anything.
+
+## Without Kubernetes: local processes
+
+```sh
+MICOLD_LOCAL_MODE=process mise run local-stack
+```
+
+This starts the same three pieces as plain processes on this computer, with no docker or cluster,
+on the same addresses. The orchestrator keeps its state in a private temporary directory that is
+removed when the stack stops. `Ctrl+C` stops the orchestrator, the daemon and the web server
+together. If another copy of the stack is running, the command names the port in use and exits.
 
 ## Reading a session
 

@@ -92,7 +92,7 @@ pnpm --filter @micold/client start:mock
 """
 
 [tasks.local-stack]
-description = "Run the orchestrator, one seeded daemon and the web client on this machine; Ctrl+C stops all (#1732) [builds the daemon and the web export]"
+description = "Run the orchestrator (Postgres state), one seeded daemon and the web client in a kind cluster micold-local, forwarded to 127.0.0.1:8730/8731; Ctrl+C deletes it unless MICOLD_LOCAL_KEEP=1. MICOLD_LOCAL_MODE=process runs them as local processes instead (#1732) [needs docker, kind, kubectl, helm]"
 dir = "{{config_root}}"
 run = "scripts/local-stack.sh"
 

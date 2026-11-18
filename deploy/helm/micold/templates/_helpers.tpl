@@ -29,14 +29,24 @@ app.kubernetes.io/component: {{ index . 1 }}
 {{- end -}}
 
 {{/*
-FR-003: only `state.mode=file` exists in this chart. The other names are reserved for the issues
-that will implement them, and rendering them fails rather than deploying something that ignores
-the setting.
+FR-003, FR-020 of #1732: the chart runs `state.mode=file` (a JSON registry on the data volume) and
+`state.mode=postgres` (the #1948 store, with `postgres.enabled` or `database.existingSecret`).
+Anything else, `sqlite` included (the store's local-only mode), fails rather than deploying
+something that ignores the setting.
 */}}
 {{- define "micold.stateMode" -}}
-{{- if ne .Values.state.mode "file" -}}
-{{- fail (printf "state.mode=%s is not available yet: only state.mode=file is supported; sqlite arrives with #1948 and postgres with #1740" .Values.state.mode) -}}
+{{- $mode := .Values.state.mode -}}
+{{- if not (has $mode (list "file" "postgres")) -}}
+{{- fail (printf "state.mode=%s is not supported by this chart: use file or postgres" $mode) -}}
 {{- end -}}
+{{- if and (eq $mode "postgres") (not .Values.postgres.enabled) (not .Values.database.existingSecret) -}}
+{{- fail "state.mode=postgres needs postgres.enabled=true or database.existingSecret" -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The Secret whose `url` key holds the database URL: the given one, else the chart's Postgres. */}}
+{{- define "micold.databaseSecret" -}}
+{{- default (printf "%s-postgres" (include "micold.fullname" .)) .Values.database.existingSecret -}}
 {{- end -}}
 
 {{/* Whether the data volume is a PVC: persistence on, and not the seeded `volume` breakage. */}}
