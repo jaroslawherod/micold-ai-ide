@@ -72,7 +72,7 @@ run
 check "a passing run exits 0" '[ "$rc" -eq 0 ]'
 check "cluster deleted before create (default name)" \
   '[ "$(grep -n "^kind delete cluster --name micold-e2e" "$calls" | head -1 | cut -d: -f1)" -lt "$(grep -n "^kind create cluster --name micold-e2e" "$calls" | cut -d: -f1)" ]'
-check "image built and loaded" 'grep -q "^docker build -f .*Dockerfile.orchestrator" "$calls" && grep -q "^kind load docker-image .* --name micold-e2e" "$calls"'
+check "image built and loaded" 'grep -q "^docker build -f .*Dockerfile.orchestrator" "$calls" && grep -q "^docker save -o .* ghcr.io/.*micold-orchestrator:e2e" "$calls" && grep -q "^kind load image-archive --name micold-e2e " "$calls"'
 check "chart installed with ci/e2e.yaml and --wait" 'grep -q "^helm upgrade --install micold .*deploy/helm/micold .*-f .*ci/e2e.yaml.*--wait" "$calls"'
 check "suites run with MICOLD_E2E=1 and REQUIRED=1" 'grep -q "^cargo test -p micold-e2e --test ops" "$calls" && grep -q "MICOLD_E2E=1 REQUIRED=1 NS=micold-e2e" "$calls"'
 

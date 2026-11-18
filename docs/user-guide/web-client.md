@@ -9,7 +9,7 @@ English or Polish. Use it to watch sessions and read what they said; it does not
 mise run local-stack
 ```
 
-This needs `docker`, `kind`, `kubectl` and `helm` (`scripts/install-kube-tools.sh kind kubectl helm`
+This needs `docker` (or `podman`; set `MICOLD_CONTAINER_RUNTIME` to choose), `kind`, `kubectl` and `helm` (`scripts/install-kube-tools.sh kind kubectl helm`
 installs the last three at the versions the project uses). It creates a kind cluster named
 `micold-local` and runs in it:
 

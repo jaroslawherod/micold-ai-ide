@@ -11,7 +11,9 @@ helm install micold deploy/helm/micold -n micold --create-namespace --set image.
 
 No image is published yet: the release workflow that builds, signs and pushes the images, and keeps
 `appVersion` in step with the release, belongs to #1740. Until then build `:dev` locally (and load
-it into the cluster, e.g. `kind load docker-image`) as above.
+it into the cluster, e.g. `kind load docker-image`, or with podman `podman save -o img.tar <image>` and
+`kind load image-archive img.tar`) as above. `scripts/local-stack-kind.sh` and `scripts/e2e-kind.sh` use docker,
+else podman; `MICOLD_CONTAINER_RUNTIME` picks one (`scripts/container-runtime.sh`).
 
 ## What it renders
 
