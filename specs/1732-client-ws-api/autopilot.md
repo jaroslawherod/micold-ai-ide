@@ -54,6 +54,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Review rounds
 
+| diff review | 1 (opus, orchestrator) | M6 1db9333f1..47c8aeee9 | 47c8aeee9 | 23cb524e3bb0efee07d88b19484fb679242b0070:47c8aeee9e7ed652270b6506b52abf5e4c28187e | PENDING (orchestrator runs the reviewer) |
 | diff review | 1 (opus, orchestrator) | M4 1c83be7~1..1c83be7 | 1c83be7 | - | CHANGES: 1 MAJOR (F1 sidebar stopped applying changes after a resync: listener `since` never reset) fixed in handleSubscribed; MINOR F2 connected only on `subscribed` (attempt reset there too), F3 visible while reconnecting keeps the attempt and only shortens the timer, F4 retry on a stopped client returns early, F5 local-stack re-checks ports before starting and names the exited process, all fixed with tests; behaviour-bearing, round 2 re-review (sonnet) due |
 | diff review | 1 (opus, orchestrator) | M3 a1c9514b3..43fc62389 | see commit | - | CHANGES, 4 minor, all fixed: F1 --ts-only missing schema now DRIFT; F2 literal expected_keys for the grouping case; F3 expected_daemons in vectors, asserted in jest; F4 duplicate test replaced by upsert-after-gone-row. Test-only/script fixes, no round 2 needed |
 
