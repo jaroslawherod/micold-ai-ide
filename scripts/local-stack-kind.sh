@@ -29,7 +29,7 @@ say() { echo "local-stack: $*"; }
 
 for tool in docker kind kubectl helm; do
   command -v "$tool" >/dev/null 2>&1 || {
-    say "$tool is not installed (kind mode needs docker, kind, kubectl and helm; scripts/install-kube-tools.sh installs the last three). MICOLD_LOCAL_MODE=process runs the stack as local processes instead." >&2
+    say "$tool is not installed (kind mode needs docker, kind, kubectl and helm; `mise run local-stack` fetches the last three; scripts/install-kube-tools.sh installs them too). MICOLD_LOCAL_MODE=process runs the stack as local processes instead." >&2
     exit 1
   }
 done
