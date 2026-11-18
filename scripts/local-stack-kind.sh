@@ -12,7 +12,8 @@
 #   MICOLD_LOCAL_WEB_PORT  the web client's loopback port (8731)
 #   MICOLD_LOCAL_KEEP=1    keep the cluster at exit
 #
-# Needs docker, kind, kubectl and helm (scripts/install-kube-tools.sh pins kind, kubectl and helm).
+# Needs a container runtime (docker, else podman; MICOLD_CONTAINER_RUNTIME picks, scripts/container-runtime.sh),
+# kind, kubectl and helm (scripts/install-kube-tools.sh pins kind, kubectl and helm).
 
 set -euo pipefail
 
@@ -27,9 +28,15 @@ WEB_PORT="${MICOLD_LOCAL_WEB_PORT:-8731}"
 
 say() { echo "local-stack: $*"; }
 
-for tool in docker kind kubectl helm; do
+# shellcheck source=container-runtime.sh
+. "$ROOT/scripts/container-runtime.sh"
+detect_container_runtime || {
+  say "kind mode needs docker or podman, kind, kubectl and helm. MICOLD_LOCAL_MODE=process runs the stack as local processes instead." >&2
+  exit 1
+}
+for tool in kind kubectl helm; do
   command -v "$tool" >/dev/null 2>&1 || {
-    say "$tool is not installed (kind mode needs docker, kind, kubectl and helm; `mise run local-stack` fetches the last three; scripts/install-kube-tools.sh installs them too). MICOLD_LOCAL_MODE=process runs the stack as local processes instead." >&2
+    say "$tool is not installed (kind mode needs docker or podman, kind, kubectl and helm; `mise run local-stack` fetches the last three; scripts/install-kube-tools.sh installs them too). MICOLD_LOCAL_MODE=process runs the stack as local processes instead." >&2
     exit 1
   }
 done
@@ -58,10 +65,10 @@ else
   kind create cluster --name "$CLUSTER" --config "$ROOT/deploy/kind/local.yaml"
 fi
 
-docker build -f "$ROOT/Dockerfile.orchestrator" -t micold-orchestrator:local "$ROOT"
-docker build -f "$ROOT/Dockerfile.web" --build-arg "EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:$API_PORT/api/ws" -t micold-web:local "$ROOT"
-kind load docker-image --name "$CLUSTER" micold-orchestrator:local
-kind load docker-image --name "$CLUSTER" micold-web:local
+"$CONTAINER_RT" build -f "$ROOT/Dockerfile.orchestrator" -t micold-orchestrator:local "$ROOT"
+"$CONTAINER_RT" build -f "$ROOT/Dockerfile.web" --build-arg "EXPO_PUBLIC_ORCHESTRATOR_URL=ws://127.0.0.1:$API_PORT/api/ws" -t micold-web:local "$ROOT"
+kind_load_image "$CLUSTER" micold-orchestrator:local
+kind_load_image "$CLUSTER" micold-web:local
 
 if ! helm upgrade --install "$RELEASE" "$CHART" --kube-context "$CONTEXT" --namespace "$NS" --create-namespace \
   -f "$CHART/ci/local.yaml" --wait --timeout 10m; then
