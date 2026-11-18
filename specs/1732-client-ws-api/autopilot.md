@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1732
 - **Worktree branch**: claude/project-thread-de08zv
 - **Started**: 2026-11-17
-- **Phase**: milestones (M5 implemented T043–T055, diff review pending)
-- **Next step**: M5 diff review (snapshot in Review rounds), then open the M5 PR (title/body in the session scratchpad) and watch `local-stack-kind`, the first live kind run; record its durations here.
+- **Phase**: milestones (M6 next)
+- **Next step**: M6 (T038–T042): 3-browser Playwright, CI, docs, polish (fresh thread).
 
 Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#2031 at 15a603c3c). Base: origin/main ff1592a91.
 
@@ -23,6 +23,8 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | #2033 | M1 daemon ReadStructuredEvents | merged | 10f82e095 |
 | #2034 | M2 /api/ws listener | merged | a1c9514b3 |
 | #2037 | M3 schema + TS types | merged | a7d7a3c12 |
+| #2038 | M4 web client on real API | merged | 5ebc01334 |
+| #2039 | M5 local kind stack | merged | 1db9333f1 |
 
 ## Milestones
 
@@ -32,7 +34,7 @@ Blockers: none. #1726 merged (#2007, #2012, #2016 at c316a62be); #1948 merged (#
 | M2 | T001–T002, T005–T019 | full | /api/ws listener: list, read_session, subscribe+resume, heartbeat, origin refusal | #2034 | merged |
 | M3 | T020–T026 | full | generated schema+TS, drift gate, FR-012 vectors | #2037 | merged |
 | M4 | T027–T037 | full | web client on the real API, i18n, minimal local-stack | #2038 | merged |
-| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 | - | implemented on claude/project-thread-de08zv, diff review pending |
+| M5 | T043–T055 | full | local kind stack: `mise run local-stack` starts a kind cluster and runs the full setup (orchestrator, daemons, Postgres, web) inside it; real-cluster deploy later (jaro 2026-11-17). Reuse #1981 kind+Helm e2e; FR-019–025, US5, SC-008 | #2039 | merged |
 | M6 | T038–T042 | full | 3-browser Playwright, CI, docs, polish | - | pending |
 
 M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole: one wire surface with no observable split.
@@ -99,7 +101,7 @@ M1 split off the daemon wire change (review F5), so M2 has 17 tasks, kept whole:
 
 ## Handover
 
-M4 merged as 5ebc01334 (PR #2038, squash; round-1 opus 1 MAJOR + 4 MINOR fixed, round-2 sonnet CLEAN; CI caught a local-stack test race, fixed with `wait -n -p`). Ledger on branch claude/project-thread-7iamtv. Next: M5 local kind stack (spec FRs + tasks first, reviewed; reuse #1981 kind+Helm), then M6 3-browser e2e, CI, docs. Not done in M4: live end-to-end run against a real daemon; seeded sessions have no event history.
+M5 merged as 1db9333f1 (PR #2039, squash). Spec 2 review rounds, diff 2 rounds + sonnet review of CI-fix commits (CLEAN). First live kind runs took 5 CI rounds: Postgres 18 PGDATA layout, orchestrator config missing [daemon] name, kubernetes sidecar must not have [listen] socket, probe request lacked id, kubectl port-forward does not exit on pod delete. Follow-ups: helm v3.19.0 -> v3.22.1 (no checksum reachable from cloud); stale header comment scripts/local-stack-kind-live.sh:5-6; kube_real_support NODE_IMAGE still v1.34.0. Next: M6 T038-T042.
 
 ## Open escalation
 
